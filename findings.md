@@ -5,7 +5,7 @@
 - The supplied planning and UI/UX reference pack is now consolidated under `docs/reference/` so planning, UI/UX, and design-system guidance have clear ownership.
 - The old `Refrence/` root name is no longer part of the tracked repository structure.
 - The GitHub remote appears to be reachable and currently has no visible branch refs, consistent with a new/empty repository.
-- No application bootstrap files such as `package.json`, `pnpm-lock.yaml`, `apps/`, or `src/` exist yet.
+- The repository now has a pnpm monorepo with independently buildable web, API, and worker applications.
 
 ## Approved baseline
 
@@ -36,3 +36,11 @@
 - Keep the design-system implementation in `packages/design-system` and document the corresponding prototype screen instead of duplicating design assets.
 - Remove Vite starter-only code/assets from the real application shell once the RecruitFlow shell is in place.
 - The generated Vite starter page and its four unused assets were removed; `apps/web` now renders a RecruitFlow dashboard shell based on the approved visual direction.
+
+## Vacancy Core implementation
+
+- The Prisma schema already contains the first-slice entities: `VacancyRequest`, `VacancyRequestApproval`, `Vacancy`, and `VacancyAssignment`.
+- The first runnable slice uses a repository interface so domain rules do not depend on Prisma client generation or a live database during local bootstrap.
+- The API must enforce the state transitions server-side: Draft -> Pending Approval -> Approved/Rejected/Changes Requested, then Approved -> Converted to Vacancy.
+- Conversion must be idempotent and preserve the approved headcount in the created vacancy.
+- The web form uses the shared Zod schema; the Nest API uses class-validator DTOs so runtime metadata remains available to the global ValidationPipe.

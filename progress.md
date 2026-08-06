@@ -15,3 +15,14 @@
 - Re-ran `pnpm install`, `pnpm lint`, `pnpm lint:web`, `pnpm typecheck`, and `pnpm build` successfully with the final `apps/web` layout.
 - Began repository cleanup: moved references to `docs/reference`, added documentation indexes, centralized lint ownership, and replaced the Vite starter screen with a RecruitFlow dashboard shell.
 - Next: resolve Prisma engine/certificate setup, then begin the first vacancy-core vertical slice.
+
+## 2026-08-06 — Vacancy Core
+
+- Cleaned the pnpm cache, removing 114 MB of cached metadata; active workspace dependencies were preserved.
+- Confirmed the tracked structure is clean: `apps/`, `packages/`, `database/`, and `docs/`, with no tracked `Frontend` or `Refrence` roots.
+- Started the first vertical slice with a repository boundary and server-side state-transition rules planned for vacancy requests, approvals, and conversion.
+- Added shared vacancy contracts, validation schemas, API DTOs, an in-memory repository, and REST endpoints for create/submit/approve/request-changes/reject/convert.
+- Connected the dashboard to the API with a create-request modal, request list, workflow actions, status metrics, and clear in-memory adapter messaging.
+- Verified the complete API flow in-process, including idempotent conversion and headcount preservation. Lint, typecheck, build, diff checks, and the code-quality checker all pass.
+- Also verified the Changes Requested path with revision increment and successful resubmission.
+- Next: add the Prisma-backed repository and authentication/authorization context before treating the slice as production-ready.
