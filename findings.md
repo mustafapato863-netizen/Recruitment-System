@@ -44,3 +44,11 @@
 - The API must enforce the state transitions server-side: Draft -> Pending Approval -> Approved/Rejected/Changes Requested, then Approved -> Converted to Vacancy.
 - Conversion must be idempotent and preserve the approved headcount in the created vacancy.
 - The web form uses the shared Zod schema; the Nest API uses class-validator DTOs so runtime metadata remains available to the global ValidationPipe.
+
+## Prisma integration checkpoint
+
+- The current API repository token can be switched without changing controllers or the domain service.
+- The installed `@prisma/client` is not generated for this schema yet; model typings/runtime are unavailable until `prisma generate` completes.
+- No migration directory exists yet, so no schema mutation should be attempted against the user's PostgreSQL database until the local Prisma engine/certificate issue is resolved.
+- Keep `VACANCY_CORE_ADAPTER=in-memory` as the safe default; introduce the Prisma adapter only after generated client and migration checks pass.
+- Confirmed at runtime that constructing `PrismaClient` fails immediately with `@prisma/client did not initialize yet`; this is a local tooling prerequisite, not an application code failure.

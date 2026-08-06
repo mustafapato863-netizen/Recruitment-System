@@ -26,3 +26,10 @@
 - Verified the complete API flow in-process, including idempotent conversion and headcount preservation. Lint, typecheck, build, diff checks, and the code-quality checker all pass.
 - Also verified the Changes Requested path with revision increment and successful resubmission.
 - Next: add the Prisma-backed repository and authentication/authorization context before treating the slice as production-ready.
+
+## 2026-08-06 — Prisma checkpoint
+
+- Started the planned database integration audit without touching the PostgreSQL database.
+- Confirmed the Prisma schema has no migration directory and the local `@prisma/client` is not generated.
+- Confirmed `PrismaClient` construction fails before connection because the Prisma engine/client artifacts are missing; the installed engine package directory is empty.
+- Kept the working API on the safe in-memory adapter and documented the exact prerequisite for the next attempt.

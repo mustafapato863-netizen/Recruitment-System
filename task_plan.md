@@ -43,3 +43,4 @@ Bootstrap the new Recruitment System repository as a secure monorepo with a Reac
 | Hidden API smoke-test process was rejected by the command safety policy | 1 | Use a direct temporary API session and a separate request session instead of spawning a hidden process from a PowerShell script. |
 | In-process smoke test started from the monorepo root and could not resolve API-local Nest dependencies | 1 | Run the temporary Nest test from `apps/api`, where the workspace dependency links are resolved normally. |
 | Code-reviewer checker failed before analysis because Windows stdout used `cp1252` for a Unicode status symbol | 1 | Rerun the checker with `PYTHONIOENCODING=utf-8`. |
+| Prisma client construction failed because the generated client and local Prisma engine are absent | 1 | Keep the in-memory adapter active and defer Prisma adapter/migration work until Prisma engine installation and certificate validation are repaired. |
