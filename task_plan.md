@@ -6,10 +6,10 @@ Bootstrap the new Recruitment System repository as a secure monorepo with a Reac
 
 ## Phases
 
-- [in_progress] 1. Inspect repository, toolchain, and database connectivity
-- [pending] 2. Create monorepo workspace and application shells
-- [pending] 3. Add database/Prisma foundation and safe local environment configuration
-- [pending] 4. Add shared contracts, authentication/authorization foundation, and UI shell
+- [completed] 1. Inspect repository, toolchain, and database connectivity
+- [completed] 2. Create monorepo workspace and application shells
+- [in_progress] 3. Add database/Prisma foundation and safe local environment configuration
+- [completed] 4. Add shared contracts, authentication/authorization foundation, and UI shell
 - [pending] 5. Implement first vertical slice: vacancy requests, approvals, and vacancies
 - [pending] 6. Run quality checks and document setup/run instructions
 
@@ -21,6 +21,7 @@ Bootstrap the new Recruitment System repository as a secure monorepo with a Reac
 - Use PostgreSQL as the source of truth and S3-compatible storage for future private files.
 - Keep the supplied `Refrence/` planning and UI materials unchanged.
 - Never commit database credentials or other secrets.
+- Keep the current `Frontend/` path until the active Vite process is stopped; the workspace is already prepared to move it to `apps/web` later.
 
 ## Errors Encountered
 
