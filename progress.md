@@ -48,3 +48,8 @@
 - Added the initial Prisma migration and a repeatable reference-data seed for organization, legal entity, branch, position, user, role, and permission.
 - Added root commands for migration deploy, migration status, and seed.
 - Added a database command wrapper so Prisma CLI and seed commands load the single root `.env` file while remaining scoped to the database workspace.
+
+## 2026-08-06 — End-to-end delivery roadmap
+
+- Converted the full reference pack into a phase-controlled implementation roadmap with fixed scope, dependencies, acceptance criteria, handoff requirements, and review gates.
+- Identified the next approved target as Phase 1 (Identity, Access, Organization, and Master Data); Phase 2 remains an MVP that needs production hardening before later recruitment modules.

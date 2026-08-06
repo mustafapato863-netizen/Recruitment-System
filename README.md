@@ -2,7 +2,7 @@
 
 RecruitFlow is an internal recruitment and hiring management system. The project is a single monorepo containing independently buildable frontend, API, and worker applications.
 
-Start with [the documentation index](docs/README.md), then read [development setup](docs/development/setup.md) and [the approved reference pack](docs/reference/README.md).
+Start with [the documentation index](docs/README.md), then read [the implementation roadmap](docs/development/implementation-roadmap.md), [development setup](docs/development/setup.md), and [the approved reference pack](docs/reference/README.md).
 
 ## Repository layout
 

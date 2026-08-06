@@ -65,3 +65,9 @@
 - A `CodeSequence` model was added so request and vacancy business codes can increment atomically through PostgreSQL instead of relying on process-local counters.
 - The target `Recruitment_DB` was audited with Prisma `migrate diff` before mutation: it had no project tables, the diff contained 15 table creations, and no `DROP TABLE`/`DROP COLUMN` operations.
 - The initial migration is stored at `database/prisma/migrations/20260806_init/migration.sql`; the seed uses idempotent upserts and does not delete or overwrite existing reference values.
+
+## Full-product planning decision
+
+- The bootstrap plan phases are not the same as full product delivery phases. The repository is currently at the end of foundation setup and the first Vacancy Core vertical slice.
+- The next controlled phase is Identity/Access/Master Data. Candidate, Application, Interview, Offer, Hiring, Joining, Analytics, Administration, Mobile, and Release phases remain separate and must not be merged into one unreviewable task.
+- Each phase in `docs/development/implementation-roadmap.md` has explicit scope, out-of-scope boundaries, dependencies, and acceptance gates for team handoff.
