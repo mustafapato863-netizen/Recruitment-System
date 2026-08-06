@@ -8,7 +8,7 @@ Bootstrap the new Recruitment System repository as a secure monorepo with a Reac
 
 - [completed] 1. Inspect repository, toolchain, and database connectivity
 - [completed] 2. Create monorepo workspace and application shells
-- [in_progress] 3. Add database/Prisma foundation, generated client, and safe local environment configuration
+- [completed] 3. Add database/Prisma foundation, generated client, migration, seed, and safe local environment configuration
 - [completed] 4. Add shared contracts, authentication/authorization foundation, and UI shell
 - [completed] 5. Implement first vertical slice: vacancy requests, approvals, and vacancies
 - [completed] 6. Clean repository structure, references, starter assets, and documentation
@@ -28,6 +28,7 @@ Bootstrap the new Recruitment System repository as a secure monorepo with a Reac
 - Expose request/approval/conversion contracts from `packages/contracts`; validate browser writes with `packages/validation` and keep Nest DTOs as the runtime API boundary.
 - Keep the canonical Prisma schema under `database/prisma`; make `database/` the owner of Prisma generation and export its ignored generated client to the API.
 - Keep `VACANCY_CORE_ADAPTER=in-memory` as the default until a migration and reference-data seed are explicitly applied.
+- Treat `db:migrate:deploy` and `db:seed` as explicit database writes; audit the target URL first and never use them against production by assumption.
 
 ## Errors Encountered
 
@@ -52,3 +53,4 @@ Bootstrap the new Recruitment System repository as a secure monorepo with a Reac
 | Custom generated-client output did not bypass Prisma's auto-install stage | 1 | Inspect the installed CLI for a supported skip/disable condition; do not repeat generation attempts without changing the execution path. |
 | Prisma client generated into a pnpm virtual-store instance that the API did not use | 1 | Make `database` a workspace package, generate to its own ignored `generated/client` path, and export that client through `@recruitflow/database`. |
 | `db:validate` could not find `DATABASE_URL` in the clean shell | 1 | Keep the schema environment-driven and document that validation needs the variable present but does not connect to PostgreSQL. |
+| Prisma's package export map resolved `require('prisma')` to a non-runtime types entry in the database wrapper | 1 | Resolve the explicit CLI entry at `prisma/build/index.js` and keep the wrapper responsible for loading the root `.env`. |

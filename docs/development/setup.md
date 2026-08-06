@@ -13,6 +13,8 @@
 Copy-Item .env.example .env
 pnpm install
 pnpm db:generate
+pnpm db:migrate:deploy
+pnpm db:seed
 pnpm dev:api
 pnpm dev:web
 ```
@@ -27,7 +29,7 @@ Keep real credentials only in the untracked `.env` file. Never commit `.env`, da
 pnpm db:generate
 ```
 
-The API defaults to `VACANCY_CORE_ADAPTER=in-memory` so the first workflow slice can run without database rows. Use `VACANCY_CORE_ADAPTER=prisma` only after the schema migration has been applied and seed data includes an organization, branch, position, and user. No migration or database mutation is performed by the bootstrap commands.
+The API defaults to `VACANCY_CORE_ADAPTER=in-memory` so the first workflow slice can run without database rows. Use `VACANCY_CORE_ADAPTER=prisma` after the schema migration has been applied and seed data includes an organization, branch, position, and user. `db:migrate:deploy` and `db:seed` are explicit database writes; review `DATABASE_URL` before running them.
 
 ## Quality checks
 

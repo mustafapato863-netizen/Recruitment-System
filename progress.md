@@ -41,3 +41,10 @@
 - Added `PrismaService`, a Prisma-backed Vacancy Core repository, an adapter switch, and a PostgreSQL `CodeSequence` model.
 - Verified generated-client construction, Prisma-adapter application bootstrap, full in-memory API workflow, lint, typecheck, and build.
 - No PostgreSQL connection, migration, seed, or data mutation was performed.
+
+## 2026-08-06 — Database migration and seed
+
+- Audited the local `Recruitment_DB` with a read-only Prisma schema diff; it was empty for this project and required 15 table creations with no drops.
+- Added the initial Prisma migration and a repeatable reference-data seed for organization, legal entity, branch, position, user, role, and permission.
+- Added root commands for migration deploy, migration status, and seed.
+- Added a database command wrapper so Prisma CLI and seed commands load the single root `.env` file while remaining scoped to the database workspace.

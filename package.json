@@ -13,7 +13,10 @@
     "lint:web": "eslint apps/web --max-warnings=0",
     "db:generate": "pnpm --dir database prisma:generate",
     "db:format": "pnpm --dir database prisma:format",
-    "db:validate": "pnpm --dir database prisma:validate"
+    "db:validate": "pnpm --dir database prisma:validate",
+    "db:migrate:deploy": "pnpm --dir database prisma:migrate:deploy",
+    "db:migrate:status": "pnpm --dir database prisma:migrate:status",
+    "db:seed": "pnpm --dir database prisma:seed"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

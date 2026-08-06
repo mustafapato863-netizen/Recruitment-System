@@ -48,10 +48,10 @@
 ## Prisma integration checkpoint
 
 - The current API repository token can be switched without changing controllers or the domain service.
-- The installed `@prisma/client` is not generated for this schema yet; model typings/runtime are unavailable until `prisma generate` completes.
-- No migration directory exists yet, so no schema mutation should be attempted against the user's PostgreSQL database until the local Prisma engine/certificate issue is resolved.
+- The generated Prisma client is owned by `@recruitflow/database` and is recreated under the ignored `database/generated/` directory.
+- The initial migration has been reviewed and applied to the new local `Recruitment_DB`; the database diff is now empty and no destructive table operation was used.
 - Keep `VACANCY_CORE_ADAPTER=in-memory` as the safe default; introduce the Prisma adapter only after generated client and migration checks pass.
-- Confirmed at runtime that constructing `PrismaClient` fails immediately with `@prisma/client did not initialize yet`; this is a local tooling prerequisite, not an application code failure.
+- Confirmed at runtime that constructing `PrismaClient` succeeds after generation; the earlier initialization error was caused by missing generated artifacts.
 - Windows has a Zscaler Root CA installed in both the user and machine root stores, while Node/npm have no custom CA configured; this is a viable certificate-chain repair path without disabling TLS.
 - The root `db:generate` script ran Prisma from the workspace root, causing Prisma's package auto-install step to target the wrong package. Prisma generation should run from `apps/api`, where `@prisma/client` is declared.
 - The repeated `pnpm add` message is emitted by the `@prisma/client` lifecycle path when `.prisma/client` is still absent; generated output must be verified after the lifecycle completes, not based on the initial schema-loaded message.
@@ -63,3 +63,5 @@
 - The generated client is intentionally owned and exported by `@recruitflow/database`; this avoids pnpm virtual-store instances being generated for one workspace and imported from another.
 - `PrismaService` and `PrismaVacancyCoreRepository` are available behind `VACANCY_CORE_ADAPTER=prisma`. The default remains in-memory until migration and seed data are applied.
 - A `CodeSequence` model was added so request and vacancy business codes can increment atomically through PostgreSQL instead of relying on process-local counters.
+- The target `Recruitment_DB` was audited with Prisma `migrate diff` before mutation: it had no project tables, the diff contained 15 table creations, and no `DROP TABLE`/`DROP COLUMN` operations.
+- The initial migration is stored at `database/prisma/migrations/20260806_init/migration.sql`; the seed uses idempotent upserts and does not delete or overwrite existing reference values.

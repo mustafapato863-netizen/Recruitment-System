@@ -23,4 +23,4 @@ The API supports two adapters behind the same repository interface:
 - `VACANCY_CORE_ADAPTER=in-memory` is the safe default for UI and workflow development. Data resets when the API restarts.
 - `VACANCY_CORE_ADAPTER=prisma` uses the generated client from `@recruitflow/database` and PostgreSQL as the source of truth.
 
-Before using the Prisma adapter, generate the client with `pnpm db:generate`, apply the database migration when it is available, and seed at least one organization, branch, position, and user. The context endpoint intentionally fails with a clear message when that reference data is missing.
+Before using the Prisma adapter, run `pnpm db:generate`, `pnpm db:migrate:deploy`, and `pnpm db:seed`. The context endpoint intentionally fails with a clear message when its reference data is missing.
