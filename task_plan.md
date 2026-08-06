@@ -21,7 +21,7 @@ Bootstrap the new Recruitment System repository as a secure monorepo with a Reac
 - Use PostgreSQL as the source of truth and S3-compatible storage for future private files.
 - Keep the supplied `Refrence/` planning and UI materials unchanged.
 - Never commit database credentials or other secrets.
-- Keep the current `Frontend/` path until the active Vite process is stopped; the workspace is already prepared to move it to `apps/web` later.
+- Keep all deployable applications under `apps/`; the frontend is now `apps/web`.
 
 ## Errors Encountered
 
@@ -31,3 +31,5 @@ Bootstrap the new Recruitment System repository as a secure monorepo with a Reac
 | pnpm ignored dependency build scripts | 1 | Move the explicit `onlyBuiltDependencies` allowlist into `pnpm-workspace.yaml`, which is the supported pnpm 11 configuration location. |
 | Prisma CLI could not download `schema-engine.exe` due local issuer certificate validation | 1 | Keep TLS verification enabled; use local formatting/type checks and document that Prisma validate/generate needs the machine certificate chain fixed. |
 | Root ESLint selected multiple TypeScript project roots | 1 | Disable type-aware project discovery in the shared lint config; TypeScript correctness remains covered by the dedicated `typecheck` scripts. |
+| Root ESLint still detected the web app's local tsconfig after moving it to `apps/web` | 1 | Keep the web app's Vite ESLint config scoped to `apps/web`; root lint covers API, worker, and shared packages, while `pnpm lint:web` covers the frontend. |
+| Cleanup command for the old generated `Frontend/node_modules` directory was blocked by the shell safety policy | 1 | Leave the ignored cache in place; it is not tracked and does not affect the repository structure. |

@@ -11,4 +11,6 @@
 - Added the monorepo root, pnpm workspace, API/worker shells, shared packages, initial PostgreSQL/Prisma schema, `.env.example`, shared ESLint configuration, and repository remote.
 - Verified `pnpm typecheck`, `pnpm build`, root lint, and frontend lint successfully.
 - Created local commit `278e89a` (`chore: bootstrap RecruitFlow monorepo`). Nothing has been pushed to GitHub yet.
+- Moved the frontend source/configuration into `apps/web` and updated workspace scripts. The old `Frontend/node_modules` directory remains as an ignored local dependency cache because Windows kept it locked; it is not part of the repository.
+- Re-ran `pnpm install`, `pnpm lint`, `pnpm lint:web`, `pnpm typecheck`, and `pnpm build` successfully with the final `apps/web` layout.
 - Next: resolve Prisma engine/certificate setup, move `Frontend` to `apps/web` when its dev process is stopped, then begin the first vacancy-core vertical slice.

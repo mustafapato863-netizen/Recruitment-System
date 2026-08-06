@@ -5,7 +5,7 @@ RecruitFlow is an internal recruitment and hiring management system based on the
 ## Repository layout
 
 ```text
-Frontend/          React + Vite application (temporary path until the active dev server is stopped)
+apps/web/          React + Vite application
 apps/api/          NestJS modular API
 apps/worker/       Background jobs and scheduled work
 packages/contracts Shared API and domain contracts
