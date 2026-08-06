@@ -5,6 +5,7 @@ export const environmentSchema = z.object({
   API_PORT: z.coerce.number().int().positive().default(3000),
   WEB_ORIGIN: z.url().default('http://localhost:5173'),
   DATABASE_URL: z.string().min(1),
+  VACANCY_CORE_ADAPTER: z.enum(['in-memory', 'prisma']).default('in-memory'),
   REDIS_URL: z.url().default('redis://localhost:6379'),
 });
 

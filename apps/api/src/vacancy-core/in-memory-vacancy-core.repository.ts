@@ -51,6 +51,14 @@ export class InMemoryVacancyCoreRepository implements VacancyCoreRepository {
     return request;
   }
 
+  async saveRequestAndVacancy(
+    request: VacancyRequest,
+    vacancy: Vacancy,
+  ): Promise<void> {
+    this.requests.set(request.id, request);
+    this.vacancies.set(vacancy.id, vacancy);
+  }
+
   async createRequest(input: CreateVacancyRequestInput): Promise<VacancyRequest> {
     const now = new Date().toISOString();
     const request: VacancyRequest = {
@@ -99,7 +107,7 @@ export class InMemoryVacancyCoreRepository implements VacancyCoreRepository {
     return vacancy;
   }
 
-  nextVacancyCode(): string {
+  async nextVacancyCode(): Promise<string> {
     return `VAC-${new Date().getUTCFullYear()}-${String(this.vacancySequence++).padStart(3, '0')}`;
   }
 }

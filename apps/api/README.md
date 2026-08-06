@@ -16,4 +16,11 @@ Vacancy Core is available under `/api/v1`:
 - `POST /vacancy-requests/:id/convert` — create the linked Vacancy.
 - `GET /vacancies` — list converted vacancies.
 
-The current adapter is intentionally in-memory so the workflow can be exercised while Prisma engine setup is blocked by the local certificate chain. Data resets when the API restarts. The next database phase will replace the adapter behind the same repository interface and add the authenticated actor context.
+## Repository adapters
+
+The API supports two adapters behind the same repository interface:
+
+- `VACANCY_CORE_ADAPTER=in-memory` is the safe default for UI and workflow development. Data resets when the API restarts.
+- `VACANCY_CORE_ADAPTER=prisma` uses the generated client from `@recruitflow/database` and PostgreSQL as the source of truth.
+
+Before using the Prisma adapter, generate the client with `pnpm db:generate`, apply the database migration when it is available, and seed at least one organization, branch, position, and user. The context endpoint intentionally fails with a clear message when that reference data is missing.

@@ -14,7 +14,7 @@ packages/contracts Shared API and domain contracts
 packages/config    Typed environment/config helpers
 packages/validation Shared Zod validation schemas
 packages/design-system Shared UI tokens and primitives
-database/prisma/   PostgreSQL schema and migrations
+database/          Prisma package, PostgreSQL schema, and generated client
 docs/              Architecture, setup, design, and references
 ```
 
@@ -33,4 +33,4 @@ The frontend and backend live in one repository but remain independently buildab
 
 The first implementation slice is Foundation plus Vacancy Core: identity and access foundations, organization/position data, vacancy requests, approval routes, vacancy conversion, assignment, headcount, and governed status transitions.
 
-Business rules are enforced server-side. PostgreSQL is the system of record; private files will use S3-compatible object storage, and long-running work will use Redis/BullMQ workers.
+Business rules are enforced server-side. PostgreSQL is the system of record; private files will use S3-compatible object storage, and long-running work will use Redis/BullMQ workers. The API starts with `VACANCY_CORE_ADAPTER=in-memory`; switch it to `prisma` only after the database schema has been migrated and seed data exists.

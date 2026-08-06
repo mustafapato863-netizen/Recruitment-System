@@ -19,6 +19,16 @@ pnpm dev:web
 
 Keep real credentials only in the untracked `.env` file. Never commit `.env`, database dumps, uploaded files, or production data.
 
+## Database adapter
+
+`database/` is the Prisma workspace package. It owns the canonical schema and exports the generated client to the API. The generated files under `database/generated/` are ignored and must be recreated after a clean checkout:
+
+```powershell
+pnpm db:generate
+```
+
+The API defaults to `VACANCY_CORE_ADAPTER=in-memory` so the first workflow slice can run without database rows. Use `VACANCY_CORE_ADAPTER=prisma` only after the schema migration has been applied and seed data includes an organization, branch, position, and user. No migration or database mutation is performed by the bootstrap commands.
+
 ## Quality checks
 
 ```powershell
@@ -28,4 +38,4 @@ pnpm typecheck
 pnpm build
 ```
 
-Prisma commands require a working certificate chain so Prisma can download its platform engine on first use. Database migrations will be added only after the schema has passed Prisma validation and the connection has been tested.
+Prisma commands require a working certificate chain so Prisma can download its platform engine on first use. On Windows machines with an enterprise TLS inspection certificate, configure Node to trust the approved local CA without disabling TLS verification. `pnpm db:validate` also requires `DATABASE_URL` to be present in the environment, but validation itself does not connect to PostgreSQL.

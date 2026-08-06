@@ -33,3 +33,11 @@
 - Confirmed the Prisma schema has no migration directory and the local `@prisma/client` is not generated.
 - Confirmed `PrismaClient` construction fails before connection because the Prisma engine/client artifacts are missing; the installed engine package directory is empty.
 - Kept the working API on the safe in-memory adapter and documented the exact prerequisite for the next attempt.
+
+## 2026-08-06 — Prisma adapter
+
+- Repaired local Prisma generation without disabling TLS by trusting the approved Windows enterprise root CA for the command process.
+- Made `database/` a workspace package that owns Prisma CLI/client resolution and exports the ignored generated client through `@recruitflow/database`.
+- Added `PrismaService`, a Prisma-backed Vacancy Core repository, an adapter switch, and a PostgreSQL `CodeSequence` model.
+- Verified generated-client construction, Prisma-adapter application bootstrap, full in-memory API workflow, lint, typecheck, and build.
+- No PostgreSQL connection, migration, seed, or data mutation was performed.

@@ -21,7 +21,7 @@ yarn-debug.log*
 *.iml
 *.swp
 
-database/prisma/generated/
+database/generated/
 uploads/
 tmp/
 

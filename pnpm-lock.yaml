@@ -17,9 +17,6 @@ importers:
       globals:
         specifier: ^17.7.0
         version: 17.9.0
-      prisma:
-        specifier: ^6.15.0
-        version: 6.19.3(typescript@6.0.3)
       typescript-eslint:
         specifier: ^8.65.0
         version: 8.66.0(eslint@10.8.0(jiti@2.7.0))(typescript@6.0.3)
@@ -38,12 +35,12 @@ importers:
       '@nestjs/platform-express':
         specifier: ^11.1.6
         version: 11.1.28(@nestjs/common@11.1.28(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2))(@nestjs/core@11.1.28)
-      '@prisma/client':
-        specifier: ^6.15.0
-        version: 6.19.3(prisma@6.19.3(typescript@5.9.3))(typescript@5.9.3)
       '@recruitflow/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@recruitflow/database':
+        specifier: workspace:*
+        version: link:../../database
       class-transformer:
         specifier: ^0.5.1
         version: 0.5.1
@@ -125,6 +122,16 @@ importers:
       typescript:
         specifier: ^5.9.2
         version: 5.9.3
+
+  database:
+    dependencies:
+      '@prisma/client':
+        specifier: 6.19.3
+        version: 6.19.3(prisma@6.19.3(typescript@6.0.3))(typescript@6.0.3)
+    devDependencies:
+      prisma:
+        specifier: 6.19.3
+        version: 6.19.3(typescript@6.0.3)
 
   packages/config:
     dependencies:
@@ -3125,10 +3132,10 @@ snapshots:
 
   '@oxc-project/types@0.143.0': {}
 
-  '@prisma/client@6.19.3(prisma@6.19.3(typescript@5.9.3))(typescript@5.9.3)':
+  '@prisma/client@6.19.3(prisma@6.19.3(typescript@6.0.3))(typescript@6.0.3)':
     optionalDependencies:
-      prisma: 6.19.3(typescript@5.9.3)
-      typescript: 5.9.3
+      prisma: 6.19.3(typescript@6.0.3)
+      typescript: 6.0.3
 
   '@prisma/config@6.19.3':
     dependencies:
@@ -4554,16 +4561,6 @@ snapshots:
       source-map-js: 1.2.1
 
   prelude-ls@1.2.1: {}
-
-  prisma@6.19.3(typescript@5.9.3):
-    dependencies:
-      '@prisma/config': 6.19.3
-      '@prisma/engines': 6.19.3
-    optionalDependencies:
-      typescript: 5.9.3
-    transitivePeerDependencies:
-      - magicast
-    optional: true
 
   prisma@6.19.3(typescript@6.0.3):
     dependencies:

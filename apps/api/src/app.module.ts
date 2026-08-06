@@ -4,7 +4,13 @@ import { HealthController } from './health.controller';
 import { VacancyCoreModule } from './vacancy-core/vacancy-core.module';
 
 @Module({
-  imports: [ConfigModule.forRoot({ isGlobal: true }), VacancyCoreModule],
+  imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: ['.env', '../../.env'],
+    }),
+    VacancyCoreModule,
+  ],
   controllers: [HealthController],
 })
 export class AppModule {}

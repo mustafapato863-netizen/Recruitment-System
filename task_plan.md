@@ -8,7 +8,7 @@ Bootstrap the new Recruitment System repository as a secure monorepo with a Reac
 
 - [completed] 1. Inspect repository, toolchain, and database connectivity
 - [completed] 2. Create monorepo workspace and application shells
-- [in_progress] 3. Add database/Prisma foundation and safe local environment configuration
+- [in_progress] 3. Add database/Prisma foundation, generated client, and safe local environment configuration
 - [completed] 4. Add shared contracts, authentication/authorization foundation, and UI shell
 - [completed] 5. Implement first vertical slice: vacancy requests, approvals, and vacancies
 - [completed] 6. Clean repository structure, references, starter assets, and documentation
@@ -26,6 +26,8 @@ Bootstrap the new Recruitment System repository as a secure monorepo with a Reac
 - Keep design-system ownership in `packages/design-system` and document visual references separately.
 - Use a server-side application service and repository boundary for Vacancy Core; keep the first slice runnable with an in-memory adapter until Prisma engine setup is available locally.
 - Expose request/approval/conversion contracts from `packages/contracts`; validate browser writes with `packages/validation` and keep Nest DTOs as the runtime API boundary.
+- Keep the canonical Prisma schema under `database/prisma`; make `database/` the owner of Prisma generation and export its ignored generated client to the API.
+- Keep `VACANCY_CORE_ADAPTER=in-memory` as the default until a migration and reference-data seed are explicitly applied.
 
 ## Errors Encountered
 
@@ -44,3 +46,9 @@ Bootstrap the new Recruitment System repository as a secure monorepo with a Reac
 | In-process smoke test started from the monorepo root and could not resolve API-local Nest dependencies | 1 | Run the temporary Nest test from `apps/api`, where the workspace dependency links are resolved normally. |
 | Code-reviewer checker failed before analysis because Windows stdout used `cp1252` for a Unicode status symbol | 1 | Rerun the checker with `PYTHONIOENCODING=utf-8`. |
 | Prisma client construction failed because the generated client and local Prisma engine are absent | 1 | Keep the in-memory adapter active and defer Prisma adapter/migration work until Prisma engine installation and certificate validation are repaired. |
+| Prisma engine download succeeded with the Windows Zscaler CA, but `prisma generate` exited while auto-running `pnpm add @prisma/client@6.19.3` | 1 | Inspect the generated output and align workspace Prisma versions/configuration before rerunning generation. |
+| Running generation from `apps/api` still triggered Prisma auto-install | 1 | Align the declared `prisma` and `@prisma/client` versions to the installed `6.19.3` release before retrying. |
+| Prisma continued the auto-install failure after version alignment | 1 | Bypass Prisma's package auto-install by verifying the API dependency manually and invoking the local CLI explicitly. |
+| Custom generated-client output did not bypass Prisma's auto-install stage | 1 | Inspect the installed CLI for a supported skip/disable condition; do not repeat generation attempts without changing the execution path. |
+| Prisma client generated into a pnpm virtual-store instance that the API did not use | 1 | Make `database` a workspace package, generate to its own ignored `generated/client` path, and export that client through `@recruitflow/database`. |
+| `db:validate` could not find `DATABASE_URL` in the clean shell | 1 | Keep the schema environment-driven and document that validation needs the variable present but does not connect to PostgreSQL. |

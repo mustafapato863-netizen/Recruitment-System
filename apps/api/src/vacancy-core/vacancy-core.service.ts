@@ -141,7 +141,7 @@ export class VacancyCoreService {
       branchId: request.branchId,
       positionId: request.positionId,
       vacancyRequestId: request.id,
-      vacancyCode: this.repository.nextVacancyCode(),
+      vacancyCode: await this.repository.nextVacancyCode(),
       status: 'Pending Activation',
       approvedHeadcount: request.requestedHeadcount,
       joinedHeadcount: 0,
@@ -154,8 +154,7 @@ export class VacancyCoreService {
 
     request.status = 'Converted to Vacancy';
     request.updatedAt = now;
-    await this.repository.saveRequest(request);
-    await this.repository.saveVacancy(vacancy);
+    await this.repository.saveRequestAndVacancy(request, vacancy);
 
     return { request, vacancy, idempotent: false };
   }

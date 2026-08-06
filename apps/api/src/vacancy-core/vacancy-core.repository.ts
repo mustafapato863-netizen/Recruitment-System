@@ -12,9 +12,13 @@ export interface VacancyCoreRepository {
   listRequests(): Promise<VacancyRequest[]>;
   getRequest(id: string): Promise<VacancyRequest | null>;
   saveRequest(request: VacancyRequest): Promise<VacancyRequest>;
+  saveRequestAndVacancy(
+    request: VacancyRequest,
+    vacancy: Vacancy,
+  ): Promise<void>;
   createRequest(input: CreateVacancyRequestInput): Promise<VacancyRequest>;
   listVacancies(): Promise<Vacancy[]>;
   getVacancyByRequestId(requestId: string): Promise<Vacancy | null>;
   saveVacancy(vacancy: Vacancy): Promise<Vacancy>;
-  nextVacancyCode(): string;
+  nextVacancyCode(): Promise<string>;
 }

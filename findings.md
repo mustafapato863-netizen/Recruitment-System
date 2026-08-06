@@ -52,3 +52,14 @@
 - No migration directory exists yet, so no schema mutation should be attempted against the user's PostgreSQL database until the local Prisma engine/certificate issue is resolved.
 - Keep `VACANCY_CORE_ADAPTER=in-memory` as the safe default; introduce the Prisma adapter only after generated client and migration checks pass.
 - Confirmed at runtime that constructing `PrismaClient` fails immediately with `@prisma/client did not initialize yet`; this is a local tooling prerequisite, not an application code failure.
+- Windows has a Zscaler Root CA installed in both the user and machine root stores, while Node/npm have no custom CA configured; this is a viable certificate-chain repair path without disabling TLS.
+- The root `db:generate` script ran Prisma from the workspace root, causing Prisma's package auto-install step to target the wrong package. Prisma generation should run from `apps/api`, where `@prisma/client` is declared.
+- The repeated `pnpm add` message is emitted by the `@prisma/client` lifecycle path when `.prisma/client` is still absent; generated output must be verified after the lifecycle completes, not based on the initial schema-loaded message.
+
+## Prisma integration result
+
+- The Windows Zscaler root certificate was exported only to the current process through `NODE_EXTRA_CA_CERTS`; TLS verification remained enabled.
+- Prisma `6.19.3` now generates successfully through the `database` workspace package when `PRISMA_GENERATE_SKIP_AUTOINSTALL=1` is set.
+- The generated client is intentionally owned and exported by `@recruitflow/database`; this avoids pnpm virtual-store instances being generated for one workspace and imported from another.
+- `PrismaService` and `PrismaVacancyCoreRepository` are available behind `VACANCY_CORE_ADAPTER=prisma`. The default remains in-memory until migration and seed data are applied.
+- A `CodeSequence` model was added so request and vacancy business codes can increment atomically through PostgreSQL instead of relying on process-local counters.
