@@ -9,8 +9,8 @@
     "dev:worker": "pnpm --dir apps/worker dev",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
-    "lint": "eslint apps/api apps/worker packages --max-warnings=0",
-    "lint:web": "pnpm --dir apps/web lint",
+    "lint": "eslint apps packages --max-warnings=0",
+    "lint:web": "eslint apps/web --max-warnings=0",
     "db:generate": "prisma generate --schema database/prisma/schema.prisma",
     "db:format": "prisma format --schema database/prisma/schema.prisma",
     "db:validate": "prisma validate --schema database/prisma/schema.prisma"

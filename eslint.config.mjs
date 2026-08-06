@@ -2,36 +2,37 @@ import eslint from '@eslint/js';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
-export default tseslint.config(
+export default [
   {
     ignores: [
       '**/node_modules/**',
       '**/dist/**',
       '**/build/**',
       '**/coverage/**',
-      'Refrence/**',
-      'Frontend/**',
+      'docs/**',
       'eslint.config.mjs',
     ],
   },
   eslint.configs.recommended,
-  ...tseslint.configs.recommended,
   {
     files: ['**/*.{ts,tsx}'],
     languageOptions: {
+      parser: tseslint.parser,
       parserOptions: {
-        project: false,
-        projectService: false,
-        tsconfigRootDir: import.meta.dirname,
+        ecmaVersion: 'latest',
+        sourceType: 'module',
       },
       globals: {
         ...globals.browser,
         ...globals.node,
       },
     },
+    plugins: {
+      '@typescript-eslint': tseslint.plugin,
+    },
     rules: {
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/consistent-type-imports': 'error',
     },
   },
-);
+];

@@ -2,7 +2,8 @@
 
 ## Repository
 
-- The workspace currently contains the supplied planning and UI/UX reference pack under `Refrence/`.
+- The supplied planning and UI/UX reference pack is now consolidated under `docs/reference/` so planning, UI/UX, and design-system guidance have clear ownership.
+- The old `Refrence/` root name is no longer part of the tracked repository structure.
 - The GitHub remote appears to be reachable and currently has no visible branch refs, consistent with a new/empty repository.
 - No application bootstrap files such as `package.json`, `pnpm-lock.yaml`, `apps/`, or `src/` exist yet.
 
@@ -29,3 +30,9 @@
 - Start with Foundation plus Vacancy Core.
 - First vertical flow: create vacancy request -> submit -> approval route -> approved request -> vacancy conversion -> assignment/headcount/status.
 
+## Cleanup decisions
+
+- Keep the complete UI prototype and source images as reference material, but move them out of the repository root.
+- Keep the design-system implementation in `packages/design-system` and document the corresponding prototype screen instead of duplicating design assets.
+- Remove Vite starter-only code/assets from the real application shell once the RecruitFlow shell is in place.
+- The generated Vite starter page and its four unused assets were removed; `apps/web` now renders a RecruitFlow dashboard shell based on the approved visual direction.

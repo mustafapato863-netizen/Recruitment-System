@@ -1,6 +1,8 @@
 # RecruitFlow
 
-RecruitFlow is an internal recruitment and hiring management system based on the approved planning pack in `Refrence/`.
+RecruitFlow is an internal recruitment and hiring management system. The project is a single monorepo containing independently buildable frontend, API, and worker applications.
+
+Start with [the documentation index](docs/README.md), then read [development setup](docs/development/setup.md) and [the approved reference pack](docs/reference/README.md).
 
 ## Repository layout
 
@@ -13,7 +15,7 @@ packages/config    Typed environment/config helpers
 packages/validation Shared Zod validation schemas
 packages/design-system Shared UI tokens and primitives
 database/prisma/   PostgreSQL schema and migrations
-Refrence/          Approved business, workflow, data, technical, and UI references
+docs/              Architecture, setup, design, and references
 ```
 
 The frontend and backend live in one repository but remain independently buildable and deployable.
