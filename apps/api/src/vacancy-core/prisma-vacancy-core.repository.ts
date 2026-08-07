@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Inject, Injectable } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import type { Prisma } from '@recruitflow/database';
 import { PrismaService } from '../database/prisma.service';
 import type {
@@ -7,6 +7,7 @@ import type {
   Vacancy,
   VacancyAssignment,
   VacancyCoreContext,
+  VacancyDetailView,
   VacancyRequest,
   VacancyRequestApproval,
 } from '@recruitflow/contracts';
@@ -69,8 +70,9 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
     };
   }
 
-  async listRequests(): Promise<VacancyRequest[]> {
+  async listRequests(organizationId: string): Promise<VacancyRequest[]> {
     const requests = await this.prisma.vacancyRequest.findMany({
+      where: { organizationId },
       include: { approvals: true },
       orderBy: { createdAt: 'desc' },
     });
@@ -78,16 +80,17 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
     return requests.map((request) => this.toVacancyRequest(request));
   }
 
-  async getRequest(id: string): Promise<VacancyRequest | null> {
+  async getRequest(organizationId: string, id: string): Promise<VacancyRequest | null> {
     const request = await this.prisma.vacancyRequest.findUnique({
       where: { id },
       include: { approvals: true },
     });
 
-    return request ? this.toVacancyRequest(request) : null;
+    return request && request.organizationId === organizationId ? this.toVacancyRequest(request) : null;
   }
 
   async saveRequest(request: VacancyRequest): Promise<VacancyRequest> {
+    await this.assertRequestReferences(request);
     return this.prisma.$transaction((transaction) =>
       this.saveRequestInTransaction(transaction, request),
     );
@@ -97,6 +100,7 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
     request: VacancyRequest,
     vacancy: Vacancy,
   ): Promise<void> {
+    await this.assertRequestReferences(request);
     await this.prisma.$transaction(async (transaction) => {
       await this.saveRequestInTransaction(transaction, request);
       await this.upsertVacancy(transaction, vacancy);
@@ -104,6 +108,35 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
   }
 
   async createRequest(input: CreateVacancyRequestInput): Promise<VacancyRequest> {
+    const [branch, position, requester, legalEntity] = await Promise.all([
+      this.prisma.branch.findFirst({
+        where: { id: input.branchId, organizationId: input.organizationId },
+        select: { id: true, legalEntityId: true },
+      }),
+      this.prisma.position.findFirst({
+        where: { id: input.positionId, organizationId: input.organizationId },
+        select: { id: true },
+      }),
+      this.prisma.user.findFirst({
+        where: { id: input.requesterId, organizationId: input.organizationId, status: 'Active' },
+        select: { id: true },
+      }),
+      input.legalEntityId
+        ? this.prisma.legalEntity.findFirst({
+            where: { id: input.legalEntityId, organizationId: input.organizationId },
+            select: { id: true },
+          })
+        : Promise.resolve(null),
+    ]);
+
+    if (!branch || !position || !requester || (input.legalEntityId && !legalEntity)) {
+      throw new BadRequestException('Vacancy request references data outside the current organization.');
+    }
+
+    if (input.legalEntityId && branch.legalEntityId !== input.legalEntityId) {
+      throw new BadRequestException('Branch does not belong to the selected legal entity.');
+    }
+
     const requestCode = await this.nextBusinessCode('VR');
     const request = await this.prisma.vacancyRequest.create({
       data: {
@@ -131,8 +164,9 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
     return this.toVacancyRequest(request);
   }
 
-  async listVacancies(): Promise<Vacancy[]> {
+  async listVacancies(organizationId: string): Promise<Vacancy[]> {
     const vacancies = await this.prisma.vacancy.findMany({
+      where: { organizationId },
       include: { assignments: true },
       orderBy: { createdAt: 'desc' },
     });
@@ -140,13 +174,22 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
     return vacancies.map((vacancy) => this.toVacancy(vacancy));
   }
 
-  async getVacancyByRequestId(requestId: string): Promise<Vacancy | null> {
+  async getVacancyByRequestId(organizationId: string, requestId: string): Promise<Vacancy | null> {
     const vacancy = await this.prisma.vacancy.findUnique({
       where: { vacancyRequestId: requestId },
       include: { assignments: true },
     });
 
-    return vacancy ? this.toVacancy(vacancy) : null;
+    return vacancy && vacancy.organizationId === organizationId ? this.toVacancy(vacancy) : null;
+  }
+
+  async getVacancy(organizationId: string, id: string): Promise<Vacancy | null> {
+    const vacancy = await this.prisma.vacancy.findUnique({
+      where: { id },
+      include: { assignments: true },
+    });
+
+    return vacancy && vacancy.organizationId === organizationId ? this.toVacancy(vacancy) : null;
   }
 
   async saveVacancy(vacancy: Vacancy): Promise<Vacancy> {
@@ -157,8 +200,102 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
     return this.toVacancy(saved);
   }
 
+  async ensureUserInOrganization(organizationId: string, userId: string): Promise<void> {
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId, organizationId, status: 'Active' },
+      select: { id: true },
+    });
+    if (!user) {
+      throw new BadRequestException('Assigned user does not belong to the current organization.');
+    }
+  }
+
+  private async assertRequestReferences(request: VacancyRequest): Promise<void> {
+    const [branch, position, requester, legalEntity] = await Promise.all([
+      this.prisma.branch.findFirst({
+        where: { id: request.branchId, organizationId: request.organizationId },
+        select: { id: true, legalEntityId: true },
+      }),
+      this.prisma.position.findFirst({
+        where: { id: request.positionId, organizationId: request.organizationId },
+        select: { id: true },
+      }),
+      this.prisma.user.findFirst({
+        where: { id: request.requesterId, organizationId: request.organizationId },
+        select: { id: true },
+      }),
+      request.legalEntityId
+        ? this.prisma.legalEntity.findFirst({
+            where: { id: request.legalEntityId, organizationId: request.organizationId },
+            select: { id: true },
+          })
+        : Promise.resolve(null),
+    ]);
+
+    if (!branch || !position || !requester || (request.legalEntityId && !legalEntity)) {
+      throw new BadRequestException('Vacancy request references data outside the current organization.');
+    }
+    if (request.legalEntityId && branch.legalEntityId !== request.legalEntityId) {
+      throw new BadRequestException('Branch does not belong to the selected legal entity.');
+    }
+  }
+
   async nextVacancyCode(): Promise<string> {
     return this.nextBusinessCode('VAC');
+  }
+
+  async getApproverInbox(organizationId: string, userRoleCodes: string[]): Promise<VacancyRequest[]> {
+    const requests = await this.prisma.vacancyRequest.findMany({
+      where: {
+        organizationId,
+        status: 'Pending Approval',
+        approvals: {
+          some: {
+            status: 'Pending',
+            roleCode: { in: userRoleCodes },
+          },
+        },
+      },
+      include: { approvals: true },
+    });
+    // Filter to ensure the *current* step matches
+    return requests.filter(r => r.approvals.some(a => a.revision === r.approvalRevision && a.status === 'Pending' && userRoleCodes.includes(a.roleCode)))
+                   .map(r => this.toVacancyRequest(r));
+  }
+
+  async getVacancyDetail(organizationId: string, id: string): Promise<VacancyDetailView | null> {
+    const vacancy = await this.prisma.vacancy.findUnique({
+      where: { id },
+      include: {
+        assignments: true,
+        vacancyRequest: {
+          include: { approvals: true },
+        },
+        organization: true,
+        branch: true,
+        legalEntity: true,
+        position: true,
+      },
+    });
+
+    if (!vacancy || vacancy.organizationId !== organizationId) return null;
+
+    return {
+      ...this.toVacancy(vacancy),
+      vacancyRequest: vacancy.vacancyRequest ? this.toVacancyRequest(vacancy.vacancyRequest) : undefined,
+      organizationName: vacancy.organization.name,
+      branchName: vacancy.branch.name,
+      legalEntityName: vacancy.legalEntity?.name,
+      positionTitle: vacancy.position.title,
+      funnelCounts: {
+        applied: 0,
+        screening: 0,
+        interviews: 0,
+        offer: 0,
+        preHire: 0,
+        joined: vacancy.joinedHeadcount,
+      },
+    };
   }
 
   private async saveRequestInTransaction(

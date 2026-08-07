@@ -13,7 +13,8 @@
     "outDir": "./dist",
     "baseUrl": "./",
     "paths": {
-      "@recruitflow/contracts": ["../../packages/contracts/src/index.ts"]
+      "@recruitflow/contracts": ["../../packages/contracts/src/index.ts"],
+      "@recruitflow/database": ["../../database/generated/client/index.d.ts"]
     },
     "incremental": true,
     "skipLibCheck": true

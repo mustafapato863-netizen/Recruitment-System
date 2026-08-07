@@ -4,6 +4,7 @@ import type {
   CreateVacancyRequestInput,
   Vacancy,
   VacancyCoreContext,
+  VacancyDetailView,
   VacancyRequest,
 } from '@recruitflow/contracts';
 import type { VacancyCoreRepository } from './vacancy-core.repository';
@@ -36,14 +37,15 @@ export class InMemoryVacancyCoreRepository implements VacancyCoreRepository {
     };
   }
 
-  async listRequests(): Promise<VacancyRequest[]> {
-    return [...this.requests.values()].sort((left, right) =>
-      right.createdAt.localeCompare(left.createdAt),
-    );
+  async listRequests(organizationId: string): Promise<VacancyRequest[]> {
+    return [...this.requests.values()]
+      .filter((r) => r.organizationId === organizationId)
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
   }
 
-  async getRequest(id: string): Promise<VacancyRequest | null> {
-    return this.requests.get(id) ?? null;
+  async getRequest(organizationId: string, id: string): Promise<VacancyRequest | null> {
+    const req = this.requests.get(id);
+    return req?.organizationId === organizationId ? req : null;
   }
 
   async saveRequest(request: VacancyRequest): Promise<VacancyRequest> {
@@ -88,18 +90,23 @@ export class InMemoryVacancyCoreRepository implements VacancyCoreRepository {
     return request;
   }
 
-  async listVacancies(): Promise<Vacancy[]> {
-    return [...this.vacancies.values()].sort((left, right) =>
-      right.createdAt.localeCompare(left.createdAt),
+  async listVacancies(organizationId: string): Promise<Vacancy[]> {
+    return [...this.vacancies.values()]
+      .filter((v) => v.organizationId === organizationId)
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+  }
+
+  async getVacancyByRequestId(organizationId: string, requestId: string): Promise<Vacancy | null> {
+    return (
+      [...this.vacancies.values()].find(
+        (vacancy) => vacancy.organizationId === organizationId && vacancy.vacancyRequestId === requestId,
+      ) ?? null
     );
   }
 
-  async getVacancyByRequestId(requestId: string): Promise<Vacancy | null> {
-    return (
-      [...this.vacancies.values()].find(
-        (vacancy) => vacancy.vacancyRequestId === requestId,
-      ) ?? null
-    );
+  async getVacancy(organizationId: string, id: string): Promise<Vacancy | null> {
+    const v = this.vacancies.get(id);
+    return v?.organizationId === organizationId ? v : null;
   }
 
   async saveVacancy(vacancy: Vacancy): Promise<Vacancy> {
@@ -107,7 +114,38 @@ export class InMemoryVacancyCoreRepository implements VacancyCoreRepository {
     return vacancy;
   }
 
+  async ensureUserInOrganization(): Promise<void> {
+    return Promise.resolve();
+  }
+
   async nextVacancyCode(): Promise<string> {
     return `VAC-${new Date().getUTCFullYear()}-${String(this.vacancySequence++).padStart(3, '0')}`;
+  }
+
+  async getApproverInbox(organizationId: string, userRoleCodes: string[]): Promise<VacancyRequest[]> {
+    return [...this.requests.values()].filter(
+      (r) =>
+        r.organizationId === organizationId &&
+        r.status === 'Pending Approval' &&
+        r.approvals.some(
+          (a) => a.revision === r.approvalRevision && a.status === 'Pending' && userRoleCodes.includes(a.roleCode),
+        ),
+    );
+  }
+
+  async getVacancyDetail(organizationId: string, id: string): Promise<VacancyDetailView | null> {
+    const vacancy = await this.getVacancy(organizationId, id);
+    if (!vacancy) return null;
+    return {
+      ...vacancy,
+      funnelCounts: {
+        applied: 0,
+        screening: 0,
+        interviews: 0,
+        offer: 0,
+        preHire: 0,
+        joined: vacancy.joinedHeadcount,
+      },
+    };
   }
 }
