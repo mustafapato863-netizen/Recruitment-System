@@ -1,6 +1,10 @@
 import { useRef, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
+import { Icon } from '../components/Icon';
+import { Alert } from '../components/ui/Alert';
+import { Button } from '../components/ui/Button';
+import { FormField } from '../components/ui/FormField';
 import '../styles/auth.css';
 
 type LoginField = 'email' | 'password';
@@ -27,6 +31,7 @@ function getLoginErrorMessage(error: unknown): string {
 export function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<LoginFieldErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -90,12 +95,12 @@ export function LoginPage() {
           </div>
         </div>
 
-        {error && <div className="alert error-alert auth-error" role="alert">{error}</div>}
+        {error && <Alert className="auth-error" tone="danger" title="Unable to sign in">{error}</Alert>}
 
         <form className="auth-form" noValidate onSubmit={handleSubmit}>
-          <div className="auth-field">
-            <label htmlFor="login-email">Email address</label>
+          <FormField error={fieldErrors.email} id="login-email" label="Email address" required>
             <input
+              className="ui-field-control auth-control"
               ref={emailInputRef}
               id="login-email"
               type="email"
@@ -103,31 +108,40 @@ export function LoginPage() {
               onChange={(event) => { setEmail(event.target.value); clearFieldError('email'); }}
               autoComplete="email"
               autoFocus
-              aria-describedby={fieldErrors.email ? 'login-email-error' : undefined}
+              aria-describedby={fieldErrors.email ? 'login-email-message' : undefined}
               aria-invalid={Boolean(fieldErrors.email)}
               placeholder="name@company.com"
             />
-            {fieldErrors.email && <p className="field-error" id="login-email-error" role="alert">{fieldErrors.email}</p>}
-          </div>
+          </FormField>
 
-          <div className="auth-field">
-            <label htmlFor="login-password">Password</label>
-            <input
-              ref={passwordInputRef}
-              id="login-password"
-              type="password"
-              value={password}
-              onChange={(event) => { setPassword(event.target.value); clearFieldError('password'); }}
-              autoComplete="current-password"
-              aria-describedby={fieldErrors.password ? 'login-password-error' : undefined}
-              aria-invalid={Boolean(fieldErrors.password)}
-            />
-            {fieldErrors.password && <p className="field-error" id="login-password-error" role="alert">{fieldErrors.password}</p>}
-          </div>
+          <FormField error={fieldErrors.password} id="login-password" label="Password" required>
+            <div className="auth-password">
+              <input
+                className="ui-field-control auth-control"
+                ref={passwordInputRef}
+                id="login-password"
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(event) => { setPassword(event.target.value); clearFieldError('password'); }}
+                autoComplete="current-password"
+                aria-describedby={fieldErrors.password ? 'login-password-message' : undefined}
+                aria-invalid={Boolean(fieldErrors.password)}
+              />
+              <button
+                type="button"
+                className="password-toggle"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                aria-pressed={showPassword}
+                onClick={() => setShowPassword((prev) => !prev)}
+              >
+                <Icon name={showPassword ? 'eye-off' : 'eye'} size={16} />
+              </button>
+            </div>
+          </FormField>
 
-          <button type="submit" className="auth-button" aria-busy={isSubmitting} disabled={isSubmitting}>
-            {isSubmitting ? 'Signing in...' : 'Sign In'}
-          </button>
+          <Button className="auth-submit" type="submit" variant="primary" size="lg" loading={isSubmitting} loadingLabel="Signing in">
+            Sign in
+          </Button>
         </form>
       </div>
     </div>

@@ -1,55 +1,57 @@
 file,title,category,description
-01_dashboard.html,Dashboard,Overview,"Recruitment demand, funnel, priorities and interviews."
-02_tasks.html,My Tasks,Overview,"Task ownership, due dates, priorities and SLA."
-03_notifications.html,Notifications,Overview,"Approvals, interviews, offers and system alerts."
-04_vacancy_requests.html,Vacancy Requests,Vacancy Management,Workforce demand and approval progress.
-05_create_vacancy_request.html,Create Vacancy Request,Vacancy Management,Complete vacancy-request wizard.
-06_vacancy_request_details.html,Vacancy Request Details,Vacancy Management,"Request summary, replacements and approval timeline."
-07_vacancy_approval_inbox.html,Vacancy Approval Inbox,Vacancy Management,Role-based vacancy approvals.
-08_vacant_list.html,Vacant List,Vacancy Management,"Branch, department, function, position, ownership and headcount."
-09_vacancy_overview.html,Vacancy Overview,Vacancy Management,"Progress, ownership, requirements and activity."
-10_vacancy_candidates.html,Vacancy Candidates,Vacancy Management,Applications linked to a selected vacancy.
-11_vacancy_pipeline.html,Vacancy Pipeline,Vacancy Management,"Kanban stages, candidate cards and stage rules."
-12_vacancy_interviews.html,Vacancy Interviews,Vacancy Management,"Rounds, participants, status and results."
-13_vacancy_offers.html,Vacancy Offers,Vacancy Management,Offer versions and candidate responses.
-14_candidates.html,Candidate Database,Talent,Unique candidate profiles and selected application context.
-15_candidate_profile.html,Candidate Profile,Talent,Unique profile with separate application history.
-16_add_candidate.html,Add Candidate,Talent,Manual candidate creation and vacancy linking.
-17_cv_upload.html,CV Upload & Processing,Talent,"OCR, parsing, confidence and duplicate checks."
-18_duplicate_detection.html,Duplicate Detection,Talent,Exact and possible duplicate resolution.
-19_application_details.html,Application Details,Talent,"Application stage, screening and interview history."
-20_phone_screening.html,Phone Screening,Talent,"Current salary, expected salary and structured screening."
-21_interviews.html,Interview Management,Recruitment,"Interview schedule, participants and feedback status."
-22_interview_calendar.html,Interview Calendar,Recruitment,Calendar schedule and meeting types.
-23_schedule_interview.html,Schedule Interview,Recruitment,"Interview details, participants and notifications."
-24_interview_evaluation.html,Interview Evaluation,Recruitment,Independent competency scorecard and evidence.
-25_hiring_decision.html,Hiring Decision,Recruitment,Debrief and final hiring decision.
-26_offers.html,Offer Management,Recruitment,"Offer list, version, package, approval and response."
-27_create_offer.html,Create Offer,Recruitment,Dynamic package and approval routing.
-28_offer_details.html,Offer Details,Recruitment,"Accepted version, components and version history."
-29_offer_approval_inbox.html,Offer Approval Inbox,Recruitment,Offer package and salary-band approvals.
-30_hire_management.html,Hire Management,Recruitment,"Pre-hire cases, readiness, approvals and joining dates."
-31_hiring_case.html,Hiring Case,Recruitment,"Readiness gates, ownership and final approval."
-32_documents.html,Documents Checklist,Recruitment,Versioned hiring documents with review and expiry.
-33_license_management.html,License Management,Recruitment,"Verification, expiry and renewal controls."
-34_final_approval_inbox.html,Final Hiring Approval Inbox,Recruitment,Final readiness and approval gate.
-35_joining_management.html,Joining Management,Recruitment,Attendance confirmation and headcount closure.
-36_talent_pool.html,Talent Pool,Talent,"Candidate communities, consent and eligibility."
-37_import_preview.html,Import Preview,Talent,"Row validation, duplicate decisions and import readiness."
-38_reports.html,Reports & Analytics,Analytics,"Funnel, time, source, department and workload KPIs."
-39_users_roles.html,Users & Roles,Administration,"Roles, scopes and sensitive permissions."
-40_master_data.html,Master Data,Administration,"Organization, position and recruitment master data."
-41_pipeline_settings.html,Pipeline Settings,Administration,"Templates, stage gates, SLA and transition rules."
-42_integrations.html,Integrations,Administration,"Calendar, storage, HRIS, sourcing and API connections."
-43_audit_log.html,Audit Log,Administration,Sensitive access and workflow event history.
-44_design_system.html,Design System,Administration,"Tokens, typography, components and feedback patterns."
-45_states_feedback.html,States & Feedback,Administration,"Loading, empty, permission, validation and error patterns."
-46_mobile_dashboard.html,Mobile Dashboard,Mobile,Responsive operational dashboard.
-47_mobile_candidate.html,Mobile Candidate,Mobile,Candidate profile and application context.
-48_mobile_approval.html,Mobile Approval,Mobile,Mobile final hiring approval.
-49_mobile_interview.html,Mobile Interview,Mobile,Mobile interview details and scorecard.
-50_dark_dashboard.html,Dark Dashboard,Special,Dark-mode visual reference.
-51_annotated_dashboard.html,Annotated Dashboard,Special,"Numbered anatomy of navigation, KPIs, analytics and priorities."
-52_annotated_vacancy.html,Annotated Vacancy Overview,Special,"Numbered anatomy of vacancy progress, ownership and requirements."
-53_annotated_candidate.html,Annotated Candidate Profile,Special,Numbered anatomy of candidate identity and application separation.
-54_annotated_hiring_case.html,Annotated Hiring Case,Special,"Numbered anatomy of readiness gates, ownership and approval history."
+01_dashboard.html,Dashboard,Command Center,"Recruitment demand, funnel, priorities and interviews."
+02_tasks.html,My Tasks,My Work,"Task ownership, due dates, priorities and SLA."
+03_notifications.html,Notifications,My Work,"Approvals, interviews, offers and system alerts."
+04_vacancy_requests.html,Vacancy Requests,Workforce & Openings,Workforce demand and approval progress.
+05_create_vacancy_request.html,Create Vacancy Request,Workforce & Openings,Complete vacancy-request wizard.
+06_vacancy_request_details.html,Vacancy Request Details,Workforce & Openings,"Request summary, replacements and approval timeline."
+07_vacancy_approval_inbox.html,Vacancy Approval Inbox,Workforce & Openings,Role-based vacancy approvals.
+08_vacant_list.html,Vacant List,Workforce & Openings,"Branch, department, function, position, ownership and headcount."
+09_vacancy_overview.html,Vacancy Overview,Workforce & Openings,"Progress, ownership, requirements and activity."
+10_vacancy_candidates.html,Vacancy Candidates,Workforce & Openings,Applications linked to a selected vacancy.
+11_vacancy_pipeline.html,Vacancy Pipeline,Workforce & Openings,"Kanban stages, candidate cards and stage rules."
+12_vacancy_interviews.html,Vacancy Interviews,Workforce & Openings,"Rounds, participants, status and results."
+13_vacancy_offers.html,Vacancy Offers,Workforce & Openings,Offer versions and candidate responses.
+14_candidates.html,Candidate Database,Talent & Intake,Unique candidate profiles and selected application context.
+15_candidate_profile.html,Candidate Profile,Talent & Intake,Unique profile with separate application history.
+16_add_candidate.html,Add Candidate,Talent & Intake,Manual candidate creation and vacancy linking.
+17_cv_upload.html,CV Upload & Processing,Talent & Intake,"OCR, parsing, confidence and duplicate checks."
+18_duplicate_detection.html,Duplicate Detection,Talent & Intake,Exact and possible duplicate resolution.
+19_application_details.html,Application Details,Talent & Intake,"Application stage, screening and interview history."
+20_phone_screening.html,Phone Screening,Talent & Intake,"Current salary, expected salary and structured screening."
+21_interviews.html,Interview Management,Hiring & Interviews,"Interview schedule, participants and feedback status."
+22_interview_calendar.html,Interview Calendar,Hiring & Interviews,Calendar schedule and meeting types.
+23_schedule_interview.html,Schedule Interview,Hiring & Interviews,"Interview details, participants and notifications."
+24_interview_evaluation.html,Interview Evaluation,Hiring & Interviews,Independent competency scorecard and evidence.
+25_hiring_decision.html,Hiring Decision,Hiring & Interviews,Debrief and final hiring decision.
+26_offers.html,Offer Management,Hiring & Interviews,"Offer list, version, package, approval and response."
+27_create_offer.html,Create Offer,Hiring & Interviews,Dynamic package and approval routing.
+28_offer_details.html,Offer Details,Hiring & Interviews,"Accepted version, components and version history."
+29_offer_approval_inbox.html,Offer Approval Inbox,Hiring & Interviews,Offer package and salary-band approvals.
+30_hire_management.html,Hire Management,Joining & Compliance,"Pre-hire cases, readiness, approvals and joining dates."
+31_hiring_case.html,Hiring Case,Joining & Compliance,"Readiness gates, ownership and final approval."
+32_documents.html,Documents Checklist,Joining & Compliance,Versioned hiring documents with review and expiry.
+33_license_management.html,License Management,Joining & Compliance,"Verification, expiry and renewal controls."
+34_final_approval_inbox.html,Final Hiring Approval Inbox,Joining & Compliance,Final readiness and approval gate.
+35_joining_management.html,Joining Management,Joining & Compliance,Attendance confirmation and headcount closure.
+36_talent_pool.html,Talent Pool,Talent & Intake,"Candidate communities, consent and eligibility."
+37_import_preview.html,Import Preview,Talent & Intake,"Row validation, duplicate decisions and import readiness."
+38_reports.html,Reports & Analytics,Insights,"Funnel, time, source, department and workload KPIs."
+39_users_roles.html,Users & Roles,Administration & Trust,"Roles, scopes and sensitive permissions."
+40_master_data.html,Master Data,Administration & Trust,"Organization, position and recruitment master data."
+41_pipeline_settings.html,Pipeline Settings,Administration & Trust,"Templates, stage gates, SLA and transition rules."
+42_integrations.html,Integrations,Administration & Trust,"Calendar, storage, HRIS, sourcing and API connections."
+43_audit_log.html,Audit Log,Administration & Trust,Sensitive access and workflow event history.
+44_design_system.html,Design System,Administration & Trust,"Tokens, typography, components and feedback patterns."
+45_states_feedback.html,States & Feedback,Administration & Trust,"Loading, empty, permission, validation and error patterns."
+46_mobile_dashboard.html,Mobile Dashboard,Mobile Continuity,Responsive operational dashboard.
+47_mobile_candidate.html,Mobile Candidate,Mobile Continuity,Candidate profile and application context.
+48_mobile_approval.html,Mobile Approval,Mobile Continuity,Mobile final hiring approval.
+49_mobile_interview.html,Mobile Interview,Mobile Continuity,Mobile interview details and scorecard.
+50_dark_dashboard.html,Dark Dashboard,Reference Anatomy,Dark-mode visual reference.
+51_annotated_dashboard.html,Annotated Dashboard,Reference Anatomy,"Numbered anatomy of navigation, KPIs, analytics and priorities."
+52_annotated_vacancy.html,Annotated Vacancy Overview,Reference Anatomy,"Numbered anatomy of vacancy progress, ownership and requirements."
+53_annotated_candidate.html,Annotated Candidate Profile,Reference Anatomy,Numbered anatomy of candidate identity and application separation.
+54_annotated_hiring_case.html,Annotated Hiring Case,Reference Anatomy,"Numbered anatomy of readiness gates, ownership and approval history."
+55_security_access.html,Security & Access,Administration & Trust,"Role stories, low-level authorization, data scope and field visibility."
+56_guidelines.html,Guidelines,Administration & Trust,"Story pipeline for recruiter, HR manager, approvals, and audit handoffs."

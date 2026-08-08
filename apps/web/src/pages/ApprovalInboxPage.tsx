@@ -3,6 +3,11 @@ import { Link } from 'react-router-dom';
 import type { VacancyRequest } from '@recruitflow/contracts';
 import { fetchApi } from '../api/client';
 import { StatusBadge } from '../components/StatusBadge';
+import { Alert } from '../components/ui/Alert';
+import { Button } from '../components/ui/Button';
+import { MetricCard } from '../components/ui/MetricCard';
+import { PageFrame } from '../components/ui/PageFrame';
+import { PageState } from '../components/ui/PageState';
 
 function currentApproval(request: VacancyRequest) {
   return [...request.approvals].reverse().find((approval) => approval.revision === request.approvalRevision && approval.status === 'Pending');
@@ -43,22 +48,27 @@ export function ApprovalInboxPage() {
   };
 
   return (
-    <div className="approval-inbox-page">
-      <div className="page-heading"><div><span className="eyebrow">Vacancy Management</span><h1>Approval Inbox</h1><p>Review and action pending vacancy requests assigned to your role.</p></div><button className="quiet-button" type="button" onClick={() => void load()}>Refresh</button></div>
+    <PageFrame
+      className="approval-inbox-page"
+      eyebrow="Vacancy Management"
+      title="Approval Inbox"
+      description="Review and action pending vacancy requests assigned to your role."
+      actions={<Button variant="ghost" size="sm" onClick={() => void load()}>Refresh</Button>}
+    >
 
-      {error && <div className="alert error-alert" role="alert"><span>{error}</span><button type="button" onClick={() => void load()}>Retry</button></div>}
+      {error && <Alert tone="danger" title="Unable to load approval inbox">{error}<Button className="ui-page-state__action" variant="danger" size="sm" onClick={() => void load()}>Retry</Button></Alert>}
 
-      <div className="metric-grid" style={{ marginBottom: '20px' }}>
-        <div className="metric-card"><span>Assigned to Me</span><strong>{requests.length}</strong><small>Current pending steps</small></div>
-        <div className="metric-card"><span>Current Step</span><strong>{requests.filter((request) => currentApproval(request)?.step === 1).length}</strong><small>First-level reviews</small></div>
-        <div className="metric-card"><span>Escalated Step</span><strong>{requests.filter((request) => (currentApproval(request)?.step || 0) > 1).length}</strong><small>Follow-up approvals</small></div>
-        <div className="metric-card"><span>Data Status</span><strong>{isLoading ? '...' : 'Live'}</strong><small>Loaded from API</small></div>
+      <div className="ui-metric-grid">
+        <MetricCard label="Assigned to Me" value={requests.length} detail="Current pending steps" tone="action" icon="↗" />
+        <MetricCard label="Current Step" value={requests.filter((request) => currentApproval(request)?.step === 1).length} detail="First-level reviews" tone="info" icon="1" />
+        <MetricCard label="Escalated Step" value={requests.filter((request) => (currentApproval(request)?.step || 0) > 1).length} detail="Follow-up approvals" tone="warning" icon="2" />
+        <MetricCard label="Data Status" value={isLoading ? '…' : 'Live'} detail="Loaded from API" tone="success" icon="✓" />
       </div>
 
       <div className="panel request-panel">
         <div className="panel-heading"><div><strong>Assigned to Me</strong><small>Only requests matching your server-authorized role are shown.</small></div></div>
-        {isLoading ? <div className="alert loading-alert" role="status">Loading approval inbox...</div> : requests.length === 0 ? (
-          <div className="empty-state"><strong>Your inbox is clear</strong><span>No pending vacancy request is assigned to your current role.</span></div>
+        {isLoading ? <PageState kind="loading" title="Loading approval inbox" description="Checking your assigned requests." /> : requests.length === 0 ? (
+          <PageState kind="empty" title="Your inbox is clear" description="No pending vacancy request is assigned to your current role." />
         ) : (
           <div className="request-table" role="region" aria-label="Approval requests" tabIndex={0}>
             <div className="request-row request-header"><span>Request</span><span>Current step</span><span>Status</span><span>Action</span></div>
@@ -68,12 +78,12 @@ export function ApprovalInboxPage() {
                 <div><strong>{request.requestCode}</strong><small>Headcount: {request.requestedHeadcount}</small></div>
                 <div><strong>{approval?.roleCode || 'Pending'}</strong><small>Revision {request.approvalRevision}, step {approval?.step || '-'}</small></div>
                 <div><StatusBadge status={request.status} /></div>
-                <div className="inline-actions"><Link className="small-button" to={`/vacancy-requests/${request.id}`}>Review</Link><button className="small-button success-button" disabled={busyId !== null} type="button" onClick={() => void approve(request)}>{busyId === request.id ? 'Approving...' : 'Approve'}</button></div>
+                <div className="inline-actions"><Link className="ui-button ui-button--secondary ui-button--sm" to={`/vacancy-requests/${request.id}`}>Review</Link><Button variant="success" size="sm" loading={busyId === request.id} disabled={busyId !== null && busyId !== request.id} loadingLabel="Approving request" onClick={() => void approve(request)}>Approve</Button></div>
               </div>;
             })}
           </div>
         )}
       </div>
-    </div>
+    </PageFrame>
   );
 }

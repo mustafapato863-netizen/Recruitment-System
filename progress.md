@@ -1,147 +1,161 @@
-# RecruitFlow Progress Log
+# RecruitFlow Delivery Progress
 
-## 2026-08-06
+## Current position — 2026-08-08
 
-- Read the complete reference pack and UI/UX catalog before implementation.
-- Confirmed the remote URL is reachable and appears empty.
-- Created persistent bootstrap planning files.
-- The existing `Frontend` directory was initially locked by another process; tracked frontend source/configuration was later moved into `apps/web` and the old ignored dependency cache was left locally.
-- Monorepo files, API/worker shells, shared packages, and initial Prisma schema were added. The first `pnpm install` downloaded dependencies but stopped before approved package build scripts ran.
-- Approved the narrowly scoped dependency build scripts and completed `pnpm install`. Prisma validation/generation is currently blocked by the local TLS certificate chain when Prisma tries to fetch its schema engine.
-- Added the monorepo root, pnpm workspace, API/worker shells, shared packages, initial PostgreSQL/Prisma schema, `.env.example`, shared ESLint configuration, and repository remote.
-- Verified `pnpm typecheck`, `pnpm build`, root lint, and frontend lint successfully.
-- Created local commit `278e89a` (`chore: bootstrap RecruitFlow monorepo`). Nothing has been pushed to GitHub yet.
-- Moved the frontend source/configuration into `apps/web` and updated workspace scripts. The old `Frontend/node_modules` directory remains as an ignored local dependency cache because Windows kept it locked; it is not part of the repository.
-- Re-ran `pnpm install`, `pnpm lint`, `pnpm lint:web`, `pnpm typecheck`, and `pnpm build` successfully with the final `apps/web` layout.
-- Began repository cleanup: moved references to `docs/reference`, added documentation indexes, centralized lint ownership, and replaced the Vite starter screen with a RecruitFlow dashboard shell.
-- Next: resolve Prisma engine/certificate setup, then begin the first vacancy-core vertical slice.
+- Active plan: [Canonical V1 execution plan](docs/development/PROJECT_EXECUTION_PLAN.md).
+- Execution instructions: [AI execution playbook](docs/development/AI_EXECUTION_PLAYBOOK.md).
+- V1 scope: Light mode only; Dark mode is deferred.
+- Completed task: `APP-CLEANUP-01` — live application cleanup, header notification popover, confirmed orphan removal, and canonical plan/playbook rewrite. Static reference remained frozen throughout this task.
+- Scope: the completed task targeted the live app only; `docs/reference/ui-ux` remained frozen and was not modified in this task.
+- Reference-only iteration completed: hardened the static generator's notification SVG replacement and added a bell-shaped notification affordance for the reference sidebar. Regenerated 54 screens, rendered the desktop/mobile set, and passed the Playwright validation suite.
+- P0 plan reset: `DONE`.
+- P1 product/story contracts: `DONE`.
+- P2 reference design system and shell: `REFERENCE DONE`.
+- Plan consolidation and cleanup: `DONE` — duplicate active roadmaps retired; historical audit evidence preserved.
+- Button matrix accessibility hardening: `DONE` — shared focus ring, 44px targets, selected contrast, semantic decision hierarchy, loading semantics, and state assertions.
+- Reference component expansion: `DONE` — added 11 missing recipes from the reviewed snapshot without accepting its standalone code.
+- Shared spinner replacement: `DONE` — live React spinner and reference loader now use the tokenized dual-ring dotted treatment.
+- Next implementation task: `P3.1` — confirm the authentication, session, organization scope, and access-control contract.
+- Active task now: `DS-LIVE-01` — live design-system hardening, starting with tokens and shared primitives.
 
-## 2026-08-06 — Vacancy Core
+## Latest handoff — DS-LIVE-01 foundation slice
 
-- Cleaned the pnpm cache, removing 114 MB of cached metadata; active workspace dependencies were preserved.
-- Confirmed the tracked structure is clean: `apps/`, `packages/`, `database/`, and `docs/`, with no tracked `Frontend` or `Refrence` roots.
-- Started the first vertical slice with a repository boundary and server-side state-transition rules planned for vacancy requests, approvals, and conversion.
-- Added shared vacancy contracts, validation schemas, API DTOs, an in-memory repository, and REST endpoints for create/submit/approve/request-changes/reject/convert.
-- Connected the dashboard to the API with a create-request modal, request list, workflow actions, status metrics, and clear in-memory adapter messaging.
-- Verified the complete API flow in-process, including idempotent conversion and headcount preservation. Lint, typecheck, build, diff checks, and the code-quality checker all pass.
-- Also verified the Changes Requested path with revision increment and successful resubmission.
-- Next: add the Prisma-backed repository and authentication/authorization context before treating the slice as production-ready.
+- Task ID: `DS-LIVE-01` (foundation slice complete; verification/migration gate remains in progress).
+- Changed: live semantic tokens, compatibility aliases, shared UI primitives, shell collapse/search/account treatment, Light-only theme provider, login form, Design System laboratory, status badge, modal close control, and pipeline stepper.
+- Contracts: V1 Light-only; shared buttons/fields/alerts/cards/status/stepper expose explicit state semantics; no API/database changes.
+- States covered: default, hover, focus-visible, pressed, disabled, loading, validation error, alert tones, status tones, desktop/mobile stepper, reduced motion.
+- Checks: `npm --prefix apps/web run build` passed; `git diff --check` passed; CSS variable audit passed except intentional `--mc`/`--ms` metric custom properties.
+- Evidence: [live design-system hardening contract](docs/design-system/LIVE_SYSTEM_HARDENING.md), [live tokens](apps/web/src/styles/tokens.css), [live primitives](apps/web/src/styles/ui-primitives.css), [live laboratory](apps/web/src/pages/DesignSystemPage.tsx).
+- Remaining risk: many business routes still contain inline styles and legacy page classes. They are the next migration slices, not silently declared complete.
+- Next task: `DS-LIVE-02`.
 
-## 2026-08-06 — Prisma checkpoint
+## Latest implementation — DS-LIVE-02 operational route group
 
-- Started the planned database integration audit without touching the PostgreSQL database.
-- Confirmed the Prisma schema has no migration directory and the local `@prisma/client` is not generated.
-- Confirmed `PrismaClient` construction fails before connection because the Prisma engine/client artifacts are missing; the installed engine package directory is empty.
-- Kept the working API on the safe in-memory adapter and documented the exact prerequisite for the next attempt.
+- Task ID: `DS-LIVE-02` (first route group implementation in progress).
+- Added reusable `PageFrame`, `MetricCard`, and `PageState` components.
+- Migrated Dashboard, My Tasks, Notifications, and Approval Inbox to shared page headers, buttons, alerts, loading/empty states, filters, metrics, status badges, task cards, and pagination.
+- Added shared task/notification/dashboard visual contracts with responsive behavior and reduced-motion-safe transitions.
+- Behavior preserved: existing API calls, filters, pagination, task status updates, notification read actions, vacancy request creation, and approval actions.
+- Verification pending: frontend build, diff check, and route/browser checks.
+- Next task after verification: migrate request/opening and candidate/intake route groups.
 
-## 2026-08-06 — Prisma adapter
+## Latest handoff — live design-system baseline audit
 
-- Repaired local Prisma generation without disabling TLS by trusting the approved Windows enterprise root CA for the command process.
-- Made `database/` a workspace package that owns Prisma CLI/client resolution and exports the ignored generated client through `@recruitflow/database`.
-- Added `PrismaService`, a Prisma-backed Vacancy Core repository, an adapter switch, and a PostgreSQL `CodeSequence` model.
-- Verified generated-client construction, Prisma-adapter application bootstrap, full in-memory API workflow, lint, typecheck, and build.
-- No PostgreSQL connection, migration, seed, or data mutation was performed.
+- Task ID: `DS-LIVE-01` (in progress).
+- Audit result: the static reference is the stronger contract; the live surface needs token normalization, primitive extraction, shell/login parity, and page-by-page migration.
+- First implementation target: define one light semantic token layer with compatibility aliases, then migrate the shell and Design System showcase so every later page has a stable foundation.
+- Known risks: existing page inline styles and legacy class names; changes must preserve current behavior and be migrated in small domain slices.
+- Next immediate slice: token contract and shared live primitive CSS/components.
 
-## 2026-08-06 — Database migration and seed
+## Latest handoff — APP-CLEANUP-01
 
-- Audited the local `Recruitment_DB` with a read-only Prisma schema diff; it was empty for this project and required 15 table creations with no drops.
-- Added the initial Prisma migration and a repeatable reference-data seed for organization, legal entity, branch, position, user, role, and permission.
-- Added root commands for migration deploy, migration status, and seed.
-- Added a database command wrapper so Prisma CLI and seed commands load the single root `.env` file while remaining scoped to the database workspace.
+- Status: `DONE`.
+- Live shell: removed Notifications from the sidebar; the header bell opens a typed recent-notifications popover without navigation, supports Escape/outside click, loading/empty/error/retry, mark-read, and `View all`.
+- Removed confirmed orphan/demo files: Design System, States & Feedback, Maintenance, the unused Design System stylesheet, and the unused Mobile Bottom Navigation component.
+- Documentation: canonical execution plan and small-model playbook now enforce the live/reference boundary, product-only navigation, notification contract, and safe cleanup protocol.
+- Evidence: `npm --prefix apps/web run build` passed; removed-route/orphan scan passed; targeted `git diff --check` passed; desktop and `390x844` browser flows passed. Local API data calls returned existing `401` responses, so the popover error/retry path was verified but successful data loading remains a backend-session follow-up.
+- Next task: `P3.1`.
 
-## 2026-08-06 — End-to-end delivery roadmap
+## Completed baseline summary
 
-- Converted the full reference pack into a phase-controlled implementation roadmap with fixed scope, dependencies, acceptance criteria, handoff requirements, and review gates.
-- Identified the next approved target as Phase 1 (Identity, Access, Organization, and Master Data); Phase 2 remains an MVP that needs production hardening before later recruitment modules.
+- Enterprise product positioning, personas, capability boundary, page story, handoffs, visual identity, and component interaction contract are documented.
+- The offline reference catalog contains 54 screens, story-first navigation, light shell, responsive grid recipes, state/motion rules, loader, and regenerated previews.
+- Local deterministic frontend fixtures and the existing recruiting workflow baseline are preserved; they are not release evidence by themselves.
+- Historical phase evidence and audit details remain in `docs/development/audit/phase-audit-2026-08-07.md` and are not active task instructions.
 
-## 2026-08-06 — Phase 1: Identity, Access, Organization, and Master Data
+## Latest verification evidence
 
-- Implemented JWT authentication with `httpOnly` access (15m) and refresh (7d) cookies.
-- Added `passwordHash`, `tokenVersion`, and `lastLoginAt` fields to `User` model with database migration `20260806_phase1_auth`.
-- Expanded database seed with 5 pre-configured users using a hashed local seed password, 10 system roles matching reference screen 39, and 18 granular permissions.
-- Built backend NestJS modules: `AuthModule`, `UsersModule`, `RolesModule`, `MasterDataModule`, `AuditModule`, and `CommonModule` (containing `JwtAuthGuard`, `PermissionsGuard`, `AuditInterceptor`, `@CurrentUser`, `@RequirePermissions`, `@AuditAction`).
-- Enforced strict server-side organization scoping (`organizationId`) on all tenant-owned queries.
-- Built frontend SPA architecture with React Router v7, `AuthContext`, `ProtectedRoute`, and brand-aligned `LoginPage`.
-- Implemented administration views: Users & Roles (`/users`, matching screen 39), Master Data (`/master-data`, matching screen 40), and Audit Log (`/audit-log`, matching screen 43).
-- Extracted `DashboardPage` into a routed page and preserved the approved visual design system.
-- Verified all quality gates: zero lint warnings (`npx eslint apps packages`), clean TypeScript build for API & Web (`typecheck` & `build`), database migration deployed, and seed verified.
+- Reference generator completed with 54 screens.
+- Playwright validation passed: 54 gallery cards, link/image targets, representative pages, gradients, hover motion, neon card, loader, reduced motion, and 375/768/1024/1440 overflow checks.
+- Button matrix assertions passed: loading `aria-busy`/disabled state, selected color, approve/reject hierarchy, shared focus ring, spinner/status label, and 44px icon target.
+- Contrast checks passed: selected `5.57:1`, approve `5.02:1`, reject `6.57:1`.
+- Component assertions passed: labelled fields, invalid/error semantics, switch role, scoped table headers, tabs, dialog, toast roles, labelled file input, timeline, stepper, unnamed-button scan, and unlabeled-control scan.
+- Design System reference now contains 21 card sections and remains responsive at 375/768/1024/1440 without overflow.
+- `git diff --check` passes; normal CRLF conversion warnings remain only as Git working-tree warnings.
 
-## 2026-08-06 — Phase 2: Vacancy Request and Approval Workflow (Production Hardening)
+## Handoff record
 
-- **Multi-Step Approval Routing**: Implemented multi-step routing logic (Step 1: Hiring Manager → Step 2: HR Manager → Step 3: Finance if unbudgeted).
-- **Actor Attribution**: Automatically derived `requesterId` and approver identity from `@CurrentUser()` JWT payload; recorded `assigneeUserId` and `decidedAt` timestamps on approval decisions.
-- **Draft & Cancellation Lifecycle**: Added draft editing (`PATCH /vacancy-requests/:id`) and request cancellation (`POST /vacancy-requests/:id/cancel`).
-- **Approver Inbox**: Added `/vacancy-requests/inbox` endpoint returning requests pending approval for user's assigned role codes.
-- **Vacancy Lifecycle Management**: Added `/vacancies/:id` detail view, status management (`Open` with `openedAt` timestamp, `On Hold`, `Cancelled`), and team member assignments.
-- **Frontend SPA Views (Screens 04–09)**:
-  - `VacancyRequestsPage` (`/vacancy-requests`, Screen 04 master list & metrics)
-  - `CreateVacancyRequestPage` (`/vacancy-requests/create`, Screen 05 5-step wizard)
-  - `VacancyRequestDetailPage` (`/vacancy-requests/:id`, Screen 06 detail, replacement list & timeline)
-  - `ApprovalInboxPage` (`/approval-inbox`, Screen 07 approver inbox)
-  - `VacantListPage` (`/vacancies`, Screen 08 approved vacancies directory)
-  - `VacancyOverviewPage` (`/vacancies/:id`, Screen 09 360-degree overview & recruitment funnel)
-- **Quality Gates**: `pnpm typecheck` passed, zero lint warnings (`npx eslint apps packages`), API Nest build clean, Web Vite build clean.
+Every completed task adds: task ID, changed files, contracts, states covered, checks run, evidence paths, risks, and one next task ID. Do not recreate the retired Phase 0–10/E0–E7 lists here.
 
-## Pre-Phase 3 review and UI/UX hardening — 2026-08-06
+## Latest handoff — plan consolidation
 
-- Re-reviewed the completed Foundation, Identity/Access/Master Data, and Vacancy Core scope without starting Candidate/Application work.
-- Hardened authentication and authorization: fail-fast JWT secrets, active-user checks, refresh-token rotation, organization/status scoping, normalized seeded permission codes, and approval-role enforcement.
-- Completed the UI/UX pass: API-backed screens, truthful loading/error/empty/pending states, real forms and mutations, shared SVG icons, accessible modal focus behavior, keyboard-friendly navigation, mobile drawer navigation, responsive tables, readable control sizing, and explicit disabled future-phase actions.
-- Database gate passed: Prisma validation and migration status are clean; the idempotent seed had already passed twice. The applied migration's legacy drop statements remain a production release-review item.
-- Verification passed: `pnpm lint`, `pnpm typecheck`, `pnpm build`, `git diff --check`, `pnpm db:validate`, and `pnpm db:migrate:status`. The web test command exited successfully but currently contains no test cases. Live authenticated API smoke testing remains unverified because local Windows process policy blocked temporary server startup.
-- Handoff: Phase 0/1/2 are ready for team review locally; Phase 3 starts with Candidate and Application foundations.
+- Task ID: `PLAN-CLEANUP-01`
+- Changed: canonical execution plan, small-model playbook, session tracker, progress/findings memory, README links, product-plan execution note, visual-identity V1 theme boundary, and UI reference dark-mode note.
+- Retired: `docs/development/implementation-roadmap.md` and its duplicate active roadmap role.
+- Preserved: historical phase audit and product/design contracts as reference evidence, not active task lists.
+- Checks: no active references to the deleted roadmap; Light mode boundary confirmed in plan, playbook, product strategy, visual identity, and UI reference summary.
+- Next task: `P2-LIVE-01`.
 
-## 2026-08-07 — Strict phase execution governance
+## Latest handoff - notification badge visibility
 
-- Updated the implementation roadmap so every future phase has a mandatory start gate, fixed scope, cross-layer contract inventory, UI state matrix, test scenarios, and reproducible environment commands before coding starts.
-- Added hard stop rules for destructive migrations, missing tenant isolation, ad-hoc permissions, secrets, fake/dead UI actions, unsafe errors, unverified checks, and unresolved P0/P1 issues.
-- Added evidence-based completion rules, PR/reviewer records, and the Phase 3 entry gate. Historical state at that time: Phase 3 remained unstarted until those entry conditions were reviewed and accepted.
+- Task ID: `UI-REF-POLISH-05`
+- Fix: notification controls no longer clip the unread badge after the sheen layer was introduced; the badge is fully visible and the bell keeps a contained hover treatment.
+- Evidence: badge visibility computed as `visible`, reference validation passed, frontend build passed, and header screenshot reviewed.
+- Next task: `P2-LIVE-01`.
 
-## 2026-08-07 — API runtime startup repair
+## Latest handoff - stable 45-degree button sheen
 
-- Replaced the broken Nest default start path with the actual compiled API entry and made `start:dev` build before launching.
-- Fixed runtime dependency injection for all Nest-injected services/guards/strategies/controllers that were incorrectly marked as type-only imports.
-- Live verification passed: health `200`, unauthenticated auth/me `401`, and empty login payload `400` validation; the previous auth `404` is resolved.
+- Task ID: `UI-REF-POLISH-04`
+- Contract: stable hover background, one non-looping 45° sheen on entry, consistent treatment across primary/secondary/decision/icon buttons, and no sheen animation under reduced motion.
+- Evidence: `verify_playwright.py` passed with sheen assertions; frontend build passed; visual hover review completed.
+- Next task: `P2-LIVE-01`.
 
-## 2026-08-07 — Phase 4: Candidate Documents, CV Processing, Screening, and Interviews
+## Latest handoff - compact button density
 
-- **Phase 4 Entry Gate**: Reviewed Phase Control Brief and entry gate criteria; entry gate explicitly accepted by project owner.
-- **Database Models & Migration**: Added `CandidateDocument`, `ScreeningLog`, `Interview`, `InterviewAttendee`, and `InterviewScorecard` models to `schema.prisma`. Created and deployed forward migration `20260807_phase4_documents_interviews`. Generated Prisma client (`v6.19.3`).
-- **Shared Contracts & Validation**: Exported Document, Screening, and Interview DTOs/interfaces in `@recruitflow/contracts` and Zod validation schemas in `@recruitflow/validation`.
-- **Backend Architecture (`apps/api`)**:
-  - `DocumentsModule`: Private document storage metadata management (`GET /documents/candidate/:id`, `GET /documents/:id`, `POST /documents`) with security scan status and text extraction support.
-  - `ScreeningModule`: Screening notes and outcomes recording (`GET /screening/application/:id`, `POST /screening`).
-  - `InterviewsModule`: Interview scheduling, attendee assignments, UTC timezone handling (`GET /interviews`, `GET /interviews/:id`, `POST /interviews`, `PATCH /interviews/:id`), and scorecard submission with immutable decision lock protection (`POST /interviews/:id/scorecard`).
-- **Frontend SPA Views (`apps/web`)**:
-  - `CandidateDocumentsPage` (`/candidates/:id/documents`, Screen 12 private document vault, upload dropzone, parsed CV text view).
-  - `InterviewsPage` (`/interviews`, Screen 18/19 interviews directory, status filters, search, "+ Schedule Interview" modal).
-  - `InterviewDetailPage` (`/interviews/:id`, Screen 20/22 interview overview, attendee statuses, scorecard feedback form with rating scale and hiring recommendation selector).
-- **Quality Gates**: `pnpm typecheck` passed cleanly, zero ESLint warnings (`npx eslint apps packages --max-warnings=0`), API Nest build clean, Web Vite build clean (`built in 299ms`).
+- Task ID: `UI-REF-POLISH-03`
+- Contract: 36px desktop buttons/icons, 32px dense actions, and 44px touch/mobile targets.
+- Evidence: visual header review; computed dimensions confirmed; reference Playwright validation, frontend build, and overflow checks passed.
+- Next task: `P2-LIVE-01`.
 
-## 2026-08-07 — Phase status reconciliation and Phase 9 start
+## Latest handoff — reference component expansion
 
-- Reconciled the roadmap, task plan, findings, and progress log after reviewing the current working tree.
-- Recorded Phase 0–8 as implementation-complete by owner decision. Phase 9 — Mobile, Responsive Behavior, Themes, and UI Completeness — is now the only active implementation phase.
-- Added the Phase 9 fixed scope: responsive workflows, mobile navigation and interactions, themes, accessibility, complete UI states, and removal of dead or prototype-only actions.
-- Kept release evidence explicit: repository lint currently fails with 109 errors; no project test files/scripts were found; the latest API health check was unavailable; the web build has a chunk-size warning; and the applied migration release-review item remains open.
-- No new business-domain features or database expansion may be added while Phase 9 is active. Phase 10 begins only after the Phase 9 handoff and covers release hardening and operations.
+- Task IDs: `UI-REF-COMP-01` through `UI-REF-COMP-05`
+- Changed: `generate.py`, reference CSS, generated Design System page, component interaction contract, and Playwright verification.
+- Added: fields/validation, pills, avatars/presence, data tables, tabs/segmented controls, dialogs, toasts/alerts, tooltip/upload, filters/saved views, timeline, and stepper.
+- Quality rule: all new controls use semantic HTML/ARIA in the reference; no pasted inline snapshot was adopted; live React implementation remains deferred to `P2-LIVE-01`.
+- Evidence: generator completed with 54 screens; Playwright validation passed; visual preview regenerated; 0 unnamed buttons and 0 unlabeled form controls detected on the laboratory page.
+- Next task: `P2-LIVE-01`.
 
-## 2026-08-07 — Comprehensive phase audit
+## Latest handoff — shared spinner replacement
 
-- Completed the read-only comparison of Phases 0–8 against the implementation roadmap and recorded the full report at `docs/development/audit/phase-audit-2026-08-07.md`.
-- Reclassified the roadmap based on evidence: Phases 0–2 are implemented pending re-verification; Phases 3–5 are implemented with incomplete acceptance; Phases 6–8 are blocked; Phase 9 remains owner-selected but has a blocked baseline; Phase 10 is not started.
-- Confirmed quality evidence: typecheck, build, Prisma validation, and migration status pass; lint fails with 109 errors; diff check fails on three whitespace lines; no project tests/scripts were found.
-- Confirmed the API runtime blocker: Nest bootstrap fails because Hiring, Talent Pool, Import, Reports, Pipeline Settings, and Integrations modules do not import `DatabaseModule`.
-- Confirmed P1 findings in permissions, approval role normalization, joining idempotency, tenant ownership checks, private document handling, reports, integrations, and import transactions.
-- Browser audit verified login missing-field inline validation and focus behavior. Authenticated browser workflows remain unverified because the API could not start.
+- Task ID: `SPINNER-01`
+- Changed: `apps/web/src/components/Spinner.tsx`, `apps/web/src/App.css`, reference loader CSS/generator/docs, and reference assertions.
+- Contract: outer action color, inner cyan accent, size follows the component `size` prop, dual counter-rotation, accessible status label, and no animation under reduced motion.
+- Evidence: TypeScript build passed; `npm --prefix apps/web run build` passed; reference generator/Playwright validation passed; visual loader preview reviewed.
+- Next task: `P2-LIVE-01`.
 
-## 2026-08-07 — Completed remediation pass for Phases 0–9
+## Latest handoff — button matrix hardening
 
-- Repaired the API runtime bootstrap and verified the live health/auth boundaries on port 3000.
-- Added the reviewed permission/audit metadata and fixed organization ownership, approval-role, workflow-transition, joining-idempotency, import-transaction, and related-user validation gaps.
-- Replaced fake or unsafe paths in reports, integrations, imports, offers, hiring, joining, talent-pool, and documents with database-backed behavior or explicit unavailable states.
-- Replaced hardcoded Pipeline Settings and Integrations catalogs with API-backed pages; template/stage creation, duplication, and provider connection checks now follow the real API or explain unavailable capabilities.
-- Removed misleading/mock UI behavior from import, reports, hiring, joining, offers, and vacancy navigation; added explicit not-found recovery and corrected mobile top-bar overflow.
-- Fresh gates passed: `pnpm lint`, `pnpm typecheck`, `pnpm build`, `pnpm db:validate`, `pnpm db:migrate:status`, `git diff --check`, and CodeQualityChecker (0 findings).
-- Fresh authenticated browser audit passed for tested routes, login validation, 404 recovery, accessibility basics, mobile navigation, and responsive widths 1440/768/375 with no horizontal overflow or request failures.
-- The project is not release-ready yet: automated tests, private object storage/virus scanning, license domain/API, and migration provenance for Phase 6–8 models remain open and are recorded as release gates rather than hidden.
+- Task ID: `UI-REF-BTN-01`
+- Changed: `generate.py`, generated Design System screen, reference CSS, component interaction contract, and Playwright verification.
+- Contract: sentence-case labels, 6px text-button radius, 8px icon-button radius, compact 40px desktop controls with 44px touch targets, shared focus ring, loading in-place, approve filled, reject outlined, selected text `#0B57D0`, quiet actions with hover/icon affordance.
+- Evidence: regenerated 54 screens; visual matrix review; `verify_playwright.py` passed; contrast ratios recorded above.
+- Next task: `P2-LIVE-01`.
+
+## Latest handoff - compact controls and notification polish
+
+- Task ID: `UI-REF-POLISH-02`
+- Changed: reference generator/CSS, live `AppShell`, live CSS, interaction contract, and Playwright assertions.
+- Contract: 36px desktop buttons and icon controls, 32px explicit compact actions, 44px touch/mobile targets, modern segmented wizard progress with explicit completed/current/pending states, stroked bell icon with semantic notification button and blue unread badge.
+- Evidence: regenerated 54 screens; visual header/button/stepper review; `verify_playwright.py` passed; `npm --prefix apps/web run build` passed; no overflow at 375/768/1024/1440.
+- Note: the generator now uses explicit UTF-8 file writing on Windows so reference regeneration remains reliable.
+- Next task: `P2-LIVE-01`.
+
+## Latest handoff — Design System audit P0 closure
+
+- Task ID: `UI-REF-AUDIT-P0`
+- Changed: reference generator/CSS, generated Design System screen, live `StatesFeedbackPage`, live shared CSS, component interaction contract, and Playwright verification.
+- Closed: filled destructive reject action, icon-backed validation message with `aria-describedby`, readable restricted Workflow Settings with lock affordance, and explicit table selection/action controls supporting the selected-count summary.
+- Evidence: generated 54 screens; reference Playwright validation passed including six scoped table headers, four checkboxes, selected-row semantics, three row actions, filled danger modal action, error icon, restricted lock/opacity checks, and responsive overflow checks; frontend build passed; visual review completed for table, modal, sidebar, and full Design System screen; `git diff --check` passed.
+- Cleanup: removed generated Python bytecode cache after verification.
+- Remaining backlog: P1–P3 audit improvements remain documented and are not part of this P0 closure.
+- Next task: `P2-LIVE-01`.
+
+## Latest handoff — critical recruiting component recipes
+
+- Task ID: `UI-REF-COMP-06`
+- Changed: `docs/reference/ui-ux/generate.py`, reference CSS, generated Design System screen/previews, interaction contract, and Playwright verification.
+- Added: explicit mobile stepper, Drawer with width/body/footer contract, Date/Time Picker with range/timezone/conflict states, Bulk Actions Toolbar, Dropdown Menu, full-width Pipeline Board with WIP/drop-zone/neon focus states, Interview Scorecard, and Comments/Mentions Thread.
+- Scope boundary: semantic static reference recipes only; live scheduling, drag/drop persistence, scorecard API, mention search, uploads, and permissions remain for live implementation tasks.
+- Evidence: generator produced 54 screens; reference Playwright validation passed with new semantic assertions and 375/768/1024/1440 overflow checks; frontend build passed; reference render completed; desktop/mobile component screenshots reviewed; `git diff --check` passed.
+- Next task: `P2-LIVE-01`.

@@ -1,46 +1,61 @@
-import type { SVGProps } from 'react';
+import type { CSSProperties, HTMLAttributes } from 'react';
 
-export interface SpinnerProps extends SVGProps<SVGSVGElement> {
+export interface SpinnerProps extends Omit<HTMLAttributes<HTMLSpanElement>, 'color'> {
   size?: number;
   color?: string;
+  secondaryColor?: string;
 }
 
-export function Spinner({ size = 24, color = 'var(--primary)', className = '', ...props }: SpinnerProps) {
+export function Spinner({
+  size = 24,
+  color = 'var(--primary, #1D4ED8)',
+  secondaryColor = 'var(--cyan, #22D3EE)',
+  className = '',
+  style,
+  role = 'status',
+  'aria-label': ariaLabel = 'Loading',
+  ...props
+}: SpinnerProps) {
+  const stroke = Math.max(2, Math.round(size / 16));
+  const spinnerStyle = {
+    '--spinner-size': `${size}px`,
+    '--spinner-stroke': `${stroke}px`,
+    '--spinner-color-1': color,
+    '--spinner-color-2': secondaryColor,
+    ...style,
+  } as CSSProperties;
+
   return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
+    <span
       className={`spinner-icon ${className}`}
-      style={{ color, animation: 'spin 0.8s linear infinite' }}
+      role={role}
+      aria-label={ariaLabel}
+      style={spinnerStyle}
       {...props}
     >
-      <circle cx="12" cy="12" r="10" strokeOpacity="0.2" />
-      <path d="M12 2a10 10 0 0 1 10 10" />
-    </svg>
+      <span aria-hidden="true" />
+    </span>
   );
 }
 
 export function PageLoadingFallback() {
   return (
-    <div
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: '60vh',
-        gap: '16px',
-        color: 'var(--muted)',
-      }}
-    >
-      <Spinner size={36} />
-      <span style={{ fontSize: '13px', fontWeight: 500 }}>Loading workspace...</span>
+    <div className="page-loading-overlay">
+      <div
+        className="card-neon-purple"
+        style={{
+          padding: '24px 32px',
+          borderRadius: '16px',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '16px',
+          background: 'var(--surface)',
+        }}
+      >
+        <Spinner size={40} aria-label="Loading workspace" />
+        <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--text)' }}>Loading workspace...</span>
+      </div>
     </div>
   );
 }

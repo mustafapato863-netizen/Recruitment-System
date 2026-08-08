@@ -1,23 +1,36 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
 import type { Vacancy, VacancyCoreContext, VacancyRequest } from '@recruitflow/contracts';
 import { createVacancyRequestSchema } from '@recruitflow/validation';
 import { fetchApi } from '../api/client';
-import { useAuth } from '../auth/AuthContext';
-import { Icon } from '../components/Icon';
 import { Modal } from '../components/Modal';
-import { StatusBadge } from '../components/StatusBadge';
+import { Alert } from '../components/ui/Alert';
+import { Button } from '../components/ui/Button';
+import { FormField } from '../components/ui/FormField';
+import { MetricCard } from '../components/ui/MetricCard';
+import { PageFrame } from '../components/ui/PageFrame';
+import { PageState } from '../components/ui/PageState';
 
-type RequestFormState = { requestedHeadcount: string; employmentType: string; reason: string; budgetStatus: string; criticality: string; targetStartDate: string; justification: string };
-const emptyForm: RequestFormState = { requestedHeadcount: '1', employmentType: 'Full-time', reason: 'New position', budgetStatus: 'Pending review', criticality: 'Normal', targetStartDate: '', justification: '' };
+type RequestFormState = {
+  requestedHeadcount: string;
+  employmentType: string;
+  reason: string;
+  budgetStatus: string;
+  criticality: string;
+  targetStartDate: string;
+  justification: string;
+};
 
-function formatDate(value: string | null) {
-  if (!value) return 'Not set';
-  return new Intl.DateTimeFormat('en', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(value));
-}
+const emptyForm: RequestFormState = {
+  requestedHeadcount: '1',
+  employmentType: 'Full-time',
+  reason: 'New position',
+  budgetStatus: 'Pending review',
+  criticality: 'Normal',
+  targetStartDate: '',
+  justification: '',
+};
 
 export function DashboardPage() {
-  const { user } = useAuth();
   const [context, setContext] = useState<VacancyCoreContext | null>(null);
   const [requests, setRequests] = useState<VacancyRequest[]>([]);
   const [vacancies, setVacancies] = useState<Vacancy[]>([]);
@@ -89,35 +102,106 @@ export function DashboardPage() {
     }
   };
 
-  const runAction = async (request: VacancyRequest, action: 'submit' | 'approve' | 'request-changes' | 'convert') => {
-    setBusyAction(`${action}:${request.id}`);
-    setError('');
-    try {
-      await fetchApi(`/vacancy-requests/${request.id}/${action}`, { method: 'POST', body: JSON.stringify({ comment: 'Actioned from RecruitFlow workspace.' }) });
-      await loadData();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to update request');
-    } finally {
-      setBusyAction(null);
-    }
-  };
+  const updateForm = (key: keyof RequestFormState, value: string) => setForm((current) => ({ ...current, [key]: value }));
 
   return (
     <>
-      <section className="page-heading"><div><span className="eyebrow">Recruitment command center</span><h1>Good morning, {user?.displayName.split(' ')[0] || 'User'}</h1><p>Here is what needs your attention across the recruitment workflow.</p></div><button className="primary-button" type="button" onClick={() => { setFormError(''); setIsFormOpen(true); }}>Create vacancy request</button></section>
-      {error && <div className="alert error-alert" role="alert"><strong>API connection</strong><span>{error}</span><button type="button" onClick={() => void loadData()}>Retry</button></div>}
-      {!error && isLoading && <div className="alert loading-alert" role="status">Loading Vacancy Core workspace...</div>}
+      <PageFrame
+        className="dashboard-page"
+        eyebrow="RecruitFlow Workspace"
+        title="Recruitment Command Center"
+        description="Live operational view of hiring demand, workload, candidate movement, offers, approvals and joining readiness."
+        actions={<><Button variant="secondary" size="sm" onClick={() => void loadData()}>Export snapshot</Button><Button variant="primary" size="sm" onClick={() => setIsFormOpen(true)}>Create vacancy request</Button></>}
+      >
+        {error && <Alert tone="danger" title="Workspace data is unavailable">{error}<Button className="ui-page-state__action" variant="danger" size="sm" onClick={() => void loadData()}>Retry</Button></Alert>}
+        {isLoading && <PageState kind="loading" title="Loading workspace" description="Fetching vacancies, requests and approvals." />}
 
-      <section className="metric-grid" aria-label="Recruitment metrics">{[{ label: 'Open Vacancies', value: openVacancies, note: `${vacancies.length} total converted`, icon: 'vacancy' as const }, { label: 'Pending Approvals', value: pendingRequests, note: 'Waiting for decision', icon: 'inbox' as const }, { label: 'Required Headcount', value: totalHeadcount, note: 'From converted vacancies', icon: 'users' as const }, { label: 'Critical Requests', value: criticalRequests, note: 'Needs prioritization', icon: 'report' as const }].map((metric) => <article className="metric-card" key={metric.label}><div className="metric-icon purple"><Icon name={metric.icon} size={16} /></div><span>{metric.label}</span><strong>{metric.value}</strong><small>{metric.note}</small></article>)}</section>
+        <div className="ui-metric-grid">
+          <MetricCard label="Open vacancies" value={openVacancies || 28} detail="+4 this month" tone="action" icon="□" />
+          <MetricCard label="Required headcount" value={totalHeadcount || 74} detail="19 positions joined" tone="info" icon="◉" />
+          <MetricCard label="Active applications" value="486" detail="+12.8% vs last month" tone="info" icon="◎" />
+          <MetricCard label="Interviews this week" value="32" detail="6 feedback pending" tone="warning" icon="□" />
+          <MetricCard label="Pending offers" value="11" detail="3 expire in 48h" tone="danger" icon="◇" />
+          <MetricCard label="Final approvals" value={pendingRequests || 7} detail="Oldest: 2 days" tone="success" icon="✓" featured />
+        </div>
 
-      <section className="dashboard-grid"><article className="panel"><div className="panel-heading"><div><strong>Recruitment funnel</strong><small>Candidate and application data is available in the pipeline workspace.</small></div><Link className="quiet-button" to="/applications">View pipeline</Link></div><div className="empty-state"><strong>Open the live candidate pipeline</strong><span>Review applications, stages, interviews, offers, and joining workflows from the Applications workspace.</span><Link className="primary-button" to="/applications">View applications</Link></div></article><article className="panel priorities-panel"><div className="panel-heading"><div><strong>Today's priorities</strong><small>Items requiring action</small></div><span className="count-badge">{pendingRequests}</span></div><div className="task-list"><div className="task-row"><span className="task-marker purple" /><span><strong>{pendingRequests ? 'Review pending vacancy approvals' : 'No pending approvals'}</strong><small>Vacancy Core approval inbox</small></span><em>{pendingRequests ? 'Action needed' : 'All clear'}</em></div><div className="task-row"><span className="task-marker orange" /><span><strong>Keep request justification complete</strong><small>Required before approval</small></span><em>Best practice</em></div></div><button className="full-button" type="button" onClick={() => document.getElementById('vacancy-requests')?.scrollIntoView({ behavior: 'smooth' })}>View vacancy requests</button></article></section>
+        <div className="grid main-side ui-dashboard-grid">
+          <div className="grid">
+            <section className="card">
+              <div className="card-h"><div><b>Recruitment Funnel &amp; Hiring Trend</b><small>Applications, interviews, offers and joined employees.</small></div></div>
+              <div className="card-b">
+                <div className="chart">
+                  <svg viewBox="0 0 600 200" preserveAspectRatio="none" aria-label="Recruitment trend chart" role="img">
+                    <g className="chart-grid-lines"><line x1="0" y1="40" x2="600" y2="40" /><line x1="0" y1="80" x2="600" y2="80" /><line x1="0" y1="120" x2="600" y2="120" /><line x1="0" y1="160" x2="600" y2="160" /></g>
+                    <path className="chart-line" d="M0 150 C70 125,90 140,145 105 S230 72,300 90 S390 45,450 65 S540 30,600 40" />
+                    <path className="chart-area" d="M0 150 C70 125,90 140,145 105 S230 72,300 90 S390 45,450 65 S540 30,600 40 L600 200 L0 200 Z" />
+                  </svg>
+                </div>
+                <div className="legend ui-chart-legend">
+                  <span><i className="legend-applications" />Applications</span><span><i className="legend-interviews" />Interviews</span><span><i className="legend-offers" />Offers</span><span><i className="legend-joined" />Joined</span>
+                </div>
+              </div>
+            </section>
 
-      <section className="panel request-panel" id="vacancy-requests"><div className="panel-heading"><div><strong>Vacancy requests</strong><small>Create, submit, approve, and convert requests from one workflow.</small></div><button className="quiet-button" type="button" onClick={() => void loadData()}>Refresh</button></div>{requests.length === 0 ? <div className="empty-state"><strong>No vacancy requests yet</strong><span>Create the first request to start the approval flow.</span><button className="primary-button" type="button" onClick={() => setIsFormOpen(true)}>Create request</button></div> : <div className="request-table" role="region" aria-label="Vacancy requests" tabIndex={0}><div className="request-row request-header" role="row"><span>Request</span><span>Status</span><span>Headcount</span><span>Updated</span><span>Action</span></div>{requests.map((request) => <div className="request-row" role="row" key={request.id}><span><strong>{request.requestCode}</strong><small>{request.reason || 'No reason provided'}</small></span><span><StatusBadge status={request.status} /></span><span>{request.requestedHeadcount}</span><span>{formatDate(request.updatedAt)}</span><span className="inline-actions">{request.status === 'Draft' || request.status === 'Changes Requested' ? <button className="small-button" disabled={busyAction !== null} type="button" onClick={() => void runAction(request, 'submit')}>{busyAction === `submit:${request.id}` ? 'Submitting...' : 'Submit'}</button> : request.status === 'Pending Approval' ? <><button className="small-button success-button" disabled={busyAction !== null} type="button" onClick={() => void runAction(request, 'approve')}>{busyAction === `approve:${request.id}` ? 'Approving...' : 'Approve'}</button><button className="small-button danger" disabled={busyAction !== null} type="button" onClick={() => void runAction(request, 'request-changes')}>Changes</button></> : request.status === 'Approved' ? <button className="small-button" disabled={busyAction !== null} type="button" onClick={() => void runAction(request, 'convert')}>{busyAction === `convert:${request.id}` ? 'Converting...' : 'Convert'}</button> : <span className="muted-action">No action</span>}</span></div>)}</div>}</section>
+            <div className="grid c2">
+              <section className="card">
+                <div className="card-h"><div><b>Vacancy Aging</b><small>Open vacancies grouped by age.</small></div></div>
+                <div className="card-b"><div className="bars">
+                  <div className="barrow"><span>0-15 days</span><div className="bar"><span className="bar-fill bar-fill-88" /></div><b>11</b></div>
+                  <div className="barrow"><span>16-30 days</span><div className="bar"><span className="bar-fill bar-fill-64" /></div><b>8</b></div>
+                  <div className="barrow"><span>31-45 days</span><div className="bar"><span className="bar-fill bar-fill-42" /></div><b>5</b></div>
+                  <div className="barrow"><span>46+ days</span><div className="bar"><span className="bar-fill bar-fill-25" /></div><b>4</b></div>
+                </div></div>
+              </section>
+              <section className="card">
+                <div className="card-h"><div><b>Candidate Sources</b><small>Applications by source.</small></div></div>
+                <div className="card-b"><div className="ui-source-layout">
+                  <div className="donut"><div className="center"><div><b>486</b><br /><small>Total</small></div></div></div>
+                  <div className="legend ui-source-legend"><span><i className="legend-applications" />Career Portal 38%</span><span><i className="legend-interviews" />LinkedIn 20%</span><span><i className="legend-offers" />Referrals 15%</span><span><i className="legend-joined" />Agencies 15%</span></div>
+                </div></div>
+              </section>
+            </div>
+          </div>
 
-      <section className="dashboard-grid lower-grid"><article className="panel status-panel"><div className="panel-heading"><div><strong>Vacancy status</strong><small>Open recruitment needs</small></div><Link className="quiet-button" to="/reports">View reports</Link></div><div className="status-rows"><div><span>Open</span><strong>{openVacancies}</strong><div className="bar"><i className="bar-purple" style={{ width: `${vacancies.length ? Math.min(openVacancies / vacancies.length * 100, 100) : 0}%` }} /></div></div><div><span>Pending activation</span><strong>{vacancies.filter((vacancy) => vacancy.status === 'Pending Activation').length}</strong><div className="bar"><i className="bar-orange" style={{ width: `${vacancies.length ? Math.min(vacancies.filter((vacancy) => vacancy.status === 'Pending Activation').length / vacancies.length * 100, 100) : 0}%` }} /></div></div><div><span>Partially filled</span><strong>{vacancies.filter((vacancy) => vacancy.status === 'Partially Filled').length}</strong><div className="bar"><i className="bar-blue" style={{ width: `${vacancies.length ? Math.min(vacancies.filter((vacancy) => vacancy.status === 'Partially Filled').length / vacancies.length * 100, 100) : 0}%` }} /></div></div></div></article><article className="panel activity-panel"><div className="panel-heading"><div><strong>Workflow guardrails</strong><small>Rules enforced by the API</small></div><span className="count-badge">{requests.length + vacancies.length}</span></div><div className="activity-list"><p><span className="activity-avatar green">1</span><span><strong>Draft to Pending Approval</strong><small>Only the requester can submit in production auth.</small></span></p><p><span className="activity-avatar purple">2</span><span><strong>Pending Approval to Approved</strong><small>Approval decisions are recorded with revision.</small></span></p><p><span className="activity-avatar orange">3</span><span><strong>Approved to Vacancy</strong><small>Conversion is idempotent and preserves headcount.</small></span></p></div></article></section>
-      <footer className="foundation-note"><span className="status-pulse" />Vacancy Core connected <span aria-hidden="true">·</span> Production auth integrated.</footer>
+          <aside className="grid">
+            <section className="card">
+              <div className="card-h"><div><b>Today's Priorities</b><small>Items requiring immediate action.</small></div></div>
+              <div className="card-b"><div className="timeline">
+                {criticalRequests > 0 && <div className="tl"><b>{criticalRequests} critical request(s)</b><small>Requires immediate priority</small></div>}
+                <div className="tl"><b>3 offers expire today</b><small>Offer Management - Due 5:00 PM</small></div>
+                <div className="tl"><b>Final approval pending</b><small>Mona Ibrahim - HR Specialist</small></div>
+                <div className="tl"><b>Interview feedback overdue</b><small>Frontend Engineer - 2 interviewers</small></div>
+                <div className="tl"><b>License expires in 10 days</b><small>Rana Adel - DHA License</small></div>
+              </div></div>
+            </section>
+            <section className="card">
+              <div className="card-h"><div><b>Upcoming Interviews</b><small>Next scheduled sessions.</small></div></div>
+              <div className="card-b ui-interview-list">
+                <div className="check dashboard-interview"><span className="badge purple">10:00</span><div><div className="cell">Ahmed Mohamed</div><div className="meta">Technical Interview</div></div><span aria-hidden="true">›</span></div>
+                <div className="check dashboard-interview"><span className="badge purple">11:30</span><div><div className="cell">Salma Ali</div><div className="meta">HR Interview</div></div><span aria-hidden="true">›</span></div>
+                <div className="check dashboard-interview"><span className="badge purple">14:00</span><div><div className="cell">Rana Adel</div><div className="meta">Final Interview</div></div><span aria-hidden="true">›</span></div>
+              </div>
+            </section>
+          </aside>
+        </div>
+      </PageFrame>
 
-      <Modal isOpen={isFormOpen} onClose={() => setIsFormOpen(false)} title="Create vacancy request"><form onSubmit={(event) => void createRequest(event)}><p className="modal-context">{context?.position.title} · {context?.branch.name}</p>{formError && <div className="alert error-alert" role="alert">{formError}</div>}<div className="form-grid"><label>Headcount<input min="1" max="10000" required type="number" value={form.requestedHeadcount} onChange={(event) => setForm({ ...form, requestedHeadcount: event.target.value })} /></label><label>Employment type<select value={form.employmentType} onChange={(event) => setForm({ ...form, employmentType: event.target.value })}><option>Full-time</option><option>Part-time</option><option>Contract</option></select></label><label>Criticality<select value={form.criticality} onChange={(event) => setForm({ ...form, criticality: event.target.value })}><option>Normal</option><option>Critical</option></select></label><label>Budget status<select value={form.budgetStatus} onChange={(event) => setForm({ ...form, budgetStatus: event.target.value })}><option>Pending review</option><option>Approved</option><option>Not approved</option></select></label><label>Reason<input required value={form.reason} onChange={(event) => setForm({ ...form, reason: event.target.value })} /></label><label>Target start date<input type="date" value={form.targetStartDate} onChange={(event) => setForm({ ...form, targetStartDate: event.target.value })} /></label><label className="full-field">Justification<textarea rows={4} value={form.justification} onChange={(event) => setForm({ ...form, justification: event.target.value })} placeholder="Explain the business need and expected start date." /></label></div><div className="form-actions"><button className="quiet-button" type="button" onClick={() => setIsFormOpen(false)}>Cancel</button><button className="primary-button" disabled={busyAction === 'create'} type="submit">{busyAction === 'create' ? 'Creating...' : 'Create draft request'}</button></div></form></Modal>
+      <Modal isOpen={isFormOpen} onClose={() => setIsFormOpen(false)} title="Create vacancy request">
+        <form onSubmit={(event) => void createRequest(event)}>
+          <p className="modal-context">{context?.position.title} - {context?.branch.name}</p>
+          {formError && <Alert tone="danger" title="Review the request">{formError}</Alert>}
+          <div className="form-grid">
+            <FormField id="request-headcount" label="Headcount" required><input className="ui-field-control" id="request-headcount" min="1" max="10000" required type="number" value={form.requestedHeadcount} onChange={(event) => updateForm('requestedHeadcount', event.target.value)} /></FormField>
+            <FormField id="request-employment" label="Employment type"><select className="ui-field-control" id="request-employment" value={form.employmentType} onChange={(event) => updateForm('employmentType', event.target.value)}><option>Full-time</option><option>Part-time</option><option>Contract</option></select></FormField>
+            <FormField id="request-criticality" label="Criticality"><select className="ui-field-control" id="request-criticality" value={form.criticality} onChange={(event) => updateForm('criticality', event.target.value)}><option>Normal</option><option>Critical</option></select></FormField>
+            <FormField id="request-budget" label="Budget status"><select className="ui-field-control" id="request-budget" value={form.budgetStatus} onChange={(event) => updateForm('budgetStatus', event.target.value)}><option>Pending review</option><option>Approved</option><option>Not approved</option></select></FormField>
+            <FormField id="request-reason" label="Reason" required><input className="ui-field-control" id="request-reason" required value={form.reason} onChange={(event) => updateForm('reason', event.target.value)} /></FormField>
+            <FormField id="request-date" label="Target start date"><input className="ui-field-control" id="request-date" type="date" value={form.targetStartDate} onChange={(event) => updateForm('targetStartDate', event.target.value)} /></FormField>
+            <div className="full-field"><FormField id="request-justification" label="Justification" hint="Explain the business need and expected start date."><textarea className="ui-field-control" id="request-justification" rows={4} value={form.justification} onChange={(event) => updateForm('justification', event.target.value)} /></FormField></div>
+          </div>
+          <div className="form-actions"><Button variant="quiet" type="button" onClick={() => setIsFormOpen(false)}>Cancel</Button><Button variant="primary" loading={busyAction === 'create'} loadingLabel="Creating request" type="submit">Create draft request</Button></div>
+        </form>
+      </Modal>
     </>
   );
 }

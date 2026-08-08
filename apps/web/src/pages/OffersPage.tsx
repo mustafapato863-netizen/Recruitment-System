@@ -1,151 +1,229 @@
-import { useState, useEffect, type CSSProperties } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { getApi } from '../api/client';
+import { Spinner } from '../components/Spinner';
+import { Icon } from '../components/Icon';
 import type { Offer } from '@recruitflow/contracts';
 
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : 'An unexpected error occurred.';
-}
+const STATUSES = ['Draft', 'Pending Approval', 'Approved', 'Sent', 'Accepted', 'Declined'] as const;
 
 export function OffersPage() {
   const [offers, setOffers] = useState<Offer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState('');
+  const [search, setSearch] = useState('');
 
-  useEffect(() => {
-    fetchOffers();
-  }, [statusFilter]);
-
-  async function fetchOffers() {
+  const loadOffers = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
-      setLoading(true);
       const params = new URLSearchParams();
       if (statusFilter) params.set('status', statusFilter);
       const data = await getApi<Offer[]>(`/offers?${params.toString()}`);
       setOffers(data);
     } catch (err: unknown) {
-      setError(getErrorMessage(err));
+      setError((err as Error).message ?? 'Failed to load offers.');
     } finally {
       setLoading(false);
     }
-  }
+  }, [statusFilter]);
 
-  if (error) return <div className="page"><div className="alert error">Failed to load offers: {error}</div></div>;
+  useEffect(() => {
+    void loadOffers();
+  }, [loadOffers]);
 
-  const getStatusBadgeClass = (status: string) => {
-    switch (status) {
-      case 'Draft': return 'badge gray';
-      case 'Pending Approval': return 'badge amber';
-      case 'Approved': return 'badge green';
-      case 'Sent': return 'badge blue';
-      case 'Accepted': return 'badge green';
-      case 'Declined': return 'badge red';
-      default: return 'badge gray';
-    }
-  };
+  const filteredOffers = offers.filter((o) => {
+    if (!search.trim()) return true;
+    const s = search.toLowerCase();
+    return (
+      o.offerCode.toLowerCase().includes(s) ||
+      (o as { candidateName?: string }).candidateName?.toLowerCase().includes(s) ||
+      (o as { positionTitle?: string }).positionTitle?.toLowerCase().includes(s)
+    );
+  });
+
+  const draftCount = offers.filter((o) => o.status === 'Draft').length;
+  const pendingCount = offers.filter((o) => o.status === 'Pending Approval').length;
+  const sentCount = offers.filter((o) => o.status === 'Sent').length;
+  const acceptedCount = offers.filter((o) => o.status === 'Accepted').length;
+  const declinedCount = offers.filter((o) => o.status === 'Declined').length;
 
   return (
-    <div className="page">
-      <div className="head">
+    <div className="page-container" style={{ animation: 'fadeIn 0.3s ease-out' }}>
+      {/* Header */}
+      <div className="page-header">
         <div>
-          <div className="eyebrow">RecruitFlow Workspace</div>
-          <h1>Offer Management</h1>
-          <div className="sub">Track versions, approval, negotiation, acceptance and decline reasons.</div>
+          <h1 className="page-title">Offer Management</h1>
+          <p className="page-subtitle">Track offer versions, approval workflows, package components, and candidate responses</p>
+        </div>
+        <div className="page-actions">
+          <Link to="/offers/create" className="button button-primary" style={{ textDecoration: 'none' }}>
+            <Icon name="plus" size={14} /> Create Offer
+          </Link>
         </div>
       </div>
 
-      <div className="grid c5">
-        <div className="card metric" style={{ '--mc': 'var(--primary)', '--ms': '#f3ecff' } as CSSProperties}>
-          <div className="m-top"><span className="m-label">Draft</span><span className="m-ico">✎</span></div>
-          <div className="m-value">{offers.filter(o => o.status === 'Draft').length}</div>
-          <div className="m-foot">Under preparation</div>
+      {/* KPI Cards */}
+      <div className="metric-grid" style={{ marginBottom: '20px' }}>
+        <div className="card metric-card card-neon-purple">
+          <span>Draft Offers</span>
+          <strong>{draftCount}</strong>
+          <small>Under preparation</small>
         </div>
-        <div className="card metric" style={{ '--mc': '#d97706', '--ms': '#fffbeb' } as CSSProperties}>
-          <div className="m-top"><span className="m-label">Pending Approval</span><span className="m-ico">◎</span></div>
-          <div className="m-value">{offers.filter(o => o.status === 'Pending Approval').length}</div>
-          <div className="m-foot">Awaiting decision</div>
+        <div className="card metric-card card-neon-amber">
+          <span>Pending Approval</span>
+          <strong>{pendingCount}</strong>
+          <small>Awaiting decision</small>
         </div>
-        <div className="card metric" style={{ '--mc': '#2563eb', '--ms': '#eff6ff' } as CSSProperties}>
-          <div className="m-top"><span className="m-label">Sent</span><span className="m-ico">◇</span></div>
-          <div className="m-value">{offers.filter(o => o.status === 'Sent').length}</div>
-          <div className="m-foot">Pending candidate</div>
+        <div className="card metric-card card-neon-blue">
+          <span>Sent to Candidate</span>
+          <strong>{sentCount}</strong>
+          <small>Awaiting candidate response</small>
         </div>
-        <div className="card metric" style={{ '--mc': '#16a34a', '--ms': '#ecfdf3' } as CSSProperties}>
-          <div className="m-top"><span className="m-label">Accepted</span><span className="m-ico">✓</span></div>
-          <div className="m-value">{offers.filter(o => o.status === 'Accepted').length}</div>
-          <div className="m-foot">Proceeding to hire</div>
-        </div>
-        <div className="card metric" style={{ '--mc': '#dc2626', '--ms': '#fff1f2' } as CSSProperties}>
-          <div className="m-top"><span className="m-label">Declined</span><span className="m-ico">×</span></div>
-          <div className="m-value">{offers.filter(o => o.status === 'Declined').length}</div>
-          <div className="m-foot">Rejected offers</div>
+        <div className="card metric-card card-neon-emerald">
+          <span>Accepted / Declined</span>
+          <strong>{acceptedCount} <small style={{ fontSize: '13px', display: 'inline', color: 'var(--muted)' }}>({declinedCount} declined)</small></strong>
+          <small>Proceeding to pre-hire</small>
         </div>
       </div>
 
-      <section className="card" style={{ marginTop: 15 }}>
-        <div className="toolbar">
-          <div className="searchbox">⌕ Search records...</div>
+      {/* Main Table Container */}
+      <div className="card" style={{ padding: '20px' }}>
+        {/* Search & Filter Toolbar */}
+        <div className="toolbar" style={{ marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+          <div className="global-search" style={{ margin: 0, maxWidth: '280px' }}>
+            <Icon name="search" size={14} />
+            <input
+              type="search"
+              placeholder="Search offers..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              aria-label="Search offers"
+            />
+          </div>
           <select
-            className="filter active"
-            style={{ border: 'none', background: 'transparent' }}
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
+            style={{
+              padding: '8px 12px',
+              border: '1px solid var(--border)',
+              borderRadius: '8px',
+              fontSize: '13px',
+              background: 'var(--surface-soft)',
+              color: 'var(--text)',
+            }}
+            aria-label="Filter by status"
           >
-            <option value="">All Status</option>
-            <option value="Draft">Draft</option>
-            <option value="Pending Approval">Pending Approval</option>
-            <option value="Approved">Approved</option>
-            <option value="Sent">Sent</option>
-            <option value="Accepted">Accepted</option>
-            <option value="Declined">Declined</option>
+            <option value="">All Statuses ({offers.length})</option>
+            {STATUSES.map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
           </select>
+          {statusFilter && (
+            <button
+              type="button"
+              className="button button-sm button-secondary"
+              onClick={() => setStatusFilter('')}
+            >
+              Clear filter
+            </button>
+          )}
         </div>
 
-        {loading ? (
-          <div style={{ padding: 20 }}>Loading offers...</div>
-        ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>Offer ID</th>
-                <th>Candidate</th>
-                <th>Vacancy</th>
-                <th>Version</th>
-                <th>Total Package</th>
-                <th>Joining Date</th>
-                <th>Approval</th>
-                <th>Status</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {offers.map(offer => (
-                <tr key={offer.id}>
-                  <td className="cell">{offer.offerCode}</td>
-                  <td>{offer.candidateName}</td>
-                  <td>{offer.positionTitle}</td>
-                  <td><span className="badge purple">V{offer.currentVersion?.versionNumber || 1}</span></td>
-                  <td><b>AED {offer.currentVersion?.monthlyPackage?.toLocaleString() || '-'}</b></td>
-                  <td>{offer.currentVersion?.proposedJoiningDate ? new Date(offer.currentVersion.proposedJoiningDate).toLocaleDateString() : '-'}</td>
-                  <td>
-                    {offer.currentVersion?.approvalStatus ? (
-                      <span className={getStatusBadgeClass(offer.currentVersion.approvalStatus)}>{offer.currentVersion.approvalStatus}</span>
-                    ) : '-'}
-                  </td>
-                  <td><span className={getStatusBadgeClass(offer.status)}>{offer.status}</span></td>
-                  <td><Link className="btn sm" to={`/offers/${offer.id}`}>Open</Link></td>
-                </tr>
-              ))}
-              {offers.length === 0 && (
-                <tr>
-                  <td colSpan={9} style={{ textAlign: 'center', padding: '2rem' }}>No offers found.</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+        {/* Error state */}
+        {error && (
+          <div className="alert error" style={{ marginBottom: '16px' }}>
+            {error}
+            <button type="button" className="button button-sm button-secondary" onClick={() => void loadOffers()} style={{ marginLeft: '12px' }}>
+              Retry
+            </button>
+          </div>
         )}
-      </section>
+
+        {/* Loading state */}
+        {loading && (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '48px 0' }}>
+            <Spinner size={32} />
+          </div>
+        )}
+
+        {/* Empty state */}
+        {!loading && !error && filteredOffers.length === 0 && (
+          <div style={{ padding: '48px', textAlign: 'center', color: 'var(--muted)', background: 'var(--surface-soft)', borderRadius: '12px' }}>
+            <p style={{ margin: 0, fontSize: '14px' }}>
+              {statusFilter || search ? 'No offers match the current criteria.' : 'No offers found. Create your first offer to get started.'}
+            </p>
+          </div>
+        )}
+
+        {/* Offers Table */}
+        {!loading && !error && filteredOffers.length > 0 && (
+          <div style={{ overflowX: 'auto' }}>
+            <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--border)', textAlign: 'left', color: 'var(--muted)', fontSize: '11px' }}>
+                  <th style={{ padding: '12px 10px' }}>Offer Code</th>
+                  <th style={{ padding: '12px 10px' }}>Candidate</th>
+                  <th style={{ padding: '12px 10px' }}>Position</th>
+                  <th style={{ padding: '12px 10px' }}>Version</th>
+                  <th style={{ padding: '12px 10px' }}>Monthly Package</th>
+                  <th style={{ padding: '12px 10px' }}>Joining Date</th>
+                  <th style={{ padding: '12px 10px' }}>Status</th>
+                  <th style={{ padding: '12px 10px', textAlign: 'right' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredOffers.map((o) => {
+                  const candidateName = (o as { candidateName?: string }).candidateName || 'Candidate';
+                  const positionTitle = (o as { positionTitle?: string }).positionTitle || 'Position';
+                  const version = (o as { currentVersion?: { versionNumber?: number; monthlyPackage?: number; proposedJoiningDate?: string } }).currentVersion;
+
+                  return (
+                    <tr key={o.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                      <td style={{ padding: '12px 10px', fontFamily: 'monospace', fontWeight: 600, color: 'var(--primary)' }}>
+                        {o.offerCode}
+                      </td>
+                      <td style={{ padding: '12px 10px', fontWeight: 600 }}>{candidateName}</td>
+                      <td style={{ padding: '12px 10px', color: 'var(--muted)' }}>{positionTitle}</td>
+                      <td style={{ padding: '12px 10px' }}>
+                        <span style={{ fontSize: '11px', padding: '2px 6px', borderRadius: '6px', background: 'var(--surface-soft)', fontWeight: 600 }}>
+                          V{version?.versionNumber ?? 1}
+                        </span>
+                      </td>
+                      <td style={{ padding: '12px 10px', fontWeight: 600 }}>
+                        {version?.monthlyPackage ? `AED ${version.monthlyPackage.toLocaleString()}` : '—'}
+                      </td>
+                      <td style={{ padding: '12px 10px', color: 'var(--muted)' }}>
+                        {version?.proposedJoiningDate ? new Date(version.proposedJoiningDate).toLocaleDateString() : '—'}
+                      </td>
+                      <td style={{ padding: '12px 10px' }}>
+                        <span
+                          style={{
+                            fontSize: '11px',
+                            padding: '3px 8px',
+                            borderRadius: '10px',
+                            fontWeight: 600,
+                            background: o.status === 'Accepted' ? '#dcfce7' : o.status === 'Sent' ? '#dbeafe' : o.status === 'Pending Approval' ? '#fef3c7' : o.status === 'Declined' ? '#fee2e2' : 'var(--surface-soft)',
+                            color: o.status === 'Accepted' ? '#15803d' : o.status === 'Sent' ? '#1d4ed8' : o.status === 'Pending Approval' ? '#b45309' : o.status === 'Declined' ? '#b91c1c' : 'var(--muted)',
+                          }}
+                        >
+                          {o.status}
+                        </span>
+                      </td>
+                      <td style={{ padding: '12px 10px', textAlign: 'right' }}>
+                        <Link to={`/offers/${o.id}`} className="button button-sm button-secondary" style={{ textDecoration: 'none' }}>
+                          Open
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

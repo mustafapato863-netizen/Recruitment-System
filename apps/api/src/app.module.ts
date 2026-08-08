@@ -22,6 +22,8 @@ import { ImportModule } from './import/import.module';
 import { ReportsModule } from './reports/reports.module';
 import { PipelineSettingsModule } from './pipeline-settings/pipeline-settings.module';
 import { IntegrationsModule } from './integrations/integrations.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { TasksModule } from './tasks/tasks.module';
 import { CorrelationIdMiddleware } from './common/middleware/correlation-id.middleware';
 
 @Module({
@@ -47,6 +49,8 @@ import { CorrelationIdMiddleware } from './common/middleware/correlation-id.midd
     ReportsModule,
     PipelineSettingsModule,
     IntegrationsModule,
+    NotificationsModule,
+    TasksModule,
   ],
   controllers: [HealthController],
 })

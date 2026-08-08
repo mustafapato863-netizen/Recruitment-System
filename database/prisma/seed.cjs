@@ -1,12 +1,13 @@
 const path = require('node:path');
 const dotenv = require('dotenv');
 const { PrismaClient } = require('@recruitflow/database');
+const { seedDemoFixtures } = require('./demo-fixtures.cjs');
 
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 // bcryptjs hash of the local seed password with cost factor 10
 // Pre-computed to avoid requiring bcryptjs in the seed script.
-const DEFAULT_PASSWORD_HASH = '$2b$10$6IdUDwUWShW2hYZ.B4sqYeSCTJagJ3yhyk3H0MyEMLfcJuXTdm17O';
+const DEFAULT_PASSWORD_HASH = '$2b$10$1YF2d.BurlPR9CzQravUWuqurUfHyhpGLe5yAW13nWRf7gCC6raDe';
 
 const prisma = new PrismaClient();
 
@@ -240,6 +241,10 @@ async function main() {
       { code: 'DOWNLOAD_DOCUMENTS', description: 'Download private candidate and hiring documents.' },
       { code: 'FINAL_HIRING_APPROVAL', description: 'Perform final hiring approval gate.' },
       { code: 'OVERRIDE_WORKFLOW', description: 'Override workflow rules and bypass validations.' },
+      // Notifications & Tasks (Phase 10)
+      { code: 'NOTIFICATION_VIEW', description: 'View own notifications and manage read status.' },
+      { code: 'TASK_VIEW', description: 'View tasks assigned to the current user.' },
+      { code: 'TASK_UPDATE_STATUS', description: 'Update the status of an assigned task.' },
     ];
 
     for (const p of permSeed) {
@@ -262,6 +267,7 @@ async function main() {
         'CANDIDATE_VIEW', 'CANDIDATE_CREATE', 'CANDIDATE_EDIT',
         'APPLICATION_VIEW', 'APPLICATION_CREATE', 'APPLICATION_MOVE_STAGE',
         'VIEW_CANDIDATE_PII', 'VIEW_CURRENT_SALARY', 'APPROVE_OFFERS',
+        'NOTIFICATION_VIEW', 'TASK_VIEW', 'TASK_UPDATE_STATUS',
       ],
       RECRUITER: [
         'VACANCY_REQUEST_VIEW', 'VACANCY_REQUEST_CREATE',
@@ -270,39 +276,47 @@ async function main() {
         'CANDIDATE_VIEW', 'CANDIDATE_CREATE', 'CANDIDATE_EDIT',
         'APPLICATION_VIEW', 'APPLICATION_CREATE', 'APPLICATION_MOVE_STAGE',
         'VIEW_CANDIDATE_PII',
+        'NOTIFICATION_VIEW', 'TASK_VIEW', 'TASK_UPDATE_STATUS',
       ],
       HIRING_MANAGER: [
         'VACANCY_REQUEST_VIEW', 'VACANCY_REQUEST_CREATE', 'VACANCY_REQUEST_APPROVE',
         'VACANCY_VIEW',
         'MASTER_DATA_VIEW',
         'CANDIDATE_VIEW', 'APPLICATION_VIEW', 'APPLICATION_MOVE_STAGE',
+        'NOTIFICATION_VIEW', 'TASK_VIEW', 'TASK_UPDATE_STATUS',
       ],
       INTERVIEWER: [
         'VACANCY_VIEW',
+        'NOTIFICATION_VIEW', 'TASK_VIEW', 'TASK_UPDATE_STATUS',
       ],
       HR_OPERATIONS: [
         'VACANCY_REQUEST_VIEW', 'VACANCY_VIEW',
         'MASTER_DATA_VIEW',
         'USERS_VIEW',
+        'NOTIFICATION_VIEW', 'TASK_VIEW', 'TASK_UPDATE_STATUS',
       ],
       LICENSE_SPECIALIST: [
         'VACANCY_VIEW',
         'DOWNLOAD_DOCUMENTS',
+        'NOTIFICATION_VIEW', 'TASK_VIEW', 'TASK_UPDATE_STATUS',
       ],
       OFFER_APPROVER: [
         'VACANCY_VIEW',
         'APPROVE_OFFERS',
+        'NOTIFICATION_VIEW', 'TASK_VIEW', 'TASK_UPDATE_STATUS',
       ],
       FINAL_HIRING_APPROVER: [
         'VACANCY_VIEW',
         'FINAL_HIRING_APPROVAL',
         'VIEW_CANDIDATE_PII',
         'DOWNLOAD_DOCUMENTS',
+        'NOTIFICATION_VIEW', 'TASK_VIEW', 'TASK_UPDATE_STATUS',
       ],
       VIEWER: [
         'VACANCY_REQUEST_VIEW',
         'VACANCY_VIEW',
         'MASTER_DATA_VIEW',
+        'NOTIFICATION_VIEW', 'TASK_VIEW',
       ],
     };
 
@@ -368,8 +382,9 @@ async function main() {
       });
     }
 
-    return { organization, legalEntity, branch, position, users, roles };
-  });
+    const demo = await seedDemoFixtures(tx, { organization, legalEntity, branch, position, users });
+    return { organization, legalEntity, branch, position, users, roles, demo };
+  }, { timeout: 30000 });
 
   console.log(
     JSON.stringify({
@@ -379,6 +394,7 @@ async function main() {
       positionId: result.position.id,
       users: Object.keys(result.users).length,
       roles: Object.keys(result.roles).length,
+      demo: result.demo,
     }),
   );
 }

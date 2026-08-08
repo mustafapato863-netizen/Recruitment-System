@@ -1,5 +1,6 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { Icon } from './Icon';
+import { IconButton } from './ui/IconButton';
 
 interface ModalProps {
   isOpen: boolean;
@@ -56,9 +57,9 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
       <div aria-labelledby="modal-title" aria-modal="true" className="form-card" ref={dialogRef} role="dialog">
         <div className="form-heading">
           <h2 id="modal-title">{title}</h2>
-          <button className="close-button" type="button" aria-label="Close dialog" onClick={onClose}>
+          <IconButton className="close-button" label="Close dialog" onClick={onClose}>
             <Icon name="more" size={17} style={{ transform: 'rotate(45deg)' }} />
-          </button>
+          </IconButton>
         </div>
         {children}
       </div>

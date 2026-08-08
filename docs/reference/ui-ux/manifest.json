@@ -2,325 +2,337 @@
   {
     "file": "01_dashboard.html",
     "title": "Dashboard",
-    "category": "Overview",
+    "category": "Command Center",
     "description": "Recruitment demand, funnel, priorities and interviews."
   },
   {
     "file": "02_tasks.html",
     "title": "My Tasks",
-    "category": "Overview",
+    "category": "My Work",
     "description": "Task ownership, due dates, priorities and SLA."
   },
   {
     "file": "03_notifications.html",
     "title": "Notifications",
-    "category": "Overview",
+    "category": "My Work",
     "description": "Approvals, interviews, offers and system alerts."
   },
   {
     "file": "04_vacancy_requests.html",
     "title": "Vacancy Requests",
-    "category": "Vacancy Management",
+    "category": "Workforce & Openings",
     "description": "Workforce demand and approval progress."
   },
   {
     "file": "05_create_vacancy_request.html",
     "title": "Create Vacancy Request",
-    "category": "Vacancy Management",
+    "category": "Workforce & Openings",
     "description": "Complete vacancy-request wizard."
   },
   {
     "file": "06_vacancy_request_details.html",
     "title": "Vacancy Request Details",
-    "category": "Vacancy Management",
+    "category": "Workforce & Openings",
     "description": "Request summary, replacements and approval timeline."
   },
   {
     "file": "07_vacancy_approval_inbox.html",
     "title": "Vacancy Approval Inbox",
-    "category": "Vacancy Management",
+    "category": "Workforce & Openings",
     "description": "Role-based vacancy approvals."
   },
   {
     "file": "08_vacant_list.html",
     "title": "Vacant List",
-    "category": "Vacancy Management",
+    "category": "Workforce & Openings",
     "description": "Branch, department, function, position, ownership and headcount."
   },
   {
     "file": "09_vacancy_overview.html",
     "title": "Vacancy Overview",
-    "category": "Vacancy Management",
+    "category": "Workforce & Openings",
     "description": "Progress, ownership, requirements and activity."
   },
   {
     "file": "10_vacancy_candidates.html",
     "title": "Vacancy Candidates",
-    "category": "Vacancy Management",
+    "category": "Workforce & Openings",
     "description": "Applications linked to a selected vacancy."
   },
   {
     "file": "11_vacancy_pipeline.html",
     "title": "Vacancy Pipeline",
-    "category": "Vacancy Management",
+    "category": "Workforce & Openings",
     "description": "Kanban stages, candidate cards and stage rules."
   },
   {
     "file": "12_vacancy_interviews.html",
     "title": "Vacancy Interviews",
-    "category": "Vacancy Management",
+    "category": "Workforce & Openings",
     "description": "Rounds, participants, status and results."
   },
   {
     "file": "13_vacancy_offers.html",
     "title": "Vacancy Offers",
-    "category": "Vacancy Management",
+    "category": "Workforce & Openings",
     "description": "Offer versions and candidate responses."
   },
   {
     "file": "14_candidates.html",
     "title": "Candidate Database",
-    "category": "Talent",
+    "category": "Talent & Intake",
     "description": "Unique candidate profiles and selected application context."
   },
   {
     "file": "15_candidate_profile.html",
     "title": "Candidate Profile",
-    "category": "Talent",
+    "category": "Talent & Intake",
     "description": "Unique profile with separate application history."
   },
   {
     "file": "16_add_candidate.html",
     "title": "Add Candidate",
-    "category": "Talent",
+    "category": "Talent & Intake",
     "description": "Manual candidate creation and vacancy linking."
   },
   {
     "file": "17_cv_upload.html",
     "title": "CV Upload & Processing",
-    "category": "Talent",
+    "category": "Talent & Intake",
     "description": "OCR, parsing, confidence and duplicate checks."
   },
   {
     "file": "18_duplicate_detection.html",
     "title": "Duplicate Detection",
-    "category": "Talent",
+    "category": "Talent & Intake",
     "description": "Exact and possible duplicate resolution."
   },
   {
     "file": "19_application_details.html",
     "title": "Application Details",
-    "category": "Talent",
+    "category": "Talent & Intake",
     "description": "Application stage, screening and interview history."
   },
   {
     "file": "20_phone_screening.html",
     "title": "Phone Screening",
-    "category": "Talent",
+    "category": "Talent & Intake",
     "description": "Current salary, expected salary and structured screening."
   },
   {
     "file": "21_interviews.html",
     "title": "Interview Management",
-    "category": "Recruitment",
+    "category": "Hiring & Interviews",
     "description": "Interview schedule, participants and feedback status."
   },
   {
     "file": "22_interview_calendar.html",
     "title": "Interview Calendar",
-    "category": "Recruitment",
+    "category": "Hiring & Interviews",
     "description": "Calendar schedule and meeting types."
   },
   {
     "file": "23_schedule_interview.html",
     "title": "Schedule Interview",
-    "category": "Recruitment",
+    "category": "Hiring & Interviews",
     "description": "Interview details, participants and notifications."
   },
   {
     "file": "24_interview_evaluation.html",
     "title": "Interview Evaluation",
-    "category": "Recruitment",
+    "category": "Hiring & Interviews",
     "description": "Independent competency scorecard and evidence."
   },
   {
     "file": "25_hiring_decision.html",
     "title": "Hiring Decision",
-    "category": "Recruitment",
+    "category": "Hiring & Interviews",
     "description": "Debrief and final hiring decision."
   },
   {
     "file": "26_offers.html",
     "title": "Offer Management",
-    "category": "Recruitment",
+    "category": "Hiring & Interviews",
     "description": "Offer list, version, package, approval and response."
   },
   {
     "file": "27_create_offer.html",
     "title": "Create Offer",
-    "category": "Recruitment",
+    "category": "Hiring & Interviews",
     "description": "Dynamic package and approval routing."
   },
   {
     "file": "28_offer_details.html",
     "title": "Offer Details",
-    "category": "Recruitment",
+    "category": "Hiring & Interviews",
     "description": "Accepted version, components and version history."
   },
   {
     "file": "29_offer_approval_inbox.html",
     "title": "Offer Approval Inbox",
-    "category": "Recruitment",
+    "category": "Hiring & Interviews",
     "description": "Offer package and salary-band approvals."
   },
   {
     "file": "30_hire_management.html",
     "title": "Hire Management",
-    "category": "Recruitment",
+    "category": "Joining & Compliance",
     "description": "Pre-hire cases, readiness, approvals and joining dates."
   },
   {
     "file": "31_hiring_case.html",
     "title": "Hiring Case",
-    "category": "Recruitment",
+    "category": "Joining & Compliance",
     "description": "Readiness gates, ownership and final approval."
   },
   {
     "file": "32_documents.html",
     "title": "Documents Checklist",
-    "category": "Recruitment",
+    "category": "Joining & Compliance",
     "description": "Versioned hiring documents with review and expiry."
   },
   {
     "file": "33_license_management.html",
     "title": "License Management",
-    "category": "Recruitment",
+    "category": "Joining & Compliance",
     "description": "Verification, expiry and renewal controls."
   },
   {
     "file": "34_final_approval_inbox.html",
     "title": "Final Hiring Approval Inbox",
-    "category": "Recruitment",
+    "category": "Joining & Compliance",
     "description": "Final readiness and approval gate."
   },
   {
     "file": "35_joining_management.html",
     "title": "Joining Management",
-    "category": "Recruitment",
+    "category": "Joining & Compliance",
     "description": "Attendance confirmation and headcount closure."
   },
   {
     "file": "36_talent_pool.html",
     "title": "Talent Pool",
-    "category": "Talent",
+    "category": "Talent & Intake",
     "description": "Candidate communities, consent and eligibility."
   },
   {
     "file": "37_import_preview.html",
     "title": "Import Preview",
-    "category": "Talent",
+    "category": "Talent & Intake",
     "description": "Row validation, duplicate decisions and import readiness."
   },
   {
     "file": "38_reports.html",
     "title": "Reports & Analytics",
-    "category": "Analytics",
+    "category": "Insights",
     "description": "Funnel, time, source, department and workload KPIs."
   },
   {
     "file": "39_users_roles.html",
     "title": "Users & Roles",
-    "category": "Administration",
+    "category": "Administration & Trust",
     "description": "Roles, scopes and sensitive permissions."
   },
   {
     "file": "40_master_data.html",
     "title": "Master Data",
-    "category": "Administration",
+    "category": "Administration & Trust",
     "description": "Organization, position and recruitment master data."
   },
   {
     "file": "41_pipeline_settings.html",
     "title": "Pipeline Settings",
-    "category": "Administration",
+    "category": "Administration & Trust",
     "description": "Templates, stage gates, SLA and transition rules."
   },
   {
     "file": "42_integrations.html",
     "title": "Integrations",
-    "category": "Administration",
+    "category": "Administration & Trust",
     "description": "Calendar, storage, HRIS, sourcing and API connections."
   },
   {
     "file": "43_audit_log.html",
     "title": "Audit Log",
-    "category": "Administration",
+    "category": "Administration & Trust",
     "description": "Sensitive access and workflow event history."
   },
   {
     "file": "44_design_system.html",
     "title": "Design System",
-    "category": "Administration",
+    "category": "Administration & Trust",
     "description": "Tokens, typography, components and feedback patterns."
   },
   {
     "file": "45_states_feedback.html",
     "title": "States & Feedback",
-    "category": "Administration",
+    "category": "Administration & Trust",
     "description": "Loading, empty, permission, validation and error patterns."
   },
   {
     "file": "46_mobile_dashboard.html",
     "title": "Mobile Dashboard",
-    "category": "Mobile",
+    "category": "Mobile Continuity",
     "description": "Responsive operational dashboard."
   },
   {
     "file": "47_mobile_candidate.html",
     "title": "Mobile Candidate",
-    "category": "Mobile",
+    "category": "Mobile Continuity",
     "description": "Candidate profile and application context."
   },
   {
     "file": "48_mobile_approval.html",
     "title": "Mobile Approval",
-    "category": "Mobile",
+    "category": "Mobile Continuity",
     "description": "Mobile final hiring approval."
   },
   {
     "file": "49_mobile_interview.html",
     "title": "Mobile Interview",
-    "category": "Mobile",
+    "category": "Mobile Continuity",
     "description": "Mobile interview details and scorecard."
   },
   {
     "file": "50_dark_dashboard.html",
     "title": "Dark Dashboard",
-    "category": "Special",
+    "category": "Reference Anatomy",
     "description": "Dark-mode visual reference."
   },
   {
     "file": "51_annotated_dashboard.html",
     "title": "Annotated Dashboard",
-    "category": "Special",
+    "category": "Reference Anatomy",
     "description": "Numbered anatomy of navigation, KPIs, analytics and priorities."
   },
   {
     "file": "52_annotated_vacancy.html",
     "title": "Annotated Vacancy Overview",
-    "category": "Special",
+    "category": "Reference Anatomy",
     "description": "Numbered anatomy of vacancy progress, ownership and requirements."
   },
   {
     "file": "53_annotated_candidate.html",
     "title": "Annotated Candidate Profile",
-    "category": "Special",
+    "category": "Reference Anatomy",
     "description": "Numbered anatomy of candidate identity and application separation."
   },
   {
     "file": "54_annotated_hiring_case.html",
     "title": "Annotated Hiring Case",
-    "category": "Special",
+    "category": "Reference Anatomy",
     "description": "Numbered anatomy of readiness gates, ownership and approval history."
+  },
+  {
+    "file": "55_security_access.html",
+    "title": "Security & Access",
+    "category": "Administration & Trust",
+    "description": "Role stories, low-level authorization, data scope and field visibility."
+  },
+  {
+    "file": "56_guidelines.html",
+    "title": "Guidelines",
+    "category": "Administration & Trust",
+    "description": "Story pipeline for recruiter, HR manager, approvals, and audit handoffs."
   }
 ]

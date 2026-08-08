@@ -19,6 +19,8 @@ export type IconName =
   | 'audit'
   | 'search'
   | 'chevron-down'
+  | 'chevron-left'
+  | 'chevron-right'
   | 'more'
   | 'logout'
   | 'menu'
@@ -33,7 +35,11 @@ export type IconName =
   | 'upload'
   | 'refresh-cw'
   | 'check-circle'
-  | 'plus';
+  | 'plus'
+  | 'eye'
+  | 'eye-off'
+  | 'sun'
+  | 'moon';
 
 const paths: Record<IconName, string[]> = {
   dashboard: ['M4 13h6V4H4v9Zm0 7h6v-5H4v5Zm10 0h6v-9h-6v9Zm0-16v5h6V4h-6Z'],
@@ -54,6 +60,8 @@ const paths: Record<IconName, string[]> = {
   audit: ['M5 4h14v16H5z', 'M8 8h8', 'M8 12h8', 'M8 16h5'],
   search: ['m21 21-4.35-4.35', 'M10.5 18a7.5 7.5 0 1 0 0-15 7.5 7.5 0 0 0 0 15Z'],
   'chevron-down': ['m6 9 6 6 6-6'],
+  'chevron-left': ['m15 18-6-6 6-6'],
+  'chevron-right': ['m9 18 6-6-6-6'],
   more: ['M5 12h.01', 'M12 12h.01', 'M19 12h.01'],
   logout: ['M10 17l5-5-5-5', 'M15 12H3', 'M21 19V5a2 2 0 0 0-2-2h-4'],
   menu: ['M4 6h16', 'M4 12h16', 'M4 18h16'],
@@ -69,6 +77,10 @@ const paths: Record<IconName, string[]> = {
   'refresh-cw': ['M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8', 'M3 3v5h5', 'M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16', 'M16 16h5v5'],
   'check-circle': ['M22 11.08V12a10 10 0 1 1-5.93-9.14', 'M22 4L12 14.01l-3-3'],
   plus: ['M12 5v14', 'M5 12h14'],
+  eye: ['M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z', 'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z'],
+  'eye-off': ['M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24', 'M1 1l22 22'],
+  sun: ['M12 4V2', 'M12 22v-2', 'm4.93 4.93-1.42-1.42', 'm18.49 18.49-1.42-1.42', 'M4 12H2', 'M22 12h-2', 'm4.93 19.07-1.42 1.42', 'm18.49 5.51-1.42 1.42', 'M12 17a5 5 0 1 0 0-10 5 5 0 0 0 0 10Z'],
+  moon: ['M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z'],
 };
 
 export function Icon({ name, size = 16, ...props }: { name: IconName; size?: number } & Omit<SVGProps<SVGSVGElement>, 'name'>) {

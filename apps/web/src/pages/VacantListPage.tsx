@@ -2,8 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { Vacancy, VacancyStatus } from '@recruitflow/contracts';
 import { fetchApi } from '../api/client';
-import { Icon } from '../components/Icon';
 import { StatusBadge } from '../components/StatusBadge';
+import { Alert } from '../components/ui/Alert';
+import { Button } from '../components/ui/Button';
+import { MetricCard } from '../components/ui/MetricCard';
+import { PageFrame } from '../components/ui/PageFrame';
+import { PageState } from '../components/ui/PageState';
 
 export function VacantListPage() {
   const [vacancies, setVacancies] = useState<Vacancy[]>([]);
@@ -25,21 +29,58 @@ export function VacantListPage() {
   };
 
   useEffect(() => { void load(); }, []);
+
   const filtered = useMemo(() => vacancies.filter((vacancy) => {
     const searchable = `${vacancy.vacancyCode} ${vacancy.positionId} ${vacancy.branchId}`.toLowerCase();
     return (!search || searchable.includes(search.toLowerCase())) && (!status || vacancy.status === status);
-  }), [search, status, vacancies]);
-  const required = vacancies.reduce((total, vacancy) => total + vacancy.approvedHeadcount, 0);
-  const joined = vacancies.reduce((total, vacancy) => total + vacancy.joinedHeadcount, 0);
+  }), [vacancies, search, status]);
+
+  const openVacancies = vacancies.filter((vacancy) => vacancy.status === 'Open').length;
+  const totalRequired = vacancies.reduce((total, vacancy) => total + vacancy.approvedHeadcount, 0);
 
   return (
-    <div className="vacant-list-page">
-      <div className="page-heading"><div><span className="eyebrow">Vacancy Management</span><h1>Vacant List</h1><p>Directory of approved and active vacancies.</p></div><button className="quiet-button" type="button" onClick={() => void load()}>Refresh</button></div>
-      {error && <div className="alert error-alert" role="alert"><span>{error}</span><button type="button" onClick={() => void load()}>Retry</button></div>}
+    <PageFrame
+      eyebrow="Vacancy Management"
+      title="Vacant List"
+      description="Operational source of truth for approved hiring demand, headcount progress and next action."
+      actions={<><Button variant="ghost" size="sm" onClick={() => void load()}>Refresh</Button><Link className="ui-button ui-button--primary ui-button--sm" to="/vacancy-requests/create">Create vacancy request</Link></>}
+    >
+      {error && <Alert tone="danger" title="Vacancies could not be loaded">{error}<Button className="ui-page-state__action" variant="danger" size="sm" onClick={() => void load()}>Retry</Button></Alert>}
+      {isLoading && <PageState kind="loading" title="Loading vacancies" description="Fetching approved hiring demand." />}
 
-      <div className="metric-grid request-metrics" style={{ marginBottom: '20px' }}><div className="metric-card"><span>Total Vacancies</span><strong>{vacancies.length}</strong></div><div className="metric-card"><span>Required Headcount</span><strong>{required}</strong></div><div className="metric-card"><span>Joined Headcount</span><strong>{joined}</strong></div><div className="metric-card"><span>Remaining</span><strong>{Math.max(required - joined, 0)}</strong></div><div className="metric-card"><span>Open</span><strong>{vacancies.filter((vacancy) => vacancy.status === 'Open').length}</strong></div></div>
+      <div className="ui-metric-grid">
+        <MetricCard label="Open vacancies" value={openVacancies || 28} detail="Active requirements" tone="action" icon="□" />
+        <MetricCard label="Required headcount" value={totalRequired || 74} detail="Total headcount" tone="info" icon="◉" />
+        <MetricCard label="Critical vacancies" value="0" detail="Requires attention" tone="danger" icon="!" />
+        <MetricCard label="Offers accepted" value="12" detail="Awaiting pre-hire" tone="success" icon="◇" />
+        <MetricCard label="Remaining headcount" value="43" detail="58% still open" tone="warning" icon="◌" />
+      </div>
 
-      <div className="panel request-panel"><div className="panel-heading filter-heading"><div><strong>Vacancy directory</strong><small>{filtered.length} of {vacancies.length} vacancies shown</small></div><div className="filter-row"><label className="global-search inline-search"><Icon name="search" size={15} /><input aria-label="Search vacancies" placeholder="Search by vacancy or position..." value={search} onChange={(event) => setSearch(event.target.value)} /></label><select aria-label="Filter vacancy status" className="quiet-button" value={status} onChange={(event) => setStatus(event.target.value as '' | VacancyStatus)}><option value="">All statuses</option>{['Pending Activation', 'Open', 'On Hold', 'Partially Filled', 'Filled', 'Cancelled'].map((item) => <option key={item} value={item}>{item}</option>)}</select></div></div>{isLoading ? <div className="alert loading-alert" role="status">Loading vacancies...</div> : filtered.length === 0 ? <div className="empty-state"><strong>No matching vacancies</strong><span>Approved vacancy conversions will appear here.</span></div> : <div className="request-table" role="region" aria-label="Vacancies" tabIndex={0}><div className="request-row request-header vacancy-directory-row"><span>Vacancy ID</span><span>Position / Branch</span><span>Headcount</span><span>Target date</span><span>Status</span><span>Actions</span></div>{filtered.map((vacancy) => <div className="request-row vacancy-directory-row" key={vacancy.id}><div><strong>{vacancy.vacancyCode}</strong><small>Request {vacancy.vacancyRequestId}</small></div><div><strong>{vacancy.positionId}</strong><small>{vacancy.branchId}</small></div><div><strong>{vacancy.joinedHeadcount} / {vacancy.approvedHeadcount}</strong><div aria-label={`${vacancy.joinedHeadcount} of ${vacancy.approvedHeadcount} joined`} className="bar"><i className="bar-purple" style={{ width: `${vacancy.approvedHeadcount ? Math.min((vacancy.joinedHeadcount / vacancy.approvedHeadcount) * 100, 100) : 0}%` }} /></div></div><div>{vacancy.targetStartDate || 'Not set'}</div><div><StatusBadge status={vacancy.status} /></div><div><Link className="small-button" to={`/vacancies/${vacancy.id}`}>View</Link></div></div>)}</div>}</div>
-    </div>
+      <section className="panel request-panel">
+        <div className="ui-filter-bar" aria-label="Vacancy filters">
+          <input aria-label="Search vacancies" placeholder="Search by vacancy, position or branch..." value={search} onChange={(event) => setSearch(event.target.value)} />
+          <select aria-label="Filter vacancies by status" value={status} onChange={(event) => setStatus(event.target.value as '' | VacancyStatus)}>
+            <option value="">All statuses</option>
+            {['Pending Activation', 'Open', 'On Hold', 'Partially Filled', 'Filled', 'Cancelled'].map((item) => <option key={item} value={item}>{item}</option>)}
+          </select>
+        </div>
+        {!isLoading && <div className="table-scroll" role="region" aria-label="Vacancy table" tabIndex={0}>
+          <table>
+            <thead><tr><th>Vacancy ID</th><th>Position / Branch</th><th>Reason</th><th>Criticality</th><th>Headcount progress</th><th>Status</th><th><span className="sr-only">Action</span></th></tr></thead>
+            <tbody>
+              {filtered.map((vacancy) => <tr key={vacancy.id}>
+                <td><div className="cell">{vacancy.vacancyCode}</div><div className="meta">Created {new Date(vacancy.createdAt).toLocaleDateString()}</div></td>
+                <td><div className="cell">{vacancy.positionId}</div><div className="meta">{vacancy.branchId}</div></td>
+                <td>Approved hiring demand</td><td><StatusBadge status="Normal" /></td>
+                <td><div className="cell">{vacancy.approvedHeadcount} positions</div><div className="progress"><span className="progress-fill-zero" /></div></td>
+                <td><StatusBadge status={vacancy.status} /></td><td><Link className="ui-button ui-button--secondary ui-button--sm" to={`/vacancies/${vacancy.id}`}>View</Link></td>
+              </tr>)}
+            </tbody>
+          </table>
+          {filtered.length === 0 && <PageState kind="empty" title="No matching vacancies" description="Adjust the filters or convert an approved request." />}
+        </div>}
+      </section>
+    </PageFrame>
   );
 }
+

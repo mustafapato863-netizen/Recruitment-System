@@ -7,6 +7,9 @@ import { AppShell } from './layout/AppShell';
 import { ThemeProvider } from './theme/ThemeContext';
 import { PageLoadingFallback } from './components/Spinner';
 import './App.css';
+import './styles/tokens.css';
+import './styles/ui-primitives.css';
+import './styles/shell.css';
 
 // Lazy loaded page components for optimal bundle splitting
 const DashboardPage = lazy(() => import('./pages/DashboardPage').then((m) => ({ default: m.DashboardPage })));
@@ -37,13 +40,13 @@ const LicenseManagementPage = lazy(() => import('./pages/LicenseManagementPage')
 const JoiningManagementPage = lazy(() => import('./pages/JoiningManagementPage').then((m) => ({ default: m.JoiningManagementPage })));
 const TalentPoolPage = lazy(() => import('./pages/TalentPoolPage').then((m) => ({ default: m.TalentPoolPage })));
 const ImportPreviewPage = lazy(() => import('./pages/ImportPreviewPage').then((m) => ({ default: m.ImportPreviewPage })));
+const CVIntakePage = lazy(() => import('./pages/CVIntakePage').then((m) => ({ default: m.CVIntakePage })));
 const ReportsPage = lazy(() => import('./pages/ReportsPage').then((m) => ({ default: m.ReportsPage })));
 const PipelineSettingsPage = lazy(() => import('./pages/PipelineSettingsPage').then((m) => ({ default: m.PipelineSettingsPage })));
 const IntegrationsPage = lazy(() => import('./pages/IntegrationsPage').then((m) => ({ default: m.IntegrationsPage })));
-const DesignSystemPage = lazy(() => import('./pages/DesignSystemPage').then((m) => ({ default: m.DesignSystemPage })));
-const StatesFeedbackPage = lazy(() => import('./pages/StatesFeedbackPage').then((m) => ({ default: m.StatesFeedbackPage })));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage').then((m) => ({ default: m.NotFoundPage })));
-const MaintenancePage = lazy(() => import('./pages/MaintenancePage').then((m) => ({ default: m.MaintenancePage })));
+const NotificationsPage = lazy(() => import('./pages/NotificationsPage').then((m) => ({ default: m.NotificationsPage })));
+const TasksPage = lazy(() => import('./pages/TasksPage').then((m) => ({ default: m.TasksPage })));
 
 function App() {
   return (
@@ -73,6 +76,8 @@ function App() {
                   <Route path="/candidates/:id" element={<CandidateDetailPage />} />
                   <Route path="/candidates/:id/documents" element={<CandidateDocumentsPage />} />
                   <Route path="/talent-pool" element={<TalentPoolPage />} />
+                  <Route path="/cv-intake" element={<CVIntakePage />} />
+                  <Route path="/cv-intake/:jobId" element={<ImportPreviewPage />} />
                   <Route path="/import" element={<ImportPreviewPage />} />
 
                   {/* Recruitment Pipeline */}
@@ -98,9 +103,10 @@ function App() {
                   <Route path="/reports" element={<ReportsPage />} />
                   <Route path="/pipeline-settings" element={<PipelineSettingsPage />} />
                   <Route path="/integrations" element={<IntegrationsPage />} />
-                  <Route path="/design-system" element={<DesignSystemPage />} />
-                  <Route path="/states-feedback" element={<StatesFeedbackPage />} />
-                  <Route path="/maintenance" element={<MaintenancePage />} />
+
+                  {/* Operational work surfaces. Notifications are opened from the header bell; this route is the full list. */}
+                  <Route path="/notifications" element={<NotificationsPage />} />
+                  <Route path="/tasks" element={<TasksPage />} />
 
                   {/* 404 Catch All */}
                   <Route path="*" element={<NotFoundPage />} />

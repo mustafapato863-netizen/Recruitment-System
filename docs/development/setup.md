@@ -19,6 +19,8 @@ pnpm dev:api
 pnpm dev:web
 ```
 
+For a complete local walkthrough across the frontend, use the deterministic fixtures documented in [Local demo data](./demo-data.md).
+
 Keep real credentials only in the untracked `.env` file. Never commit `.env`, database dumps, uploaded files, or production data.
 
 ## Database adapter

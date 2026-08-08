@@ -8,6 +8,7 @@ import type {
   ImportRowDecision,
   ImportRowItem,
   ImportRowResult,
+  PaginatedResult,
 } from '@recruitflow/contracts';
 import type { Prisma } from '@recruitflow/database';
 
@@ -15,8 +16,39 @@ import type { Prisma } from '@recruitflow/database';
 export class ImportService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private toSummary(job: {
+    id: string;
+    fileName: string;
+    status: string;
+    totalRows: number;
+    validRows: number;
+    invalidRows: number;
+    duplicateRows: number;
+    newRows: number;
+    updateRows: number;
+    createdAt: Date;
+  }, unresolvedDuplicateRows?: number): ImportJobSummary {
+    return {
+      id: job.id,
+      fileName: job.fileName,
+      status: job.status,
+      totalRows: job.totalRows,
+      validRows: job.validRows,
+      invalidRows: job.invalidRows,
+      duplicateRows: job.duplicateRows,
+      ...(unresolvedDuplicateRows === undefined ? {} : { unresolvedDuplicateRows }),
+      newRows: job.newRows,
+      updateRows: job.updateRows,
+      createdAt: job.createdAt.toISOString(),
+    };
+  }
+
   private normalizeEmail(email: string): string {
     return email.trim().toLowerCase();
+  }
+
+  private isEmail(email: string): boolean {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   }
 
   private async nextCandidateCode(client: Pick<PrismaService, 'codeSequence'>): Promise<string> {
@@ -27,6 +59,32 @@ export class ImportService {
       update: { lastIssued: { increment: 1 } },
     });
     return `CAN-${year}-${String(sequence.lastIssued).padStart(4, '0')}`;
+  }
+
+  async listJobs(
+    organizationId: string,
+    page = 1,
+    pageSize = 20,
+  ): Promise<PaginatedResult<ImportJobSummary>> {
+    const safePage = Math.max(1, page);
+    const safePageSize = Math.min(100, Math.max(1, pageSize));
+    const where = { organizationId };
+    const [total, jobs] = await Promise.all([
+      this.prisma.candidateImportJob.count({ where }),
+      this.prisma.candidateImportJob.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (safePage - 1) * safePageSize,
+        take: safePageSize,
+      }),
+    ]);
+
+    return {
+      data: jobs.map((job) => this.toSummary(job)),
+      total,
+      page: safePage,
+      pageSize: safePageSize,
+    };
   }
 
   async upload(organizationId: string, userId: string, dto: UploadImportDto): Promise<{ jobId: string }> {
@@ -54,6 +112,10 @@ export class ImportService {
       if (!row.email) {
         result = 'Invalid';
         details = 'Email is required';
+        invalidRows++;
+      } else if (!this.isEmail(normalizedEmail!)) {
+        result = 'Invalid';
+        details = 'Email format is invalid';
         invalidRows++;
       } else if (!row.firstName || !row.lastName) {
         result = 'Invalid';
@@ -111,26 +173,18 @@ export class ImportService {
   }
 
   async getJobSummary(organizationId: string, jobId: string): Promise<ImportJobSummary> {
-    const job = await this.prisma.candidateImportJob.findFirst({
-      where: { id: jobId, organizationId },
-    });
+    const [job, unresolvedDuplicateRows] = await Promise.all([
+      this.prisma.candidateImportJob.findFirst({ where: { id: jobId, organizationId } }),
+      this.prisma.candidateImportRow.count({
+        where: { job: { id: jobId, organizationId }, result: 'Duplicate', decision: null },
+      }),
+    ]);
 
     if (!job) {
       throw new NotFoundException('Import job not found');
     }
 
-    return {
-      id: job.id,
-      fileName: job.fileName,
-      status: job.status,
-      totalRows: job.totalRows,
-      validRows: job.validRows,
-      invalidRows: job.invalidRows,
-      duplicateRows: job.duplicateRows,
-      newRows: job.newRows,
-      updateRows: job.updateRows,
-      createdAt: job.createdAt.toISOString(),
-    };
+    return this.toSummary(job, unresolvedDuplicateRows);
   }
 
   async getJobRows(

@@ -30,6 +30,8 @@ model Organization {
   candidateImportJobs  CandidateImportJob[]
   pipelineTemplates    PipelineTemplate[]
   integrations         Integration[]
+  notifications        Notification[]
+  tasks                Task[]
   createdAt            DateTime            @default(now()) @db.Timestamptz(6)
   updatedAt            DateTime            @updatedAt @db.Timestamptz(6)
 
@@ -125,6 +127,9 @@ model User {
   complianceVerified      ComplianceRequirement[]    @relation("ComplianceVerifier")
   hiringCaseApprovals     HiringCaseApproval[]       @relation("HiringCaseApprover")
   importJobs              CandidateImportJob[]       @relation("ImportUploader")
+  notifications           Notification[]
+  assignedTasks           Task[]                     @relation("TaskAssignee")
+  createdTasks            Task[]                     @relation("TaskCreator")
 
   @@unique([organizationId, emailNormalized])
   @@index([status])
@@ -743,4 +748,51 @@ model Integration {
 
   @@index([organizationId, status])
   @@map("integrations")
+}
+
+// ─── Phase 10: Notifications & Tasks ──────────────────────────
+
+model Notification {
+  id              String       @id @default(uuid()) @db.Uuid
+  organizationId  String       @db.Uuid
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  recipientUserId String       @db.Uuid
+  recipient       User         @relation(fields: [recipientUserId], references: [id], onDelete: Cascade)
+  type            String       @db.VarChar(80)   // e.g. VacancyRequestSubmitted, ApprovalDecision, TaskAssigned
+  title           String       @db.VarChar(255)
+  message         String       @db.Text
+  entityType      String?      @db.VarChar(80)   // e.g. VacancyRequest, Offer, HiringCase
+  entityId        String?      @db.VarChar(80)
+  readAt          DateTime?    @db.Timestamptz(6)
+  createdAt       DateTime     @default(now()) @db.Timestamptz(6)
+
+  @@index([organizationId, recipientUserId, createdAt])
+  @@index([recipientUserId, readAt])
+  @@map("notifications")
+}
+
+model Task {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  assigneeUserId String       @db.Uuid
+  assignee       User         @relation("TaskAssignee", fields: [assigneeUserId], references: [id], onDelete: Restrict)
+  createdById    String       @db.Uuid
+  createdBy      User         @relation("TaskCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  type           String       @db.VarChar(80)   // e.g. ApprovalReview, OfferReview, ComplianceCheck
+  title          String       @db.VarChar(255)
+  description    String?      @db.Text
+  priority       String       @default("Normal") @db.VarChar(30)  // Low, Normal, High, Critical
+  status         String       @default("Open") @db.VarChar(30)    // Open, In Progress, Completed, Dismissed
+  dueAt          DateTime?    @db.Timestamptz(6)
+  entityType     String?      @db.VarChar(80)
+  entityId       String?      @db.VarChar(80)
+  completedAt    DateTime?    @db.Timestamptz(6)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime     @updatedAt @db.Timestamptz(6)
+
+  @@index([organizationId, assigneeUserId, status])
+  @@index([assigneeUserId, dueAt])
+  @@index([organizationId, status])
+  @@map("tasks")
 }

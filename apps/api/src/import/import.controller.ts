@@ -14,6 +14,16 @@ import { AuditAction } from '../common/decorators/audit-action.decorator';
 export class ImportController {
   constructor(private readonly importService: ImportService) {}
 
+  @Get('jobs')
+  @RequirePermissions('CANDIDATE_VIEW')
+  async listJobs(
+    @CurrentUser() user: AuthUser,
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number = 1,
+    @Query('pageSize', new DefaultValuePipe(20), ParseIntPipe) pageSize: number = 20,
+  ) {
+    return this.importService.listJobs(user.organizationId, page, pageSize);
+  }
+
   @Post('upload')
   @RequirePermissions('CANDIDATE_CREATE')
   @AuditAction('CANDIDATE_IMPORT_UPLOAD')

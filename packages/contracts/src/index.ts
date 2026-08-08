@@ -788,6 +788,7 @@ export interface ImportJobSummary {
   validRows: number;
   invalidRows: number;
   duplicateRows: number;
+  unresolvedDuplicateRows?: number;
   newRows: number;
   updateRows: number;
   createdAt: string;
@@ -868,3 +869,15 @@ export interface IntegrationItem {
   status: string;
   lastSyncAt?: string | null;
 }
+
+// ─── Phase 10 Notifications & Tasks ───────────────────────────
+export type {
+  NotificationRecord,
+  UnreadCountResponse,
+  NotificationFilterInput,
+  TaskPriority,
+  TaskStatus,
+  TaskRecord,
+  UpdateTaskStatusInput,
+  TaskFilterInput,
+} from './notifications-tasks';

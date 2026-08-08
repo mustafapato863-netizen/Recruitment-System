@@ -25,7 +25,10 @@ The original visual reference contained 16 core UI screens. Version 2.0 expands 
 - Hire management, hiring case, documents, licenses, final approval and joining.
 - Talent pools, import review and analytics.
 - Users/roles, master data, pipeline templates, integrations, audit log and design-system states.
-- Four mobile workflow screens, one dark-mode reference and four annotated feature-anatomy images.
+- Design System Laboratory now documents fields/validation, status pills, avatars/presence, data tables, tabs, dialogs, toasts, upload, filters, saved views, timelines and steppers with semantic light-mode examples.
+- Refined the interaction layer with compact 36px desktop controls, 32px dense actions, 44px touch-safe targets, a card-based wizard stepper, and a stroked notification bell with an accessible unread badge.
+- Added a single 45-degree MUI-inspired hover sheen across button variants; gradient position remains stable to prevent flicker and reduced-motion disables the effect.
+- Four mobile workflow screens, one exploratory dark-mode reference, and four annotated feature-anatomy images. The dark-mode reference is deferred and is not part of V1 acceptance.
 
 ## How to review
 Open `app/index.html`, then select any feature card. The catalog links to every interactive HTML screen and its rendered screenshot.

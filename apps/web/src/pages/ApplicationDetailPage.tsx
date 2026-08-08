@@ -6,15 +6,7 @@ import type {
   ApplicationStage,
   ApplicationStatusHistoryItem,
 } from '@recruitflow/contracts';
-
-const STAGE_ORDER: ApplicationStage[] = [
-  'Applied',
-  'Screening',
-  'Interview',
-  'Offer',
-  'Pre-Hire',
-  'Joined',
-];
+import { PipelineStepper } from '../components/PipelineStepper';
 
 const ALLOWED_TRANSITIONS: Record<ApplicationStage, ApplicationStage[]> = {
   Applied: ['Screening', 'Rejected', 'Withdrawn'],
@@ -118,33 +110,10 @@ export function ApplicationDetailPage() {
       </div>
 
       {/* Visual Funnel Stage Stepper */}
-      <div className="panel" style={{ padding: '20px', background: 'var(--surface)', borderRadius: '10px', border: '1px solid var(--border)', marginBottom: '24px' }}>
-        <h4 style={{ fontSize: '12px', color: 'var(--muted)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Stage Progress Pipeline</h4>
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          {STAGE_ORDER.map((stageName, index) => {
-            const isCurrent = application.stage === stageName;
-            const isPast = STAGE_ORDER.indexOf(application.stage) > index;
-            return (
-              <div
-                key={stageName}
-                style={{
-                  flex: 1,
-                  padding: '10px 8px',
-                  borderRadius: '6px',
-                  textAlign: 'center',
-                  fontSize: '11px',
-                  fontWeight: isCurrent ? 700 : 500,
-                  background: isCurrent ? 'var(--primary)' : isPast ? 'rgba(124, 58, 237, 0.15)' : 'var(--background)',
-                  color: isCurrent ? '#fff' : isPast ? 'var(--primary)' : 'var(--muted)',
-                  border: isCurrent ? 'none' : '1px solid var(--border)',
-                }}
-              >
-                {stageName}
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      <PipelineStepper
+        currentStage={application.stage}
+        isRejectedOrWithdrawn={application.stage === 'Rejected' || application.stage === 'Withdrawn'}
+      />
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '20px' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>

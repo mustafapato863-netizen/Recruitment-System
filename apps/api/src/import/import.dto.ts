@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsArray, ValidateNested, IsEnum, MaxLength, IsEmail } from 'class-validator';
+import { ArrayMaxSize, ArrayMinSize, IsString, IsOptional, IsArray, ValidateNested, IsEnum, MaxLength } from 'class-validator';
 import { Type } from 'class-transformer';
 import type { ImportRowDecision, ImportRowDecisionInput } from '@recruitflow/contracts';
 
@@ -14,7 +14,7 @@ export class ImportRowDto {
   lastName?: string | null;
 
   @IsOptional()
-  @IsEmail()
+  @MaxLength(254)
   email?: string | null;
 
   @IsOptional()
@@ -29,6 +29,8 @@ export class UploadImportDto {
   fileName!: string;
 
   @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(5000)
   @ValidateNested({ each: true })
   @Type(() => ImportRowDto)
   rows!: ImportRowDto[];

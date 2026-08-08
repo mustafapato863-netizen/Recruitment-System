@@ -1,7 +1,7 @@
 from pathlib import Path
 import json, fitz, sys
 from weasyprint import HTML, CSS
-ROOT=Path('/mnt/data/RecruitFlow_UIUX_Application_v2.0'); PAGES=ROOT/'app'/'pages'
+ROOT=Path(__file__).resolve().parent; PAGES=ROOT/'app'/'pages'
 manifest=json.loads((ROOT/'manifest.json').read_text())
 start=int(sys.argv[1]); end=int(sys.argv[2])
 cd=CSS(string='@page{size:1586px 992px;margin:0} html,body{width:1586px;height:992px;overflow:hidden} body{print-color-adjust:exact;-webkit-print-color-adjust:exact}')
