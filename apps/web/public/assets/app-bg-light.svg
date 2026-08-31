@@ -1,0 +1,37 @@
+<svg width="1800" height="1200" viewBox="0 0 1800 1200" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="wave" x1="150" y1="760" x2="1750" y2="740" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#68B6FF" stop-opacity="0.22"/>
+      <stop offset="0.52" stop-color="#2E7CF6" stop-opacity="0.13"/>
+      <stop offset="1" stop-color="#9F7AEA" stop-opacity="0.18"/>
+    </linearGradient>
+    <linearGradient id="sky" x1="1430" y1="450" x2="1760" y2="980" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4E8EFF" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#7B61FF" stop-opacity="0.07"/>
+    </linearGradient>
+  </defs>
+  <g opacity="0.55" stroke="#4D91FF" stroke-width="1.4">
+    <path d="M1160 108l35-20 35 20v40l-35 20-35-20v-40Z" opacity=".15"/>
+    <path d="M1230 148l35-20 35 20v40l-35 20-35-20v-40Z" opacity=".12"/>
+    <path d="M1300 108l35-20 35 20v40l-35 20-35-20v-40Z" opacity=".10"/>
+    <path d="M1430 254l35-20 35 20v40l-35 20-35-20v-40Z" opacity=".12"/>
+    <path d="M1500 294l35-20 35 20v40l-35 20-35-20v-40Z" opacity=".10"/>
+  </g>
+  <g stroke="url(#wave)" stroke-width="2" opacity="0.95">
+    <path d="M-80 820C160 615 360 987 612 798C858 613 1018 654 1180 793C1350 938 1538 785 1880 598"/>
+    <path d="M-80 836C160 631 360 1003 612 814C858 629 1018 670 1180 809C1350 954 1538 801 1880 614"/>
+    <path d="M-80 852C160 647 360 1019 612 830C858 645 1018 686 1180 825C1350 970 1538 817 1880 630"/>
+    <path d="M-80 868C160 663 360 1035 612 846C858 661 1018 702 1180 841C1350 986 1538 833 1880 646"/>
+    <path d="M-80 884C160 679 360 1051 612 862C858 677 1018 718 1180 857C1350 1002 1538 849 1880 662"/>
+    <path d="M-80 900C160 695 360 1067 612 878C858 693 1018 734 1180 873C1350 1018 1538 865 1880 678"/>
+    <path d="M-80 916C160 711 360 1083 612 894C858 709 1018 750 1180 889C1350 1034 1538 881 1880 694"/>
+  </g>
+  <g transform="translate(1400 525)" stroke="url(#sky)" fill="#F7FAFF" fill-opacity="0.34">
+    <path d="M0 270h92V93H0v177Z"/>
+    <path d="M116 270h88V0h-88v270Z"/>
+    <path d="M226 270h78V132h-78v138Z"/>
+    <path d="M329 270h64V61h-64v209Z"/>
+    <path d="M147 0V-82M139-64h16M41 93V39M34 52h14M360 61V7M353 20h14"/>
+    <path d="M13 116h66M13 142h66M13 168h66M13 194h66M13 220h66M129 30h62M129 58h62M129 86h62M129 114h62M129 142h62M129 170h62M129 198h62M240 155h50M240 180h50M240 205h50M342 84h38M342 112h38M342 140h38M342 168h38" opacity=".55"/>
+  </g>
+</svg>

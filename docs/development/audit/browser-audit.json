@@ -1,0 +1,157 @@
+{
+  "web_base": "http://localhost:5173",
+  "api_base": "http://localhost:3000/api/v1",
+  "api": {
+    "/health": {
+      "status": 200,
+      "body": "{\"status\":\"ok\",\"service\":\"recruitflow-api\",\"timestamp\":\"2026-08-07T01:25:20.402Z\"}"
+    },
+    "/auth/me": {
+      "status": 401,
+      "body": "{\"message\":\"Unauthorized\",\"statusCode\":401}"
+    }
+  },
+  "login": {
+    "title": "frontend",
+    "h1": "",
+    "labels": [
+      "Email address",
+      "Password"
+    ],
+    "missing_field_messages": [
+      "Enter your email address.",
+      "Enter your password."
+    ],
+    "focused_after_submit": "login-email",
+    "authenticated": true
+  },
+  "routes": [
+    {
+      "path": "/",
+      "http_status": 200,
+      "h1": "Good morning, Admin",
+      "body_has_error": false
+    },
+    {
+      "path": "/candidates",
+      "http_status": 200,
+      "h1": "Candidates Directory",
+      "body_has_error": false
+    },
+    {
+      "path": "/applications",
+      "http_status": 200,
+      "h1": "Applications Pipeline",
+      "body_has_error": false
+    },
+    {
+      "path": "/interviews",
+      "http_status": 200,
+      "h1": "Interviews & Scheduling",
+      "body_has_error": false
+    },
+    {
+      "path": "/offers",
+      "http_status": 200,
+      "h1": "Offer Management",
+      "body_has_error": false
+    },
+    {
+      "path": "/hires",
+      "http_status": 200,
+      "h1": "Hire Management",
+      "body_has_error": false
+    },
+    {
+      "path": "/talent-pool",
+      "http_status": 200,
+      "h1": "Talent Pool",
+      "body_has_error": false
+    },
+    {
+      "path": "/import",
+      "http_status": 200,
+      "h1": "Import Candidates \u00b7 Review Results",
+      "body_has_error": false
+    },
+    {
+      "path": "/reports",
+      "http_status": 200,
+      "h1": "Reports & Analytics",
+      "body_has_error": false
+    },
+    {
+      "path": "/pipeline-settings",
+      "http_status": 200,
+      "h1": "Pipeline Settings",
+      "body_has_error": false
+    },
+    {
+      "path": "/integrations",
+      "http_status": 200,
+      "h1": "Integrations & API",
+      "body_has_error": false
+    },
+    {
+      "path": "/design-system",
+      "http_status": 200,
+      "h1": "RecruitFlow Design System",
+      "body_has_error": false
+    },
+    {
+      "path": "/states-feedback",
+      "http_status": 200,
+      "h1": "Application States & Feedback Patterns",
+      "body_has_error": false
+    },
+    {
+      "path": "/does-not-exist",
+      "http_status": 200,
+      "h1": "Page Not Found",
+      "body_has_error": false
+    }
+  ],
+  "responsive": [
+    {
+      "viewport": 1440,
+      "scrollWidth": 1440,
+      "clientWidth": 1440,
+      "horizontalOverflow": false,
+      "mobileToggle": true,
+      "sidebarVisible": true,
+      "screenshot": "artifacts\\dashboard-1440.png"
+    },
+    {
+      "viewport": 768,
+      "scrollWidth": 768,
+      "clientWidth": 768,
+      "horizontalOverflow": false,
+      "mobileToggle": true,
+      "sidebarVisible": true,
+      "screenshot": "artifacts\\dashboard-768.png"
+    },
+    {
+      "viewport": 375,
+      "scrollWidth": 375,
+      "clientWidth": 375,
+      "horizontalOverflow": false,
+      "mobileToggle": true,
+      "sidebarVisible": false,
+      "screenshot": "artifacts\\dashboard-375.png"
+    },
+    {
+      "mobile_navigation_opened": true,
+      "close_button_visible": true
+    }
+  ],
+  "accessibility": {
+    "unlabeledInputs": [],
+    "unnamedButtons": 0,
+    "dialogs": 0
+  },
+  "console_errors": [
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+    "Failed to load resource: the server responded with a status of 401 (Unauthorized)"
+  ],
+  "request_failures": []
+}

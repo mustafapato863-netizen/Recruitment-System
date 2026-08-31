@@ -1,0 +1,118 @@
+name: RecruitFlow CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate-and-build:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: recruitflow_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d recruitflow_ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/recruitflow_ci?schema=public
+      NODE_ENV: test
+      API_PORT: 3000
+      WEB_ORIGIN: http://localhost:5173
+      VITE_API_BASE_URL: http://localhost:3000/api/v1
+      JWT_ACCESS_SECRET: ci-access-secret-change-me
+      JWT_REFRESH_SECRET: ci-refresh-secret-change-me
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 11
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate Prisma Schema
+        run: pnpm --dir database prisma:validate
+
+      - name: Generate Prisma Client
+        run: pnpm db:generate
+
+      - name: Apply Database Migrations
+        run: pnpm db:migrate:deploy
+
+      - name: Verify Migration Status
+        run: pnpm db:migrate:status
+
+      - name: Seed Test Database
+        run: pnpm db:seed
+
+      - name: Design Token Lint Gate
+        run: pnpm check:design-tokens
+
+      - name: Code Quality & ESLint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Build All Projects
+        run: pnpm build
+
+      - name: Bundle Budget Audit
+        run: pnpm check:bundle
+
+      - name: Dependency Audit
+        run: pnpm audit --prod
+
+      - name: Start API for Integration and Browser Gates
+        run: |
+          pnpm --dir apps/api start > api-ci.log 2>&1 &
+          for attempt in {1..30}; do
+            if curl --fail --silent http://localhost:3000/api/v1/health > /dev/null; then
+              break
+            fi
+            sleep 2
+          done
+          curl --fail --silent http://localhost:3000/api/v1/health > /dev/null
+
+      - name: Start Web Preview for Browser Gate
+        run: |
+          pnpm --dir apps/web preview --host 0.0.0.0 --port 5173 > web-ci.log 2>&1 &
+          for attempt in {1..30}; do
+            if curl --fail --silent http://localhost:5173/ > /dev/null; then
+              break
+            fi
+            sleep 2
+          done
+          curl --fail --silent http://localhost:5173/ > /dev/null
+
+      - name: Install Browser Test Runtime
+        run: |
+          python -m pip install --upgrade pip playwright
+          python -m playwright install --with-deps chromium
+
+      - name: Run Complete Database and Security Tests
+        run: pnpm test:all
+
+      - name: Run Browser and Accessibility Matrix
+        run: pnpm test:browser

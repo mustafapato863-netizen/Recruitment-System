@@ -1,0 +1,144 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+/* Keep test-only and unused catalog primitives out of the production utility scan. */
+@source not "./**/*.test.*";
+@source not "./design-system/components";
+
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+@keyframes rf-drift {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(var(--rf-atmosphere-drift-x, 8px), var(--rf-atmosphere-drift-y, 5px), 0); }
+}
+
+@keyframes rf-drift-reverse {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(calc(var(--rf-atmosphere-drift-x, 8px) * -1), calc(var(--rf-atmosphere-drift-y, 5px) * -1), 0); }
+}
+
+/* shadcn utilities are mapped to the canonical RecruitFlow semantic tokens. */
+@theme inline {
+  --font-rf: var(--font-sans);
+  --font-rf-heading: var(--font-heading);
+  --color-rf-canvas: var(--color-canvas);
+  --color-rf-surface: var(--color-surface);
+  --color-rf-surface-elevated: var(--color-surface-elevated);
+  --color-rf-surface-subtle: var(--color-surface-subtle);
+  --color-rf-surface-muted: var(--color-surface-muted);
+  --color-rf-surface-hover: var(--color-surface-hover);
+  --color-rf-field: var(--color-field);
+  --color-rf-field-disabled: var(--color-field-disabled);
+  --color-rf-border: var(--color-border);
+  --color-rf-border-subtle: var(--color-border-subtle);
+  --color-rf-border-strong: var(--color-border-strong);
+  --color-rf-ink: var(--color-ink-950);
+  --color-rf-ink-muted: var(--color-ink-500);
+  --color-rf-action: var(--color-action);
+  --color-rf-action-strong: var(--color-action-strong);
+  --color-rf-action-soft: var(--color-action-soft);
+  --color-rf-on-action: var(--color-on-action);
+  --color-rf-on-status: var(--color-on-status);
+  --color-rf-success: var(--color-success);
+  --color-rf-success-strong: var(--color-success-strong);
+  --color-rf-success-soft: var(--color-success-soft);
+  --color-rf-success-border: var(--color-success-border);
+  --color-rf-warning: var(--color-warning);
+  --color-rf-warning-strong: var(--color-warning-strong);
+  --color-rf-warning-soft: var(--color-warning-soft);
+  --color-rf-warning-border: var(--color-warning-border);
+  --color-rf-danger: var(--color-danger);
+  --color-rf-danger-strong: var(--color-danger-strong);
+  --color-rf-danger-soft: var(--color-danger-soft);
+  --color-rf-danger-border: var(--color-danger-border);
+  --color-rf-info: var(--color-info);
+  --color-rf-info-soft: var(--color-info-soft);
+  --color-rf-info-strong: var(--color-info-strong);
+  --color-rf-info-border: var(--color-info-border);
+  --color-rf-purple: var(--color-purple);
+  --color-rf-purple-soft: var(--color-purple-soft);
+  --color-rf-purple-border: var(--color-purple-border);
+  --color-rf-cyan: var(--color-cyan);
+  --color-rf-cyan-soft: var(--color-cyan-soft);
+  --color-rf-cyan-border: var(--color-cyan-border);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+@layer base {
+  :root {
+    --background: var(--color-canvas);
+    --foreground: var(--color-ink-950);
+    --card: var(--color-surface);
+    --card-foreground: var(--color-ink-950);
+    --popover: var(--color-surface);
+    --popover-foreground: var(--color-ink-950);
+    --primary: var(--color-action);
+    --primary-foreground: var(--color-on-action);
+    --secondary: var(--color-surface-subtle);
+    --secondary-foreground: var(--color-ink-800);
+    --muted: var(--color-surface-subtle);
+    --muted-foreground: var(--color-ink-500);
+    --accent: var(--color-action-soft);
+    --accent-foreground: var(--color-action);
+    --destructive: var(--color-danger);
+    --border: var(--color-border);
+    --input: var(--color-border);
+    --ring: var(--color-action);
+    --chart-1: var(--color-action);
+    --chart-2: var(--color-info);
+    --chart-3: var(--color-success);
+    --chart-4: var(--color-warning);
+    --chart-5: var(--color-danger);
+    --radius: var(--radius-lg);
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    min-width: 320px;
+    min-height: 100vh;
+    margin: 0;
+    background: var(--color-canvas);
+    color: var(--color-ink-950);
+    font-family: var(--font-sans);
+  }
+
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+}

@@ -1,0 +1,1071 @@
+/* RecruitFlow v2 visual parity layer.
+ * This aligns shared production geometry and page-family surfaces with the
+ * static reference while keeping React data, routing, and permissions intact. */
+
+:root {
+  --rf-page-max: 1360px;
+  --rf-page-gutter: 24px;
+}
+
+.sidebar {
+  width: var(--sidebar) !important;
+}
+
+.sidebar .brand {
+  height: var(--header) !important;
+}
+
+.topbar {
+  height: var(--header) !important;
+}
+
+.main-shell {
+  margin-left: var(--sidebar) !important;
+  padding-top: var(--header) !important;
+}
+
+.rf-page,
+.page {
+  width: 100%;
+  max-width: var(--rf-page-max) !important;
+  padding: 26px var(--rf-page-gutter) 38px !important;
+}
+
+.rf-page-header {
+  margin-bottom: 0;
+}
+
+.rf-page-eyebrow {
+  color: var(--color-ink-500) !important;
+  font-size: 10.5px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0 !important;
+  line-height: 1.25 !important;
+}
+
+.rf-page-header h1 {
+  font-size: 20px !important;
+  line-height: 1.2 !important;
+  letter-spacing: -0.03em !important;
+}
+
+.rf-page-header p {
+  color: var(--color-ink-500) !important;
+  font-size: 11.5px !important;
+  line-height: 1.5 !important;
+  margin-top: 5px !important;
+}
+
+[data-slot='button'] {
+  border-radius: var(--radius-md) !important;
+}
+
+[data-slot='button'][data-size='sm'],
+[data-slot='button'][data-size='md'] {
+  min-height: var(--control-height) !important;
+  height: var(--control-height) !important;
+}
+
+[data-slot='input'],
+.rf-filter-bar select,
+.rf-filter-bar textarea,
+.rf-filter-bar input {
+  border-radius: var(--radius-md) !important;
+}
+
+.rf-dashboard-page {
+  gap: 14px !important;
+}
+
+.rf-dashboard-page .rf-page-hero {
+  min-height: 78px;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.rf-dashboard-page .rf-page-hero > div:first-child > div:first-child {
+  display: block;
+  margin-bottom: 5px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-ink-400);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.rf-dashboard-page .rf-page-hero h1 {
+  font-size: 20px !important;
+  letter-spacing: -0.03em !important;
+}
+
+.rf-dashboard-page .rf-page-hero p {
+  color: var(--color-ink-400) !important;
+  font-size: 12px !important;
+}
+
+.rf-kpi-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  gap: 10px !important;
+}
+
+.rf-metric-card {
+  min-height: 158px !important;
+  border-radius: var(--radius-lg) !important;
+  border-color: var(--color-border) !important;
+  background: var(--color-surface) !important;
+  box-shadow: var(--shadow-xs) !important;
+}
+
+.rf-metric-card:hover {
+  transform: none !important;
+  border-color: var(--color-border-strong) !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+.rf-dashboard-page .rf-section-grid > section,
+.rf-dashboard-page .rf-section-grid .rf-section-grid > section {
+  border-radius: var(--radius-lg) !important;
+  border-color: var(--color-border) !important;
+  box-shadow: var(--shadow-xs) !important;
+}
+
+.rf-dashboard-page .rf-section-grid > section > div:first-child h2,
+.rf-dashboard-page .rf-section-grid > section h2 {
+  letter-spacing: -0.02em;
+}
+
+.rf-approval-tabs {
+  gap: 22px !important;
+}
+
+.rf-approval-tab {
+  position: relative;
+  height: 38px !important;
+  min-height: 38px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--color-ink-700) !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+}
+
+.rf-approval-tab:hover {
+  color: var(--color-action) !important;
+  background: transparent !important;
+}
+
+.rf-approval-tab.is-active {
+  color: var(--color-action) !important;
+}
+
+.rf-approval-tab.is-active::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--color-action);
+  content: '';
+}
+
+.rf-source-tabs {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  min-width: 0;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--color-border);
+  scrollbar-width: none;
+}
+
+.rf-source-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.rf-source-tab {
+  position: relative;
+  display: inline-flex;
+  min-height: 38px;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-ink-700);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--motion-fast), background-color var(--motion-fast);
+}
+
+.rf-source-tab:hover:not(:disabled),
+.rf-source-tab:focus-visible,
+.rf-source-tab.is-active {
+  color: var(--color-action);
+}
+
+.rf-source-tab:focus-visible {
+  outline: 2px solid var(--color-focus);
+  outline-offset: 4px;
+}
+
+.rf-source-tab:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.rf-source-tab.is-active::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--color-action);
+  content: '';
+}
+
+.rf-source-tab-count {
+  color: var(--color-ink-500);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.rf-source-tab.is-active .rf-source-tab-count {
+  color: var(--color-action);
+}
+
+.approval-inbox-page .rf-table-shell > div:first-child {
+  background: var(--color-surface) !important;
+  border-color: var(--color-border) !important;
+  padding: 18px 20px 14px !important;
+}
+
+.approval-inbox-page .rf-table-shell > div.p-4 {
+  gap: 8px !important;
+  padding: 12px 16px !important;
+}
+
+.approval-inbox-page .rf-table-shell .rounded-xl {
+  border-radius: var(--radius-md) !important;
+  border-color: var(--color-border) !important;
+  background: var(--color-surface) !important;
+  padding: 12px !important;
+}
+
+.rf-table-shell {
+  border-radius: var(--radius-lg) !important;
+  border-color: var(--color-border) !important;
+  background: var(--color-surface) !important;
+  box-shadow: var(--shadow-xs) !important;
+}
+
+.rf-panel,
+.rf-elevated-card,
+.rf-detail-hero,
+.rf-form-section,
+.rf-report-canvas,
+.ui-calendar-panel,
+.ui-calendar-grid,
+.pipeline-column,
+.pipeline-card {
+  border-radius: var(--radius-lg) !important;
+  border-color: var(--color-border) !important;
+  box-shadow: var(--shadow-xs) !important;
+}
+
+.rf-panel,
+.rf-elevated-card,
+.rf-detail-hero,
+.rf-form-section,
+.rf-report-canvas,
+.ui-calendar-panel,
+.ui-calendar-grid {
+  background: var(--color-surface) !important;
+}
+
+.rf-panel::before {
+  display: none !important;
+}
+
+.rf-detail-hero {
+  background: var(--color-surface) !important;
+}
+
+.rf-form-section {
+  background: var(--color-surface) !important;
+}
+
+.rf-report-canvas {
+  background: var(--color-surface) !important;
+}
+
+.rf-card-list > * {
+  transition: background-color var(--motion-fast), border-color var(--motion-fast) !important;
+}
+
+.rf-card-list > *:hover {
+  transform: none !important;
+  border-color: var(--color-border-strong) !important;
+}
+
+.ui-calendar-grid {
+  min-width: 820px;
+  overflow: hidden;
+}
+
+.ui-calendar-grid__corner,
+.ui-calendar-grid__day-header {
+  background: var(--color-surface-subtle) !important;
+  color: var(--color-ink-700) !important;
+  border-color: var(--color-border) !important;
+}
+
+.ui-calendar-grid__time,
+.ui-calendar-grid__cell {
+  border-color: var(--color-border-subtle) !important;
+}
+
+.ui-calendar-event {
+  border-color: color-mix(in srgb, var(--color-action) 34%, var(--color-border)) !important;
+  background: var(--color-action-soft) !important;
+  color: var(--color-action-strong) !important;
+}
+
+.pipeline-board-scroll {
+  padding-bottom: 10px;
+}
+
+.pipeline-column {
+  background: color-mix(in srgb, var(--color-surface) 92%, var(--color-action) 8%) !important;
+  padding: 10px !important;
+}
+
+.pipeline-card {
+  background: var(--color-surface) !important;
+  border-radius: var(--radius-md) !important;
+  box-shadow: var(--shadow-2xs) !important;
+}
+
+.pipeline-card:hover,
+.pipeline-card.neon-focus {
+  border-color: var(--color-border-strong) !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+.pipeline-card .pill {
+  border-radius: var(--radius-sm) !important;
+}
+
+.rf-table-shell > form,
+.rf-filter-bar {
+  border-color: var(--color-border) !important;
+  background: var(--color-surface) !important;
+  padding: 14px 16px !important;
+}
+
+.rf-table-shell table {
+  min-width: 820px;
+}
+
+.rf-table-shell table th {
+  background: var(--color-surface-subtle) !important;
+  border-color: var(--color-border) !important;
+  color: var(--color-ink-500) !important;
+  font-size: 10.5px !important;
+  letter-spacing: 0.01em !important;
+  padding: 11px 13px !important;
+}
+
+.rf-table-shell table td {
+  border-color: var(--color-border-subtle) !important;
+  color: var(--color-ink-700) !important;
+  font-size: 12px !important;
+  padding: 12px 13px !important;
+}
+
+.rf-table-shell table tbody tr:hover td {
+  background: color-mix(in srgb, var(--color-action) 4%, var(--color-surface)) !important;
+}
+
+.rf-table-shell span[class*='bg-rf-action-soft'] {
+  color: var(--color-action-strong) !important;
+}
+
+.rf-table-shell [data-slot='badge'][class*='text-rf-success'] {
+  color: var(--color-success-strong) !important;
+}
+
+.rf-table-shell [data-slot='badge'][class*='text-rf-warning'] {
+  color: var(--color-warning-strong) !important;
+}
+
+.rf-table-shell [data-slot='badge'][class*='text-rf-danger'] {
+  color: var(--color-danger-strong) !important;
+}
+
+.rf-table-shell [data-slot='badge'][class*='text-rf-info'],
+.rf-table-shell [data-slot='badge'][class*='text-rf-action'] {
+  color: var(--color-info-strong) !important;
+}
+
+/* Keep status labels legible wherever a page uses the shared Badge primitive. */
+.rf-page [data-slot='badge'][class*='text-rf-success'] {
+  color: var(--color-success-strong) !important;
+}
+
+.rf-page [data-slot='badge'][class*='text-rf-warning'] {
+  color: var(--color-warning-strong) !important;
+}
+
+.rf-page [data-slot='badge'][class*='text-rf-danger'] {
+  color: var(--color-danger-strong) !important;
+}
+
+.rf-page [data-slot='badge'][class*='text-rf-info'],
+.rf-page [data-slot='badge'][class*='text-rf-action'],
+.rf-page span[class*='bg-rf-action-soft'][class*='text-rf-action'] {
+  color: var(--color-action-strong) !important;
+}
+
+.rf-table-shell [data-slot='input'],
+.rf-table-shell select {
+  min-height: var(--control-height) !important;
+  height: var(--control-height) !important;
+}
+
+.avatar-demo,
+:root[data-theme='dark'] .avatar-demo {
+  color: var(--color-on-action) !important;
+}
+
+.rf-page article.group {
+  min-height: 128px;
+  border-radius: var(--radius-lg) !important;
+  border-color: var(--color-border) !important;
+  box-shadow: var(--shadow-xs) !important;
+}
+
+.rf-page article.group:hover {
+  transform: none !important;
+  border-color: var(--color-border-strong) !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+.rf-page article.group strong {
+  font-size: 20px !important;
+}
+
+.rf-page .rounded-2xl.border-rf-border-subtle,
+.rf-page .rounded-2xl.border-slate-200\/90 {
+  border-radius: var(--radius-lg) !important;
+  border-color: var(--color-border) !important;
+  box-shadow: var(--shadow-xs) !important;
+}
+
+@media (max-width: 1180px) {
+  :root {
+    --sidebar: 244px;
+  }
+
+  .rf-kpi-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 860px) {
+  :root {
+    --sidebar: 0px;
+  }
+
+  /* Keep the hidden drawer a real-width surface so its min-content cannot
+   * bleed into the 0px desktop layout variable on narrow screens. */
+  .sidebar {
+    width: min(290px, calc(100vw - 48px)) !important;
+    min-width: 0;
+    overflow-x: hidden;
+  }
+
+  .app:not(.is-mobile-nav-open) .sidebar {
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  .app.is-mobile-nav-open .sidebar {
+    visibility: visible;
+    pointer-events: auto;
+  }
+
+  .main-shell {
+    margin-left: 0 !important;
+  }
+
+  .rf-page,
+  .page {
+    padding: 20px 16px 30px !important;
+  }
+
+  .rf-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  [data-slot='button'][data-size='sm'],
+  [data-slot='button'][data-size='md'] {
+    min-height: 44px !important;
+    height: 44px !important;
+  }
+}
+
+@media (max-width: 520px) {
+  .rf-kpi-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .rf-page-header h1,
+  .rf-dashboard-page .rf-page-hero h1 {
+    font-size: 18px !important;
+  }
+}
+
+/* ==========================================================================
+   RecruitFlow sidebar finish
+
+   The shell is intentionally styled here as the final parity layer. The
+   sidebar markup is shared by every authenticated route, so this keeps the
+   navigation rhythm, active state, collapsed state, and account footer
+   consistent without touching page-specific workflow UI.
+   ========================================================================== */
+
+:root {
+  --sidebar: 232px;
+}
+
+.sidebar {
+  width: var(--sidebar) !important;
+  min-width: 0;
+  padding: 0 !important;
+  overflow: hidden;
+  background: var(--color-surface) !important;
+  border-right: 1px solid var(--color-border-subtle) !important;
+  box-shadow: 10px 0 32px -28px rgba(15, 23, 42, 0.34);
+  backdrop-filter: none;
+}
+
+.brand {
+  position: relative;
+  display: flex;
+  min-height: 64px;
+  height: 64px !important;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 14px 16px 16px !important;
+  border-bottom: 1px solid var(--color-border-subtle) !important;
+}
+
+.brand-home {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 6px;
+  margin-left: -6px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  color: inherit;
+  text-decoration: none;
+  transition: background-color var(--motion-fast), border-color var(--motion-fast), transform var(--motion-fast);
+}
+
+.brand-home:hover {
+  border-color: var(--color-border-subtle);
+  background: var(--color-surface-subtle);
+}
+
+.brand-home:active {
+  transform: translateY(1px);
+}
+
+.brand .mark {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--gradient-action);
+  color: var(--color-on-action);
+  font-size: 18px;
+  font-weight: 850;
+  box-shadow: 0 8px 18px -9px rgba(37, 84, 214, 0.72);
+}
+
+.brand-copy {
+  min-width: 0;
+}
+
+.brand-copy b {
+  display: block;
+  overflow: hidden;
+  color: var(--color-ink-950);
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.025em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.brand-copy small {
+  display: block;
+  margin-top: 3px;
+  color: var(--color-ink-500);
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.sidebar .sidebar-collapse {
+  position: absolute;
+  top: 21px;
+  right: 14px;
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--color-border) !important;
+  border-radius: 9px;
+  background: var(--color-surface) !important;
+  color: var(--color-ink-500);
+  box-shadow: var(--shadow-2xs);
+  transition: background-color var(--motion-fast), border-color var(--motion-fast), color var(--motion-fast), transform var(--motion-fast);
+}
+
+.sidebar .sidebar-collapse:hover {
+  border-color: color-mix(in srgb, var(--color-action) 35%, var(--color-border)) !important;
+  background: var(--color-action-soft) !important;
+  color: var(--color-action);
+  transform: translateX(-1px);
+}
+
+.sidebar .sidebar-collapse:active {
+  background: var(--color-action) !important;
+  color: var(--color-on-action);
+  transform: translateY(1px);
+}
+
+.sidebar .sidebar-collapse:focus-visible,
+.brand-home:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.nav {
+  min-height: 0;
+  padding: 14px 12px 16px !important;
+  gap: 2px;
+  overscroll-behavior: contain;
+}
+
+.nav .group {
+  margin: 16px 10px 6px;
+  padding: 0 !important;
+  color: var(--color-ink-400);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.105em;
+  line-height: 1.25;
+  text-transform: uppercase;
+}
+
+.nav .group:first-of-type {
+  margin-top: 0;
+}
+
+.nav a,
+.nav-item-disabled {
+  min-height: 38px;
+  margin: 2px 0;
+  padding: 0 10px !important;
+  gap: 10px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  color: var(--color-ink-700);
+  font-size: 10.5px;
+  font-weight: 750;
+  letter-spacing: 0.075em;
+  line-height: 1.2;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.nav a::before {
+  position: absolute;
+  left: -1px;
+  width: 3px;
+  height: 16px;
+  border-radius: 0 999px 999px 0;
+  background: transparent;
+  content: '';
+  transition: background-color var(--motion-fast), height var(--motion-fast);
+}
+
+.nav a .ico,
+.nav-item-disabled .ico {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  place-items: center;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: 9px;
+  background: var(--color-surface-subtle);
+  color: var(--color-ink-500);
+  transition: background-color var(--motion-fast), border-color var(--motion-fast), color var(--motion-fast), transform var(--motion-fast);
+}
+
+.nav a .ico svg,
+.nav-item-disabled .ico svg {
+  width: 16px;
+  height: 16px;
+}
+
+.nav a:hover:not(.active) {
+  border-color: color-mix(in srgb, var(--color-border) 78%, transparent);
+  background: var(--color-surface-hover);
+  color: var(--color-ink-950);
+}
+
+.nav a:hover:not(.active) .ico {
+  border-color: color-mix(in srgb, var(--color-action) 24%, var(--color-border-subtle));
+  color: var(--color-action);
+  transform: translateX(1px);
+}
+
+.nav a.active {
+  border-color: color-mix(in srgb, var(--color-action) 16%, var(--color-border-subtle));
+  background: linear-gradient(90deg, color-mix(in srgb, var(--color-action) 10%, transparent), color-mix(in srgb, var(--color-action) 4%, transparent));
+  color: var(--color-action-strong);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--color-surface) 48%, transparent);
+}
+
+.nav a.active::before {
+  height: 20px;
+  background: var(--color-action);
+}
+
+.nav a.active .ico {
+  border-color: var(--color-action);
+  background: var(--color-action);
+  color: var(--color-on-action);
+  box-shadow: 0 4px 10px -7px var(--color-action);
+}
+
+.nav a:active:not(.active) {
+  background: var(--color-action-soft);
+  color: var(--color-action-strong);
+  transform: translateY(1px);
+}
+
+.nav a:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+.nav a:hover .nav-tooltip,
+.nav a:focus-visible .nav-tooltip {
+  opacity: 1;
+}
+
+.nav-item-disabled {
+  opacity: 0.48;
+}
+
+.sidebar > .user {
+  display: flex;
+  min-height: 74px;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 12px !important;
+  border-top: 1px solid var(--color-border-subtle);
+  background: var(--color-surface);
+}
+
+.user-profile-link {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 8px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+  color: inherit;
+  text-decoration: none;
+  transition: background-color var(--motion-fast), border-color var(--motion-fast);
+}
+
+.user-profile-link:hover {
+  border-color: var(--color-border-subtle);
+  background: var(--color-surface-subtle);
+}
+
+.sidebar > .user .avatar {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  place-items: center;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #fb923c, #ea580c);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0.02em;
+  box-shadow: 0 6px 14px -8px rgba(194, 65, 12, 0.7);
+}
+
+.account-copy {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.account-copy b,
+.account-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-copy b {
+  color: var(--color-ink-950);
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.account-copy small {
+  color: var(--color-ink-500);
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.account-more {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-ink-500);
+  transition: background-color var(--motion-fast), border-color var(--motion-fast), color var(--motion-fast);
+}
+
+.account-more:hover {
+  border-color: var(--color-danger-border);
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+}
+
+.is-sidebar-collapsed .sidebar .brand {
+  justify-content: center;
+  padding-inline: 0 !important;
+}
+
+.is-sidebar-collapsed .sidebar .brand-home {
+  flex: 0 0 auto;
+}
+
+.is-sidebar-collapsed .sidebar .sidebar-collapse {
+  position: absolute;
+  top: 20px;
+  right: -12px;
+  z-index: 50;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+}
+
+.is-sidebar-collapsed .sidebar > .user {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 6px !important;
+}
+
+.is-sidebar-collapsed .sidebar .user-profile-link {
+  flex: 0 0 auto;
+  justify-content: center;
+  padding-inline: 0;
+}
+
+.is-sidebar-collapsed .sidebar .account-copy,
+.is-sidebar-collapsed .sidebar .account-more {
+  display: none !important;
+}
+
+@media (max-width: 1180px) and (min-width: 861px) {
+  :root {
+    --sidebar: 244px;
+  }
+}
+
+@media (max-width: 860px) {
+  :root {
+    --sidebar: 0px;
+  }
+
+  .sidebar {
+    width: min(280px, calc(100vw - 28px)) !important;
+    transform: translateX(-105%);
+    visibility: hidden;
+    pointer-events: none;
+    box-shadow: 22px 0 60px -30px rgba(15, 23, 42, 0.46);
+    transition: transform 220ms var(--ease-enter), visibility 220ms linear;
+  }
+
+  .app.is-mobile-open .sidebar,
+  .sidebar.mobile-active {
+    transform: translateX(0);
+    visibility: visible;
+    pointer-events: auto;
+  }
+
+  .is-sidebar-collapsed .sidebar {
+    width: min(280px, calc(100vw - 28px)) !important;
+  }
+
+  .is-sidebar-collapsed .sidebar .brand-copy,
+  .is-sidebar-collapsed .sidebar .group,
+  .is-sidebar-collapsed .sidebar .nav-label,
+  .is-sidebar-collapsed .sidebar .account-copy,
+  .is-sidebar-collapsed .sidebar .account-more {
+    display: initial;
+  }
+
+  .is-sidebar-collapsed .sidebar .brand-home,
+  .is-sidebar-collapsed .sidebar .user-profile-link {
+    flex: 1;
+  }
+
+  .is-sidebar-collapsed .sidebar .nav a,
+  .is-sidebar-collapsed .sidebar .nav-item-disabled {
+    justify-content: flex-start;
+    padding-inline: 10px !important;
+  }
+
+  .is-sidebar-collapsed .sidebar .sidebar-collapse {
+    top: 21px;
+    right: 14px;
+    width: 32px;
+    height: 32px;
+  }
+}
+
+/* The shared icon-button primitive supplies display styles of its own. Keep
+   the shell controls explicit so mobile-only actions never appear as
+   duplicate desktop controls. */
+@media (min-width: 861px) {
+  .sidebar .sidebar-collapse[class~='lg:hidden'],
+  .header .rf-icon-button[class~='lg:hidden'] {
+    display: none !important;
+  }
+
+  .sidebar .sidebar-collapse[class~='hidden'][class~='lg:flex'] {
+    display: grid !important;
+  }
+}
+
+@media (max-width: 860px) {
+  .sidebar .sidebar-collapse[class~='hidden'][class~='lg:flex'] {
+    display: none !important;
+  }
+
+  .header .rf-icon-button[class~='lg:hidden'] {
+    display: grid !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar,
+  .nav a,
+  .nav a .ico,
+  .sidebar .sidebar-collapse,
+  .brand-home,
+  .user-profile-link,
+  .account-more {
+    transition: none !important;
+  }
+}
+
+/* Dark mode controls and navigation retain an explicit painted surface. This
+   gives automated contrast tooling, high-contrast browsers, and users with
+   low-vision a reliable backdrop instead of relying on transparent ancestors. */
+:where(html[data-theme='dark'], html.dark, body.dark, .dark) .sidebar,
+:where(html[data-theme='dark'], html.dark, body.dark, .dark) .nav {
+  background-color: var(--color-surface) !important;
+}
+
+:where(html[data-theme='dark'], html.dark, body.dark, .dark) .nav a,
+:where(html[data-theme='dark'], html.dark, body.dark, .dark) .nav-item-disabled {
+  background-color: var(--color-surface);
+  color: var(--color-ink-800);
+}
+
+:where(html[data-theme='dark'], html.dark, body.dark, .dark) .nav-label {
+  background-color: var(--color-surface);
+}
+
+:where(html[data-theme='dark'], html.dark, body.dark, .dark) input,
+:where(html[data-theme='dark'], html.dark, body.dark, .dark) select,
+:where(html[data-theme='dark'], html.dark, body.dark, .dark) textarea {
+  background-color: var(--color-field);
+  color: var(--color-ink-950);
+}
+
+:where(html[data-theme='dark'], html.dark, body.dark, .dark) input::placeholder,
+:where(html[data-theme='dark'], html.dark, body.dark, .dark) textarea::placeholder {
+  color: var(--color-ink-700) !important;
+  opacity: 1 !important;
+}
+
+:where(html[data-theme='dark'], html.dark, body.dark, .dark) select {
+  background-color: var(--color-field) !important;
+  color: var(--color-ink-950) !important;
+}
+
+:where(html[data-theme='dark'], html.dark, body.dark, .dark) .rf-panel .min-w-0 {
+  background-color: var(--color-surface-subtle);
+}
+
+:where(html[data-theme='dark'], html.dark, body.dark, .dark) [data-slot='badge'].text-rf-success-strong {
+  background-color: #123b32 !important;
+  border-color: #4ade80 !important;
+  color: #a7f3d0 !important;
+}

@@ -1,0 +1,41 @@
+﻿{
+  "name": "@recruitflow/api",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "build": "nest build",
+    "start": "node dist/apps/api/src/main.js",
+    "start:dev": "nest build && node dist/apps/api/src/main.js",
+    "test": "pnpm --dir ../web exec vitest run --root ../.. --environment node --globals apps/api/src/common/errors/error-normalizer.spec.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "pnpm --dir ../.. exec eslint apps/api/src --max-warnings=0"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.1.6",
+    "@nestjs/config": "^4.0.2",
+    "@nestjs/core": "^11.1.6",
+    "@nestjs/jwt": "^11.0.2",
+    "@nestjs/passport": "^11.0.5",
+    "@nestjs/platform-express": "^11.1.6",
+    "@recruitflow/contracts": "workspace:*",
+    "@recruitflow/database": "workspace:*",
+    "bcryptjs": "^3.0.3",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.2",
+    "cookie-parser": "^1.4.7",
+    "passport": "^0.7.0",
+    "passport-jwt": "^4.0.1",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^11.0.10",
+    "@types/bcryptjs": "^3.0.0",
+    "@types/cookie-parser": "^1.4.10",
+    "@types/express": "^5.0.6",
+    "@types/node": "^24.3.0",
+    "@types/passport-jwt": "^4.0.1",
+    "typescript": "^5.9.2"
+  }
+}
