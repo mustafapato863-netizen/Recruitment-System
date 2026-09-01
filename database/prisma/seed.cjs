@@ -5,8 +5,8 @@ const { seedDemoFixtures } = require('./demo-fixtures.cjs');
 
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
-// bcryptjs hash of the local seed password with cost factor 10
-const DEFAULT_PASSWORD_HASH = '$2b$10$2PCxh7U3qBjs6Qvl0z7vCuNoBmM5mWrvJVKeWd.T81BBD8fAEzmSm';
+// bcryptjs hash of the local seed password ('Password123!') with cost factor 10
+const DEFAULT_PASSWORD_HASH = '$2b$10$dd0OAfjCvUL/waxTy79xZe0H7QN3r7oEbPPKJ9dwg97.y70rZgep6';
 
 const prisma = new PrismaClient();
 
@@ -190,6 +190,22 @@ async function main() {
         id: '10000000-0000-4000-8000-000000000013',
         email: 'omar.nasser@recruitflow.local',
         displayName: 'Omar Nasser',
+      },
+      // Demo users for testing (3 roles)
+      {
+        id: '10000000-0000-4000-8000-000000000021',
+        email: 'a@test.com',
+        displayName: 'Admin User',
+      },
+      {
+        id: '10000000-0000-4000-8000-000000000022',
+        email: 'e@test.com',
+        displayName: 'Employee User',
+      },
+      {
+        id: '10000000-0000-4000-8000-000000000023',
+        email: 'm@test.com',
+        displayName: 'Manager User',
       },
     ];
 
@@ -404,6 +420,9 @@ async function main() {
       'hassan.ali@recruitflow.local': 'HIRING_MANAGER',
       'aya.mostafa@recruitflow.local': 'FINAL_HIRING_APPROVER',
       'omar.nasser@recruitflow.local': 'LICENSE_SPECIALIST',
+      'a@test.com': 'ADMINISTRATOR',
+      'e@test.com': 'VIEWER',
+      'm@test.com': 'HIRING_MANAGER',
     };
 
     for (const [email, roleCode] of Object.entries(userRoleMap)) {
@@ -419,16 +438,22 @@ async function main() {
 
     // ── Sample Candidates & Applications ─────────────────────
     const candidateSeed = [
-      { code: 'CND-2026-001', firstName: 'Mariam', lastName: 'Farouk', email: 'mariam.farouk@example.com', phone: '+201001234567', currentTitle: 'Lead Frontend Developer', currentCompany: 'TechHub', source: 'LinkedIn' },
-      { code: 'CND-2026-002', firstName: 'Kareem', lastName: 'Ezzat', email: 'kareem.ezzat@example.com', phone: '+201119876543', currentTitle: 'Senior React Specialist', currentCompany: 'DevCorp', source: 'Referral' },
-      { code: 'CND-2026-003', firstName: 'Nour', lastName: 'Salem', email: 'nour.salem@example.com', phone: '+201225554433', currentTitle: 'UI/UX Designer & Engineer', currentCompany: 'DesignStudio', source: 'Job Portal' },
+      { code: 'C001', firstName: 'John', lastName: 'Doe', email: 'john@demo.com', phone: '1234', currentTitle: 'Frontend Dev', currentCompany: 'A', source: 'Web' },
+      { code: 'C002', firstName: 'Jane', lastName: 'Ali', email: 'jane@demo.com', phone: '1234', currentTitle: 'Backend Dev', currentCompany: 'B', source: 'Web' },
+      { code: 'C003', firstName: 'Omar', lastName: 'Sam', email: 'omar@demo.com', phone: '1234', currentTitle: 'DevOps Eng', currentCompany: 'C', source: 'Web' },
+      { code: 'C004', firstName: 'Sara', lastName: 'Kim', email: 'sara@demo.com', phone: '1234', currentTitle: 'QA Engineer', currentCompany: 'D', source: 'Web' },
+      { code: 'C005', firstName: 'Adam', lastName: 'Zaz', email: 'adam@demo.com', phone: '1234', currentTitle: 'Product Mgr', currentCompany: 'E', source: 'Web' },
+      { code: 'C006', firstName: 'Dina', lastName: 'Baz', email: 'dina@demo.com', phone: '1234', currentTitle: 'UI Designer', currentCompany: 'F', source: 'Web' },
     ];
 
-    for (const c of candidateSeed) {
-      await tx.candidate.upsert({
+    for (let i = 0; i < candidateSeed.length; i++) {
+      const c = candidateSeed[i];
+      const candId = `10000000-0000-4000-9000-00000000000${i+1}`;
+      const cand = await tx.candidate.upsert({
         where: { organizationId_email: { organizationId: organization.id, email: c.email } },
-        update: { firstName: c.firstName, lastName: c.lastName },
+        update: { firstName: c.firstName, lastName: c.lastName, currentTitle: c.currentTitle },
         create: {
+          id: candId,
           organizationId: organization.id,
           candidateCode: c.code,
           firstName: c.firstName,
@@ -441,6 +466,27 @@ async function main() {
           status: 'Active',
         },
       });
+
+      // Add dummy CV document
+      const docId = `20000000-0000-4000-9000-00000000000${i+1}`;
+      const existingDoc = await tx.candidateDocument.findUnique({ where: { id: docId } });
+      if (!existingDoc) {
+        await tx.candidateDocument.create({
+          data: {
+            id: docId,
+            organizationId: organization.id,
+            candidateId: cand.id,
+            documentType: 'CV',
+            fileName: `${c.firstName}_CV.pdf`,
+            fileSize: 102400,
+            mimeType: 'application/pdf',
+            storageKey: `cvs/${organization.id}/${cand.id}/cv.pdf`,
+            storageProvider: 'local-private',
+            scanStatus: 'Clean',
+            consentStatus: 'Active',
+          }
+        });
+      }
     }
 
     const demo = await seedDemoFixtures(tx, { organization, legalEntity, branch, position, users });

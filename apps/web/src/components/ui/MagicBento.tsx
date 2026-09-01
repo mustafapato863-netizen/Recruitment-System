@@ -435,7 +435,7 @@ export default function MagicBento({
   enableTilt = false,
   glowColor = DEFAULT_GLOW_COLOR,
   clickEffect = true,
-  enableMagnetism = true,
+  enableMagnetism = false,
   className = '',
 }: MagicBentoProps) {
   const gridRef = useRef<HTMLDivElement>(null);

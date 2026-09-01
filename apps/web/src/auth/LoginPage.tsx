@@ -10,7 +10,6 @@ import { FormField } from '../components/ui/FormField';
 import { Input } from '../components/ui/Input';
 import { AtmosphericBackground } from '../components/ui/AtmosphericBackground';
 import { BorderGlow } from '../components/ui/BorderGlow';
-import { ClickSpark } from '../components/ui/ClickSpark';
 import { ThemeToggle } from '../components/ui/ThemeToggle';
 import { SghAnimatedLogo } from '../design-system/brand/sgh-animated-logo';
 import { SghLogo } from '../design-system/brand/sgh-logo';
@@ -31,28 +30,22 @@ const TEST_PERSONAS: Array<{
 }> = import.meta.env.DEV
   ? [
       {
-        name: 'Ahmed Mahmoud',
-        initials: 'AM',
-        role: 'Administrator (Full Governance)',
-        email: 'ahmed.mahmoud@recruitflow.local',
+        name: 'Employee User',
+        initials: 'E',
+        role: 'Employee/Requester',
+        email: 'e@test.com',
       },
       {
-        name: 'Tarek Nabil',
-        initials: 'TN',
-        role: 'Performance Admin (Auditor & Reports)',
-        email: 'tarek.audit@recruitflow.local',
+        name: 'Manager User',
+        initials: 'M',
+        role: 'Manager/Hiring Manager',
+        email: 'm@test.com',
       },
       {
-        name: 'Mona El-Sayed',
-        initials: 'ME',
-        role: 'Talent Manager (Hiring Lead & Targets)',
-        email: 'mona.manager@recruitflow.local',
-      },
-      {
-        name: 'Sarah Ahmed',
-        initials: 'SA',
-        role: 'Recruiter (Jobs & Fast Review)',
-        email: 'sarah.ahmed@recruitflow.local',
+        name: 'Admin User',
+        initials: 'A',
+        role: 'Administrator/Recruitment Ops',
+        email: 'a@test.com',
       },
     ]
   : [];
@@ -201,13 +194,6 @@ export function LoginPage() {
           isDark={isDark}
         />
       )}
-      <ClickSpark
-        className="rf-login-click-spark"
-        sparkColor="var(--color-action)"
-        sparkRadius={24}
-        sparkCount={10}
-        duration={450}
-      >
         <main className="relative isolate min-h-screen overflow-hidden bg-rf-canvas">
         <AtmosphericBackground className="z-0" variant="auth" />
         <div className="pointer-events-none absolute inset-0 z-0 opacity-40">
@@ -551,7 +537,6 @@ export function LoginPage() {
         </BorderGlow>
       </div>
       </main>
-      </ClickSpark>
     </>
   );
 }

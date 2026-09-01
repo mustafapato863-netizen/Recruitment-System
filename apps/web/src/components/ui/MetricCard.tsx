@@ -9,6 +9,9 @@ export interface MetricCardProps {
   label: string;
   value: ReactNode;
   detail?: ReactNode;
+  definition?: ReactNode;
+  source?: ReactNode;
+  asOf?: ReactNode;
   icon?: ReactNode;
   action?: ReactNode;
   tone?: MetricTone;
@@ -86,6 +89,9 @@ export function MetricCard({
   label,
   value,
   detail,
+  definition,
+  source,
+  asOf,
   icon,
   action,
   tone = 'neutral',
@@ -136,18 +142,32 @@ export function MetricCard({
                 <span>{urgencyText}</span>
               </span>
             )}
-            <div className="flex items-center gap-1.5 min-w-0">
-              <span className="text-xs font-bold uppercase tracking-wider text-rf-ink-muted truncate" title={typeof infoTooltip === 'string' ? infoTooltip : undefined}>{label}</span>
-              {infoTooltip && (
-                <div className="group/tooltip relative flex items-center">
+            <div className="flex flex-col gap-1.5 min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-bold uppercase tracking-wider text-rf-ink-muted truncate" title={typeof infoTooltip === 'string' ? infoTooltip : undefined}>{label}</span>
+                {infoTooltip && (
+                  <div className="group/tooltip relative flex items-center">
+                    <svg className="w-3.5 h-3.5 text-rf-ink-muted opacity-60 hover:opacity-100 cursor-help transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover/tooltip:block w-48 p-2 bg-rf-ink text-rf-surface text-[11px] leading-tight font-medium rounded shadow-xl z-50 text-center pointer-events-none before:content-[''] before:absolute before:top-full before:left-1/2 before:-translate-x-1/2 before:border-4 before:border-transparent before:border-t-rf-ink">
+                      {infoTooltip}
+                    </div>
+                  </div>
+                )}
+              </div>
+              {definition && (
+                <div className="group/tooltip relative flex items-center mt-1">
                   <svg className="w-3.5 h-3.5 text-rf-ink-muted opacity-60 hover:opacity-100 cursor-help transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                   <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover/tooltip:block w-48 p-2 bg-rf-ink text-rf-surface text-[11px] leading-tight font-medium rounded shadow-xl z-50 text-center pointer-events-none before:content-[''] before:absolute before:top-full before:left-1/2 before:-translate-x-1/2 before:border-4 before:border-transparent before:border-t-rf-ink">
-                    {infoTooltip}
+                    {definition}
                   </div>
                 </div>
               )}
+              {source && <span className="block text-[10px] text-rf-ink-muted">{source}</span>}
+              {asOf && <span className="block text-[10px] text-rf-ink-muted">as of {asOf}</span>}
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-1.5 transition-opacity group-hover:opacity-30">

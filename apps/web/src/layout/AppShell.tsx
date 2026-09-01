@@ -16,8 +16,7 @@ type NavigationItemProps = {
   icon: IconName;
   to?: string;
   end?: boolean;
-  permission?: string;
-  anyPermissions?: string[];
+  allowedRoles?: ('ADMIN' | 'MANAGER' | 'EMPLOYEE')[];
   isCollapsed?: boolean;
   onNavigate?: () => void;
 };
@@ -27,16 +26,20 @@ function NavigationItem({
   icon,
   to,
   end = false,
-  permission,
-  anyPermissions,
+  allowedRoles,
   isCollapsed = false,
   onNavigate,
 }: NavigationItemProps) {
   const { user } = useAuth();
-  const hasPermission = permission ? Boolean(user?.permissions.includes(permission)) : true;
-  const hasAnyPermission = anyPermissions ? anyPermissions.some((item) => user?.permissions.includes(item)) : true;
+  
+  const userRoleCodes = user?.roles?.map(r => r.code) || [];
+  const isAdmin = userRoleCodes.some(c => ['ADMIN', 'SYSADMIN'].includes(c));
+  const isManager = userRoleCodes.some(c => ['HIRING_MANAGER', 'RECRUITER', 'MANAGER'].includes(c));
+  const effectiveRole = isAdmin ? 'ADMIN' : (isManager ? 'MANAGER' : 'EMPLOYEE');
 
-  if (!hasPermission || !hasAnyPermission) return null;
+  const hasAccess = allowedRoles ? allowedRoles.includes(effectiveRole) : true;
+
+  if (!hasAccess) return null;
 
   if (!to) {
     return (
@@ -179,8 +182,8 @@ export function AppShell() {
     { path: '/vacancy-requests/', label: 'Vacancy Request Detail', parent: 'Vacancy Requests' },
     { path: '/vacancy-requests', label: 'Vacancy Requests', parent: 'My Work' },
     { path: '/approval-inbox', label: 'Approval Inbox', parent: 'My Work' },
-    { path: '/vacancies/', label: 'Vacancy Overview', parent: 'Openings & Vacancies' },
-    { path: '/vacancies', label: 'Openings & Vacancies', parent: 'Jobs & Pipeline' },
+    { path: '/vacancies/', label: 'Vacancy Overview', parent: 'Openings & Job Cards' },
+    { path: '/vacancies', label: 'Openings & Job Cards', parent: 'Jobs & Pipeline' },
     { path: '/candidates/', label: 'Candidate Profile', parent: 'Candidates Directory' },
     { path: '/candidates', label: 'Candidates Directory', parent: 'Jobs & Pipeline' },
     { path: '/applications/', label: 'Application Detail', parent: 'Applications Pipeline' },
@@ -275,17 +278,16 @@ export function AppShell() {
         </div>
 
         <div className="nav rf-scrollbar">
-          {/* Main Navigation - 10 Core App Design Pages */}
-          <NavigationItem end icon="dashboard" label="Dashboard" to="/" isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
-          <NavigationItem icon="list" label="Jobs" to="/vacancies" permission="VACANCY_VIEW" isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
-          <NavigationItem icon="pipeline" label="Applicants" to="/applications" permission="APPLICATION_VIEW" isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
-          <NavigationItem icon="calendar-clock" label="Interviews" to="/interviews/calendar" permission="VACANCY_VIEW" isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
-          <NavigationItem icon="offer" label="Offers & Approvals" to="/offers" anyPermissions={['APPLICATION_VIEW', 'APPROVE_OFFERS']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
-          <NavigationItem icon="database" label="CV Bank" to="/cv-bank" permission="CANDIDATE_VIEW" isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
-          <NavigationItem icon="report" label="Reports" to="/reports" permission="APPLICATION_VIEW" isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
-          <NavigationItem icon="folder-kanban" label="Talent Pipeline" to="/talent-pool" permission="CANDIDATE_VIEW" isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
-          <NavigationItem icon="mail" label="Notifications" to="/notifications" permission="NOTIFICATION_VIEW" isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
-          <NavigationItem icon="settings" label="Settings" to="/settings" anyPermissions={['USERS_VIEW', 'MASTER_DATA_VIEW', 'OVERRIDE_WORKFLOW']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+          <NavigationItem end icon="dashboard" label="Dashboard" to="/" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+          <NavigationItem icon="briefcase" label="Jobs" to="/vacancies" allowedRoles={['ADMIN', 'MANAGER']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+          <NavigationItem icon="pipeline" label="Applicants" to="/applications" allowedRoles={['ADMIN', 'MANAGER']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+          <NavigationItem icon="calendar-clock" label="Interviews" to="/interviews" allowedRoles={['ADMIN', 'MANAGER']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+          <NavigationItem icon="offer" label="Offers & Approvals" to="/offers" allowedRoles={['ADMIN', 'MANAGER']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+          <NavigationItem icon="database" label="CV Bank" to="/cv-bank" allowedRoles={['ADMIN']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+          <NavigationItem icon="report" label="Reports" to="/reports" allowedRoles={['ADMIN']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+          <NavigationItem icon="folder-kanban" label="Talent Pipeline" to="/talent-pool" allowedRoles={['ADMIN']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+          <NavigationItem icon="bell" label="Notifications" to="/notifications" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+          <NavigationItem icon="settings" label="Settings" to="/settings" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
         </div>
 
         {/* User Account / Footer Section */}
@@ -347,26 +349,26 @@ export function AppShell() {
               ))}
             </ol>
           </nav>
-        </div>
-        <button
-          ref={searchTriggerRef}
-          type="button"
-          className="search cursor-text text-left"
-          onClick={() => setIsCommandPaletteOpen(true)}
-          aria-haspopup="dialog"
-          aria-expanded={isCommandPaletteOpen}
-          aria-label="Search candidates, vacancies, applications and tasks"
-        >
-          <Icon name="search" size={15} />
-          <span className="text-rf-ink-muted">Search candidates, vacancies, applications...</span>
-          <kbd>⌘ K</kbd>
-        </button>
-        <div className="actions flex items-center gap-2.5">
-          <QuickCreateMenu />
-          <NotificationAlertDialog triggerVariant="icon" />
-          <ThemeToggle />
-          <div className="h-6 w-px bg-rf-border-subtle mx-0.5 hidden sm:block" aria-hidden="true" />
-          <UserProfileDropdown />
+          <button
+            ref={searchTriggerRef}
+            type="button"
+            className="search cursor-text text-left"
+            onClick={() => setIsCommandPaletteOpen(true)}
+            aria-haspopup="dialog"
+            aria-expanded={isCommandPaletteOpen}
+            aria-label="Search candidates, vacancies, applications and tasks"
+          >
+            <Icon name="search" size={15} />
+            <span className="text-rf-ink-muted">Search candidates, vacancies, applications...</span>
+            <kbd>⌘ K</kbd>
+          </button>
+          <div className="actions flex items-center gap-2.5">
+            <QuickCreateMenu />
+            <NotificationAlertDialog triggerVariant="icon" />
+            <ThemeToggle />
+            <div className="h-6 w-px bg-rf-border-subtle mx-0.5 hidden sm:block" aria-hidden="true" />
+            <UserProfileDropdown />
+          </div>
         </div>
       </header>
 

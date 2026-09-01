@@ -17,6 +17,13 @@ const ENTITY_ICONS: Record<GlobalSearchItem['entityType'], IconName> = {
   vacancy: 'briefcase',
   application: 'pipeline',
   task: 'tasks',
+  interview: 'calendar-clock',
+  offer: 'document',
+  approval: 'inbox',
+  notification: 'mail',
+  cv: 'upload',
+  'talent-pool': 'folder-kanban',
+  'master-data': 'database',
 };
 
 function itemRoute(item: GlobalSearchItem): string {
@@ -25,6 +32,14 @@ function itemRoute(item: GlobalSearchItem): string {
     case 'vacancy': return `/vacancies/${item.entityId}`;
     case 'application': return `/applications/${item.entityId}`;
     case 'task': return `/tasks?focus=${encodeURIComponent(item.entityId)}`;
+    case 'interview': return `/interviews/${item.entityId}`;
+    case 'offer': return `/offers/${item.entityId}`;
+    case 'approval': return `/approval-inbox/${item.entityId}`;
+    case 'notification': return `/notifications/${item.entityId}`;
+    case 'cv': return `/cv-intake/${item.entityId}`;
+    case 'talent-pool': return `/talent-pool/${item.entityId}`;
+    case 'master-data': return `/master-data/${item.entityId}`;
+    default: return '/';
   }
 }
 
@@ -59,7 +74,7 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
       setLoading(true);
       setError('');
       void fetchApi<GlobalSearchResponse>(
-        `/search?q=${encodeURIComponent(normalized)}&limit=5`,
+        `/search?q=${encodeURIComponent(normalized)}&limit=8`,
         { method: 'GET', signal: controller.signal },
       )
         .then((response) => {
@@ -109,11 +124,11 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
                 openItem(flatItems[activeIndex]);
               }
             }}
-            aria-label="Search candidates, openings, applications, and tasks"
+            aria-label="Search candidates, openings, applications, interviews, offers, approvals, tasks, notifications, CV records, talent pools, and master data"
             aria-controls="command-search-results"
             aria-activedescendant={flatItems[activeIndex] ? `command-result-${flatItems[activeIndex].entityType}-${flatItems[activeIndex].entityId}` : undefined}
             autoComplete="off"
-            placeholder="Search candidates, openings, applications, and tasks..."
+            placeholder="Search candidates, openings, applications, interviews, offers, approvals, tasks, notifications, CV records, talent pools, master data..."
           />
           {loading && <Spinner size={17} aria-label="Searching workspace" />}
         </div>

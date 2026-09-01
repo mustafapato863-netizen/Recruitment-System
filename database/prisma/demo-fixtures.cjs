@@ -1,4 +1,4 @@
-const DEMO_PASSWORD_HASH = '$2b$10$1YF2d.BurlPR9CzQravUWuqurUfHyhpGLe5yAW13nWRf7gCC6raDe';
+const DEMO_PASSWORD_HASH = '$2b$10$dd0OAfjCvUL/waxTy79xZe0H7QN3r7oEbPPKJ9dwg97.y70rZgep6';
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 function fixtureId(number) {

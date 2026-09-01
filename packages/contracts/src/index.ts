@@ -1151,7 +1151,7 @@ export interface ReportOverview {
   };
 }
 
-export type GlobalSearchEntityType = 'candidate' | 'vacancy' | 'application' | 'task';
+export type GlobalSearchEntityType = 'candidate' | 'vacancy' | 'application' | 'task' | 'interview' | 'offer' | 'approval' | 'notification' | 'cv' | 'talent-pool' | 'master-data';
 
 export interface GlobalSearchItem {
   entityType: GlobalSearchEntityType;

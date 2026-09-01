@@ -1,0 +1,172 @@
+erDiagram
+    ORGANIZATION ||..o{LegalEntity : has
+    ORGANIZATION ||..o{Branch : has
+    ORGANIZATION ||..o{Position : has
+    ORGANIZATION ||..o{User : has
+    ORGANIZATION ||..o{VacancyRequest : has
+    ORGANIZATION ||..o{Vacancy : has
+    ORGANIZATION ||..o{Candidate : has
+    ORGANIZATION ||..o{Application : has
+    ORGANIZATION ||..o{UserRole : has
+    ORGANIZATION ||..o{Role : has
+    ORGANIZATION ||..o{Permission : has
+    ORGANIZATION ||..o{AuditLog : has
+    ORGANIZATION ||..o{AuthToken : has
+    ORGANIZATION ||..o{Notification : has
+    ORGANIZATION ||..o{Task : has
+    ORGANIZATION ||..o{CustomRole : has
+    ORGANIZATION ||..o{EmailOutbox : has
+    ORGANIZATION ||..o{Integration : has
+    ORGANIZATION ||..o{PipelineTemplate : has
+    ORGANIZATION ||..o{TalentPool : has
+    ORGANIZATION ||..o{CandidateImportJob : has
+
+    LEGALENTITY ||..o{Branch : has
+    LEGALENTITY ||..o{Position : has
+    LEGALENTITY ||..o{VacancyRequest : has
+    LEGALENTITY ||..o{Vacancy : has
+
+    BRANCH ||..o{VacancyRequest : has
+    BRANCH ||..o{Vacancy : has
+
+    POSITION ||..o{VacancyRequest : has
+    POSITION ||..o{Vacancy : has
+
+    USER ||..o{UserRole : has
+    USER ||..o{VacancyRequest : requester
+    USER ||..o{VacancyRequestApproval : assignee
+    USER ||..o{VacancyAssignment : assignee
+    USER ||..o{Application : primary_recruiter
+    USER ||..o{Application : task_owner
+    USER ||..o{ApplicationStatusHistory : changed_by
+    USER ||..o{CandidateDocument : uploaded_by
+    USER ||..o{CandidateDocument : deleted_by
+    USER ||..o{ScreeningLog : screener
+    USER ||..o{InterviewAttendee : attendee
+    USER ||..o{InterviewScorecard : interviewer
+    USER ||..o{OfferApproval : approver
+    USER ||..o{HiringCase : owner
+    USER ||..o{ComplianceRequirement : verifier
+    USER ||..o{HiringCaseApproval : approver
+    USER ||..o{TalentPool : uploaded_by
+    USER ||..o{Notification : recipient
+    USER ||..o{Task : assignee
+    USER ||..o{Task : creator
+    USER ||..o{AuthToken : user
+
+    ROLE ||..o{UserRole : has
+    ROLE ||..o{RolePermission : has
+
+    PERMISSION ||..o{RolePermission : has
+
+    USER_ROLE }|..|| User : belongs_to
+    USER_ROLE }|..|| Role : belongs_to
+
+    ROLE_PERMISSION }|..|| Role : belongs_to
+    ROLE_PERMISSION }|..|| Permission : belongs_to
+
+    VACANCY_REQUEST ||..o{VacancyRequestApproval : has
+    VACANCY_REQUEST }|..|| Vacancy : may_have
+
+    VACANCY_REQUEST_APPROVAL }|..|| VacancyRequest : belongs_to
+    VACANCY_REQUEST_APPROVAL }|..|| User : may_be_assigned_to
+
+    VACANCY ||..o{VacancyAssignment : has
+    VACANCY ||..o{Application : has
+    VACANCY }|..|| VacancyRequest : belongs_to
+
+    VACANCY_ASSIGNMENT }|..|| Vacancy : belongs_to
+    VACANCY_ASSIGNMENT }|..|| User : belongs_to
+
+    AUDIT_LOG }|..|| Organization : may_belong_to
+    AUDIT_LOG }|..|| User : may_be_performed_by
+
+    AUTH_RATE_LIMIT
+
+    CODE_SEQUENCE
+
+    CANDIDATE ||..o{Application : has
+    CANDIDATE ||..o{CandidateDocument : has
+    CANDIDATE ||..o{TalentPoolCandidate : has
+
+    APPLICATION ||..o{ApplicationStatusHistory : has
+    APPLICATION ||..o{ScreeningLog : has
+    APPLICATION ||..o{Interview : has
+    APPLICATION ||..o{Offer : has
+    APPLICATION }|..|| HiringCase : may_have
+
+    APPLICATION_STATUS_HISTORY }|..|| Application : belongs_to
+    APPLICATION_STATUS_HISTORY }|..|| User : may_be_changed_by
+
+    CANDIDATE_DOCUMENT ||..o{ComplianceRequirement : may_be_used_for
+    CANDIDATE_DOCUMENT }|..|| Candidate : belongs_to
+    CANDIDATE_DOCUMENT }|..|| User : may_be_uploaded_by
+    CANDIDATE_DOCUMENT }|..|| User : may_be_deleted_by
+
+    SCREENING_LOG }|..|| Application : belongs_to
+    SCREENING_LOG }|..|| User : belongs_to
+
+    INTERVIEW ||..o{InterviewAttendee : has
+    INTERVIEW ||..o{InterviewScorecard : has
+    INTERVIEW }|..|| Application : belongs_to
+
+    INTERVIEW_ATTENDEE }|..|| Interview : belongs_to
+    INTERVIEW_ATTENDEE }|..|| User : belongs_to
+
+    INTERVIEW_SCORECARD }|..|| Interview : belongs_to
+    INTERVIEW_SCORECARD }|..|| User : belongs_to
+
+    OFFER ||..o{OfferVersion : has
+    OFFER }|..|| Application : belongs_to
+    OFFER }|..|| HiringCase : may_be_associated_with
+
+    OFFER_VERSION ||..o{OfferComponent : has
+    OFFER_VERSION ||..o{OfferApproval : has
+    OFFER_VERSION }|..|| Offer : belongs_to
+
+    OFFER_COMPONENT }|..|| OfferVersion : belongs_to
+
+    OFFER_APPROVAL }|..|| OfferVersion : belongs_to
+    OFFER_APPROVAL }|..|| User : may_be_approver
+
+    HIRING_CASE ||..o{ComplianceRequirement : has
+    HIRING_CASE ||..o{HiringCaseApproval : has
+    HIRING_CASE }|..|| Application : belongs_to
+    HIRING_CASE }|..|| Offer : belongs_to
+    HIRING_CASE }|..|| User : may_be_owner
+
+    COMPLIANCE_REQUIREMENT }|..|| HiringCase : belongs_to
+    COMPLIANCE_REQUIREMENT }|..|| CandidateDocument : may_reference
+    COMPLIANCE_REQUIREMENT }|..|| User : may_be_verified_by
+
+    HIRING_CASE_APPROVAL }|..|| HiringCase : belongs_to
+    HIRING_CASE_APPROVAL }|..|| User : may_be_approver
+
+    TALENT_POOL ||..o{TalentPoolCandidate : has
+
+    TALENT_POOL_CANDIDATE }|..|| TalentPool : belongs_to
+    TALENT_POOL_CANDIDATE }|..|| Candidate : belongs_to
+
+    CANDIDATE_IMPORT_JOB }|..|| Organization : belongs_to
+    CANDIDATE_IMPORT_JOB }|..|| User : may_be_uploaded_by
+    CANDIDATE_IMPORT_JOB ||..o{CandidateImportRow : has
+
+    CANDIDATE_IMPORT_ROW }|..|| CandidateImportJob : belongs_to
+
+    PIPELINE_TEMPLATE ||..o{PipelineStage : has
+
+    PIPELINE_STAGE }|..|| PipelineTemplate : belongs_to
+
+    INTEGRATION }|..|| Organization : belongs_to
+
+    NOTIFICATION }|..|| Organization : belongs_to
+    NOTIFICATION }|..|| User : belongs_to
+
+    TASK }|..|| Organization : belongs_to
+    TASK }|..|| User : assignee
+    TASK }|..|| User : creator
+
+    AUTH_TOKEN }|..|| Organization : belongs_to
+    AUTH_TOKEN }|..|| User : belongs_to
+
+    EMAIL_OUTBOX }|..|| Organization : may_belong_to

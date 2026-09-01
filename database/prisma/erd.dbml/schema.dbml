@@ -1,0 +1,947 @@
+//// ------------------------------------------------------
+//// THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
+//// ------------------------------------------------------
+
+Table organizations {
+  id String [pk]
+  code String [unique, not null]
+  name String [not null]
+  status String [not null, default: 'Active']
+  legalEntities legal_entities [not null]
+  branches branches [not null]
+  positions positions [not null]
+  users users [not null]
+  vacancyRequests vacancy_requests [not null]
+  vacancies vacancies [not null]
+  candidates candidates [not null]
+  applications applications [not null]
+  candidateDocuments candidate_documents [not null]
+  screeningLogs screening_logs [not null]
+  interviews interviews [not null]
+  offers offers [not null]
+  hiringCases hiring_cases [not null]
+  talentPools talent_pools [not null]
+  candidateImportJobs candidate_import_jobs [not null]
+  pipelineTemplates pipeline_templates [not null]
+  integrations integrations [not null]
+  notifications notifications [not null]
+  tasks tasks [not null]
+  authTokens auth_tokens [not null]
+  customRoles roles [not null]
+  emailOutbox email_outbox [not null]
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+}
+
+Table legal_entities {
+  id String [pk]
+  organizationId String [not null]
+  organization organizations [not null]
+  code String [not null]
+  name String [not null]
+  status String [not null, default: 'Active']
+  branches branches [not null]
+  positions positions [not null]
+  vacancyRequests vacancy_requests [not null]
+  vacancies vacancies [not null]
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+
+  indexes {
+    (organizationId, code) [unique]
+  }
+}
+
+Table branches {
+  id String [pk]
+  organizationId String [not null]
+  organization organizations [not null]
+  legalEntityId String [not null]
+  legalEntity legal_entities [not null]
+  code String [not null]
+  name String [not null]
+  city String
+  status String [not null, default: 'Active']
+  vacancyRequests vacancy_requests [not null]
+  vacancies vacancies [not null]
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+
+  indexes {
+    (legalEntityId, code) [unique]
+  }
+}
+
+Table positions {
+  id String [pk]
+  organizationId String [not null]
+  organization organizations [not null]
+  legalEntityId String
+  legalEntity legal_entities
+  code String [not null]
+  title String [not null]
+  description String
+  status String [not null, default: 'Active']
+  vacancyRequests vacancy_requests [not null]
+  vacancies vacancies [not null]
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+
+  indexes {
+    (organizationId, code) [unique]
+  }
+}
+
+Table users {
+  id String [pk]
+  organizationId String [not null]
+  organization organizations [not null]
+  email String [not null]
+  emailNormalized String [not null]
+  passwordHash String
+  displayName String [not null]
+  status String [not null, default: 'Active']
+  emailVerifiedAt DateTime
+  invitationAcceptedAt DateTime
+  tokenVersion Int [not null, default: 0]
+  lastLoginAt DateTime
+  theme String [not null, default: 'light']
+  timezone String [not null, default: 'UTC']
+  dateFormat String [not null, default: 'MMM d, yyyy']
+  timeFormat String [not null, default: '12h']
+  reducedMotion Boolean [not null, default: false]
+  inAppNotifications Boolean [not null, default: true]
+  emailNotifications Boolean [not null, default: false]
+  interviewReminders Boolean [not null, default: true]
+  approvalReminders Boolean [not null, default: true]
+  taskReminders Boolean [not null, default: true]
+  userRoles user_roles [not null]
+  vacancyRequests vacancy_requests [not null]
+  approvals vacancy_request_approvals [not null]
+  assignments vacancy_assignments [not null]
+  primaryApplications applications [not null]
+  taskApplications applications [not null]
+  applicationStageChanges application_status_histories [not null]
+  uploadedDocuments candidate_documents [not null]
+  deletedDocuments candidate_documents [not null]
+  screeningLogs screening_logs [not null]
+  interviewAttendeeLinks interview_attendees [not null]
+  submittedScorecards interview_scorecards [not null]
+  offerApprovals offer_approvals [not null]
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+  hiringCasesOwned hiring_cases [not null]
+  complianceVerified compliance_requirements [not null]
+  hiringCaseApprovals hiring_case_approvals [not null]
+  importJobs candidate_import_jobs [not null]
+  notifications notifications [not null]
+  authTokens auth_tokens [not null]
+  assignedTasks tasks [not null]
+  createdTasks tasks [not null]
+
+  indexes {
+    (organizationId, emailNormalized) [unique]
+  }
+}
+
+Table auth_tokens {
+  id String [pk]
+  organizationId String [not null]
+  organization organizations [not null]
+  userId String [not null]
+  user users [not null]
+  type String [not null]
+  tokenHash String [unique, not null]
+  expiresAt DateTime [not null]
+  consumedAt DateTime
+  createdAt DateTime [default: `now()`, not null]
+}
+
+Table email_outbox {
+  id String [pk]
+  organizationId String
+  organization organizations
+  toEmail String [not null]
+  subject String [not null]
+  template String [not null]
+  payload Json [not null]
+  status String [not null, default: 'Pending']
+  attempts Int [not null, default: 0]
+  maxAttempts Int [not null, default: 5]
+  lastError String
+  availableAt DateTime [default: `now()`, not null]
+  sentAt DateTime
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+}
+
+Table roles {
+  id String [pk]
+  code String [unique, not null]
+  name String [not null]
+  status String [not null, default: 'Active']
+  organizationId String
+  organization organizations
+  userRoles user_roles [not null]
+  permissions role_permissions [not null]
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+}
+
+Table permissions {
+  id String [pk]
+  code String [unique, not null]
+  description String
+  roleLinks role_permissions [not null]
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+}
+
+Table user_roles {
+  userId String [not null]
+  roleId String [not null]
+  user users [not null]
+  role roles [not null]
+  assignedAt DateTime [default: `now()`, not null]
+
+  indexes {
+    (userId, roleId) [pk]
+  }
+}
+
+Table role_permissions {
+  roleId String [not null]
+  permissionId String [not null]
+  role roles [not null]
+  permission permissions [not null]
+
+  indexes {
+    (roleId, permissionId) [pk]
+  }
+}
+
+Table vacancy_requests {
+  id String [pk]
+  organizationId String [not null]
+  organization organizations [not null]
+  legalEntityId String
+  legalEntity legal_entities
+  branchId String [not null]
+  branch branches [not null]
+  positionId String [not null]
+  position positions [not null]
+  requesterId String [not null]
+  requester users [not null]
+  requestCode String [unique, not null]
+  status String [not null, default: 'Draft']
+  requestedHeadcount Int [not null]
+  employmentType String
+  reason String
+  budgetStatus String
+  criticality String
+  targetStartDate DateTime
+  justification String
+  submittedAt DateTime
+  approvalRevision Int [not null, default: 1]
+  approvals vacancy_request_approvals [not null]
+  vacancy vacancies
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+}
+
+Table vacancy_request_approvals {
+  id String [pk]
+  vacancyRequestId String [not null]
+  vacancyRequest vacancy_requests [not null]
+  revision Int [not null]
+  step Int [not null]
+  roleCode String [not null]
+  assigneeUserId String
+  assignee users
+  status String [not null, default: 'Pending']
+  comment String
+  decidedAt DateTime
+  createdAt DateTime [default: `now()`, not null]
+
+  indexes {
+    (vacancyRequestId, revision, step) [unique]
+  }
+}
+
+Table vacancies {
+  id String [pk]
+  organizationId String [not null]
+  organization organizations [not null]
+  legalEntityId String
+  legalEntity legal_entities
+  branchId String [not null]
+  branch branches [not null]
+  positionId String [not null]
+  position positions [not null]
+  vacancyRequestId String [unique, not null]
+  vacancyRequest vacancy_requests [not null]
+  vacancyCode String [unique, not null]
+  status String [not null, default: 'Pending Activation']
+  approvedHeadcount Int [not null]
+  joinedHeadcount Int [not null, default: 0]
+  openedAt DateTime
+  targetStartDate DateTime
+  requiredSkills String[] [not null]
+  minExperienceYears Int
+  location String
+  assignments vacancy_assignments [not null]
+  applications applications [not null]
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+}
+
+Table vacancy_assignments {
+  id String [pk]
+  vacancyId String [not null]
+  vacancy vacancies [not null]
+  userId String [not null]
+  user users [not null]
+  roleCode String [not null]
+  isActive Boolean [not null, default: true]
+  assignedAt DateTime [default: `now()`, not null]
+
+  indexes {
+    (vacancyId, userId, roleCode, isActive) [unique]
+  }
+}
+
+Table audit_logs {
+  id String [pk]
+  organizationId String
+  actorUserId String
+  action String [not null]
+  entityType String [not null]
+  entityId String [not null]
+  result String [not null]
+  reason String
+  beforeData Json
+  afterData Json
+  correlationId String
+  ipAddress String
+  createdAt DateTime [default: `now()`, not null]
+}
+
+Table auth_rate_limits {
+  id String [pk]
+  scope String [not null]
+  keyHash String [not null]
+  attempts Int [not null, default: 0]
+  lastAttemptAt DateTime [not null]
+  lockedUntil DateTime
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+
+  indexes {
+    (scope, keyHash) [unique]
+  }
+}
+
+Table code_sequences {
+  key String [pk]
+  lastIssued Int [not null, default: 0]
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+}
+
+Table candidates {
+  id String [pk]
+  organizationId String [not null]
+  organization organizations [not null]
+  candidateCode String [unique, not null]
+  firstName String [not null]
+  lastName String [not null]
+  email String [not null]
+  phone String
+  currentTitle String
+  currentCompany String
+  source String
+  status String [not null, default: 'Active']
+  consentStatus String [not null, default: 'Unknown']
+  consentCapturedAt DateTime
+  consentSource String
+  skills String[] [not null]
+  experienceYears Int
+  location String
+  certifications String[] [not null]
+  languages String[] [not null]
+  availability String
+  applications applications [not null]
+  documents candidate_documents [not null]
+  talentPoolMemberships talent_pool_candidates [not null]
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+
+  indexes {
+    (organizationId, email) [unique]
+  }
+}
+
+Table applications {
+  id String [pk]
+  organizationId String [not null]
+  organization organizations [not null]
+  applicationCode String [unique, not null]
+  vacancyId String [not null]
+  vacancy vacancies [not null]
+  candidateId String [not null]
+  candidate candidates [not null]
+  stage String [not null, default: 'Applied']
+  source String
+  primaryRecruiterId String
+  primaryRecruiter users
+  taskOwnerId String
+  taskOwner users
+  appliedAt DateTime [default: `now()`, not null]
+  statusHistory application_status_histories [not null]
+  screeningLogs screening_logs [not null]
+  interviews interviews [not null]
+  offers offers [not null]
+  hiringCase hiring_cases
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+
+  indexes {
+    (vacancyId, candidateId) [unique]
+  }
+}
+
+Table application_status_histories {
+  id String [pk]
+  applicationId String [not null]
+  application applications [not null]
+  fromStage String
+  toStage String [not null]
+  changedById String
+  changedBy users
+  reason String
+  createdAt DateTime [default: `now()`, not null]
+}
+
+Table candidate_documents {
+  id String [pk]
+  organizationId String [not null]
+  organization organizations [not null]
+  candidateId String [not null]
+  candidate candidates [not null]
+  documentType String [not null]
+  fileName String [not null]
+  fileSize Int [not null]
+  mimeType String [not null]
+  storageKey String [not null]
+  storageProvider String [not null, default: 'local-private']
+  sha256 String
+  extractionText String
+  scanStatus String [not null, default: 'Clean']
+  scanProvider String
+  scanMessage String
+  scannedAt DateTime
+  parserStatus String [not null, default: 'NotStarted']
+  parserVersion String
+  retentionExpiresAt DateTime
+  consentStatus String [not null, default: 'Unknown']
+  deletedAt DateTime
+  deletedById String
+  deletedBy users
+  deletionReason String
+  uploadedById String
+  uploadedBy users
+  complianceRequirements compliance_requirements [not null]
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+}
+
+Table screening_logs {
+  id String [pk]
+  organizationId String [not null]
+  organization organizations [not null]
+  applicationId String [not null]
+  application applications [not null]
+  screenerId String [not null]
+  screener users [not null]
+  outcome String [not null]
+  notes String
+  screenedAt DateTime [default: `now()`, not null]
+  createdAt DateTime [default: `now()`, not null]
+}
+
+Table interviews {
+  id String [pk]
+  organizationId String [not null]
+  organization organizations [not null]
+  interviewCode String [unique, not null]
+  applicationId String [not null]
+  application applications [not null]
+  title String [not null]
+  interviewType String [not null]
+  scheduledStart DateTime [not null]
+  scheduledEnd DateTime [not null]
+  timezone String [not null, default: 'UTC']
+  locationUrl String
+  status String [not null, default: 'Scheduled']
+  attendees interview_attendees [not null]
+  scorecards interview_scorecards [not null]
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+}
+
+Table interview_attendees {
+  id String [pk]
+  interviewId String [not null]
+  interview interviews [not null]
+  userId String [not null]
+  user users [not null]
+  role String [not null, default: 'Interviewer']
+  response String [not null, default: 'Accepted']
+
+  indexes {
+    (interviewId, userId) [unique]
+  }
+}
+
+Table interview_scorecards {
+  id String [pk]
+  interviewId String [not null]
+  interview interviews [not null]
+  interviewerId String [not null]
+  interviewer users [not null]
+  overallRating Int [not null]
+  recommendation String [not null]
+  strengths String
+  concerns String
+  notes String
+  isLocked Boolean [not null, default: false]
+  submittedAt DateTime [default: `now()`, not null]
+
+  indexes {
+    (interviewId, interviewerId) [unique]
+  }
+}
+
+Table offers {
+  id String [pk]
+  organizationId String [not null]
+  organization organizations [not null]
+  applicationId String [not null]
+  application applications [not null]
+  offerCode String [unique, not null]
+  currentVersionId String
+  status String [not null, default: 'Draft']
+  versions offer_versions [not null]
+  hiringCase hiring_cases
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+}
+
+Table offer_versions {
+  id String [pk]
+  offerId String [not null]
+  offer offers [not null]
+  versionNumber Int [not null]
+  monthlyPackage Decimal
+  annualFixed Decimal
+  contractType String
+  probationPeriod String
+  offerExpiry DateTime
+  proposedJoiningDate DateTime
+  workLocation String
+  workingSchedule String
+  approvalStatus String [not null, default: 'Draft']
+  isLocked Boolean [not null, default: false]
+  components offer_components [not null]
+  approvals offer_approvals [not null]
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+
+  indexes {
+    (offerId, versionNumber) [unique]
+  }
+}
+
+Table offer_components {
+  id String [pk]
+  offerVersionId String [not null]
+  offerVersion offer_versions [not null]
+  type String [not null]
+  name String [not null]
+  amount Decimal
+  currency String
+  frequency String
+  isTaxable Boolean [not null, default: true]
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+}
+
+Table offer_approvals {
+  id String [pk]
+  offerVersionId String [not null]
+  offerVersion offer_versions [not null]
+  approverUserId String
+  approver users
+  roleCode String [not null]
+  status String [not null, default: 'Pending']
+  comment String
+  decidedAt DateTime
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+}
+
+Table hiring_cases {
+  id String [pk]
+  organizationId String [not null]
+  organization organizations [not null]
+  applicationId String [unique, not null]
+  application applications [not null]
+  offerId String [unique, not null]
+  offer offers [not null]
+  status String [not null, default: 'Pending Compliance']
+  plannedJoiningDate DateTime
+  actualJoiningDate DateTime
+  ownerUserId String
+  owner users
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+  complianceRequirements compliance_requirements [not null]
+  approvals hiring_case_approvals [not null]
+}
+
+Table compliance_requirements {
+  id String [pk]
+  hiringCaseId String [not null]
+  hiringCase hiring_cases [not null]
+  type String [not null]
+  name String [not null]
+  status String [not null, default: 'Pending']
+  isRequired Boolean [not null, default: true]
+  documentId String
+  document candidate_documents
+  expiryDate DateTime
+  verifiedAt DateTime
+  verifiedById String
+  verifier users
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+}
+
+Table hiring_case_approvals {
+  id String [pk]
+  hiringCaseId String [not null]
+  hiringCase hiring_cases [not null]
+  roleCode String [not null]
+  status String [not null, default: 'Pending']
+  comment String
+  approverUserId String
+  approver users
+  decidedAt DateTime
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+}
+
+Table talent_pools {
+  id String [pk]
+  organizationId String [not null]
+  organization organizations [not null]
+  name String [not null]
+  description String
+  tags String[] [not null]
+  status String [not null, default: 'Active']
+  candidates talent_pool_candidates [not null]
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+}
+
+Table talent_pool_candidates {
+  id String [pk]
+  talentPoolId String [not null]
+  talentPool talent_pools [not null]
+  candidateId String [not null]
+  candidate candidates [not null]
+  eligibility String [not null, default: 'Eligible']
+  coolingOffUntil DateTime
+  consentStatus String [not null, default: 'Active']
+  consentExpiry DateTime
+  source String
+  addedAt DateTime [default: `now()`, not null]
+
+  indexes {
+    (talentPoolId, candidateId) [unique]
+  }
+}
+
+Table candidate_import_jobs {
+  id String [pk]
+  organizationId String [not null]
+  organization organizations [not null]
+  fileName String [not null]
+  dataset String [not null, default: 'candidates']
+  sourceFormat String [not null, default: 'json']
+  sheetName String
+  fileSize Int
+  checksum String
+  status String [not null, default: 'Validating']
+  totalRows Int [not null, default: 0]
+  validRows Int [not null, default: 0]
+  invalidRows Int [not null, default: 0]
+  duplicateRows Int [not null, default: 0]
+  newRows Int [not null, default: 0]
+  updateRows Int [not null, default: 0]
+  uploadedById String
+  uploadedBy users
+  rows candidate_import_rows [not null]
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+}
+
+Table candidate_import_rows {
+  id String [pk]
+  jobId String [not null]
+  job candidate_import_jobs [not null]
+  rowNumber Int [not null]
+  rawData Json [not null]
+  firstName String
+  lastName String
+  email String
+  phone String
+  result String [not null, default: 'Pending']
+  details String
+  decision String
+  createdAt DateTime [default: `now()`, not null]
+}
+
+Table pipeline_templates {
+  id String [pk]
+  organizationId String [not null]
+  organization organizations [not null]
+  name String [not null]
+  isDefault Boolean [not null, default: false]
+  status String [not null, default: 'Draft']
+  stages pipeline_stages [not null]
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+}
+
+Table pipeline_stages {
+  id String [pk]
+  templateId String [not null]
+  template pipeline_templates [not null]
+  name String [not null]
+  stageType String [not null]
+  sortOrder Int [not null, default: 0]
+  slaDays Int
+  defaultOwner String
+  entryGate String
+  exitGate String
+  status String [not null, default: 'Active']
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+}
+
+Table integrations {
+  id String [pk]
+  organizationId String [not null]
+  organization organizations [not null]
+  name String [not null]
+  provider String [not null]
+  category String [not null]
+  status String [not null, default: 'Available']
+  configJson Json
+  lastSyncAt DateTime
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+}
+
+Table notifications {
+  id String [pk]
+  organizationId String [not null]
+  organization organizations [not null]
+  recipientUserId String [not null]
+  recipient users [not null]
+  type String [not null]
+  title String [not null]
+  message String [not null]
+  entityType String
+  entityId String
+  readAt DateTime
+  createdAt DateTime [default: `now()`, not null]
+}
+
+Table tasks {
+  id String [pk]
+  organizationId String [not null]
+  organization organizations [not null]
+  assigneeUserId String [not null]
+  assignee users [not null]
+  createdById String [not null]
+  createdBy users [not null]
+  type String [not null]
+  title String [not null]
+  description String
+  priority String [not null, default: 'Normal']
+  status String [not null, default: 'Open']
+  dueAt DateTime
+  entityType String
+  entityId String
+  completedAt DateTime
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+}
+
+Ref: legal_entities.organizationId > organizations.id [delete: Restrict]
+
+Ref: branches.organizationId > organizations.id [delete: Restrict]
+
+Ref: branches.legalEntityId > legal_entities.id [delete: Restrict]
+
+Ref: positions.organizationId > organizations.id [delete: Restrict]
+
+Ref: positions.legalEntityId > legal_entities.id [delete: Restrict]
+
+Ref: users.organizationId > organizations.id [delete: Restrict]
+
+Ref: auth_tokens.organizationId > organizations.id [delete: Cascade]
+
+Ref: auth_tokens.userId > users.id [delete: Cascade]
+
+Ref: email_outbox.organizationId > organizations.id [delete: Set Null]
+
+Ref: roles.organizationId > organizations.id [delete: Restrict]
+
+Ref: user_roles.userId > users.id [delete: Restrict]
+
+Ref: user_roles.roleId > roles.id [delete: Restrict]
+
+Ref: role_permissions.roleId > roles.id [delete: Restrict]
+
+Ref: role_permissions.permissionId > permissions.id [delete: Restrict]
+
+Ref: vacancy_requests.organizationId > organizations.id [delete: Restrict]
+
+Ref: vacancy_requests.legalEntityId > legal_entities.id [delete: Restrict]
+
+Ref: vacancy_requests.branchId > branches.id [delete: Restrict]
+
+Ref: vacancy_requests.positionId > positions.id [delete: Restrict]
+
+Ref: vacancy_requests.requesterId > users.id [delete: Restrict]
+
+Ref: vacancy_request_approvals.vacancyRequestId > vacancy_requests.id [delete: Restrict]
+
+Ref: vacancy_request_approvals.assigneeUserId > users.id [delete: Restrict]
+
+Ref: vacancies.organizationId > organizations.id [delete: Restrict]
+
+Ref: vacancies.legalEntityId > legal_entities.id [delete: Restrict]
+
+Ref: vacancies.branchId > branches.id [delete: Restrict]
+
+Ref: vacancies.positionId > positions.id [delete: Restrict]
+
+Ref: vacancies.vacancyRequestId - vacancy_requests.id [delete: Restrict]
+
+Ref: vacancy_assignments.vacancyId > vacancies.id [delete: Restrict]
+
+Ref: vacancy_assignments.userId > users.id [delete: Restrict]
+
+Ref: candidates.organizationId > organizations.id [delete: Restrict]
+
+Ref: applications.organizationId > organizations.id [delete: Restrict]
+
+Ref: applications.vacancyId > vacancies.id [delete: Restrict]
+
+Ref: applications.candidateId > candidates.id [delete: Restrict]
+
+Ref: applications.primaryRecruiterId > users.id [delete: Restrict]
+
+Ref: applications.taskOwnerId > users.id [delete: Restrict]
+
+Ref: application_status_histories.applicationId > applications.id [delete: Restrict]
+
+Ref: application_status_histories.changedById > users.id [delete: Restrict]
+
+Ref: candidate_documents.organizationId > organizations.id [delete: Restrict]
+
+Ref: candidate_documents.candidateId > candidates.id [delete: Restrict]
+
+Ref: candidate_documents.deletedById > users.id [delete: Restrict]
+
+Ref: candidate_documents.uploadedById > users.id [delete: Restrict]
+
+Ref: screening_logs.organizationId > organizations.id [delete: Restrict]
+
+Ref: screening_logs.applicationId > applications.id [delete: Restrict]
+
+Ref: screening_logs.screenerId > users.id [delete: Restrict]
+
+Ref: interviews.organizationId > organizations.id [delete: Restrict]
+
+Ref: interviews.applicationId > applications.id [delete: Restrict]
+
+Ref: interview_attendees.interviewId > interviews.id [delete: Cascade]
+
+Ref: interview_attendees.userId > users.id [delete: Restrict]
+
+Ref: interview_scorecards.interviewId > interviews.id [delete: Restrict]
+
+Ref: interview_scorecards.interviewerId > users.id [delete: Restrict]
+
+Ref: offers.organizationId > organizations.id [delete: Restrict]
+
+Ref: offers.applicationId > applications.id [delete: Restrict]
+
+Ref: offer_versions.offerId > offers.id [delete: Cascade]
+
+Ref: offer_components.offerVersionId > offer_versions.id [delete: Cascade]
+
+Ref: offer_approvals.offerVersionId > offer_versions.id [delete: Cascade]
+
+Ref: offer_approvals.approverUserId > users.id [delete: Restrict]
+
+Ref: hiring_cases.organizationId > organizations.id [delete: Restrict]
+
+Ref: hiring_cases.applicationId - applications.id [delete: Cascade]
+
+Ref: hiring_cases.offerId - offers.id [delete: Restrict]
+
+Ref: hiring_cases.ownerUserId > users.id [delete: Restrict]
+
+Ref: compliance_requirements.hiringCaseId > hiring_cases.id [delete: Cascade]
+
+Ref: compliance_requirements.documentId > candidate_documents.id [delete: Set Null]
+
+Ref: compliance_requirements.verifiedById > users.id [delete: Set Null]
+
+Ref: hiring_case_approvals.hiringCaseId > hiring_cases.id [delete: Cascade]
+
+Ref: hiring_case_approvals.approverUserId > users.id [delete: Restrict]
+
+Ref: talent_pools.organizationId > organizations.id [delete: Restrict]
+
+Ref: talent_pool_candidates.talentPoolId > talent_pools.id [delete: Cascade]
+
+Ref: talent_pool_candidates.candidateId > candidates.id [delete: Cascade]
+
+Ref: candidate_import_jobs.organizationId > organizations.id [delete: Restrict]
+
+Ref: candidate_import_jobs.uploadedById > users.id [delete: Restrict]
+
+Ref: candidate_import_rows.jobId > candidate_import_jobs.id [delete: Cascade]
+
+Ref: pipeline_templates.organizationId > organizations.id [delete: Restrict]
+
+Ref: pipeline_stages.templateId > pipeline_templates.id [delete: Cascade]
+
+Ref: integrations.organizationId > organizations.id [delete: Restrict]
+
+Ref: notifications.organizationId > organizations.id [delete: Restrict]
+
+Ref: notifications.recipientUserId > users.id [delete: Cascade]
+
+Ref: tasks.organizationId > organizations.id [delete: Restrict]
+
+Ref: tasks.assigneeUserId > users.id [delete: Restrict]
+
+Ref: tasks.createdById > users.id [delete: Restrict]

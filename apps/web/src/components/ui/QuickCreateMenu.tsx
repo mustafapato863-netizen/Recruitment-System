@@ -3,7 +3,17 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../../auth/AuthContext';
 import { Icon, type IconName } from '../Icon';
 
-type QuickActionId = 'vacancy-request' | 'candidate' | 'cv-intake' | 'schedule-interview' | 'offer';
+type QuickActionId =
+  | 'vacancy-request'
+  | 'candidate'
+  | 'cv-intake'
+  | 'schedule-interview'
+  | 'offer'
+  | 'candidate-from-vacancy'
+  | 'interview-from-application'
+  | 'offer-from-application'
+  | 'hiring-case-from-offer'
+  | 'onboarding-from-hiring-case';
 
 interface QuickAction {
   id: QuickActionId;
@@ -14,9 +24,11 @@ interface QuickAction {
   permissions?: readonly string[];
   destination: { kind: 'route'; to: string };
   contextHint?: string;
+  requiresContext?: boolean;
+  contextTypes?: string[]; // What context types this action can work with
 }
 
-/** The only actions exposed by the authenticated Quick New surface. */
+/** Context-aware Quick Actions for F5 enhancement */
 const QUICK_ACTIONS: readonly QuickAction[] = [
   {
     id: 'vacancy-request',
@@ -60,6 +72,62 @@ const QUICK_ACTIONS: readonly QuickAction[] = [
     icon: 'offer',
     destination: { kind: 'route', to: '/offers/create' },
   },
+  // Context-aware actions (F5 enhancement)
+  {
+    id: 'candidate-from-vacancy',
+    label: 'Candidate from vacancy',
+    description: 'Create candidate for this vacancy',
+    icon: 'user',
+    permission: 'CANDIDATE_CREATE',
+    destination: { kind: 'route', to: '/candidates?create=1' },
+    contextHint: 'Pre-filled with vacancy context',
+    requiresContext: true,
+    contextTypes: ['vacancy'],
+  },
+  {
+    id: 'interview-from-application',
+    label: 'Interview from application',
+    description: 'Schedule interview for this application',
+    icon: 'calendar-clock',
+    permissions: ['VACANCY_VIEW', 'APPLICATION_MOVE_STAGE'],
+    destination: { kind: 'route', to: '/interviews?create=1' },
+    contextHint: 'Pre-filled with application context',
+    requiresContext: true,
+    contextTypes: ['application'],
+  },
+  {
+    id: 'offer-from-application',
+    label: 'Offer from application',
+    description: 'Make offer for this application',
+    icon: 'document',
+    permission: 'APPLICATION_MOVE_STAGE',
+    destination: { kind: 'route', to: '/offers/create' },
+    contextHint: 'Pre-filled with application context',
+    requiresContext: true,
+    contextTypes: ['application'],
+  },
+  {
+    id: 'hiring-case-from-offer',
+    label: 'Hiring case from offer',
+    description: 'Start hiring process for this offer',
+    icon: 'check-circle',
+    permission: 'APPLICATION_VIEW',
+    destination: { kind: 'route', to: '/hires?create=1' },
+    contextHint: 'Pre-filled with offer context',
+    requiresContext: true,
+    contextTypes: ['offer'],
+  },
+  {
+    id: 'onboarding-from-hiring-case',
+    label: 'Onboarding from hiring case',
+    description: 'Begin onboarding for this hiring case',
+    icon: 'user-check',
+    permission: 'APPLICATION_VIEW',
+    destination: { kind: 'route', to: '/joinings?create=1' },
+    contextHint: 'Pre-filled with hiring case context',
+    requiresContext: true,
+    contextTypes: ['hiring-case'],
+  },
 ];
 
 const MENU_ID = 'quick-create-menu';
@@ -72,12 +140,66 @@ export function QuickCreateMenu() {
   const firstActionRef = useRef<HTMLAnchorElement>(null);
   const [isOpen, setIsOpen] = useState(false);
 
+  // Extract context from URL for context-aware actions
+  const context = useMemo(() => {
+    const pathname = location.pathname;
+
+    // Check for vacancy context
+    if (pathname.startsWith('/vacancies/') && !pathname.endsWith('/create')) {
+      const vacancyId = pathname.split('/')[2];
+      if (vacancyId && vacancyId !== '') {
+        return { type: 'vacancy', id: vacancyId };
+      }
+    }
+
+    // Check for application context
+    if (pathname.startsWith('/applications/') && !pathname.endsWith('/create')) {
+      const applicationId = pathname.split('/')[2];
+      if (applicationId && applicationId !== '') {
+        return { type: 'application', id: applicationId };
+      }
+    }
+
+    // Check for offer context
+    if (pathname.startsWith('/offers/') && !pathname.endsWith('/create') && !pathname.endsWith('/approvals')) {
+      const offerId = pathname.split('/')[2];
+      if (offerId && offerId !== '') {
+        return { type: 'offer', id: offerId };
+      }
+    }
+
+    // Check for hiring case context
+    if (pathname.startsWith('/hires/') && !pathname.endsWith('/create') && !pathname.endsWith('/approvals')) {
+      const hiringCaseId = pathname.split('/')[2];
+      if (hiringCaseId && hiringCaseId !== '') {
+        return { type: 'hiring-case', id: hiringCaseId };
+      }
+    }
+
+    return null;
+  }, [location.pathname]);
+
   const actions = useMemo(
-    () => QUICK_ACTIONS.filter((action) => {
-      const requiredPermissions = action.permissions ?? (action.permission ? [action.permission] : []);
-      return requiredPermissions.every((permission) => user?.permissions.includes(permission));
-    }),
-    [user],
+    () => {
+      // Filter actions by permissions first
+      const permittedActions = QUICK_ACTIONS.filter((action) => {
+        const requiredPermissions = action.permissions ?? (action.permission ? [action.permission] : []);
+        return requiredPermissions.every((permission) => user?.permissions.includes(permission));
+      });
+
+      // Then filter by context awareness
+      return permittedActions.filter((action) => {
+        // If action doesn't require context, always show it
+        if (!action.requiresContext) return true;
+
+        // If action requires context but we have no context, don't show it
+        if (!context) return false;
+
+        // If action requires context, check if context matches
+        return action.contextTypes?.includes(context.type) ?? false;
+      });
+    },
+    [user, context]
   );
 
   const closeMenu = (restoreFocus = false) => {
@@ -130,6 +252,14 @@ export function QuickCreateMenu() {
       >
         <Icon name="plus" size={14} />
         <span>New</span>
+        {context && (
+          <span className="ml-2 text-xs text-rf-ink-muted">
+            ({context.type === 'vacancy' ? 'In vacancy' :
+              context.type === 'application' ? 'In application' :
+              context.type === 'offer' ? 'In offer' :
+              context.type === 'hiring-case' ? 'In hiring case' : ''})
+          </span>
+        )}
       </button>
       {isOpen && (
         <div id={MENU_ID} className="quick-create__menu" role="menu" aria-label="Create new">
