@@ -190,7 +190,7 @@ export function AppShell() {
     { path: '/vacancies', label: 'Openings & Job Cards', parent: 'Jobs & Pipeline' },
     { path: '/candidates/compare', label: 'Compare Candidates', parent: 'Candidates Directory' },
     { path: '/candidates/', label: 'Candidate Profile', parent: 'Candidates Directory' },
-    { path: '/candidates', label: 'Candidates Directory', parent: 'Jobs & Pipeline' },
+    { path: '/candidates', label: 'Candidates DB', parent: 'Talent & Sourcing' },
     { path: '/portal', label: 'My Applications', parent: 'Candidate Portal' },
     { path: '/applications/', label: 'Application Detail', parent: 'Applications Pipeline' },
     { path: '/applications', label: 'Applications Pipeline', parent: 'Jobs & Pipeline' },
@@ -284,7 +284,7 @@ export function AppShell() {
           <NavigationItem icon="users" label="Applications" to="/applications" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
           <NavigationItem icon="calendar" label="Interviews" to="/interviews" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
           <NavigationItem icon="offer" label="Offers" to="/offers" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
-          <NavigationItem icon="calendar-clock" label="Calendar" to="/interviews/calendar" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+          <NavigationItem icon="database" label="Candidates DB" to="/candidates" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
           <NavigationItem icon="report" label="Reports" to="/reports" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
           <NavigationItem icon="settings" label="Settings" to="/settings" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
         </div>

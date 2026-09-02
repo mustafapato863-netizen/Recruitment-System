@@ -10,7 +10,7 @@ const PATH_NAME_MAP: Record<string, string> = {
   interviews: 'Interviews & Scheduling',
   calendar: 'Calendar',
   offers: 'Offers & Packages',
-  candidates: 'Candidates Directory',
+  candidates: 'Candidates DB',
   'cv-intake': 'Smart CV Intake',
   'talent-pool': 'Talent Pools',
   'talent-pools': 'Talent Pools',

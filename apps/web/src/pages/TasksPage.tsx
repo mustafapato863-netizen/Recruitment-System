@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Icon } from '../components/Icon';
 import { Modal } from '../components/Modal';
 import { postApi } from '../api/client';
+import { DEFAULT_OPEN_VACANCIES, RECRUITER_OPTIONS } from './ManagerDashboard';
 import './PageEnhancementsV2.css';
 
 interface TaskQueueItem {
@@ -227,14 +228,13 @@ export function TasksPage() {
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  // Form State
-  const [taskTitle, setTaskTitle] = useState('');
-  const [assigneeName, setAssigneeName] = useState('Sarah Ahmed');
-  const [taskType, setTaskType] = useState('Screening');
+  // Vacancy & Target Assignment State
+  const [selectedVacancyId, setSelectedVacancyId] = useState<string>('vac-1');
+  const [selectedRecruiterId, setSelectedRecruiterId] = useState<string>('231c4106-9094-478d-8c20-0ff0bc9ee592');
+  const [targetType, setTargetType] = useState<'Hires' | 'Screenings' | 'Interviews'>('Hires');
+  const [targetQuota, setTargetQuota] = useState<number>(3);
+  const [targetDeadline, setTargetDeadline] = useState<string>('7 Days (Standard SLA)');
   const [priority, setPriority] = useState<'High' | 'Medium' | 'Low'>('High');
-  const [dueDateTime, setDueDateTime] = useState('Today, 4:00 PM');
-  const [candidateName, setCandidateName] = useState('Ahmed Mostafa');
-  const [positionTitle, setPositionTitle] = useState('Radiology Technologist');
   const [instructions, setInstructions] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -245,46 +245,48 @@ export function TasksPage() {
 
   const handleAssignTask = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!taskTitle.trim()) {
-      showToast('Please enter a task title');
-      return;
-    }
+    const vacancy = DEFAULT_OPEN_VACANCIES.find((v) => v.id === selectedVacancyId) || DEFAULT_OPEN_VACANCIES[0];
+    const recruiter = RECRUITER_OPTIONS.find((r) => r.id === selectedRecruiterId) || RECRUITER_OPTIONS[0];
 
     setIsSubmitting(true);
+    const taskTitle = `${targetType === 'Hires' ? 'Hire Target' : 'Screening Target'}: ${targetQuota} ${targetType} for ${vacancy.title}`;
     const newTask: TaskQueueItem = {
       id: `task-${Date.now()}`,
       priority,
-      taskTitle: taskTitle.trim(),
-      taskType,
-      candidateName: candidateName.trim() || 'Candidate',
-      candidateAppId: `APP-${Math.floor(1000 + Math.random() * 9000)}`,
+      taskTitle,
+      taskType: targetType === 'Hires' ? 'Hiring' : 'Screening',
+      candidateName: `${vacancy.title} Pipeline`,
+      candidateAppId: `REQ-${vacancy.id.toUpperCase()}`,
       candidateAvatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=100&auto=format&fit=crop&q=80',
-      positionTitle: positionTitle.trim() || 'Specialist Role',
-      department: 'Clinical Operations',
-      location: 'SGH Jeddah',
-      ownerName: assigneeName,
-      ownerAvatar: assigneeName.split(' ').map((n) => n[0]).join('').substring(0, 2).toUpperCase(),
-      dueTime: dueDateTime || 'Tomorrow, 10:00 AM',
-      dueLeft: 'Due soon',
+      positionTitle: vacancy.title,
+      department: vacancy.department,
+      location: vacancy.location,
+      ownerName: recruiter.name,
+      ownerAvatar: recruiter.name.split(' ').map((n) => n[0]).join('').substring(0, 2).toUpperCase(),
+      dueTime: targetDeadline,
+      dueLeft: targetDeadline.split('(')[0].trim(),
       slaState: priority === 'High' ? 'At risk' : 'On track',
-      nextActionLabel: taskType === 'Interview' ? 'Start interview' : 'Take action',
-      nextActionRoute: '/applications',
+      nextActionLabel: 'Review pipeline',
+      nextActionRoute: '/vacancies',
     };
 
     try {
-      // Fire-and-forget API persistence if valid
-      postApi('/tasks', {
+      await postApi('/tasks', {
         title: newTask.taskTitle,
         type: newTask.taskType,
         priority: newTask.priority === 'High' ? 'High' : 'Normal',
-        description: instructions,
-        assigneeUserId: '231c4106-9094-478d-8c20-0ff0bc9ee592',
+        description: `Position: ${vacancy.title} (${vacancy.department}) | Quota: ${targetQuota} ${targetType} | Due: ${targetDeadline} | Notes: ${instructions || 'Target assigned by recruitment manager'}`,
+        assigneeUserId: recruiter.id,
       }).catch(() => {});
 
       setTasksList((prev) => [newTask, ...prev]);
-      showToast(`✓ Task "${newTask.taskTitle}" assigned to ${assigneeName}!`);
+      const isReassign = vacancy.currentRecruiter !== 'Unassigned' && vacancy.currentRecruiter !== recruiter.name;
+      showToast(
+        isReassign
+          ? `✓ Reassigned "${vacancy.title}" to ${recruiter.name} (Target: ${targetQuota} ${targetType})!`
+          : `✓ Assigned "${vacancy.title}" to ${recruiter.name} (Target: ${targetQuota} ${targetType})!`
+      );
       setIsAssignModalOpen(false);
-      setTaskTitle('');
       setInstructions('');
     } finally {
       setIsSubmitting(false);
@@ -687,118 +689,224 @@ export function TasksPage() {
           </div>
         </div>
       </div>
-      {/* Assign Task Modal */}
+      {/* Assign Open Vacancy & Target Modal */}
       <Modal
         isOpen={isAssignModalOpen}
         onClose={() => setIsAssignModalOpen(false)}
-        title="Assign New Recruitment Task"
-        maxWidthClass="max-w-md"
+        title="Assign Open Vacancy & Target to Recruiter"
+        maxWidthClass="max-w-lg"
       >
-        <form onSubmit={handleAssignTask} className="space-y-3.5 text-xs">
+        <form onSubmit={handleAssignTask} className="space-y-4 text-xs">
+          <p className="text-slate-500 dark:text-slate-400">
+            Select an active vacancy position, assign or reassign to a recruiter, and establish clinical recruitment targets with SLAs.
+          </p>
+
+          {/* Vacancy Selector */}
           <div>
-            <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">Task Title</label>
-            <input
-              type="text"
-              required
-              value={taskTitle}
-              onChange={(e) => setTaskTitle(e.target.value)}
-              placeholder="e.g. Clinical Review of ICU Specialist"
-              className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
-            />
+            <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">
+              Select Open Vacancy Position
+            </label>
+            <select
+              value={selectedVacancyId}
+              onChange={(e) => {
+                const id = e.target.value;
+                setSelectedVacancyId(id);
+                const vac = DEFAULT_OPEN_VACANCIES.find((v) => v.id === id);
+                if (vac && vac.currentRecruiterId) {
+                  setSelectedRecruiterId(vac.currentRecruiterId);
+                }
+              }}
+              className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-semibold cursor-pointer"
+            >
+              {DEFAULT_OPEN_VACANCIES.map((vac) => (
+                <option key={vac.id} value={vac.id}>
+                  {vac.title} — {vac.department} ({vac.location}) [Current: {vac.currentRecruiter}]
+                </option>
+              ))}
+            </select>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">Assignee</label>
-              <select
-                value={assigneeName}
-                onChange={(e) => setAssigneeName(e.target.value)}
-                className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
-              >
-                <option value="Sarah Ahmed">Sarah Ahmed (Recruiter)</option>
-                <option value="Dr. Hassan Ali">Dr. Hassan Ali (HOD)</option>
-                <option value="Mona Saleh">Mona Saleh (HRBP)</option>
-                <option value="Ahmed Mostafa">Ahmed Mostafa (Operations)</option>
-                <option value="Lina Hassan">Lina Hassan (Credentialing)</option>
-              </select>
-            </div>
+          {/* Vacancy Details Card & Reassignment Logic */}
+          {(() => {
+            const currentVac = DEFAULT_OPEN_VACANCIES.find((v) => v.id === selectedVacancyId) || DEFAULT_OPEN_VACANCIES[0];
+            const selectedRecruiter = RECRUITER_OPTIONS.find((r) => r.id === selectedRecruiterId) || RECRUITER_OPTIONS[0];
+            const isReassignment = currentVac.currentRecruiter !== 'Unassigned' && currentVac.currentRecruiter !== selectedRecruiter.name;
 
-            <div>
-              <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">Task Category</label>
-              <select
-                value={taskType}
-                onChange={(e) => setTaskType(e.target.value)}
-                className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
-              >
-                <option value="Screening">CV Screening</option>
-                <option value="Interview">Interview Follow-up</option>
-                <option value="Offer">Offer Approval / Review</option>
-                <option value="Compliance">SCFHS License Verification</option>
-                <option value="Onboarding">Onboarding Checklist</option>
-              </select>
-            </div>
-          </div>
+            return (
+              <div className="space-y-3.5">
+                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="font-bold text-slate-500 uppercase tracking-wider">Position Status</span>
+                    <span className="px-2 py-0.5 rounded-full font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                      ACTIVE REQUISITION
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-500">Department &amp; Location:</span>
+                    <span className="font-semibold text-slate-900 dark:text-white">{currentVac.department} &bull; {currentVac.location}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-500">Active Pipeline Candidates:</span>
+                    <span className="font-bold text-blue-600 dark:text-blue-400">{currentVac.openApplications} candidates</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
+                    <span className="text-slate-500">Current Assigned Recruiter:</span>
+                    <span className="font-bold text-slate-900 dark:text-white">
+                      {currentVac.currentRecruiter === 'Unassigned' ? (
+                        <span className="text-amber-600 font-semibold">⚠️ Unassigned</span>
+                      ) : (
+                        `👤 ${currentVac.currentRecruiter}`
+                      )}
+                    </span>
+                  </div>
+                </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">Priority</label>
-              <select
-                value={priority}
-                onChange={(e) => setPriority(e.target.value as any)}
-                className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
-              >
-                <option value="High">High (Urgent)</option>
-                <option value="Medium">Medium</option>
-                <option value="Low">Low</option>
-              </select>
-            </div>
+                {/* Reassignment Status Notice */}
+                {isReassignment ? (
+                  <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 text-xs flex items-start gap-2">
+                    <span className="text-base">🔄</span>
+                    <div>
+                      <span className="font-bold block">Reassigning Position</span>
+                      <span className="text-[11px] block mt-0.5">
+                        Transferring <b>{currentVac.title}</b> from <b>{currentVac.currentRecruiter}</b> to <b>{selectedRecruiter.name}</b>.
+                      </span>
+                    </div>
+                  </div>
+                ) : currentVac.currentRecruiter === 'Unassigned' ? (
+                  <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300 text-xs flex items-start gap-2">
+                    <span className="text-base">✨</span>
+                    <div>
+                      <span className="font-bold block">Initial Position Assignment</span>
+                      <span className="text-[11px] block mt-0.5">
+                        Assigning <b>{currentVac.title}</b> to <b>{selectedRecruiter.name}</b>.
+                      </span>
+                    </div>
+                  </div>
+                ) : null}
 
-            <div>
-              <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">Due Timeline</label>
-              <input
-                type="text"
-                value={dueDateTime}
-                onChange={(e) => setDueDateTime(e.target.value)}
-                placeholder="e.g. Today, 5:00 PM"
-                className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
-              />
-            </div>
-          </div>
+                {/* Recruiter Selector */}
+                <div>
+                  <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">
+                    {isReassignment ? 'Reassign To Recruiter' : 'Assign To Recruiter'}
+                  </label>
+                  <select
+                    value={selectedRecruiterId}
+                    onChange={(e) => setSelectedRecruiterId(e.target.value)}
+                    className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-semibold cursor-pointer"
+                  >
+                    {RECRUITER_OPTIONS.map((rec) => (
+                      <option key={rec.id} value={rec.id}>
+                        {rec.name} — {rec.role}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">Related Candidate</label>
-              <input
-                type="text"
-                value={candidateName}
-                onChange={(e) => setCandidateName(e.target.value)}
-                placeholder="Candidate name"
-                className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
-              />
-            </div>
+                {/* Target Configuration Section */}
+                <div className="p-3.5 rounded-xl border border-blue-200 dark:border-blue-900/60 bg-blue-50/40 dark:bg-blue-950/20 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-extrabold text-blue-900 dark:text-blue-300 text-xs flex items-center gap-1.5">
+                      <span>🎯</span> Recruiter Target &amp; SLA Quota
+                    </span>
+                    <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400">
+                      SLA Velocity
+                    </span>
+                  </div>
 
-            <div>
-              <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">Position / Job</label>
-              <input
-                type="text"
-                value={positionTitle}
-                onChange={(e) => setPositionTitle(e.target.value)}
-                placeholder="Position title"
-                className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
-              />
-            </div>
-          </div>
+                  {/* Target Type Selector */}
+                  <div>
+                    <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300 text-[11px]">
+                      Target Objective Type
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {(['Hires', 'Screenings', 'Interviews'] as const).map((t) => (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => setTargetType(t)}
+                          className={`py-1.5 px-2 rounded-lg text-[11px] font-bold transition cursor-pointer border ${
+                            targetType === t
+                              ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                              : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                          }`}
+                        >
+                          {t === 'Hires' ? '🎯 Hires Target' : t === 'Screenings' ? '📄 CV Screenings' : '📅 Interviews'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
 
-          <div>
-            <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">Instructions / Notes (Optional)</label>
-            <textarea
-              rows={2}
-              value={instructions}
-              onChange={(e) => setInstructions(e.target.value)}
-              placeholder="Provide context or specific instructions for the assignee..."
-              className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
-            />
-          </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300 text-[11px]">
+                        Target Quota (Quantity)
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={50}
+                        value={targetQuota}
+                        onChange={(e) => setTargetQuota(parseInt(e.target.value) || 1)}
+                        className="w-full p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-bold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300 text-[11px]">
+                        Target SLA Timeline
+                      </label>
+                      <select
+                        value={targetDeadline}
+                        onChange={(e) => setTargetDeadline(e.target.value)}
+                        className="w-full p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-semibold cursor-pointer"
+                      >
+                        <option value="3 Days (Urgent SLA)">3 Days (Urgent SLA)</option>
+                        <option value="7 Days (Standard SLA)">7 Days (Standard SLA)</option>
+                        <option value="14 Days (2 Weeks)">14 Days (2 Weeks)</option>
+                        <option value="30 Days (End of Month)">30 Days (End of Month)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300 text-[11px]">Priority</label>
+                      <select
+                        value={priority}
+                        onChange={(e) => setPriority(e.target.value as any)}
+                        className="w-full p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white cursor-pointer"
+                      >
+                        <option value="High">High (Critical Priority)</option>
+                        <option value="Medium">Medium (Normal SLA)</option>
+                        <option value="Low">Low</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300 text-[11px]">Calculated Pacing</label>
+                      <div className="p-2 bg-white/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+                        {targetQuota} {targetType.toLowerCase()} / {targetDeadline.split('(')[0]}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Instructions */}
+                <div>
+                  <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">
+                    Manager Instructions &amp; Candidate Sourcing Criteria
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={instructions}
+                    onChange={(e) => setInstructions(e.target.value)}
+                    placeholder="e.g. Expedite review of applicants with GCC experience. Ensure salary aligns with clinical operations budget."
+                    className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
+                  />
+                </div>
+              </div>
+            );
+          })()}
 
           <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
             <button
@@ -813,7 +921,7 @@ export function TasksPage() {
               disabled={isSubmitting}
               className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold transition shadow-xs cursor-pointer disabled:opacity-50"
             >
-              {isSubmitting ? 'Assigning...' : 'Assign Task'}
+              {isSubmitting ? 'Assigning...' : 'Assign Vacancy & Target'}
             </button>
           </div>
         </form>

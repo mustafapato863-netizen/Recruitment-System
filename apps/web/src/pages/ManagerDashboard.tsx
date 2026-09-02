@@ -9,6 +9,98 @@ import { Modal } from '../components/Modal';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 
+export interface OpenVacancyOption {
+  id: string;
+  title: string;
+  department: string;
+  location: string;
+  currentRecruiter: string;
+  currentRecruiterId: string;
+  targetHires: number;
+  openApplications: number;
+}
+
+export const DEFAULT_OPEN_VACANCIES: OpenVacancyOption[] = [
+  {
+    id: 'vac-1',
+    title: 'Senior Frontend Engineer',
+    department: 'Engineering',
+    location: 'Cairo, Egypt',
+    currentRecruiter: 'Sarah Ahmed',
+    currentRecruiterId: '231c4106-9094-478d-8c20-0ff0bc9ee592',
+    targetHires: 2,
+    openApplications: 48,
+  },
+  {
+    id: 'vac-2',
+    title: 'Registered Nurse – ICU',
+    department: 'Clinical Operations',
+    location: 'Jeddah, KSA',
+    currentRecruiter: 'Mona Saleh',
+    currentRecruiterId: 'rec-mona-saleh',
+    targetHires: 5,
+    openApplications: 43,
+  },
+  {
+    id: 'vac-3',
+    title: 'Product Manager',
+    department: 'Digital Health',
+    location: 'Riyadh, KSA',
+    currentRecruiter: 'Omar Farouk',
+    currentRecruiterId: 'rec-omar-farouk',
+    targetHires: 1,
+    openApplications: 23,
+  },
+  {
+    id: 'vac-4',
+    title: 'Cardiology Consultant',
+    department: 'Specialized Care',
+    location: 'Riyadh, KSA',
+    currentRecruiter: 'Unassigned',
+    currentRecruiterId: '',
+    targetHires: 1,
+    openApplications: 12,
+  },
+  {
+    id: 'vac-5',
+    title: 'Pediatric Intensive Care Specialist',
+    department: 'Pediatrics',
+    location: 'Dammam, KSA',
+    currentRecruiter: 'Unassigned',
+    currentRecruiterId: '',
+    targetHires: 2,
+    openApplications: 16,
+  },
+  {
+    id: 'vac-6',
+    title: 'Backend Engineer',
+    department: 'Engineering',
+    location: 'Cairo, Egypt',
+    currentRecruiter: 'Sarah Ahmed',
+    currentRecruiterId: '231c4106-9094-478d-8c20-0ff0bc9ee592',
+    targetHires: 3,
+    openApplications: 36,
+  },
+  {
+    id: 'vac-7',
+    title: 'Product Designer',
+    department: 'Design',
+    location: 'Riyadh, KSA',
+    currentRecruiter: 'Omar Farouk',
+    currentRecruiterId: 'rec-omar-farouk',
+    targetHires: 1,
+    openApplications: 29,
+  },
+];
+
+export const RECRUITER_OPTIONS = [
+  { id: '231c4106-9094-478d-8c20-0ff0bc9ee592', name: 'Sarah Ahmed', role: 'Senior Clinical Recruiter' },
+  { id: 'rec-ahmed-mostafa', name: 'Ahmed Mostafa', role: 'Recruitment Lead' },
+  { id: 'rec-mona-saleh', name: 'Mona Saleh', role: 'Senior Healthcare Recruiter' },
+  { id: 'rec-omar-farouk', name: 'Omar Farouk', role: 'Technical & Informatics Recruiter' },
+  { id: 'rec-fatima-harbi', name: 'Fatima Al-Harbi', role: 'Talent Sourcing Specialist' },
+];
+
 export function ManagerDashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -24,15 +116,15 @@ export function ManagerDashboard() {
   // Target Velocity Period Toggle
   const [targetPeriod, setTargetPeriod] = useState<'daily' | 'monthly'>('daily');
 
-  // Assign Task State
+  // Manager Vacancy & Target Assignment State
+  const [openVacanciesList, setOpenVacanciesList] = useState<OpenVacancyOption[]>(DEFAULT_OPEN_VACANCIES);
   const [isAssignTaskModalOpen, setIsAssignTaskModalOpen] = useState(false);
-  const [taskTitle, setTaskTitle] = useState('');
-  const [taskAssignee, setTaskAssignee] = useState('Sarah Ahmed');
+  const [selectedVacancyId, setSelectedVacancyId] = useState<string>('vac-1');
+  const [selectedRecruiterId, setSelectedRecruiterId] = useState<string>('231c4106-9094-478d-8c20-0ff0bc9ee592');
+  const [targetType, setTargetType] = useState<'Hires' | 'Screenings' | 'Interviews'>('Hires');
+  const [targetQuota, setTargetQuota] = useState<number>(3);
+  const [targetDeadline, setTargetDeadline] = useState<string>('7 Days (Standard SLA)');
   const [taskPriority, setTaskPriority] = useState<'High' | 'Medium' | 'Low'>('High');
-  const [taskCategory, setTaskCategory] = useState('Screening');
-  const [taskDue, setTaskDue] = useState('Today, 5:00 PM');
-  const [taskCandidate, setTaskCandidate] = useState('Ahmed Mostafa');
-  const [taskPosition, setTaskPosition] = useState('Radiology Technologist');
   const [taskInstructions, setTaskInstructions] = useState('');
   const [isAssigning, setIsAssigning] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
@@ -42,26 +134,50 @@ export function ManagerDashboard() {
     setTimeout(() => setToastMsg(null), 3500);
   };
 
+  const openAssignModalForVacancy = (vacId?: string) => {
+    if (vacId) {
+      setSelectedVacancyId(vacId);
+      const found = openVacanciesList.find((v) => v.id === vacId);
+      if (found && found.currentRecruiterId) {
+        setSelectedRecruiterId(found.currentRecruiterId);
+      }
+    }
+    setIsAssignTaskModalOpen(true);
+  };
+
   const handleAssignTaskSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!taskTitle.trim()) {
-      showToast('Please enter a task title');
-      return;
-    }
+    const vacancy = openVacanciesList.find((v) => v.id === selectedVacancyId) || openVacanciesList[0];
+    const recruiter = RECRUITER_OPTIONS.find((r) => r.id === selectedRecruiterId) || RECRUITER_OPTIONS[0];
 
     setIsAssigning(true);
     try {
+      const generatedTitle = `${targetType === 'Hires' ? 'Hire Target' : 'Screening Target'}: ${targetQuota} ${targetType} for ${vacancy.title}`;
+      
       await postApi('/tasks', {
-        title: taskTitle.trim(),
-        type: taskCategory,
+        title: generatedTitle,
+        type: targetType === 'Hires' ? 'Hiring' : 'Screening',
         priority: taskPriority === 'High' ? 'High' : 'Normal',
-        description: taskInstructions || `Assigned to ${taskAssignee} for ${taskPosition}`,
-        assigneeUserId: '231c4106-9094-478d-8c20-0ff0bc9ee592',
+        description: `Vacancy: ${vacancy.title} (${vacancy.department} • ${vacancy.location}) | Target: ${targetQuota} ${targetType} by ${targetDeadline} | Notes: ${taskInstructions || 'Meet standard clinical staffing SLA'}`,
+        assigneeUserId: recruiter.id,
       }).catch(() => {});
 
-      showToast(`✓ Task "${taskTitle.trim()}" assigned to ${taskAssignee}!`);
+      // Update current recruiter in local state for the vacancy
+      setOpenVacanciesList((prev) =>
+        prev.map((item) =>
+          item.id === vacancy.id
+            ? { ...item, currentRecruiter: recruiter.name, currentRecruiterId: recruiter.id }
+            : item
+        )
+      );
+
+      const isReassign = vacancy.currentRecruiter !== 'Unassigned' && vacancy.currentRecruiter !== recruiter.name;
+      showToast(
+        isReassign
+          ? `✓ Reassigned "${vacancy.title}" to ${recruiter.name} (Target: ${targetQuota} ${targetType})!`
+          : `✓ Assigned "${vacancy.title}" to ${recruiter.name} (Target: ${targetQuota} ${targetType})!`
+      );
       setIsAssignTaskModalOpen(false);
-      setTaskTitle('');
       setTaskInstructions('');
     } finally {
       setIsAssigning(false);
@@ -137,11 +253,11 @@ export function ManagerDashboard() {
 
           <button
             type="button"
-            onClick={() => setIsAssignTaskModalOpen(true)}
+            onClick={() => openAssignModalForVacancy()}
             className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
           >
             <Icon name="check-circle" size={14} />
-            <span>Assign Task</span>
+            <span>Assign Vacancy &amp; Target</span>
           </button>
 
           <button
@@ -252,31 +368,42 @@ export function ManagerDashboard() {
             </div>
           </div>
 
-          {/* Toggle Switch */}
-          <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200/60 dark:border-slate-700/60 self-start sm:self-auto">
+          {/* Controls: Toggle Switch & Set Target Button */}
+          <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
+            <div className="flex items-center gap-1.5 p-1 bg-slate-100 dark:bg-slate-800/80 rounded-xl border border-slate-200/60 dark:border-slate-700/60">
+              <button
+                type="button"
+                onClick={() => setTargetPeriod('daily')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                  targetPeriod === 'daily'
+                    ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
+                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <span>☀️</span>
+                <span>Daily Target</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setTargetPeriod('monthly')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                  targetPeriod === 'monthly'
+                    ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
+                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <span>📅</span>
+                <span>Monthly Target</span>
+              </button>
+            </div>
+
             <button
               type="button"
-              onClick={() => setTargetPeriod('daily')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
-                targetPeriod === 'daily'
-                  ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
-                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-              }`}
+              onClick={() => openAssignModalForVacancy()}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
             >
-              <span>☀️</span>
-              <span>Daily Target</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setTargetPeriod('monthly')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
-                targetPeriod === 'monthly'
-                  ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
-                  : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-              }`}
-            >
-              <span>📅</span>
-              <span>Monthly Target</span>
+              <Icon name="plus" size={13} />
+              <span>Set Vacancy Target</span>
             </button>
           </div>
         </div>
@@ -582,110 +709,47 @@ export function ManagerDashboard() {
           </div>
 
           <div className="space-y-3">
-            {/* Job 1 */}
-            <div
-              onClick={() => navigate('/vacancies')}
-              className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/60 transition gap-3 cursor-pointer group"
-            >
-              <div className="min-w-0">
-                <span className="block text-xs font-bold text-slate-900 dark:text-white truncate group-hover:text-blue-600 transition">
-                  Senior Frontend Engineer
-                </span>
-                <span className="block text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">
-                  Engineering &bull; 48 applications
-                </span>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900">
-                  5 need action
-                </span>
-                <Icon name="chevron-right" size={16} className="text-slate-300 dark:text-slate-600 group-hover:translate-x-0.5 transition" />
-              </div>
-            </div>
+            {openVacanciesList.slice(0, 5).map((job) => (
+              <div
+                key={job.id}
+                onClick={() => navigate('/vacancies')}
+                className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/60 transition gap-3 cursor-pointer group border border-slate-100 dark:border-slate-800/60"
+              >
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-slate-900 dark:text-white truncate group-hover:text-blue-600 transition">
+                      {job.title}
+                    </span>
+                    <span className={`px-2 py-0.5 rounded-full text-[9.5px] font-bold border ${
+                      job.currentRecruiter === 'Unassigned'
+                        ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300 border-amber-200'
+                        : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                    }`}>
+                      {job.currentRecruiter === 'Unassigned' ? '⚠️ Unassigned' : `👤 ${job.currentRecruiter}`}
+                    </span>
+                  </div>
+                  <span className="block text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">
+                    {job.department} &bull; {job.openApplications} applications &bull; Target: {job.targetHires} hires
+                  </span>
+                </div>
 
-            {/* Job 2 */}
-            <div
-              onClick={() => navigate('/vacancies')}
-              className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/60 transition gap-3 cursor-pointer group"
-            >
-              <div className="min-w-0">
-                <span className="block text-xs font-bold text-slate-900 dark:text-white truncate group-hover:text-blue-600 transition">
-                  Product Designer
-                </span>
-                <span className="block text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">
-                  Design &bull; 29 applications
-                </span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openAssignModalForVacancy(job.id);
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 font-bold text-[11px] flex items-center gap-1 transition cursor-pointer shadow-2xs"
+                    title={`Assign or reassign ${job.title} and set targets`}
+                  >
+                    <span>🎯</span>
+                    <span>{job.currentRecruiter === 'Unassigned' ? 'Assign & Target' : 'Reassign'}</span>
+                  </button>
+                  <Icon name="chevron-right" size={16} className="text-slate-300 dark:text-slate-600 group-hover:translate-x-0.5 transition" />
+                </div>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-900">
-                  3 need action
-                </span>
-                <Icon name="chevron-right" size={16} className="text-slate-300 dark:text-slate-600 group-hover:translate-x-0.5 transition" />
-              </div>
-            </div>
-
-            {/* Job 3 */}
-            <div
-              onClick={() => navigate('/vacancies')}
-              className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/60 transition gap-3 cursor-pointer group"
-            >
-              <div className="min-w-0">
-                <span className="block text-xs font-bold text-slate-900 dark:text-white truncate group-hover:text-blue-600 transition">
-                  Backend Engineer
-                </span>
-                <span className="block text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">
-                  Engineering &bull; 36 applications
-                </span>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900">
-                  On track
-                </span>
-                <Icon name="chevron-right" size={16} className="text-slate-300 dark:text-slate-600 group-hover:translate-x-0.5 transition" />
-              </div>
-            </div>
-
-            {/* Job 4 */}
-            <div
-              onClick={() => navigate('/vacancies')}
-              className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/60 transition gap-3 cursor-pointer group"
-            >
-              <div className="min-w-0">
-                <span className="block text-xs font-bold text-slate-900 dark:text-white truncate group-hover:text-blue-600 transition">
-                  Registered Nurse &ndash; ICU
-                </span>
-                <span className="block text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">
-                  Clinical Ops &bull; 31 applications
-                </span>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900">
-                  2 overdue
-                </span>
-                <Icon name="chevron-right" size={16} className="text-slate-300 dark:text-slate-600 group-hover:translate-x-0.5 transition" />
-              </div>
-            </div>
-
-            {/* Job 5 */}
-            <div
-              onClick={() => navigate('/vacancies')}
-              className="flex items-center justify-between p-3 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/60 transition gap-3 cursor-pointer group"
-            >
-              <div className="min-w-0">
-                <span className="block text-xs font-bold text-slate-900 dark:text-white truncate group-hover:text-blue-600 transition">
-                  Data Analyst
-                </span>
-                <span className="block text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">
-                  Strategy &amp; Analytics &bull; 14 applications
-                </span>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                  On hold
-                </span>
-                <Icon name="chevron-right" size={16} className="text-slate-300 dark:text-slate-600 group-hover:translate-x-0.5 transition" />
-              </div>
-            </div>
+            ))}
           </div>
         </div>
       </div>
@@ -1057,116 +1121,224 @@ export function ManagerDashboard() {
         </div>
       </Modal>
 
-      {/* Assign Task Modal */}
+      {/* Assign Open Vacancy & Target Modal */}
       <Modal
         isOpen={isAssignTaskModalOpen}
         onClose={() => setIsAssignTaskModalOpen(false)}
-        title="Assign New Task to Recruiter / Team"
-        maxWidthClass="max-w-md"
+        title="Assign Open Vacancy & Target to Recruiter"
+        maxWidthClass="max-w-lg"
       >
-        <form onSubmit={handleAssignTaskSubmit} className="space-y-3.5 text-xs">
+        <form onSubmit={handleAssignTaskSubmit} className="space-y-4 text-xs">
+          <p className="text-slate-500 dark:text-slate-400">
+            Select an open vacancy position, delegate or reassign to a recruiter, and establish clear hiring &amp; screening targets with SLAs.
+          </p>
+
+          {/* Vacancy Selector */}
           <div>
-            <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">Task Title</label>
-            <input
-              type="text"
-              required
-              value={taskTitle}
-              onChange={(e) => setTaskTitle(e.target.value)}
-              placeholder="e.g. Screen Oncology Consultant candidates"
-              className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
-            />
+            <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">
+              Select Open Vacancy Position
+            </label>
+            <select
+              value={selectedVacancyId}
+              onChange={(e) => {
+                const id = e.target.value;
+                setSelectedVacancyId(id);
+                const vac = openVacanciesList.find((v) => v.id === id);
+                if (vac && vac.currentRecruiterId) {
+                  setSelectedRecruiterId(vac.currentRecruiterId);
+                }
+              }}
+              className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-semibold cursor-pointer"
+            >
+              {openVacanciesList.map((vac) => (
+                <option key={vac.id} value={vac.id}>
+                  {vac.title} — {vac.department} ({vac.location}) [Current: {vac.currentRecruiter}]
+                </option>
+              ))}
+            </select>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">Assign To</label>
-              <select
-                value={taskAssignee}
-                onChange={(e) => setTaskAssignee(e.target.value)}
-                className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
-              >
-                <option value="Sarah Ahmed">Sarah Ahmed (Senior Recruiter)</option>
-                <option value="Dr. Hassan Ali">Dr. Hassan Ali (HOD)</option>
-                <option value="Mona Saleh">Mona Saleh (HRBP)</option>
-                <option value="Ahmed Mostafa">Ahmed Mostafa (Recruitment Lead)</option>
-              </select>
-            </div>
+          {/* Vacancy Details Card & Reassignment Logic */}
+          {(() => {
+            const currentVac = openVacanciesList.find((v) => v.id === selectedVacancyId) || openVacanciesList[0];
+            const selectedRecruiter = RECRUITER_OPTIONS.find((r) => r.id === selectedRecruiterId) || RECRUITER_OPTIONS[0];
+            const isReassignment = currentVac.currentRecruiter !== 'Unassigned' && currentVac.currentRecruiter !== selectedRecruiter.name;
 
-            <div>
-              <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">Category</label>
-              <select
-                value={taskCategory}
-                onChange={(e) => setTaskCategory(e.target.value)}
-                className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
-              >
-                <option value="Screening">CV Screening</option>
-                <option value="Interview">Interview Scheduling</option>
-                <option value="Offer">Offer Drafting &amp; Review</option>
-                <option value="Compliance">SCFHS License Verification</option>
-              </select>
-            </div>
-          </div>
+            return (
+              <div className="space-y-3.5">
+                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="font-bold text-slate-500 uppercase tracking-wider">Position Status</span>
+                    <span className="px-2 py-0.5 rounded-full font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                      OPEN REQUISITION
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-500">Department &amp; Location:</span>
+                    <span className="font-semibold text-slate-900 dark:text-white">{currentVac.department} &bull; {currentVac.location}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-slate-500">Active Candidates in Funnel:</span>
+                    <span className="font-bold text-blue-600 dark:text-blue-400">{currentVac.openApplications} candidates</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
+                    <span className="text-slate-500">Current Assigned Recruiter:</span>
+                    <span className="font-bold text-slate-900 dark:text-white">
+                      {currentVac.currentRecruiter === 'Unassigned' ? (
+                        <span className="text-amber-600 font-semibold">⚠️ Unassigned</span>
+                      ) : (
+                        `👤 ${currentVac.currentRecruiter}`
+                      )}
+                    </span>
+                  </div>
+                </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">Priority</label>
-              <select
-                value={taskPriority}
-                onChange={(e) => setTaskPriority(e.target.value as any)}
-                className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
-              >
-                <option value="High">High (Urgent)</option>
-                <option value="Medium">Medium</option>
-                <option value="Low">Low</option>
-              </select>
-            </div>
+                {/* Reassignment Status Notice */}
+                {isReassignment ? (
+                  <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 text-xs flex items-start gap-2">
+                    <span className="text-base">🔄</span>
+                    <div>
+                      <span className="font-bold block">Reassigning Position</span>
+                      <span className="text-[11px] block mt-0.5">
+                        Responsibility for <b>{currentVac.title}</b> will transfer from <b>{currentVac.currentRecruiter}</b> to <b>{selectedRecruiter.name}</b>.
+                      </span>
+                    </div>
+                  </div>
+                ) : currentVac.currentRecruiter === 'Unassigned' ? (
+                  <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300 text-xs flex items-start gap-2">
+                    <span className="text-base">✨</span>
+                    <div>
+                      <span className="font-bold block">Initial Position Assignment</span>
+                      <span className="text-[11px] block mt-0.5">
+                        Assigning <b>{currentVac.title}</b> to <b>{selectedRecruiter.name}</b> with active SLA tracking.
+                      </span>
+                    </div>
+                  </div>
+                ) : null}
 
-            <div>
-              <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">Due Timeline</label>
-              <input
-                type="text"
-                value={taskDue}
-                onChange={(e) => setTaskDue(e.target.value)}
-                placeholder="e.g. Today, 5:00 PM"
-                className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
-              />
-            </div>
-          </div>
+                {/* Recruiter Selector */}
+                <div>
+                  <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">
+                    {isReassignment ? 'Reassign To Recruiter' : 'Assign To Recruiter'}
+                  </label>
+                  <select
+                    value={selectedRecruiterId}
+                    onChange={(e) => setSelectedRecruiterId(e.target.value)}
+                    className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-semibold cursor-pointer"
+                  >
+                    {RECRUITER_OPTIONS.map((rec) => (
+                      <option key={rec.id} value={rec.id}>
+                        {rec.name} — {rec.role}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">Candidate (Optional)</label>
-              <input
-                type="text"
-                value={taskCandidate}
-                onChange={(e) => setTaskCandidate(e.target.value)}
-                placeholder="Candidate name"
-                className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
-              />
-            </div>
+                {/* Target Configuration Section */}
+                <div className="p-3.5 rounded-xl border border-blue-200 dark:border-blue-900/60 bg-blue-50/40 dark:bg-blue-950/20 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-extrabold text-blue-900 dark:text-blue-300 text-xs flex items-center gap-1.5">
+                      <span>🎯</span> Recruiter Target &amp; SLA Quota
+                    </span>
+                    <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400">
+                      Velocity Benchmark
+                    </span>
+                  </div>
 
-            <div>
-              <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">Position / Vacancy</label>
-              <input
-                type="text"
-                value={taskPosition}
-                onChange={(e) => setTaskPosition(e.target.value)}
-                placeholder="Position title"
-                className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
-              />
-            </div>
-          </div>
+                  {/* Target Type Selector */}
+                  <div>
+                    <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300 text-[11px]">
+                      Target Objective Type
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {(['Hires', 'Screenings', 'Interviews'] as const).map((t) => (
+                        <button
+                          key={t}
+                          type="button"
+                          onClick={() => setTargetType(t)}
+                          className={`py-1.5 px-2 rounded-lg text-[11px] font-bold transition cursor-pointer border ${
+                            targetType === t
+                              ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                              : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                          }`}
+                        >
+                          {t === 'Hires' ? '🎯 Hires Target' : t === 'Screenings' ? '📄 CV Screenings' : '📅 Interviews'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
 
-          <div>
-            <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">Instructions / Notes</label>
-            <textarea
-              rows={2}
-              value={taskInstructions}
-              onChange={(e) => setTaskInstructions(e.target.value)}
-              placeholder="Specific notes or instructions for the recruiter..."
-              className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
-            />
-          </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300 text-[11px]">
+                        Target Quota (Quantity)
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={50}
+                        value={targetQuota}
+                        onChange={(e) => setTargetQuota(parseInt(e.target.value) || 1)}
+                        className="w-full p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-bold"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300 text-[11px]">
+                        Target SLA Timeline
+                      </label>
+                      <select
+                        value={targetDeadline}
+                        onChange={(e) => setTargetDeadline(e.target.value)}
+                        className="w-full p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-semibold cursor-pointer"
+                      >
+                        <option value="3 Days (Urgent SLA)">3 Days (Urgent SLA)</option>
+                        <option value="7 Days (Standard SLA)">7 Days (Standard SLA)</option>
+                        <option value="14 Days (2 Weeks)">14 Days (2 Weeks)</option>
+                        <option value="30 Days (End of Month)">30 Days (End of Month)</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300 text-[11px]">Priority</label>
+                      <select
+                        value={taskPriority}
+                        onChange={(e) => setTaskPriority(e.target.value as any)}
+                        className="w-full p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white cursor-pointer"
+                      >
+                        <option value="High">High (Critical Priority)</option>
+                        <option value="Medium">Medium (Normal SLA)</option>
+                        <option value="Low">Low</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300 text-[11px]">Pacing Output</label>
+                      <div className="p-2 bg-white/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+                        {targetQuota} {targetType.toLowerCase()} / {targetDeadline.split('(')[0]}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Instructions */}
+                <div>
+                  <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">
+                    Manager Sourcing Instructions &amp; Clinical Criteria
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={taskInstructions}
+                    onChange={(e) => setTaskInstructions(e.target.value)}
+                    placeholder="e.g. Prioritize candidates with active SCFHS license and ICU experience. Target offer extension within 14 days."
+                    className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
+                  />
+                </div>
+              </div>
+            );
+          })()}
 
           <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
             <button
@@ -1181,7 +1353,7 @@ export function ManagerDashboard() {
               disabled={isAssigning}
               className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold transition shadow-xs cursor-pointer disabled:opacity-50"
             >
-              {isAssigning ? 'Assigning...' : 'Assign Task'}
+              {isAssigning ? 'Assigning...' : 'Assign Vacancy & Target'}
             </button>
           </div>
         </form>
