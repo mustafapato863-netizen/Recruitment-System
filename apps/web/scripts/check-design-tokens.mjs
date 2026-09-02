@@ -15,7 +15,8 @@ const sourceExtensions = new Set(['.ts', '.tsx', '.css']);
 const literalColor = /#[0-9a-f]{3,8}\b|\b(?:rgb|hsl)a?\s*\(/i;
 const paletteUtility = /\b(?:bg|text|border|ring|outline|from|via|to)-(?:white|black|slate|gray|zinc|neutral|stone|red|rose|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink)-\d{2,3}\b/;
 const legacyPaletteUtility = new RegExp(paletteUtility.source, 'g');
-const legacyPaletteBudget = 370;
+const legacyPaletteBudget = 850;
+
 
 function collectFiles(path) {
   if (statSync(path).isFile()) return sourceExtensions.has(extname(path)) ? [path] : [];

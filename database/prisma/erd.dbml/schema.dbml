@@ -391,6 +391,7 @@ Table applications {
   candidateId String [not null]
   candidate candidates [not null]
   stage String [not null, default: 'Applied']
+  version Int [not null, default: 1]
   source String
   primaryRecruiterId String
   primaryRecruiter users

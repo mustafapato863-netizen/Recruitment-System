@@ -54,6 +54,8 @@ export interface ErrorEnvelope {
   code: ErrorCode;
   message: string;
   fields?: ErrorFieldErrors;
+  /** Safe, resource-specific context for recoverable client workflows such as optimistic-concurrency conflicts. */
+  details?: Record<string, unknown>;
   requestId: string;
   retryable: boolean;
   retryAfterSeconds: number | null;
@@ -155,6 +157,39 @@ export interface VacancyAssignment {
   roleCode: string;
   isActive: boolean;
   assignedAt: string;
+}
+
+export type WorkHealthState = 'healthy' | 'attention' | 'blocked';
+
+export interface WorkHealth {
+  state: WorkHealthState;
+  reason?: string;
+  dueAt?: string;
+}
+
+export interface NextActionDescriptor {
+  code: string;
+  label: string;
+  enabled: boolean;
+  targetStage?: ApplicationStage;
+  blockedReason?: string;
+  requiresReason: boolean;
+}
+
+/** Server-calculated operational summary for the jobs work queue. */
+export interface JobWorkQueueItem {
+  id: string;
+  code: string;
+  title: string;
+  branch: { id: string; name: string; code?: string } | null;
+  status: VacancyStatus;
+  owner: { id: string; displayName: string } | null;
+  headcount: { approved: number; joined: number; remaining: number };
+  pipelineCounts: Record<ApplicationStage, number>;
+  needsActionCount: number;
+  health: WorkHealth | null;
+  lastActivity: { at: string; label: string } | null;
+  nextAction: NextActionDescriptor | null;
 }
 
 export interface CreateVacancyRequestInput {
@@ -610,6 +645,8 @@ export interface Application {
   candidateId: string;
   stage: ApplicationStage;
   allowedTransitions: ApplicationStage[];
+  /** Incremented atomically for every workflow transition. */
+  version: number;
   source?: string | null | undefined;
   primaryRecruiterId?: string | null | undefined;
   primaryRecruiterName?: string | null | undefined;
@@ -633,6 +670,8 @@ export interface CreateApplicationInput {
 
 export interface UpdateApplicationStageInput {
   stage: ApplicationStage;
+  expectedStage: ApplicationStage;
+  expectedVersion: number;
   reason?: string | undefined;
 }
 
@@ -642,6 +681,8 @@ export interface ApplicationFilterInput {
   stage?: ApplicationStage | undefined;
   primaryRecruiterId?: string | undefined;
   search?: string | undefined;
+  sortBy?: 'createdAt' | 'updatedAt' | 'appliedAt' | undefined;
+  sortDirection?: 'asc' | 'desc' | undefined;
   page?: number | undefined;
   pageSize?: number | undefined;
 }

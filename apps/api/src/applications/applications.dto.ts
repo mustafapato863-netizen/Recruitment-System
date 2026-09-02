@@ -45,6 +45,23 @@ export class UpdateApplicationStageDto {
   ])
   stage!: ApplicationStage;
 
+  @IsEnum([
+    'Applied',
+    'Screening',
+    'Interview',
+    'Offer',
+    'Pre-Hire',
+    'Joined',
+    'Rejected',
+    'Withdrawn',
+  ])
+  expectedStage!: ApplicationStage;
+
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  expectedVersion!: number;
+
   @IsOptional()
   @IsString()
   @MaxLength(1000)
@@ -71,6 +88,14 @@ export class ApplicationQueryDto {
   @IsOptional()
   @IsString()
   search?: string;
+
+  @IsOptional()
+  @IsEnum(['createdAt', 'updatedAt', 'appliedAt'])
+  sortBy?: 'createdAt' | 'updatedAt' | 'appliedAt';
+
+  @IsOptional()
+  @IsEnum(['asc', 'desc'])
+  sortDirection?: 'asc' | 'desc';
 
   @IsOptional()
   @Type(() => Number)

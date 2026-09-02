@@ -10,6 +10,7 @@ import {
   IsUUID,
   IsEnum,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class CreateVacancyRequestDto {
   @IsOptional()
@@ -140,4 +141,28 @@ export class AssignTeamMemberDto {
   @IsString()
   @MaxLength(60)
   roleCode!: string;
+}
+
+export class VacancyWorkQueueQueryDto {
+  @IsOptional()
+  @IsEnum(['Pending Activation', 'Open', 'On Hold', 'Partially Filled', 'Filled', 'Cancelled'])
+  status?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  search?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  page?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(100)
+  pageSize?: number;
 }

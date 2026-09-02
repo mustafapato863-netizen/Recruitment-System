@@ -162,6 +162,7 @@ export interface NormalizedError {
   code: ErrorCode;
   message: string;
   fields?: ErrorFieldErrors;
+  details?: Record<string, unknown>;
   retryable: boolean;
   retryAfterSeconds?: number | null;
   /** Server-side diagnostic context (sanitized). Never returned to clients. */
@@ -433,6 +434,9 @@ export function normalizeError(
       const fields = hasFieldErrors
         ? (resObj.fields as ErrorFieldErrors)
         : undefined;
+      const details = status === HttpStatus.CONFLICT && isSafePublicDetails(resObj.details)
+        ? resObj.details
+        : undefined;
 
       const rawMessage = Array.isArray(resObj.message)
         ? resObj.message
@@ -480,6 +484,7 @@ export function normalizeError(
         code: stableCode,
         message,
         ...(hasFieldErrors && fields ? { fields } : {}),
+        ...(details ? { details } : {}),
         retryable,
         retryAfterSeconds:
           retryAfter ?? (status === HttpStatus.TOO_MANY_REQUESTS ? null : null),
@@ -595,7 +600,13 @@ export function buildErrorEnvelope(normalized: NormalizedError, requestId: strin
   if (normalized.fields && Object.keys(normalized.fields).length > 0) {
     envelope.fields = normalized.fields;
   }
+  if (normalized.details) envelope.details = normalized.details;
   return envelope;
+}
+
+function isSafePublicDetails(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  return Object.keys(value).every((key) => key === 'currentApplication' || key === 'currentStage' || key === 'currentVersion');
 }
 
 /**

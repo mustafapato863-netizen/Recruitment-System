@@ -1,0 +1,33 @@
+{
+  "name": "@sgh/design-system",
+  "version": "1.0.0",
+  "description": "Saudi German Health (SGH) Enterprise Design System - Cross-Platform UI Components, Design Tokens, Vector Assets, and Background Effects",
+  "main": "index.ts",
+  "module": "index.ts",
+  "types": "index.ts",
+  "exports": {
+    ".": "./index.ts",
+    "./tokens": "./tokens/index.ts",
+    "./brand": "./brand/index.ts",
+    "./backgrounds": "./backgrounds/index.ts",
+    "./components": "./components/index.ts",
+    "./tailwind": "./tailwind/preset.js",
+    "./styles.css": "./tokens/sgh-tokens.css"
+  },
+  "peerDependencies": {
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0",
+    "motion": ">=11.0.0"
+  },
+  "keywords": [
+    "sgh",
+    "saudi-german-health",
+    "design-system",
+    "react",
+    "tailwind",
+    "healthcare-ui",
+    "motion"
+  ],
+  "author": "Saudi German Health IT & Engineering",
+  "license": "UNLICENSED"
+}

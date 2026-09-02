@@ -296,8 +296,8 @@ Acceptance checks: <testable statements>
 Rules:
 - Do not redefine the product or start another sub-milestone.
 - Do not invent fields, endpoints, statuses, permissions, or security claims.
-- Keep Light mode only for V1.
-- Keep docs/reference/ui-ux out of the live application runtime.
+- Keep approved Light and Dark modes only for V1.
+- Do not recreate retired static reference/prototype pages in the live application runtime.
 - Preserve unrelated worktree changes.
 - Use existing components, tokens, contracts, and test patterns.
 - Stop and report BLOCKED if a required decision is missing.

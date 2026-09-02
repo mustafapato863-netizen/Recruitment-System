@@ -62,6 +62,9 @@ export class ApplicationsService {
       ];
     }
 
+    const sortBy = query.sortBy ?? 'updatedAt';
+    const sortDirection = query.sortDirection ?? 'desc';
+
     const [total, items] = await Promise.all([
       this.prisma.application.count({ where }),
       this.prisma.application.findMany({
@@ -74,7 +77,7 @@ export class ApplicationsService {
           primaryRecruiter: true,
           taskOwner: true,
         },
-        orderBy: { createdAt: 'desc' },
+        orderBy: { [sortBy]: sortDirection },
         skip,
         take: pageSize,
       }),
@@ -202,6 +205,10 @@ export class ApplicationsService {
   ): Promise<Application> {
     const application = await this.getApplication(organizationId, id);
 
+    if (application.stage !== dto.expectedStage || application.version !== dto.expectedVersion) {
+      this.throwTransitionConflict(application);
+    }
+
     const allowed = ALLOWED_STAGE_TRANSITIONS[application.stage];
     if (!allowed.includes(dto.stage)) {
       throw new BadRequestException(
@@ -210,11 +217,33 @@ export class ApplicationsService {
     }
 
     const updated = await this.prisma.$transaction(async (tx) => {
-      const app = await tx.application.update({
-        where: { id },
+      const changed = await (tx.application as any).updateMany({
+        where: {
+          id,
+          organizationId,
+          stage: dto.expectedStage,
+          version: dto.expectedVersion,
+        },
         data: {
           stage: dto.stage,
+          version: { increment: 1 },
         },
+      });
+
+      if (changed.count !== 1) return null;
+
+      await tx.applicationStatusHistory.create({
+        data: {
+          applicationId: id,
+          fromStage: dto.expectedStage,
+          toStage: dto.stage,
+          changedById: actorUserId,
+          reason: dto.reason?.trim() ?? null,
+        },
+      });
+
+      return tx.application.findUnique({
+        where: { id },
         include: {
           candidate: true,
           vacancy: { include: { position: true } },
@@ -222,19 +251,12 @@ export class ApplicationsService {
           taskOwner: true,
         },
       });
-
-      await tx.applicationStatusHistory.create({
-        data: {
-          applicationId: id,
-          fromStage: application.stage,
-          toStage: dto.stage,
-          changedById: actorUserId,
-          reason: dto.reason?.trim() ?? null,
-        },
-      });
-
-      return app;
     });
+
+    if (!updated) {
+      const current = await this.getApplication(organizationId, id);
+      this.throwTransitionConflict(current);
+    }
 
     return this.toApplication(updated);
   }
@@ -289,6 +311,7 @@ export class ApplicationsService {
       candidateId: record.candidateId,
       stage: record.stage as ApplicationStage,
       allowedTransitions: ALLOWED_STAGE_TRANSITIONS[record.stage as ApplicationStage] ?? [],
+      version: (record as any).version ?? 1,
       source: record.source,
       primaryRecruiterId: record.primaryRecruiterId,
       primaryRecruiterName: record.primaryRecruiter?.displayName,
@@ -320,5 +343,17 @@ export class ApplicationsService {
       createdAt: record.createdAt.toISOString(),
       updatedAt: record.updatedAt.toISOString(),
     };
+  }
+
+  private throwTransitionConflict(current: Application): never {
+    throw new ConflictException({
+      code: 'CONFLICT',
+      message: 'This application changed before the stage update could be saved.',
+      details: {
+        currentApplication: current,
+        currentStage: current.stage,
+        currentVersion: current.version,
+      },
+    });
   }
 }

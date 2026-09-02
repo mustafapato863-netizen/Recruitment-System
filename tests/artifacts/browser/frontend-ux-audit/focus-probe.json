@@ -1,0 +1,83 @@
+{
+  "viewport": {
+    "width": 1024,
+    "height": 900
+  },
+  "theme": "dark",
+  "sidebar": {
+    "selector": ".sidebar",
+    "display": "flex",
+    "visibility": "visible",
+    "pointerEvents": "auto",
+    "transform": "none",
+    "width": 244,
+    "height": 900,
+    "x": 0,
+    "y": 0
+  },
+  "mobileMenu": {
+    "selector": "button[aria-label=\"Open navigation menu\"]",
+    "display": "none",
+    "visibility": "visible",
+    "pointerEvents": "auto",
+    "transform": "none",
+    "width": 0,
+    "height": 0,
+    "x": 0,
+    "y": 0
+  },
+  "header": {
+    "selector": ".header",
+    "display": "flex",
+    "visibility": "visible",
+    "pointerEvents": "auto",
+    "transform": "none",
+    "width": 780,
+    "height": 62,
+    "x": 244,
+    "y": 0
+  },
+  "sidebarAriaHidden": null,
+  "offscreenSidebarLinks": [],
+  "metric": {
+    "text": "0",
+    "foreground": "rgb(248, 250, 252)",
+    "background": "rgb(17, 24, 39)",
+    "renderedForeground": "rgb(248, 250, 252)",
+    "renderedBackground": "rgb(17, 24, 39)",
+    "contrast": 16.96
+  },
+  "heading": {
+    "text": "Hiring at a glance",
+    "color": "rgb(248, 250, 252)"
+  },
+  "nextAction": {
+    "text": "Create job requestStart a new approved opening",
+    "color": "rgb(248, 250, 252)",
+    "background": "rgb(17, 24, 39)"
+  },
+  "mobile375": {
+    "opened": {
+      "sidebar": {
+        "visibility": "visible",
+        "pointerEvents": "auto",
+        "transform": "matrix(1, 0, 0, 1, 0, 0)",
+        "x": 0,
+        "width": 280
+      },
+      "labels": [
+        "Home",
+        "Jobs",
+        "Candidates",
+        "Interviews",
+        "Offers & Joining",
+        "Reports",
+        "Settings"
+      ]
+    },
+    "closed": {
+      "activeLabel": "Open navigation menu",
+      "sidebarTransform": "matrix(1, 0, 0, 1, -294, 0)"
+    }
+  }
+}

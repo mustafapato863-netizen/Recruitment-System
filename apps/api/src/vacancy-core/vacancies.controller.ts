@@ -6,12 +6,13 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import type { AuthUser } from '@recruitflow/contracts';
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { VacancyCoreService } from './vacancy-core.service';
-import { UpdateVacancyStatusDto, AssignTeamMemberDto } from './vacancy-core.dto';
+import { UpdateVacancyStatusDto, AssignTeamMemberDto, VacancyWorkQueueQueryDto } from './vacancy-core.dto';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { TenantScopedGuard } from '../common/guards/tenant-scoped.guard';
@@ -29,6 +30,12 @@ export class VacanciesController {
   @RequirePermissions('VACANCY_VIEW')
   listVacancies(@CurrentUser() user: AuthUser) {
     return this.vacancyCoreService.listVacancies(user.organizationId);
+  }
+
+  @Get('work-queue')
+  @RequirePermissions('VACANCY_VIEW')
+  getWorkQueue(@CurrentUser() user: AuthUser, @Query() query: VacancyWorkQueueQueryDto) {
+    return this.vacancyCoreService.getWorkQueue(user.organizationId, query);
   }
 
   @Get(':id')

@@ -1,0 +1,19 @@
+Recruitment visual reference set
+Unique numbered pages only; collages and duplicate composites excluded.
+
+01-my-work-dashboard.png
+02-job-positions.png
+03-job-overview.png
+04-applications-pipeline-kanban.png
+05-applicant-profile.png
+06-stage-transition.png
+07-recruitment-reports-dark.png
+08-mobile-navigation-drawer.png
+09-interviews.png
+10-interview-detail-feedback.png
+11-offers.png
+12-offer-detail-hire.png
+13-applications-list-view.png
+14-my-work-full-task-queue.png
+15-job-analytics.png
+16-recruitment-settings.png

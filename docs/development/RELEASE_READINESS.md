@@ -23,7 +23,7 @@ This report is the release-hardening handoff for `P10-RELEASE-01`. It records ex
 | Browser navigation timing instrumentation | PASS | Release browser journey records non-zero response and DOMContentLoaded timing |
 | Code quality review | PASS | `code_quality_checker.py apps/web/src/pages` — 0 findings |
 | Auth/tenant/RBAC/workflow regression matrix | PASS | 7/7 safe disclosure, 10/10 isolation, RBAC, auth 93/93, workflow 115/115, candidate 51/51, interviews 38/38 |
-| Reference/live boundary | PASS | No `DesignSystemPage`, `/design-system`, or `docs/reference/ui-ux` references under `apps/web/src` |
+| Reference/live boundary | PASS | No `DesignSystemPage`, `/design-system`, retired prototype routes, or generated reference assets under `apps/web/src` |
 | CORS origin policy | PASS | Configured/local development origins allowed; unknown external origin receives no CORS headers |
 | Document contract truthfulness | PASS | Metadata-only UI, no false private-storage/download claims, storage key redaction verified in P5.3 — 53/53 |
 

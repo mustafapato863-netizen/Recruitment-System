@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import type { Application, ApplicationStage } from '@recruitflow/contracts';
 import { Icon } from '../Icon';
 import { Button } from '../ui/Button';
@@ -110,6 +110,24 @@ export function CandidateSplitDrawer({
       type: 'note',
     },
   ]);
+
+  // Handle Escape key to close
+  useEffect(() => {
+    if (!isOpen) return undefined;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // If a nested modal (e.g. activity modal) is open, let that modal handle Escape
+      if (event.key === 'Escape' && !isActivityModalOpen) {
+        event.preventDefault();
+        onClose();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen, isActivityModalOpen, onClose]);
 
   if (!isOpen || !application) return null;
 
@@ -266,8 +284,22 @@ export function CandidateSplitDrawer({
       role="dialog"
       aria-modal="true"
       aria-labelledby="drawer-candidate-name"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
     >
-      <div className="flex h-full w-full max-w-5xl flex-col bg-white dark:bg-rf-surface shadow-2xl border-l border-rf-border">
+      <div
+        className="flex h-full w-full max-w-5xl flex-col bg-white dark:bg-rf-surface shadow-2xl border-l border-rf-border"
+        onMouseDown={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header with Odoo-style Status Stepper */}
         <header className="flex flex-wrap items-center justify-between gap-3 border-b border-rf-border px-6 py-3.5 bg-rf-surface-subtle/60">
           <div className="flex items-center gap-3">

@@ -8,17 +8,22 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import type {
+  ApplicationStage,
   CreateVacancyRequestInput,
+  JobWorkQueueItem,
+  PaginatedResult,
   Vacancy,
   VacancyRequest,
   VacancyRequestActionResult,
   VacancyDetailView,
 } from '@recruitflow/contracts';
+import type { Prisma } from '@recruitflow/database';
 import type {
   CreateVacancyRequestDto,
   VacancyRequestActionDto,
   UpdateVacancyRequestDto,
   AssignTeamMemberDto,
+  VacancyWorkQueueQueryDto,
 } from './vacancy-core.dto';
 import {
   VACANCY_CORE_REPOSITORY,
@@ -77,6 +82,96 @@ export class VacancyCoreService {
 
   listVacancies(organizationId: string): Promise<Vacancy[]> {
     return this.repository.listVacancies(organizationId);
+  }
+
+  async getWorkQueue(
+    organizationId: string,
+    query: VacancyWorkQueueQueryDto,
+  ): Promise<PaginatedResult<JobWorkQueueItem>> {
+    const page = query.page ?? 1;
+    const pageSize = query.pageSize ?? 20;
+    const where: Prisma.VacancyWhereInput = { organizationId };
+    if (query.status) where.status = query.status;
+    if (query.search?.trim()) {
+      const term = query.search.trim();
+      where.OR = [
+        { vacancyCode: { contains: term, mode: 'insensitive' } },
+        { position: { title: { contains: term, mode: 'insensitive' } } },
+        { branch: { name: { contains: term, mode: 'insensitive' } } },
+      ];
+    }
+
+    const [total, vacancies] = await Promise.all([
+      this.prisma.vacancy.count({ where }),
+      this.prisma.vacancy.findMany({
+        where,
+        orderBy: { updatedAt: 'desc' },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: {
+          position: { select: { title: true } },
+          branch: { select: { id: true, name: true, code: true } },
+          assignments: {
+            where: { isActive: true },
+            orderBy: { assignedAt: 'asc' },
+            include: { user: { select: { id: true, displayName: true } } },
+          },
+          applications: { select: { stage: true, updatedAt: true } },
+        },
+      }),
+    ]);
+
+    const data: JobWorkQueueItem[] = vacancies.map((vacancy) => {
+      const pipelineCounts = createPipelineCounts();
+      for (const application of vacancy.applications) {
+        const stage = application.stage as ApplicationStage;
+        if (stage in pipelineCounts) pipelineCounts[stage] += 1;
+      }
+      const owner = vacancy.assignments[0]?.user ?? null;
+      const remaining = Math.max(0, vacancy.approvedHeadcount - vacancy.joinedHeadcount);
+      const newApplicants = pipelineCounts.Applied;
+      const isTargetPast = Boolean(
+        vacancy.targetStartDate && vacancy.targetStartDate.getTime() < Date.now() && remaining > 0,
+      );
+      const health = !owner
+        ? { state: 'attention' as const, reason: 'No active job owner' }
+        : isTargetPast
+          ? {
+              state: 'attention' as const,
+              reason: 'Target start date has passed',
+              ...(vacancy.targetStartDate ? { dueAt: vacancy.targetStartDate.toISOString() } : {}),
+            }
+          : null;
+      const nextAction = newApplicants > 0
+        ? { code: 'review-applicants', label: 'Review applicants', enabled: true, targetStage: 'Screening' as const, requiresReason: false }
+        : vacancy.status === 'Pending Activation'
+          ? { code: 'activate-job', label: 'Activate job', enabled: true, requiresReason: false }
+          : { code: 'open-job', label: 'Open job', enabled: true, requiresReason: false };
+      const latestApplication = vacancy.applications.reduce<Date | null>(
+        (latest, app) => !latest || app.updatedAt > latest ? app.updatedAt : latest,
+        null,
+      );
+      const lastActivityAt = latestApplication && latestApplication > vacancy.updatedAt
+        ? latestApplication
+        : vacancy.updatedAt;
+
+      return {
+        id: vacancy.id,
+        code: vacancy.vacancyCode,
+        title: vacancy.position.title,
+        branch: vacancy.branch,
+        status: vacancy.status as Vacancy['status'],
+        owner,
+        headcount: { approved: vacancy.approvedHeadcount, joined: vacancy.joinedHeadcount, remaining },
+        pipelineCounts,
+        needsActionCount: newApplicants,
+        health,
+        lastActivity: { at: lastActivityAt.toISOString(), label: latestApplication && latestApplication > vacancy.updatedAt ? 'Applicant activity' : 'Job updated' },
+        nextAction,
+      };
+    });
+
+    return { data, total, page, pageSize };
   }
 
   async getVacancy(organizationId: string, id: string): Promise<Vacancy> {
@@ -489,4 +584,17 @@ export class VacancyCoreService {
     vacancy.updatedAt = new Date().toISOString();
     return this.repository.saveVacancy(vacancy);
   }
+}
+
+function createPipelineCounts(): Record<ApplicationStage, number> {
+  return {
+    Applied: 0,
+    Screening: 0,
+    Interview: 0,
+    Offer: 0,
+    'Pre-Hire': 0,
+    Joined: 0,
+    Rejected: 0,
+    Withdrawn: 0,
+  };
 }

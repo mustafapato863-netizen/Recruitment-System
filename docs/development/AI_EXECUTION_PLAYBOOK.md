@@ -1,4 +1,4 @@
-# RecruitFlow — AI Execution Playbook for Small Models
+# RecruitFlow - AI Execution Playbook for Small Models
 
 This playbook is written for a small-context AI model or a developer using an AI assistant. It prevents scope drift, invented contracts, duplicate work, and large unreviewable changes.
 
@@ -12,11 +12,11 @@ Approved product decision (2026-08-18): RecruitFlow supports explicit Light and 
 
 ## 1.1 Live app and reference separation
 
-- Treat `apps/web` as the production product surface and `docs/reference/ui-ux/app` as an offline design/reference surface.
-- Never copy a reference page into the live router, sidebar, bundle, fixtures, or normal user navigation merely because it is useful for visual review.
-- A page named Design System, States & Feedback, annotated view, gallery, or visual laboratory stays in the reference tree unless the canonical plan explicitly approves it as a product capability with a real API/data contract.
+- Treat `apps/web` as the production product surface.
+- The retired generated UI/UX prototype and screenshot pack must not be recreated, routed, bundled, or used as production fixture data.
+- A page named Design System, States & Feedback, annotated view, gallery, or visual laboratory is not a product route unless the canonical plan explicitly approves it as a product capability with a real API/data contract.
 - Before adding or retaining a live route, write down its user, job-to-be-done, owner, data source, permission, next action, and state matrix. Missing answers mean the page belongs in documentation, not the app.
-- A shared primitive may be reused by the live app; a reference page or reference fixture may not become an application dependency.
+- A shared primitive may be reused by the live app; a reference/prototype page or fixture may not become an application dependency.
 
 ## 2. Read order for every task
 
@@ -26,15 +26,16 @@ Read only the minimum context required, in this order:
 2. `docs/development/PROJECT_MILESTONES.md` — the assigned milestone, estimate, dependency, and acceptance gate.
 3. This playbook — execution rules and output format.
 4. The relevant product/page/design contract:
-   - product decision → `enterprise-saas-product-plan.md`
-   - page handoff → `enterprise-page-story.md`
-   - visual rule → `enterprise-product-direction.md`, `enterprise-visual-identity.md`, or `docs/reference/ui-ux/COMPONENT_INTERACTION_REFERENCE.md`
+   - frontend redesign -> `FRONTEND_SIMPLE_SYSTEM_PLAN.md`
+   - product decision -> `enterprise-saas-product-plan.md`
+   - page handoff -> `enterprise-page-story.md`
+   - visual rule -> `enterprise-product-direction.md` or `enterprise-visual-identity.md`
 
-Before any UI, role, or approval task, also review the three mandatory reference pages:
+Before any UI, role, or approval task, also review only the active frontend references that match the task:
 
-- `docs/reference/ui-ux/app/pages/44_design_system.html` — visual/component contract.
-- `docs/reference/ui-ux/app/pages/55_security_access.html` — RLS, scope, field visibility, and authorization contract.
-- `docs/reference/ui-ux/app/pages/56_guidelines.html` — recruiter, manager, approval-cycle, and audit handoff story.
+- `docs/development/FRONTEND_SIMPLE_SYSTEM_PLAN.md` - simplified workflow, IA, page contracts, and acceptance gates.
+- `docs/design-system/enterprise-visual-identity.md` - tokens, typography, density, states, and accessibility rules.
+- `docs/design-system/enterprise-product-direction.md` - product behavior and interaction direction.
 5. The exact target files and their nearest tests.
 6. `progress.md` and `findings.md` only when resuming, blocked, or resolving a previous risk.
 
@@ -220,7 +221,7 @@ Authoritative documents:
 
 V1 constraint: Light and Dark only, with Light as the first-visit default. Do not implement additional themes, AI claims, unsupported compliance claims, or unrelated refactors.
 
-Surface boundary: `apps/web` is the live product; `docs/reference/ui-ux/app` is offline reference only. Do not route, import, bundle, or place reference/demo pages in live navigation.
+Surface boundary: `apps/web` is the live product. Do not route, import, bundle, or place reference/demo pages in live navigation.
 
 Your assigned task is exactly:
 Task ID: <P?.?-??>

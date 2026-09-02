@@ -47,7 +47,7 @@ Rules: status colors require text/icon support, all text must meet WCAG AA, and 
 ## Typography
 
 - Primary family: Plus Jakarta Sans or an approved self-hosted equivalent.
-- Display: 28-36px, weight 700, tight but readable line-height.
+- Display: 28-36px, weight 700, readable line-height.
 - Page title: 24-28px, weight 700.
 - Section title: 16-18px, weight 700.
 - Body: 14-16px, line-height 1.5.
@@ -104,8 +104,9 @@ Rules: status colors require text/icon support, all text must meet WCAG AA, and 
 - Can a user identify owner, status, SLA, and evidence in five seconds?
 - Does the page hand off to the next story page with context preserved?
 - Does the screen remain usable at 375px, 768px, 1024px, and 1440px?
-## Component interaction reference update — 2026-08-08
 
-The offline reference now includes a complete component laboratory and written frontend handoff at `docs/reference/ui-ux/COMPONENT_INTERACTION_REFERENCE.md`.
+## Component interaction update - 2026-09-01
 
-Controlled gradients are allowed for the page canvas, primary actions, selected navigation, and one decision-critical neon focus card. They must remain tokenized, accessible, and reduced-motion safe. Data surfaces remain solid and readable. Every interactive component documents default, hover, focus-visible, pressed, selected, disabled, loading, success, warning, error, and empty states. The reference grid is 12 columns on desktop, 8 on tablet, and 4 on phone with declared gutters, gaps, max width, and collapse behavior.
+The generated offline component laboratory has been retired. The active frontend direction is `docs/development/FRONTEND_SIMPLE_SYSTEM_PLAN.md`, supported by this visual identity and `enterprise-product-direction.md`.
+
+Controlled gradients are not part of the active V1 product direction. Data surfaces remain solid and readable. Every interactive component documents default, hover, focus-visible, pressed, selected, disabled, loading, success, warning, error, and empty states. Layouts must define desktop, tablet, and phone behavior before implementation.

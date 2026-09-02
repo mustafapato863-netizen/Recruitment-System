@@ -436,6 +436,7 @@ model Application {
   candidateId        String                     @db.Uuid
   candidate          Candidate                  @relation(fields: [candidateId], references: [id], onDelete: Restrict)
   stage              String                     @default("Applied") @db.VarChar(50)
+  version            Int                        @default(1)
   source             String?                    @db.VarChar(80)
   primaryRecruiterId String?                    @db.Uuid
   primaryRecruiter   User?                      @relation("ApplicationPrimaryRecruiter", fields: [primaryRecruiterId], references: [id], onDelete: Restrict)
