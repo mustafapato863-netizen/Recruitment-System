@@ -2605,47 +2605,45 @@
 }
 
 .rf-dashboard-reference__openings ul > li {
-  gap: 0.2rem;
-  padding: 0.4rem 0.55rem !important;
+  gap: 0.45rem;
+  padding: 0.65rem 0.85rem !important;
 }
 
 .rf-dashboard-reference__attention ul > li > div:first-child {
-  width: 1.6rem;
-  height: 1.6rem;
+  width: 2rem;
+  height: 2rem;
 }
 
 .rf-dashboard-reference__attention ul > li {
-  min-height: 2.65rem;
-  padding: 0.35rem 0.45rem !important;
-  gap: 0.45rem;
+  min-height: 3.2rem;
+  padding: 0.6rem 0.85rem !important;
+  gap: 0.75rem;
 }
 
 .rf-dashboard-reference__attention ul > li > a > div:first-child {
-  font-size: 0.64rem;
-  line-height: 1.1;
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1.25;
 }
 
 .rf-dashboard-reference__attention ul > li > a > div:last-child {
-  font-size: 0.56rem;
-  line-height: 1.1;
+  font-size: 0.72rem;
+  line-height: 1.25;
 }
 
 .rf-dashboard-reference__openings .h-2 {
-  height: 0.25rem;
-}
-
-.rf-dashboard-reference__openings ul > li {
-  gap: 0.1rem;
-  padding: 0.3rem 0.45rem !important;
+  height: 0.35rem;
 }
 
 .rf-dashboard-reference__openings ul > li > div:first-child {
-  line-height: 1.05;
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1.25;
 }
 
 .rf-dashboard-reference__openings ul > li > div:nth-child(2) {
-  font-size: 0.55rem;
-  line-height: 1.05;
+  font-size: 0.72rem;
+  line-height: 1.25;
 }
 
 .rf-dashboard-reference__support-grid {
@@ -2680,5 +2678,168 @@
   .rf-dashboard-reference__funnel-panel,
   .rf-dashboard-reference__trend {
     min-height: 0;
+  }
+}
+
+/* ── Global Sizing & Padding Enhancements ── */
+.breadcrumbs-bar {
+  min-height: 42px;
+  line-height: 1.4;
+}
+
+.breadcrumbs-bar a,
+.breadcrumbs-bar button {
+  min-height: 28px;
+}
+
+/* Ensure form controls and inputs have comfortable touch targets */
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+input[type="search"],
+select,
+textarea {
+  min-height: 38px;
+  font-size: 0.8125rem;
+}
+
+/* Card padding consistency */
+.rf-card-spacious {
+  padding: 1.5rem !important;
+}
+
+/* Scrollbar polish for breadcrumbs and overflow containers */
+.rf-scrollbar::-webkit-scrollbar {
+  height: 4px;
+  width: 4px;
+}
+.rf-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.rf-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.35);
+  border-radius: 9999px;
+}
+.rf-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.6);
+}
+
+/* ==========================================================================
+   Comprehensive Mobile & Tablet Responsive Design System
+   ========================================================================== */
+
+/* Prevent horizontal overflow across the application */
+html, body {
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
+/* Responsive Page & Container Padding Scale */
+@media (max-width: 639px) {
+  .page,
+  .main > div {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+
+  /* Ensure flex headers wrap gracefully */
+  .rf-page-header,
+  .rf-header-actions,
+  div[class*="flex"][class*="justify-between"][class*="items-center"] {
+    flex-wrap: wrap !important;
+    gap: 0.75rem !important;
+  }
+
+  /* Make filter bars and search inputs stretch nicely on small screens */
+  .rf-filter-bar,
+  div[class*="flex-wrap"][class*="items-center"][class*="gap-3"] {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    width: 100% !important;
+  }
+
+  .rf-filter-bar > *,
+  div[class*="flex-wrap"][class*="items-center"][class*="gap-3"] > * {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  /* Make button groups inside headers stack or wrap cleanly */
+  div[class*="flex items-center gap-2.5"],
+  div[class*="flex items-center gap-3"] {
+    flex-wrap: wrap !important;
+    width: 100% !important;
+  }
+
+  div[class*="flex items-center gap-2.5"] > button,
+  div[class*="flex items-center gap-3"] > button {
+    flex: 1 1 auto !important;
+    justify-content: center !important;
+  }
+
+  /* Responsive Metric & KPI Cards: 1 or 2 columns max on mobile */
+  div[class*="grid-cols-1 sm:grid-cols-2 lg:grid-cols-4"],
+  div[class*="grid-cols-1 sm:grid-cols-2 lg:grid-cols-5"],
+  div[class*="grid-cols-5"],
+  div[class*="grid-cols-4"] {
+    grid-template-columns: 1fr !important;
+    gap: 0.75rem !important;
+  }
+
+  /* Ensure modal dialogs fit within mobile viewport */
+  div[role="dialog"] {
+    width: calc(100vw - 20px) !important;
+    max-width: calc(100vw - 20px) !important;
+    margin: 10px auto !important;
+  }
+
+  div[role="dialog"] .grid-cols-2 {
+    grid-template-columns: 1fr !important;
+    gap: 0.5rem !important;
+  }
+
+  /* Table containers must scroll smoothly on mobile without clipping */
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+  }
+
+  /* Target widget toggle on mobile */
+  .breadcrumbs-bar {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+}
+
+@media (min-width: 640px) and (max-width: 1023px) {
+  .page,
+  .main > div {
+    padding-left: 18px !important;
+    padding-right: 18px !important;
+  }
+
+  /* 2 columns for metrics on tablets */
+  div[class*="grid-cols-1 sm:grid-cols-2 lg:grid-cols-4"],
+  div[class*="grid-cols-1 sm:grid-cols-2 lg:grid-cols-5"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 1rem !important;
+  }
+
+  /* Two-column layout in dashboard collapses to single column on tablets */
+  div[class*="lg:grid-cols-12"] > [class*="lg:col-span-6"] {
+    grid-column: span 12 / span 12 !important;
+  }
+}
+
+/* Touch targets optimization */
+@media (pointer: coarse) {
+  button,
+  a,
+  input,
+  select {
+    min-height: 40px;
   }
 }

@@ -46,7 +46,7 @@
 .border-glow-card:not(:hover):not(.sweep-active)::after,
 .border-glow-card:not(:hover):not(.sweep-active) > .edge-light {
   opacity: 0;
-  transition: opacity 0.75s ease-in-out;
+  transition: opacity 0.2s ease-in-out;
 }
 
 /* colored mesh-gradient border */

@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { PrismaService } from '../database/prisma.service';
+import { CreateTaskDto } from './tasks.dto';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import type { TaskRecord, PaginatedResult } from '@recruitflow/contracts';
 
@@ -90,6 +91,39 @@ export class TasksService {
       data: { status, completedAt, updatedAt: now },
     });
     return this.toRecord(updated, now);
+  }
+
+  async create(organizationId: string, createdById: string, dto: CreateTaskDto): Promise<TaskRecord> {
+    const now = new Date();
+    const task = await this.prisma.task.create({
+      data: {
+        organizationId,
+        createdById,
+        assigneeUserId: dto.assigneeUserId,
+        type: dto.type,
+        title: dto.title,
+        description: dto.description ?? null,
+        priority: dto.priority ?? 'Normal',
+        status: 'Open',
+        dueAt: dto.dueAt ? new Date(dto.dueAt) : null,
+        entityType: dto.entityType ?? null,
+        entityId: dto.entityId ?? null,
+      },
+    });
+
+    await this.prisma.notification.create({
+      data: {
+        organizationId,
+        recipientUserId: dto.assigneeUserId,
+        type: 'TaskAssigned',
+        title: 'New task assigned: ' + dto.title,
+        message: dto.description || `You have been assigned a new task: ${dto.title}`,
+        entityType: 'Task',
+        entityId: task.id,
+      },
+    }).catch(() => {});
+
+    return this.toRecord(task, now);
   }
 
   private toRecord(t: {

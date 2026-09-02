@@ -586,7 +586,7 @@ export class OffersService {
   }
 
   private mapOfferDetail(offer: OfferRecord, disclosure: CompensationDisclosure) {
-    const currentVersion = offer.versions?.find((v) => v.id === offer.currentVersionId);
+    const currentVersion = (offer.currentVersionId ? offer.versions?.find((v) => v.id === offer.currentVersionId) : null) ?? offer.versions?.[0];
     return {
       id: offer.id,
       organizationId: offer.organizationId,

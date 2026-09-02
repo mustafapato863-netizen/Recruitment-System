@@ -5,13 +5,14 @@ import {
   Param,
   ParseUUIDPipe,
   Patch,
+  Post,
   Query,
   UseGuards,
 } from '@nestjs/common';
 // DTO classes must remain runtime imports for Nest metadata reflection.
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { TasksService } from './tasks.service';
-import { UpdateTaskStatusDto } from './tasks.dto';
+import { UpdateTaskStatusDto, CreateTaskDto } from './tasks.dto';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { TenantScopedGuard } from '../common/guards/tenant-scoped.guard';
@@ -62,6 +63,13 @@ export class TasksController {
   @TenantResource({ resource: 'task', param: 'id' })
   getOne(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.tasksService.getOne(user.organizationId, user.userId, id);
+  }
+
+  /** POST /tasks — create and assign a new task */
+  @Post()
+  @RequirePermissions('TASK_VIEW')
+  create(@CurrentUser() user: AuthUser, @Body() dto: CreateTaskDto) {
+    return this.tasksService.create(user.organizationId, user.userId, dto);
   }
 
   /** PATCH /tasks/:id/status — update task status (only assignee) */

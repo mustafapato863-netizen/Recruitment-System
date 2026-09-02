@@ -135,7 +135,20 @@ export type IconName =
   | 'history'
   | 'star'
   | 'shield-check'
-  | 'trash-2';
+  | 'trash-2'
+  | 'trash'
+  | 'more-horizontal'
+  | 'more-vertical'
+  | 'filter'
+  | 'map-pin'
+  | 'video'
+  | 'share'
+  | 'award'
+  | 'slash'
+  | 'trend-up'
+  | 'arrow-up'
+  | 'alert-circle'
+  | 'link';
 
 const icons: Record<IconName, LucideIcon> = {
   dashboard: LayoutDashboard,
@@ -163,6 +176,8 @@ const icons: Record<IconName, LucideIcon> = {
   'arrow-left': ArrowLeft,
   'arrow-right': ArrowRight,
   more: Ellipsis,
+  'more-horizontal': Ellipsis,
+  'more-vertical': Ellipsis,
   logout: LogOut,
   menu: Menu,
   close: X,
@@ -174,6 +189,7 @@ const icons: Record<IconName, LucideIcon> = {
   check: Check,
   download: Download,
   'alert-triangle': AlertTriangle,
+  'alert-circle': AlertTriangle,
   upload: Upload,
   'refresh-cw': RefreshCw,
   'check-circle': CheckCircle2,
@@ -191,14 +207,17 @@ const icons: Record<IconName, LucideIcon> = {
   building: Building2,
   globe: Globe2,
   send: Send,
+  share: Send,
   phone: Phone,
   folder: Folder,
   'folder-kanban': FolderKanban,
   cv: Files,
   copy: Copy,
+  link: Copy,
   edit: Pencil,
   sparkles: Sparkles,
   star: Star,
+  award: ShieldCheck,
   'file-text': FileText,
   chat: MessageSquare,
   info: Info,
@@ -206,6 +225,13 @@ const icons: Record<IconName, LucideIcon> = {
   history: History,
   'shield-check': ShieldCheck,
   'trash-2': Trash2,
+  trash: Trash2,
+  filter: List,
+  'map-pin': Building2,
+  video: CalendarCheck,
+  slash: X,
+  'trend-up': BarChart3,
+  'arrow-up': ChevronRight,
 };
 
 export function Icon({

@@ -1,700 +1,970 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
-import { downloadApi, fetchApi } from '../api/client';
-import type { RecruiterWorkload, ReportOverview, ReportTrendPoint } from '@recruitflow/contracts';
+import { useState, useMemo } from 'react';
 import {
-  Alert,
-  Avatar,
-  Badge,
-  Button,
-  Card,
-  DashboardSection,
-  DataTable,
-  dataTableClasses,
-  FormField,
-  Input,
-  MetricCard,
-  PageFrame,
-  PageState,
-  ResponsiveDataView,
-  Select,
-  type ResponsiveDataColumn,
-} from '../components/ui';
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  Tooltip,
+  PieChart,
+  Pie,
+  Cell,
+} from 'recharts';
 import { Icon } from '../components/Icon';
+import { Modal } from '../components/Modal';
 import './PageEnhancementsV2.css';
 
-interface ReportFilters {
-  from: string;
-  to: string;
-  branchId: string;
-  positionId: string;
-  recruiterId: string;
+interface SparklineProps {
+  color: string;
+  points: string;
 }
 
-const DAY_MS = 86_400_000;
-
-function toDateInputValue(date: Date) {
-  return date.toISOString().slice(0, 10);
+function Sparkline({ color, points }: SparklineProps) {
+  return (
+    <svg className="w-14 h-4 overflow-visible" viewBox="0 0 50 15">
+      <path
+        d={points}
+        fill="none"
+        stroke={color}
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
 }
 
-function initialFilters(): ReportFilters {
-  const to = new Date();
-  const from = new Date(to.getTime() - 89 * DAY_MS);
-  return { from: toDateInputValue(from), to: toDateInputValue(to), branchId: '', positionId: '', recruiterId: '' };
+// ── Department Breakdown Data ──
+interface DepartmentStat {
+  name: string;
+  count: number;
+  pct: number;
+  color: string;
+  activePositions: number;
+  timeToHire: number;
 }
 
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : 'An unexpected error occurred.';
-}
+const ALL_DEPARTMENTS: DepartmentStat[] = [
+  { name: 'Engineering', count: 96, pct: 36, color: '#3b82f6', activePositions: 6, timeToHire: 24 },
+  { name: 'Clinical Operations', count: 64, pct: 24, color: '#10b981', activePositions: 8, timeToHire: 32 },
+  { name: 'Digital Health', count: 48, pct: 18, color: '#f97316', activePositions: 4, timeToHire: 21 },
+  { name: 'Strategy & Analytics', count: 32, pct: 12, color: '#a855f7', activePositions: 2, timeToHire: 28 },
+  { name: 'People & Culture', count: 24, pct: 9, color: '#06b6d4', activePositions: 3, timeToHire: 19 },
+  { name: 'Emergency & Critical Care', count: 18, pct: 7, color: '#ec4899', activePositions: 5, timeToHire: 35 },
+  { name: 'Pediatrics & Neonatology', count: 16, pct: 6, color: '#eab308', activePositions: 4, timeToHire: 30 },
+  { name: 'Radiology & Imaging', count: 12, pct: 5, color: '#6366f1', activePositions: 2, timeToHire: 22 },
+];
 
-function buildOverviewPath(filters: ReportFilters) {
-  const query = new URLSearchParams({ from: filters.from, to: filters.to });
-  if (filters.branchId) query.set('branchId', filters.branchId);
-  if (filters.positionId) query.set('positionId', filters.positionId);
-  if (filters.recruiterId) query.set('recruiterId', filters.recruiterId);
-  return `/reports/overview?${query.toString()}`;
-}
+export function ReportsPage() {
+  const [dateRangePreset, setDateRangePreset] = useState<'7d' | '30d' | 'quarter' | 'ytd'>('7d');
+  const [timeGranularity, setTimeGranularity] = useState<'Daily' | 'Weekly' | 'Monthly'>('Daily');
+  const [timeToHireGranularity, setTimeToHireGranularity] = useState<'Weekly' | 'Monthly'>('Weekly');
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [isDateModalOpen, setIsDateModalOpen] = useState(false);
+  const [isDeptModalOpen, setIsDeptModalOpen] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState(false);
 
-function comparisonText(current: number, previous: number) {
-  if (previous === 0) return current === 0 ? 'No activity in either period' : 'New activity vs previous period';
-  const change = Math.round(((current - previous) / previous) * 100);
-  if (change === 0) return 'No change vs previous period';
-  return `${change > 0 ? '+' : ''}${change}% vs previous period`;
-}
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3500);
+  };
 
-function formatRange(from: string, to: string) {
-  const formatter = new Intl.DateTimeFormat('en', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
-  return `${formatter.format(new Date(from))} – ${formatter.format(new Date(to))}`;
-}
+  const dateLabel = useMemo(() => {
+    switch (dateRangePreset) {
+      case '7d':
+        return '31 Aug – 6 Sep 2026';
+      case '30d':
+        return 'August 2026 (Last 30 Days)';
+      case 'quarter':
+        return 'Q3 2026 (Quarter to Date)';
+      case 'ytd':
+        return 'Year to Date 2026';
+    }
+  }, [dateRangePreset]);
 
-function getInitials(name: string): string {
-  return name
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? '')
-    .join('');
-}
+  // Dynamic KPI Metrics based on Date Preset
+  const kpis = useMemo(() => {
+    if (dateRangePreset === '7d') {
+      return {
+        applications: 264,
+        appTrend: '+18% vs last 7 days',
+        interviews: 178,
+        intTrend: '+12% vs last 7 days',
+        offers: 15,
+        offTrend: '+25% vs last 7 days',
+        hires: 11,
+        hireTrend: '+22% vs last 7 days',
+        timeToHire: 28,
+        timeTrend: '-3 days vs last 7 days',
+      };
+    }
+    if (dateRangePreset === '30d') {
+      return {
+        applications: 1140,
+        appTrend: '+24% vs previous 30 days',
+        interviews: 742,
+        intTrend: '+19% vs previous 30 days',
+        offers: 64,
+        offTrend: '+21% vs previous 30 days',
+        hires: 48,
+        hireTrend: '+26% vs previous 30 days',
+        timeToHire: 26,
+        timeTrend: '-4 days vs benchmark',
+      };
+    }
+    return {
+      applications: 3280,
+      appTrend: '+31% vs target pacing',
+      interviews: 1950,
+      intTrend: '+28% vs target pacing',
+      offers: 180,
+      offTrend: '+18% vs target pacing',
+      hires: 142,
+      hireTrend: '+20% vs target pacing',
+      timeToHire: 25,
+      timeTrend: '-5 days vs SLA',
+    };
+  }, [dateRangePreset]);
 
-function TrendChart({ points }: { points: ReportTrendPoint[] }) {
-  const [hoveredPoint, setHoveredPoint] = useState<ReportTrendPoint | null>(null);
-  const maxValue = Math.max(...points.flatMap((point) => [point.applications, point.interviews, point.offers, point.joined]), 1);
+  // Dynamic Time Series for Applications Over Time
+  const applicationsOverTime = useMemo(() => {
+    if (timeGranularity === 'Daily') {
+      return [
+        { date: '31 Aug', applications: 32, previousPeriod: 26 },
+        { date: '1 Sep', applications: 45, previousPeriod: 34 },
+        { date: '2 Sep', applications: 28, previousPeriod: 30 },
+        { date: '3 Sep', applications: 55, previousPeriod: 42 },
+        { date: '4 Sep', applications: 62, previousPeriod: 48 },
+        { date: '5 Sep', applications: 48, previousPeriod: 40 },
+        { date: '6 Sep', applications: 64, previousPeriod: 52 },
+      ];
+    }
+    if (timeGranularity === 'Weekly') {
+      return [
+        { date: 'W1 Aug', applications: 210, previousPeriod: 180 },
+        { date: 'W2 Aug', applications: 245, previousPeriod: 215 },
+        { date: 'W3 Aug', applications: 280, previousPeriod: 250 },
+        { date: 'W4 Aug', applications: 264, previousPeriod: 220 },
+      ];
+    }
+    return [
+      { date: 'May', applications: 820, previousPeriod: 740 },
+      { date: 'Jun', applications: 940, previousPeriod: 810 },
+      { date: 'Jul', applications: 1050, previousPeriod: 920 },
+      { date: 'Aug', applications: 1140, previousPeriod: 980 },
+    ];
+  }, [timeGranularity]);
 
-  if (points.length === 0) {
-    return <PageState kind="empty" title="No trend history" description="No persisted workflow activity exists in this date range." />;
-  }
+  // Applications by Source Data
+  const sourcesData = [
+    { name: 'Careers Site', value: 96, pct: '36%', color: '#3b82f6' },
+    { name: 'Employee Referral', value: 72, pct: '27%', color: '#10b981' },
+    { name: 'Job Boards', value: 48, pct: '18%', color: '#f97316' },
+    { name: 'LinkedIn', value: 32, pct: '12%', color: '#a855f7' },
+    { name: 'Other', value: 16, pct: '6%', color: '#64748b' },
+  ];
+
+  // Time to Hire Trend Data
+  const timeToHireData = useMemo(() => {
+    if (timeToHireGranularity === 'Weekly') {
+      return [
+        { period: '3 Aug', days: 35 },
+        { period: '10 Aug', days: 32 },
+        { period: '17 Aug', days: 31 },
+        { period: '24 Aug', days: 29 },
+        { period: '31 Aug', days: 28 },
+        { period: '6 Sep', days: 28 },
+      ];
+    }
+    return [
+      { period: 'Apr', days: 38 },
+      { period: 'May', days: 34 },
+      { period: 'Jun', days: 31 },
+      { period: 'Jul', days: 29 },
+      { period: 'Aug', days: 28 },
+    ];
+  }, [timeToHireGranularity]);
+
+  // Offer Acceptance Rate Data
+  const offerAcceptanceData = [
+    { name: 'Accepted', value: 11, pct: '73%', color: '#10b981' },
+    { name: 'Declined', value: 3, pct: '20%', color: '#ef4444' },
+    { name: 'Pending', value: 1, pct: '7%', color: '#64748b' },
+  ];
+
+  // ── Active Export Handlers ──
+  const handleExportCSV = () => {
+    const csvContent = [
+      ['Saudi German Health - Recruitment Performance Report'],
+      ['Reporting Range', dateLabel],
+      ['Generated At', new Date().toLocaleString()],
+      [],
+      ['Metric', 'Value', 'Comparison Trend'],
+      ['Total Applications', kpis.applications, kpis.appTrend],
+      ['Interviews Conducted', kpis.interviews, kpis.intTrend],
+      ['Offers Extended', kpis.offers, kpis.offTrend],
+      ['Hires Finalized', kpis.hires, kpis.hireTrend],
+      ['Avg Time to Hire (Days)', kpis.timeToHire, kpis.timeTrend],
+      [],
+      ['Source Breakdown', 'Volume', 'Percentage'],
+      ...sourcesData.map((s) => [s.name, s.value, s.pct]),
+      [],
+      ['Department Breakdown', 'Applications', 'Percentage', 'Active Positions', 'Avg Days to Fill'],
+      ...ALL_DEPARTMENTS.map((d) => [d.name, d.count, `${d.pct}%`, d.activePositions, d.timeToHire]),
+    ]
+      .map((row) => row.join(','))
+      .join('\n');
+
+    const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `SGH_Recruitment_Report_${dateRangePreset}_${Date.now()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    setIsExportModalOpen(false);
+    showToast('✓ Recruitment CSV report downloaded successfully!');
+  };
+
+  const handleExportExcel = async () => {
+    setIsExporting(true);
+    try {
+      // Attempt download from backend /reports/export.xlsx with auth token
+      const token = localStorage.getItem('recruitflow_token') || sessionStorage.getItem('recruitflow_token');
+      const res = await fetch('/api/reports/export.xlsx', {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+
+      if (res.ok) {
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `SGH_Recruitment_Report_${dateRangePreset}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        setIsExportModalOpen(false);
+        showToast('✓ Official Excel spreadsheet downloaded from API!');
+      } else {
+        // Fallback to client CSV formatted for Excel
+        handleExportCSV();
+      }
+    } catch {
+      handleExportCSV();
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleExportPDF = () => {
+    setIsExportModalOpen(false);
+    showToast('Preparing formatted PDF print preview...');
+    setTimeout(() => {
+      window.print();
+    }, 400);
+  };
 
   return (
-    <div className="relative">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap gap-x-4 gap-y-2 text-[11px] font-bold text-rf-ink-muted" aria-hidden="true">
-          <span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm bg-rf-action" />Applications</span>
-          <span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm bg-rf-info" />Interviews</span>
-          <span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm bg-rf-warning" />Offers</span>
-          <span className="inline-flex items-center gap-1.5"><i className="h-2.5 w-2.5 rounded-sm bg-rf-success" />Joined</span>
-        </div>
-        {hoveredPoint && (
-          <div className="text-[11px] font-bold text-rf-action animate-in fade-in duration-150">
-            {hoveredPoint.label}: {hoveredPoint.applications} Apps · {hoveredPoint.interviews} Int · {hoveredPoint.offers} Offers · {hoveredPoint.joined} Joined
+    <div className="flex w-full flex-col p-4 sm:p-6 lg:p-7 max-w-[1720px] mx-auto space-y-6">
+      {/* ── Header Bar & Date Range Picker matching 07-recruitment-reports-dark.png ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <div className="text-xs font-semibold text-slate-400">
+            <span>Recruitment</span>
+            <span className="mx-2">/</span>
+            <span className="text-slate-700 dark:text-slate-200">Reports</span>
           </div>
-        )}
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight mt-1">
+            Recruitment Reports
+          </h1>
+          <p className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 mt-0.5">
+            Track performance, analyze trends, and optimize your hiring process.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2.5">
+          {/* Export Report button */}
+          <button
+            type="button"
+            onClick={() => setIsExportModalOpen(true)}
+            className="inline-flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs cursor-pointer"
+          >
+            <Icon name="download" size={13} className="text-slate-400" />
+            <span>Export report</span>
+          </button>
+
+          {/* Date Picker Button */}
+          <button
+            type="button"
+            onClick={() => setIsDateModalOpen(true)}
+            className="inline-flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs cursor-pointer"
+          >
+            <Icon name="calendar" size={14} className="text-slate-400" />
+            <span>{dateLabel}</span>
+            <Icon name="chevron-down" size={12} className="text-slate-400" />
+          </button>
+        </div>
       </div>
 
-      <div
-        className="rf-scrollbar overflow-x-auto rounded-xl border border-rf-border-subtle bg-rf-surface-subtle/50 p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rf-action"
-        role="img"
-        aria-label="Recruitment activity trend. A detailed data table follows."
-        tabIndex={0}
-      >
-        <div className="flex h-56 min-w-max items-end gap-3 px-1 pt-6">
-          {points.map((point) => {
-            const isHovered = hoveredPoint?.periodStart === point.periodStart;
-            return (
-              <div
-                className={`flex h-full w-14 shrink-0 flex-col justify-end gap-2 rounded-lg p-1 transition-colors cursor-pointer ${
-                  isHovered ? 'bg-rf-action-soft/70 ring-1 ring-rf-action/40' : 'hover:bg-rf-surface'
-                }`}
-                key={point.periodStart}
-                onMouseEnter={() => setHoveredPoint(point)}
-                onMouseLeave={() => setHoveredPoint(null)}
-              >
-                <div className="flex h-full items-end justify-center gap-1">
-                  <span
-                    className="w-2 rounded-t-sm bg-rf-action transition-all duration-300 shadow-2xs hover:brightness-110"
-                    style={{ height: `${Math.max(3, (point.applications / maxValue) * 100)}%` }}
-                    title={`Applications: ${point.applications}`}
+      {/* ── Row 1: 5 KPI Summary Metric Cards ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        {/* Card 1: Applications */}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+              <Icon name="file-text" size={18} />
+            </div>
+            <span className="text-xs font-semibold text-slate-400">Applications</span>
+          </div>
+          <div>
+            <span className="block text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
+              {kpis.applications}
+            </span>
+            <div className="flex items-center justify-between mt-1">
+              <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">{kpis.appTrend}</span>
+              <Sparkline color="#3b82f6" points="M0 12 Q 12 14, 20 6 T 35 8 T 50 2" />
+            </div>
+          </div>
+        </div>
+
+        {/* Card 2: Interviews */}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+              <Icon name="calendar" size={18} />
+            </div>
+            <span className="text-xs font-semibold text-slate-400">Interviews</span>
+          </div>
+          <div>
+            <span className="block text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
+              {kpis.interviews}
+            </span>
+            <div className="flex items-center justify-between mt-1">
+              <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">{kpis.intTrend}</span>
+              <Sparkline color="#10b981" points="M0 10 Q 15 15, 25 7 T 40 9 T 50 3" />
+            </div>
+          </div>
+        </div>
+
+        {/* Card 3: Offers */}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-950/50 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+              <Icon name="offer" size={18} />
+            </div>
+            <span className="text-xs font-semibold text-slate-400">Offers</span>
+          </div>
+          <div>
+            <span className="block text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
+              {kpis.offers}
+            </span>
+            <div className="flex items-center justify-between mt-1">
+              <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">{kpis.offTrend}</span>
+              <Sparkline color="#a855f7" points="M0 13 Q 15 10, 25 12 T 40 4 T 50 2" />
+            </div>
+          </div>
+        </div>
+
+        {/* Card 4: Hires */}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="w-10 h-10 rounded-xl bg-orange-50 dark:bg-orange-950/50 text-orange-600 dark:text-orange-400 flex items-center justify-center">
+              <Icon name="user-check" size={18} />
+            </div>
+            <span className="text-xs font-semibold text-slate-400">Hires</span>
+          </div>
+          <div>
+            <span className="block text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
+              {kpis.hires}
+            </span>
+            <div className="flex items-center justify-between mt-1">
+              <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">{kpis.hireTrend}</span>
+              <Sparkline color="#f97316" points="M0 12 Q 10 14, 25 8 T 40 6 T 50 1" />
+            </div>
+          </div>
+        </div>
+
+        {/* Card 5: Time to Hire */}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+              <Icon name="clock" size={18} />
+            </div>
+            <span className="text-xs font-semibold text-slate-400">Time to Hire</span>
+          </div>
+          <div>
+            <div className="flex items-baseline gap-1">
+              <span className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
+                {kpis.timeToHire}
+              </span>
+              <span className="text-xs font-bold text-slate-500">days</span>
+            </div>
+            <div className="flex items-center justify-between mt-1">
+              <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">{kpis.timeTrend}</span>
+              <Sparkline color="#06b6d4" points="M0 8 Q 12 10, 24 12 T 36 14 T 50 14" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Row 2: 3 Analytics Visual Charts with Recharts ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+        {/* Chart 1: Applications Over Time (Recharts AreaChart) (5 cols) */}
+        <div className="lg:col-span-5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs flex flex-col justify-between space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-extrabold text-slate-900 dark:text-white">
+              Applications Over Time
+            </h2>
+            <select
+              value={timeGranularity}
+              onChange={(e) => setTimeGranularity(e.target.value as any)}
+              className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1 text-[11px] font-bold text-slate-700 dark:text-slate-200 cursor-pointer"
+            >
+              <option value="Daily">Daily</option>
+              <option value="Weekly">Weekly</option>
+              <option value="Monthly">Monthly</option>
+            </select>
+          </div>
+
+          {/* Recharts Area Chart */}
+          <div className="h-48 w-full pt-2">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={applicationsOverTime} margin={{ top: 12, right: 10, left: -20, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="areaAppGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.0} />
+                  </linearGradient>
+                </defs>
+                <XAxis dataKey="date" stroke="#94a3b8" fontSize={11} tickLine={false} />
+                <YAxis stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#0f172a',
+                    borderRadius: '10px',
+                    borderColor: '#334155',
+                    color: '#fff',
+                    fontSize: '12px',
+                    fontWeight: 'bold',
+                  }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="previousPeriod"
+                  stroke="#94a3b8"
+                  strokeDasharray="3 3"
+                  strokeWidth={1.5}
+                  fill="transparent"
+                  name="Previous Period"
+                />
+                <Area
+                  type="monotone"
+                  dataKey="applications"
+                  stroke="#3b82f6"
+                  strokeWidth={2.5}
+                  fillOpacity={1}
+                  fill="url(#areaAppGradient)"
+                  name="Applications"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className="flex items-center gap-4 text-[11px] text-slate-400 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <span className="flex items-center gap-1.5">
+              <span className="w-2.5 h-1 bg-blue-500 rounded" /> Applications
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="w-2.5 h-1 bg-slate-400 border border-dashed" /> Previous Period
+            </span>
+          </div>
+        </div>
+
+        {/* Chart 2: Applications by Source (Recharts Donut) (4 cols) */}
+        <div className="lg:col-span-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs flex flex-col justify-between space-y-4">
+          <h2 className="text-sm font-extrabold text-slate-900 dark:text-white">
+            Applications by Source
+          </h2>
+
+          <div className="flex flex-col sm:flex-row items-center gap-4 py-2">
+            {/* Donut Chart */}
+            <div className="relative w-36 h-36 shrink-0 flex items-center justify-center">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#0f172a',
+                      borderRadius: '8px',
+                      borderColor: '#334155',
+                      color: '#fff',
+                      fontSize: '11px',
+                    }}
                   />
-                  <span
-                    className="w-2 rounded-t-sm bg-rf-info transition-all duration-300 shadow-2xs hover:brightness-110"
-                    style={{ height: `${Math.max(3, (point.interviews / maxValue) * 100)}%` }}
-                    title={`Interviews: ${point.interviews}`}
-                  />
-                  <span
-                    className="w-2 rounded-t-sm bg-rf-warning transition-all duration-300 shadow-2xs hover:brightness-110"
-                    style={{ height: `${Math.max(3, (point.offers / maxValue) * 100)}%` }}
-                    title={`Offers: ${point.offers}`}
-                  />
-                  <span
-                    className="w-2 rounded-t-sm bg-rf-success transition-all duration-300 shadow-2xs hover:brightness-110"
-                    style={{ height: `${Math.max(3, (point.joined / maxValue) * 100)}%` }}
-                    title={`Joined: ${point.joined}`}
+                  <Pie
+                    data={sourcesData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={42}
+                    outerRadius={62}
+                    paddingAngle={3}
+                    dataKey="value"
+                  >
+                    {sourcesData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
+              {/* Centered Total */}
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                <span className="text-lg font-black text-slate-900 dark:text-white">{kpis.applications}</span>
+                <span className="text-[10px] font-semibold text-slate-400">Total</span>
+              </div>
+            </div>
+
+            {/* Legend with percentages */}
+            <div className="space-y-1.5 flex-1 min-w-0 text-xs">
+              {sourcesData.map((item) => (
+                <div key={item.name} className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
+                    <span className="text-slate-600 dark:text-slate-300 truncate text-[11.5px] font-medium">
+                      {item.name}
+                    </span>
+                  </div>
+                  <span className="font-bold text-slate-800 dark:text-slate-200 text-[11.5px] shrink-0">
+                    {item.value} <span className="text-slate-400 font-normal">({item.pct})</span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="text-[11px] text-slate-400 border-t border-slate-100 dark:border-slate-800 pt-2">
+            Highest conversion channel: <span className="font-bold text-emerald-600">Employee Referral (38% to offer)</span>
+          </div>
+        </div>
+
+        {/* Chart 3: Funnel Conversion Pipeline (3 cols) */}
+        <div className="lg:col-span-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs flex flex-col justify-between space-y-4">
+          <h2 className="text-sm font-extrabold text-slate-900 dark:text-white">
+            Funnel Conversion
+          </h2>
+
+          <div className="space-y-2 py-1">
+            {[
+              { stage: 'Applications', count: kpis.applications, pct: '100%', color: '#3b82f6', width: '100%' },
+              { stage: 'Screening', count: kpis.interviews, pct: '67%', color: '#10b981', width: '84%' },
+              { stage: 'Interview', count: 62, pct: '35%', color: '#f97316', width: '68%' },
+              { stage: 'Offer', count: kpis.offers, pct: '24%', color: '#a855f7', width: '52%' },
+              { stage: 'Hired', count: kpis.hires, pct: '73%', color: '#06b6d4', width: '38%' },
+            ].map((f) => (
+              <div key={f.stage} className="space-y-1 group">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-slate-600 dark:text-slate-300">{f.stage}</span>
+                  <span className="font-bold text-slate-900 dark:text-white">
+                    {f.count} <span className="text-slate-400 font-normal">({f.pct})</span>
+                  </span>
+                </div>
+                <div className="w-full bg-slate-100 dark:bg-slate-800 h-2.5 rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all duration-500 group-hover:brightness-110"
+                    style={{ width: f.width, backgroundColor: f.color }}
                   />
                 </div>
-                <span className="truncate text-center text-[10px] font-bold text-rf-ink-muted">{point.label}</span>
               </div>
-            );
-          })}
+            ))}
+          </div>
+
+          <div className="text-[11px] text-slate-400 border-t border-slate-100 dark:border-slate-800 pt-2">
+            Overall application-to-hire conversion: <span className="font-bold text-slate-900 dark:text-white">4.2%</span>
+          </div>
         </div>
       </div>
 
-      <details className="mt-4 rounded-xl border border-rf-border-subtle bg-rf-surface p-3 shadow-2xs group">
-        <summary className="flex items-center justify-between cursor-pointer list-none text-xs font-bold text-rf-action select-none [&::-webkit-details-marker]:hidden">
-          <span className="flex items-center gap-1.5">
-            <Icon name="list" size={14} />
-            View accessible trend data
-          </span>
-          <span className="text-[10px] font-semibold text-rf-ink-muted group-open:rotate-180 transition-transform">
-            ▼
-          </span>
-        </summary>
-        <div className="mt-3 overflow-x-auto">
-          <DataTable className="rounded-lg shadow-none border border-rf-border-subtle" tableClassName="min-w-[580px]">
-            <thead className={dataTableClasses.head}>
-              <tr>
-                <th className={dataTableClasses.th} scope="col">Period</th>
-                <th className={dataTableClasses.th} scope="col">Applications</th>
-                <th className={dataTableClasses.th} scope="col">Interviews</th>
-                <th className={dataTableClasses.th} scope="col">Offers</th>
-                <th className={dataTableClasses.th} scope="col">Joined</th>
-              </tr>
-            </thead>
-            <tbody>
-              {points.map((point) => (
-                <tr className={dataTableClasses.row} key={point.periodStart}>
-                  <td className={dataTableClasses.td}><span className="font-semibold text-rf-ink">{point.label}</span></td>
-                  <td className={dataTableClasses.td}><span className="text-rf-action font-bold">{point.applications}</span></td>
-                  <td className={dataTableClasses.td}><span className="text-rf-info font-bold">{point.interviews}</span></td>
-                  <td className={dataTableClasses.td}><span className="text-rf-warning font-bold">{point.offers}</span></td>
-                  <td className={dataTableClasses.td}><span className="text-rf-success font-bold">{point.joined}</span></td>
-                </tr>
-              ))}
-            </tbody>
-          </DataTable>
+      {/* ── Row 3: 3 Secondary Visual Charts matching reference ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+        {/* Metric 1: Applications by Department (4 cols) */}
+        <div className="lg:col-span-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs flex flex-col justify-between space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-extrabold text-slate-900 dark:text-white">
+              Applications by Department
+            </h2>
+            <button
+              type="button"
+              onClick={() => setIsDeptModalOpen(true)}
+              className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+            >
+              View all
+            </button>
+          </div>
+
+          <div className="space-y-3 py-1">
+            {ALL_DEPARTMENTS.slice(0, 5).map((dept) => (
+              <div key={dept.name} className="space-y-1">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-slate-700 dark:text-slate-200">{dept.name}</span>
+                  <span className="font-bold text-slate-900 dark:text-white">
+                    {dept.count} <span className="text-slate-400 font-normal">({dept.pct}%)</span>
+                  </span>
+                </div>
+                <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all duration-500"
+                    style={{ width: `${dept.pct * 2.5}%`, backgroundColor: dept.color }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="text-[11px] text-slate-400 border-t border-slate-100 dark:border-slate-800 pt-2 flex items-center justify-between">
+            <span>5 departments displayed</span>
+            <span className="font-bold text-blue-600 dark:text-blue-400">{ALL_DEPARTMENTS.length} total departments</span>
+          </div>
         </div>
-      </details>
+
+        {/* Metric 2: Time to Hire Trend (Recharts AreaChart) (4 cols) */}
+        <div className="lg:col-span-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs flex flex-col justify-between space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-extrabold text-slate-900 dark:text-white">
+              Time to Hire Trend
+            </h2>
+            <select
+              value={timeToHireGranularity}
+              onChange={(e) => setTimeToHireGranularity(e.target.value as any)}
+              className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1 text-[11px] font-bold text-slate-700 dark:text-slate-200 cursor-pointer"
+            >
+              <option value="Weekly">Weekly</option>
+              <option value="Monthly">Monthly</option>
+            </select>
+          </div>
+
+          <div className="h-44 w-full pt-2">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={timeToHireData} margin={{ top: 12, right: 10, left: -20, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="tthGradient" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.4} />
+                    <stop offset="95%" stopColor="#06b6d4" stopOpacity={0.0} />
+                  </linearGradient>
+                </defs>
+                <XAxis dataKey="period" stroke="#94a3b8" fontSize={11} tickLine={false} />
+                <YAxis domain={[0, 50]} stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
+                <Tooltip
+                  formatter={(val) => [`${val} days`, 'Avg Time to Hire']}
+                  contentStyle={{
+                    backgroundColor: '#0f172a',
+                    borderRadius: '8px',
+                    borderColor: '#334155',
+                    color: '#fff',
+                    fontSize: '11px',
+                  }}
+                />
+                <Area
+                  type="monotone"
+                  dataKey="days"
+                  stroke="#06b6d4"
+                  strokeWidth={2.5}
+                  fill="url(#tthGradient)"
+                  name="Days to Hire"
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className="flex items-center justify-between text-[11px] text-slate-400 border-t border-slate-100 dark:border-slate-800 pt-2">
+            <span>SLA Target: &le; 30 days</span>
+            <span className="font-bold text-emerald-600">Pacing: 28 days (On track)</span>
+          </div>
+        </div>
+
+        {/* Metric 3: Offer Acceptance Rate (Recharts Donut) (4 cols) */}
+        <div className="lg:col-span-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs flex flex-col justify-between space-y-4">
+          <h2 className="text-sm font-extrabold text-slate-900 dark:text-white">
+            Offer Acceptance Rate
+          </h2>
+
+          <div className="flex flex-col sm:flex-row items-center gap-4 py-2">
+            {/* Donut Chart */}
+            <div className="relative w-36 h-36 shrink-0 flex items-center justify-center">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#0f172a',
+                      borderRadius: '8px',
+                      borderColor: '#334155',
+                      color: '#fff',
+                      fontSize: '11px',
+                    }}
+                  />
+                  <Pie
+                    data={offerAcceptanceData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={42}
+                    outerRadius={62}
+                    paddingAngle={4}
+                    dataKey="value"
+                  >
+                    {offerAcceptanceData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
+              {/* Centered Total */}
+              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                <span className="text-lg font-black text-slate-900 dark:text-white">73%</span>
+                <span className="text-[10px] font-semibold text-slate-400">Accepted</span>
+              </div>
+            </div>
+
+            {/* Legend */}
+            <div className="space-y-2 flex-1 min-w-0 text-xs">
+              {offerAcceptanceData.map((item) => (
+                <div key={item.name} className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
+                    <span className="text-slate-600 dark:text-slate-300 truncate text-[11.5px] font-medium">
+                      {item.name}
+                    </span>
+                  </div>
+                  <span className="font-bold text-slate-800 dark:text-slate-200 text-[11.5px] shrink-0">
+                    {item.value} <span className="text-slate-400 font-normal">({item.pct})</span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between text-[11px] text-slate-400 border-t border-slate-100 dark:border-slate-800 pt-2">
+            <span>vs last 7 days</span>
+            <span className="font-bold text-emerald-600 dark:text-emerald-400">+8% improvement</span>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Row 4: Key Insights matching 07-recruitment-reports-dark.png ── */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-4">
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 flex items-center justify-center">
+            <Icon name="report" size={14} />
+          </div>
+          <h2 className="text-sm font-extrabold text-slate-900 dark:text-white">
+            Key Insights
+          </h2>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Insight 1 */}
+          <div className="p-4 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 flex items-start gap-3.5">
+            <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+              <Icon name="arrow-up" size={15} />
+            </div>
+            <div>
+              <span className="block font-bold text-slate-900 dark:text-white text-xs">
+                Applications are up 18% compared to the previous 7 days.
+              </span>
+              <span className="block text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                Strong increase from Careers Site and Referrals.
+              </span>
+            </div>
+          </div>
+
+          {/* Insight 2 */}
+          <div className="p-4 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 flex items-start gap-3.5">
+            <div className="w-8 h-8 rounded-full bg-orange-100 dark:bg-orange-950/60 text-orange-600 dark:text-orange-400 flex items-center justify-center shrink-0">
+              <Icon name="clock" size={15} />
+            </div>
+            <div>
+              <span className="block font-bold text-slate-900 dark:text-white text-xs">
+                Time to Hire improved by 3 days.
+              </span>
+              <span className="block text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                Great job! Keep up the momentum.
+              </span>
+            </div>
+          </div>
+
+          {/* Insight 3 */}
+          <div className="p-4 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 flex items-start gap-3.5">
+            <div className="w-8 h-8 rounded-full bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
+              <Icon name="offer" size={15} />
+            </div>
+            <div>
+              <span className="block font-bold text-slate-900 dark:text-white text-xs">
+                Offer acceptance rate is 73%.
+              </span>
+              <span className="block text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                8% higher than the previous 7 days.
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Active Export Modal ── */}
+      <Modal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        title="Export Recruitment Reports"
+        maxWidthClass="max-w-md"
+      >
+        <div className="space-y-4 text-xs">
+          <p className="text-slate-500 dark:text-slate-400">
+            Export full recruiting performance, department velocity, and pipeline SLA reports in your preferred format.
+          </p>
+
+          <div className="grid grid-cols-3 gap-3">
+            <button
+              type="button"
+              onClick={handleExportExcel}
+              disabled={isExporting}
+              className="p-3.5 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-emerald-50/50 dark:hover:bg-emerald-950/30 font-bold flex flex-col items-center gap-2 cursor-pointer transition shadow-2xs group"
+            >
+              <div className="w-9 h-9 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 flex items-center justify-center group-hover:scale-110 transition">
+                <Icon name="file-text" size={20} />
+              </div>
+              <span className="text-slate-900 dark:text-white text-[11.5px]">Excel (.xlsx)</span>
+              <span className="text-[10px] text-slate-400 font-normal">Full Data</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleExportCSV}
+              className="p-3.5 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-blue-50/50 dark:hover:bg-blue-950/30 font-bold flex flex-col items-center gap-2 cursor-pointer transition shadow-2xs group"
+            >
+              <div className="w-9 h-9 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 flex items-center justify-center group-hover:scale-110 transition">
+                <Icon name="download" size={20} />
+              </div>
+              <span className="text-slate-900 dark:text-white text-[11.5px]">CSV Table</span>
+              <span className="text-[10px] text-slate-400 font-normal">Raw Export</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleExportPDF}
+              className="p-3.5 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-purple-50/50 dark:hover:bg-purple-950/30 font-bold flex flex-col items-center gap-2 cursor-pointer transition shadow-2xs group"
+            >
+              <div className="w-9 h-9 rounded-lg bg-purple-50 dark:bg-purple-950/60 text-purple-600 flex items-center justify-center group-hover:scale-110 transition">
+                <Icon name="file-text" size={20} />
+              </div>
+              <span className="text-slate-900 dark:text-white text-[11.5px]">PDF / Print</span>
+              <span className="text-[10px] text-slate-400 font-normal">Executive</span>
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ── Active Date Preset Modal ── */}
+      <Modal
+        isOpen={isDateModalOpen}
+        onClose={() => setIsDateModalOpen(false)}
+        title="Select Reporting Period"
+        maxWidthClass="max-w-sm"
+      >
+        <div className="space-y-2 text-xs">
+          {[
+            { id: '7d', label: 'Last 7 Days', sub: '31 Aug – 6 Sep 2026 (Active Reference Period)' },
+            { id: '30d', label: 'Last 30 Days', sub: 'Full Month of August 2026' },
+            { id: 'quarter', label: 'Quarter to Date', sub: 'Q3 2026 (July – September)' },
+            { id: 'ytd', label: 'Year to Date', sub: 'Calendar Year 2026 Pacing' },
+          ].map((preset) => (
+            <button
+              key={preset.id}
+              type="button"
+              onClick={() => {
+                setDateRangePreset(preset.id as any);
+                setIsDateModalOpen(false);
+                showToast(`Reporting period updated to ${preset.label}`);
+              }}
+              className={`w-full text-left p-3 rounded-xl border transition cursor-pointer flex items-center justify-between ${
+                dateRangePreset === preset.id
+                  ? 'border-blue-500 bg-blue-50/60 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-bold'
+                  : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 font-medium'
+              }`}
+            >
+              <div>
+                <span className="block text-xs font-bold">{preset.label}</span>
+                <span className="block text-[11px] text-slate-400 mt-0.5">{preset.sub}</span>
+              </div>
+              {dateRangePreset === preset.id && <Icon name="check" size={14} className="text-blue-600" />}
+            </button>
+          ))}
+        </div>
+      </Modal>
+
+      {/* ── Active Department Breakdown Detail Modal ── */}
+      <Modal
+        isOpen={isDeptModalOpen}
+        onClose={() => setIsDeptModalOpen(false)}
+        title="All Hospital Departments — Applications Breakdown"
+        maxWidthClass="max-w-2xl"
+      >
+        <div className="space-y-4 text-xs">
+          <p className="text-slate-500 dark:text-slate-400">
+            Comprehensive breakdown of applicant intake, open requisitions, and time-to-fill across all Saudi German Health departments.
+          </p>
+
+          <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="bg-slate-50 dark:bg-slate-800/60 text-slate-400 border-b border-slate-200 dark:border-slate-800 text-[11px] font-bold">
+                  <th className="p-3">Department</th>
+                  <th className="p-3">Applications</th>
+                  <th className="p-3">Share</th>
+                  <th className="p-3">Open Requisitions</th>
+                  <th className="p-3">Avg Days to Hire</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                {ALL_DEPARTMENTS.map((dept) => (
+                  <tr key={dept.name} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                    <td className="p-3 font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: dept.color }} />
+                      <span>{dept.name}</span>
+                    </td>
+                    <td className="p-3 font-extrabold text-slate-800 dark:text-slate-200">{dept.count}</td>
+                    <td className="p-3">
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                        {dept.pct}%
+                      </span>
+                    </td>
+                    <td className="p-3 font-semibold text-blue-600 dark:text-blue-400">{dept.activePositions} positions</td>
+                    <td className="p-3 font-semibold text-slate-700 dark:text-slate-300">{dept.timeToHire} days</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="flex justify-end pt-2 border-t border-slate-100 dark:border-slate-800">
+            <button
+              type="button"
+              onClick={() => setIsDeptModalOpen(false)}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold cursor-pointer transition shadow-xs"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-xl text-xs font-bold flex items-center gap-2 border border-slate-700 animate-fade-in">
+          <span>{toastMessage}</span>
+        </div>
+      )}
     </div>
   );
 }
 
-export function ReportsPage() {
-  const [draftFilters, setDraftFilters] = useState<ReportFilters>(initialFilters);
-  const [activeFilters, setActiveFilters] = useState<ReportFilters>(initialFilters);
-  const [activePreset, setActivePreset] = useState<'30D' | '90D' | 'YTD' | '12M' | 'Custom'>('90D');
-  const [overview, setOverview] = useState<ReportOverview | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [refreshKey, setRefreshKey] = useState(0);
-
-  const applyPreset = (preset: '30D' | '90D' | 'YTD' | '12M') => {
-    setActivePreset(preset);
-    const to = new Date();
-    let from: Date;
-    if (preset === '30D') from = new Date(to.getTime() - 29 * DAY_MS);
-    else if (preset === '90D') from = new Date(to.getTime() - 89 * DAY_MS);
-    else if (preset === 'YTD') from = new Date(Date.UTC(to.getUTCFullYear(), 0, 1));
-    else from = new Date(to.getTime() - 364 * DAY_MS);
-
-    const nextFilters = {
-      ...draftFilters,
-      from: toDateInputValue(from),
-      to: toDateInputValue(to),
-    };
-    setDraftFilters(nextFilters);
-    setActiveFilters(nextFilters);
-  };
-
-  useEffect(() => {
-    const controller = new AbortController();
-    setLoading(true);
-    setError(null);
-    fetchApi<ReportOverview>(buildOverviewPath(activeFilters), { method: 'GET', signal: controller.signal })
-      .then(setOverview)
-      .catch((reason: unknown) => {
-        if (reason instanceof DOMException && reason.name === 'AbortError') return;
-        setError(getErrorMessage(reason));
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
-    return () => controller.abort();
-  }, [activeFilters, refreshKey]);
-
-  const totals = useMemo(() => overview?.trend.reduce((result, point) => ({
-    applications: result.applications + point.applications,
-    interviews: result.interviews + point.interviews,
-    offers: result.offers + point.offers,
-    joined: result.joined + point.joined,
-  }), { applications: 0, interviews: 0, offers: 0, joined: 0 }), [overview]);
-
-  const workloadColumns = useMemo<ResponsiveDataColumn<RecruiterWorkload>[]>(() => [
-    {
-      key: 'recruiter',
-      header: 'Recruiter',
-      priority: 'primary',
-      render: (row) => (
-        <div className="flex items-center gap-2.5">
-          <Avatar initials={getInitials(row.name)} size="sm" />
-          <span className="font-bold text-rf-ink text-xs">{row.name}</span>
-        </div>
-      ),
-    },
-    {
-      key: 'vacancies',
-      header: 'Assigned vacancies',
-      mobileLabel: 'Vacancies',
-      render: (row) => (
-        <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-rf-surface-subtle font-mono text-xs font-semibold text-rf-ink">
-          {row.vacancies}
-        </span>
-      ),
-    },
-    {
-      key: 'applications',
-      header: 'Active applications',
-      mobileLabel: 'Applications',
-      render: (row) => (
-        <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-rf-action-soft text-rf-action font-mono text-xs font-bold">
-          {row.applications}
-        </span>
-      ),
-    },
-    {
-      key: 'overdue',
-      header: 'Overdue tasks',
-      priority: 'tertiary',
-      render: (row) => (
-        <Badge variant={row.overdueTasks > 0 ? 'danger' : 'success'}>
-          {row.overdueTasks > 0 ? `${row.overdueTasks} overdue` : '0 overdue'}
-        </Badge>
-      ),
-    },
-  ], []);
-
-  const applyFilters = (event: FormEvent) => {
-    event.preventDefault();
-    if (draftFilters.from > draftFilters.to) {
-      setError('Report start date must be before the end date.');
-      return;
-    }
-    setActivePreset('Custom');
-    setActiveFilters({ ...draftFilters });
-  };
-
-  const exportReportExcel = async () => {
-    if (!overview) return;
-    try {
-      const exportPath = buildOverviewPath(activeFilters).replace('/reports/overview?', '/reports/export.xlsx?');
-      const blob = await downloadApi(exportPath);
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `RecruitFlow_Report_${overview.range.from.slice(0, 10)}_to_${overview.range.to.slice(0, 10)}.xlsx`;
-      link.click();
-      URL.revokeObjectURL(url);
-    } catch (reason) {
-      setError(getErrorMessage(reason));
-    }
-  };
-
-  if (loading && !overview) {
-    return (
-      <PageFrame eyebrow="Insights & Trust" title="Reports & Analytics" description="Loading report metrics...">
-        <PageState kind="loading" title="Loading recruitment analytics" description="Aggregating organization-scoped performance evidence." />
-      </PageFrame>
-    );
-  }
-
-  if (!overview) {
-    return (
-      <PageFrame eyebrow="Insights & Trust" title="Reports & Analytics" description="Operational performance from persisted workflow records.">
-        <PageState kind="error" title="Unable to load analytics" description={error ?? 'No report data is available.'} actionLabel="Retry" onAction={() => setRefreshKey((value) => value + 1)} />
-      </PageFrame>
-    );
-  }
-
-  const current = totals ?? { applications: 0, interviews: 0, offers: 0, joined: 0 };
-  const maxFunnel = Math.max(...overview.funnel.map((stage) => stage.count), 1);
-
-  return (
-    <PageFrame
-      eyebrow="Insights & Trust"
-      title="Reports & Analytics"
-      description={`Persisted recruitment performance for ${formatRange(overview.range.from, overview.range.to)}.`}
-      actions={
-        <div className="flex items-center gap-2">
-          <Button variant="secondary" size="sm" onClick={() => void exportReportExcel()} disabled={loading}>
-            <Icon name="download" size={13} />
-            Export Excel
-          </Button>
-          <Button variant="ghost" size="sm" loading={loading} loadingLabel="Refreshing" onClick={() => setRefreshKey((value) => value + 1)}>
-            <Icon name="refresh-cw" size={13} className={loading ? 'animate-spin' : ''} />
-            Refresh
-          </Button>
-        </div>
-      }
-    >
-      {error && <Alert tone="danger" title="Report refresh failed">{error}</Alert>}
-
-      {/* Date Range Presets & Filter Card */}
-      <Card className="shadow-xs border-rf-border-subtle bg-rf-surface">
-        <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-rf-border-subtle mb-4">
-          <div className="flex items-center gap-1.5">
-            <span className="text-[11px] font-bold text-rf-ink-muted uppercase tracking-wider mr-1">Range Preset:</span>
-            {(['30D', '90D', 'YTD', '12M'] as const).map((preset) => (
-              <button
-                key={preset}
-                type="button"
-                onClick={() => applyPreset(preset)}
-                className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${
-                  activePreset === preset
-                    ? 'bg-rf-action text-rf-on-action shadow-2xs'
-                    : 'bg-rf-surface-subtle text-rf-ink-muted hover:bg-rf-surface-muted hover:text-rf-ink'
-                }`}
-              >
-                {preset === '30D' ? 'Last 30 Days' : preset === '90D' ? 'Last 90 Days' : preset === 'YTD' ? 'Year to Date' : 'Last 12 Months'}
-              </button>
-            ))}
-          </div>
-          <span className="text-[11px] font-medium text-rf-ink-muted">
-            Comparison: <strong className="text-rf-ink">{formatRange(overview.comparisonRange.from, overview.comparisonRange.to)}</strong>
-          </span>
-        </div>
-
-        <form className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[repeat(5,minmax(0,1fr))_auto] xl:items-end" onSubmit={applyFilters}>
-          <FormField id="report-filter-from" label="From Date" required>
-            <Input
-              id="report-filter-from"
-              type="date"
-              value={draftFilters.from}
-              max={draftFilters.to}
-              onChange={(event) => {
-                setActivePreset('Custom');
-                setDraftFilters((filters) => ({ ...filters, from: event.target.value }));
-              }}
-              required
-            />
-          </FormField>
-          <FormField id="report-filter-to" label="To Date" required>
-            <Input
-              id="report-filter-to"
-              type="date"
-              value={draftFilters.to}
-              min={draftFilters.from}
-              onChange={(event) => {
-                setActivePreset('Custom');
-                setDraftFilters((filters) => ({ ...filters, to: event.target.value }));
-              }}
-              required
-            />
-          </FormField>
-          <FormField id="report-filter-branch" label="Branch">
-            <Select id="report-filter-branch" value={draftFilters.branchId} onChange={(event) => setDraftFilters((filters) => ({ ...filters, branchId: event.target.value }))}>
-              <option value="">All branches</option>
-              {overview.filterOptions.branches.map((option) => <option value={option.id} key={option.id}>{option.label}</option>)}
-            </Select>
-          </FormField>
-          <FormField id="report-filter-position" label="Position">
-            <Select id="report-filter-position" value={draftFilters.positionId} onChange={(event) => setDraftFilters((filters) => ({ ...filters, positionId: event.target.value }))}>
-              <option value="">All positions</option>
-              {overview.filterOptions.positions.map((option) => <option value={option.id} key={option.id}>{option.label}</option>)}
-            </Select>
-          </FormField>
-          <FormField id="report-filter-recruiter" label="Recruiter">
-            <Select id="report-filter-recruiter" value={draftFilters.recruiterId} onChange={(event) => setDraftFilters((filters) => ({ ...filters, recruiterId: event.target.value }))}>
-              <option value="">All recruiters</option>
-              {overview.filterOptions.recruiters.map((option) => <option value={option.id} key={option.id}>{option.label}</option>)}
-            </Select>
-          </FormField>
-          <Button variant="primary" type="submit" loading={loading} loadingLabel="Applying">
-            Apply Filters
-          </Button>
-        </form>
-      </Card>
-
-      {/* Top 4 KPI Bento Cards */}
-      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard
-          label="Applications"
-          value={current.applications}
-          detail={comparisonText(current.applications, overview.comparison.applications)}
-          tone="action"
-          icon={<Icon name="pipeline" size={16} />}
-        />
-        <MetricCard
-          label="Interviews"
-          value={current.interviews}
-          detail={comparisonText(current.interviews, overview.comparison.interviews)}
-          tone="info"
-          icon={<Icon name="calendar" size={16} />}
-        />
-        <MetricCard
-          label="Offers"
-          value={current.offers}
-          detail={comparisonText(current.offers, overview.comparison.offers)}
-          tone="warning"
-          icon={<Icon name="offer" size={16} />}
-        />
-        <MetricCard
-          label="Joined"
-          value={current.joined}
-          detail={comparisonText(current.joined, overview.comparison.joined)}
-          tone="success"
-          icon={<Icon name="check-circle" size={16} />}
-        />
-      </div>
-
-      {/* Activity Trend & Evidence Summary Grid */}
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.6fr)_minmax(320px,0.75fr)]">
-        <DashboardSection
-          title="Recruitment Activity Trend"
-          description="Applications, interviews, offers, and confirmed joinings over the selected timeframe."
-        >
-          <TrendChart points={overview.trend} />
-        </DashboardSection>
-
-        <Card className="grid content-start gap-4 p-5 bg-rf-surface border-rf-border-subtle shadow-xs">
-          <div>
-            <h2 className="m-0 text-xs font-black uppercase tracking-wider text-rf-ink">Evidence & Performance</h2>
-            <p className="m-0 mt-1 text-[11px] font-medium text-rf-ink-muted">Operational KPIs calculated from verified event logs.</p>
-          </div>
-          <div className="grid gap-3">
-            <div className="rounded-xl border border-rf-border-subtle bg-rf-surface-subtle p-3.5 flex items-center justify-between">
-              <div>
-                <span className="text-[10.5px] font-bold uppercase tracking-wider text-rf-ink-muted block">Avg. Time to Fill</span>
-                <strong className="text-[16px] font-black text-rf-ink mt-0.5 block">
-                  {overview.kpis.timeToFill.value > 0 ? `${overview.kpis.timeToFill.value} days` : '—'}
-                </strong>
-              </div>
-              <span className="h-9 w-9 rounded-xl bg-rf-action-soft text-rf-action flex items-center justify-center">
-                <Icon name="clock" size={18} />
-              </span>
-            </div>
-
-            <div className="rounded-xl border border-rf-border-subtle bg-rf-surface-subtle p-3.5 flex items-center justify-between">
-              <div>
-                <span className="text-[10.5px] font-bold uppercase tracking-wider text-rf-ink-muted block">Offer Acceptance</span>
-                <strong className="text-[16px] font-black text-rf-ink mt-0.5 block">
-                  {overview.kpis.offerAcceptanceRate.total > 0 ? `${overview.kpis.offerAcceptanceRate.value}%` : '—'}
-                </strong>
-              </div>
-              <span className="h-9 w-9 rounded-xl bg-rf-success-soft text-rf-success flex items-center justify-center">
-                <Icon name="check-circle" size={18} />
-              </span>
-            </div>
-
-            <div className="rounded-xl border border-rf-border-subtle bg-rf-surface-subtle p-3.5 flex items-center justify-between">
-              <div>
-                <span className="text-[10.5px] font-bold uppercase tracking-wider text-rf-ink-muted block">Top Source Quality</span>
-                <strong className="text-sm font-black text-rf-ink mt-0.5 block">
-                  {overview.kpis.topSource.name && overview.kpis.topSource.name !== 'No data' ? overview.kpis.topSource.name : '—'}
-                </strong>
-                <span className="text-[10px] font-semibold text-rf-action mt-0.5 block">
-                  {overview.kpis.topSource.name === 'No data' ? 'No source evidence' : `${overview.kpis.topSource.conversionRate}% joined conversion`}
-                </span>
-              </div>
-              <span className="h-9 w-9 rounded-xl bg-rf-info-soft text-rf-info flex items-center justify-center">
-                <Icon name="users" size={18} />
-              </span>
-            </div>
-          </div>
-          <Alert tone="info" title="Pipeline aging status">
-            Metrics are calculated from persisted workflow events in the selected range.
-          </Alert>
-        </Card>
-      </div>
-
-      {/* Funnel & Headcount Progress */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        <DashboardSection
-          title="Hiring Funnel Conversion"
-          description="Stage-by-stage volume and progression rate across active candidate pipelines."
-        >
-          {overview.funnel.every((stage) => stage.count === 0) ? (
-            <PageState kind="empty" title="No funnel data" description="No applications were created in this date range." />
-          ) : (
-            <div className="grid gap-3.5">
-              {overview.funnel.map((stage, idx) => {
-                const percentOfTotal = Math.round((stage.count / maxFunnel) * 100);
-                const prevStage = idx > 0 ? overview.funnel[idx - 1] : null;
-                const convRate = stage.conversionRate ?? null;
-                return (
-                  <div className="rounded-xl border border-rf-border-subtle bg-rf-surface p-3 shadow-2xs" key={stage.name}>
-                    <div className="flex items-center justify-between mb-1.5 text-xs">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-rf-ink">{stage.name}</span>
-                        {convRate !== null && (
-                          <span className="text-[10px] font-semibold text-rf-action bg-rf-action-soft px-1.5 py-0.5 rounded">
-                            {convRate}% from {prevStage?.name}
-                          </span>
-                        )}
-                        {prevStage && convRate === null && (
-                          <span className="text-[10px] font-semibold text-rf-ink-muted bg-rf-surface-subtle px-1.5 py-0.5 rounded">
-                            Stage volume
-                          </span>
-                        )}
-                      </div>
-                      <strong className="text-rf-ink font-mono text-sm">{stage.count}</strong>
-                    </div>
-                    <div className="h-2.5 w-full overflow-hidden rounded-full bg-rf-surface-muted">
-                      <div
-                        className="h-full rounded-full bg-gradient-to-r from-rf-action to-rf-action-strong transition-all duration-300 shadow-2xs"
-                        style={{ width: `${Math.max(3, percentOfTotal)}%` }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </DashboardSection>
-
-        <DashboardSection
-          title="Hiring Progress by Position"
-          description="Joined headcount achieved against approved requisition demand."
-        >
-          {overview.hiringByPosition.length === 0 ? (
-            <PageState kind="empty" title="No headcount data" description="No approved vacancy demand matches these filters." />
-          ) : (
-            <div className="grid gap-3.5">
-              {overview.hiringByPosition.map((position) => {
-                const percent = position.target > 0 ? Math.min(100, Math.round((position.joined / position.target) * 100)) : 0;
-                const isComplete = position.joined >= position.target;
-                return (
-                  <div className="rounded-xl border border-rf-border-subtle bg-rf-surface p-3 shadow-2xs" key={position.positionId}>
-                    <div className="flex items-center justify-between mb-1.5 text-xs">
-                      <span className="font-bold text-rf-ink truncate max-w-[220px]" title={position.position}>
-                        {position.position}
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <Badge variant={isComplete ? 'success' : percent > 0 ? 'info' : 'neutral'}>
-                          {isComplete ? 'Filled' : percent > 0 ? 'In Progress' : 'Open'}
-                        </Badge>
-                        <span className="font-mono text-xs font-bold text-rf-ink">
-                          {position.joined} / {position.target}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="h-2.5 w-full overflow-hidden rounded-full bg-rf-surface-muted">
-                      <div
-                        className={`h-full rounded-full transition-all duration-300 shadow-2xs ${
-                          isComplete ? 'bg-rf-success' : 'bg-rf-action'
-                        }`}
-                        style={{ width: `${Math.max(3, percent)}%` }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </DashboardSection>
-      </div>
-
-      {/* Recruiter Target Attainment & Activity KPIs */}
-      <DashboardSection
-        title="Recruiter Activity Targets & KPI Attainment"
-        description="Performance benchmark against set targets: calls, CV screenings, interviews conducted, and offers extended."
-      >
-        <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-xl border border-emerald-200 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/20 p-4 shadow-2xs">
-            <div className="flex items-center justify-between text-xs mb-2">
-              <span className="font-semibold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
-                <Icon name="phone" size={14} className="text-emerald-600" />
-                Calls Target Attainment
-              </span>
-              <Badge variant="success">83%</Badge>
-            </div>
-            <div className="text-[17px] font-bold text-rf-ink dark:text-white">
-              165 <span className="text-xs font-normal text-rf-ink-muted">/ 200 monthly target</span>
-            </div>
-            <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-emerald-200 dark:bg-emerald-900">
-              <div className="h-full rounded-full bg-emerald-500" style={{ width: '83%' }} />
-            </div>
-            <p className="mt-2 text-[11px] text-rf-ink-muted">Pace: 7.8 calls / day across all branches</p>
-          </div>
-
-          <div className="rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/20 p-4 shadow-2xs">
-            <div className="flex items-center justify-between text-xs mb-2">
-              <span className="font-semibold text-blue-800 dark:text-blue-300 flex items-center gap-1.5">
-                <Icon name="file-text" size={14} className="text-blue-600" />
-                CV Screenings Attainment
-              </span>
-              <Badge variant="info">80%</Badge>
-            </div>
-            <div className="text-[17px] font-bold text-rf-ink dark:text-white">
-              120 <span className="text-xs font-normal text-rf-ink-muted">/ 150 monthly target</span>
-            </div>
-            <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-blue-200 dark:bg-blue-900">
-              <div className="h-full rounded-full bg-blue-500" style={{ width: '80%' }} />
-            </div>
-            <p className="mt-2 text-[11px] text-rf-ink-muted">Quality pass rate: 42% forwarded to interview</p>
-          </div>
-
-          <div className="rounded-xl border border-purple-200 dark:border-purple-800 bg-purple-50/50 dark:bg-purple-950/20 p-4 shadow-2xs">
-            <div className="flex items-center justify-between text-xs mb-2">
-              <span className="font-semibold text-purple-800 dark:text-purple-300 flex items-center gap-1.5">
-                <Icon name="calendar-clock" size={14} className="text-purple-600" />
-                Interviews Conducted
-              </span>
-              <Badge variant="success">95%</Badge>
-            </div>
-            <div className="text-[17px] font-bold text-rf-ink dark:text-white">
-              38 <span className="text-xs font-normal text-rf-ink-muted">/ 40 monthly target</span>
-            </div>
-            <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-purple-200 dark:bg-purple-900">
-              <div className="h-full rounded-full bg-purple-500" style={{ width: '95%' }} />
-            </div>
-            <p className="mt-2 text-[11px] text-rf-ink-muted">Avg scorecard turnaround: 4.2 hours</p>
-          </div>
-
-          <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-950/20 p-4 shadow-2xs">
-            <div className="flex items-center justify-between text-xs mb-2">
-              <span className="font-semibold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
-                <Icon name="offer" size={14} className="text-amber-600" />
-                Offers Accepted
-              </span>
-              <Badge variant="success">90%</Badge>
-            </div>
-            <div className="text-[17px] font-bold text-rf-ink dark:text-white">
-              9 <span className="text-xs font-normal text-rf-ink-muted">/ 10 monthly target</span>
-            </div>
-            <div className="mt-2.5 h-1.5 w-full overflow-hidden rounded-full bg-amber-200 dark:bg-amber-900">
-              <div className="h-full rounded-full bg-amber-500" style={{ width: '90%' }} />
-            </div>
-            <p className="mt-2 text-[11px] text-rf-ink-muted">Offer acceptance rate: 89%</p>
-          </div>
-        </div>
-      </DashboardSection>
-
-      {/* Recruiter Workload Distribution */}
-      <DashboardSection
-        title="Recruiter Workload & Output"
-        description="Active requisition assignments, candidates managed, and task SLA compliance."
-        action={
-          <div className="flex flex-wrap gap-2">
-            <Button variant="secondary" size="sm" asChild><Link to="/applications">Applications</Link></Button>
-            <Button variant="secondary" size="sm" asChild><Link to="/offers">Offers</Link></Button>
-          </div>
-        }
-      >
-        <ResponsiveDataView
-          rows={overview.recruiterWorkload}
-          columns={workloadColumns}
-          rowKey={(row) => row.id ?? row.name}
-          label="Recruiter workload"
-          emptyState={<PageState kind="empty" title="No recruiter workload" description="No active recruiter assignments match these filters." />}
-        />
-      </DashboardSection>
-    </PageFrame>
-  );
-}
+export default ReportsPage;

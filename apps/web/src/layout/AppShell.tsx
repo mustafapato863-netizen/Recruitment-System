@@ -10,6 +10,7 @@ import { ThemeToggle } from '../components/ui/ThemeToggle';
 import { AtmosphericBackground } from '../components/ui/AtmosphericBackground';
 import { SghHeartSvg } from '../design-system/brand/sgh-heart-svg';
 import { UserProfileDropdown } from '../components/ui/UserProfileDropdown';
+import { BreadcrumbsBar } from '../components/ui/BreadcrumbsBar';
 
 type NavigationItemProps = {
   label: string;
@@ -21,7 +22,7 @@ type NavigationItemProps = {
   onNavigate?: () => void;
 };
 
-function NavigationItem({
+export function NavigationItem({
   label,
   icon,
   to,
@@ -32,9 +33,9 @@ function NavigationItem({
 }: NavigationItemProps) {
   const { user } = useAuth();
   
-  const userRoleCodes = user?.roles?.map(r => r.code) || [];
-  const isAdmin = userRoleCodes.some(c => ['ADMIN', 'SYSADMIN'].includes(c));
-  const isManager = userRoleCodes.some(c => ['HIRING_MANAGER', 'RECRUITER', 'MANAGER'].includes(c));
+  const userRoleCodes = user?.roles?.map((r) => ((r.code || r.name || '').toUpperCase())) || [];
+  const isAdmin = userRoleCodes.some((c) => ['ADMIN', 'SYSADMIN'].includes(c));
+  const isManager = userRoleCodes.some((c) => ['HIRING_MANAGER', 'RECRUITER', 'MANAGER'].includes(c));
   const effectiveRole = isAdmin ? 'ADMIN' : (isManager ? 'MANAGER' : 'EMPLOYEE');
 
   const hasAccess = allowedRoles ? allowedRoles.includes(effectiveRole) : true;
@@ -60,14 +61,17 @@ function NavigationItem({
       end={end}
       to={to}
       aria-label={label}
+      title={isCollapsed ? label : undefined}
       onClick={onNavigate}
     >
       <span className="ico"><Icon name={icon} size={18} /></span>
-      {!isCollapsed && <span className="nav-label">{label}</span>}
+      {!isCollapsed && (
+        <span className="nav-label font-semibold text-[13.5px] leading-tight normal-case tracking-normal">{label}</span>
+      )}
       {isCollapsed && (
         <span
           role="tooltip"
-          className="nav-tooltip absolute left-full ml-2.5 top-1/2 -translate-y-1/2 px-2.5 py-1 rounded-md bg-rf-ink text-white text-xs font-bold whitespace-nowrap opacity-0 pointer-events-none transition-opacity z-50 shadow-md border border-rf-border-strong/20"
+          className="nav-tooltip absolute left-full ml-3 top-1/2 -translate-y-1/2 px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-semibold whitespace-nowrap opacity-0 pointer-events-none transition-all duration-150 z-50 shadow-xl border border-slate-700/60"
         >
           {label}
         </span>
@@ -184,8 +188,10 @@ export function AppShell() {
     { path: '/approval-inbox', label: 'Approval Inbox', parent: 'My Work' },
     { path: '/vacancies/', label: 'Vacancy Overview', parent: 'Openings & Job Cards' },
     { path: '/vacancies', label: 'Openings & Job Cards', parent: 'Jobs & Pipeline' },
+    { path: '/candidates/compare', label: 'Compare Candidates', parent: 'Candidates Directory' },
     { path: '/candidates/', label: 'Candidate Profile', parent: 'Candidates Directory' },
     { path: '/candidates', label: 'Candidates Directory', parent: 'Jobs & Pipeline' },
+    { path: '/portal', label: 'My Applications', parent: 'Candidate Portal' },
     { path: '/applications/', label: 'Application Detail', parent: 'Applications Pipeline' },
     { path: '/applications', label: 'Applications Pipeline', parent: 'Jobs & Pipeline' },
     { path: '/offers/create', label: 'Create Offer', parent: 'Offers & Pre-Hire' },
@@ -214,12 +220,7 @@ export function AppShell() {
       : location.pathname === path || location.pathname.startsWith(path),
   );
 
-  const breadcrumbs = matchedRoute
-    ? [
-        ...(matchedRoute.parent ? [{ label: matchedRoute.parent }] : []),
-        { label: matchedRoute.label },
-      ]
-    : [{ label: 'Workspace' }];
+  void matchedRoute;
 
   return (
     <div
@@ -278,15 +279,13 @@ export function AppShell() {
         </div>
 
         <div className="nav rf-scrollbar">
-          <NavigationItem end icon="dashboard" label="Dashboard" to="/" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
-          <NavigationItem icon="briefcase" label="Jobs" to="/vacancies" allowedRoles={['ADMIN', 'MANAGER']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
-          <NavigationItem icon="pipeline" label="Applicants" to="/applications" allowedRoles={['ADMIN', 'MANAGER']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
-          <NavigationItem icon="calendar-clock" label="Interviews" to="/interviews" allowedRoles={['ADMIN', 'MANAGER']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
-          <NavigationItem icon="offer" label="Offers & Approvals" to="/offers" allowedRoles={['ADMIN', 'MANAGER']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
-          <NavigationItem icon="database" label="CV Bank" to="/cv-bank" allowedRoles={['ADMIN']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
-          <NavigationItem icon="report" label="Reports" to="/reports" allowedRoles={['ADMIN']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
-          <NavigationItem icon="folder-kanban" label="Talent Pipeline" to="/talent-pool" allowedRoles={['ADMIN']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
-          <NavigationItem icon="bell" label="Notifications" to="/notifications" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+          <NavigationItem end icon="dashboard" label="My Work" to="/" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+          <NavigationItem icon="briefcase" label="Job Positions" to="/vacancies" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+          <NavigationItem icon="users" label="Applications" to="/applications" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+          <NavigationItem icon="calendar" label="Interviews" to="/interviews" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+          <NavigationItem icon="offer" label="Offers" to="/offers" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+          <NavigationItem icon="calendar-clock" label="Calendar" to="/interviews/calendar" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+          <NavigationItem icon="report" label="Reports" to="/reports" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
           <NavigationItem icon="settings" label="Settings" to="/settings" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
         </div>
 
@@ -319,60 +318,83 @@ export function AppShell() {
       </aside>
 
       <header className="header">
-        <div className="flex items-center gap-2">
-          <IconButton
-            ref={mobileMenuTriggerRef as unknown as React.Ref<HTMLButtonElement>}
-            className="lg:hidden"
-            label="Open navigation menu"
-            onClick={() => setIsMobileDrawerOpen(true)}
-          >
-            <Icon name="menu" size={18} />
-          </IconButton>
-          <nav className="crumb" aria-label="Breadcrumb">
-            <ol className="flex items-center gap-1 list-none m-0 p-0">
-              <li>
-                <Link to="/" className="text-rf-ink-muted hover:text-rf-action transition-colors">RecruitFlow</Link>
-              </li>
-              {breadcrumbs.map((crumb, idx) => (
-                <li key={idx} className="flex items-center gap-1">
-                  <span aria-hidden="true" className="text-rf-ink-muted/50">/</span>
-                  {idx === breadcrumbs.length - 1 ? (
-                    <span className="font-bold text-rf-ink truncate max-w-[200px]" title={crumb.label}>
-                      {crumb.label}
-                    </span>
-                  ) : (
-                    <span className="text-rf-ink-muted truncate max-w-[140px]" title={crumb.label}>
-                      {crumb.label}
-                    </span>
-                  )}
-                </li>
-              ))}
-            </ol>
-          </nav>
-          <button
-            ref={searchTriggerRef}
-            type="button"
-            className="search cursor-text text-left"
-            onClick={() => setIsCommandPaletteOpen(true)}
-            aria-haspopup="dialog"
-            aria-expanded={isCommandPaletteOpen}
-            aria-label="Search candidates, vacancies, applications and tasks"
-          >
-            <Icon name="search" size={15} />
-            <span className="text-rf-ink-muted">Search candidates, vacancies, applications...</span>
-            <kbd>⌘ K</kbd>
-          </button>
-          <div className="actions flex items-center gap-2.5">
+        <div className="flex items-center justify-between w-full gap-4 px-2">
+          <div className="flex items-center gap-3">
+            <IconButton
+              ref={mobileMenuTriggerRef as unknown as React.Ref<HTMLButtonElement>}
+              className="lg:hidden"
+              label="Open navigation menu"
+              onClick={() => setIsMobileDrawerOpen(true)}
+            >
+              <Icon name="menu" size={18} />
+            </IconButton>
+
+            <IconButton
+              className="hidden lg:flex"
+              label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              onClick={() => setIsSidebarCollapsed((prev) => !prev)}
+              title={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            >
+              <Icon name={isSidebarCollapsed ? 'menu' : 'menu'} size={18} />
+            </IconButton>
+
+            {/* Global Search Bar matching reference */}
+            <button
+              ref={searchTriggerRef}
+              type="button"
+              className="search-bar-unified flex items-center gap-2 px-3 sm:px-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-400 hover:border-slate-300 dark:hover:border-slate-700 transition flex-1 min-w-[120px] max-w-[460px] shadow-2xs cursor-text"
+              onClick={() => setIsCommandPaletteOpen(true)}
+              aria-haspopup="dialog"
+              aria-expanded={isCommandPaletteOpen}
+              aria-label="Search job positions, applicants, activities, notes..."
+            >
+              <Icon name="search" size={14} className="text-slate-400 shrink-0" />
+              <span className="truncate flex-1 text-left">Search job positions, applicants, activities...</span>
+              <kbd className="hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-mono bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-slate-500">
+                ⌘ K
+              </kbd>
+            </button>
+          </div>
+
+          <div className="actions flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {/* Help button */}
+            <button
+              type="button"
+              className="hidden md:flex w-9 h-9 items-center justify-center rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs text-xs font-bold cursor-pointer"
+              title="Help & Documentation"
+            >
+              ?
+            </button>
+
+            {/* History / Clock button */}
+            <button
+              type="button"
+              className="hidden md:flex w-9 h-9 items-center justify-center rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs cursor-pointer"
+              title="Recent History"
+            >
+              <Icon name="clock" size={15} />
+            </button>
+
+            {/* Notifications Bell */}
+            <div className="relative">
+              <NotificationAlertDialog triggerVariant="icon" />
+            </div>
+
+            <ThemeToggle className="hidden sm:flex" />
+
+            {/* Quick Create Menu */}
             <QuickCreateMenu />
-            <NotificationAlertDialog triggerVariant="icon" />
-            <ThemeToggle />
-            <div className="h-6 w-px bg-rf-border-subtle mx-0.5 hidden sm:block" aria-hidden="true" />
+
+            <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 mx-0.5 hidden sm:block" aria-hidden="true" />
             <UserProfileDropdown />
           </div>
         </div>
       </header>
 
-      <main className="main" aria-hidden={isMobileDrawerOpen ? 'true' : undefined}><Outlet /></main>
+      <main className="main" aria-hidden={isMobileDrawerOpen ? 'true' : undefined}>
+        <BreadcrumbsBar />
+        <Outlet />
+      </main>
 
       <CommandPalette isOpen={isCommandPaletteOpen} onClose={() => setIsCommandPaletteOpen(false)} />
     </div>

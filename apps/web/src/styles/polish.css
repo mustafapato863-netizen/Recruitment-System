@@ -535,24 +535,25 @@ body {
     width: min(290px, calc(100vw - 48px));
   }
 
-  .is-sidebar-collapsed .brand-copy,
-  .is-sidebar-collapsed .workspace-switcher,
-  .is-sidebar-collapsed .group,
-  .is-sidebar-collapsed .nav-label,
-  .is-sidebar-collapsed .user-profile-info,
-  .is-sidebar-collapsed .user-chevron,
-  .is-sidebar-collapsed .action-text {
+  .is-sidebar-collapsed .sidebar .brand-copy,
+  .is-sidebar-collapsed .sidebar .workspace-switcher,
+  .is-sidebar-collapsed .sidebar div.group,
+  .is-sidebar-collapsed .sidebar span.group,
+  .is-sidebar-collapsed .sidebar .nav-label,
+  .is-sidebar-collapsed .sidebar .user-profile-info,
+  .is-sidebar-collapsed .sidebar .user-chevron,
+  .is-sidebar-collapsed .sidebar .action-text {
     display: initial;
   }
 
-  .is-sidebar-collapsed .brand-copy,
-  .is-sidebar-collapsed .workspace-copy,
-  .is-sidebar-collapsed .user-profile-info,
-  .is-sidebar-collapsed .action-text {
+  .is-sidebar-collapsed .sidebar .brand-copy,
+  .is-sidebar-collapsed .sidebar .workspace-copy,
+  .is-sidebar-collapsed .sidebar .user-profile-info,
+  .is-sidebar-collapsed .sidebar .action-text {
     display: block;
   }
 
-  .is-sidebar-collapsed .nav .group {
+  .is-sidebar-collapsed .sidebar .nav .group {
     display: block;
   }
 

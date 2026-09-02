@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import type { VacancyRequest, Task } from '@recruitflow/contracts';
+import type { VacancyRequest, TaskRecord } from '@recruitflow/contracts';
 import { getApi } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { Button } from '../components/ui/Button';
@@ -12,7 +12,7 @@ export function EmployeeDashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [requests, setRequests] = useState<VacancyRequest[]>([]);
-  const [tasks, setTasks] = useState<Task[]>([]);
+  const [tasks, setTasks] = useState<TaskRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -25,7 +25,7 @@ export function EmployeeDashboard() {
       try {
         const [requestsRes, tasksRes] = await Promise.allSettled([
           getApi<VacancyRequest[]>('/vacancy-requests'),
-          getApi<Task[]>('/tasks'),
+          getApi<TaskRecord[]>('/tasks'),
         ]);
 
         if (requestsRes.status === 'fulfilled' && requestsRes.value) {
@@ -169,7 +169,7 @@ export function EmployeeDashboard() {
                       <StatusBadge status={req.status} />
                     </div>
                     <div className="text-sm font-bold text-rf-ink mt-1 truncate">
-                      {req.position?.title ?? req.positionId ?? 'Position Requisition'}
+                      {(req as any).position?.title ?? req.positionId ?? 'Position Requisition'}
                     </div>
                     <div className="text-xs text-rf-ink-muted mt-0.5 flex items-center gap-3">
                       <span>Headcount: <strong>{req.requestedHeadcount}</strong></span>
@@ -221,7 +221,7 @@ export function EmployeeDashboard() {
                     <div className="min-w-0 flex-1">
                       <div className="text-xs font-bold text-rf-ink truncate">{task.title}</div>
                       <div className="text-[11px] text-rf-ink-muted mt-0.5">
-                        Due {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : 'soon'}
+                        Due {task.dueAt ? new Date(task.dueAt).toLocaleDateString() : 'soon'}
                       </div>
                     </div>
                   </li>

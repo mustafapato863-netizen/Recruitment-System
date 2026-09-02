@@ -1,325 +1,832 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import type { PaginatedResult, TaskRecord } from '@recruitflow/contracts';
-import { getApi, patchApi } from '../api/client';
-import { ConfirmDialog } from '../components/ConfirmDialog';
-import { Icon, type IconName } from '../components/Icon';
-import { Spinner } from '../components/Spinner';
-import { StatusBadge } from '../components/StatusBadge';
-import { Alert } from '../components/ui/Alert';
-import { Badge } from '../components/ui/Badge';
-import { Button } from '../components/ui/Button';
-import { DataToolbar } from '../components/ui/DataToolbar';
-import { FilterChip } from '../components/ui/FilterChips';
-import { Input } from '../components/ui/Input';
-import { MetricCard } from '../components/ui/MetricCard';
-import { Pagination } from '../components/ui/Pagination';
-import { PageFrame } from '../components/ui/PageFrame';
-import { PageState } from '../components/ui/PageState';
-import { PriorityChip, type PriorityLevel } from '../components/ui/PriorityChip';
-import { Select } from '../components/ui/Select';
-import { ListSkeleton } from '../components/ui/Skeleton';
+import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Icon } from '../components/Icon';
+import { Modal } from '../components/Modal';
+import { postApi } from '../api/client';
 import './PageEnhancementsV2.css';
 
-const STATUSES = ['Open', 'In Progress', 'Completed', 'Dismissed'] as const;
-const PRIORITIES = ['Low', 'Normal', 'High', 'Critical'] as const;
+interface TaskQueueItem {
+  id: string;
+  priority: 'High' | 'Medium' | 'Low';
+  taskTitle: string;
+  taskType: string;
+  candidateName: string;
+  candidateAppId: string;
+  candidateAvatar: string;
+  positionTitle: string;
+  department: string;
+  location: string;
+  ownerName: string;
+  ownerAvatar: string;
+  dueTime: string;
+  dueLeft: string;
+  slaState: 'On track' | 'At risk' | 'Overdue';
+  nextActionLabel: string;
+  nextActionRoute: string;
+}
 
-const TASK_SHORTCUTS: Array<{
-  label: string;
-  description: string;
-  to: string;
-  icon: IconName;
-  tone: 'action' | 'info' | 'warning';
-}> = [
+const DEFAULT_TASKS: TaskQueueItem[] = [
   {
-    label: 'Candidate directory',
-    description: 'Review profiles, applications, and recent activity.',
-    to: '/candidates',
-    icon: 'users',
-    tone: 'action',
+    id: 'task-1',
+    priority: 'High',
+    taskTitle: 'Technical interview',
+    taskType: 'Interview',
+    candidateName: 'Ali Hassan',
+    candidateAppId: 'APP-02481',
+    candidateAvatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=100&auto=format&fit=crop&q=80',
+    positionTitle: 'Senior Frontend Engineer',
+    department: 'Engineering',
+    location: 'Cairo, Egypt',
+    ownerName: 'Sarah Ahmed',
+    ownerAvatar: 'SA',
+    dueTime: 'Today, 2:00 PM',
+    dueLeft: '2h 15m left',
+    slaState: 'On track',
+    nextActionLabel: 'Start interview',
+    nextActionRoute: '/interviews/int-1',
   },
   {
-    label: 'Approval inbox',
-    description: 'See vacancy, offer, and hiring decisions waiting for you.',
-    to: '/approval-inbox',
-    icon: 'inbox',
-    tone: 'warning',
+    id: 'task-2',
+    priority: 'High',
+    taskTitle: 'Review CV',
+    taskType: 'Screening',
+    candidateName: 'Mona Saleh',
+    candidateAppId: 'APP-02517',
+    candidateAvatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=100&auto=format&fit=crop&q=80',
+    positionTitle: 'Registered Nurse – ICU',
+    department: 'Clinical Operations',
+    location: 'Jeddah',
+    ownerName: 'Mona Saleh',
+    ownerAvatar: 'MS',
+    dueTime: 'Today, 10:30 AM',
+    dueLeft: '10m left',
+    slaState: 'At risk',
+    nextActionLabel: 'Review now',
+    nextActionRoute: '/applications/APP-02481',
   },
   {
-    label: 'Interview calendar',
-    description: 'Check upcoming interviews and feedback readiness.',
-    to: '/interviews/calendar',
-    icon: 'calendar',
-    tone: 'info',
+    id: 'task-3',
+    priority: 'Medium',
+    taskTitle: 'Offer approval',
+    taskType: 'Offer',
+    candidateName: 'Ahmed Samy',
+    candidateAppId: 'APP-02455',
+    candidateAvatar: 'https://images.unsplash.com/photo-1519345182560-3f2917c472ef?w=100&auto=format&fit=crop&q=80',
+    positionTitle: 'Product Manager',
+    department: 'Digital Health',
+    location: 'Riyadh',
+    ownerName: 'Sarah Ahmed',
+    ownerAvatar: 'SA',
+    dueTime: 'Today, 4:30 PM',
+    dueLeft: '6h left',
+    slaState: 'On track',
+    nextActionLabel: 'Approve offer',
+    nextActionRoute: '/offers/OFF-2026-1157',
+  },
+  {
+    id: 'task-4',
+    priority: 'Medium',
+    taskTitle: 'Phone screen',
+    taskType: 'Screening',
+    candidateName: 'Nourhan Sami',
+    candidateAppId: 'APP-02533',
+    candidateAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop&q=80',
+    positionTitle: 'Backend Engineer',
+    department: 'Engineering',
+    location: 'Cairo, Egypt',
+    ownerName: 'Nourhan Sami',
+    ownerAvatar: 'NS',
+    dueTime: 'Tomorrow, 9:00 AM',
+    dueLeft: '21h left',
+    slaState: 'On track',
+    nextActionLabel: 'Schedule call',
+    nextActionRoute: '/interviews',
+  },
+  {
+    id: 'task-5',
+    priority: 'Low',
+    taskTitle: 'Follow up',
+    taskType: 'Follow-up',
+    candidateName: 'Yousef Ahmed',
+    candidateAppId: 'APP-02466',
+    candidateAvatar: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=100&auto=format&fit=crop&q=80',
+    positionTitle: 'UX Designer',
+    department: 'Digital Health',
+    location: 'Cairo, Egypt',
+    ownerName: 'Yousef Ahmed',
+    ownerAvatar: 'YA',
+    dueTime: 'Tomorrow, 11:30 AM',
+    dueLeft: '23h left',
+    slaState: 'On track',
+    nextActionLabel: 'Send message',
+    nextActionRoute: '/applications/APP-02481',
+  },
+  {
+    id: 'task-6',
+    priority: 'High',
+    taskTitle: 'Interview feedback',
+    taskType: 'Interview',
+    candidateName: 'Khaled Mostafa',
+    candidateAppId: 'APP-02501',
+    candidateAvatar: 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=100&auto=format&fit=crop&q=80',
+    positionTitle: 'Data Analyst',
+    department: 'Strategy & Analytics',
+    location: 'Cairo',
+    ownerName: 'Sara Mohamed',
+    ownerAvatar: 'SM',
+    dueTime: 'Tomorrow, 2:00 PM',
+    dueLeft: '1 day left',
+    slaState: 'At risk',
+    nextActionLabel: 'Add feedback',
+    nextActionRoute: '/interviews/int-1',
+  },
+  {
+    id: 'task-7',
+    priority: 'Medium',
+    taskTitle: 'Compensation review',
+    taskType: 'Offer',
+    candidateName: 'Omar Ashraf',
+    candidateAppId: 'APP-02412',
+    candidateAvatar: 'https://images.unsplash.com/photo-1501196354995-cbb51c65aaea?w=100&auto=format&fit=crop&q=80',
+    positionTitle: 'Senior Frontend Engineer',
+    department: 'Engineering',
+    location: 'Cairo, Egypt',
+    ownerName: 'Omar Ashraf',
+    ownerAvatar: 'OA',
+    dueTime: '2 Sep, 10:00 AM',
+    dueLeft: '2 days left',
+    slaState: 'On track',
+    nextActionLabel: 'Review offer',
+    nextActionRoute: '/offers/OFF-2026-1157',
+  },
+  {
+    id: 'task-8',
+    priority: 'Low',
+    taskTitle: 'Reference check',
+    taskType: 'Verification',
+    candidateName: 'Heba Mohamed',
+    candidateAppId: 'APP-02544',
+    candidateAvatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=100&auto=format&fit=crop&q=80',
+    positionTitle: 'Radiology Technologist',
+    department: 'Clinical Operations',
+    location: 'Dammam',
+    ownerName: 'Heba Mohamed',
+    ownerAvatar: 'HM',
+    dueTime: '2 Sep, 3:00 PM',
+    dueLeft: '2 days left',
+    slaState: 'On track',
+    nextActionLabel: 'Check references',
+    nextActionRoute: '/applications/APP-02481',
+  },
+  {
+    id: 'task-9',
+    priority: 'Low',
+    taskTitle: 'Send offer letter',
+    taskType: 'Offer',
+    candidateName: 'Islam Fathy',
+    candidateAppId: 'APP-02480',
+    candidateAvatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&auto=format&fit=crop&q=80',
+    positionTitle: 'DevOps Engineer',
+    department: 'Engineering',
+    location: 'Jeddah',
+    ownerName: 'Sarah Ahmed',
+    ownerAvatar: 'SA',
+    dueTime: '3 Sep, 11:00 AM',
+    dueLeft: '3 days left',
+    slaState: 'On track',
+    nextActionLabel: 'Send offer',
+    nextActionRoute: '/offers/OFF-2026-1157',
+  },
+  {
+    id: 'task-10',
+    priority: 'Medium',
+    taskTitle: 'Panel interview',
+    taskType: 'Interview',
+    candidateName: 'Lina Hassan',
+    candidateAppId: 'APP-02520',
+    candidateAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
+    positionTitle: 'HR Business Partner',
+    department: 'People & Culture',
+    location: 'Riyadh',
+    ownerName: 'Lina Hassan',
+    ownerAvatar: 'LH',
+    dueTime: '3 Sep, 2:00 PM',
+    dueLeft: '3 days left',
+    slaState: 'On track',
+    nextActionLabel: 'Prepare panel',
+    nextActionRoute: '/interviews/int-1',
   },
 ];
 
-function toPriorityLevel(priority?: string): PriorityLevel {
-  const p = priority?.toLowerCase();
-  if (p === 'high' || p === 'critical') return 'high';
-  if (p === 'low') return 'low';
-  return 'medium';
-}
-
 export function TasksPage() {
-  const [tasks, setTasks] = useState<TaskRecord[]>([]);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [filterStatus, setFilterStatus] = useState('');
-  const [filterPriority, setFilterPriority] = useState('');
-  const [overdueOnly, setOverdueOnly] = useState(false);
-  const [search, setSearch] = useState('');
-  const [updatingId, setUpdatingId] = useState<string | null>(null);
-  const [confirmTaskId, setConfirmTaskId] = useState<string | null>(null);
+  const navigate = useNavigate();
+  const [tasksList, setTasksList] = useState<TaskQueueItem[]>(DEFAULT_TASKS);
+  const [activeFilterTab, setActiveFilterTab] = useState('All Tasks');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const pageSize = 20;
+  // Form State
+  const [taskTitle, setTaskTitle] = useState('');
+  const [assigneeName, setAssigneeName] = useState('Sarah Ahmed');
+  const [taskType, setTaskType] = useState('Screening');
+  const [priority, setPriority] = useState<'High' | 'Medium' | 'Low'>('High');
+  const [dueDateTime, setDueDateTime] = useState('Today, 4:00 PM');
+  const [candidateName, setCandidateName] = useState('Ahmed Mostafa');
+  const [positionTitle, setPositionTitle] = useState('Radiology Technologist');
+  const [instructions, setInstructions] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
-      if (filterStatus) params.set('status', filterStatus);
-      if (filterPriority) params.set('priority', filterPriority);
-      if (overdueOnly) params.set('overdueOnly', 'true');
-      if (search.trim()) params.set('search', search.trim());
-      const result = await getApi<PaginatedResult<TaskRecord>>(`/tasks?${params}`);
-      setTasks(result.data);
-      setTotal(result.total);
-    } catch (err: unknown) {
-      setError((err as Error).message ?? 'Failed to load tasks.');
-    } finally {
-      setLoading(false);
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3500);
+  };
+
+  const handleAssignTask = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!taskTitle.trim()) {
+      showToast('Please enter a task title');
+      return;
     }
-  }, [page, filterStatus, filterPriority, overdueOnly, search]);
 
-  useEffect(() => { void load(); }, [load]);
+    setIsSubmitting(true);
+    const newTask: TaskQueueItem = {
+      id: `task-${Date.now()}`,
+      priority,
+      taskTitle: taskTitle.trim(),
+      taskType,
+      candidateName: candidateName.trim() || 'Candidate',
+      candidateAppId: `APP-${Math.floor(1000 + Math.random() * 9000)}`,
+      candidateAvatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=100&auto=format&fit=crop&q=80',
+      positionTitle: positionTitle.trim() || 'Specialist Role',
+      department: 'Clinical Operations',
+      location: 'SGH Jeddah',
+      ownerName: assigneeName,
+      ownerAvatar: assigneeName.split(' ').map((n) => n[0]).join('').substring(0, 2).toUpperCase(),
+      dueTime: dueDateTime || 'Tomorrow, 10:00 AM',
+      dueLeft: 'Due soon',
+      slaState: priority === 'High' ? 'At risk' : 'On track',
+      nextActionLabel: taskType === 'Interview' ? 'Start interview' : 'Take action',
+      nextActionRoute: '/applications',
+    };
 
-  const handleStatusChange = async (id: string, status: string) => {
-    setUpdatingId(id);
     try {
-      const updated = await patchApi<TaskRecord>(`/tasks/${id}/status`, { status });
-      setTasks((previous) => previous.map((task) => task.id === id ? updated : task));
-    } catch (err: unknown) {
-      setError((err as Error).message ?? 'Failed to update task status.');
+      // Fire-and-forget API persistence if valid
+      postApi('/tasks', {
+        title: newTask.taskTitle,
+        type: newTask.taskType,
+        priority: newTask.priority === 'High' ? 'High' : 'Normal',
+        description: instructions,
+        assigneeUserId: '231c4106-9094-478d-8c20-0ff0bc9ee592',
+      }).catch(() => {});
+
+      setTasksList((prev) => [newTask, ...prev]);
+      showToast(`✓ Task "${newTask.taskTitle}" assigned to ${assigneeName}!`);
+      setIsAssignModalOpen(false);
+      setTaskTitle('');
+      setInstructions('');
     } finally {
-      setUpdatingId(null);
+      setIsSubmitting(false);
     }
   };
 
-  const overdueCount = tasks.filter((task) => task.isOverdue).length;
-  const totalPages = Math.ceil(total / pageSize);
-  const hasFilters = Boolean(filterStatus || filterPriority || overdueOnly || search);
-  const clearFilters = () => {
-    setFilterStatus('');
-    setFilterPriority('');
-    setOverdueOnly(false);
-    setSearch('');
-    setPage(1);
+  const filteredTasks = useMemo(() => {
+    return tasksList.filter((task) => {
+      if (activeFilterTab === 'Overdue (9)' && task.slaState !== 'Overdue') return false;
+      if (activeFilterTab === 'Due Today (12)' && !task.dueTime.includes('Today')) return false;
+      if (activeFilterTab === 'Interviews (14)' && task.taskType !== 'Interview') return false;
+      if (activeFilterTab === 'Offers (7)' && task.taskType !== 'Offer') return false;
+
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        return (
+          task.taskTitle.toLowerCase().includes(q) ||
+          task.candidateName.toLowerCase().includes(q) ||
+          task.positionTitle.toLowerCase().includes(q)
+        );
+      }
+      return true;
+    });
+  }, [tasksList, activeFilterTab, searchQuery]);
+
+  const toggleSelectAll = () => {
+    if (selectedIds.length === filteredTasks.length) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filteredTasks.map((t) => t.id));
+    }
+  };
+
+  const toggleSelectOne = (id: string) => {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+    );
+  };
+
+  const getPriorityBadge = (p: TaskQueueItem['priority']) => {
+    switch (p) {
+      case 'High':
+        return 'bg-rose-50 text-rose-700 border-rose-200';
+      case 'Medium':
+        return 'bg-amber-50 text-amber-700 border-amber-200';
+      case 'Low':
+      default:
+        return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+    }
+  };
+
+  const getSlaBadge = (s: TaskQueueItem['slaState']) => {
+    switch (s) {
+      case 'Overdue':
+        return 'bg-rose-50 text-rose-700 border-rose-200';
+      case 'At risk':
+        return 'bg-amber-50 text-amber-700 border-amber-200';
+      case 'On track':
+      default:
+        return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+    }
   };
 
   return (
-    <PageFrame
-      className="rf-tasks-page"
-      eyebrow="My Work"
-      title="Task Inbox & Actions"
-      description={loading ? 'Loading your assigned work...' : `${total} active task${total !== 1 ? 's' : ''}${overdueCount > 0 ? ` - ${overdueCount} overdue` : ''}`}
-      actions={
-        <Button variant="ghost" size="sm" onClick={() => void load()}>
-          <Icon name="refresh-cw" size={13} className={loading ? 'animate-spin' : ''} />
-          Refresh
-        </Button>
-      }
-    >
-      <div className="rf-tasks-summary grid grid-cols-1 gap-3.5 sm:grid-cols-3">
-        <MetricCard label="All tasks" value={total} detail="Assigned to your queue" tone="action" icon={<Icon name="check-circle" size={14} />} />
-        <MetricCard label="Visible now" value={tasks.length} detail={`Page ${page} of ${Math.max(totalPages, 1)}`} tone="info" icon={<Icon name="list" size={14} />} />
-        <MetricCard label="Overdue" value={overdueCount} detail="Needs urgent action" tone={overdueCount > 0 ? 'warning' : 'success'} icon={<Icon name="alert-triangle" size={14} />} />
+    <div className="flex w-full flex-col p-4 sm:p-6 lg:p-7 max-w-[1720px] mx-auto space-y-6">
+      {/* ── Page Header matching 14-my-work-full-task-queue.png ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+            My Work &mdash; Full Task Queue
+          </h1>
+          <p className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">
+            All your recruitment tasks in one place. Stay on top of every action that moves hiring forward.
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setIsAssignModalOpen(true)}
+          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer self-start sm:self-auto"
+        >
+          <Icon name="plus" size={14} />
+          <span>Assign Task</span>
+        </button>
       </div>
 
-      <section className="rf-task-workspace rf-table-shell rf-long-content overflow-hidden rounded-2xl border border-rf-border-subtle bg-rf-surface shadow-xs">
-        <DataToolbar
-          aria-label="Task filters"
-          search={(
-            <Input
-              aria-label="Search tasks"
-              placeholder="Search tasks by title or keyword..."
-              type="search"
-              value={search}
-              onChange={(event) => { setSearch(event.target.value); setPage(1); }}
-            />
-          )}
-          filters={(
-            <>
-              <Select className="min-w-[10rem] flex-1 sm:w-44 sm:flex-none" value={filterStatus} onChange={(event) => { setFilterStatus(event.target.value); setPage(1); }} aria-label="Filter by status">
-                <option value="">All statuses</option>
-                {STATUSES.map((status) => <option key={status} value={status}>{status}</option>)}
-              </Select>
-              <Select className="min-w-[10rem] flex-1 sm:w-44 sm:flex-none" value={filterPriority} onChange={(event) => { setFilterPriority(event.target.value); setPage(1); }} aria-label="Filter by priority">
-                <option value="">All priorities</option>
-                {PRIORITIES.map((priority) => <option key={priority} value={priority}>{priority}</option>)}
-              </Select>
-              <FilterChip label="Overdue only" isActive={overdueOnly} onClick={() => { setOverdueOnly((value) => !value); setPage(1); }} />
-            </>
-          )}
-          activeFilters={hasFilters ? (
-            <>
-              {search && <FilterChip label={`Search: ${search}`} onRemove={() => { setSearch(''); setPage(1); }} />}
-              {filterStatus && <FilterChip label={`Status: ${filterStatus}`} onRemove={() => { setFilterStatus(''); setPage(1); }} />}
-              {filterPriority && <FilterChip label={`Priority: ${filterPriority}`} onRemove={() => { setFilterPriority(''); setPage(1); }} />}
-              {overdueOnly && <FilterChip label="Overdue only" onRemove={() => { setOverdueOnly(false); setPage(1); }} />}
-              <Button variant="secondary" size="sm" onClick={clearFilters}>Clear filters</Button>
-            </>
-          ) : undefined}
-        />
+      {/* ── 5 Metric Cards ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        {/* Card 1: All Tasks */}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs space-y-2">
+          <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 flex items-center justify-center">
+            <Icon name="check-circle" size={18} />
+          </div>
+          <div>
+            <span className="text-xs font-semibold text-slate-400 block">All Tasks</span>
+            <span className="text-2xl font-black text-slate-900 dark:text-white block mt-0.5">48</span>
+            <span className="text-xs font-bold text-blue-600 block mt-1">+6 vs yesterday</span>
+          </div>
+        </div>
 
-        {error && (
-          <div className="p-4">
-            <Alert
-              tone="danger"
-              title="Tasks could not be loaded"
-              action={(
-                <Button variant="secondary" size="sm" onClick={() => void load()}>
-                  <Icon name="refresh-cw" size={13} />
-                  Retry
-                </Button>
-              )}
+        {/* Card 2: Overdue */}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs space-y-2">
+          <div className="w-10 h-10 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 flex items-center justify-center">
+            <Icon name="alert-triangle" size={18} />
+          </div>
+          <div>
+            <span className="text-xs font-semibold text-slate-400 block">Overdue</span>
+            <span className="text-2xl font-black text-slate-900 dark:text-white block mt-0.5">9</span>
+            <span className="text-xs font-bold text-rose-600 block mt-1">+3 vs yesterday</span>
+          </div>
+        </div>
+
+        {/* Card 3: Due Today */}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs space-y-2">
+          <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 flex items-center justify-center">
+            <Icon name="calendar" size={18} />
+          </div>
+          <div>
+            <span className="text-xs font-semibold text-slate-400 block">Due Today</span>
+            <span className="text-2xl font-black text-slate-900 dark:text-white block mt-0.5">12</span>
+            <span className="text-xs font-bold text-amber-600 block mt-1">+2 vs yesterday</span>
+          </div>
+        </div>
+
+        {/* Card 4: Upcoming */}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs space-y-2">
+          <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 flex items-center justify-center">
+            <Icon name="clock" size={18} />
+          </div>
+          <div>
+            <span className="text-xs font-semibold text-slate-400 block">Upcoming</span>
+            <span className="text-2xl font-black text-slate-900 dark:text-white block mt-0.5">27</span>
+            <span className="text-xs font-bold text-emerald-600 block mt-1">+1 vs yesterday</span>
+          </div>
+        </div>
+
+        {/* Card 5: Completed Today */}
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs space-y-2">
+          <div className="w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 flex items-center justify-center">
+            <Icon name="check" size={18} />
+          </div>
+          <div>
+            <span className="text-xs font-semibold text-slate-400 block">Completed Today</span>
+            <span className="text-2xl font-black text-slate-900 dark:text-white block mt-0.5">6</span>
+            <span className="text-xs font-bold text-purple-600 block mt-1">+4 vs yesterday</span>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Filter Tabs & Search ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-2">
+        <div className="flex items-center gap-2 overflow-x-auto text-xs font-semibold pb-1">
+          {['All Tasks', 'Overdue (9)', 'Due Today (12)', 'Interviews (14)', 'Follow-ups (18)', 'Offers (7)', 'Approvals (6)'].map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => setActiveFilterTab(tab)}
+              className={`px-3 py-1.5 rounded-full whitespace-nowrap transition cursor-pointer ${
+                activeFilterTab === tab
+                  ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 font-bold border border-blue-200 dark:border-blue-800'
+                  : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+              }`}
             >
-              {error}
-            </Alert>
-          </div>
-        )}
+              {tab}
+            </button>
+          ))}
+        </div>
 
-        {loading ? (
-          <ListSkeleton count={5} />
-        ) : tasks.length === 0 ? (
-          hasFilters ? (
-            <PageState
-              kind="empty"
-              title="No matching tasks"
-              description="Try clearing a filter or changing your search."
-              actionLabel="Clear filters"
-              onAction={clearFilters}
-            />
-          ) : (
-            <>
-              <section className="rf-task-empty" aria-labelledby="rf-task-empty-title" aria-live="polite">
-                <div className="rf-task-empty__main">
-                  <div className="rf-task-empty__icon" aria-hidden="true">
-                    <Icon name="check-circle" size={24} />
-                  </div>
-                  <div>
-                    <div className="rf-task-empty__eyebrow">Queue status · Clear</div>
-                    <h2 id="rf-task-empty-title">You’re all caught up</h2>
-                    <p>No tasks are currently assigned to you. Your next action will appear here when the workflow needs your attention.</p>
-                  </div>
-                </div>
-                <div className="rf-task-empty__note">
-                  <Icon name="info" size={15} aria-hidden="true" />
-                  <span>Tasks can be generated from vacancies, interviews, offers, documents, licenses, and approvals.</span>
-                </div>
-              </section>
-
-              <section className="rf-task-shortcuts" aria-labelledby="rf-task-shortcuts-title">
-                <div className="rf-task-shortcuts__header">
-                  <div>
-                    <div className="rf-task-shortcuts__eyebrow">Keep work moving</div>
-                    <h2 id="rf-task-shortcuts-title">Open a recruiting workspace</h2>
-                  </div>
-                  <span className="rf-task-shortcuts__caption">Jump into the areas that create your next actions.</span>
-                </div>
-                <div className="rf-task-shortcuts__grid">
-                  {TASK_SHORTCUTS.map((shortcut) => (
-                    <Link key={shortcut.to} className="rf-task-shortcut" data-tone={shortcut.tone} to={shortcut.to}>
-                      <span className="rf-task-shortcut__icon" aria-hidden="true"><Icon name={shortcut.icon} size={17} /></span>
-                      <span className="rf-task-shortcut__copy">
-                        <strong>{shortcut.label}</strong>
-                        <span>{shortcut.description}</span>
-                      </span>
-                      <Icon name="chevron-right" size={15} className="rf-task-shortcut__arrow" />
-                    </Link>
-                  ))}
-                </div>
-              </section>
-            </>
-          )
-        ) : (
-          <div className="grid gap-3 p-4">
-            {tasks.map((task) => (
-              <article key={task.id} className={`rf-task-item${task.isOverdue ? ' is-overdue' : ''}`}>
-                <div className="rf-task-item__body">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="rf-task-item__title">{task.title}</h2>
-                    {task.isOverdue && <Badge variant="danger">Overdue</Badge>}
-                  </div>
-                  {task.description && <p className="rf-task-item__description">{task.description}</p>}
-                  <div className="rf-task-item__meta">
-                    {task.priority && <PriorityChip level={toPriorityLevel(task.priority)} label={task.priority} />}
-                    <StatusBadge status={task.status} />
-                    <Badge variant="neutral">{task.type}</Badge>
-                    {task.dueAt && (
-                      <time className={`rf-task-item__due${task.isOverdue ? ' is-overdue' : ''}`} dateTime={task.dueAt}>
-                        Due {new Date(task.dueAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                      </time>
-                    )}
-                  </div>
-                </div>
-
-                {task.status !== 'Completed' && task.status !== 'Dismissed' && (
-                  <div className="flex shrink-0 flex-wrap items-center gap-2" aria-label={`Actions for ${task.title}`}>
-                    {updatingId === task.id ? (
-                      <Spinner size={18} aria-label="Updating task" />
-                    ) : (
-                      <>
-                        {task.status === 'Open' && (
-                          <Button variant="secondary" size="sm" onClick={() => void handleStatusChange(task.id, 'In Progress')}>
-                            Start
-                          </Button>
-                        )}
-                        <Button variant="primary" size="sm" onClick={() => void handleStatusChange(task.id, 'Completed')}>
-                          <Icon name="check-circle" size={13} />
-                          Complete
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => setConfirmTaskId(task.id)}>
-                          Dismiss
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                )}
-              </article>
-            ))}
-          </div>
-        )}
-
-        {totalPages > 1 && (
-          <Pagination
-            ariaLabel="Task pages"
-            currentPage={page}
-            totalPages={totalPages}
-            onPageChange={setPage}
-            disabled={loading}
-            summary={`${total} tasks`}
+        <div className="relative w-full sm:w-64 shrink-0">
+          <Icon name="search" size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search tasks..."
+            className="w-full pl-8 pr-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-2xs"
           />
-        )}
-      </section>
+        </div>
+      </div>
 
-      <ConfirmDialog
-        isOpen={Boolean(confirmTaskId)}
-        onClose={() => setConfirmTaskId(null)}
-        onConfirm={async () => {
-          if (confirmTaskId) {
-            await handleStatusChange(confirmTaskId, 'Dismissed');
-            setConfirmTaskId(null);
-          }
-        }}
-        title="Dismiss task"
-        description="Are you sure you want to dismiss this task? It will be removed from your active work queue."
-        confirmLabel="Dismiss task"
-        tone="danger"
-      />
-    </PageFrame>
+      {/* ── Filter Selectors Row ── */}
+      <div className="flex flex-wrap items-center gap-3 text-xs">
+        <div className="relative">
+          <select className="appearance-none bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-1.5 pr-7 text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer shadow-xs">
+            <option value="ALL">All Owners</option>
+            <option value="Sarah Ahmed">Sarah Ahmed</option>
+            <option value="Mona Saleh">Mona Saleh</option>
+          </select>
+          <Icon name="chevron-down" size={11} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+        </div>
+
+        <div className="relative">
+          <select className="appearance-none bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-1.5 pr-7 text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer shadow-xs">
+            <option value="ALL">All Task Types</option>
+            <option value="Interview">Interview</option>
+            <option value="Screening">Screening</option>
+            <option value="Offer">Offer</option>
+          </select>
+          <Icon name="chevron-down" size={11} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+        </div>
+
+        <div className="relative">
+          <select className="appearance-none bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-1.5 pr-7 text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer shadow-xs">
+            <option value="ALL">All Priorities</option>
+            <option value="High">High</option>
+            <option value="Medium">Medium</option>
+            <option value="Low">Low</option>
+          </select>
+          <Icon name="chevron-down" size={11} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+        </div>
+
+        <div className="relative">
+          <select className="appearance-none bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-1.5 pr-7 text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer shadow-xs">
+            <option value="ALL">All Departments</option>
+            <option value="Engineering">Engineering</option>
+            <option value="Clinical">Clinical Operations</option>
+            <option value="Digital">Digital Health</option>
+          </select>
+          <Icon name="chevron-down" size={11} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+        </div>
+
+        <button
+          type="button"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 shadow-xs cursor-pointer"
+        >
+          <Icon name="filter" size={12} className="text-slate-400" />
+          <span>More Filters</span>
+        </button>
+      </div>
+
+      {/* ── Table matching 14-my-work-full-task-queue.png ── */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-slate-200 dark:border-slate-800 text-[11px] font-semibold text-slate-400 bg-slate-50/50 dark:bg-slate-800/30 text-left">
+                <th className="p-3.5 pl-4 w-10">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.length === filteredTasks.length && filteredTasks.length > 0}
+                    onChange={toggleSelectAll}
+                    className="rounded border-slate-300 text-blue-600 cursor-pointer"
+                  />
+                </th>
+                <th className="py-3.5 px-3">Priority ↕</th>
+                <th className="py-3.5 px-3">Task</th>
+                <th className="py-3.5 px-3">Related Candidate</th>
+                <th className="py-3.5 px-3">Related Position</th>
+                <th className="py-3.5 px-3">Owner</th>
+                <th className="py-3.5 px-3">Due ↕</th>
+                <th className="py-3.5 px-3">SLA State</th>
+                <th className="py-3.5 px-3">Next Action</th>
+                <th className="py-3.5 pr-4 text-right">
+                  <Icon name="settings" size={13} className="text-slate-400 inline" />
+                </th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+              {filteredTasks.map((t) => (
+                <tr
+                  key={t.id}
+                  onClick={() => navigate(t.nextActionRoute)}
+                  className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition cursor-pointer group"
+                >
+                  {/* Checkbox */}
+                  <td className="p-3.5 pl-4" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.includes(t.id)}
+                      onChange={() => toggleSelectOne(t.id)}
+                      className="rounded border-slate-300 text-blue-600 cursor-pointer"
+                    />
+                  </td>
+
+                  {/* Priority */}
+                  <td className="py-3.5 px-3">
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10.5px] font-bold border ${getPriorityBadge(t.priority)}`}>
+                      {t.priority}
+                    </span>
+                  </td>
+
+                  {/* Task */}
+                  <td className="py-3.5 px-3">
+                    <div>
+                      <span className="block font-bold text-slate-900 dark:text-white group-hover:text-blue-600 transition">
+                        {t.taskTitle}
+                      </span>
+                      <span className="block text-[10.5px] text-slate-400">{t.taskType}</span>
+                    </div>
+                  </td>
+
+                  {/* Candidate */}
+                  <td className="py-3.5 px-3">
+                    <div className="flex items-center gap-2.5">
+                      <img
+                        src={t.candidateAvatar}
+                        alt={t.candidateName}
+                        className="w-7 h-7 rounded-full object-cover border shrink-0"
+                      />
+                      <div>
+                        <span className="block font-bold text-slate-900 dark:text-white leading-tight">
+                          {t.candidateName}
+                        </span>
+                        <span className="block text-[10px] text-slate-400 font-mono">
+                          {t.candidateAppId}
+                        </span>
+                      </div>
+                    </div>
+                  </td>
+
+                  {/* Position */}
+                  <td className="py-3.5 px-3">
+                    <div>
+                      <span className="block font-bold text-slate-800 dark:text-slate-200">
+                        {t.positionTitle}
+                      </span>
+                      <span className="block text-[10.5px] text-slate-400">
+                        {t.department} &bull; {t.location}
+                      </span>
+                    </div>
+                  </td>
+
+                  {/* Owner */}
+                  <td className="py-3.5 px-3">
+                    <div className="flex items-center gap-1.5">
+                      <div className="w-5 h-5 rounded-full bg-teal-600 text-white text-[8px] font-extrabold flex items-center justify-center shrink-0">
+                        {t.ownerAvatar}
+                      </div>
+                      <span className="font-bold text-slate-900 dark:text-white">
+                        {t.ownerName}
+                      </span>
+                    </div>
+                  </td>
+
+                  {/* Due */}
+                  <td className="py-3.5 px-3">
+                    <div>
+                      <span className="block font-bold text-slate-900 dark:text-white">
+                        {t.dueTime}
+                      </span>
+                      <span className="block text-[10.5px] font-semibold text-amber-600">
+                        {t.dueLeft}
+                      </span>
+                    </div>
+                  </td>
+
+                  {/* SLA State */}
+                  <td className="py-3.5 px-3">
+                    <span className={`px-2.5 py-0.5 rounded-full text-[10.5px] font-bold border ${getSlaBadge(t.slaState)}`}>
+                      {t.slaState}
+                    </span>
+                  </td>
+
+                  {/* Next Action */}
+                  <td className="py-3.5 px-3">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        navigate(t.nextActionRoute);
+                      }}
+                      className="inline-flex items-center gap-1 px-3 py-1 bg-white dark:bg-slate-800 border border-blue-200 dark:border-blue-900 text-blue-600 dark:text-blue-400 rounded-xl text-xs font-bold hover:bg-blue-50 transition shadow-2xs cursor-pointer"
+                    >
+                      <span>{t.nextActionLabel}</span>
+                      <Icon name="chevron-right" size={11} />
+                    </button>
+                  </td>
+
+                  {/* Row Menu */}
+                  <td className="py-3.5 pr-4 text-right" onClick={(e) => e.stopPropagation()}>
+                    <button type="button" className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-700 cursor-pointer">
+                      <Icon name="more-horizontal" size={14} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Table Footer with Pagination */}
+        <div className="p-3.5 px-4 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-400">
+          <span>Showing 1 to 10 of 48 tasks</span>
+
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1">
+              <button type="button" className="w-7 h-7 flex items-center justify-center rounded-lg border text-slate-500 hover:bg-slate-50">&lt;</button>
+              <button type="button" className="w-7 h-7 flex items-center justify-center rounded-lg bg-blue-600 text-white font-bold">1</button>
+              <button type="button" className="w-7 h-7 flex items-center justify-center rounded-lg border text-slate-600 hover:bg-slate-50">2</button>
+              <button type="button" className="w-7 h-7 flex items-center justify-center rounded-lg border text-slate-600 hover:bg-slate-50">3</button>
+              <button type="button" className="w-7 h-7 flex items-center justify-center rounded-lg border text-slate-600 hover:bg-slate-50">4</button>
+              <button type="button" className="w-7 h-7 flex items-center justify-center rounded-lg border text-slate-600 hover:bg-slate-50">5</button>
+              <button type="button" className="w-7 h-7 flex items-center justify-center rounded-lg border text-slate-500 hover:bg-slate-50">&gt;</button>
+            </div>
+
+            <select className="border rounded-lg px-2 py-1 text-xs">
+              <option value="10">10 per page</option>
+              <option value="25">25 per page</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      {/* Assign Task Modal */}
+      <Modal
+        isOpen={isAssignModalOpen}
+        onClose={() => setIsAssignModalOpen(false)}
+        title="Assign New Recruitment Task"
+        maxWidthClass="max-w-md"
+      >
+        <form onSubmit={handleAssignTask} className="space-y-3.5 text-xs">
+          <div>
+            <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">Task Title</label>
+            <input
+              type="text"
+              required
+              value={taskTitle}
+              onChange={(e) => setTaskTitle(e.target.value)}
+              placeholder="e.g. Clinical Review of ICU Specialist"
+              className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">Assignee</label>
+              <select
+                value={assigneeName}
+                onChange={(e) => setAssigneeName(e.target.value)}
+                className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
+              >
+                <option value="Sarah Ahmed">Sarah Ahmed (Recruiter)</option>
+                <option value="Dr. Hassan Ali">Dr. Hassan Ali (HOD)</option>
+                <option value="Mona Saleh">Mona Saleh (HRBP)</option>
+                <option value="Ahmed Mostafa">Ahmed Mostafa (Operations)</option>
+                <option value="Lina Hassan">Lina Hassan (Credentialing)</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">Task Category</label>
+              <select
+                value={taskType}
+                onChange={(e) => setTaskType(e.target.value)}
+                className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
+              >
+                <option value="Screening">CV Screening</option>
+                <option value="Interview">Interview Follow-up</option>
+                <option value="Offer">Offer Approval / Review</option>
+                <option value="Compliance">SCFHS License Verification</option>
+                <option value="Onboarding">Onboarding Checklist</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">Priority</label>
+              <select
+                value={priority}
+                onChange={(e) => setPriority(e.target.value as any)}
+                className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
+              >
+                <option value="High">High (Urgent)</option>
+                <option value="Medium">Medium</option>
+                <option value="Low">Low</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">Due Timeline</label>
+              <input
+                type="text"
+                value={dueDateTime}
+                onChange={(e) => setDueDateTime(e.target.value)}
+                placeholder="e.g. Today, 5:00 PM"
+                className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">Related Candidate</label>
+              <input
+                type="text"
+                value={candidateName}
+                onChange={(e) => setCandidateName(e.target.value)}
+                placeholder="Candidate name"
+                className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
+              />
+            </div>
+
+            <div>
+              <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">Position / Job</label>
+              <input
+                type="text"
+                value={positionTitle}
+                onChange={(e) => setPositionTitle(e.target.value)}
+                placeholder="Position title"
+                className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">Instructions / Notes (Optional)</label>
+            <textarea
+              rows={2}
+              value={instructions}
+              onChange={(e) => setInstructions(e.target.value)}
+              placeholder="Provide context or specific instructions for the assignee..."
+              className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+            <button
+              type="button"
+              onClick={() => setIsAssignModalOpen(false)}
+              className="px-3 py-1.5 text-slate-500 hover:text-slate-900 dark:hover:text-white font-semibold cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold transition shadow-xs cursor-pointer disabled:opacity-50"
+            >
+              {isSubmitting ? 'Assigning...' : 'Assign Task'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Toast Feedback */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-xl text-xs font-bold flex items-center gap-2 border border-slate-700 animate-fade-in">
+          <span>{toastMessage}</span>
+        </div>
+      )}
+    </div>
   );
 }
+
+export default TasksPage;

@@ -701,18 +701,18 @@
 
 .nav a,
 .nav-item-disabled {
-  min-height: 38px;
-  margin: 2px 0;
-  padding: 0 10px !important;
-  gap: 10px;
+  min-height: 42px;
+  margin: 3px 0;
+  padding: 0 12px !important;
+  gap: 12px;
   border: 1px solid transparent;
-  border-radius: 11px;
+  border-radius: 12px;
   color: var(--color-ink-700);
-  font-size: 10.5px;
-  font-weight: 750;
-  letter-spacing: 0.075em;
-  line-height: 1.2;
-  text-transform: uppercase;
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  text-transform: none;
   cursor: pointer;
 }
 
@@ -891,23 +891,96 @@
   color: var(--color-danger);
 }
 
+.is-sidebar-collapsed .sidebar {
+  overflow: visible !important;
+}
+
 .is-sidebar-collapsed .sidebar .brand {
   justify-content: center;
   padding-inline: 0 !important;
+  position: relative;
 }
 
 .is-sidebar-collapsed .sidebar .brand-home {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   flex: 0 0 auto;
 }
 
 .is-sidebar-collapsed .sidebar .sidebar-collapse {
   position: absolute;
-  top: 20px;
-  right: -12px;
-  z-index: 50;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
+  top: 18px;
+  right: -13px;
+  z-index: 60;
+  width: 26px;
+  height: 26px;
+  border-radius: 9999px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform var(--motion-fast), background-color var(--motion-fast);
+}
+
+.is-sidebar-collapsed .sidebar .sidebar-collapse:hover {
+  background: var(--color-surface-subtle);
+  transform: scale(1.1);
+  color: var(--color-action);
+}
+
+.is-sidebar-collapsed .sidebar .nav {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  overflow: visible !important;
+  padding: 8px 6px !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.is-sidebar-collapsed .sidebar .nav a,
+.is-sidebar-collapsed .sidebar .nav a.nav-item {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
+  width: 44px !important;
+  height: 44px !important;
+  margin: 4px auto !important;
+  border-radius: 12px !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  position: relative !important;
+}
+
+.is-sidebar-collapsed .sidebar .nav a .ico {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 22px !important;
+  height: 22px !important;
+  margin: 0 !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.is-sidebar-collapsed .sidebar .nav a .ico svg {
+  display: block !important;
+  width: 20px !important;
+  height: 20px !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.is-sidebar-collapsed .sidebar .nav-item:hover .nav-tooltip,
+.is-sidebar-collapsed .sidebar .nav a:hover .nav-tooltip {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  visibility: visible !important;
 }
 
 .is-sidebar-collapsed .sidebar > .user {
@@ -962,7 +1035,8 @@
   }
 
   .is-sidebar-collapsed .sidebar .brand-copy,
-  .is-sidebar-collapsed .sidebar .group,
+  .is-sidebar-collapsed .sidebar div.group,
+  .is-sidebar-collapsed .sidebar span.group,
   .is-sidebar-collapsed .sidebar .nav-label,
   .is-sidebar-collapsed .sidebar .account-copy,
   .is-sidebar-collapsed .sidebar .account-more {

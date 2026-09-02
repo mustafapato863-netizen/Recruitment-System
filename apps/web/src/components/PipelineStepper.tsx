@@ -56,42 +56,68 @@ export function PipelineStepper({
 
   return (
     <div
-      className="rf-pipeline-stepper-scroll rf-scrollbar"
+      className="w-full bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs mb-6 overflow-x-auto rf-pipeline-stepper-scroll"
       aria-label="Pipeline progress"
       role="region"
       tabIndex={0}
     >
-      <div className="rf-pipeline-stepper">
-        <div className="rf-pipeline-stepper__track" aria-hidden="true" />
+      <div className="relative min-w-[520px] px-4 py-2 rf-pipeline-stepper">
+        {/* Background track line */}
+        <div className="absolute top-[26px] left-12 right-12 h-0.5 bg-slate-200 dark:bg-slate-800 rf-pipeline-stepper__track" aria-hidden="true" />
+
+        {/* Active progress fill */}
         <div
-          className="rf-pipeline-stepper__progress"
-          style={{ width: progressPct === 0 ? '0%' : `${progressPct}%` }}
+          className="absolute top-[26px] left-12 h-0.5 bg-blue-600 dark:bg-blue-500 transition-all duration-300 rf-pipeline-stepper__progress"
+          style={{ width: `calc(${progressPct}% * 0.85)` }}
           aria-hidden="true"
         />
 
-        <ol className="rf-pipeline-stepper__steps">
+        <ol className="relative z-10 flex items-center justify-between list-none p-0 m-0 rf-pipeline-stepper__steps">
           {stageList.map((stage, index) => {
             const status = getStatus(index);
             const defaultIcon = STAGE_ICONS[stage] || 'circle';
 
+            const isCompleted = status === 'completed';
+            const isCurrent = status === 'current';
+            const isRejected = status === 'rejected';
+
             return (
               <li
                 key={stage}
-                className={`rf-pipeline-stepper__step is-${status}`}
-                aria-current={status === 'current' ? 'step' : undefined}
+                className={`flex flex-col items-center gap-1.5 flex-1 text-center rf-pipeline-stepper__step is-${status}`}
+                aria-current={isCurrent ? 'step' : undefined}
               >
-                <span className="rf-pipeline-stepper__marker" aria-hidden="true">
-                  {status === 'completed' ? (
-                    <Icon name="check" size={14} className="stroke-[2.5]" />
-                  ) : status === 'rejected' ? (
-                    <Icon name="close" size={13} className="stroke-[2.5]" />
+                <span
+                  className={`w-9 h-9 rounded-full flex items-center justify-center transition-all shadow-xs rf-pipeline-stepper__marker ${
+                    isCompleted
+                      ? 'bg-emerald-600 text-white shadow-emerald-500/20'
+                      : isCurrent
+                      ? 'bg-blue-600 text-white ring-4 ring-blue-100 dark:ring-blue-900/40 shadow-blue-500/25'
+                      : isRejected
+                      ? 'bg-rose-600 text-white shadow-rose-500/20'
+                      : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border border-slate-200 dark:border-slate-700'
+                  }`}
+                  aria-hidden="true"
+                >
+                  {isCompleted ? (
+                    <Icon name="check" size={15} className="stroke-[2.5]" />
+                  ) : isRejected ? (
+                    <Icon name="close" size={14} className="stroke-[2.5]" />
                   ) : (
-                    <Icon name={defaultIcon} size={14} />
+                    <Icon name={defaultIcon} size={15} />
                   )}
                 </span>
 
-                <span className="rf-pipeline-stepper__label">{stage}</span>
-                <span className="rf-pipeline-stepper__meta">Step {index + 1}</span>
+                <span className={`text-xs font-bold leading-tight truncate max-w-[130px] rf-pipeline-stepper__label ${
+                  isCurrent ? 'text-blue-600 dark:text-blue-400' : isCompleted ? 'text-slate-800 dark:text-slate-200' : 'text-slate-400 dark:text-slate-500'
+                }`}>
+                  {stage}
+                </span>
+                <span className={`text-[10px] font-semibold rf-pipeline-stepper__meta ${
+                  isCurrent ? 'text-blue-600 dark:text-blue-400 font-bold' : 'text-slate-400 dark:text-slate-500'
+                }`}>
+                  Step {index + 1}
+                </span>
               </li>
             );
           })}

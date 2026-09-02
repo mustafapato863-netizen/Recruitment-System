@@ -89,10 +89,43 @@ function readInitialReducedMotion(): boolean {
 }
 
 function applyTheme(theme: Theme, reducedMotion: boolean) {
+  if (typeof document === 'undefined') return;
+
+  // Temporarily disable CSS transitions during theme class switch to prevent
+  // the browser compositor from freezing the screen while interpolating all DOM elements.
+  let disableStyle = document.getElementById('rf-disable-theme-transitions') as HTMLStyleElement | null;
+  if (!disableStyle && document.head) {
+    disableStyle = document.createElement('style');
+    disableStyle.id = 'rf-disable-theme-transitions';
+    disableStyle.textContent = `
+      *, *::before, *::after {
+        -webkit-transition: none !important;
+        -moz-transition: none !important;
+        -o-transition: none !important;
+        -ms-transition: none !important;
+        transition: none !important;
+      }
+    `;
+    document.head.appendChild(disableStyle);
+  }
+
   document.documentElement.dataset.theme = theme;
   document.documentElement.dataset.reducedMotion = String(reducedMotion);
   document.documentElement.classList.toggle('dark', theme === 'dark');
   document.documentElement.style.colorScheme = theme;
+
+  // Force reflow so the new color values apply instantaneously in the current frame
+  void document.documentElement.offsetHeight;
+
+  // Re-enable transitions on the next frame so normal micro-interactions and hover states work smoothly
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      const el = document.getElementById('rf-disable-theme-transitions');
+      if (el?.parentNode) {
+        el.parentNode.removeChild(el);
+      }
+    });
+  });
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
@@ -114,6 +147,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const handleStorage = (event: StorageEvent) => {
       if (event.key === THEME_STORAGE_KEY && isTheme(event.newValue)) {
+        applyTheme(event.newValue, reducedMotion);
         setThemeState(event.newValue);
       }
       if (event.key === REDUCED_MOTION_STORAGE_KEY && (event.newValue === 'true' || event.newValue === 'false')) {
@@ -123,15 +157,30 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
     window.addEventListener('storage', handleStorage);
     return () => window.removeEventListener('storage', handleStorage);
-  }, []);
+  }, [reducedMotion]);
 
   const setTheme = useCallback((nextTheme: Theme) => {
+    applyTheme(nextTheme, reducedMotion);
+    try {
+      window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+    } catch {
+      // Storage can be unavailable in private browsing
+    }
     setThemeState(nextTheme);
-  }, []);
+  }, [reducedMotion]);
 
   const toggleTheme = useCallback(() => {
-    setThemeState((current) => (current === 'light' ? 'dark' : 'light'));
-  }, []);
+    setThemeState((current) => {
+      const nextTheme = current === 'light' ? 'dark' : 'light';
+      applyTheme(nextTheme, reducedMotion);
+      try {
+        window.localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+      } catch {
+        // Storage can be unavailable in private browsing
+      }
+      return nextTheme;
+    });
+  }, [reducedMotion]);
 
   const setReducedMotion = useCallback((enabled: boolean) => {
     setReducedMotionState(enabled);

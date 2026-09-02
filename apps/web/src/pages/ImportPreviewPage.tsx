@@ -183,7 +183,7 @@ export function ImportPreviewPage() {
         </>
       }
     >
-      <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-xs">
+      <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-xs">
         <PipelineStepper steps={IMPORT_STEPS} currentStep={isConfirmed ? 4 : 2} />
       </div>
 
@@ -229,8 +229,8 @@ export function ImportPreviewPage() {
         </Alert>
       )}
 
-      <section className="rf-table-shell rf-long-content overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-xs">
-        <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <section className="rf-table-shell rf-long-content overflow-hidden rounded-2xl border border-slate-200/90 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
+        <div className="p-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="w-full sm:w-72">
             <Input
               aria-label="Search records"
