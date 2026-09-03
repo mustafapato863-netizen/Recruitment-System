@@ -5,7 +5,25 @@ import './PageEnhancementsV2.css';
 
 export function JobAnalyticsPage() {
   const navigate = useNavigate();
-  const [dateRange] = useState('31 Aug – 6 Sep 2026');
+  const [dateRange, setDateRange] = useState('31 Aug – 6 Sep 2026');
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  const handleExportCsv = () => {
+    const csvContent = 'Metric,Value,Period\nTotal Applications,48,31 Aug - 6 Sep 2026\nShortlisted,24,31 Aug - 6 Sep 2026\nInterviews,12,31 Aug - 6 Sep 2026\nOffers,3,31 Aug - 6 Sep 2026\nHires,1,31 Aug - 6 Sep 2026';
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `job-analytics-export-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    showToast('✓ Job analytics metrics exported to CSV!');
+  };
 
   return (
     <div className="flex w-full flex-col p-4 sm:p-6 lg:p-7 max-w-[1720px] mx-auto space-y-6">
@@ -52,6 +70,7 @@ export function JobAnalyticsPage() {
 
           <button
             type="button"
+            onClick={handleExportCsv}
             className="inline-flex items-center gap-1.5 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 transition shadow-xs cursor-pointer"
           >
             <Icon name="download" size={13} className="text-slate-400" />
@@ -60,13 +79,16 @@ export function JobAnalyticsPage() {
 
           <button
             type="button"
+            onClick={() => showToast('Analytics options: Refresh metrics, Schedule automated weekly report')}
             className="p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-500 hover:text-slate-900 shadow-xs cursor-pointer"
+            title="More options"
           >
             <Icon name="more-horizontal" size={15} />
           </button>
 
           <button
             type="button"
+            onClick={() => setDateRange((prev) => prev.includes('31 Aug') ? 'This Month' : prev === 'This Month' ? 'Last 90 Days' : '31 Aug – 6 Sep 2026')}
             className="inline-flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 shadow-xs cursor-pointer"
           >
             <Icon name="calendar" size={13} className="text-slate-400" />
@@ -540,7 +562,11 @@ export function JobAnalyticsPage() {
           </div>
 
           <div className="text-right pt-1 border-t border-slate-100">
-            <button type="button" className="text-xs font-bold text-blue-600 hover:underline">
+            <button
+              type="button"
+              onClick={() => showToast('Bottleneck breakdown: Technical Interview (4 candidates stuck), Offer Stage (1 candidate stuck)')}
+              className="text-xs font-bold text-blue-600 hover:underline cursor-pointer"
+            >
               View all bottlenecks
             </button>
           </div>
@@ -589,7 +615,11 @@ export function JobAnalyticsPage() {
                   </span>
                 </td>
                 <td className="py-2.5 text-right">
-                  <button type="button" className="px-3 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-50">
+                  <button
+                    type="button"
+                    onClick={() => showToast('✓ Interview feedback reminder sent to Ali Hassan!')}
+                    className="px-3 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                  >
                     Send reminder
                   </button>
                 </td>
@@ -617,7 +647,11 @@ export function JobAnalyticsPage() {
                   </span>
                 </td>
                 <td className="py-2.5 text-right">
-                  <button type="button" className="px-3 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-50">
+                  <button
+                    type="button"
+                    onClick={() => navigate('/applications')}
+                    className="px-3 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                  >
                     Review
                   </button>
                 </td>
@@ -645,7 +679,11 @@ export function JobAnalyticsPage() {
                   </span>
                 </td>
                 <td className="py-2.5 text-right">
-                  <button type="button" className="px-3 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-50">
+                  <button
+                    type="button"
+                    onClick={() => showToast('✓ Hiring manager feedback reminder sent to Lina Hassan!')}
+                    className="px-3 py-1 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                  >
                     Send reminder
                   </button>
                 </td>
@@ -655,11 +693,23 @@ export function JobAnalyticsPage() {
         </div>
 
         <div className="text-center pt-2 border-t border-slate-100">
-          <button type="button" className="text-xs font-bold text-blue-600 hover:underline">
+          <button
+            type="button"
+            onClick={() => navigate('/applications')}
+            className="text-xs font-bold text-blue-600 hover:underline cursor-pointer"
+          >
             View all (7)
           </button>
         </div>
       </div>
+
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-xl text-xs font-bold flex items-center gap-2 border border-slate-700 animate-fade-in">
+          <Icon name="check-circle" size={14} className="text-emerald-400" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
     </div>
   );
 }

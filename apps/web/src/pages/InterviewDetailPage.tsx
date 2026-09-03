@@ -14,6 +14,12 @@ export function InterviewDetailPage() {
   const [isReminderSent, setIsReminderSent] = useState(false);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [isScoreGuideOpen, setIsScoreGuideOpen] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -56,6 +62,7 @@ export function InterviewDetailPage() {
         <div className="flex items-center gap-2">
           <button
             type="button"
+            onClick={() => showToast('Interview options: Reschedule, Cancel, or Reassign Panel')}
             className="inline-flex items-center gap-1.5 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 transition shadow-xs cursor-pointer"
           >
             <span>Actions</span>
@@ -105,16 +112,39 @@ export function InterviewDetailPage() {
               </p>
               {/* Quick Contact Buttons */}
               <div className="flex items-center gap-1.5 mt-2">
-                <button type="button" className="p-1 rounded-lg border border-slate-200 text-slate-500 hover:text-slate-900 cursor-pointer">
+                <button
+                  type="button"
+                  onClick={() => window.open('mailto:ali.hassan@example.com?subject=Technical Interview Update')}
+                  className="p-1.5 rounded-lg border border-slate-200 hover:border-blue-500 text-slate-500 hover:text-blue-600 cursor-pointer transition"
+                  title="Send email"
+                >
                   <Icon name="mail" size={12} />
                 </button>
-                <button type="button" className="p-1 rounded-lg border border-slate-200 text-slate-500 hover:text-slate-900 cursor-pointer">
+                <button
+                  type="button"
+                  onClick={() => window.open('tel:+966500000000')}
+                  className="p-1.5 rounded-lg border border-slate-200 hover:border-emerald-500 text-slate-500 hover:text-emerald-600 cursor-pointer transition"
+                  title="Call candidate"
+                >
                   <Icon name="phone" size={12} />
                 </button>
-                <button type="button" className="p-1 rounded-lg border border-slate-200 text-slate-500 hover:text-slate-900 cursor-pointer">
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(window.location.href);
+                    showToast('✓ Interview link copied to clipboard!');
+                  }}
+                  className="p-1.5 rounded-lg border border-slate-200 hover:border-indigo-500 text-slate-500 hover:text-indigo-600 cursor-pointer transition"
+                  title="Copy link"
+                >
                   <Icon name="link" size={12} />
                 </button>
-                <button type="button" className="p-1 rounded-lg border border-slate-200 text-slate-500 hover:text-slate-900 cursor-pointer">
+                <button
+                  type="button"
+                  onClick={() => showToast('Candidate options: View full profile, Add note')}
+                  className="p-1.5 rounded-lg border border-slate-200 hover:border-slate-400 text-slate-500 hover:text-slate-900 cursor-pointer transition"
+                  title="More candidate options"
+                >
                   <Icon name="more-horizontal" size={12} />
                 </button>
               </div>
@@ -195,7 +225,11 @@ export function InterviewDetailPage() {
             <h2 className="text-sm font-extrabold text-slate-900 dark:text-white">
               Interview Details
             </h2>
-            <button type="button" className="text-xs font-bold text-blue-600 hover:underline">
+            <button
+              type="button"
+              onClick={() => showToast('Opening reschedule options for Technical Interview...')}
+              className="text-xs font-bold text-blue-600 hover:underline cursor-pointer"
+            >
               Edit
             </button>
           </div>
@@ -251,7 +285,11 @@ export function InterviewDetailPage() {
               <h2 className="text-sm font-extrabold text-slate-900 dark:text-white">
                 Interview Panel
               </h2>
-              <button type="button" className="text-xs font-bold text-blue-600 hover:underline">
+              <button
+                type="button"
+                onClick={() => showToast('Panel configuration: 3 active panelists')}
+                className="text-xs font-bold text-blue-600 hover:underline cursor-pointer"
+              >
                 Manage panel
               </button>
             </div>
@@ -386,7 +424,11 @@ export function InterviewDetailPage() {
           </div>
 
           <div className="pt-2 border-t border-slate-100 dark:border-slate-800 text-center">
-            <button type="button" className="text-xs font-bold text-blue-600 hover:underline">
+            <button
+              type="button"
+              onClick={() => setIsUploadModalOpen(true)}
+              className="text-xs font-bold text-blue-600 hover:underline cursor-pointer"
+            >
               View all attachments (5)
             </button>
           </div>
@@ -560,7 +602,11 @@ export function InterviewDetailPage() {
           </div>
 
           <div className="pt-2 border-t border-slate-100 dark:border-slate-800 text-center">
-            <button type="button" className="text-xs font-bold text-blue-600 hover:underline">
+            <button
+              type="button"
+              onClick={() => showToast('Displaying full question scorecard feedback summaries')}
+              className="text-xs font-bold text-blue-600 hover:underline cursor-pointer"
+            >
               View full feedback ↗
             </button>
           </div>
@@ -601,7 +647,11 @@ export function InterviewDetailPage() {
               </div>
             </div>
 
-            <button type="button" className="text-xs font-bold text-blue-600 hover:underline block pt-1">
+            <button
+              type="button"
+              onClick={() => showToast('Opening decision note composer...')}
+              className="text-xs font-bold text-blue-600 hover:underline block pt-1 cursor-pointer"
+            >
               Add decision note
             </button>
           </div>
@@ -619,6 +669,7 @@ export function InterviewDetailPage() {
 
             <button
               type="button"
+              onClick={() => showToast('✓ Feedback request reminder notification sent to interviewers!')}
               className="w-full py-2 px-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold hover:bg-slate-50 transition shadow-xs cursor-pointer"
             >
               Request more feedback
@@ -667,6 +718,13 @@ export function InterviewDetailPage() {
           <div className="p-2 border rounded-lg"><b>1.0 - Unacceptable:</b> Major deficiencies.</div>
         </div>
       </Modal>
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-xl text-xs font-bold flex items-center gap-2 border border-slate-700 animate-fade-in">
+          <Icon name="check-circle" size={14} className="text-emerald-400" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
     </div>
   );
 }

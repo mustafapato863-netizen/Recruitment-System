@@ -18,6 +18,12 @@ export function VacancyOverviewPage() {
   const [activeTab, setActiveTab] = useState<'overview' | 'applications' | 'pipeline' | 'interviews' | 'posting' | 'activity' | 'settings'>('overview');
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -106,7 +112,9 @@ export function VacancyOverviewPage() {
 
           <button
             type="button"
+            onClick={() => showToast('Position options: Clone requisition, Archive, or Change status')}
             className="p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-50 transition shadow-xs cursor-pointer"
+            title="Position actions"
           >
             <Icon name="more-vertical" size={15} />
           </button>
@@ -277,7 +285,11 @@ export function VacancyOverviewPage() {
             <h2 className="text-base font-extrabold text-slate-900 dark:text-white tracking-tight">
               SLA Progress
             </h2>
-            <button type="button" className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer">
+            <button
+              type="button"
+              onClick={() => showToast('SLA metrics: Time-to-screen (1.8d), Time-to-interview (4.2d), Time-to-offer (32d / 45d target)')}
+              className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+            >
               View details
             </button>
           </div>
@@ -301,22 +313,14 @@ export function VacancyOverviewPage() {
             <div>
               <div className="flex items-baseline justify-between">
                 <div>
-                  <span className="block text-xs font-bold text-slate-900 dark:text-white">12 days</span>
-                  <span className="block text-[11px] text-slate-500">Target: 15 days</span>
+                  <span className="block text-xs font-bold text-slate-900 dark:text-white">Interview Stage: 12 days</span>
+                  <span className="block text-[11px] text-slate-500">Target: 14 days</span>
                 </div>
-                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">80%</span>
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">85%</span>
               </div>
               <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full mt-2 overflow-hidden">
-                <div className="bg-amber-500 h-full rounded-full" style={{ width: '80%' }} />
+                <div className="bg-blue-600 h-full rounded-full" style={{ width: '85%' }} />
               </div>
-            </div>
-
-            {/* Green on track banner */}
-            <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 rounded-xl border border-emerald-200/60 dark:border-emerald-900 flex items-center gap-2">
-              <Icon name="check-circle" size={16} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
-              <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300">
-                On track to meet SLA target
-              </span>
             </div>
           </div>
         </div>
@@ -325,57 +329,37 @@ export function VacancyOverviewPage() {
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-4">
           <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
             <h2 className="text-base font-extrabold text-slate-900 dark:text-white tracking-tight">
-              Owner &amp; Hiring Team
+              Hiring Team
             </h2>
             <button
               type="button"
-              onClick={() => setIsEditModalOpen(true)}
+              onClick={() => showToast('Team: Sarah Ahmed (Lead Recruiter), Dr. Tariq (Hiring Manager)')}
               className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
             >
-              Edit
+              Manage
             </button>
           </div>
 
-          <div className="space-y-4">
-            {/* Owner */}
-            <div>
-              <span className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Owner</span>
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-teal-600 text-white text-xs font-extrabold flex items-center justify-center shrink-0">
-                  SA
-                </div>
-                <div>
-                  <span className="block text-xs font-bold text-slate-900 dark:text-white">Sarah Ahmed</span>
-                  <span className="block text-[11px] text-slate-500">Senior Recruiter</span>
-                </div>
+          <div className="space-y-3">
+            {/* Primary Recruiter */}
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-teal-600 text-white font-black text-xs flex items-center justify-center">
+                SA
+              </div>
+              <div>
+                <span className="block text-xs font-bold text-slate-900 dark:text-white">Sarah Ahmed</span>
+                <span className="block text-[11px] text-slate-500">Lead Recruiter</span>
               </div>
             </div>
 
             {/* Hiring Manager */}
-            <div>
-              <span className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Hiring Manager</span>
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-emerald-600 text-white text-xs font-extrabold flex items-center justify-center shrink-0">
-                  AM
-                </div>
-                <div>
-                  <span className="block text-xs font-bold text-slate-900 dark:text-white">Ahmed Mostafa</span>
-                  <span className="block text-[11px] text-slate-500">Engineering Manager</span>
-                </div>
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-purple-600 text-white font-black text-xs flex items-center justify-center">
+                TM
               </div>
-            </div>
-
-            {/* Recruiting Team */}
-            <div>
-              <span className="block text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-1.5">Recruiting Team</span>
-              <div className="flex items-center gap-1.5">
-                <div className="w-7 h-7 rounded-full bg-teal-600 text-white text-[10px] font-bold flex items-center justify-center">OF</div>
-                <div className="w-7 h-7 rounded-full bg-cyan-600 text-white text-[10px] font-bold flex items-center justify-center">KM</div>
-                <div className="w-7 h-7 rounded-full bg-emerald-600 text-white text-[10px] font-bold flex items-center justify-center">MS</div>
-                <div className="w-7 h-7 rounded-full bg-green-700 text-white text-[10px] font-bold flex items-center justify-center">NF</div>
-                <div className="w-7 h-7 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-300 text-[10px] font-bold flex items-center justify-center">
-                  +2
-                </div>
+              <div>
+                <span className="block text-xs font-bold text-slate-900 dark:text-white">Dr. Tariq Mahmoud</span>
+                <span className="block text-[11px] text-slate-500">Hiring Manager &bull; Engineering Director</span>
               </div>
             </div>
           </div>
@@ -388,7 +372,11 @@ export function VacancyOverviewPage() {
               <h2 className="text-base font-extrabold text-slate-900 dark:text-white tracking-tight">
                 Last Activity
               </h2>
-              <button type="button" className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer">
+              <button
+                type="button"
+                onClick={() => setActiveTab('activity')}
+                className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+              >
                 View all
               </button>
             </div>
@@ -445,7 +433,11 @@ export function VacancyOverviewPage() {
           </div>
 
           <div className="pt-2 border-t border-slate-100 dark:border-slate-800 text-center">
-            <button type="button" className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer">
+            <button
+              type="button"
+              onClick={() => setActiveTab('activity')}
+              className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+            >
               View all activity
             </button>
           </div>
@@ -705,6 +697,14 @@ export function VacancyOverviewPage() {
           </div>
         </div>
       </Modal>
+
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-xl text-xs font-bold flex items-center gap-2 border border-slate-700 animate-fade-in">
+          <Icon name="check-circle" size={14} className="text-emerald-400" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
     </div>
   );
 }

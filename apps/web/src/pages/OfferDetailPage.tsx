@@ -45,6 +45,25 @@ export function OfferDetailPage() {
     setIsAddNoteModalOpen(false);
   };
 
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  const handleDownloadOfferLetter = () => {
+    const content = `OFFER LETTER - SAUDI GERMAN HEALTH\nCandidate: Mona Saleh\nPosition: Registered Nurse - ICU\nDate: 1 September 2026\n\nBasic Salary: SAR 12,000 / month\nHousing Allowance: SAR 3,000 / month\nTransportation Allowance: SAR 1,500 / month\nTotal Monthly Package: SAR 16,500 / month\nStatus: Approved & Accepted`;
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `Offer_Letter_Mona_Saleh.txt`;
+    link.click();
+    URL.revokeObjectURL(url);
+    showToast('✓ Offer letter downloaded successfully!');
+  };
+
   return (
     <div className="flex w-full flex-col p-4 sm:p-6 lg:p-7 max-w-[1720px] mx-auto space-y-6">
       {/* ── Breadcrumbs & Top Header matching 12-offer-detail-hire.png ── */}
@@ -74,6 +93,7 @@ export function OfferDetailPage() {
         <div className="flex items-center gap-2.5">
           <button
             type="button"
+            onClick={() => showToast('Offer options: Edit offer, Re-trigger approvals, or Revoke')}
             className="p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-500 hover:text-slate-900 shadow-xs cursor-pointer"
             title="More actions"
           >
@@ -82,6 +102,7 @@ export function OfferDetailPage() {
 
           <button
             type="button"
+            onClick={handleDownloadOfferLetter}
             className="inline-flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 shadow-xs cursor-pointer"
           >
             <Icon name="download" size={13} className="text-slate-400" />
@@ -204,7 +225,11 @@ export function OfferDetailPage() {
             <h2 className="text-sm font-extrabold text-slate-900 dark:text-white">
               Compensation Package
             </h2>
-            <button type="button" className="text-xs font-bold text-blue-600 hover:underline">
+            <button
+              type="button"
+              onClick={() => showToast('Monthly compensation breakdown: Basic (SAR 12k), Housing (SAR 3k), Transport (SAR 1k), Specialty (SAR 2k)')}
+              className="text-xs font-bold text-blue-600 hover:underline cursor-pointer"
+            >
               View breakdown
             </button>
           </div>
@@ -280,7 +305,11 @@ export function OfferDetailPage() {
             </div>
 
             <div className="text-right pt-1">
-              <button type="button" className="text-xs font-bold text-blue-600 hover:underline">
+              <button
+                type="button"
+                onClick={() => showToast('Benefits summary: Full Medical Class A, 30 Days Annual Leave, End of Service, Education Allowance')}
+                className="text-xs font-bold text-blue-600 hover:underline cursor-pointer"
+              >
                 View all benefits
               </button>
             </div>
@@ -356,6 +385,7 @@ export function OfferDetailPage() {
               </div>
               <button
                 type="button"
+                onClick={handleDownloadOfferLetter}
                 className="px-2.5 py-1 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-xs font-semibold hover:bg-slate-50 cursor-pointer"
               >
                 Download
@@ -538,7 +568,11 @@ export function OfferDetailPage() {
             <h2 className="text-sm font-extrabold text-slate-900 dark:text-white">
               Internal Notes
             </h2>
-            <button type="button" className="text-xs font-bold text-blue-600 hover:underline">
+            <button
+              type="button"
+              onClick={() => showToast(`Displaying all ${notesList.length} internal notes`)}
+              className="text-xs font-bold text-blue-600 hover:underline cursor-pointer"
+            >
               View all
             </button>
           </div>
@@ -606,6 +640,14 @@ export function OfferDetailPage() {
           </div>
         </div>
       </Modal>
+
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-xl text-xs font-bold flex items-center gap-2 border border-slate-700 animate-fade-in">
+          <Icon name="check-circle" size={14} className="text-emerald-400" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
     </div>
   );
 }

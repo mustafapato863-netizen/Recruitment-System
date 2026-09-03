@@ -241,6 +241,8 @@ export function OffersPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isCreateOfferModalOpen, setIsCreateOfferModalOpen] = useState(false);
+  const [isMoreFiltersOpen, setIsMoreFiltersOpen] = useState(false);
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     getApi<any>('/offers')
@@ -349,10 +351,15 @@ export function OffersPage() {
         <div className="flex items-center gap-2.5">
           <button
             type="button"
-            className="inline-flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 transition shadow-xs cursor-pointer"
+            onClick={() => setIsMoreFiltersOpen((prev) => !prev)}
+            className={`inline-flex items-center gap-2 px-3.5 py-2 border rounded-xl text-xs font-bold transition shadow-xs cursor-pointer ${
+              isMoreFiltersOpen
+                ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950/40 dark:border-blue-800'
+                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50'
+            }`}
           >
             <Icon name="filter" size={13} className="text-slate-400" />
-            <span>Filters</span>
+            <span>{isMoreFiltersOpen ? 'Hide Filters' : 'Filters'}</span>
           </button>
 
           <button
@@ -365,6 +372,37 @@ export function OffersPage() {
           </button>
         </div>
       </div>
+
+      {/* Expandable filters */}
+      {isMoreFiltersOpen && (
+        <div className="flex flex-wrap items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200/60 dark:border-slate-700/60 text-xs">
+          <span className="font-bold text-slate-500">Filter by Status:</span>
+          {['ALL', 'Draft', 'Approved', 'Sent', 'Accepted', 'Rejected'].map((st) => (
+            <button
+              key={st}
+              type="button"
+              onClick={() => setActivePill(st)}
+              className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer border ${
+                activePill === st
+                  ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              {st === 'ALL' ? 'All Offers' : st}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => {
+              setActivePill('ALL');
+              setSearchQuery('');
+            }}
+            className="ml-auto text-xs font-bold text-slate-500 hover:text-rose-600 cursor-pointer"
+          >
+            Reset
+          </button>
+        </div>
+      )}
 
       {/* ── Top 5 KPI Summary Cards ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -661,7 +699,12 @@ export function OffersPage() {
 
                   {/* Row Menu */}
                   <td className="py-3.5 pr-4 text-right" onClick={(e) => e.stopPropagation()}>
-                    <button type="button" className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400 hover:text-slate-700 cursor-pointer">
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/offers/${offer.id}`)}
+                      className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400 hover:text-blue-600 transition cursor-pointer"
+                      title="View offer details"
+                    >
                       <Icon name="more-horizontal" size={14} />
                     </button>
                   </td>
@@ -673,23 +716,38 @@ export function OffersPage() {
 
         {/* Footer with Pagination matching reference */}
         <div className="p-3.5 px-4 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-400">
-          <span>Showing 1 to 8 of 26 offers</span>
+          <span>Showing {(page - 1) * 8 + 1} to {Math.min(page * 8, 26)} of 26 offers</span>
 
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1">
-              <button type="button" className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 cursor-pointer">
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 disabled:opacity-40 cursor-pointer"
+              >
                 &lt;
               </button>
-              <button type="button" className="w-7 h-7 flex items-center justify-center rounded-lg bg-blue-600 text-white font-bold cursor-pointer">
-                1
-              </button>
-              <button type="button" className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 cursor-pointer">
-                2
-              </button>
-              <button type="button" className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 cursor-pointer">
-                3
-              </button>
-              <button type="button" className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 cursor-pointer">
+              {[1, 2, 3].map((num) => (
+                <button
+                  key={num}
+                  type="button"
+                  onClick={() => setPage(num)}
+                  className={`w-7 h-7 flex items-center justify-center rounded-lg text-xs font-bold transition cursor-pointer ${
+                    page === num
+                      ? 'bg-blue-600 text-white shadow-2xs'
+                      : 'border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50'
+                  }`}
+                >
+                  {num}
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setPage((p) => Math.min(3, p + 1))}
+                disabled={page === 3}
+                className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 disabled:opacity-40 cursor-pointer"
+              >
                 &gt;
               </button>
             </div>

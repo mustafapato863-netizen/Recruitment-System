@@ -550,6 +550,33 @@ export function ApplicationsPage() {
 
   // List view state
   const [selectedListIds, setSelectedListIds] = useState<string[]>([]);
+  const [isMoreFiltersOpen, setIsMoreFiltersOpen] = useState(false);
+  const [selectedSourceFilter, setSelectedSourceFilter] = useState('ALL');
+  const [selectedRatingFilter, setSelectedRatingFilter] = useState('ALL');
+  const [listPage, setListPage] = useState(1);
+
+  const handleExportCsv = () => {
+    const headers = ['ID', 'Candidate Name', 'Job Position', 'Stage', 'Owner', 'Fit Score', 'Applied'];
+    const rows = DEFAULT_LIST_ROWS.map((r) => [
+      r.id,
+      `"${r.name.replace(/"/g, '""')}"`,
+      `"${r.positionTitle.replace(/"/g, '""')}"`,
+      `"${r.currentStage}"`,
+      `"${r.ownerName}"`,
+      r.fitScore,
+      `"${r.appliedAgo}"`,
+    ]);
+    const csvContent = [headers.join(','), ...rows.map((e) => e.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `applications-export-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    setToastMessage('✓ Applications exported to CSV successfully!');
+    setTimeout(() => setToastMessage(null), 3000);
+  };
 
   const loadApplications = useCallback(() => {
     const url = vacancyId
@@ -756,6 +783,7 @@ export function ApplicationsPage() {
         <div className="flex items-center gap-2.5">
           <button
             type="button"
+            onClick={handleExportCsv}
             className="inline-flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 transition shadow-xs cursor-pointer"
           >
             <Icon name="download" size={13} className="text-slate-400" />
@@ -822,10 +850,15 @@ export function ApplicationsPage() {
         {/* More filters */}
         <button
           type="button"
-          className="inline-flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 shadow-xs cursor-pointer"
+          onClick={() => setIsMoreFiltersOpen((prev) => !prev)}
+          className={`inline-flex items-center gap-2 px-3.5 py-2 border rounded-xl text-xs font-semibold transition shadow-xs cursor-pointer ${
+            isMoreFiltersOpen || selectedSourceFilter !== 'ALL' || selectedRatingFilter !== 'ALL'
+              ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950/40 dark:border-blue-800'
+              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50'
+          }`}
         >
           <Icon name="filter" size={13} className="text-slate-400" />
-          <span>More Filters</span>
+          <span>{isMoreFiltersOpen ? 'Hide Filters' : 'More Filters'}</span>
         </button>
 
         {/* Search Bar */}
@@ -868,6 +901,40 @@ export function ApplicationsPage() {
           </button>
         </div>
       </div>
+
+      {/* ── Expandable Secondary Filters ── */}
+      {isMoreFiltersOpen && (
+        <div className="flex flex-wrap items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200/60 dark:border-slate-700/60 text-xs">
+          <span className="font-bold text-slate-500">Source:</span>
+          {['ALL', 'LinkedIn', 'Careers Site', 'Referral', 'Job Boards'].map((src) => (
+            <button
+              key={src}
+              type="button"
+              onClick={() => setSelectedSourceFilter(src)}
+              className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer border ${
+                selectedSourceFilter === src
+                  ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
+                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100'
+              }`}
+            >
+              {src === 'ALL' ? 'All Sources' : src}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedJob('All Positions');
+              setSelectedStageFilter('ALL');
+              setSelectedSourceFilter('ALL');
+              setSelectedRatingFilter('ALL');
+              setSearchQuery('');
+            }}
+            className="ml-auto text-xs font-bold text-slate-500 hover:text-rose-600 cursor-pointer"
+          >
+            Reset Filters
+          </button>
+        </div>
+      )}
 
       {/* Toast Notification */}
       {toastMessage && (
@@ -1023,7 +1090,12 @@ export function ApplicationsPage() {
                     </td>
 
                     <td className="py-3.5 pr-4 text-right" onClick={(e) => e.stopPropagation()}>
-                      <button type="button" className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-700">
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/applications/${row.id}`)}
+                        className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400 hover:text-blue-600 transition cursor-pointer"
+                        title="View application details"
+                      >
                         <Icon name="more-horizontal" size={14} />
                       </button>
                     </td>
@@ -1035,14 +1107,39 @@ export function ApplicationsPage() {
 
           {/* List Footer */}
           <div className="p-3.5 px-4 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-400">
-            <span>Showing 1 to 10 of 278 applications</span>
+            <span>Showing {(listPage - 1) * 10 + 1} to {Math.min(listPage * 10, DEFAULT_LIST_ROWS.length)} of {DEFAULT_LIST_ROWS.length} applications</span>
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-1">
-                <button type="button" className="w-7 h-7 flex items-center justify-center rounded-lg border text-slate-500 hover:bg-slate-50">&lt;</button>
-                <button type="button" className="w-7 h-7 flex items-center justify-center rounded-lg bg-blue-600 text-white font-bold">1</button>
-                <button type="button" className="w-7 h-7 flex items-center justify-center rounded-lg border text-slate-600 hover:bg-slate-50">2</button>
-                <button type="button" className="w-7 h-7 flex items-center justify-center rounded-lg border text-slate-600 hover:bg-slate-50">3</button>
-                <button type="button" className="w-7 h-7 flex items-center justify-center rounded-lg border text-slate-500 hover:bg-slate-50">&gt;</button>
+                <button
+                  type="button"
+                  onClick={() => setListPage((p) => Math.max(1, p - 1))}
+                  disabled={listPage === 1}
+                  className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 disabled:opacity-40 cursor-pointer"
+                >
+                  &lt;
+                </button>
+                {[1, 2, 3].map((pageNumber) => (
+                  <button
+                    key={pageNumber}
+                    type="button"
+                    onClick={() => setListPage(pageNumber)}
+                    className={`w-7 h-7 flex items-center justify-center rounded-lg text-xs font-bold transition cursor-pointer ${
+                      listPage === pageNumber
+                        ? 'bg-blue-600 text-white shadow-2xs'
+                        : 'border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50'
+                    }`}
+                  >
+                    {pageNumber}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setListPage((p) => Math.min(3, p + 1))}
+                  disabled={listPage === 3}
+                  className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 disabled:opacity-40 cursor-pointer"
+                >
+                  &gt;
+                </button>
               </div>
               <select className="border rounded-lg px-2 py-1 text-xs">
                 <option value="10">10 per page</option>
@@ -1090,6 +1187,10 @@ export function ApplicationsPage() {
                     </button>
                     <button
                       type="button"
+                      onClick={() => {
+                        setToastMessage(`ℹ️ Stage: ${column.name} (${column.count} candidates)`);
+                        setTimeout(() => setToastMessage(null), 3000);
+                      }}
                       className="p-1 hover:bg-slate-200/60 dark:hover:bg-slate-800 rounded-md cursor-pointer transition"
                       title="Column options"
                     >

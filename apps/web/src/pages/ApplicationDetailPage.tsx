@@ -25,6 +25,12 @@ export function ApplicationDetailPage() {
   const [isAddTagModalOpen, setIsAddTagModalOpen] = useState(false);
   const [tags, setTags] = useState(['React', 'TypeScript', 'Frontend', '3+ Years', 'English']);
   const [newTagInput, setNewTagInput] = useState('');
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3000);
+  };
 
   // Move stage selection
   const [selectedNextStage, setSelectedNextStage] = useState('First Interview');
@@ -106,7 +112,9 @@ export function ApplicationDetailPage() {
 
           <button
             type="button"
+            onClick={() => showToast('Application options: Export candidate packet, Transfer requisition, or Archive')}
             className="p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-50 transition shadow-xs cursor-pointer"
+            title="Application options"
           >
             <Icon name="more-horizontal" size={16} />
           </button>
@@ -318,7 +326,11 @@ export function ApplicationDetailPage() {
                 <h2 className="text-base font-extrabold text-slate-900 dark:text-white tracking-tight">
                   Timeline
                 </h2>
-                <button type="button" className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('activity')}
+                  className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                >
                   View full timeline
                 </button>
               </div>
@@ -811,6 +823,14 @@ export function ApplicationDetailPage() {
           </div>
         </div>
       </Modal>
+
+      {/* Toast Notification */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-xl text-xs font-bold flex items-center gap-2 border border-slate-700 animate-fade-in">
+          <Icon name="check-circle" size={14} className="text-emerald-400" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { Icon, type IconName } from '../components/Icon';
 import { IconButton } from '../components/ui/IconButton';
@@ -83,6 +83,7 @@ export function NavigationItem({
 export function AppShell() {
   const { user, logout } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const searchTriggerRef = useRef<HTMLButtonElement>(null);
   const mobileMenuTriggerRef = useRef<HTMLButtonElement>(null);
   const mobileSidebarRef = useRef<HTMLElement>(null);
@@ -360,8 +361,9 @@ export function AppShell() {
             {/* Help button */}
             <button
               type="button"
+              onClick={() => setIsCommandPaletteOpen(true)}
               className="hidden md:flex w-9 h-9 items-center justify-center rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs text-xs font-bold cursor-pointer"
-              title="Help & Documentation"
+              title="Help & Quick Command Search (⌘K)"
             >
               ?
             </button>
@@ -369,8 +371,9 @@ export function AppShell() {
             {/* History / Clock button */}
             <button
               type="button"
+              onClick={() => navigate('/tasks')}
               className="hidden md:flex w-9 h-9 items-center justify-center rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs cursor-pointer"
-              title="Recent History"
+              title="Recent Activity & Task Queue"
             >
               <Icon name="clock" size={15} />
             </button>

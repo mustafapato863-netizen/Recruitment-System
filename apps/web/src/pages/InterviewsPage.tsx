@@ -219,11 +219,37 @@ export function InterviewsPage() {
   const [apiInterviews, setApiInterviews] = useState<Interview[]>([]);
   const [applications, setApplications] = useState<Application[]>([]);
   const [viewMode, setViewMode] = useState<'calendar' | 'list'>('list');
-  const [dateRange] = useState('31 Aug - 6 Sep 2026');
+  const [dateRange, setDateRange] = useState('31 Aug - 6 Sep 2026');
+  const [isMoreFiltersOpen, setIsMoreFiltersOpen] = useState(false);
   const [selectedType, setSelectedType] = useState('ALL');
   const [selectedStatus, setSelectedStatus] = useState('ALL');
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const handleExportCsv = () => {
+    const headers = ['Candidate', 'Position', 'Type', 'Time', 'Interviewer', 'Status'];
+    const rows: string[][] = [];
+    DEFAULT_INTERVIEW_GROUPS.forEach((s) => {
+      s.items.forEach((inv) => {
+        rows.push([
+          `"${inv.candidateName}"`,
+          `"${inv.jobTitle}"`,
+          `"${inv.typeTag}"`,
+          `"${s.dayTitle} ${inv.time}"`,
+          `"${inv.interviewerName}"`,
+          `"${inv.statusBadge}"`,
+        ]);
+      });
+    });
+    const blob = new Blob([[headers.join(','), ...rows.map((r) => r.join(','))].join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `interviews-schedule-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    showToast('✓ Interview schedule exported to CSV!');
+  };
 
   // Scheduling Form State
   const [selectedAppId, setSelectedAppId] = useState('');
@@ -374,6 +400,7 @@ export function InterviewsPage() {
         <div className="flex items-center gap-2.5">
           <button
             type="button"
+            onClick={handleExportCsv}
             className="inline-flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 transition shadow-xs cursor-pointer"
           >
             <Icon name="download" size={13} className="text-slate-400" />
@@ -397,6 +424,7 @@ export function InterviewsPage() {
         <div className="relative">
           <button
             type="button"
+            onClick={() => setDateRange((prev) => prev.includes('31 Aug') ? 'Today' : prev === 'Today' ? 'Next 7 Days' : '31 Aug - 6 Sep 2026')}
             className="inline-flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 shadow-xs cursor-pointer"
           >
             <Icon name="calendar" size={13} className="text-slate-400" />
@@ -449,12 +477,49 @@ export function InterviewsPage() {
         {/* More filters */}
         <button
           type="button"
-          className="inline-flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 shadow-xs cursor-pointer"
+          onClick={() => setIsMoreFiltersOpen((prev) => !prev)}
+          className={`inline-flex items-center gap-2 px-3.5 py-2 border rounded-xl text-xs font-semibold transition shadow-xs cursor-pointer ${
+            isMoreFiltersOpen
+              ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950/40 dark:border-blue-800'
+              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50'
+          }`}
         >
           <Icon name="filter" size={13} className="text-slate-400" />
-          <span>More filters</span>
+          <span>{isMoreFiltersOpen ? 'Hide filters' : 'More filters'}</span>
         </button>
       </div>
+
+      {/* Expandable filters */}
+      {isMoreFiltersOpen && (
+        <div className="flex flex-wrap items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200/60 dark:border-slate-700/60 text-xs">
+          <span className="font-bold text-slate-500">Quick Filters:</span>
+          <button
+            type="button"
+            onClick={() => setSelectedStatus('Feedback Pending')}
+            className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 text-amber-700 dark:text-amber-400 cursor-pointer"
+          >
+            Feedback Pending
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedType('Technical')}
+            className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 text-blue-600 dark:text-blue-400 cursor-pointer"
+          >
+            Technical Rounds
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedType('ALL');
+              setSelectedStatus('ALL');
+              setDateRange('31 Aug - 6 Sep 2026');
+            }}
+            className="ml-auto text-xs font-bold text-slate-500 hover:text-rose-600 cursor-pointer"
+          >
+            Reset All
+          </button>
+        </div>
+      )}
 
       {/* ── Tabs & Sort Bar ── */}
       <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
@@ -591,6 +656,7 @@ export function InterviewsPage() {
             <span>Showing 1 to 8 of 8 interviews</span>
             <button
               type="button"
+              onClick={() => showToast('All scheduled interviews are currently loaded.')}
               className="px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 cursor-pointer"
             >
               Load more ▾
@@ -606,7 +672,11 @@ export function InterviewsPage() {
               <h2 className="text-sm font-extrabold text-slate-900 dark:text-white">
                 Feedback Pending
               </h2>
-              <button type="button" className="text-xs font-bold text-blue-600 hover:underline">
+              <button
+                type="button"
+                onClick={() => setSelectedStatus('Feedback Pending')}
+                className="text-xs font-bold text-blue-600 hover:underline cursor-pointer"
+              >
                 View all
               </button>
             </div>
@@ -652,7 +722,14 @@ export function InterviewsPage() {
               <h2 className="text-sm font-extrabold text-slate-900 dark:text-white">
                 Today&apos;s Interviews
               </h2>
-              <button type="button" className="text-xs font-bold text-blue-600 hover:underline">
+              <button
+                type="button"
+                onClick={() => {
+                  setDateRange('Today');
+                  setViewMode('calendar');
+                }}
+                className="text-xs font-bold text-blue-600 hover:underline cursor-pointer"
+              >
                 View full day
               </button>
             </div>
