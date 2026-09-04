@@ -24,7 +24,8 @@
 |------|-------------|--------|--------|
 | P0.1 | pre-existing tree | opencode muse-spark-1.3 read-only PASS | 14df39e |
 | P0.2 | agy (report lost on abort; work recovered) | opencode muse-spark-1.3 read-only PASS | 13d504c |
-| P0.3 | agy | opencode muse-spark-1.3 read-only PASS; tsc clean; web build ok | pending |
+| P0.3 | agy | opencode muse-spark-1.3 read-only PASS; tsc clean; web build ok | 7d82564 |
+| P1.1 | agy (timed out after writing file; no report) | opencode muse-spark-1.3 read-only PASS 6/6; tsc clean; tokens+props verified by orchestrator | pending |
 | P0.2–P4.3 | agy (sequential) | opencode muse-spark-1.3 read-only | per task |
 
 ### Delegation mandates (user-approved 2026-09-04)
@@ -44,8 +45,8 @@
   - Verified `pnpm --dir apps/web build` passes with 0 errors (production build succeeded).
   - Verified no TypeScript errors in ApplicationDetailPage.tsx or any P0.1/P0.2 touched files.
 
-### In Progress
-- [ ] Phase 1 tasks
+  ### In Progress
+- [ ] Phase 1 tasks (P1.2 next: rebuild CandidateDetailPage as 360 hub)
 
 ### Blocked
 - None
