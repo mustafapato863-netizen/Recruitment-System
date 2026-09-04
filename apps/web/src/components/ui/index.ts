@@ -30,3 +30,4 @@ export * from './Toast';
 export { ConfirmDialog } from '../ConfirmDialog';
 export { Modal } from '../Modal';
 export { StatusBadge } from '../StatusBadge';
+export { SLAIndicator } from './SLAIndicator';

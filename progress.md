@@ -23,7 +23,8 @@
 | Task | Implementer | Review | Commit |
 |------|-------------|--------|--------|
 | P0.1 | pre-existing tree | opencode muse-spark-1.3 read-only PASS | 14df39e |
-| P0.2 | agy (report lost on abort; work recovered) | opencode muse-spark-1.3 read-only PASS | pending |
+| P0.2 | agy (report lost on abort; work recovered) | opencode muse-spark-1.3 read-only PASS | 13d504c |
+| P0.3 | agy | opencode muse-spark-1.3 read-only PASS; tsc clean; web build ok | pending |
 | P0.2–P4.3 | agy (sequential) | opencode muse-spark-1.3 read-only | per task |
 
 ### Delegation mandates (user-approved 2026-09-04)
@@ -37,8 +38,14 @@
   - tsc clean (0 errors); web tests 58/58 pass.
   - Orchestrator verification 2026-09-04: opencode review (muse-spark-1.3, read-only) PASS items 1-4, P0.1 untouched, no new deps; tsc re-run clean; web tests re-run 58/58 pass. Committed.
 
+- [x] Task P0.3: Green build gate + export SLAIndicator
+  - Exported SLAIndicator from apps/web/src/components/ui/index.ts.
+  - Verified `pnpm --dir apps/web exec tsc -p tsconfig.app.json --noEmit` passes with 0 errors.
+  - Verified `pnpm --dir apps/web build` passes with 0 errors (production build succeeded).
+  - Verified no TypeScript errors in ApplicationDetailPage.tsx or any P0.1/P0.2 touched files.
+
 ### In Progress
-- [ ] Task P0.3: Green build baseline + export SLAIndicator from components/index.ts
+- [ ] Phase 1 tasks
 
 ### Blocked
 - None

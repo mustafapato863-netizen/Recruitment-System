@@ -14,7 +14,7 @@ Already built, NOT yet wired end-to-end:
 - `Scorecard.tsx` — full star-rating UI, no write-back to application/interview record
 - `ActivityTimeline.tsx` — imported in HiringCasePage only
 - `PipelineStepper.tsx` — imported in ApplicationDetailPage but stage movement fires raw PATCH
-- `SLAIndicator.tsx` — unused in any page
+- `SLAIndicator.tsx` — exported from components/ui as of P0.3 (ready for Phase 1); unused in any page yet
 - `ProgressBar.tsx` — imported in HiringCasePage
 
 ## 3. Missing Connections (The 5 Gaps)
