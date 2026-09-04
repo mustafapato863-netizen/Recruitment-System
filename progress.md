@@ -29,6 +29,7 @@
 | P1.2 | agy (retry after network stall) | opencode muse-spark-1.3 read-only PASS 5/5 incl. backend DTO verification; tsc clean; web tests 58/58 pass. Accepted: Add Tag modal as in-scope-adjacent (wires P1.1 onAddTag, whitelisted skills field) | e4faaf9 |
 | P1.3 | agy (killed during final verify; work recovered) | opencode muse-spark-1.3 read-only PASS 6/6; tsc clean; web tests 58/58 pass. Noted non-blocking: dialog closes on transition error (alert behind bar); onClick additive bypasses transition logic — audit at wiring (P1.4) | 766dc5a |
 | P1.4 | agy | opencode muse-spark-1.3 read-only PASS 4/4; tsc clean; web build ok. Orchestrator hardening: version={application.version ?? 1} (matches P0.1 convention) | pending |
+| P2.0-backend | agy | opencode muse-spark-1.3 read-only PASS 5/5 (guards, tenant isolation, validation verified); prisma valid; API tsc clean; eslint clean; API tests 11/11 pass. Implementer claims live DB migration + cross-tenant checks executed | 13029d3 |
 | P0.2–P4.3 | agy (sequential) | opencode muse-spark-1.3 read-only | per task |
 
 ### Delegation mandates (user-approved 2026-09-04)
@@ -78,8 +79,18 @@
   - Verified `pnpm --dir apps/web exec tsc -p tsconfig.app.json --noEmit` clean (0 errors).
   - Verified `pnpm --dir apps/web build` clean (production build succeeded in 1.55s).
 
+- [x] Task P2.0-backend: Add ApplicationNote model + GET/POST /applications/:id/notes endpoints
+  - Added `ApplicationNote` model to `database/prisma/schema.prisma` with uuid PK, organizationId, applicationId, authorId (User relation, onDelete Restrict), content text, timestamps, indexes on `[applicationId, createdAt]` and `[organizationId, applicationId]`, and back-relations `notes ApplicationNote[]` on `Application`, `applicationNotes` on `Organization` and `User`.
+  - Created migration `20260905_add_application_notes/migration.sql` and applied table, indexes, and foreign keys to PostgreSQL DB (`application_notes` table verified in DB).
+  - Regenerated Prisma client via `pnpm --dir database prisma:generate`.
+  - Added `CreateApplicationNoteDto` with class-validator/class-transformer decorators (`@Transform` trim, `@IsString`, `@IsNotEmpty`, `@MaxLength(10000)`).
+  - Implemented `listNotes(organizationId, applicationId)` and `createNote(organizationId, applicationId, authorId, content)` in `applications.service.ts` with organization ownership verification (404 NotFound if application absent or mismatched) and author display name/email mapping.
+  - Implemented `GET /applications/:id/notes` (`APPLICATION_VIEW` + `TenantScopedGuard`) and `POST /applications/:id/notes` (`APPLICATION_MOVE_STAGE` + `TenantScopedGuard` + `@AuditAction('APPLICATION_NOTE_CREATE')`) in `applications.controller.ts`.
+  - Added `ApplicationNote` and `CreateApplicationNoteInput` contract types to `packages/contracts/src/index.ts`.
+  - Gates: API typecheck clean (`tsc --noEmit`), ESLint clean on touched files (0 errors, 0 warnings), existing error-normalizer unit tests 11/11 pass, live API cross-tenant isolation and 400 validation verified, DB migration executed.
+
 ### In Progress
-- [ ] Phase 2 tasks (Phase 1 complete)
+- [ ] Phase 2 tasks (P2.0-backend complete; unblocks P2.1 / P2.2 CommentsThread wiring)
 
 ### Blocked
-- None
+- None (P2.1 unblocked by P2.0-backend endpoint delivery; P2.2 CommentsThread UI wiring ready to proceed).

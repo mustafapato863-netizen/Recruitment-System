@@ -20,7 +20,7 @@ Already built, NOT yet wired end-to-end:
 ## 3. Missing Connections (The 5 Gaps)
 1. **Unified Candidate 360 hub** — Resolved in P1.2 (`CandidateDetailPage.tsx` integrates `CandidateWorkspace`, applications table, interview history, offer list, timeline placeholder).
 2. **No Smart Action Bar** — Resolved in P1.3 and P1.4 (`SmartActionBar.tsx` created and integrated into `ApplicationDetailPage.tsx` with context-aware stage actions, optimistic locking, blocked action tooltips, ConfirmDialog, and Drawer comments thread).
-3. **CommentsThread is UI-only** — no POST /applications/:id/notes endpoint wired
+3. **CommentsThread is UI-only** — Backend endpoint resolved in P2.0-backend (`ApplicationNote` schema, migration, `CreateApplicationNoteDto`, `listNotes`/`createNote` service methods, and `GET/POST /applications/:id/notes` endpoints with tenant guards & audit action; P2.1 probe unblocked, P2.2 CommentsThread UI wiring comes next).
 4. **Scorecard is disconnected** — no read/write path from InterviewDetailPage to the Interview or Application record
 5. **Joining has no completion ceremony** — JoiningManagementPage has "Manage" button → HiringCasePage, but no joining confirmation modal, compliance checklist, or headcount close
 
@@ -39,7 +39,8 @@ From schema.prisma (confirmed):
 - `GET /offers` — returns `Offer[]` (scoped to organization). Does NOT accept `candidateId` query parameter. Candidate 360 filters client-side by candidate's application IDs.
 - `PATCH /candidates/:id` — accepts `skills?: string[]`, used by Candidate 360 to persist tags.
 - `PATCH /applications/:id/stage` — exists (ApplicationDetailPage calls it)
-- `POST /applications/:id/notes` — NOT verified; CommentsThread has no call
+- `POST /applications/:id/notes` — Implemented in P2.0-backend (requires `APPLICATION_MOVE_STAGE` + `TenantScopedGuard`, audit action `APPLICATION_NOTE_CREATE`).
+- `GET /applications/:id/notes` — Implemented in P2.0-backend (requires `APPLICATION_VIEW` + `TenantScopedGuard`, returns `ApplicationNote[]` ordered by `createdAt desc`).
 - `GET /applications/:id/history` — exists (ApplicationDetailPage fetches it)
 - `GET /hiring` — exists (JoiningManagementPage fetches)
 - `PATCH /hiring/:id` — exists (HiringCasePage calls it)

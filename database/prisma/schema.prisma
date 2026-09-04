@@ -14,34 +14,35 @@ datasource db {
 }
 
 model Organization {
-  id                 String              @id @default(uuid()) @db.Uuid
-  code               String              @unique @db.VarChar(50)
-  name               String              @db.VarChar(200)
-  status             String              @default("Active") @db.VarChar(30)
-  legalEntities      LegalEntity[]
-  branches           Branch[]
-  positions          Position[]
-  users              User[]
-  vacancyRequests    VacancyRequest[]
-  vacancies          Vacancy[]
-  candidates         Candidate[]
-  applications       Application[]
-  candidateDocuments CandidateDocument[]
-  screeningLogs      ScreeningLog[]
-  interviews         Interview[]
-  offers             Offer[]
-  hiringCases          HiringCase[]
-  talentPools          TalentPool[]
-  candidateImportJobs  CandidateImportJob[]
-  pipelineTemplates    PipelineTemplate[]
-  integrations         Integration[]
-  notifications        Notification[]
-  tasks                Task[]
-  authTokens           AuthToken[]
-  customRoles          Role[]
-  emailOutbox          EmailOutbox[]
-  createdAt            DateTime            @default(now()) @db.Timestamptz(6)
-  updatedAt            DateTime            @updatedAt @db.Timestamptz(6)
+  id                  String               @id @default(uuid()) @db.Uuid
+  code                String               @unique @db.VarChar(50)
+  name                String               @db.VarChar(200)
+  status              String               @default("Active") @db.VarChar(30)
+  legalEntities       LegalEntity[]
+  branches            Branch[]
+  positions           Position[]
+  users               User[]
+  vacancyRequests     VacancyRequest[]
+  vacancies           Vacancy[]
+  candidates          Candidate[]
+  applications        Application[]
+  candidateDocuments  CandidateDocument[]
+  screeningLogs       ScreeningLog[]
+  applicationNotes    ApplicationNote[]
+  interviews          Interview[]
+  offers              Offer[]
+  hiringCases         HiringCase[]
+  talentPools         TalentPool[]
+  candidateImportJobs CandidateImportJob[]
+  pipelineTemplates   PipelineTemplate[]
+  integrations        Integration[]
+  notifications       Notification[]
+  tasks               Task[]
+  authTokens          AuthToken[]
+  customRoles         Role[]
+  emailOutbox         EmailOutbox[]
+  createdAt           DateTime             @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime             @updatedAt @db.Timestamptz(6)
 
   @@index([status])
   @@map("organizations")
@@ -137,8 +138,9 @@ model User {
   taskApplications        Application[]              @relation("ApplicationTaskOwner")
   applicationStageChanges ApplicationStatusHistory[]
   uploadedDocuments       CandidateDocument[]
-  deletedDocuments        CandidateDocument[]      @relation("DocumentDeleter")
+  deletedDocuments        CandidateDocument[]        @relation("DocumentDeleter")
   screeningLogs           ScreeningLog[]
+  applicationNotes        ApplicationNote[]
   interviewAttendeeLinks  InterviewAttendee[]
   submittedScorecards     InterviewScorecard[]
   offerApprovals          OfferApproval[]
@@ -159,16 +161,16 @@ model User {
 }
 
 model AuthToken {
-  id             String        @id @default(uuid()) @db.Uuid
-  organizationId String        @db.Uuid
-  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  userId         String        @db.Uuid
-  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  type           String        @db.VarChar(40)
-  tokenHash      String        @unique @db.VarChar(64)
-  expiresAt      DateTime      @db.Timestamptz(6)
-  consumedAt     DateTime?     @db.Timestamptz(6)
-  createdAt      DateTime      @default(now()) @db.Timestamptz(6)
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userId         String       @db.Uuid
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type           String       @db.VarChar(40)
+  tokenHash      String       @unique @db.VarChar(64)
+  expiresAt      DateTime     @db.Timestamptz(6)
+  consumedAt     DateTime?    @db.Timestamptz(6)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(6)
 
   @@index([userId, type, expiresAt])
   @@index([organizationId, type, expiresAt])
@@ -201,17 +203,17 @@ model EmailOutbox {
 }
 
 model Role {
-  id             String        @id @default(uuid()) @db.Uuid
-  code           String        @unique @db.VarChar(80)
-  name           String        @db.VarChar(120)
-  status         String        @default("Active") @db.VarChar(30)
+  id             String           @id @default(uuid()) @db.Uuid
+  code           String           @unique @db.VarChar(80)
+  name           String           @db.VarChar(120)
+  status         String           @default("Active") @db.VarChar(30)
   // Null = shared system role visible to every organization; set = tenant-local custom role.
-  organizationId String?       @db.Uuid
-  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  organizationId String?          @db.Uuid
+  organization   Organization?    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   userRoles      UserRole[]
   permissions    RolePermission[]
-  createdAt      DateTime      @default(now()) @db.Timestamptz(6)
-  updatedAt      DateTime      @updatedAt @db.Timestamptz(6)
+  createdAt      DateTime         @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime         @updatedAt @db.Timestamptz(6)
 
   @@index([organizationId])
   @@map("roles")
@@ -302,30 +304,30 @@ model VacancyRequestApproval {
 }
 
 model Vacancy {
-  id                String              @id @default(uuid()) @db.Uuid
-  organizationId    String              @db.Uuid
-  organization      Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  legalEntityId     String?             @db.Uuid
-  legalEntity       LegalEntity?        @relation(fields: [legalEntityId], references: [id], onDelete: Restrict)
-  branchId          String              @db.Uuid
-  branch            Branch              @relation(fields: [branchId], references: [id], onDelete: Restrict)
-  positionId        String              @db.Uuid
-  position          Position            @relation(fields: [positionId], references: [id], onDelete: Restrict)
-  vacancyRequestId  String              @unique @db.Uuid
-  vacancyRequest    VacancyRequest      @relation(fields: [vacancyRequestId], references: [id], onDelete: Restrict)
-  vacancyCode       String              @unique @db.VarChar(50)
-  status            String              @default("Pending Activation") @db.VarChar(40)
-  approvedHeadcount Int
-  joinedHeadcount   Int                 @default(0)
-  openedAt          DateTime?           @db.Timestamptz(6)
-  targetStartDate   DateTime?           @db.Date
-  requiredSkills    String[]            @default([]) @db.VarChar(100)
+  id                 String              @id @default(uuid()) @db.Uuid
+  organizationId     String              @db.Uuid
+  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  legalEntityId      String?             @db.Uuid
+  legalEntity        LegalEntity?        @relation(fields: [legalEntityId], references: [id], onDelete: Restrict)
+  branchId           String              @db.Uuid
+  branch             Branch              @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  positionId         String              @db.Uuid
+  position           Position            @relation(fields: [positionId], references: [id], onDelete: Restrict)
+  vacancyRequestId   String              @unique @db.Uuid
+  vacancyRequest     VacancyRequest      @relation(fields: [vacancyRequestId], references: [id], onDelete: Restrict)
+  vacancyCode        String              @unique @db.VarChar(50)
+  status             String              @default("Pending Activation") @db.VarChar(40)
+  approvedHeadcount  Int
+  joinedHeadcount    Int                 @default(0)
+  openedAt           DateTime?           @db.Timestamptz(6)
+  targetStartDate    DateTime?           @db.Date
+  requiredSkills     String[]            @default([]) @db.VarChar(100)
   minExperienceYears Int?
-  location          String?             @db.VarChar(120)
-  assignments       VacancyAssignment[]
-  applications      Application[]
-  createdAt         DateTime            @default(now()) @db.Timestamptz(6)
-  updatedAt         DateTime            @updatedAt @db.Timestamptz(6)
+  location           String?             @db.VarChar(120)
+  assignments        VacancyAssignment[]
+  applications       Application[]
+  createdAt          DateTime            @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime            @updatedAt @db.Timestamptz(6)
 
   @@index([organizationId, status])
   @@index([branchId, positionId, openedAt])
@@ -368,14 +370,14 @@ model AuditLog {
 }
 
 model AuthRateLimit {
-  id             String    @id @default(uuid()) @db.Uuid
-  scope          String    @db.VarChar(16)
-  keyHash        String    @db.VarChar(64)
-  attempts       Int       @default(0)
-  lastAttemptAt  DateTime  @db.Timestamptz(6)
-  lockedUntil    DateTime? @db.Timestamptz(6)
-  createdAt      DateTime  @default(now()) @db.Timestamptz(6)
-  updatedAt      DateTime  @updatedAt @db.Timestamptz(6)
+  id            String    @id @default(uuid()) @db.Uuid
+  scope         String    @db.VarChar(16)
+  keyHash       String    @db.VarChar(64)
+  attempts      Int       @default(0)
+  lastAttemptAt DateTime  @db.Timestamptz(6)
+  lockedUntil   DateTime? @db.Timestamptz(6)
+  createdAt     DateTime  @default(now()) @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @db.Timestamptz(6)
 
   @@unique([scope, keyHash])
   @@index([lockedUntil])
@@ -392,32 +394,32 @@ model CodeSequence {
 }
 
 model Candidate {
-  id             String              @id @default(uuid()) @db.Uuid
-  organizationId String              @db.Uuid
-  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  candidateCode  String              @unique @db.VarChar(50)
-  firstName      String              @db.VarChar(80)
-  lastName       String              @db.VarChar(80)
-  email          String              @db.VarChar(255)
-  phone          String?             @db.VarChar(40)
-  currentTitle   String?             @db.VarChar(120)
-  currentCompany String?             @db.VarChar(120)
-  source         String?             @db.VarChar(80)
-  status         String              @default("Active") @db.VarChar(40)
-  consentStatus  String              @default("Unknown") @db.VarChar(30)
-  consentCapturedAt DateTime?        @db.Timestamptz(6)
-  consentSource  String?             @db.VarChar(80)
-  skills         String[]            @default([]) @db.VarChar(100)
-  experienceYears Int?
-  location       String?             @db.VarChar(120)
-  certifications String[]            @default([]) @db.VarChar(120)
-  languages      String[]            @default([]) @db.VarChar(50)
-  availability   String?             @db.VarChar(60)
-  applications           Application[]
-  documents              CandidateDocument[]
-  talentPoolMemberships  TalentPoolCandidate[]
-  createdAt      DateTime            @default(now()) @db.Timestamptz(6)
-  updatedAt      DateTime            @updatedAt @db.Timestamptz(6)
+  id                    String                @id @default(uuid()) @db.Uuid
+  organizationId        String                @db.Uuid
+  organization          Organization          @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  candidateCode         String                @unique @db.VarChar(50)
+  firstName             String                @db.VarChar(80)
+  lastName              String                @db.VarChar(80)
+  email                 String                @db.VarChar(255)
+  phone                 String?               @db.VarChar(40)
+  currentTitle          String?               @db.VarChar(120)
+  currentCompany        String?               @db.VarChar(120)
+  source                String?               @db.VarChar(80)
+  status                String                @default("Active") @db.VarChar(40)
+  consentStatus         String                @default("Unknown") @db.VarChar(30)
+  consentCapturedAt     DateTime?             @db.Timestamptz(6)
+  consentSource         String?               @db.VarChar(80)
+  skills                String[]              @default([]) @db.VarChar(100)
+  experienceYears       Int?
+  location              String?               @db.VarChar(120)
+  certifications        String[]              @default([]) @db.VarChar(120)
+  languages             String[]              @default([]) @db.VarChar(50)
+  availability          String?               @db.VarChar(60)
+  applications          Application[]
+  documents             CandidateDocument[]
+  talentPoolMemberships TalentPoolCandidate[]
+  createdAt             DateTime              @default(now()) @db.Timestamptz(6)
+  updatedAt             DateTime              @updatedAt @db.Timestamptz(6)
 
   @@unique([organizationId, email])
   @@index([organizationId, status])
@@ -445,6 +447,7 @@ model Application {
   appliedAt          DateTime                   @default(now()) @db.Timestamptz(6)
   statusHistory      ApplicationStatusHistory[]
   screeningLogs      ScreeningLog[]
+  notes              ApplicationNote[]
   interviews         Interview[]
   offers             Offer[]
   hiringCase         HiringCase?
@@ -473,6 +476,23 @@ model ApplicationStatusHistory {
   @@map("application_status_histories")
 }
 
+model ApplicationNote {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  applicationId  String       @db.Uuid
+  application    Application  @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  authorId       String       @db.Uuid
+  author         User         @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  content        String       @db.Text
+  createdAt      DateTime     @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime     @updatedAt @db.Timestamptz(6)
+
+  @@index([applicationId, createdAt])
+  @@index([organizationId, applicationId])
+  @@map("application_notes")
+}
+
 model CandidateDocument {
   id                     String                  @id @default(uuid()) @db.Uuid
   organizationId         String                  @db.Uuid
@@ -488,17 +508,17 @@ model CandidateDocument {
   sha256                 String?                 @db.VarChar(64)
   extractionText         String?                 @db.Text
   scanStatus             String                  @default("Clean") @db.VarChar(40)
-  scanProvider            String?                 @db.VarChar(50)
-  scanMessage             String?                 @db.Text
-  scannedAt               DateTime?               @db.Timestamptz(6)
-  parserStatus            String                  @default("NotStarted") @db.VarChar(40)
-  parserVersion           String?                 @db.VarChar(40)
-  retentionExpiresAt      DateTime?               @db.Timestamptz(6)
-  consentStatus           String                  @default("Unknown") @db.VarChar(30)
-  deletedAt               DateTime?               @db.Timestamptz(6)
-  deletedById             String?                 @db.Uuid
-  deletedBy               User?                   @relation("DocumentDeleter", fields: [deletedById], references: [id], onDelete: Restrict)
-  deletionReason          String?                 @db.Text
+  scanProvider           String?                 @db.VarChar(50)
+  scanMessage            String?                 @db.Text
+  scannedAt              DateTime?               @db.Timestamptz(6)
+  parserStatus           String                  @default("NotStarted") @db.VarChar(40)
+  parserVersion          String?                 @db.VarChar(40)
+  retentionExpiresAt     DateTime?               @db.Timestamptz(6)
+  consentStatus          String                  @default("Unknown") @db.VarChar(30)
+  deletedAt              DateTime?               @db.Timestamptz(6)
+  deletedById            String?                 @db.Uuid
+  deletedBy              User?                   @relation("DocumentDeleter", fields: [deletedById], references: [id], onDelete: Restrict)
+  deletionReason         String?                 @db.Text
   uploadedById           String?                 @db.Uuid
   uploadedBy             User?                   @relation(fields: [uploadedById], references: [id], onDelete: Restrict)
   complianceRequirements ComplianceRequirement[]
@@ -877,10 +897,10 @@ model Notification {
   organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   recipientUserId String       @db.Uuid
   recipient       User         @relation(fields: [recipientUserId], references: [id], onDelete: Cascade)
-  type            String       @db.VarChar(80)   // e.g. VacancyRequestSubmitted, ApprovalDecision, TaskAssigned
+  type            String       @db.VarChar(80) // e.g. VacancyRequestSubmitted, ApprovalDecision, TaskAssigned
   title           String       @db.VarChar(255)
   message         String       @db.Text
-  entityType      String?      @db.VarChar(80)   // e.g. VacancyRequest, Offer, HiringCase
+  entityType      String?      @db.VarChar(80) // e.g. VacancyRequest, Offer, HiringCase
   entityId        String?      @db.VarChar(80)
   readAt          DateTime?    @db.Timestamptz(6)
   createdAt       DateTime     @default(now()) @db.Timestamptz(6)
@@ -898,11 +918,11 @@ model Task {
   assignee       User         @relation("TaskAssignee", fields: [assigneeUserId], references: [id], onDelete: Restrict)
   createdById    String       @db.Uuid
   createdBy      User         @relation("TaskCreator", fields: [createdById], references: [id], onDelete: Restrict)
-  type           String       @db.VarChar(80)   // e.g. ApprovalReview, OfferReview, ComplianceCheck
+  type           String       @db.VarChar(80) // e.g. ApprovalReview, OfferReview, ComplianceCheck
   title          String       @db.VarChar(255)
   description    String?      @db.Text
-  priority       String       @default("Normal") @db.VarChar(30)  // Low, Normal, High, Critical
-  status         String       @default("Open") @db.VarChar(30)    // Open, In Progress, Completed, Dismissed
+  priority       String       @default("Normal") @db.VarChar(30) // Low, Normal, High, Critical
+  status         String       @default("Open") @db.VarChar(30) // Open, In Progress, Completed, Dismissed
   dueAt          DateTime?    @db.Timestamptz(6)
   entityType     String?      @db.VarChar(80)
   entityId       String?      @db.VarChar(80)

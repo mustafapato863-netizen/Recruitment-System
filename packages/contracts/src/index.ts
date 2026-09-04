@@ -698,6 +698,22 @@ export interface ApplicationStatusHistoryItem {
   createdAt: string;
 }
 
+export interface ApplicationNote {
+  id: string;
+  organizationId: string;
+  applicationId: string;
+  authorId: string;
+  authorName?: string | undefined;
+  authorEmail?: string | undefined;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateApplicationNoteInput {
+  content: string;
+}
+
 // ── Phase 4 — Documents, Screening, and Interviews ──────────
 
 export interface CandidateDocument {

@@ -13,6 +13,7 @@ import {
 import { ApplicationsService } from './applications.service';
 import {
   CreateApplicationDto,
+  CreateApplicationNoteDto,
   UpdateApplicationStageDto,
   ApplicationQueryDto,
 } from './applications.dto';
@@ -56,6 +57,35 @@ export class ApplicationsController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.applicationsService.getApplicationHistory(user.organizationId, id);
+  }
+
+  @Get(':id/notes')
+  @RequirePermissions('APPLICATION_VIEW')
+  @UseGuards(TenantScopedGuard)
+  @TenantResource({ resource: 'application', param: 'id' })
+  listNotes(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.applicationsService.listNotes(user.organizationId, id);
+  }
+
+  @Post(':id/notes')
+  @RequirePermissions('APPLICATION_MOVE_STAGE')
+  @AuditAction('APPLICATION_NOTE_CREATE')
+  @UseGuards(TenantScopedGuard)
+  @TenantResource({ resource: 'application', param: 'id' })
+  createNote(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: CreateApplicationNoteDto,
+  ) {
+    return this.applicationsService.createNote(
+      user.organizationId,
+      id,
+      user.userId,
+      body.content,
+    );
   }
 
   @Post()

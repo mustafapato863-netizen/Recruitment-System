@@ -1,6 +1,7 @@
 import {
   IsEnum,
   IsInt,
+  IsNotEmpty,
   IsOptional,
   IsString,
   IsUUID,
@@ -8,7 +9,7 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import type { ApplicationStage } from '@recruitflow/contracts';
 
 export class CreateApplicationDto {
@@ -109,4 +110,12 @@ export class ApplicationQueryDto {
   @Min(1)
   @Max(100)
   pageSize?: number;
+}
+
+export class CreateApplicationNoteDto {
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(10000)
+  content!: string;
 }

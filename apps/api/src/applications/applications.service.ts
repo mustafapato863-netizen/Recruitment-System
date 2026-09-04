@@ -8,6 +8,7 @@ import {
 import type { Prisma } from '@recruitflow/database';
 import type {
   Application,
+  ApplicationNote,
   ApplicationStage,
   ApplicationStatusHistoryItem,
   Candidate,
@@ -217,7 +218,7 @@ export class ApplicationsService {
     }
 
     const updated = await this.prisma.$transaction(async (tx) => {
-      const changed = await (tx.application as any).updateMany({
+      const changed = await tx.application.updateMany({
         where: {
           id,
           organizationId,
@@ -285,6 +286,54 @@ export class ApplicationsService {
     }));
   }
 
+  async listNotes(
+    organizationId: string,
+    applicationId: string,
+  ): Promise<ApplicationNote[]> {
+    await this.getApplication(organizationId, applicationId);
+
+    const notes = await this.prisma.applicationNote.findMany({
+      where: {
+        applicationId,
+        organizationId,
+      },
+      include: {
+        author: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return notes.map((note) => this.toApplicationNote(note));
+  }
+
+  async createNote(
+    organizationId: string,
+    applicationId: string,
+    authorId: string,
+    content: string,
+  ): Promise<ApplicationNote> {
+    await this.getApplication(organizationId, applicationId);
+
+    const trimmed = content.trim();
+    if (!trimmed) {
+      throw new BadRequestException('Note content cannot be empty.');
+    }
+
+    const note = await this.prisma.applicationNote.create({
+      data: {
+        organizationId,
+        applicationId,
+        authorId,
+        content: trimmed,
+      },
+      include: {
+        author: true,
+      },
+    });
+
+    return this.toApplicationNote(note);
+  }
+
   private async nextApplicationCode(): Promise<string> {
     const year = new Date().getUTCFullYear();
     const seq = await this.prisma.codeSequence.upsert({
@@ -311,7 +360,7 @@ export class ApplicationsService {
       candidateId: record.candidateId,
       stage: record.stage as ApplicationStage,
       allowedTransitions: ALLOWED_STAGE_TRANSITIONS[record.stage as ApplicationStage] ?? [],
-      version: (record as any).version ?? 1,
+      version: record.version ?? 1,
       source: record.source,
       primaryRecruiterId: record.primaryRecruiterId,
       primaryRecruiterName: record.primaryRecruiter?.displayName,
@@ -355,5 +404,25 @@ export class ApplicationsService {
         currentVersion: current.version,
       },
     });
+  }
+
+  private toApplicationNote(
+    record: Prisma.ApplicationNoteGetPayload<{
+      include: {
+        author: true;
+      };
+    }>,
+  ): ApplicationNote {
+    return {
+      id: record.id,
+      organizationId: record.organizationId,
+      applicationId: record.applicationId,
+      authorId: record.authorId,
+      authorName: record.author?.displayName,
+      authorEmail: record.author?.email,
+      content: record.content,
+      createdAt: record.createdAt.toISOString(),
+      updatedAt: record.updatedAt.toISOString(),
+    };
   }
 }
