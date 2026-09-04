@@ -14,14 +14,16 @@ import { Alert } from '../components/ui/Alert';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
+import { PageState } from '../components/ui/PageState';
 import './PageEnhancementsV2.css';
 
 export function ApplicationDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [application, setApplication] = useState<Application | null>(null);
-  const [, setHistory] = useState<ApplicationStatusHistoryItem[]>([]);
+  const [history, setHistory] = useState<ApplicationStatusHistoryItem[]>([]);
   const [, setScreeningLogs] = useState<ScreeningLog[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'overview' | 'resume' | 'interviews' | 'activity' | 'tasks'>('overview');
 
   // Modals
@@ -31,7 +33,7 @@ export function ApplicationDetailPage() {
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
   const [isViewResumeModalOpen, setIsViewResumeModalOpen] = useState(false);
   const [isAddTagModalOpen, setIsAddTagModalOpen] = useState(false);
-  const [tags, setTags] = useState(['React', 'TypeScript', 'Frontend', '3+ Years', 'English']);
+  const [tags, setTags] = useState<string[]>([]);
   const [newTagInput, setNewTagInput] = useState('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -77,7 +79,11 @@ export function ApplicationDetailPage() {
   }, [application?.stage, application?.allowedTransitions]);
 
   useEffect(() => {
-    if (!id) return;
+    if (!id) {
+      setIsLoading(false);
+      return;
+    }
+    setIsLoading(true);
     Promise.allSettled([
       getApi<Application>(`/applications/${id}`),
       getApi<ApplicationStatusHistoryItem[]>(`/applications/${id}/history`),
@@ -85,6 +91,9 @@ export function ApplicationDetailPage() {
     ]).then(([appRes, histRes, scrRes]) => {
       if (appRes.status === 'fulfilled' && appRes.value) {
         setApplication(appRes.value);
+        if (appRes.value.candidate?.skills && appRes.value.candidate.skills.length > 0) {
+          setTags(appRes.value.candidate.skills);
+        }
       }
       if (histRes.status === 'fulfilled' && histRes.value) {
         setHistory(histRes.value);
@@ -92,17 +101,21 @@ export function ApplicationDetailPage() {
       if (scrRes.status === 'fulfilled' && scrRes.value) {
         setScreeningLogs(scrRes.value);
       }
+    }).finally(() => {
+      setIsLoading(false);
     });
   }, [id]);
 
   const candidateName = application?.candidate
-    ? `${application.candidate.firstName} ${application.candidate.lastName}`
-    : 'Ali Hassan';
-  const roleName = application?.positionTitle || 'Frontend Developer';
-  const candidateEmail = application?.candidate?.email || 'ali.hassan@email.com';
-  const candidatePhone = application?.candidate?.phone || '+20 101 234 5678';
-  const candidateLocation = 'Cairo, Egypt';
-  const appIdDisplay = application?.id ? (application.id.length > 10 ? 'APP-02481' : application.id) : 'APP-02481';
+    ? `${application.candidate.firstName || ''} ${application.candidate.lastName || ''}`.trim() || 'Unknown candidate'
+    : 'Unknown candidate';
+  const roleName = application?.positionTitle || 'No position';
+  const candidateEmail = application?.candidate?.email || null;
+  const candidatePhone = application?.candidate?.phone || null;
+  const candidateLocation = application?.candidate?.location || null;
+  const rawAppId = application?.id || id || '';
+  const cleanAppId = rawAppId.replace(/^app[-_]?/i, '');
+  const appIdDisplay = rawAppId ? `APP-${(cleanAppId || rawAppId).slice(0, 8).toUpperCase()}` : '';
 
   const handleAddTag = () => {
     if (newTagInput.trim() && !tags.includes(newTagInput.trim())) {
@@ -177,6 +190,34 @@ export function ApplicationDetailPage() {
     }
   };
 
+  if (isLoading) {
+    return (
+      <div className="flex w-full flex-col p-4 sm:p-6 lg:p-7 max-w-[1720px] mx-auto space-y-6">
+        <PageState kind="loading" title="Loading applicant profile..." />
+      </div>
+    );
+  }
+
+  if (!application) {
+    return (
+      <div className="flex w-full flex-col p-4 sm:p-6 lg:p-7 max-w-[1720px] mx-auto space-y-6">
+        <div className="flex items-center gap-2">
+          <Button variant="secondary" size="sm" onClick={() => navigate('/applications')}>
+            <Icon name="arrow-left" size={13} />
+            <span>Back to applications</span>
+          </Button>
+        </div>
+        <PageState
+          kind="empty"
+          title="Application not found"
+          description="The requested application could not be found or you do not have permission to view it."
+          actionLabel="Back to applications"
+          actionHref="/applications"
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="flex w-full flex-col p-4 sm:p-6 lg:p-7 max-w-[1720px] mx-auto space-y-6">
       {/* ── Breadcrumb & Top Bar ── */}
@@ -190,7 +231,7 @@ export function ApplicationDetailPage() {
               Applications
             </span>
             <span className="mx-2">&bull;</span>
-            <span className="text-slate-700 dark:text-slate-200">{appIdDisplay}</span>
+            <span className="text-slate-700 dark:text-slate-200">{appIdDisplay || '—'}</span>
           </div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight mt-1">
             Applicant Profile
@@ -271,116 +312,136 @@ export function ApplicationDetailPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* ════════ Left Sidebar (~28% width / 4 cols) ════════ */}
         <div className="lg:col-span-4 xl:col-span-3 space-y-6">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-5">
-            {/* Candidate Photo & Basic Info */}
-            <div className="flex flex-col items-center text-center">
-              <div className="w-20 h-20 rounded-full bg-slate-100 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 flex items-center justify-center text-xl font-bold text-slate-700 dark:text-slate-200 mb-3 shadow-xs">
-                {candidateName.split(' ').map((n) => n[0]).join('')}
-              </div>
-              <h2 className="text-lg font-extrabold text-slate-900 dark:text-white">
-                {candidateName}
-              </h2>
-              <p className="text-xs text-slate-500 font-medium mt-0.5">
-                {roleName}
-              </p>
-
-              {/* Star Rating & Fit Badge */}
-              <div className="flex items-center gap-1.5 mt-2">
-                <div className="flex text-amber-400 text-xs">
-                  <span>★</span>
-                  <span>★</span>
-                  <span>★</span>
-                  <span>★</span>
-                  <span className="text-slate-200 dark:text-slate-700">★</span>
+          {!application?.candidate ? (
+            <PageState
+              kind="empty"
+              title="Candidate data unavailable"
+              description="Candidate details are not linked to this application."
+            />
+          ) : (
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-5">
+              {/* Candidate Photo & Basic Info */}
+              <div className="flex flex-col items-center text-center">
+                <div className="w-20 h-20 rounded-full bg-slate-100 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 flex items-center justify-center text-xl font-bold text-slate-700 dark:text-slate-200 mb-3 shadow-xs">
+                  {candidateName
+                    .split(' ')
+                    .filter(Boolean)
+                    .map((n) => n[0])
+                    .join('')
+                    .slice(0, 2)
+                    .toUpperCase() || '?'}
                 </div>
-                <span className="text-xs font-black text-slate-700 dark:text-slate-200 ml-1">4.2</span>
+                <h2 className="text-lg font-extrabold text-slate-900 dark:text-white">
+                  {candidateName}
+                </h2>
+                <p className="text-xs text-slate-500 font-medium mt-0.5">
+                  {roleName}
+                </p>
+
+                {application.candidate.status && (
+                  <span className="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 mt-2 border border-slate-200 dark:border-slate-700">
+                    Status: {application.candidate.status}
+                  </span>
+                )}
               </div>
-              <span className="inline-block text-[11px] font-bold text-emerald-600 dark:text-emerald-400 mt-1">
-                Strong fit
-              </span>
+
+              {/* Contact & Meta Rows */}
+              <div className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800 text-xs">
+                {candidateEmail && (
+                  <div className="flex items-center gap-3 text-slate-600 dark:text-slate-300">
+                    <Icon name="mail" size={14} className="text-slate-400 shrink-0" />
+                    <span className="truncate">{candidateEmail}</span>
+                  </div>
+                )}
+                {candidatePhone && (
+                  <div className="flex items-center gap-3 text-slate-600 dark:text-slate-300">
+                    <Icon name="phone" size={14} className="text-slate-400 shrink-0" />
+                    <span>{candidatePhone}</span>
+                  </div>
+                )}
+                {candidateLocation && (
+                  <div className="flex items-center gap-3 text-slate-600 dark:text-slate-300">
+                    <Icon name="map-pin" size={14} className="text-slate-400 shrink-0" />
+                    <span>{candidateLocation}</span>
+                  </div>
+                )}
+                {application.candidate.experienceYears != null && (
+                  <div className="flex items-center gap-3 text-slate-600 dark:text-slate-300">
+                    <Icon name="briefcase" size={14} className="text-slate-400 shrink-0" />
+                    <span>
+                      {application.candidate.experienceYears}{' '}
+                      {application.candidate.experienceYears === 1 ? 'year' : 'years'} experience
+                    </span>
+                  </div>
+                )}
+                {(application.appliedAt || application.createdAt) && (
+                  <div className="flex items-center gap-3 text-slate-600 dark:text-slate-300">
+                    <Icon name="calendar" size={14} className="text-slate-400 shrink-0" />
+                    <div>
+                      <span className="block text-[10px] text-slate-400">Applied on</span>
+                      <span className="font-semibold">
+                        {new Date(application.appliedAt || application.createdAt).toLocaleDateString('en-GB', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                        })}
+                      </span>
+                    </div>
+                  </div>
+                )}
+                {application.candidate.currentCompany && (
+                  <div className="flex items-center gap-3 text-slate-600 dark:text-slate-300">
+                    <Icon name="briefcase" size={14} className="text-slate-400 shrink-0" />
+                    <div>
+                      <span className="block text-[10px] text-slate-400">Current company</span>
+                      <span className="font-semibold">{application.candidate.currentCompany}</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Profile Summary */}
+              <div className="space-y-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+                <h3 className="text-xs font-bold text-slate-900 dark:text-white">Profile summary</h3>
+
+                {application.candidate.skills && application.candidate.skills.length > 0 ? (
+                  <div>
+                    <div className="flex justify-between text-xs font-semibold mb-1">
+                      <span className="text-slate-500">Skills on file</span>
+                      <span className="text-slate-900 dark:text-white font-bold">{application.candidate.skills.length}</span>
+                    </div>
+                  </div>
+                ) : null}
+
+                {application.candidate.experienceYears != null ? (
+                  <div>
+                    <div className="flex justify-between text-xs font-semibold mb-1">
+                      <span className="text-slate-500">Total experience</span>
+                      <span className="text-slate-900 dark:text-white font-bold">
+                        {application.candidate.experienceYears} {application.candidate.experienceYears === 1 ? 'year' : 'years'}
+                      </span>
+                    </div>
+                  </div>
+                ) : null}
+
+                {!application.candidate.skills?.length && application.candidate.experienceYears == null ? (
+                  <p className="text-xs text-slate-400 italic">No skills or experience records on file.</p>
+                ) : null}
+              </div>
+
+              {/* View Resume Button */}
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsViewResumeModalOpen(true)}
+                  className="w-full py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Icon name="file-text" size={14} className="text-slate-400" />
+                  <span>View r&eacute;sum&eacute;</span>
+                </button>
+              </div>
             </div>
-
-            {/* Contact & Meta Rows */}
-            <div className="space-y-3 pt-3 border-t border-slate-100 dark:border-slate-800 text-xs">
-              <div className="flex items-center gap-3 text-slate-600 dark:text-slate-300">
-                <Icon name="mail" size={14} className="text-slate-400 shrink-0" />
-                <span className="truncate">{candidateEmail}</span>
-              </div>
-              <div className="flex items-center gap-3 text-slate-600 dark:text-slate-300">
-                <Icon name="phone" size={14} className="text-slate-400 shrink-0" />
-                <span>{candidatePhone}</span>
-              </div>
-              <div className="flex items-center gap-3 text-slate-600 dark:text-slate-300">
-                <Icon name="map-pin" size={14} className="text-slate-400 shrink-0" />
-                <span>{candidateLocation}</span>
-              </div>
-              <div className="flex items-center gap-3 text-slate-600 dark:text-slate-300">
-                <Icon name="briefcase" size={14} className="text-slate-400 shrink-0" />
-                <span>3 years experience</span>
-              </div>
-              <div className="flex items-center gap-3 text-slate-600 dark:text-slate-300">
-                <Icon name="calendar" size={14} className="text-slate-400 shrink-0" />
-                <div>
-                  <span className="block text-[10px] text-slate-400">Applied on</span>
-                  <span className="font-semibold">28 Aug 2026</span>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 text-slate-600 dark:text-slate-300">
-                <Icon name="briefcase" size={14} className="text-slate-400 shrink-0" />
-                <div>
-                  <span className="block text-[10px] text-slate-400">Current company</span>
-                  <span className="font-semibold">Tech Solutions</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Fit Summary */}
-            <div className="space-y-3 pt-4 border-t border-slate-100 dark:border-slate-800">
-              <h3 className="text-xs font-bold text-slate-900 dark:text-white">Fit summary</h3>
-
-              <div>
-                <div className="flex justify-between text-xs font-semibold mb-1">
-                  <span className="text-slate-500">Skills match</span>
-                  <span className="text-slate-900 dark:text-white font-bold">85%</span>
-                </div>
-                <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                  <div className="bg-blue-500 h-full rounded-full" style={{ width: '85%' }} />
-                </div>
-              </div>
-
-              <div>
-                <div className="flex justify-between text-xs font-semibold mb-1">
-                  <span className="text-slate-500">Experience match</span>
-                  <span className="text-slate-900 dark:text-white font-bold">80%</span>
-                </div>
-                <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                  <div className="bg-emerald-500 h-full rounded-full" style={{ width: '80%' }} />
-                </div>
-              </div>
-
-              <div>
-                <div className="flex justify-between text-xs font-semibold mb-1">
-                  <span className="text-slate-500">Culture fit</span>
-                  <span className="text-slate-900 dark:text-white font-bold">75%</span>
-                </div>
-                <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                  <div className="bg-amber-500 h-full rounded-full" style={{ width: '75%' }} />
-                </div>
-              </div>
-            </div>
-
-            {/* View Resume Button */}
-            <div className="pt-2">
-              <button
-                type="button"
-                onClick={() => setIsViewResumeModalOpen(true)}
-                className="w-full py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <Icon name="file-text" size={14} className="text-slate-400" />
-                <span>View r&eacute;sum&eacute;</span>
-              </button>
-            </div>
-          </div>
+          )}
         </div>
 
         {/* ════════ Right Main Column (~72% width / 8 cols) ════════ */}
@@ -392,19 +453,24 @@ export function ApplicationDetailPage() {
               <div className="space-y-1">
                 <span className="block text-[11px] font-semibold text-slate-400 uppercase">Current stage</span>
                 <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-                  {application?.stage || 'Screening'}
+                  {application?.stage || '—'}
                 </span>
-                <span className="block text-[11px] text-slate-400 mt-0.5">Since 28 Aug 2026</span>
+                {(application?.updatedAt || application?.appliedAt) && (
+                  <span className="block text-[11px] text-slate-400 mt-0.5">
+                    Since{' '}
+                    {new Date(application.updatedAt || application.appliedAt).toLocaleDateString('en-GB', {
+                      day: 'numeric',
+                      month: 'short',
+                      year: 'numeric',
+                    })}
+                  </span>
+                )}
               </div>
 
               {/* Cell 2: Next action */}
               <div className="space-y-1 md:pl-4 pt-3 md:pt-0">
                 <span className="block text-[11px] font-semibold text-slate-400 uppercase">Next action</span>
-                <span className="block text-xs font-bold text-slate-900 dark:text-white">Technical interview</span>
-                <div className="flex items-center gap-1 text-[11px] text-slate-500">
-                  <Icon name="calendar" size={12} className="text-slate-400" />
-                  <span>Today, 2:00 PM</span>
-                </div>
+                <span className="block text-xs font-bold text-slate-400 italic">None scheduled</span>
               </div>
 
               {/* Cell 3: Owner */}
@@ -412,11 +478,25 @@ export function ApplicationDetailPage() {
                 <span className="block text-[11px] font-semibold text-slate-400 uppercase">Owner</span>
                 <div className="flex items-center gap-2">
                   <div className="w-5 h-5 rounded-full bg-teal-600 text-white text-[9px] font-extrabold flex items-center justify-center shrink-0">
-                    SA
+                    {((application?.primaryRecruiterName || application?.taskOwnerName || 'Unassigned')
+                      .split(' ')
+                      .filter(Boolean)
+                      .map((n) => n[0])
+                      .join('')
+                      .slice(0, 2)
+                      .toUpperCase()) || '—'}
                   </div>
                   <div>
-                    <span className="block text-xs font-bold text-slate-900 dark:text-white leading-tight">Sarah Ahmed</span>
-                    <span className="block text-[10px] text-slate-400">Senior Recruiter</span>
+                    <span className="block text-xs font-bold text-slate-900 dark:text-white leading-tight">
+                      {application?.primaryRecruiterName || application?.taskOwnerName || 'Unassigned'}
+                    </span>
+                    <span className="block text-[10px] text-slate-400">
+                      {application?.primaryRecruiterName
+                        ? 'Primary Recruiter'
+                        : application?.taskOwnerName
+                          ? 'Task Owner'
+                          : 'No owner assigned'}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -424,21 +504,25 @@ export function ApplicationDetailPage() {
               {/* Cell 4: SLA */}
               <div className="space-y-1 md:pl-4 pt-3 md:pt-0">
                 <span className="block text-[11px] font-semibold text-slate-400 uppercase">SLA</span>
-                <span className="block text-xs font-bold text-amber-600 dark:text-amber-400">6h left</span>
-                <div className="flex items-center gap-1 text-[11px] text-slate-400">
-                  <Icon name="clock" size={12} />
-                  <span>Due today, 8:00 PM</span>
-                </div>
+                <span className="block text-xs font-bold text-slate-400 italic">No SLA target</span>
               </div>
 
               {/* Cell 5: Last activity */}
               <div className="space-y-1 md:pl-4 pt-3 md:pt-0">
                 <span className="block text-[11px] font-semibold text-slate-400 uppercase">Last activity</span>
-                <span className="block text-xs font-bold text-slate-900 dark:text-white">Interview invitation sent</span>
-                <div className="flex items-center gap-1 text-[11px] text-slate-400">
-                  <Icon name="check-circle" size={12} className="text-emerald-500" />
-                  <span>Today, 9:12 AM</span>
-                </div>
+                {history.length > 0 ? (
+                  <>
+                    <span className="block text-xs font-bold text-slate-900 dark:text-white truncate">
+                      {history[0].toStage ? `Moved to ${history[0].toStage}` : 'Updated'}
+                    </span>
+                    <div className="flex items-center gap-1 text-[11px] text-slate-400">
+                      <Icon name="clock" size={12} />
+                      <span>{new Date(history[0].createdAt).toLocaleDateString('en-GB')}</span>
+                    </div>
+                  </>
+                ) : (
+                  <span className="block text-xs text-slate-400 italic">No activity recorded</span>
+                )}
               </div>
             </div>
           </div>
@@ -461,80 +545,42 @@ export function ApplicationDetailPage() {
               </div>
 
               {/* Stepper Timeline List */}
-              <div className="relative pl-6 space-y-5 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200 dark:before:bg-slate-800">
-                {/* Event 1 */}
-                <div className="relative">
-                  <div className="absolute -left-6 top-0.5 w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-600 flex items-center justify-center text-[10px]">
-                    <Icon name="calendar" size={11} />
-                  </div>
-                  <div className="flex items-baseline justify-between">
-                    <div>
-                      <span className="block text-xs font-bold text-slate-900 dark:text-white">Interview invitation sent</span>
-                      <span className="block text-[11px] text-slate-400">by Sarah Ahmed</span>
+              {history.length > 0 ? (
+                <div className="relative pl-6 space-y-5 before:absolute before:left-2.5 before:top-2 before:bottom-2 before:w-0.5 before:bg-slate-200 dark:before:bg-slate-800">
+                  {history.slice(0, 5).map((item) => (
+                    <div key={item.id} className="relative">
+                      <div className="absolute -left-6 top-0.5 w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-600 flex items-center justify-center text-[10px]">
+                        <Icon name="check-circle" size={11} />
+                      </div>
+                      <div className="flex items-baseline justify-between">
+                        <div>
+                          <span className="block text-xs font-bold text-slate-900 dark:text-white">
+                            {item.fromStage ? `Moved from ${item.fromStage} to ${item.toStage}` : `Stage set to ${item.toStage}`}
+                          </span>
+                          {item.changedByName && (
+                            <span className="block text-[11px] text-slate-400">by {item.changedByName}</span>
+                          )}
+                          {item.reason && (
+                            <span className="block text-[11px] text-slate-500 italic mt-0.5">&quot;{item.reason}&quot;</span>
+                          )}
+                        </div>
+                        <span className="text-[11px] text-slate-400">
+                          {new Date(item.createdAt).toLocaleDateString('en-GB', {
+                            day: 'numeric',
+                            month: 'short',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <span className="text-[11px] text-slate-400">Today, 9:12 AM</span>
-                      <Icon name="check-circle" size={12} className="text-emerald-500" />
-                    </div>
-                  </div>
+                  ))}
                 </div>
-
-                {/* Event 2 */}
-                <div className="relative">
-                  <div className="absolute -left-6 top-0.5 w-5 h-5 rounded-full bg-purple-100 dark:bg-purple-950/60 text-purple-600 flex items-center justify-center text-[10px]">
-                    <Icon name="users" size={11} />
-                  </div>
-                  <div className="flex items-baseline justify-between">
-                    <div>
-                      <span className="block text-xs font-bold text-slate-900 dark:text-white">Moved to First Interview</span>
-                      <span className="block text-[11px] text-slate-400">by Sarah Ahmed</span>
-                    </div>
-                    <span className="text-[11px] text-slate-400">Today, 9:11 AM</span>
-                  </div>
+              ) : (
+                <div className="py-8 text-center text-xs text-slate-400 italic">
+                  No status transitions recorded yet.
                 </div>
-
-                {/* Event 3 */}
-                <div className="relative">
-                  <div className="absolute -left-6 top-0.5 w-5 h-5 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-600 flex items-center justify-center text-[10px]">
-                    <Icon name="file-text" size={11} />
-                  </div>
-                  <div className="flex items-baseline justify-between">
-                    <div>
-                      <span className="block text-xs font-bold text-slate-900 dark:text-white">Resume reviewed</span>
-                      <span className="block text-[11px] text-slate-400">by Sarah Ahmed</span>
-                    </div>
-                    <span className="text-[11px] text-slate-400">Yesterday, 4:35 PM</span>
-                  </div>
-                </div>
-
-                {/* Event 4 */}
-                <div className="relative">
-                  <div className="absolute -left-6 top-0.5 w-5 h-5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 flex items-center justify-center text-[10px]">
-                    <Icon name="plus" size={11} />
-                  </div>
-                  <div className="flex items-baseline justify-between">
-                    <div>
-                      <span className="block text-xs font-bold text-slate-900 dark:text-white">Application received</span>
-                      <span className="block text-[11px] text-slate-400">via LinkedIn</span>
-                    </div>
-                    <span className="text-[11px] text-slate-400">28 Aug 2026, 10:23 AM</span>
-                  </div>
-                </div>
-
-                {/* Event 5 */}
-                <div className="relative">
-                  <div className="absolute -left-6 top-0.5 w-5 h-5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 flex items-center justify-center text-[10px]">
-                    <Icon name="user" size={11} />
-                  </div>
-                  <div className="flex items-baseline justify-between">
-                    <div>
-                      <span className="block text-xs font-bold text-slate-900 dark:text-white">Profile created</span>
-                      <span className="block text-[11px] text-slate-400">by System</span>
-                    </div>
-                    <span className="text-[11px] text-slate-400">28 Aug 2026, 10:22 AM</span>
-                  </div>
-                </div>
-              </div>
+              )}
             </div>
 
             {/* Right: Quick Actions & About this application (5 cols) */}
@@ -638,23 +684,25 @@ export function ApplicationDetailPage() {
                 <div className="space-y-2.5 text-xs">
                   <div className="flex items-center justify-between py-1 border-b border-slate-100/60 dark:border-slate-800/60">
                     <span className="text-slate-400">Application ID</span>
-                    <span className="font-bold text-slate-900 dark:text-white font-mono">{appIdDisplay}</span>
+                    <span className="font-bold text-slate-900 dark:text-white font-mono">{appIdDisplay || '—'}</span>
                   </div>
                   <div className="flex items-center justify-between py-1 border-b border-slate-100/60 dark:border-slate-800/60">
                     <span className="text-slate-400">Source</span>
-                    <span className="font-bold text-slate-900 dark:text-white">LinkedIn</span>
+                    <span className="font-bold text-slate-900 dark:text-white">
+                      {application?.source || application?.candidate?.source || '—'}
+                    </span>
                   </div>
                   <div className="flex items-center justify-between py-1 border-b border-slate-100/60 dark:border-slate-800/60">
                     <span className="text-slate-400">Position</span>
-                    <span className="font-bold text-slate-900 dark:text-white">Senior Frontend Engineer</span>
+                    <span className="font-bold text-slate-900 dark:text-white">{roleName}</span>
                   </div>
                   <div className="flex items-center justify-between py-1 border-b border-slate-100/60 dark:border-slate-800/60">
-                    <span className="text-slate-400">Department</span>
-                    <span className="font-bold text-slate-900 dark:text-white">Engineering</span>
+                    <span className="text-slate-400">Requisition</span>
+                    <span className="font-bold text-slate-900 dark:text-white">{application?.vacancyCode || '—'}</span>
                   </div>
                   <div className="flex items-center justify-between py-1">
                     <span className="text-slate-400">Location</span>
-                    <span className="font-bold text-slate-900 dark:text-white">Cairo, Egypt</span>
+                    <span className="font-bold text-slate-900 dark:text-white">{candidateLocation || '—'}</span>
                   </div>
                 </div>
               </div>
@@ -678,19 +726,8 @@ export function ApplicationDetailPage() {
                 </button>
               </div>
 
-              <div className="p-3.5 bg-slate-50/70 dark:bg-slate-800/40 rounded-xl border border-slate-100 dark:border-slate-800 space-y-2">
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-full bg-teal-600 text-white text-[10px] font-extrabold flex items-center justify-center shrink-0">
-                    SA
-                  </div>
-                  <span className="text-xs font-bold text-slate-900 dark:text-white">Sarah Ahmed</span>
-                </div>
-                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-                  Strong technical background in React and TypeScript. Good communication skills and cultural fit.
-                </p>
-                <span className="block text-[10px] text-slate-400">
-                  Today, 9:15 AM
-                </span>
+              <div className="py-6 text-center text-xs text-slate-400 italic">
+                No notes recorded yet.
               </div>
             </div>
 
@@ -701,14 +738,18 @@ export function ApplicationDetailPage() {
               </h2>
 
               <div className="flex flex-wrap items-center gap-2">
-                {tags.map((tag) => (
-                  <span
-                    key={tag}
-                    className="px-3 py-1 rounded-full text-xs font-bold bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800"
-                  >
-                    {tag}
-                  </span>
-                ))}
+                {tags.length > 0 ? (
+                  tags.map((tag) => (
+                    <span
+                      key={tag}
+                      className="px-3 py-1 rounded-full text-xs font-bold bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800"
+                    >
+                      {tag}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-xs text-slate-400 italic">No tags</span>
+                )}
                 <button
                   type="button"
                   onClick={() => setIsAddTagModalOpen(true)}
@@ -811,7 +852,7 @@ export function ApplicationDetailPage() {
           </div>
           <div>
             <label className="font-bold block mb-1">Date &amp; Time</label>
-            <Input type="datetime-local" defaultValue="2026-09-03T14:00" />
+            <Input type="datetime-local" />
           </div>
           <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
             <button
@@ -910,30 +951,59 @@ export function ApplicationDetailPage() {
       <Modal
         isOpen={isViewResumeModalOpen}
         onClose={() => setIsViewResumeModalOpen(false)}
-        title="Ali Hassan - R&eacute;sum&eacute;"
+        title={`${candidateName} - R\u00e9sum\u00e9`}
         maxWidthClass="max-w-2xl"
       >
         <div className="space-y-4 text-xs p-2">
-          <div className="border-b pb-3">
-            <h3 className="text-sm font-bold">Ali Hassan</h3>
-            <p className="text-slate-500">Frontend Developer &bull; Cairo, Egypt &bull; ali.hassan@email.com</p>
-          </div>
-          <div>
-            <h4 className="font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider text-[11px] mb-1">Summary</h4>
-            <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
-              Passionate Frontend Developer with 3+ years of experience building modern responsive web apps using React, TypeScript, Next.js, and TailwindCSS.
-            </p>
-          </div>
-          <div>
-            <h4 className="font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider text-[11px] mb-1">Experience</h4>
-            <div className="space-y-2">
-              <div>
-                <span className="font-bold block">Frontend Engineer &bull; Tech Solutions</span>
-                <span className="text-[11px] text-slate-400 block">2023 - Present</span>
-                <p className="text-slate-600 dark:text-slate-300 mt-0.5">Developed healthcare patient management portals using React and TypeScript.</p>
+          {!application?.candidate ? (
+            <PageState
+              kind="empty"
+              title="Candidate data unavailable"
+              description="No candidate profile is attached to this application."
+            />
+          ) : (
+            <>
+              <div className="border-b pb-3">
+                <h3 className="text-sm font-bold">{candidateName}</h3>
+                <p className="text-slate-500">
+                  {[roleName !== 'No position' ? roleName : null, candidateLocation, candidateEmail]
+                    .filter(Boolean)
+                    .join(' \u2022 ') || 'No contact details available'}
+                </p>
               </div>
-            </div>
-          </div>
+              <div>
+                <h4 className="font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider text-[11px] mb-1">
+                  Summary
+                </h4>
+                <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
+                  {application.candidate.skills && application.candidate.skills.length > 0
+                    ? `Candidate with verified skills in ${application.candidate.skills.join(', ')}.`
+                    : 'No summary provided.'}
+                </p>
+              </div>
+              <div>
+                <h4 className="font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider text-[11px] mb-1">
+                  Experience
+                </h4>
+                <div className="space-y-2">
+                  {application.candidate.currentCompany || application.candidate.currentTitle ? (
+                    <div>
+                      <span className="font-bold block">
+                        {application.candidate.currentTitle || 'Role'} &bull; {application.candidate.currentCompany || 'Company'}
+                      </span>
+                      <span className="text-[11px] text-slate-400 block">
+                        {application.candidate.experienceYears != null
+                          ? `${application.candidate.experienceYears} ${application.candidate.experienceYears === 1 ? 'year' : 'years'} experience`
+                          : 'Experience recorded'}
+                      </span>
+                    </div>
+                  ) : (
+                    <p className="text-slate-400 italic">No experience records available.</p>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
           <div className="flex justify-end pt-2 border-t border-slate-200">
             <button
               type="button"

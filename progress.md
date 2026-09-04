@@ -22,11 +22,23 @@
 ### Delegation queue (agy implement + opencode/muse-spark-1.3 review + orchestrator commit, one commit per task)
 | Task | Implementer | Review | Commit |
 |------|-------------|--------|--------|
-| P0.1 | pre-existing tree | opencode muse-spark-1.3 read-only PASS | pending |
+| P0.1 | pre-existing tree | opencode muse-spark-1.3 read-only PASS | 14df39e |
+| P0.2 | agy (report lost on abort; work recovered) | opencode muse-spark-1.3 read-only PASS | pending |
 | P0.2–P4.3 | agy (sequential) | opencode muse-spark-1.3 read-only | per task |
 
+### Delegation mandates (user-approved 2026-09-04)
+- agy runs use --dangerously-skip-permissions (headless write auto-denied without it). Treat agy runs as full access; orchestrator diff review is the safety net.
+- Fixed PreToolUse hook quoting bug in ~/.gemini/config/plugins/googlecloudtools.datacloud_telemetry/hooks.json.
+
+- [x] Task P0.2: Remove hardcoded fallback data from ApplicationDetailPage.tsx
+  - Replaced hardcoded strings ('Ali Hassan', 'Frontend Developer', 'ali.hassan@email.com', '+20 101 234 5678', 'Cairo, Egypt', 'APP-02481', tags mock array) with null-safe accessors or dynamic empty states.
+  - Added PageState empty banner when candidate is missing and hidden rows when email/phone/location are null.
+  - Added real timeline rendering from history API and empty state for notes.
+  - tsc clean (0 errors); web tests 58/58 pass.
+  - Orchestrator verification 2026-09-04: opencode review (muse-spark-1.3, read-only) PASS items 1-4, P0.1 untouched, no new deps; tsc re-run clean; web tests re-run 58/58 pass. Committed.
+
 ### In Progress
-- [ ] Task P0.2: Remove hardcoded fallback data from ApplicationDetailPage.tsx
+- [ ] Task P0.3: Green build baseline + export SLAIndicator from components/index.ts
 
 ### Blocked
 - None
