@@ -1,9 +1,17 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getApi, patchApi } from '../api/client';
-import type { Application, ApplicationStatusHistoryItem, ScreeningLog } from '@recruitflow/contracts';
+import { getApi, patchApi, ApiError } from '../api/client';
+import type {
+  Application,
+  ApplicationStage,
+  ApplicationStatusHistoryItem,
+  ScreeningLog,
+  UpdateApplicationStageInput,
+} from '@recruitflow/contracts';
 import { Icon } from '../components/Icon';
 import { Modal } from '../components/Modal';
+import { Alert } from '../components/ui/Alert';
+import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import './PageEnhancementsV2.css';
@@ -32,8 +40,41 @@ export function ApplicationDetailPage() {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  // Move stage selection
-  const [selectedNextStage, setSelectedNextStage] = useState('First Interview');
+  // Move stage selection & optimistic locking states
+  const [selectedNextStage, setSelectedNextStage] = useState<ApplicationStage>('Screening');
+  const [stageReason, setStageReason] = useState('');
+  const [isStageMoving, setIsStageMoving] = useState(false);
+  const [conflictAlert, setConflictAlert] = useState<string | null>(null);
+  const [stageError, setStageError] = useState<string | null>(null);
+  const conflictTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (conflictTimeoutRef.current) {
+        clearTimeout(conflictTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (application?.allowedTransitions && application.allowedTransitions.length > 0) {
+      setSelectedNextStage(application.allowedTransitions[0]);
+    } else if (application?.stage) {
+      const remaining: ApplicationStage[] = [
+        'Applied',
+        'Screening',
+        'Interview',
+        'Offer',
+        'Pre-Hire',
+        'Joined',
+        'Rejected',
+        'Withdrawn',
+      ].filter((s) => s !== application.stage) as ApplicationStage[];
+      if (remaining.length > 0 && !remaining.includes(selectedNextStage)) {
+        setSelectedNextStage(remaining[0]);
+      }
+    }
+  }, [application?.stage, application?.allowedTransitions]);
 
   useEffect(() => {
     if (!id) return;
@@ -72,12 +113,68 @@ export function ApplicationDetailPage() {
   };
 
   const handleStageMove = async () => {
-    if (id) {
-      try {
-        await patchApi(`/applications/${id}/stage`, { stage: selectedNextStage });
-      } catch {}
+    if (!id || !application) return;
+    setIsStageMoving(true);
+    setStageError(null);
+    setConflictAlert(null);
+
+    const payload: UpdateApplicationStageInput = {
+      stage: selectedNextStage,
+      expectedStage: application.stage,
+      expectedVersion: application.version ?? 1,
+      ...(stageReason.trim() ? { reason: stageReason.trim() } : {}),
+    };
+
+    try {
+      const updated = await patchApi<Application>(`/applications/${id}/stage`, payload);
+      if (updated) {
+        setApplication(updated);
+      } else {
+        const refreshed = await getApi<Application>(`/applications/${id}`);
+        if (refreshed) setApplication(refreshed);
+      }
+      setIsMoveStageModalOpen(false);
+      setStageReason('');
+      showToast('Stage updated successfully');
+    } catch (err: unknown) {
+      const isConflict =
+        (err instanceof ApiError && (err.statusCode === 409 || err.code === 'CONFLICT')) ||
+        (Boolean(err) &&
+          typeof err === 'object' &&
+          ((err as { statusCode?: number }).statusCode === 409 ||
+            (err as { status?: number }).status === 409 ||
+            (err as { code?: string }).code === 'CONFLICT'));
+
+      setIsMoveStageModalOpen(false);
+
+      if (isConflict) {
+        setConflictAlert('This application was updated by someone else. Refreshing...');
+        try {
+          const refreshed = await getApi<Application>(`/applications/${id}`);
+          if (refreshed) {
+            setApplication(refreshed);
+          }
+        } catch {
+          // ignore refresh failure on conflict
+        }
+        if (conflictTimeoutRef.current) {
+          clearTimeout(conflictTimeoutRef.current);
+        }
+        conflictTimeoutRef.current = setTimeout(() => {
+          setConflictAlert(null);
+        }, 4000);
+      } else {
+        const errorMsg =
+          err instanceof ApiError && err.statusCode >= 500
+            ? 'Server error occurred while updating stage. Please try again.'
+            : err instanceof Error && err.message
+              ? err.message
+              : 'Server error occurred while updating stage. Please try again.';
+        setStageError(errorMsg);
+      }
+    } finally {
+      setIsStageMoving(false);
     }
-    setIsMoveStageModalOpen(false);
   };
 
   return (
@@ -120,6 +217,34 @@ export function ApplicationDetailPage() {
           </button>
         </div>
       </div>
+
+      {/* ── Optimistic Concurrency Conflict / Server Error Banners ── */}
+      {conflictAlert && (
+        <Alert tone="warning" role="alert" className="w-full">
+          {conflictAlert}
+        </Alert>
+      )}
+
+      {stageError && (
+        <Alert
+          tone="danger"
+          role="alert"
+          className="w-full"
+          action={
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => void handleStageMove()}
+              loading={isStageMoving}
+              disabled={isStageMoving}
+            >
+              Retry
+            </Button>
+          }
+        >
+          {stageError}
+        </Alert>
+      )}
 
       {/* ── Horizontal Navigation Tabs (Overview, Resume, Interviews, Activity, Tasks) ── */}
       <div className="border-b border-slate-200 dark:border-slate-800 flex items-center gap-6 overflow-x-auto rf-scrollbar text-xs font-semibold">
@@ -267,7 +392,7 @@ export function ApplicationDetailPage() {
               <div className="space-y-1">
                 <span className="block text-[11px] font-semibold text-slate-400 uppercase">Current stage</span>
                 <span className="inline-block px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-                  First Interview
+                  {application?.stage || 'Screening'}
                 </span>
                 <span className="block text-[11px] text-slate-400 mt-0.5">Since 28 Aug 2026</span>
               </div>
@@ -421,7 +546,10 @@ export function ApplicationDetailPage() {
                 </h2>
 
                 <div
-                  onClick={() => navigate(`/applications/${id || 'APP-02481'}/transition`)}
+                  onClick={() => {
+                    setStageError(null);
+                    setIsMoveStageModalOpen(true);
+                  }}
                   className="p-2.5 rounded-xl border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer flex items-center justify-between group"
                 >
                   <div className="flex items-center gap-3">
@@ -598,7 +726,9 @@ export function ApplicationDetailPage() {
       {/* 1. Move Stage Modal */}
       <Modal
         isOpen={isMoveStageModalOpen}
-        onClose={() => setIsMoveStageModalOpen(false)}
+        onClose={() => {
+          if (!isStageMoving) setIsMoveStageModalOpen(false);
+        }}
         title="Move Candidate Stage"
         maxWidthClass="max-w-md"
       >
@@ -607,31 +737,58 @@ export function ApplicationDetailPage() {
             <label className="font-bold block mb-1">Select Next Stage</label>
             <Select
               value={selectedNextStage}
-              onChange={(e) => setSelectedNextStage(e.target.value)}
+              onChange={(e) => setSelectedNextStage(e.target.value as ApplicationStage)}
+              disabled={isStageMoving}
             >
-              <option value="Screening">Screening</option>
-              <option value="First Interview">First Interview</option>
-              <option value="Technical Interview">Technical Interview</option>
-              <option value="Hiring Manager Interview">Hiring Manager Interview</option>
-              <option value="Offer">Offer</option>
-              <option value="Hired">Hired</option>
+              {(application?.allowedTransitions && application.allowedTransitions.length > 0
+                ? application.allowedTransitions
+                : ([
+                    'Applied',
+                    'Screening',
+                    'Interview',
+                    'Offer',
+                    'Pre-Hire',
+                    'Joined',
+                    'Rejected',
+                    'Withdrawn',
+                  ] as ApplicationStage[])
+              ).map((stageOption) => (
+                <option key={stageOption} value={stageOption}>
+                  {stageOption}
+                </option>
+              ))}
             </Select>
           </div>
-          <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
-            <button
+          <div>
+            <label className="font-bold block mb-1">Reason (Optional)</label>
+            <Input
+              type="text"
+              placeholder="e.g. Cleared technical screening"
+              value={stageReason}
+              onChange={(e) => setStageReason(e.target.value)}
+              disabled={isStageMoving}
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+            <Button
               type="button"
+              variant="ghost"
+              size="sm"
               onClick={() => setIsMoveStageModalOpen(false)}
-              className="px-3 py-1.5 text-slate-500 hover:text-slate-900 cursor-pointer"
+              disabled={isStageMoving}
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="primary"
+              size="sm"
               onClick={() => void handleStageMove()}
-              className="px-4 py-1.5 bg-blue-600 text-white rounded-xl font-bold cursor-pointer"
+              loading={isStageMoving}
+              disabled={isStageMoving}
             >
-              Confirm Move
-            </button>
+              {isStageMoving ? 'Updating...' : 'Confirm Move'}
+            </Button>
           </div>
         </div>
       </Modal>

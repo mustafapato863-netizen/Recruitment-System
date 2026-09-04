@@ -1,20 +1,55 @@
-# Findings
+# Findings — RecruitFlow Candidate Journey Audit
 
-## Research Goal
-Redesign the full application to match the visual reference provided in `docs/recruitment-visual-reference-complete`.
+## 1. Page Inventory (50 pages total)
+Key pages for journey scope:
+- `CandidateDetailPage.tsx` (20 KB) — should be "Candidate 360" hub; currently simple read-only
+- `ApplicationDetailPage.tsx` (42 KB) — richest page; has 5 tabs, 6 modals; NOT linked bidirectionally to candidate
+- `InterviewDetailPage.tsx` (37 KB) — standalone; Scorecard is never persisted to application record
+- `HiringCasePage.tsx` (17 KB) — compliance/approval workflow; no breadcrumb back to candidate
+- `JoiningManagementPage.tsx` (8 KB) — flat list; no joining completion flow
 
-## Visual Design Analysis
-### Core Layout & Theme
-- **AppShell:** Dark sidebar on the left, top breadcrumb header.
-- **Card Design:** A specific card style highlighted by the user (white background, rounded corners, subtle shadow, light blue border/glow on right and bottom, document icon in top right).
+## 2. Existing UI Building Blocks
+Already built, NOT yet wired end-to-end:
+- `CommentsThread.tsx` — exists, no API call, no mention of @user, no activity types
+- `Scorecard.tsx` — full star-rating UI, no write-back to application/interview record
+- `ActivityTimeline.tsx` — imported in HiringCasePage only
+- `PipelineStepper.tsx` — imported in ApplicationDetailPage but stage movement fires raw PATCH
+- `SLAIndicator.tsx` — unused in any page
+- `ProgressBar.tsx` — imported in HiringCasePage
 
-### Key Pages / Components Identified in References
-1. **01-my-work-dashboard.png & 14-my-work-full-task-queue.png**: Dashboard layout, metric cards (like the one requested), task lists.
-2. **02-job-positions.png & 03-job-overview.png**: Job listings, data tables, overview panel.
-3. **04-applications-pipeline-kanban.png & 13-applications-list-view.png**: Kanban board, list views, candidate cards.
-4. **05-applicant-profile.png & 06-stage-transition.png**: Candidate details, stepper, transition alert boxes.
-5. **07-recruitment-reports-dark.png & 15-job-analytics.png**: Charts, dark theme variants for reporting.
-6. **08-mobile-navigation-drawer.png**: Mobile layout.
-7. **09-interviews.png & 10-interview-detail-feedback.png**: Interview scheduling, calendar, feedback forms.
-8. **11-offers.png & 12-offer-detail-hire.png**: Offer drafting, approval flows.
-9. **16-recruitment-settings.png**: Forms, configuration layouts.
+## 3. Missing Connections (The 5 Gaps)
+1. **No unified Candidate 360 hub** — CandidateDetailPage lacks application list, interview history, offer state, timeline
+2. **No Smart Action Bar** — ApplicationDetailPage has 6 modals but no context-aware "next step" rail
+3. **CommentsThread is UI-only** — no POST /applications/:id/notes endpoint wired
+4. **Scorecard is disconnected** — no read/write path from InterviewDetailPage to the Interview or Application record
+5. **Joining has no completion ceremony** — JoiningManagementPage has "Manage" button → HiringCasePage, but no joining confirmation modal, compliance checklist, or headcount close
+
+## 4. Backend Assets Available
+From schema.prisma (confirmed):
+- `HiringCase` — has `status`, `plannedJoiningDate`, `actualJoiningDate`, `complianceItems` relation
+- `ComplianceRequirement` — has `isCompleted`, `notes`, `completedAt`
+- `Offer` — has `status`, `signedAt`, `acceptedAt`
+- Application has `stage`, `version` (optimistic locking)
+- Interviews have no Scorecard model yet (UI exists, no DB model)
+
+## 5. API Endpoints Status
+- `PATCH /applications/:id/stage` — exists (ApplicationDetailPage calls it)
+- `POST /applications/:id/notes` — NOT verified; CommentsThread has no call
+- `GET /applications/:id/history` — exists (ApplicationDetailPage fetches it)
+- `GET /hiring` — exists (JoiningManagementPage fetches)
+- `PATCH /hiring/:id` — exists (HiringCasePage calls it)
+- Interview scorecard endpoints — NOT confirmed, likely missing
+
+## 6. FRONTEND_SIMPLE_SYSTEM_PLAN.md Constraints
+- Never invent fields outside typed contracts
+- No drag-and-drop as sole stage control
+- No hardcoded candidate/interview data
+- Stage transitions require server `version` field (optimistic lock)
+- Candidate 360 shape: Identity header + application history + CV/doc metadata + interviews + offers + timeline + notes
+- Page contracts: every page must answer: owner / object / status / next action / evidence
+
+## 7. Authority File for This Work
+`docs/development/FRONTEND_SIMPLE_SYSTEM_PLAN.md` — authority level 4
+Phase mapping from that document:
+- Phase 2 (Jobs→Applicants) = our Phase 1+2
+- Phase 3 (Candidate→Interview→Offer) = our Phase 3+4
