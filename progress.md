@@ -27,7 +27,8 @@
 | P0.3 | agy | opencode muse-spark-1.3 read-only PASS; tsc clean; web build ok | 7d82564 |
 | P1.1 | agy (timed out after writing file; no report) | opencode muse-spark-1.3 read-only PASS 6/6; tsc clean; tokens+props verified by orchestrator | a61d559 |
 | P1.2 | agy (retry after network stall) | opencode muse-spark-1.3 read-only PASS 5/5 incl. backend DTO verification; tsc clean; web tests 58/58 pass. Accepted: Add Tag modal as in-scope-adjacent (wires P1.1 onAddTag, whitelisted skills field) | e4faaf9 |
-| P1.3 | agy (killed during final verify; work recovered) | opencode muse-spark-1.3 read-only PASS 6/6; tsc clean; web tests 58/58 pass. Noted non-blocking: dialog closes on transition error (alert behind bar); onClick additive bypasses transition logic — audit at wiring (P1.4) | pending |
+| P1.3 | agy (killed during final verify; work recovered) | opencode muse-spark-1.3 read-only PASS 6/6; tsc clean; web tests 58/58 pass. Noted non-blocking: dialog closes on transition error (alert behind bar); onClick additive bypasses transition logic — audit at wiring (P1.4) | 766dc5a |
+| P1.4 | agy | opencode muse-spark-1.3 read-only PASS 4/4; tsc clean; web build ok. Orchestrator hardening: version={application.version ?? 1} (matches P0.1 convention) | pending |
 | P0.2–P4.3 | agy (sequential) | opencode muse-spark-1.3 read-only | per task |
 
 ### Delegation mandates (user-approved 2026-09-04)
@@ -67,8 +68,18 @@
   - "Add Note" opens `CommentsThread` inside `Drawer` wired to `onActionComplete`.
   - tsc clean (0 errors); web tests 58/58 pass.
 
+- [x] Task P1.4: Integrate SmartActionBar into ApplicationDetailPage
+  - Imported `SmartActionBar` and `getDefaultActions` in `apps/web/src/pages/ApplicationDetailPage.tsx`.
+  - Removed disconnected header action buttons (`Back to applications` and options button) from top bar.
+  - Kept all existing modal state (`isAddNoteModalOpen`, `isRejectModalOpen`, `handleStageMove`, etc.) intact for backwards compatibility.
+  - Integrated `<SmartActionBar>` at bottom of page content area guarded by `application != null`.
+  - Passed `applicationId={id || application.id}`, `stage={application.stage}`, `version={application.version}`, `actions={getDefaultActions(application.stage)}`, and `onActionComplete={refetchApplication}`.
+  - Extracted `refetchApplication` using `useCallback` to reload application, history, and screening logs on action complete.
+  - Verified `pnpm --dir apps/web exec tsc -p tsconfig.app.json --noEmit` clean (0 errors).
+  - Verified `pnpm --dir apps/web build` clean (production build succeeded in 1.55s).
+
 ### In Progress
-- [ ] Phase 1 tasks (P1.4 next: ApplicationDetailPage SmartActionBar integration)
+- [ ] Phase 2 tasks (Phase 1 complete)
 
 ### Blocked
 - None

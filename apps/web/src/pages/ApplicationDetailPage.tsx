@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getApi, patchApi, ApiError } from '../api/client';
 import type {
@@ -15,6 +15,7 @@ import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { PageState } from '../components/ui/PageState';
+import { SmartActionBar, getDefaultActions } from '../components/candidate/SmartActionBar';
 import './PageEnhancementsV2.css';
 
 export function ApplicationDetailPage() {
@@ -78,17 +79,14 @@ export function ApplicationDetailPage() {
     }
   }, [application?.stage, application?.allowedTransitions]);
 
-  useEffect(() => {
-    if (!id) {
-      setIsLoading(false);
-      return;
-    }
-    setIsLoading(true);
-    Promise.allSettled([
-      getApi<Application>(`/applications/${id}`),
-      getApi<ApplicationStatusHistoryItem[]>(`/applications/${id}/history`),
-      getApi<ScreeningLog[]>(`/screening/application/${id}`),
-    ]).then(([appRes, histRes, scrRes]) => {
+  const refetchApplication = useCallback(async () => {
+    if (!id) return;
+    try {
+      const [appRes, histRes, scrRes] = await Promise.allSettled([
+        getApi<Application>(`/applications/${id}`),
+        getApi<ApplicationStatusHistoryItem[]>(`/applications/${id}/history`),
+        getApi<ScreeningLog[]>(`/screening/application/${id}`),
+      ]);
       if (appRes.status === 'fulfilled' && appRes.value) {
         setApplication(appRes.value);
         if (appRes.value.candidate?.skills && appRes.value.candidate.skills.length > 0) {
@@ -101,10 +99,21 @@ export function ApplicationDetailPage() {
       if (scrRes.status === 'fulfilled' && scrRes.value) {
         setScreeningLogs(scrRes.value);
       }
-    }).finally(() => {
+    } catch {
+      // ignore
+    }
+  }, [id]);
+
+  useEffect(() => {
+    if (!id) {
+      setIsLoading(false);
+      return;
+    }
+    setIsLoading(true);
+    refetchApplication().finally(() => {
       setIsLoading(false);
     });
-  }, [id]);
+  }, [id, refetchApplication]);
 
   const candidateName = application?.candidate
     ? `${application.candidate.firstName || ''} ${application.candidate.lastName || ''}`.trim() || 'Unknown candidate'
@@ -236,26 +245,6 @@ export function ApplicationDetailPage() {
           <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight mt-1">
             Applicant Profile
           </h1>
-        </div>
-
-        <div className="flex items-center gap-2.5">
-          <button
-            type="button"
-            onClick={() => navigate('/applications')}
-            className="inline-flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs cursor-pointer"
-          >
-            <Icon name="arrow-left" size={13} />
-            <span>Back to applications</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => showToast('Application options: Export candidate packet, Transfer requisition, or Archive')}
-            className="p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-50 transition shadow-xs cursor-pointer"
-            title="Application options"
-          >
-            <Icon name="more-horizontal" size={16} />
-          </button>
         </div>
       </div>
 
@@ -762,6 +751,17 @@ export function ApplicationDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* ── Smart Action Bar ── */}
+      {application != null && (
+        <SmartActionBar
+          applicationId={id || application.id}
+          stage={application.stage}
+          version={application.version ?? 1}
+          actions={getDefaultActions(application.stage)}
+          onActionComplete={refetchApplication}
+        />
+      )}
 
       {/* ── Modals for Quick Actions ── */}
       {/* 1. Move Stage Modal */}
