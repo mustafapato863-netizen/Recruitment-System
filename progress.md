@@ -26,7 +26,8 @@
 | P0.2 | agy (report lost on abort; work recovered) | opencode muse-spark-1.3 read-only PASS | 13d504c |
 | P0.3 | agy | opencode muse-spark-1.3 read-only PASS; tsc clean; web build ok | 7d82564 |
 | P1.1 | agy (timed out after writing file; no report) | opencode muse-spark-1.3 read-only PASS 6/6; tsc clean; tokens+props verified by orchestrator | a61d559 |
-| P1.2 | agy (retry after network stall) | opencode muse-spark-1.3 read-only PASS 5/5 incl. backend DTO verification; tsc clean; web tests 58/58 pass. Accepted: Add Tag modal as in-scope-adjacent (wires P1.1 onAddTag, whitelisted skills field) | pending |
+| P1.2 | agy (retry after network stall) | opencode muse-spark-1.3 read-only PASS 5/5 incl. backend DTO verification; tsc clean; web tests 58/58 pass. Accepted: Add Tag modal as in-scope-adjacent (wires P1.1 onAddTag, whitelisted skills field) | e4faaf9 |
+| P1.3 | agy (killed during final verify; work recovered) | opencode muse-spark-1.3 read-only PASS 6/6; tsc clean; web tests 58/58 pass. Noted non-blocking: dialog closes on transition error (alert behind bar); onClick additive bypasses transition logic — audit at wiring (P1.4) | pending |
 | P0.2–P4.3 | agy (sequential) | opencode muse-spark-1.3 read-only | per task |
 
 ### Delegation mandates (user-approved 2026-09-04)
@@ -55,8 +56,19 @@
   - Zero hardcoded fallback strings; null fields hidden cleanly.
   - tsc clean (0 errors); web tests 58/58 pass.
 
+- [x] Task P1.3: Create SmartActionBar — context-aware sticky action bar
+  - Created `apps/web/src/components/candidate/SmartActionBar.tsx`.
+  - Implemented `SmartAction` and `SmartActionBarProps` contracts with strict types from contracts package (`ApplicationStage`).
+  - Implemented `getDefaultActions(stage)` helper mapping each canonical stage to its context-aware actions.
+  - Sticky bottom layout: `[Back] ... [Add Note] [Reject] [primary rightmost]` with role="toolbar" and aria-label="Application actions".
+  - Blocked actions rendered as disabled Button with `aria-disabled` wrapped in `Tooltip` displaying `blockedReason`.
+  - Destructive/confirmable actions wired to `ConfirmDialog`; "Reject" requires reason via ConfirmDialog textarea with comment validation.
+  - Transitions use `PATCH /applications/:id/stage` with optimistic-lock payload (`stage`, `expectedStage`, `expectedVersion`, `reason?`) and 409 conflict detection.
+  - "Add Note" opens `CommentsThread` inside `Drawer` wired to `onActionComplete`.
+  - tsc clean (0 errors); web tests 58/58 pass.
+
 ### In Progress
-- [ ] Phase 1 tasks (P1.3 next)
+- [ ] Phase 1 tasks (P1.4 next: ApplicationDetailPage SmartActionBar integration)
 
 ### Blocked
 - None

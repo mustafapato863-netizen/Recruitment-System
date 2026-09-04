@@ -19,7 +19,7 @@ Already built, NOT yet wired end-to-end:
 
 ## 3. Missing Connections (The 5 Gaps)
 1. **Unified Candidate 360 hub** — Resolved in P1.2 (`CandidateDetailPage.tsx` integrates `CandidateWorkspace`, applications table, interview history, offer list, timeline placeholder).
-2. **No Smart Action Bar** — ApplicationDetailPage has 6 modals but no context-aware "next step" rail
+2. **No Smart Action Bar** — Component created in P1.3 (`SmartActionBar.tsx` with context-aware stage actions, optimistic locking, blocked action tooltips, ConfirmDialog, and Drawer comments thread; P1.4 will integrate into `ApplicationDetailPage.tsx`).
 3. **CommentsThread is UI-only** — no POST /applications/:id/notes endpoint wired
 4. **Scorecard is disconnected** — no read/write path from InterviewDetailPage to the Interview or Application record
 5. **Joining has no completion ceremony** — JoiningManagementPage has "Manage" button → HiringCasePage, but no joining confirmation modal, compliance checklist, or headcount close
