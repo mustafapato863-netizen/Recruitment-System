@@ -18,7 +18,7 @@ Already built, NOT yet wired end-to-end:
 - `ProgressBar.tsx` — imported in HiringCasePage
 
 ## 3. Missing Connections (The 5 Gaps)
-1. **No unified Candidate 360 hub** — CandidateDetailPage lacks application list, interview history, offer state, timeline
+1. **Unified Candidate 360 hub** — Resolved in P1.2 (`CandidateDetailPage.tsx` integrates `CandidateWorkspace`, applications table, interview history, offer list, timeline placeholder).
 2. **No Smart Action Bar** — ApplicationDetailPage has 6 modals but no context-aware "next step" rail
 3. **CommentsThread is UI-only** — no POST /applications/:id/notes endpoint wired
 4. **Scorecard is disconnected** — no read/write path from InterviewDetailPage to the Interview or Application record
@@ -33,6 +33,11 @@ From schema.prisma (confirmed):
 - Interviews have no Scorecard model yet (UI exists, no DB model)
 
 ## 5. API Endpoints Status
+- `GET /candidates/:id` — returns `Candidate` record
+- `GET /applications?candidateId=:id` — returns `PaginatedResult<Application>` (unpacked via `.data`)
+- `GET /interviews` — returns `Interview[]`. Does NOT accept `candidateId` query parameter (fails with 400 due to `forbidNonWhitelisted: true`). Candidate 360 filters client-side by candidate's application IDs.
+- `GET /offers` — returns `Offer[]` (scoped to organization). Does NOT accept `candidateId` query parameter. Candidate 360 filters client-side by candidate's application IDs.
+- `PATCH /candidates/:id` — accepts `skills?: string[]`, used by Candidate 360 to persist tags.
 - `PATCH /applications/:id/stage` — exists (ApplicationDetailPage calls it)
 - `POST /applications/:id/notes` — NOT verified; CommentsThread has no call
 - `GET /applications/:id/history` — exists (ApplicationDetailPage fetches it)

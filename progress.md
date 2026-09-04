@@ -25,7 +25,8 @@
 | P0.1 | pre-existing tree | opencode muse-spark-1.3 read-only PASS | 14df39e |
 | P0.2 | agy (report lost on abort; work recovered) | opencode muse-spark-1.3 read-only PASS | 13d504c |
 | P0.3 | agy | opencode muse-spark-1.3 read-only PASS; tsc clean; web build ok | 7d82564 |
-| P1.1 | agy (timed out after writing file; no report) | opencode muse-spark-1.3 read-only PASS 6/6; tsc clean; tokens+props verified by orchestrator | pending |
+| P1.1 | agy (timed out after writing file; no report) | opencode muse-spark-1.3 read-only PASS 6/6; tsc clean; tokens+props verified by orchestrator | a61d559 |
+| P1.2 | agy (retry after network stall) | opencode muse-spark-1.3 read-only PASS 5/5 incl. backend DTO verification; tsc clean; web tests 58/58 pass. Accepted: Add Tag modal as in-scope-adjacent (wires P1.1 onAddTag, whitelisted skills field) | pending |
 | P0.2–P4.3 | agy (sequential) | opencode muse-spark-1.3 read-only | per task |
 
 ### Delegation mandates (user-approved 2026-09-04)
@@ -45,8 +46,17 @@
   - Verified `pnpm --dir apps/web build` passes with 0 errors (production build succeeded).
   - Verified no TypeScript errors in ApplicationDetailPage.tsx or any P0.1/P0.2 touched files.
 
-  ### In Progress
-- [ ] Phase 1 tasks (P1.2 next: rebuild CandidateDetailPage as 360 hub)
+- [x] Task P1.2: Rebuild CandidateDetailPage as Candidate 360 hub
+  - Integrated CandidateWorkspace with candidate identity + active application pipeline stepper.
+  - Added Tabs with 5 views: Overview (contact facts, sourcing channel, consent status, professional summary), Applications (ResponsiveDataView table), Interviews (ResponsiveDataView table with scorecard status), Offers (list with StatusBadges), and Timeline (Phase 2 placeholder).
+  - Implemented loading (DetailSkeleton/TableSkeleton/ListSkeleton), empty (PageState kind="empty"), error (Alert tone="danger" + retry), and data states per tab.
+  - Adapted endpoint handling: `GET /applications?candidateId=:id` unpacked from PaginatedResult; `GET /interviews` and `GET /offers` filtered client-side by candidate's application IDs (since backend forbidNonWhitelisted forbids candidateId on /interviews).
+  - Wired interactive Add Tag modal with `PATCH /candidates/:id` and Assign to Vacancy modal.
+  - Zero hardcoded fallback strings; null fields hidden cleanly.
+  - tsc clean (0 errors); web tests 58/58 pass.
+
+### In Progress
+- [ ] Phase 1 tasks (P1.3 next)
 
 ### Blocked
 - None
