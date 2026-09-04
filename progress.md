@@ -31,6 +31,7 @@
 | P1.4 | agy | opencode muse-spark-1.3 read-only PASS 4/4; tsc clean; web build ok. Orchestrator hardening: version={application.version ?? 1} (matches P0.1 convention) | pending |
 | P2.0-backend | agy | opencode muse-spark-1.3 read-only PASS 5/5 (guards, tenant isolation, validation verified); prisma valid; API tsc clean; eslint clean; API tests 11/11 pass. Implementer claims live DB migration + cross-tenant checks executed | 13029d3 |
 | P2.2 | agy | opencode muse-spark-1.3 read-only PASS 6/6; tsc clean; web tests 58/58 pass; web build ok. Noted: GET failure is silent-empty (feed-level states deferred to P2.4); SmartActionBar still UI-only until P2.4 | pending |
+| P2.3 | agy | opencode muse-spark-1.3 read-only PASS 6/6; tsc clean; web tests 58/58 pass. Orchestrator fix: dead class text-rf-ink-800 -> text-rf-ink (token undefined). Noted: composer list-hiding CSS couples to CommentsThread internals — revisit in P2.4 if fragile | pending |
 | P0.2–P4.3 | agy (sequential) | opencode muse-spark-1.3 read-only | per task |
 
 ### Delegation mandates (user-approved 2026-09-04)
@@ -98,8 +99,23 @@
   - Added `@mention` highlight: content matches for `/(@\w+)/g` rendered in `<mark className="mention-highlight">` with scoped CSS.
   - Verification: `pnpm --dir apps/web exec tsc -p tsconfig.app.json --noEmit` clean (0 errors); web tests 58/58 pass; production build succeeds.
 
+- [x] Task P2.3: Create ActivityFeed — merged notes + events timeline
+  - Created `apps/web/src/components/candidate/ActivityFeed.tsx`.
+  - Implemented and exported contract types `FeedEntry` (`note`, `stage_change`, `interview`, `offer`, `system`) and `ActivityFeedProps` (`entityType: 'application' | 'hiringCase'`, `entityId`, `entries`, `onRefresh`, `className?`).
+  - Implemented defensive newest-first re-sort by `createdAt`.
+  - Consistent note rendering with `Avatar` initials, author name, optional author role, relative timestamp, and content with `@mention` highlighting consistent with `CommentsThread`.
+  - Consistent system event rendering with colored left borders and verified Icon names (zero substitutions needed):
+    - `stage_change` -> Icon `arrow-right` + teal left border (`border-l-4 border-l-teal-500`) + `byUser` actor
+    - `interview` -> Icon `calendar` + blue left border (`border-l-4 border-l-blue-500`)
+    - `offer` -> Icon `file-text` + purple left border (`border-l-4 border-l-purple-500`)
+    - `system` -> Icon `info` + grey left border (`border-l-4 border-l-slate-400`)
+  - Relative date calculation (`formatTimeAgo`) implemented with plain JS Date math (no external libraries), returning e.g. "2 hours ago", "Just now", "Yesterday".
+  - Empty entries state rendered via `PageState kind="empty" title="No activity yet"`.
+  - Bottom "Post a note" composer rendered via `CommentsThread` with `entityType` and `entityId` passthrough; calls `onRefresh()` after note post. Internal comment list hidden via scoped CSS in composer mode to prevent note duplication. Pure data-in component with zero fetch calls inside.
+  - Verification: `pnpm --dir apps/web exec tsc -p tsconfig.app.json --noEmit` clean (0 errors).
+
 ### In Progress
-- [ ] Phase 2 tasks (P2.0-backend and P2.2 complete; unblocks P2.1 and Phase 2 progression)
+- [ ] Task P2.4: Integrate ActivityFeed into ApplicationDetailPage and HiringCasePage
 
 ### Blocked
-- None (P2.2 CommentsThread UI wiring complete; ready for review).
+- None (P2.3 ActivityFeed component ready for review and P2.4 integration).

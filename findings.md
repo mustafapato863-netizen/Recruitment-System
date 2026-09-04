@@ -9,10 +9,10 @@ Key pages for journey scope:
 - `JoiningManagementPage.tsx` (8 KB) — flat list; no joining completion flow
 
 ## 2. Existing UI Building Blocks
-Already built, NOT yet wired end-to-end:
-- `CommentsThread.tsx` — exists, no API call, no mention of @user, no activity types
+- `CommentsThread.tsx` — wired to application notes API in P2.2 (@mention highlight, error alerts, UI-only fallback for hiring cases)
+- `ActivityFeed.tsx` — created in P2.3 (merged notes + system events timeline, newest-first, colored event left borders, plain JS Date math, bottom CommentsThread composer)
 - `Scorecard.tsx` — full star-rating UI, no write-back to application/interview record
-- `ActivityTimeline.tsx` — imported in HiringCasePage only
+- `ActivityTimeline.tsx` — imported in HiringCasePage only (style mirrored by ActivityFeed)
 - `PipelineStepper.tsx` — imported in ApplicationDetailPage but stage movement fires raw PATCH
 - `SLAIndicator.tsx` — exported from components/ui as of P0.3 (ready for Phase 1); unused in any page yet
 - `ProgressBar.tsx` — imported in HiringCasePage
