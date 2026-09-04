@@ -30,6 +30,7 @@
 | P1.3 | agy (killed during final verify; work recovered) | opencode muse-spark-1.3 read-only PASS 6/6; tsc clean; web tests 58/58 pass. Noted non-blocking: dialog closes on transition error (alert behind bar); onClick additive bypasses transition logic — audit at wiring (P1.4) | 766dc5a |
 | P1.4 | agy | opencode muse-spark-1.3 read-only PASS 4/4; tsc clean; web build ok. Orchestrator hardening: version={application.version ?? 1} (matches P0.1 convention) | pending |
 | P2.0-backend | agy | opencode muse-spark-1.3 read-only PASS 5/5 (guards, tenant isolation, validation verified); prisma valid; API tsc clean; eslint clean; API tests 11/11 pass. Implementer claims live DB migration + cross-tenant checks executed | 13029d3 |
+| P2.2 | agy | opencode muse-spark-1.3 read-only PASS 6/6; tsc clean; web tests 58/58 pass; web build ok. Noted: GET failure is silent-empty (feed-level states deferred to P2.4); SmartActionBar still UI-only until P2.4 | pending |
 | P0.2–P4.3 | agy (sequential) | opencode muse-spark-1.3 read-only | per task |
 
 ### Delegation mandates (user-approved 2026-09-04)
@@ -89,8 +90,16 @@
   - Added `ApplicationNote` and `CreateApplicationNoteInput` contract types to `packages/contracts/src/index.ts`.
   - Gates: API typecheck clean (`tsc --noEmit`), ESLint clean on touched files (0 errors, 0 warnings), existing error-normalizer unit tests 11/11 pass, live API cross-tenant isolation and 400 validation verified, DB migration executed.
 
+- [x] Task P2.2: Wire CommentsThread to API (application notes only)
+  - Extended `CommentsThreadProps` with optional `entityType?: 'application' | 'hiringCase'`, `entityId?: string`, and `initialComments?: CommentItem[]` while preserving legacy `comments`/`onPostComment` call shape and behavior.
+  - Activated API mode strictly for `entityType === 'application' && entityId`: fetches `GET /applications/:id/notes` on mount and entity change, maps `ApplicationNote` to `CommentItem` (authorName ?? 'Unknown', derived initials, content, relative createdAt display).
+  - Wired posting in API mode: sets `isPosting=true` (disables textarea and shows button loading spinner), calls `postApi('/applications/:id/notes', { content })`, on success clears input, reloads notes from server, and calls `onPostComment?.(trimmed)`; on error displays inline `Alert tone="danger"` below textarea mapping server validation errors (empty/too-long).
+  - Kept UI-only behavior for `entityType === 'hiringCase'` or missing `entityId` (appends locally, calls `onPostComment`, zero calls to hiring endpoints).
+  - Added `@mention` highlight: content matches for `/(@\w+)/g` rendered in `<mark className="mention-highlight">` with scoped CSS.
+  - Verification: `pnpm --dir apps/web exec tsc -p tsconfig.app.json --noEmit` clean (0 errors); web tests 58/58 pass; production build succeeds.
+
 ### In Progress
-- [ ] Phase 2 tasks (P2.0-backend complete; unblocks P2.1 / P2.2 CommentsThread wiring)
+- [ ] Phase 2 tasks (P2.0-backend and P2.2 complete; unblocks P2.1 and Phase 2 progression)
 
 ### Blocked
-- None (P2.1 unblocked by P2.0-backend endpoint delivery; P2.2 CommentsThread UI wiring ready to proceed).
+- None (P2.2 CommentsThread UI wiring complete; ready for review).
