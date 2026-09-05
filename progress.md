@@ -32,6 +32,7 @@
 | P2.0-backend | agy | opencode muse-spark-1.3 read-only PASS 5/5 (guards, tenant isolation, validation verified); prisma valid; API tsc clean; eslint clean; API tests 11/11 pass. Implementer claims live DB migration + cross-tenant checks executed | 13029d3 |
 | P2.2 | agy | opencode muse-spark-1.3 read-only PASS 6/6; tsc clean; web tests 58/58 pass; web build ok. Noted: GET failure is silent-empty (feed-level states deferred to P2.4); SmartActionBar still UI-only until P2.4 | pending |
 | P2.3 | agy | opencode muse-spark-1.3 read-only PASS 6/6; tsc clean; web tests 58/58 pass. Orchestrator fix: dead class text-rf-ink-800 -> text-rf-ink (token undefined). Noted: composer list-hiding CSS couples to CommentsThread internals — revisit in P2.4 if fragile | pending |
+| P2.4 | agy | opencode muse-spark-1.3 read-only review: App page PASS, hiring page CONDITIONAL (1 defect). tsc clean; web build ok. Orchestrator fix: conditional useMemo -> plain IIFE derivation (Rules-of-Hooks), tsc re-clean. Accepted benign: hiring inline error Alert, tab-gating, details-open default | pending |
 | P0.2–P4.3 | agy (sequential) | opencode muse-spark-1.3 read-only | per task |
 
 ### Delegation mandates (user-approved 2026-09-04)
@@ -114,8 +115,29 @@
   - Bottom "Post a note" composer rendered via `CommentsThread` with `entityType` and `entityId` passthrough; calls `onRefresh()` after note post. Internal comment list hidden via scoped CSS in composer mode to prevent note duplication. Pure data-in component with zero fetch calls inside.
   - Verification: `pnpm --dir apps/web exec tsc -p tsconfig.app.json --noEmit` clean (0 errors).
 
+- [x] Task P2.4: Integrate ActivityFeed into ApplicationDetailPage and HiringCasePage
+  - ApplicationDetailPage:
+    - Wired `ActivityFeed` into the 'activity' tab: `<ActivityFeed entityType="application" entityId={id!} entries={mergedEntries} onRefresh={refetchAll} />`.
+    - Integrated `GET /applications/:id/notes` into `refetchApplication` (parallel `Promise.allSettled` fetching application, history, screening logs, and notes).
+    - Mapped `ApplicationStatusHistoryItem[]` to `FeedEntry` (`type: 'stage_change'`, label e.g. `"${from} → ${to} — ${reason}"`, `byUser` from `changedByName` falling back to `'System'`, ISO `createdAt`).
+    - Mapped `ApplicationNote[]` to `FeedEntry` (`type: 'note'`, `authorName` ?? `'Unknown'`, derived initials via `getInitials`, content, and ISO `createdAt`).
+    - Enabled full tab switching for `activity`, `overview`, `resume`, and `tasks` views. Overview Timeline "View full timeline" and Notes "View all notes" direct users to the Activity tab.
+    - Notes card on Overview tab displays dynamic preview of recent notes.
+    - Connected Add Note modal to `POST /applications/:id/notes` with loading state, validation, and auto-refresh on save.
+    - Handled states: loading renders `<ListSkeleton count={3} />`, empty state handled cleanly by `ActivityFeed`, errors surfaced via page `<Alert tone="danger">`.
+  - HiringCasePage:
+    - Added collapsible section `<details open className="rf-panel ...">` with header "Activity & Notes" below the pre-hire compliance checklist.
+    - Mapped `hiringCase.approvals` to `FeedEntry`: decided approvals mapped to `type: 'stage_change'` with `byUser: app.approverName`, decision status, and comment; pending approvals mapped to `type: 'system'` with `${roleCode} approval pending`.
+    - Mapped `hiringCase.complianceRequirements` status changes: verified/exempt items mapped to `FeedEntry` (`stage_change` if `verifiedBy` present, otherwise `system`).
+    - Added case initiation event (`type: 'system'`) and joining event (`type: 'stage_change'` if `actualJoiningDate` present).
+    - Handled UI-only legacy note posting via `ActivityFeed` (`entityType="hiringCase"`), triggering case refresh on note submission.
+    - Feed loading state renders `<ListSkeleton count={3} />`; page errors surfaced via in-page `<Alert tone="danger">` without unmounting.
+  - Verification: `pnpm --dir apps/web exec tsc -p tsconfig.app.json --noEmit` clean (0 errors); `pnpm --dir apps/web build` clean (production build in 2.76s); `pnpm --dir apps/web test` 58/58 pass.
+  - Phase 2 complete and closed.
+
 ### In Progress
-- [ ] Task P2.4: Integrate ActivityFeed into ApplicationDetailPage and HiringCasePage
+- None (Phase 2 closed; ready for Phase 3).
 
 ### Blocked
-- None (P2.3 ActivityFeed component ready for review and P2.4 integration).
+- None.
+

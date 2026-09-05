@@ -12,6 +12,8 @@ import { ProgressBar } from '../components/ui/ProgressBar';
 import { StatusBadge } from '../components/StatusBadge';
 import { Icon, type IconName } from '../components/Icon';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { ListSkeleton } from '../components/ui/Skeleton';
+import { ActivityFeed, type FeedEntry } from '../components/candidate/ActivityFeed';
 import './PageEnhancementsV2.css';
 
 function getErrorMessage(error: unknown): string {
@@ -44,6 +46,7 @@ export function HiringCasePage() {
   const navigate = useNavigate();
   const [hiringCase, setHiringCase] = useState<HiringCase | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
@@ -51,7 +54,11 @@ export function HiringCasePage() {
 
   const loadCase = async () => {
     if (!id) return;
-    setLoading(true);
+    if (hiringCase) {
+      setIsRefreshing(true);
+    } else {
+      setLoading(true);
+    }
     setError(null);
     try {
       setHiringCase(await getApi<HiringCase>(`/hiring/${id}`));
@@ -59,6 +66,7 @@ export function HiringCasePage() {
       setError(getErrorMessage(reason));
     } finally {
       setLoading(false);
+      setIsRefreshing(false);
     }
   };
 
@@ -168,7 +176,7 @@ export function HiringCasePage() {
     );
   }
 
-  if (error || !hiringCase) {
+  if (!hiringCase) {
     const isForbidden = error?.toLowerCase().includes('denied') || error?.toLowerCase().includes('permission') || error?.includes('403');
     return (
       <PageFrame eyebrow="Hiring Cases" title="Hiring Case Details" description="Pre-hire readiness gate.">
@@ -216,6 +224,81 @@ export function HiringCasePage() {
         timestamp: new Date(hiringCase.createdAt).toLocaleString(),
         tone: 'success',
       }];
+
+  // Plain derivation (not a hook) so it stays valid below the early returns.
+  const hiringFeedEntries: FeedEntry[] = (() => {
+    if (!hiringCase) return [];
+
+    const entries: FeedEntry[] = [];
+
+    // 1. Approvals mapping
+    if (hiringCase.approvals && hiringCase.approvals.length > 0) {
+      for (const app of hiringCase.approvals) {
+        if (app.status === 'Approved' || app.status === 'Rejected') {
+          entries.push({
+            type: 'stage_change',
+            id: `approval-${app.id}`,
+            label: `${app.roleCode} approval: ${app.status}${app.comment ? ` — "${app.comment}"` : ''}`,
+            byUser: app.approverName?.trim() || 'Approver',
+            createdAt: app.decidedAt || hiringCase.updatedAt || hiringCase.createdAt,
+          });
+        } else {
+          entries.push({
+            type: 'system',
+            id: `approval-${app.id}`,
+            label: `${app.roleCode} approval pending`,
+            createdAt: hiringCase.createdAt,
+          });
+        }
+      }
+    }
+
+    // 2. Compliance status changes
+    if (hiringCase.complianceRequirements && hiringCase.complianceRequirements.length > 0) {
+      for (const req of hiringCase.complianceRequirements) {
+        if (req.verifiedAt || req.status === 'Verified' || req.status === 'Not Required') {
+          const statusText = req.status === 'Not Required' ? 'marked as Exempt / Not Required' : 'verified';
+          if (req.verifiedBy) {
+            entries.push({
+              type: 'stage_change',
+              id: `compliance-${req.id}`,
+              label: `Compliance "${req.name}" ${statusText}`,
+              byUser: req.verifiedBy,
+              createdAt: req.verifiedAt || hiringCase.updatedAt || hiringCase.createdAt,
+            });
+          } else {
+            entries.push({
+              type: 'system',
+              id: `compliance-${req.id}`,
+              label: `Compliance "${req.name}" ${statusText}`,
+              createdAt: req.verifiedAt || hiringCase.updatedAt || hiringCase.createdAt,
+            });
+          }
+        }
+      }
+    }
+
+    // 3. Case creation system event
+    entries.push({
+      type: 'system',
+      id: `case-created-${hiringCase.id}`,
+      label: `Hiring case initiated with status: ${hiringCase.status}`,
+      createdAt: hiringCase.createdAt,
+    });
+
+    // 4. Joining event if recorded
+    if (hiringCase.actualJoiningDate) {
+      entries.push({
+        type: 'stage_change',
+        id: `case-joined-${hiringCase.id}`,
+        label: 'Candidate confirmed as Joined',
+        byUser: hiringCase.ownerName?.trim() || 'HR Ops',
+        createdAt: hiringCase.actualJoiningDate,
+      });
+    }
+
+    return entries;
+  })();
 
   return (
     <PageFrame
@@ -288,6 +371,20 @@ export function HiringCasePage() {
         </Alert>
       )}
 
+      {error && (
+        <Alert
+          tone="danger"
+          title="Error"
+          action={
+            <Button variant="outline" size="sm" onClick={() => void loadCase()}>
+              Retry
+            </Button>
+          }
+        >
+          {error}
+        </Alert>
+      )}
+
       {!isReady && hiringCase.status === 'Pending Compliance' && (
         <Alert tone="warning" title="Readiness checklist pending">
           All mandatory compliance items and background checks must be verified before final approval submission.
@@ -335,6 +432,41 @@ export function HiringCasePage() {
               />
             )}
           </section>
+
+          {/* Collapsible Activity & Notes Section */}
+          <details
+            open
+            className="rf-panel rounded-2xl border border-rf-border-subtle/90 bg-white shadow-xs overflow-hidden group"
+          >
+            <summary className="p-4 border-b border-rf-border-subtle bg-rf-surface-subtle/50 cursor-pointer flex items-center justify-between select-none list-none [&::-webkit-details-marker]:hidden">
+              <div className="flex items-center gap-2.5">
+                <Icon name="chat" size={16} className="text-rf-ink-muted shrink-0" />
+                <div>
+                  <h3 className="text-xs font-bold text-rf-ink m-0">Activity &amp; Notes</h3>
+                  <p className="text-[11px] text-rf-ink-muted font-medium m-0 mt-0.5">
+                    Unified feed of approvals, compliance verification events, and notes.
+                  </p>
+                </div>
+              </div>
+              <Icon
+                name="chevron-down"
+                size={16}
+                className="text-rf-ink-muted transition-transform group-open:rotate-180 shrink-0"
+              />
+            </summary>
+            <div className="p-5">
+              {isRefreshing ? (
+                <ListSkeleton count={3} />
+              ) : (
+                <ActivityFeed
+                  entityType="hiringCase"
+                  entityId={id!}
+                  entries={hiringFeedEntries}
+                  onRefresh={loadCase}
+                />
+              )}
+            </div>
+          </details>
         </div>
 
         <aside className="flex flex-col gap-6">

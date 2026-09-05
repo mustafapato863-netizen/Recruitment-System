@@ -39,11 +39,13 @@ From schema.prisma (confirmed):
 - `GET /offers` — returns `Offer[]` (scoped to organization). Does NOT accept `candidateId` query parameter. Candidate 360 filters client-side by candidate's application IDs.
 - `PATCH /candidates/:id` — accepts `skills?: string[]`, used by Candidate 360 to persist tags.
 - `PATCH /applications/:id/stage` — exists (ApplicationDetailPage calls it)
-- `POST /applications/:id/notes` — Implemented in P2.0-backend (requires `APPLICATION_MOVE_STAGE` + `TenantScopedGuard`, audit action `APPLICATION_NOTE_CREATE`).
-- `GET /applications/:id/notes` — Implemented in P2.0-backend (requires `APPLICATION_VIEW` + `TenantScopedGuard`, returns `ApplicationNote[]` ordered by `createdAt desc`).
-- `GET /applications/:id/history` — exists (ApplicationDetailPage fetches it)
+- `POST /applications/:id/notes` — Implemented in P2.0-backend (requires `APPLICATION_MOVE_STAGE` + `TenantScopedGuard`, audit action `APPLICATION_NOTE_CREATE`). Wired into ApplicationDetailPage ActivityFeed and Quick Action Note modal in P2.4.
+- `GET /applications/:id/notes` — Implemented in P2.0-backend (requires `APPLICATION_VIEW` + `TenantScopedGuard`, returns `ApplicationNote[]` ordered by `createdAt desc`). Integrated into ApplicationDetailPage parallel refetch pipeline in P2.4.
+- `GET /applications/:id/history` — exists (ApplicationDetailPage fetches it, mapped to FeedEntry stage_change events in P2.4)
 - `GET /hiring` — exists (JoiningManagementPage fetches)
 - `PATCH /hiring/:id` — exists (HiringCasePage calls it)
+- `HiringCase Activity & Notes` — Hiring cases do not have a dedicated backend notes model; ActivityFeed runs in UI-only mode for notes while mapping approval items, compliance verification timestamps, case creation, and joining dates into FeedEntry events.
+- `Collapsible Component Choice` — As no pre-existing Accordion component exists in `apps/web/src/components`, HiringCasePage uses native `<details open className="rf-panel ...">` with `<summary>` styled with `rf-panel`, `rf-border-subtle`, and `rf-surface-subtle` tokens.
 - Interview scorecard endpoints — NOT confirmed, likely missing
 
 ## 6. FRONTEND_SIMPLE_SYSTEM_PLAN.md Constraints
