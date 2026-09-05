@@ -332,6 +332,85 @@ export function InterviewDetailPage() {
     ];
   }, [activeScorecard?.overallRating]);
 
+  const candidateDisplayName = interview?.candidateName ?? 'Unknown candidate';
+  const positionDisplayName = interview?.positionTitle ?? 'No position';
+  const candidateInitials = candidateDisplayName
+    .split(' ')
+    .filter(Boolean)
+    .map((n) => n[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase() || 'UC';
+
+  const scheduledDateStr = interview?.scheduledStart
+    ? new Date(interview.scheduledStart).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+    : null;
+  const scheduledTimeStr = interview?.scheduledStart
+    ? new Date(interview.scheduledStart).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    : null;
+  const createdDateStr = interview?.createdAt
+    ? new Date(interview.createdAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
+    : null;
+
+  const appliedDateLine = scheduledDateStr
+    ? `${interview?.timezone ? `${interview.timezone} • ` : ''}Scheduled ${scheduledDateStr}${scheduledTimeStr ? ` at ${scheduledTimeStr}` : ''}`
+    : (createdDateStr ? `Created ${createdDateStr}` : '—');
+
+  const candidateEmail = (interview as any)?.candidateEmail || (interview as any)?.application?.candidate?.email || null;
+  const candidatePhone = (interview as any)?.candidatePhone || (interview as any)?.application?.candidate?.phone || null;
+
+  const rawAppId = interview?.applicationId;
+  const appIdDisplay = interview?.applicationCode || (rawAppId ? (rawAppId.startsWith('APP-') ? rawAppId : `APP-${rawAppId.slice(0, 8).toUpperCase()}`) : '—');
+
+  const attendees = interview?.attendees || [];
+  const scorecards = interview?.scorecards || [];
+
+  const primaryOwner = attendees.find((a) => a.role === 'Lead' || a.role === 'Host' || a.role === 'Organizer') || attendees[0];
+  const ownerName = primaryOwner?.userName || scorecards[0]?.interviewerName || 'Unassigned';
+  const ownerRole = primaryOwner?.role || 'Interviewer';
+  const ownerInitials = ownerName === 'Unassigned' ? '—' : ownerName.split(' ').filter(Boolean).map((n) => n[0]).join('').slice(0, 2).toUpperCase() || 'IN';
+
+  const attachments: { name: string; size?: string; url?: string }[] =
+    (interview as any)?.documents || (interview as any)?.attachments || [];
+
+  const avgScore = useMemo(() => {
+    if (scorecards.length === 0) return null;
+    const sum = scorecards.reduce((acc, sc) => acc + (Number(sc.overallRating) || 0), 0);
+    return (sum / scorecards.length).toFixed(1);
+  }, [scorecards]);
+
+  const majorityRec = useMemo(() => {
+    if (scorecards.length === 0) return null;
+    const counts: Record<string, number> = {};
+    scorecards.forEach((sc) => {
+      const rec = sc.recommendation || 'Hire';
+      counts[rec] = (counts[rec] || 0) + 1;
+    });
+    let maxCount = 0;
+    let best = 'Hire';
+    for (const [rec, count] of Object.entries(counts)) {
+      if (count > maxCount) {
+        maxCount = count;
+        best = rec;
+      }
+    }
+    return best;
+  }, [scorecards]);
+
+  if (isLoadingInterview && !interview) {
+    return (
+      <div className="flex w-full flex-col p-4 sm:p-6 lg:p-7 max-w-[1720px] mx-auto space-y-6">
+        <Skeleton className="h-8 w-64" />
+        <Skeleton className="h-32 w-full rounded-2xl" />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <Skeleton className="h-48 rounded-2xl" />
+          <Skeleton className="h-48 rounded-2xl" />
+          <Skeleton className="h-48 rounded-2xl" />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex w-full flex-col p-4 sm:p-6 lg:p-7 max-w-[1720px] mx-auto space-y-6">
       {/* ── Breadcrumbs & Top Action Bar matching 10-interview-detail-feedback.png ── */}
@@ -351,15 +430,15 @@ export function InterviewDetailPage() {
 
           <div className="flex items-center gap-3 mt-1.5">
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-              Technical Interview
+              {interview?.title || 'Interview Details'}
             </h1>
             <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-              Scheduled
+              {interview?.status || 'Scheduled'}
             </span>
           </div>
 
           <p className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 mt-0.5">
-            Next stage: Panel Interview &bull; After this: Offer Approval
+            {interview?.interviewType ? `${interview.interviewType} Interview` : 'Interview'} &bull; {interview?.status || 'Scheduled'}
           </p>
         </div>
 
@@ -399,39 +478,41 @@ export function InterviewDetailPage() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
           {/* Candidate Profile Info (5 cols) */}
           <div className="lg:col-span-5 flex items-center gap-4">
-            <img
-              src="https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=160&auto=format&fit=crop&q=80"
-              alt="Ali Hassan"
-              className="w-16 h-16 rounded-full object-cover border-2 border-white dark:border-slate-800 shadow-xs shrink-0"
-            />
+            <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 flex items-center justify-center text-lg font-bold text-slate-700 dark:text-slate-200 shadow-xs shrink-0">
+              {candidateInitials}
+            </div>
             <div>
               <h2 className="text-lg font-black text-slate-900 dark:text-white leading-tight">
-                Ali Hassan
+                {candidateDisplayName}
               </h2>
               <p className="text-xs font-bold text-slate-700 dark:text-slate-300 mt-0.5">
-                Senior Frontend Engineer
+                {positionDisplayName}
               </p>
               <p className="text-[11px] text-slate-400 mt-0.5">
-                Engineering &bull; Cairo, Egypt &bull; Applied 28 Aug 2026
+                {appliedDateLine}
               </p>
               {/* Quick Contact Buttons */}
               <div className="flex items-center gap-1.5 mt-2">
-                <button
-                  type="button"
-                  onClick={() => window.open('mailto:ali.hassan@example.com?subject=Technical Interview Update')}
-                  className="p-1.5 rounded-lg border border-slate-200 hover:border-blue-500 text-slate-500 hover:text-blue-600 cursor-pointer transition"
-                  title="Send email"
-                >
-                  <Icon name="mail" size={12} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => window.open('tel:+966500000000')}
-                  className="p-1.5 rounded-lg border border-slate-200 hover:border-emerald-500 text-slate-500 hover:text-emerald-600 cursor-pointer transition"
-                  title="Call candidate"
-                >
-                  <Icon name="phone" size={12} />
-                </button>
+                {candidateEmail ? (
+                  <button
+                    type="button"
+                    onClick={() => window.open(`mailto:${candidateEmail}?subject=${encodeURIComponent(interview?.title || 'Interview Update')}`)}
+                    className="p-1.5 rounded-lg border border-slate-200 hover:border-blue-500 text-slate-500 hover:text-blue-600 cursor-pointer transition"
+                    title={`Send email to ${candidateEmail}`}
+                  >
+                    <Icon name="mail" size={12} />
+                  </button>
+                ) : null}
+                {candidatePhone ? (
+                  <button
+                    type="button"
+                    onClick={() => window.open(`tel:${candidatePhone}`)}
+                    className="p-1.5 rounded-lg border border-slate-200 hover:border-emerald-500 text-slate-500 hover:text-emerald-600 cursor-pointer transition"
+                    title="Call candidate"
+                  >
+                    <Icon name="phone" size={12} />
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => {
@@ -459,18 +540,18 @@ export function InterviewDetailPage() {
           <div className="lg:col-span-3 space-y-2 border-t lg:border-t-0 lg:border-l border-slate-100 dark:border-slate-800 pt-3 lg:pt-0 lg:pl-6 text-xs">
             <div className="flex justify-between items-center">
               <span className="text-slate-400 font-semibold uppercase text-[10.5px]">Application ID</span>
-              <span className="font-bold font-mono text-slate-900 dark:text-white">APP-02481</span>
+              <span className="font-bold font-mono text-slate-900 dark:text-white">{appIdDisplay}</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-slate-400 font-semibold uppercase text-[10.5px]">Current Stage</span>
               <span className="px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                Technical Interview
+                {interview?.interviewType ? `${interview.interviewType} Interview` : 'Interview'}
               </span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-slate-400 font-semibold uppercase text-[10.5px]">Application Status</span>
               <span className="px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                In Progress
+                {interview?.status || 'In Progress'}
               </span>
             </div>
           </div>
@@ -481,8 +562,9 @@ export function InterviewDetailPage() {
               <span>Fit Summary</span>
               <button
                 type="button"
-                onClick={() => navigate('/applications/APP-02481')}
-                className="text-[11px] text-blue-600 hover:underline font-semibold"
+                onClick={() => rawAppId && navigate(`/applications/${rawAppId}`)}
+                disabled={!rawAppId}
+                className="text-[11px] text-blue-600 hover:underline font-semibold disabled:opacity-50 disabled:no-underline"
               >
                 View full profile
               </button>
@@ -531,7 +613,7 @@ export function InterviewDetailPage() {
             </h2>
             <button
               type="button"
-              onClick={() => showToast('Opening reschedule options for Technical Interview...')}
+              onClick={() => showToast(`Opening reschedule options for ${interview?.title || 'Interview'}...`)}
               className="text-xs font-bold text-blue-600 hover:underline cursor-pointer"
             >
               Edit
@@ -541,41 +623,54 @@ export function InterviewDetailPage() {
           <div className="space-y-3 text-xs">
             <div>
               <span className="text-slate-400 block text-[11px] font-semibold uppercase">Date &amp; Time</span>
-              <span className="font-bold text-slate-900 dark:text-white block mt-0.5">Today, 2 Sep 2026</span>
-              <span className="text-[11px] text-slate-400">2:00 PM – 3:00 PM (AST)</span>
+              <span className="font-bold text-slate-900 dark:text-white block mt-0.5">
+                {interview?.scheduledStart ? new Date(interview.scheduledStart).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
+              </span>
+              <span className="text-[11px] text-slate-400">
+                {interview?.scheduledStart ? new Date(interview.scheduledStart).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                {interview?.scheduledEnd ? ` – ${new Date(interview.scheduledEnd).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
+                {interview?.timezone ? ` (${interview.timezone})` : ''}
+              </span>
             </div>
 
             <div>
               <span className="text-slate-400 block text-[11px] font-semibold uppercase">Interview Type</span>
-              <span className="font-bold text-slate-900 dark:text-white block mt-0.5">Video Interview</span>
+              <span className="font-bold text-slate-900 dark:text-white block mt-0.5">
+                {interview?.interviewType ? `${interview.interviewType} Interview` : '—'}
+              </span>
             </div>
 
             <div>
               <span className="text-slate-400 block text-[11px] font-semibold uppercase">Location / Link</span>
               <div className="flex items-center justify-between mt-0.5">
-                <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                  <Icon name="video" size={13} className="text-blue-500" /> Microsoft Teams
+                <span className="font-bold text-slate-900 dark:text-white flex items-center gap-1.5 truncate">
+                  <Icon name={interview?.locationUrl?.startsWith('http') ? 'video' : 'map-pin'} size={13} className="text-blue-500 shrink-0" />
+                  <span className="truncate">{interview?.locationUrl || '—'}</span>
                 </span>
-                <a href="#join" className="text-xs font-bold text-blue-600 hover:underline flex items-center gap-1">
-                  Join meeting ↗
-                </a>
+                {interview?.locationUrl && interview.locationUrl.startsWith('http') ? (
+                  <a href={interview.locationUrl} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-blue-600 hover:underline flex items-center gap-1 shrink-0 ml-2">
+                    Join meeting ↗
+                  </a>
+                ) : null}
               </div>
             </div>
 
             <div>
               <span className="text-slate-400 block text-[11px] font-semibold uppercase">Time Zone</span>
-              <span className="font-bold text-slate-900 dark:text-white block mt-0.5">Asia/Riyadh (GMT+3)</span>
+              <span className="font-bold text-slate-900 dark:text-white block mt-0.5">
+                {interview?.timezone || '—'}
+              </span>
             </div>
 
             <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
               <span className="text-slate-400 block text-[11px] font-semibold uppercase">Interview Owner</span>
               <div className="flex items-center gap-2 mt-1">
                 <div className="w-5 h-5 rounded-full bg-teal-600 text-white text-[9px] font-extrabold flex items-center justify-center">
-                  SA
+                  {ownerInitials}
                 </div>
                 <div>
-                  <span className="font-bold text-slate-900 dark:text-white block leading-none">Sarah Ahmed</span>
-                  <span className="text-[10px] text-slate-400">Senior Recruiter</span>
+                  <span className="font-bold text-slate-900 dark:text-white block leading-none">{ownerName}</span>
+                  <span className="text-[10px] text-slate-400">{ownerRole}</span>
                 </div>
               </div>
             </div>
@@ -591,7 +686,7 @@ export function InterviewDetailPage() {
               </h2>
               <button
                 type="button"
-                onClick={() => showToast('Panel configuration: 3 active panelists')}
+                onClick={() => showToast(`Panel configuration: ${attendees.length} active panelist${attendees.length !== 1 ? 's' : ''}`)}
                 className="text-xs font-bold text-blue-600 hover:underline cursor-pointer"
               >
                 Manage panel
@@ -599,86 +694,58 @@ export function InterviewDetailPage() {
             </div>
 
             <div className="space-y-3 text-xs">
-              {/* Member 1 */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-full bg-teal-600 text-white text-[10px] font-black flex items-center justify-center">
-                    SA
-                  </div>
-                  <div>
-                    <span className="block font-bold text-slate-900 dark:text-white leading-tight">Sarah Ahmed</span>
-                    <span className="block text-[10.5px] text-slate-400">Senior Recruiter</span>
-                  </div>
-                </div>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  Feedback submitted
-                </span>
-              </div>
-
-              {/* Member 2 */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-full bg-teal-700 text-white text-[10px] font-black flex items-center justify-center">
-                    AM
-                  </div>
-                  <div>
-                    <span className="block font-bold text-slate-900 dark:text-white leading-tight">Ahmed Mostafa</span>
-                    <span className="block text-[10.5px] text-slate-400">Engineering Manager</span>
-                  </div>
-                </div>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  Feedback submitted
-                </span>
-              </div>
-
-              {/* Member 3 */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-full bg-amber-600 text-white text-[10px] font-black flex items-center justify-center">
-                    KM
-                  </div>
-                  <div>
-                    <span className="block font-bold text-slate-900 dark:text-white leading-tight">Khaled Mostafa</span>
-                    <span className="block text-[10.5px] text-slate-400">Senior Frontend Engineer</span>
-                  </div>
-                </div>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                  Feedback pending
-                </span>
-              </div>
-
-              {/* Member 4 */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-full bg-emerald-600 text-white text-[10px] font-black flex items-center justify-center">
-                    NS
-                  </div>
-                  <div>
-                    <span className="block font-bold text-slate-900 dark:text-white leading-tight">Nourhan Sami</span>
-                    <span className="block text-[10.5px] text-slate-400">HR Business Partner</span>
-                  </div>
-                </div>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  Feedback submitted
-                </span>
-              </div>
+              {attendees.length === 0 ? (
+                <p className="text-slate-400 italic py-2">No panel members assigned.</p>
+              ) : (
+                attendees.map((attendee) => {
+                  const name = attendee.userName || 'Unassigned';
+                  const initials = name === 'Unassigned' ? '—' : name.split(' ').filter(Boolean).map((n) => n[0]).join('').slice(0, 2).toUpperCase() || 'IN';
+                  const hasSubmitted = scorecards.some((sc) => sc.interviewerId === attendee.userId || sc.interviewerName === attendee.userName);
+                  return (
+                    <div key={attendee.id} className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-7 h-7 rounded-full bg-teal-600 text-white text-[10px] font-black flex items-center justify-center">
+                          {initials}
+                        </div>
+                        <div>
+                          <span className="block font-bold text-slate-900 dark:text-white leading-tight">{name}</span>
+                          <span className="block text-[10.5px] text-slate-400">{attendee.role || 'Panelist'}</span>
+                        </div>
+                      </div>
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                        hasSubmitted
+                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
+                          : 'bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800'
+                      }`}>
+                        {hasSubmitted ? 'Feedback submitted' : 'Feedback pending'}
+                      </span>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
 
           {/* Pending Alert Banner */}
-          <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 flex items-center justify-between text-xs">
-            <div className="flex items-center gap-1.5 text-amber-800 dark:text-amber-300 font-semibold text-[11px]">
-              <Icon name="alert-triangle" size={13} className="text-amber-600" />
-              <span>1 panel member has not submitted feedback</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setIsReminderSent(true)}
-              className="text-[11px] font-bold text-amber-700 hover:underline cursor-pointer"
-            >
-              {isReminderSent ? '✓ Sent' : 'Send reminder'}
-            </button>
-          </div>
+          {(() => {
+            const pendingPanelCount = attendees.filter((att) => !scorecards.some((sc) => sc.interviewerId === att.userId || sc.interviewerName === att.userName)).length;
+            if (pendingPanelCount <= 0) return null;
+            return (
+              <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 flex items-center justify-between text-xs mt-3">
+                <div className="flex items-center gap-1.5 text-amber-800 dark:text-amber-300 font-semibold text-[11px]">
+                  <Icon name="alert-triangle" size={13} className="text-amber-600" />
+                  <span>{pendingPanelCount} panel member{pendingPanelCount > 1 ? 's have' : ' has'} not submitted feedback</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsReminderSent(true)}
+                  className="text-[11px] font-bold text-amber-700 dark:text-amber-400 hover:underline cursor-pointer"
+                >
+                  {isReminderSent ? '✓ Sent' : 'Send reminder'}
+                </button>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Card 3: Attachments */}
@@ -697,45 +764,50 @@ export function InterviewDetailPage() {
               </button>
             </div>
 
-            <div className="space-y-2 text-xs">
-              {[
-                { name: 'Ali Hassan CV.pdf', size: 'PDF • 210 KB' },
-                { name: 'Portfolio - Ali Hassan.pdf', size: 'PDF • 1.2 MB' },
-                { name: 'Technical Assessment Report.pdf', size: 'PDF • 842 KB' },
-                { name: 'Interview Agenda - Technical.pdf', size: 'PDF • 145 KB' },
-              ].map((doc) => (
-                <div
-                  key={doc.name}
-                  className="p-2 rounded-xl border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center justify-between group cursor-pointer"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-6 h-6 rounded-lg bg-red-50 text-red-600 flex items-center justify-center shrink-0">
-                      <Icon name="file-text" size={13} />
+            {attachments.length === 0 ? (
+              <div className="py-6 text-center text-slate-400 text-xs">
+                <Icon name="file-text" size={24} className="mx-auto mb-1 text-slate-300 dark:text-slate-600" />
+                <p className="font-semibold">No attachments</p>
+                <p className="text-[10px] text-slate-400">No documents attached to this interview.</p>
+              </div>
+            ) : (
+              <div className="space-y-2 text-xs">
+                {attachments.map((doc: any) => (
+                  <div
+                    key={doc.name}
+                    className="p-2 rounded-xl border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center justify-between group cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-6 h-6 rounded-lg bg-red-50 text-red-600 flex items-center justify-center shrink-0">
+                        <Icon name="file-text" size={13} />
+                      </div>
+                      <div>
+                        <span className="block font-bold text-slate-900 dark:text-white leading-tight">
+                          {doc.name}
+                        </span>
+                        <span className="block text-[10px] text-slate-400">
+                          {doc.size || 'Document'}
+                        </span>
+                      </div>
                     </div>
-                    <div>
-                      <span className="block font-bold text-slate-900 dark:text-white leading-tight">
-                        {doc.name}
-                      </span>
-                      <span className="block text-[10px] text-slate-400">
-                        {doc.size}
-                      </span>
-                    </div>
+                    <Icon name="download" size={12} className="text-slate-300 group-hover:text-slate-600" />
                   </div>
-                  <Icon name="download" size={12} className="text-slate-300 group-hover:text-slate-600" />
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
 
-          <div className="pt-2 border-t border-slate-100 dark:border-slate-800 text-center">
-            <button
-              type="button"
-              onClick={() => setIsUploadModalOpen(true)}
-              className="text-xs font-bold text-blue-600 hover:underline cursor-pointer"
-            >
-              View all attachments (5)
-            </button>
-          </div>
+          {attachments.length > 0 && (
+            <div className="pt-2 border-t border-slate-100 dark:border-slate-800 text-center">
+              <button
+                type="button"
+                onClick={() => setIsUploadModalOpen(true)}
+                className="text-xs font-bold text-blue-600 hover:underline cursor-pointer"
+              >
+                View all attachments ({attachments.length})
+              </button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1038,7 +1110,6 @@ export function InterviewDetailPage() {
           </div>
         )}
       </section>
-
       {/* ── Bottom Row: Scorecard (~45%), Feedback (~30%), Recommendation (~25%) ── */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Column 1: Interview Scorecard (5 cols) */}
@@ -1047,92 +1118,77 @@ export function InterviewDetailPage() {
             <h2 className="text-sm font-extrabold text-slate-900 dark:text-white">
               Interview Scorecard
             </h2>
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-              Average Score: 4.1 / 5
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+              {avgScore ? `Average Score: ${avgScore} / 5` : 'No scores submitted'}
             </span>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-left text-[10.5px] font-semibold text-slate-400 border-b border-slate-100 dark:border-slate-800">
-                  <th className="pb-2">Criteria</th>
-                  <th className="pb-2 text-center">Sarah Ahmed</th>
-                  <th className="pb-2 text-center">Ahmed Mostafa</th>
-                  <th className="pb-2 text-center">Khaled Mostafa</th>
-                  <th className="pb-2 text-right">Average</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                <tr>
-                  <td className="py-2.5">
-                    <span className="font-bold text-slate-900 dark:text-white block">Technical Skills</span>
-                    <span className="text-[10px] text-slate-400 block">Frontend, React, TypeScript</span>
-                  </td>
-                  <td className="py-2.5 text-center font-bold text-slate-800">4.5</td>
-                  <td className="py-2.5 text-center font-bold text-slate-800">4.0</td>
-                  <td className="py-2.5 text-center text-slate-400">–</td>
-                  <td className="py-2.5 text-right font-black text-slate-900 dark:text-white">4.3</td>
-                </tr>
-
-                <tr>
-                  <td className="py-2.5">
-                    <span className="font-bold text-slate-900 dark:text-white block">Problem Solving</span>
-                    <span className="text-[10px] text-slate-400 block">Analytical thinking &amp; approach</span>
-                  </td>
-                  <td className="py-2.5 text-center font-bold text-slate-800">4.0</td>
-                  <td className="py-2.5 text-center font-bold text-slate-800">4.0</td>
-                  <td className="py-2.5 text-center text-slate-400">–</td>
-                  <td className="py-2.5 text-right font-black text-slate-900 dark:text-white">4.0</td>
-                </tr>
-
-                <tr>
-                  <td className="py-2.5">
-                    <span className="font-bold text-slate-900 dark:text-white block">Communication</span>
-                    <span className="text-[10px] text-slate-400 block">Clarity &amp; collaboration</span>
-                  </td>
-                  <td className="py-2.5 text-center font-bold text-slate-800">4.0</td>
-                  <td className="py-2.5 text-center font-bold text-slate-800">4.5</td>
-                  <td className="py-2.5 text-center text-slate-400">–</td>
-                  <td className="py-2.5 text-right font-black text-slate-900 dark:text-white">4.3</td>
-                </tr>
-
-                <tr>
-                  <td className="py-2.5">
-                    <span className="font-bold text-slate-900 dark:text-white block">Culture Fit</span>
-                    <span className="text-[10px] text-slate-400 block">Values &amp; team alignment</span>
-                  </td>
-                  <td className="py-2.5 text-center font-bold text-slate-800">4.0</td>
-                  <td className="py-2.5 text-center font-bold text-slate-800">4.0</td>
-                  <td className="py-2.5 text-center text-slate-400">–</td>
-                  <td className="py-2.5 text-right font-black text-slate-900 dark:text-white">4.0</td>
-                </tr>
-
-                <tr>
-                  <td className="py-2.5">
-                    <span className="font-bold text-slate-900 dark:text-white block">Ownership &amp; Initiative</span>
-                    <span className="text-[10px] text-slate-400 block">Proactiveness &amp; ownership</span>
-                  </td>
-                  <td className="py-2.5 text-center font-bold text-slate-800">4.5</td>
-                  <td className="py-2.5 text-center font-bold text-slate-800">4.0</td>
-                  <td className="py-2.5 text-center text-slate-400">–</td>
-                  <td className="py-2.5 text-right font-black text-slate-900 dark:text-white">4.3</td>
-                </tr>
-
-                <tr className="bg-slate-50/60 dark:bg-slate-800/40">
-                  <td className="py-2.5 font-extrabold text-slate-900 dark:text-white">Total Score (Average)</td>
-                  <td className="py-2.5 text-center font-black text-slate-900 dark:text-white">4.2</td>
-                  <td className="py-2.5 text-center font-black text-slate-900 dark:text-white">4.1</td>
-                  <td className="py-2.5 text-center text-slate-400">–</td>
-                  <td className="py-2.5 text-right">
-                    <span className="px-2 py-0.5 rounded-full text-xs font-black bg-emerald-100 text-emerald-800">
-                      4.1
-                    </span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          {scorecards.length === 0 ? (
+            <div className="py-8 text-center text-slate-400 text-xs">
+              <Icon name="award" size={24} className="mx-auto mb-1 text-slate-300 dark:text-slate-600" />
+              <p className="font-semibold">No scorecards submitted</p>
+              <p className="text-[10px] text-slate-400">Scorecards submitted by panelists will appear here.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-left text-[10.5px] font-semibold text-slate-400 border-b border-slate-100 dark:border-slate-800">
+                    <th className="pb-2">Criteria</th>
+                    {scorecards.map((sc) => (
+                      <th key={sc.id} className="pb-2 text-center">
+                        {sc.interviewerName || 'Interviewer'}
+                      </th>
+                    ))}
+                    <th className="pb-2 text-right">Average</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  <tr>
+                    <td className="py-2.5">
+                      <span className="font-bold text-slate-900 dark:text-white block">Overall Rating</span>
+                      <span className="text-[10px] text-slate-400 block">General performance score</span>
+                    </td>
+                    {scorecards.map((sc) => (
+                      <td key={sc.id} className="py-2.5 text-center font-bold text-slate-800 dark:text-slate-200">
+                        {sc.overallRating ? Number(sc.overallRating).toFixed(1) : '—'}
+                      </td>
+                    ))}
+                    <td className="py-2.5 text-right font-black text-slate-900 dark:text-white">
+                      {avgScore || '—'}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td className="py-2.5">
+                      <span className="font-bold text-slate-900 dark:text-white block">Recommendation</span>
+                      <span className="text-[10px] text-slate-400 block">Hiring evaluation decision</span>
+                    </td>
+                    {scorecards.map((sc) => (
+                      <td key={sc.id} className="py-2.5 text-center text-slate-700 dark:text-slate-300 font-medium">
+                        {sc.recommendation || '—'}
+                      </td>
+                    ))}
+                    <td className="py-2.5 text-right font-bold text-emerald-600">
+                      {majorityRec || '—'}
+                    </td>
+                  </tr>
+                  <tr className="bg-slate-50/60 dark:bg-slate-800/40">
+                    <td className="py-2.5 font-extrabold text-slate-900 dark:text-white">Total Score (Average)</td>
+                    {scorecards.map((sc) => (
+                      <td key={sc.id} className="py-2.5 text-center font-black text-slate-900 dark:text-white">
+                        {sc.overallRating ? Number(sc.overallRating).toFixed(1) : '—'}
+                      </td>
+                    ))}
+                    <td className="py-2.5 text-right">
+                      <span className="px-2 py-0.5 rounded-full text-xs font-black bg-emerald-100 text-emerald-800">
+                        {avgScore || '—'}
+                      </span>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )}
 
           <div className="pt-2 border-t border-slate-100 dark:border-slate-800 text-right">
             <button
@@ -1156,14 +1212,14 @@ export function InterviewDetailPage() {
                 <button
                   type="button"
                   onClick={() => setFeedbackTab('byQuestion')}
-                  className={`px-2 py-0.5 rounded-lg ${feedbackTab === 'byQuestion' ? 'font-bold text-blue-600 bg-blue-50' : 'text-slate-400'}`}
+                  className={`px-2 py-0.5 rounded-lg ${feedbackTab === 'byQuestion' ? 'font-bold text-blue-600 bg-blue-50 dark:bg-blue-950/40' : 'text-slate-400'}`}
                 >
                   By Question
                 </button>
                 <button
                   type="button"
                   onClick={() => setFeedbackTab('byInterviewer')}
-                  className={`px-2 py-0.5 rounded-lg ${feedbackTab === 'byInterviewer' ? 'font-bold text-blue-600 bg-blue-50' : 'text-slate-400'}`}
+                  className={`px-2 py-0.5 rounded-lg ${feedbackTab === 'byInterviewer' ? 'font-bold text-blue-600 bg-blue-50 dark:bg-blue-950/40' : 'text-slate-400'}`}
                 >
                   By Interviewer
                 </button>
@@ -1171,49 +1227,53 @@ export function InterviewDetailPage() {
             </div>
 
             <div className="space-y-3.5 text-xs">
-              {/* Feedback item 1 */}
-              <div className="p-3.5 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-5 h-5 rounded-full bg-teal-600 text-white text-[8px] font-extrabold flex items-center justify-center">
-                      SA
-                    </div>
-                    <span className="font-bold text-slate-900 dark:text-white">Sarah Ahmed</span>
-                  </div>
-                  <span className="text-[10px] text-slate-400">Submitted 2 Sep 2026, 2:55 PM</span>
+              {scorecards.length === 0 ? (
+                <div className="py-8 text-center text-slate-400 text-xs">
+                  <Icon name="chat" size={24} className="mx-auto mb-1 text-slate-300 dark:text-slate-600" />
+                  <p className="font-semibold">No feedback submitted yet</p>
+                  <p className="text-[10px] text-slate-400">Interviewer comments and observations will appear here.</p>
                 </div>
-                <p className="text-slate-600 dark:text-slate-300 italic text-[11px] leading-relaxed">
-                  &ldquo;Ali demonstrated strong knowledge of React and TypeScript. Communicates clearly and explains complex topics well.&rdquo;
-                </p>
-              </div>
+              ) : (
+                scorecards.map((sc) => {
+                  const author = sc.interviewerName || 'Interviewer';
+                  const initials = author.split(' ').filter(Boolean).map((n) => n[0]).join('').slice(0, 2).toUpperCase() || 'IN';
+                  const feedbackText = sc.notes || sc.strengths || (sc.concerns ? `Concerns: ${sc.concerns}` : null) || `Recommendation: ${sc.recommendation} (Rating: ${sc.overallRating}/5)`;
+                  const submittedDate = sc.submittedAt
+                    ? `Submitted ${new Date(sc.submittedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}, ${new Date(sc.submittedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                    : 'Submitted';
 
-              {/* Feedback item 2 */}
-              <div className="p-3.5 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="w-5 h-5 rounded-full bg-teal-700 text-white text-[8px] font-extrabold flex items-center justify-center">
-                      AM
+                  return (
+                    <div key={sc.id} className="p-3.5 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-5 h-5 rounded-full bg-teal-600 text-white text-[8px] font-extrabold flex items-center justify-center">
+                            {initials}
+                          </div>
+                          <span className="font-bold text-slate-900 dark:text-white">{author}</span>
+                        </div>
+                        <span className="text-[10px] text-slate-400">{submittedDate}</span>
+                      </div>
+                      <p className="text-slate-600 dark:text-slate-300 italic text-[11px] leading-relaxed">
+                        &ldquo;{feedbackText}&rdquo;
+                      </p>
                     </div>
-                    <span className="font-bold text-slate-900 dark:text-white">Ahmed Mostafa</span>
-                  </div>
-                  <span className="text-[10px] text-slate-400">Submitted 2 Sep 2026, 2:57 PM</span>
-                </div>
-                <p className="text-slate-600 dark:text-slate-300 italic text-[11px] leading-relaxed">
-                  &ldquo;Solid problem solving skills and good system design thinking. I&apos;d like to see deeper discussion on scalability trade-offs.&rdquo;
-                </p>
-              </div>
+                  );
+                })
+              )}
             </div>
           </div>
 
-          <div className="pt-2 border-t border-slate-100 dark:border-slate-800 text-center">
-            <button
-              type="button"
-              onClick={() => showToast('Displaying full question scorecard feedback summaries')}
-              className="text-xs font-bold text-blue-600 hover:underline cursor-pointer"
-            >
-              View full feedback ↗
-            </button>
-          </div>
+          {scorecards.length > 0 && (
+            <div className="pt-2 border-t border-slate-100 dark:border-slate-800 text-center">
+              <button
+                type="button"
+                onClick={() => showToast('Displaying full question scorecard feedback summaries')}
+                className="text-xs font-bold text-blue-600 hover:underline cursor-pointer"
+              >
+                View full feedback ↗
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Column 3: Recommendation & Decision (3 cols) */}
@@ -1225,10 +1285,12 @@ export function InterviewDetailPage() {
               <span>Recommendation (Average)</span>
             </div>
             <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400">
-              Strong Hire
+              {majorityRec || 'Pending'}
             </div>
             <p className="text-[11px] text-slate-400">
-              Based on 2 of 3 submitted feedbacks
+              {scorecards.length > 0
+                ? `Based on ${scorecards.length} of ${attendees.length || scorecards.length} submitted feedback${(attendees.length || scorecards.length) !== 1 ? 's' : ''}`
+                : 'No feedback submitted yet'}
             </p>
           </div>
 
@@ -1243,11 +1305,11 @@ export function InterviewDetailPage() {
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-slate-400">Decided by</span>
-                <span className="text-slate-500">–</span>
+                <span className="text-slate-500">—</span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-slate-400">Decision date</span>
-                <span className="text-slate-500">–</span>
+                <span className="text-slate-500">—</span>
               </div>
             </div>
 
@@ -1264,10 +1326,11 @@ export function InterviewDetailPage() {
           <div className="space-y-2">
             <button
               type="button"
-              onClick={() => navigate('/applications/APP-02481/transition')}
-              className="w-full py-2.5 px-4 bg-gradient-to-r from-teal-600 to-emerald-600 hover:opacity-95 text-white rounded-xl text-xs font-bold transition shadow-xs flex items-center justify-center gap-2 cursor-pointer"
+              onClick={() => rawAppId && navigate(`/applications/${rawAppId}/transition`)}
+              disabled={!rawAppId}
+              className="w-full py-2.5 px-4 bg-gradient-to-r from-teal-600 to-emerald-600 hover:opacity-95 text-white rounded-xl text-xs font-bold transition shadow-xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <span>Move to Panel Interview</span>
+              <span>Move to Next Stage</span>
               <Icon name="arrow-right" size={13} />
             </button>
 

@@ -4,6 +4,8 @@ import { getApi, postApi } from '../api/client';
 import type { Interview, Application, PaginatedResult } from '@recruitflow/contracts';
 import { Icon } from '../components/Icon';
 import { Modal } from '../components/Modal';
+import { PageState } from '../components/ui/PageState';
+import { TableSkeleton } from '../components/ui/Skeleton';
 import './PageEnhancementsV2.css';
 
 interface InterviewGroup {
@@ -31,205 +33,253 @@ interface InterviewGroup {
   }[];
 }
 
-const DEFAULT_INTERVIEW_GROUPS: InterviewGroup[] = [
-  {
-    dayTitle: 'Today',
-    daySubtitle: 'Wednesday, 2 Sep 2026',
-    countLabel: '3 interviews',
-    items: [
-      {
-        id: 'int-1',
-        time: '10:00 AM',
-        duration: '45m',
-        candidateName: 'Mona Khaled',
-        candidateRole: 'Product Designer',
-        candidateAvatar: 'MK',
-        jobTitle: 'Product Designer',
-        department: 'Design',
-        typeTag: 'Technical Interview',
-        typeTone: 'purple',
-        panel: 'Panel (2)',
-        mode: 'Teams',
-        modeIcon: 'video',
-        interviewerName: 'Ali Hassan',
-        interviewerAvatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=80&auto=format&fit=crop&q=80',
-        statusBadge: 'Feedback Done',
-        statusTone: 'green',
-      },
-      {
-        id: 'int-2',
-        time: '12:30 PM',
-        duration: '60m',
-        candidateName: 'Khaled Mostafa',
-        candidateRole: 'Backend Engineer',
-        candidateAvatar: 'KM',
-        jobTitle: 'Backend Engineer',
-        department: 'Engineering',
-        typeTag: 'Panel Interview',
-        typeTone: 'blue',
-        panel: 'Panel (3)',
-        mode: 'Teams',
-        modeIcon: 'video',
-        interviewerName: 'Sarah Ahmed',
-        interviewerAvatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=80&auto=format&fit=crop&q=80',
-        statusBadge: 'Feedback Pending',
-        statusTone: 'amber',
-      },
-      {
-        id: 'int-3',
-        time: '3:00 PM',
-        duration: '30m',
-        candidateName: 'Nourhan Sami',
-        candidateRole: 'ICU Nurse',
-        candidateAvatar: 'NS',
-        jobTitle: 'Registered Nurse - ICU',
-        department: 'Clinical Operations',
-        typeTag: 'HR Interview',
-        typeTone: 'green',
-        panel: 'Sara Mohamed',
-        mode: 'Phone',
-        modeIcon: 'phone',
-        interviewerName: 'Sara Mohamed',
-        interviewerAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=80&auto=format&fit=crop&q=80',
-        statusBadge: 'Feedback Pending',
-        statusTone: 'amber',
-      },
-    ],
-  },
-  {
-    dayTitle: 'Tomorrow',
-    daySubtitle: 'Thursday, 3 Sep 2026',
-    countLabel: '2 interviews',
-    items: [
-      {
-        id: 'int-4',
-        time: '10:00 AM',
-        duration: '45m',
-        candidateName: 'Yousef Ahmed',
-        candidateRole: 'DevOps Engineer',
-        candidateAvatar: 'YA',
-        jobTitle: 'DevOps Engineer',
-        department: 'Engineering',
-        typeTag: 'Technical Interview',
-        typeTone: 'purple',
-        panel: 'Panel (2)',
-        mode: 'Teams',
-        modeIcon: 'video',
-        interviewerName: 'Sara Mohamed',
-        interviewerAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=80&auto=format&fit=crop&q=80',
-        statusBadge: 'Scheduled',
-        statusTone: 'blue',
-      },
-      {
-        id: 'int-5',
-        time: '2:00 PM',
-        duration: '60m',
-        candidateName: 'Islam Fathy',
-        candidateRole: 'Data Analyst',
-        candidateAvatar: 'IF',
-        jobTitle: 'Data Analyst',
-        department: 'Strategy & Analytics',
-        typeTag: 'Panel Interview',
-        typeTone: 'blue',
-        panel: 'Panel (3)',
-        mode: 'On-site Cairo HQ',
-        modeIcon: 'map-pin',
-        interviewerName: 'Omar Farouk',
-        interviewerAvatar: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=80&auto=format&fit=crop&q=80',
-        statusBadge: 'Scheduled',
-        statusTone: 'blue',
-      },
-    ],
-  },
-  {
-    dayTitle: 'Friday',
-    daySubtitle: '4 Sep 2026',
-    countLabel: '2 interviews',
-    items: [
-      {
-        id: 'int-6',
-        time: '11:00 AM',
-        duration: '30m',
-        candidateName: 'Lina Hassan',
-        candidateRole: 'HR Business Partner',
-        candidateAvatar: 'LH',
-        jobTitle: 'HR Business Partner',
-        department: 'People & Culture',
-        typeTag: 'HR Interview',
-        typeTone: 'green',
-        panel: 'Lina Hassan HR',
-        mode: 'Teams',
-        modeIcon: 'video',
-        interviewerName: 'Lina Hassan',
-        interviewerAvatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=80&auto=format&fit=crop&q=80',
-        statusBadge: 'Scheduled',
-        statusTone: 'blue',
-      },
-      {
-        id: 'int-7',
-        time: '4:00 PM',
-        duration: '45m',
-        candidateName: 'Omar Ashraf',
-        candidateRole: 'Frontend Engineer',
-        candidateAvatar: 'OA',
-        jobTitle: 'Frontend Engineer',
-        department: 'Engineering',
-        typeTag: 'Technical Interview',
-        typeTone: 'purple',
-        panel: 'Panel (2)',
-        mode: 'Teams',
-        modeIcon: 'video',
-        interviewerName: 'Ahmed Mostafa',
-        interviewerAvatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=80&auto=format&fit=crop&q=80',
-        statusBadge: 'Scheduled',
-        statusTone: 'blue',
-      },
-    ],
-  },
-  {
-    dayTitle: 'Saturday',
-    daySubtitle: '5 Sep 2026',
-    countLabel: '1 interview',
-    items: [
-      {
-        id: 'int-8',
-        time: '12:00 PM',
-        duration: '45m',
-        candidateName: 'Noha Farouk',
-        candidateRole: 'Medical Coder',
-        candidateAvatar: 'NF',
-        jobTitle: 'Medical Coder',
-        department: 'Clinical Operations',
-        typeTag: 'Panel Interview',
-        typeTone: 'blue',
-        panel: 'Panel (2)',
-        mode: 'Phone',
-        modeIcon: 'phone',
-        interviewerName: 'Mona Saleh',
-        interviewerAvatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=80&auto=format&fit=crop&q=80',
-        statusBadge: 'Scheduled',
-        statusTone: 'blue',
-      },
-    ],
-  },
-];
-
 export function InterviewsPage() {
   const navigate = useNavigate();
   const [apiInterviews, setApiInterviews] = useState<Interview[]>([]);
   const [applications, setApplications] = useState<Application[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'calendar' | 'list'>('list');
-  const [dateRange, setDateRange] = useState('31 Aug - 6 Sep 2026');
+  const [dateRange, setDateRange] = useState('All Dates');
   const [isMoreFiltersOpen, setIsMoreFiltersOpen] = useState(false);
   const [selectedType, setSelectedType] = useState('ALL');
   const [selectedStatus, setSelectedStatus] = useState('ALL');
+  const [selectedInterviewer, setSelectedInterviewer] = useState('ALL');
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  // Scheduling Form State
+  const [selectedAppId, setSelectedAppId] = useState('');
+  const [interviewTitle, setInterviewTitle] = useState('Clinical Assessment Round');
+  const [interviewType, setInterviewType] = useState<'Screening' | 'Technical' | 'Behavioral' | 'Managerial' | 'Executive'>('Technical');
+  const [scheduledDateTime, setScheduledDateTime] = useState('2026-09-04T10:00');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3500);
+  };
+
+  const loadData = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      const [intRes, appRes] = await Promise.all([
+        getApi<any>('/interviews').catch(() => []),
+        getApi<PaginatedResult<Application>>('/applications?page=1&pageSize=50').catch(() => ({ data: [] })),
+      ]);
+      const intList = Array.isArray(intRes) ? intRes : intRes?.data || [];
+      setApiInterviews(intList);
+
+      const appList = appRes?.data || [];
+      setApplications(appList);
+      if (appList.length > 0 && !selectedAppId) {
+        setSelectedAppId(appList[0].id);
+      }
+    } catch {
+      // Ignore network errors
+    } finally {
+      setIsLoading(false);
+    }
+  }, [selectedAppId]);
+
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
+
+  const interviewerOptions = useMemo(() => {
+    const names = new Set<string>();
+    apiInterviews.forEach((int: any) => {
+      if (Array.isArray(int.attendees)) {
+        int.attendees.forEach((att: any) => {
+          if (att.userName && att.userName.trim()) {
+            names.add(att.userName.trim());
+          }
+        });
+      }
+      if (Array.isArray(int.scorecards)) {
+        int.scorecards.forEach((sc: any) => {
+          if (sc.interviewerName && sc.interviewerName.trim()) {
+            names.add(sc.interviewerName.trim());
+          }
+        });
+      }
+    });
+    return Array.from(names).sort();
+  }, [apiInterviews]);
+
+  const interviewGroups: InterviewGroup[] = useMemo(() => {
+    if (apiInterviews.length === 0) return [];
+
+    const filtered = apiInterviews.filter((int: any) => {
+      if (selectedType !== 'ALL') {
+        const typeMatch = (int.interviewType || '').toLowerCase() === selectedType.toLowerCase();
+        if (!typeMatch) return false;
+      }
+      if (selectedStatus !== 'ALL') {
+        const hasScorecards = Array.isArray(int.scorecards) && int.scorecards.length > 0;
+        const isPast = int.scheduledStart && new Date(int.scheduledStart) < new Date();
+        let badge = int.status || 'Scheduled';
+        if (int.status === 'Completed' || hasScorecards) badge = 'Feedback Done';
+        else if (isPast) badge = 'Feedback Pending';
+
+        if (badge !== selectedStatus && int.status !== selectedStatus) return false;
+      }
+      if (selectedInterviewer !== 'ALL') {
+        const attendeeMatch = Array.isArray(int.attendees) && int.attendees.some((a: any) => a.userName === selectedInterviewer);
+        const scorecardMatch = Array.isArray(int.scorecards) && int.scorecards.some((s: any) => s.interviewerName === selectedInterviewer);
+        if (!attendeeMatch && !scorecardMatch) return false;
+      }
+      return true;
+    });
+
+    if (filtered.length === 0) return [];
+
+    // Group items by calendar date
+    const groupsMap = new Map<string, { dayTitle: string; daySubtitle: string; items: any[] }>();
+    const now = new Date();
+    const todayKey = now.toDateString();
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowKey = tomorrow.toDateString();
+
+    filtered.forEach((int: any) => {
+      const startDate = int.scheduledStart ? new Date(int.scheduledStart) : null;
+      const dateKey = startDate ? startDate.toDateString() : 'Unscheduled';
+
+      let dayTitle = 'Scheduled';
+      let daySubtitle = 'Upcoming';
+      if (startDate) {
+        if (dateKey === todayKey) {
+          dayTitle = 'Today';
+          daySubtitle = startDate.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' });
+        } else if (dateKey === tomorrowKey) {
+          dayTitle = 'Tomorrow';
+          daySubtitle = startDate.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'short', year: 'numeric' });
+        } else {
+          dayTitle = startDate.toLocaleDateString(undefined, { weekday: 'long' });
+          daySubtitle = startDate.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+        }
+      }
+
+      if (!groupsMap.has(dateKey)) {
+        groupsMap.set(dateKey, { dayTitle, daySubtitle, items: [] });
+      }
+
+      const name = int.candidateName || (int.application?.candidate
+        ? `${int.application.candidate.firstName} ${int.application.candidate.lastName}`
+        : 'Unknown candidate');
+      const initials = name.split(' ').filter(Boolean).map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() || 'UC';
+
+      const durationMins = int.scheduledStart && int.scheduledEnd
+        ? Math.round((new Date(int.scheduledEnd).getTime() - new Date(int.scheduledStart).getTime()) / 60000)
+        : null;
+
+      const primaryAttendee = (Array.isArray(int.attendees) && int.attendees.find((a: any) => a.userName)?.userName) ||
+        (Array.isArray(int.scorecards) && int.scorecards[0]?.interviewerName) ||
+        'Unassigned';
+      const interviewerAvatar = primaryAttendee === 'Unassigned'
+        ? '—'
+        : primaryAttendee.split(' ').filter(Boolean).map((n: string) => n[0]).join('').slice(0, 2).toUpperCase() || 'IN';
+
+      let mode = 'Remote';
+      let modeIcon: 'video' | 'phone' | 'map-pin' = 'video';
+      if (int.locationUrl) {
+        const lowerLoc = int.locationUrl.toLowerCase();
+        if (lowerLoc.includes('teams')) {
+          mode = 'Teams';
+          modeIcon = 'video';
+        } else if (lowerLoc.includes('zoom')) {
+          mode = 'Zoom';
+          modeIcon = 'video';
+        } else if (lowerLoc.includes('meet')) {
+          mode = 'Google Meet';
+          modeIcon = 'video';
+        } else if (lowerLoc.includes('tel') || lowerLoc.includes('phone')) {
+          mode = 'Phone';
+          modeIcon = 'phone';
+        } else if (int.locationUrl.startsWith('http')) {
+          mode = 'Video Call';
+          modeIcon = 'video';
+        } else {
+          mode = int.locationUrl;
+          modeIcon = 'map-pin';
+        }
+      } else if (int.timezone) {
+        mode = `Remote (${int.timezone})`;
+      }
+
+      const hasScorecards = Array.isArray(int.scorecards) && int.scorecards.length > 0;
+      const isPast = int.scheduledStart && new Date(int.scheduledStart) < new Date();
+      let statusBadge = int.status || 'Scheduled';
+      let statusTone: 'green' | 'amber' | 'blue' = 'blue';
+
+      if (int.status === 'Completed' || hasScorecards) {
+        statusBadge = 'Feedback Done';
+        statusTone = 'green';
+      } else if (isPast) {
+        statusBadge = 'Feedback Pending';
+        statusTone = 'amber';
+      }
+
+      const panelCount = Array.isArray(int.attendees) ? int.attendees.length : 0;
+      const panelLabel = panelCount > 1 ? `Panel (${panelCount})` : primaryAttendee;
+
+      groupsMap.get(dateKey)!.items.push({
+        id: int.id,
+        time: int.scheduledStart ? new Date(int.scheduledStart).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—',
+        duration: durationMins && durationMins > 0 ? `${durationMins}m` : '—',
+        candidateName: name,
+        candidateRole: int.positionTitle || 'No position',
+        candidateAvatar: initials,
+        jobTitle: int.positionTitle || 'No position',
+        department: int.department || '—',
+        typeTag: `${int.interviewType || 'General'} Interview`,
+        typeTone: int.interviewType === 'Technical' ? 'purple' : int.interviewType === 'Behavioral' || int.interviewType === 'HR' ? 'green' : 'blue',
+        panel: panelLabel,
+        mode,
+        modeIcon,
+        interviewerName: primaryAttendee,
+        interviewerAvatar,
+        statusBadge,
+        statusTone,
+      });
+    });
+
+    return Array.from(groupsMap.values()).map((grp) => ({
+      dayTitle: grp.dayTitle,
+      daySubtitle: grp.daySubtitle,
+      countLabel: `${grp.items.length} interview${grp.items.length !== 1 ? 's' : ''}`,
+      items: grp.items,
+    }));
+  }, [apiInterviews, selectedType, selectedStatus, selectedInterviewer]);
+
+  const totalFilteredCount = useMemo(() => {
+    return interviewGroups.reduce((acc, grp) => acc + grp.items.length, 0);
+  }, [interviewGroups]);
+
+  const pendingFeedbackInterviews = useMemo(() => {
+    return apiInterviews.filter((int: any) => {
+      const isPast = int.scheduledStart && new Date(int.scheduledStart) < new Date();
+      const hasScorecards = Array.isArray(int.scorecards) && int.scorecards.length > 0;
+      return (int.status === 'Scheduled' && isPast) || (!hasScorecards && int.status !== 'Cancelled');
+    });
+  }, [apiInterviews]);
+
+  const totalInterviews = apiInterviews.length;
+  const completedCount = useMemo(() => {
+    return apiInterviews.filter((i: any) => i.status === 'Completed' || (Array.isArray(i.scorecards) && i.scorecards.length > 0)).length;
+  }, [apiInterviews]);
+  const panelsCount = useMemo(() => {
+    return apiInterviews.filter((i: any) => Array.isArray(i.attendees) && i.attendees.length > 1).length;
+  }, [apiInterviews]);
+
   const handleExportCsv = () => {
+    if (interviewGroups.length === 0) {
+      showToast('No interviews to export.');
+      return;
+    }
     const headers = ['Candidate', 'Position', 'Type', 'Time', 'Interviewer', 'Status'];
     const rows: string[][] = [];
-    DEFAULT_INTERVIEW_GROUPS.forEach((s) => {
+    interviewGroups.forEach((s) => {
       s.items.forEach((inv) => {
         rows.push([
           `"${inv.candidateName}"`,
@@ -249,81 +299,6 @@ export function InterviewsPage() {
     link.click();
     URL.revokeObjectURL(url);
     showToast('✓ Interview schedule exported to CSV!');
-  };
-
-  // Scheduling Form State
-  const [selectedAppId, setSelectedAppId] = useState('');
-  const [interviewTitle, setInterviewTitle] = useState('Clinical Assessment Round');
-  const [interviewType, setInterviewType] = useState<'Screening' | 'Technical' | 'Behavioral' | 'Managerial' | 'Executive'>('Technical');
-  const [scheduledDateTime, setScheduledDateTime] = useState('2026-09-04T10:00');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const loadData = useCallback(async () => {
-    try {
-      const [intRes, appRes] = await Promise.all([
-        getApi<any>('/interviews').catch(() => []),
-        getApi<PaginatedResult<Application>>('/applications?page=1&pageSize=50').catch(() => ({ data: [] })),
-      ]);
-      const intList = Array.isArray(intRes) ? intRes : intRes?.data || [];
-      setApiInterviews(intList);
-
-      const appList = appRes?.data || [];
-      setApplications(appList);
-      if (appList.length > 0 && !selectedAppId) {
-        setSelectedAppId(appList[0].id);
-      }
-    } catch {
-      // Ignore network errors
-    }
-  }, [selectedAppId]);
-
-  useEffect(() => {
-    void loadData();
-  }, [loadData]);
-
-  const interviewGroups: InterviewGroup[] = useMemo(() => {
-    if (apiInterviews.length === 0) return DEFAULT_INTERVIEW_GROUPS;
-
-    const dynamicItems = apiInterviews.map((int: any) => {
-      const name = int.application?.candidate
-        ? `${int.application.candidate.firstName} ${int.application.candidate.lastName}`
-        : 'Candidate';
-      const initials = name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() || 'CD';
-      return {
-        id: int.id,
-        time: int.scheduledStart ? new Date(int.scheduledStart).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '10:00 AM',
-        duration: '45m',
-        candidateName: name,
-        candidateRole: int.application?.positionTitle || 'Clinical Specialist',
-        candidateAvatar: initials,
-        jobTitle: int.application?.positionTitle || 'Clinical Specialist',
-        department: 'Medical Operations',
-        typeTag: `${int.interviewType || 'Clinical'} Assessment`,
-        typeTone: 'purple' as const,
-        panel: 'Clinical Panel',
-        mode: 'Teams',
-        modeIcon: 'video' as const,
-        interviewerName: 'Sarah Ahmed',
-        interviewerAvatar: 'SA',
-        statusBadge: int.status || 'Scheduled',
-        statusTone: 'blue' as const,
-      };
-    });
-
-    return [
-      {
-        dayTitle: 'Database Scheduled',
-        daySubtitle: 'Live synced from recruitment database',
-        countLabel: `${dynamicItems.length} interviews`,
-        items: dynamicItems,
-      },
-      ...DEFAULT_INTERVIEW_GROUPS,
-    ];
-  }, [apiInterviews]);
-
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3500);
   };
 
   const handleScheduleSubmit = async (e: React.FormEvent) => {
@@ -424,7 +399,7 @@ export function InterviewsPage() {
         <div className="relative">
           <button
             type="button"
-            onClick={() => setDateRange((prev) => prev.includes('31 Aug') ? 'Today' : prev === 'Today' ? 'Next 7 Days' : '31 Aug - 6 Sep 2026')}
+            onClick={() => setDateRange((prev) => prev === 'All Dates' ? 'Today' : prev === 'Today' ? 'Upcoming' : 'All Dates')}
             className="inline-flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 shadow-xs cursor-pointer"
           >
             <Icon name="calendar" size={13} className="text-slate-400" />
@@ -441,20 +416,26 @@ export function InterviewsPage() {
             className="appearance-none bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2 pr-8 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 cursor-pointer shadow-xs"
           >
             <option value="ALL">All Interview Types</option>
+            <option value="Screening">Screening Round</option>
             <option value="Technical">Technical Interview</option>
-            <option value="Panel">Panel Interview</option>
-            <option value="HR">HR Interview</option>
+            <option value="Behavioral">Behavioral / Leadership</option>
+            <option value="Managerial">Managerial Round</option>
+            <option value="Executive">Executive Board</option>
           </select>
           <Icon name="chevron-down" size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
         </div>
 
         {/* All interviewers */}
         <div className="relative">
-          <select className="appearance-none bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2 pr-8 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 cursor-pointer shadow-xs">
+          <select
+            value={selectedInterviewer}
+            onChange={(e) => setSelectedInterviewer(e.target.value)}
+            className="appearance-none bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2 pr-8 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 cursor-pointer shadow-xs"
+          >
             <option value="ALL">All Interviewers</option>
-            <option value="Sarah Ahmed">Sarah Ahmed</option>
-            <option value="Ahmed Mostafa">Ahmed Mostafa</option>
-            <option value="Sara Mohamed">Sara Mohamed</option>
+            {interviewerOptions.map((name) => (
+              <option key={name} value={name}>{name}</option>
+            ))}
           </select>
           <Icon name="chevron-down" size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
         </div>
@@ -470,6 +451,8 @@ export function InterviewsPage() {
             <option value="Scheduled">Scheduled</option>
             <option value="Feedback Done">Feedback Done</option>
             <option value="Feedback Pending">Feedback Pending</option>
+            <option value="Completed">Completed</option>
+            <option value="Cancelled">Cancelled</option>
           </select>
           <Icon name="chevron-down" size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
         </div>
@@ -512,7 +495,8 @@ export function InterviewsPage() {
             onClick={() => {
               setSelectedType('ALL');
               setSelectedStatus('ALL');
-              setDateRange('31 Aug - 6 Sep 2026');
+              setSelectedInterviewer('ALL');
+              setDateRange('All Dates');
             }}
             className="ml-auto text-xs font-bold text-slate-500 hover:text-rose-600 cursor-pointer"
           >
@@ -560,108 +544,133 @@ export function InterviewsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left Column: Interview Day Groups (8 cols) */}
         <div className="lg:col-span-8 space-y-6">
-          {interviewGroups.map((group) => (
-            <div key={group.dayTitle} className="space-y-3">
-              {/* Day Section Header */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white">
-                    {group.dayTitle} <span className="font-normal text-slate-400">&bull; {group.daySubtitle}</span>
-                  </h2>
-                </div>
-                <span className="text-[11px] font-bold text-blue-600 dark:text-blue-400">
-                  {group.countLabel}
-                </span>
-              </div>
-
-              {/* Interview Item Cards */}
-              <div className="space-y-2.5">
-                {group.items.map((item) => (
-                  <div
-                    key={item.id}
-                    onClick={() => navigate(`/interviews/${item.id}`)}
-                    className="p-3.5 sm:p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 hover:border-blue-300 hover:shadow-md transition cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
-                  >
-                    {/* Time & Duration */}
-                    <div className="w-16 sm:w-20 shrink-0">
-                      <span className="block text-xs font-extrabold text-slate-900 dark:text-white leading-tight">
-                        {item.time}
-                      </span>
-                      <span className="block text-[11px] text-slate-400 font-medium">
-                        {item.duration}
-                      </span>
+          {isLoading ? (
+            <TableSkeleton columns={5} rows={4} />
+          ) : interviewGroups.length === 0 ? (
+            <PageState
+              kind="empty"
+              title="No interviews scheduled"
+              description={
+                apiInterviews.length === 0
+                  ? "There are no scheduled interviews yet."
+                  : "No interviews match your selected filters."
+              }
+              actionLabel={apiInterviews.length === 0 ? "Schedule Interview" : "Reset Filters"}
+              onAction={() => {
+                if (apiInterviews.length === 0) {
+                  setIsScheduleModalOpen(true);
+                } else {
+                  setSelectedType('ALL');
+                  setSelectedStatus('ALL');
+                  setSelectedInterviewer('ALL');
+                }
+              }}
+            />
+          ) : (
+            <>
+              {interviewGroups.map((group) => (
+                <div key={group.dayTitle} className="space-y-3">
+                  {/* Day Section Header */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white">
+                        {group.dayTitle} <span className="font-normal text-slate-400">&bull; {group.daySubtitle}</span>
+                      </h2>
                     </div>
-
-                    {/* Candidate Avatar & Details */}
-                    <div className="flex items-center gap-2.5 min-w-0 flex-1 sm:flex-initial sm:w-44">
-                      <div className="w-8 h-8 rounded-full bg-teal-600 text-white font-black text-xs flex items-center justify-center shrink-0">
-                        {item.candidateAvatar}
-                      </div>
-                      <div className="min-w-0">
-                        <span className="block text-xs font-bold text-slate-900 dark:text-white group-hover:text-blue-600 transition truncate">
-                          {item.candidateName}
-                        </span>
-                        <span className="block text-[10.5px] text-slate-400 truncate">
-                          {item.candidateRole}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Job Position & Department */}
-                    <div className="min-w-0 flex-1 hidden xl:block">
-                      <span className="block font-bold text-slate-800 dark:text-slate-200 truncate">
-                        {item.jobTitle}
-                      </span>
-                      <span className="block text-[10.5px] text-slate-400 truncate">
-                        {item.department}
-                      </span>
-                    </div>
-
-                    {/* Type Tag & Mode */}
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <span className={`px-2.5 py-0.5 rounded-full text-[10.5px] font-bold ${getTypeTagClass(item.typeTone)}`}>
-                        {item.typeTag}
-                      </span>
-                      <span className="text-[11px] text-slate-500 font-medium hidden 2xl:inline">
-                        {item.panel}
-                      </span>
-                    </div>
-
-                    {/* Mode (Teams/Phone) */}
-                    <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium shrink-0 hidden md:flex">
-                      <Icon name={item.modeIcon === 'phone' ? 'phone' : item.modeIcon === 'map-pin' ? 'map-pin' : 'video'} size={13} className="text-slate-400" />
-                      <span>{item.mode}</span>
-                    </div>
-
-                    {/* Interviewer Host Avatar & Status Badge */}
-                    <div className="flex items-center gap-2.5 shrink-0 ml-auto sm:ml-0">
-                      <img
-                        src={item.interviewerAvatar}
-                        alt={item.interviewerName}
-                        className="w-7 h-7 rounded-full object-cover border border-slate-200 shrink-0 hidden sm:block"
-                      />
-                      <span className={`px-2.5 py-0.5 rounded-full text-[10.5px] font-bold whitespace-nowrap shrink-0 ${getStatusBadgeClass(item.statusTone)}`}>
-                        {item.statusBadge}
-                      </span>
-                      <Icon name="more-vertical" size={13} className="text-slate-300 group-hover:text-slate-600 shrink-0" />
-                    </div>
+                    <span className="text-[11px] font-bold text-blue-600 dark:text-blue-400">
+                      {group.countLabel}
+                    </span>
                   </div>
-                ))}
-              </div>
-            </div>
-          ))}
 
-          {/* Footer Navigation */}
-          <div className="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-400">
-            <span>Showing 1 to 8 of 8 interviews</span>
-            <button
-              type="button"
-              onClick={() => showToast('All scheduled interviews are currently loaded.')}
-              className="px-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 cursor-pointer"
-            >
-              Load more ▾
-            </button>
-          </div>
+                  {/* Interview Item Cards */}
+                  <div className="space-y-2.5">
+                    {group.items.map((item) => (
+                      <div
+                        key={item.id}
+                        onClick={() => navigate(`/interviews/${item.id}`)}
+                        className="p-3.5 sm:p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 hover:border-blue-300 hover:shadow-md transition cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
+                      >
+                        {/* Time & Duration */}
+                        <div className="w-16 sm:w-20 shrink-0">
+                          <span className="block text-xs font-extrabold text-slate-900 dark:text-white leading-tight">
+                            {item.time}
+                          </span>
+                          <span className="block text-[11px] text-slate-400 font-medium">
+                            {item.duration}
+                          </span>
+                        </div>
+
+                        {/* Candidate Avatar & Details */}
+                        <div className="flex items-center gap-2.5 min-w-0 flex-1 sm:flex-initial sm:w-44">
+                          <div className="w-8 h-8 rounded-full bg-teal-600 text-white font-black text-xs flex items-center justify-center shrink-0">
+                            {item.candidateAvatar}
+                          </div>
+                          <div className="min-w-0">
+                            <span className="block text-xs font-bold text-slate-900 dark:text-white group-hover:text-blue-600 transition truncate">
+                              {item.candidateName}
+                            </span>
+                            <span className="block text-[10.5px] text-slate-400 truncate">
+                              {item.candidateRole}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Job Position & Department */}
+                        <div className="min-w-0 flex-1 hidden xl:block">
+                          <span className="block font-bold text-slate-800 dark:text-slate-200 truncate">
+                            {item.jobTitle}
+                          </span>
+                          <span className="block text-[10.5px] text-slate-400 truncate">
+                            {item.department}
+                          </span>
+                        </div>
+
+                        {/* Type Tag & Mode */}
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10.5px] font-bold ${getTypeTagClass(item.typeTone)}`}>
+                            {item.typeTag}
+                          </span>
+                          <span className="text-[11px] text-slate-500 font-medium hidden 2xl:inline">
+                            {item.panel}
+                          </span>
+                        </div>
+
+                        {/* Mode (Teams/Phone) */}
+                        <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium shrink-0 hidden md:flex">
+                          <Icon name={item.modeIcon === 'phone' ? 'phone' : item.modeIcon === 'map-pin' ? 'map-pin' : 'video'} size={13} className="text-slate-400" />
+                          <span>{item.mode}</span>
+                        </div>
+
+                        {/* Interviewer Host Avatar & Status Badge */}
+                        <div className="flex items-center gap-2.5 shrink-0 ml-auto sm:ml-0">
+                          {item.interviewerAvatar && item.interviewerAvatar.startsWith('http') ? (
+                            <img
+                              src={item.interviewerAvatar}
+                              alt={item.interviewerName}
+                              className="w-7 h-7 rounded-full object-cover border border-slate-200 shrink-0 hidden sm:block"
+                            />
+                          ) : (
+                            <div className="w-7 h-7 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-[10px] flex items-center justify-center border border-slate-200 dark:border-slate-700 shrink-0 hidden sm:flex">
+                              {item.interviewerAvatar}
+                            </div>
+                          )}
+                          <span className={`px-2.5 py-0.5 rounded-full text-[10.5px] font-bold whitespace-nowrap shrink-0 ${getStatusBadgeClass(item.statusTone)}`}>
+                            {item.statusBadge}
+                          </span>
+                          <Icon name="more-vertical" size={13} className="text-slate-300 group-hover:text-slate-600 shrink-0" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+
+              {/* Footer Navigation */}
+              <div className="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-400">
+                <span>Showing {totalFilteredCount} of {apiInterviews.length} interviews</span>
+              </div>
+            </>
+          )}
         </div>
 
         {/* Right Sidebar: Quick Stats & Actions (~28% / 4 cols) */}
@@ -672,47 +681,42 @@ export function InterviewsPage() {
               <h2 className="text-sm font-extrabold text-slate-900 dark:text-white">
                 Feedback Pending
               </h2>
-              <button
-                type="button"
-                onClick={() => setSelectedStatus('Feedback Pending')}
-                className="text-xs font-bold text-blue-600 hover:underline cursor-pointer"
-              >
-                View all
-              </button>
+              {pendingFeedbackInterviews.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedStatus('Feedback Pending')}
+                  className="text-xs font-bold text-blue-600 hover:underline cursor-pointer"
+                >
+                  View all
+                </button>
+              )}
             </div>
 
             <div className="space-y-2.5 text-xs">
-              <div className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/60 transition">
-                <div>
-                  <span className="block font-bold text-slate-900 dark:text-white">Khaled Mostafa</span>
-                  <span className="block text-[10.5px] text-slate-400">Panel Interview &bull; Backend Engineer</span>
-                </div>
-                <span className="w-5 h-5 rounded-full bg-amber-100 text-amber-700 font-bold text-xs flex items-center justify-center">3</span>
-              </div>
-
-              <div className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/60 transition">
-                <div>
-                  <span className="block font-bold text-slate-900 dark:text-white">Nourhan Sami</span>
-                  <span className="block text-[10.5px] text-slate-400">HR Interview &bull; ICU Nurse</span>
-                </div>
-                <span className="w-5 h-5 rounded-full bg-amber-100 text-amber-700 font-bold text-xs flex items-center justify-center">1</span>
-              </div>
-
-              <div className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/60 transition">
-                <div>
-                  <span className="block font-bold text-slate-900 dark:text-white">Yousef Ahmed</span>
-                  <span className="block text-[10.5px] text-slate-400">Technical Interview &bull; DevOps</span>
-                </div>
-                <span className="w-5 h-5 rounded-full bg-amber-100 text-amber-700 font-bold text-xs flex items-center justify-center">2</span>
-              </div>
-
-              <div className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/60 transition">
-                <div>
-                  <span className="block font-bold text-slate-900 dark:text-white">Lina Hassan</span>
-                  <span className="block text-[10.5px] text-slate-400">HR Interview &bull; HR Partner</span>
-                </div>
-                <span className="w-5 h-5 rounded-full bg-amber-100 text-amber-700 font-bold text-xs flex items-center justify-center">1</span>
-              </div>
+              {pendingFeedbackInterviews.length === 0 ? (
+                <p className="text-xs text-slate-400 italic py-2">No pending feedback.</p>
+              ) : (
+                pendingFeedbackInterviews.slice(0, 4).map((int: any) => {
+                  const name = int.candidateName || (int.application?.candidate ? `${int.application.candidate.firstName} ${int.application.candidate.lastName}` : 'Unknown candidate');
+                  const role = int.positionTitle || 'No position';
+                  const pendingCount = Math.max(1, (int.attendees?.length || 1) - (int.scorecards?.length || 0));
+                  return (
+                    <div
+                      key={int.id}
+                      onClick={() => navigate(`/interviews/${int.id}`)}
+                      className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/60 transition cursor-pointer"
+                    >
+                      <div>
+                        <span className="block font-bold text-slate-900 dark:text-white">{name}</span>
+                        <span className="block text-[10.5px] text-slate-400">{int.interviewType || 'Interview'} &bull; {role}</span>
+                      </div>
+                      <span className="w-5 h-5 rounded-full bg-amber-100 text-amber-700 font-bold text-xs flex items-center justify-center">
+                        {pendingCount}
+                      </span>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
 
@@ -720,18 +724,8 @@ export function InterviewsPage() {
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-3.5">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
               <h2 className="text-sm font-extrabold text-slate-900 dark:text-white">
-                Today&apos;s Interviews
+                Interview Summary
               </h2>
-              <button
-                type="button"
-                onClick={() => {
-                  setDateRange('Today');
-                  setViewMode('calendar');
-                }}
-                className="text-xs font-bold text-blue-600 hover:underline cursor-pointer"
-              >
-                View full day
-              </button>
             </div>
 
             <div className="space-y-2 text-xs">
@@ -739,28 +733,28 @@ export function InterviewsPage() {
                 <span className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
                   <Icon name="calendar" size={14} className="text-blue-500" /> Total Interviews
                 </span>
-                <span className="font-bold text-slate-900 dark:text-white">3</span>
+                <span className="font-bold text-slate-900 dark:text-white">{totalInterviews}</span>
               </div>
 
               <div className="flex items-center justify-between py-1">
                 <span className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
-                  <Icon name="check-circle" size={14} className="text-emerald-500" /> Completed
+                  <Icon name="check-circle" size={14} className="text-emerald-500" /> Completed / Evaluated
                 </span>
-                <span className="font-bold text-slate-900 dark:text-white">1</span>
+                <span className="font-bold text-slate-900 dark:text-white">{completedCount}</span>
               </div>
 
               <div className="flex items-center justify-between py-1">
                 <span className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
                   <Icon name="clock" size={14} className="text-amber-500" /> Pending Feedback
                 </span>
-                <span className="font-bold text-slate-900 dark:text-white">2</span>
+                <span className="font-bold text-slate-900 dark:text-white">{pendingFeedbackInterviews.length}</span>
               </div>
 
               <div className="flex items-center justify-between py-1">
                 <span className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
                   <Icon name="users" size={14} className="text-purple-500" /> Interview Panels
                 </span>
-                <span className="font-bold text-slate-900 dark:text-white">2</span>
+                <span className="font-bold text-slate-900 dark:text-white">{panelsCount}</span>
               </div>
             </div>
           </div>
@@ -773,7 +767,7 @@ export function InterviewsPage() {
 
             {[
               { label: 'Schedule Interview', sub: 'Plan a new interview', icon: 'calendar', tone: 'text-emerald-500' },
-              { label: 'Interview Templates', sub: 'Manage templates', icon: 'file-text', tone: 'text-blue-500' },
+              { label: 'Interview Templates', sub: 'Manage templates', icon: 'document', tone: 'text-blue-500' },
               { label: 'Interview Types', sub: 'Manage interview types', icon: 'chat', tone: 'text-amber-500' },
               { label: 'Interview Feedback', sub: 'View and provide feedback', icon: 'award', tone: 'text-purple-500' },
               { label: 'Interview Guidelines', sub: 'Best practices & guidelines', icon: 'help', tone: 'text-blue-500' },

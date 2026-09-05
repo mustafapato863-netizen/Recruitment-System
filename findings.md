@@ -73,3 +73,9 @@ From schema.prisma (confirmed):
 Phase mapping from that document:
 - Phase 2 (Jobs→Applicants) = our Phase 1+2
 - Phase 3 (Candidate→Interview→Offer) = our Phase 3+4
+
+## 8. Enhancements Sweep E1 Findings
+- **Interview Contract Email/Phone Field**: `Interview` in `@recruitflow/contracts` provides `candidateName?: string` and `positionTitle?: string`, but not `candidateEmail` or `phone`. `InterviewDetailPage` reads optional candidate contact info if present on application payload and drops mailto/tel action buttons when absent, avoiding hardcoded fake emails/numbers.
+- **Scorecard Isolation Preserved**: P3.2 Feedback & Scorecard section (`<section aria-labelledby="feedback-scorecard-heading">`) remains completely untouched. Only the post-P3.2 multi-interviewer rollup tables and summary cards were made dynamic using `interview.scorecards` and `interview.attendees`.
+- **Interviews List Data Truth**: `InterviewsPage` formerly fell back to `DEFAULT_INTERVIEW_GROUPS` (8 mock items) whenever `apiInterviews` was empty. This has been replaced with clean calendar-day grouping over real items and `<PageState kind="empty">` when empty or filtered out.
+

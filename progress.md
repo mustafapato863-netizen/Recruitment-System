@@ -276,7 +276,39 @@
 - Orchestrator verification: opencode muse-spark-1.3 read-only PASS all (no N+1, server-preferred counts, dead class gone, no shape breaks); API tsc re-clean; web+API tests re-run green (58/58, 11/11). Noted for enhancements: License page expects full complianceRequirements from list (pre-existing gap); progress counts optionals vs required-only gate.
 
 ### FINAL GATE (orchestrator, 2026-09-05): FULL PLAN COMPLETE
-- Code gates on final tree: web tsc clean, web build ok, web tests 58/58 pass, API tsc clean, API tests 11/11 pass. Prisma schema valid. Migration 20260905 applied directly (idempotent SQL) � repo `migrate deploy` still P3005-unbaselined (pre-existing: no _prisma_migrations table; REPORTED as ops item, not silently fixed).
+- Code gates on final tree: web tsc clean, web build ok, web tests 58/58 pass, API tsc clean, API tests 11/11 pass. Prisma schema valid. Migration 20260905 applied directly (idempotent SQL) � repo `migrate deploy` still P3005-unbaselined (pre-existing: no _prisma_migrations table; REPORTED as ops item, not silently fixed).
 - Live demo verification (API :3000, demo org RECRUITFLOW-DEMO, password Password123!): logins a@test.com (ADMINISTRATOR) / m@test.com (HIRING_MANAGER) / e@test.com (RECRUITER) + named staff all ok; applications list (18); notes POST->GET round-trip with author; scorecard submit ok + locked resubmit 400; offer create->approve->Sent->Accepted; hiring case create; list counts 2/2 live; compliance toggles; submit->final-approve->Joined. Invalid transitions correctly 400 (offer accept guard, joining-status guard). Demo rows cleaned up afterward; state re-verified pristine (0 cases, 1 offer, app Offer stage, 0 notes, 1 scorecard).
 - UI/UX audit: 12/49 pages still contain hardcoded demo literals (ApplicationsPage 14, TasksPage 16, InterviewDetailPage 13, OffersPage 12, ManagerDashboard 11, OfferDetailPage 10, VacantListPage 10, StageTransitionPage 9, VacancyOverviewPage 6, JobAnalyticsPage 5, InterviewsPage 5, CVIntakePage 2). Scheduled as enhancements sweep E1-E5 (pre-approved).
 - API left RUNNING (PID 2472, fresh build with all phases) for manual browser verification.
+
+### E1 Remove hardcoded demo literals from interview pages: DONE
+- Task ID: E1
+- Scope: `apps/web/src/pages/InterviewDetailPage.tsx`, `apps/web/src/pages/InterviewsPage.tsx`
+- Replaced literals in `InterviewDetailPage.tsx`:
+  - Replaced hardcoded candidate name 'Ali Hassan' and alt text with dynamic `candidateDisplayName = interview?.candidateName ?? 'Unknown candidate'`, position title with `interview?.positionTitle ?? 'No position'`, and initials avatar fallback.
+  - Replaced hardcoded mailto `ali.hassan@example.com` and tel links: mailto only rendered if candidate email exists; call button only rendered if phone exists.
+  - Replaced hardcoded subtitle 'Engineering • Cairo, Egypt • Applied 28 Aug 2026' with real scheduled/applied dates (`appliedDateLine`) and timezone.
+  - Replaced hardcoded 'APP-02481' and `/applications/APP-02481[/transition]` links with `appIdDisplay` (first-8 APP- convention) and real `interview.applicationId` navigation.
+  - Derived "Interview Owner" from attendees (`role === 'Lead' | 'Host' | 'Organizer'` or first attendee) / scorecards / `'Unassigned'`.
+  - Derived "Interview Panel" list from `interview.attendees` (`userName`, `role`) and checked real scorecard submission status against `interview.scorecards`. Rendered null-safe empty state when no attendees are assigned.
+  - Derived pending panel banner count dynamically (`attendees.length - scorecards.length`).
+  - Replaced hardcoded attachment rows ('Ali Hassan CV.pdf', 'Portfolio - Ali Hassan.pdf') with dynamic `attachments` check and empty state ("No attachments") when none exist.
+  - Strictly preserved P3.2 Feedback & Scorecard section (`<section aria-labelledby="feedback-scorecard-heading">`) untouched.
+  - Derived "Interview Scorecard" table headers and rating rows from real `interview.scorecards`, with empty state when none are submitted.
+  - Derived "Feedback Summary" items and author names from real `interview.scorecards` (`interviewerName`, `notes`, `strengths`, `concerns`, `recommendation`), replacing hardcoded quotes and authors.
+  - Derived Recommendation (Average) from scorecards (majority recommendation) with null-safe pending fallback.
+- Replaced literals in `InterviewsPage.tsx`:
+  - Removed `DEFAULT_INTERVIEW_GROUPS` containing 8 mock candidate/interviewer rows ('Ali Hassan', 'Sarah Ahmed', 'On-site Cairo HQ', Unsplash avatars).
+  - Derived `interviewGroups` dynamically from fetched `apiInterviews` with calendar day grouping (Today / Tomorrow / Day Name) and real field mappings (`candidateName ?? 'Unknown candidate'`, `positionTitle ?? 'No position'`, duration computed from `scheduledStart`/`scheduledEnd`).
+  - Replaced interviewer filter `<option>Sarah Ahmed</option>` with data-driven `interviewerOptions` derived from `apiInterviews` attendees and scorecards.
+  - Implemented empty state using `<PageState kind="empty">` when no interviews are scheduled or match active filters.
+  - Derived "Feedback Pending" sidebar card dynamically from past/unscored interviews in `apiInterviews` with empty state fallback.
+  - Derived "Today's Interviews Summary" counts (`totalInterviews`, `completedCount`, `pendingFeedback`, `panelsCount`) dynamically from `apiInterviews`.
+  - Updated CSV export to export real `interviewGroups` data.
+  - Preserved existing scheduling form and API fetch logic.
+- Verification:
+  - `pnpm --dir apps/web exec tsc -p tsconfig.app.json --noEmit` passed clean (0 errors).
+  - `pnpm --dir apps/web build` passed clean (1.59s).
+  - `pnpm --dir apps/web test` passed clean (23 test files, 58/58 tests pass).
+- Orchestrator verification: opencode muse-spark-1.3 read-only PASS (zero literals, P3.2 untouched, mock gone, scope clean); tsc re-run clean; literal grep 0/0 on both files. Noted: schedule-form defaults (Clinical Assessment Round, Asia/Riyadh, Teams URL) left for follow-up.
+
