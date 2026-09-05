@@ -141,3 +141,14 @@
 ### Blocked
 - None.
 
+### Mission acceptance criteria (user-added 2026-09-05)
+- After full plan completion: entire app verified working with demo users (seed/demo accounts, all roles).
+- UI/UX polished to perfect: no hardcoded data, consistent tokens, empty/loading/error states everywhere, responsive + accessible.
+- Post-plan: orchestrator MAY propose enhancements and delegate them under the same rules (agy implement + opencode/muse-spark-1.3 review + orchestrator commit) without asking.
+
+### P3.1 preflight (orchestrator inline probe, 2026-09-05): DONE
+- InterviewScorecard model EXISTS (schema.prisma) with interview/interviewer relations, overallRating, recommendation, strengths/concerns/notes, isLocked, submittedAt.
+- POST /interviews/:id/scorecard EXISTS (SubmitScorecardDto; interviewer-only guard; locks on submit; locked resubmit -> 400 BadRequest, NOT 409).
+- No dedicated GET /interviews/:id/scorecard, but GET /interviews/:id includes scorecards[] with interviewer -> P3.2 reads form state from there.
+- P3.2 unblocked with corrections: read scorecard from GET interview detail; expect 400 (not 409) on locked resubmit.
+
