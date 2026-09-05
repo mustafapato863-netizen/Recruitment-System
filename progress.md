@@ -256,8 +256,7 @@
   - Web unit tests (23 test files, 58 tests) passed clean (100% pass rate).
 - Phase 4 complete and closed. Full plan complete.
 
-### P4.3-fix Server-computed checklist counts + remove dead CSS class: DONE
-- Task ID: P4.3-fix (delta, completes P4.3 exit gate)
+### P4.3-fix Server-computed checklist counts + remove dead CSS class: DONE- Task ID: P4.3-fix (delta, completes P4.3 exit gate)
 - Updated `apps/api/src/hiring/hiring.service.ts`:
   - Added `complianceRequirements: { select: { status: true } }` to the Prisma include in `listHiringCases`.
   - Added additive server-computed counts to each returned case: `completedItems` (count of requirements with status `'Verified'` or `'Not Required'`) and `totalItems` (requirements count).
@@ -275,3 +274,9 @@
   - Web unit tests: 23/23 files, 58/58 tests pass (100% pass rate).
   - Web build: `pnpm --dir apps/web build` passed clean (production build succeeded).
 - Orchestrator verification: opencode muse-spark-1.3 read-only PASS all (no N+1, server-preferred counts, dead class gone, no shape breaks); API tsc re-clean; web+API tests re-run green (58/58, 11/11). Noted for enhancements: License page expects full complianceRequirements from list (pre-existing gap); progress counts optionals vs required-only gate.
+
+### FINAL GATE (orchestrator, 2026-09-05): FULL PLAN COMPLETE
+- Code gates on final tree: web tsc clean, web build ok, web tests 58/58 pass, API tsc clean, API tests 11/11 pass. Prisma schema valid. Migration 20260905 applied directly (idempotent SQL) — repo `migrate deploy` still P3005-unbaselined (pre-existing: no _prisma_migrations table; REPORTED as ops item, not silently fixed).
+- Live demo verification (API :3000, demo org RECRUITFLOW-DEMO, password Password123!): logins a@test.com (ADMINISTRATOR) / m@test.com (HIRING_MANAGER) / e@test.com (RECRUITER) + named staff all ok; applications list (18); notes POST->GET round-trip with author; scorecard submit ok + locked resubmit 400; offer create->approve->Sent->Accepted; hiring case create; list counts 2/2 live; compliance toggles; submit->final-approve->Joined. Invalid transitions correctly 400 (offer accept guard, joining-status guard). Demo rows cleaned up afterward; state re-verified pristine (0 cases, 1 offer, app Offer stage, 0 notes, 1 scorecard).
+- UI/UX audit: 12/49 pages still contain hardcoded demo literals (ApplicationsPage 14, TasksPage 16, InterviewDetailPage 13, OffersPage 12, ManagerDashboard 11, OfferDetailPage 10, VacantListPage 10, StageTransitionPage 9, VacancyOverviewPage 6, JobAnalyticsPage 5, InterviewsPage 5, CVIntakePage 2). Scheduled as enhancements sweep E1-E5 (pre-approved).
+- API left RUNNING (PID 2472, fresh build with all phases) for manual browser verification.
