@@ -169,4 +169,28 @@
 - Verification: `pnpm --dir apps/web exec tsc -p tsconfig.app.json --noEmit` passed clean (0 errors); unit test `Scorecard.test.tsx` passed clean.
 - Orchestrator verification: opencode muse-spark-1.3 read-only PASS all (enum mapping, lock, guards, scope); tsc re-run clean. Known-accepted: Neutral->hire lossy map; pre-existing page literals + mock panel outside scope (final UI/UX sweep).
 
+### P3.3 Create ScorecardSummary + embed in Candidate 360 + ApplicationDetailPage header: DONE
+- Created `apps/web/src/components/candidate/ScorecardSummary.tsx`:
+  - Implemented `ScorecardSummaryProps` interface (`interviewTitle`, `interviewDate`, `interviewerName`, `recommendation: 'strong_hire'|'hire'|'no_hire'|null`, `averageRating`, `interviewId`, `isLocked`, `pendingLabel?`).
+  - Layout matches specification: header title + date, interviewer row with icon, `ProgressBar` rating x/5 (accessible with `aria-label`, meta labels, and dynamic tone), colored recommendation badge (`strong_hire` -> success green, `hire` -> info blue, `no_hire` -> danger red, `null` -> neutral grey "Pending" / custom pendingLabel), lock icon when `isLocked`, and `"View full scorecard ->"` link to `/interviews/:id`. Existing design system tokens only, zero hardcoded values.
+  - Exported reusable scorecard aggregation helpers: `mapBackendToUiRecommendation` (inline mapping reusing P3.2 enum mapping rules without importing from page), `aggregateInterviewScorecards` (averages overall ratings 1-5 to 1 decimal place, calculates majority/top recommendation with tie-break `strong_hire` > `hire` > `no_hire`, joins deduplicated interviewer names, detects locked state), and `computeInterviewsStats` (tallies Strong Hire, Hire, No Hire, and Pending counts across interviews).
+- Integrated into `CandidateDetailPage.tsx`:
+  - Replaced raw table in Interviews tab with responsive grid of `<ScorecardSummary>` cards.
+  - Per interview with scorecard: computes aggregated rating, majority/top recommendation, interviewer names, and renders `<ScorecardSummary>`.
+  - Per interview without scorecard: renders `<ScorecardSummary>` with `recommendation={null}`, `averageRating={null}`, `pendingLabel="Pending feedback"`, displaying neutral "Pending feedback" badge.
+  - Tab header displays summary badges: Strong Hire (success), Hire (info), No Hire (danger), and Pending feedback (neutral).
+  - Preserved client-filtering on candidate application IDs; verified `GET /interviews` list items already include `scorecards[]` from backend Prisma include (no N+1 `GET /interviews/:id` required).
+- Integrated into `ApplicationDetailPage.tsx`:
+  - Fetched `GET /interviews?applicationId=:id` in parallel alongside existing loads in `refetchApplication`.
+  - Displayed aggregate recommendation badges in page header next to `<StatusBadge status={application.stage} />`.
+  - Shows breakdown counts of Strong Hire (success), Hire (info), No Hire (danger), and Pending (neutral).
+  - Null-safe fallback: renders `<Badge variant="neutral">No interviews</Badge>` when no interviews exist, and `"Pending feedback"` when interviews are pending evaluation.
+  - Entire aggregate badge links directly to `/interviews`.
+- Verification:
+  - `pnpm --dir apps\web exec tsc -p tsconfig.app.json --noEmit` passed clean (0 errors).
+  - `pnpm --dir apps\web build` passed clean (production build succeeded in 1.32s).
+  - Unit tests in `apps/web` (23 test files, 58 tests) all passed clean.
+- Phase 3 complete and closed.
+- Orchestrator verification: opencode muse-spark-1.3 read-only PASS all (helpers logic, embeds, scope); tsc re-run clean; web tests re-run 58/58 pass. Accepted: null-default mapping, pending-fallback edge, generic /interviews link.
+
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, type FormEvent } from 'react';
+import { useState, useEffect, useMemo, type FormEvent } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
   PageFrame,
@@ -24,6 +24,11 @@ import {
 } from '../components/ui';
 import { Icon } from '../components/Icon';
 import { CandidateWorkspace } from '../components/candidate/CandidateWorkspace';
+import {
+  ScorecardSummary,
+  aggregateInterviewScorecards,
+  computeInterviewsStats,
+} from '../components/candidate/ScorecardSummary';
 import { getApi, postApi, patchApi } from '../api/client';
 import type {
   Candidate,
@@ -58,6 +63,8 @@ export function CandidateDetailPage() {
   const [offers, setOffers] = useState<Offer[]>([]);
   const [offersLoading, setOffersLoading] = useState(true);
   const [offersError, setOffersError] = useState<string | null>(null);
+
+  const interviewStats = useMemo(() => computeInterviewsStats(interviews), [interviews]);
 
   // Tab navigation
   const [activeTab, setActiveTab] = useState<TabKey>('overview');
@@ -422,62 +429,6 @@ export function CandidateDetailPage() {
     },
   ];
 
-  const interviewColumns: ResponsiveDataColumn<Interview>[] = [
-    {
-      key: 'date',
-      header: 'Date & Time',
-      priority: 'primary',
-      render: (intv) => (
-        <div>
-          <div className="font-bold text-rf-ink">{new Date(intv.scheduledStart).toLocaleDateString()}</div>
-          <div className="text-xs text-rf-ink-muted">
-            {new Date(intv.scheduledStart).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </div>
-        </div>
-      ),
-    },
-    {
-      key: 'interviewer',
-      header: 'Interviewer',
-      priority: 'secondary',
-      render: (intv) => (
-        <span className="text-rf-ink">
-          {intv.attendees && intv.attendees.length > 0
-            ? intv.attendees.map((a) => a.userName || 'Interviewer').join(', ')
-            : '—'}
-        </span>
-      ),
-    },
-    {
-      key: 'type',
-      header: 'Type',
-      priority: 'secondary',
-      render: (intv) => <Badge variant="neutral">{intv.interviewType}</Badge>,
-    },
-    {
-      key: 'scorecard',
-      header: 'Scorecard Status',
-      priority: 'secondary',
-      render: (intv) => {
-        const hasScorecards = intv.scorecards && intv.scorecards.length > 0;
-        const isLocked = hasScorecards && intv.scorecards!.some((s) => s.isLocked);
-        if (isLocked) return <Badge variant="success">Submitted</Badge>;
-        if (hasScorecards) return <Badge variant="warning">In Progress</Badge>;
-        return <Badge variant="neutral">Pending</Badge>;
-      },
-    },
-    {
-      key: 'action',
-      header: 'Action',
-      priority: 'secondary',
-      render: (intv) => (
-        <Button variant="secondary" size="sm" asChild>
-          <Link to={`/interviews/${intv.id}`}>View details</Link>
-        </Button>
-      ),
-    },
-  ];
-
   // ─── Render ───────────────────────────────────────────────────
 
   return (
@@ -625,7 +576,10 @@ export function CandidateDetailPage() {
         {/* Interviews Tab */}
         <TabPanel id="interviews" activeKey={activeTab}>
           {interviewsLoading ? (
-            <TableSkeleton rows={3} columns={5} />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <TableSkeleton rows={2} columns={3} />
+              <TableSkeleton rows={2} columns={3} />
+            </div>
           ) : interviewsError ? (
             <Alert
               tone="danger"
@@ -645,21 +599,76 @@ export function CandidateDetailPage() {
               description="No interviews have been scheduled for this candidate."
             />
           ) : (
-            <div className="rf-table-shell overflow-hidden rounded-2xl border border-rf-border-subtle bg-white shadow-xs">
-              <div className="p-4 border-b border-rf-border-subtle bg-rf-surface-subtle flex items-center justify-between">
+            <div className="flex flex-col gap-4">
+              <div className="p-4 rounded-2xl border border-rf-border-subtle bg-rf-surface-subtle flex flex-wrap items-center justify-between gap-3 shadow-xs">
                 <div>
                   <h3 className="text-xs font-bold text-rf-ink m-0">Interviews ({interviews.length})</h3>
                   <p className="text-[11px] text-rf-ink-muted font-medium m-0 mt-0.5">
                     Recorded interview rounds and scorecard evaluations.
                   </p>
                 </div>
+                {/* Tab header shows Strong Hire/Hire/No Hire counts */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="success">{interviewStats.strongHire} Strong Hire</Badge>
+                  <Badge variant="info">{interviewStats.hire} Hire</Badge>
+                  <Badge variant="danger">{interviewStats.noHire} No Hire</Badge>
+                  {interviewStats.pending > 0 && (
+                    <Badge variant="neutral">{interviewStats.pending} Pending feedback</Badge>
+                  )}
+                </div>
               </div>
-              <ResponsiveDataView
-                rows={interviews}
-                columns={interviewColumns}
-                rowKey={(intv) => intv.id}
-                label="Candidate interviews table"
-              />
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4" role="list" aria-label="Candidate interview scorecards">
+                {interviews.map((intv) => {
+                  const hasScorecards = Boolean(intv.scorecards && intv.scorecards.length > 0);
+                  const agg = aggregateInterviewScorecards(intv.scorecards);
+                  const formattedDate = intv.scheduledStart
+                    ? new Date(intv.scheduledStart).toLocaleDateString(undefined, {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })
+                    : 'Unscheduled';
+
+                  const interviewerName =
+                    agg.interviewerNames ||
+                    intv.attendees?.map((a) => a.userName).filter(Boolean).join(', ') ||
+                    'Interviewer';
+
+                  if (hasScorecards && agg.recommendation) {
+                    return (
+                      <div key={intv.id} role="listitem">
+                        <ScorecardSummary
+                          interviewId={intv.id}
+                          interviewTitle={intv.title || `${intv.interviewType} Interview`}
+                          interviewDate={formattedDate}
+                          interviewerName={interviewerName}
+                          recommendation={agg.recommendation}
+                          averageRating={agg.averageRating}
+                          isLocked={agg.isLocked}
+                        />
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div key={intv.id} role="listitem">
+                      <ScorecardSummary
+                        interviewId={intv.id}
+                        interviewTitle={intv.title || `${intv.interviewType} Interview`}
+                        interviewDate={formattedDate}
+                        interviewerName={interviewerName}
+                        recommendation={null}
+                        averageRating={null}
+                        isLocked={false}
+                        pendingLabel="Pending feedback"
+                      />
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
         </TabPanel>

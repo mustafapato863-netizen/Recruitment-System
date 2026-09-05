@@ -1,24 +1,28 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { getApi, patchApi, postApi, ApiError } from '../api/client';
 import type {
   Application,
   ApplicationNote,
   ApplicationStage,
   ApplicationStatusHistoryItem,
+  Interview,
   ScreeningLog,
   UpdateApplicationStageInput,
 } from '@recruitflow/contracts';
 import { Icon } from '../components/Icon';
 import { Modal } from '../components/Modal';
 import { Alert } from '../components/ui/Alert';
+import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { PageState } from '../components/ui/PageState';
 import { ListSkeleton } from '../components/ui/Skeleton';
+import { StatusBadge } from '../components/StatusBadge';
 import { ActivityFeed, type FeedEntry } from '../components/candidate/ActivityFeed';
 import { SmartActionBar, getDefaultActions } from '../components/candidate/SmartActionBar';
+import { computeInterviewsStats } from '../components/candidate/ScorecardSummary';
 import './PageEnhancementsV2.css';
 
 function getInitials(name?: string | null): string {
@@ -36,10 +40,13 @@ export function ApplicationDetailPage() {
   const [history, setHistory] = useState<ApplicationStatusHistoryItem[]>([]);
   const [notes, setNotes] = useState<ApplicationNote[]>([]);
   const [, setScreeningLogs] = useState<ScreeningLog[]>([]);
+  const [interviews, setInterviews] = useState<Interview[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isFeedLoading, setIsFeedLoading] = useState(false);
   const [feedError, setFeedError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'resume' | 'interviews' | 'activity' | 'tasks'>('overview');
+
+  const interviewStats = useMemo(() => computeInterviewsStats(interviews), [interviews]);
 
   // Modals
   const [isMoveStageModalOpen, setIsMoveStageModalOpen] = useState(false);
@@ -100,11 +107,12 @@ export function ApplicationDetailPage() {
     setIsFeedLoading(true);
     setFeedError(null);
     try {
-      const [appRes, histRes, scrRes, notesRes] = await Promise.allSettled([
+      const [appRes, histRes, scrRes, notesRes, intvsRes] = await Promise.allSettled([
         getApi<Application>(`/applications/${id}`),
         getApi<ApplicationStatusHistoryItem[]>(`/applications/${id}/history`),
         getApi<ScreeningLog[]>(`/screening/application/${id}`),
         getApi<ApplicationNote[]>(`/applications/${id}/notes`),
+        getApi<Interview[]>(`/interviews?applicationId=${id}`),
       ]);
       if (appRes.status === 'fulfilled' && appRes.value) {
         setApplication(appRes.value);
@@ -122,6 +130,11 @@ export function ApplicationDetailPage() {
         setNotes(Array.isArray(notesRes.value) ? notesRes.value : []);
       } else if (notesRes.status === 'rejected') {
         setFeedError('Failed to load application notes.');
+      }
+      if (intvsRes.status === 'fulfilled' && Array.isArray(intvsRes.value)) {
+        setInterviews(intvsRes.value);
+      } else {
+        setInterviews([]);
       }
     } catch {
       // ignore
@@ -320,9 +333,32 @@ export function ApplicationDetailPage() {
             <span className="mx-2">&bull;</span>
             <span className="text-slate-700 dark:text-slate-200">{appIdDisplay || '—'}</span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight mt-1">
-            Applicant Profile
-          </h1>
+          <div className="flex flex-wrap items-center gap-3 mt-1">
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight m-0">
+              Applicant Profile
+            </h1>
+            {application?.stage && <StatusBadge status={application.stage} />}
+            <Link
+              to="/interviews"
+              className="inline-flex items-center gap-1.5 no-underline hover:opacity-85 transition-opacity"
+              title="View interviews"
+            >
+              {interviews.length === 0 ? (
+                <Badge variant="neutral">No interviews</Badge>
+              ) : interviewStats.strongHire === 0 && interviewStats.hire === 0 && interviewStats.noHire === 0 ? (
+                <Badge variant="neutral">Pending feedback</Badge>
+              ) : (
+                <>
+                  <Badge variant="success">{interviewStats.strongHire} Strong Hire</Badge>
+                  <Badge variant="info">{interviewStats.hire} Hire</Badge>
+                  <Badge variant="danger">{interviewStats.noHire} No Hire</Badge>
+                  {interviewStats.pending > 0 && (
+                    <Badge variant="neutral">{interviewStats.pending} Pending</Badge>
+                  )}
+                </>
+              )}
+            </Link>
+          </div>
         </div>
       </div>
 
