@@ -21,7 +21,7 @@ Key pages for journey scope:
 1. **Unified Candidate 360 hub** — Resolved in P1.2 (`CandidateDetailPage.tsx` integrates `CandidateWorkspace`, applications table, interview history, offer list, timeline placeholder).
 2. **No Smart Action Bar** — Resolved in P1.3 and P1.4 (`SmartActionBar.tsx` created and integrated into `ApplicationDetailPage.tsx` with context-aware stage actions, optimistic locking, blocked action tooltips, ConfirmDialog, and Drawer comments thread).
 3. **CommentsThread is UI-only** — Resolved in P2.0-backend and P2.2 (backend `GET/POST /applications/:id/notes` implemented; `CommentsThread.tsx` wired to API mode for `entityType === 'application'`, with server note fetching, posting with spinner, error alerting for 400 validation failures, @mention highlighting, and backward-compatible UI-only mode for legacy callers).
-4. **Scorecard is disconnected** — no read/write path from InterviewDetailPage to the Interview or Application record
+4. **Scorecard is disconnected** — Resolved in P3.2 (`InterviewDetailPage.tsx` wired to `POST /interviews/:id/scorecard` and `GET /interviews/:id` scorecards array; controlled scorecard locks after submission with read-only summary).
 5. **Joining has no completion ceremony** — JoiningManagementPage has "Manage" button → HiringCasePage, but no joining confirmation modal, compliance checklist, or headcount close
 
 ## 4. Backend Assets Available
@@ -30,7 +30,7 @@ From schema.prisma (confirmed):
 - `ComplianceRequirement` — has `isCompleted`, `notes`, `completedAt`
 - `Offer` — has `status`, `signedAt`, `acceptedAt`
 - Application has `stage`, `version` (optimistic locking)
-- Interviews have no Scorecard model yet (UI exists, no DB model)
+- `InterviewScorecard` — exists with interview/interviewer relations, overallRating, recommendation, strengths/concerns/notes, isLocked, submittedAt (confirmed P3.1)
 
 ## 5. API Endpoints Status
 - `GET /candidates/:id` — returns `Candidate` record
@@ -46,7 +46,10 @@ From schema.prisma (confirmed):
 - `PATCH /hiring/:id` — exists (HiringCasePage calls it)
 - `HiringCase Activity & Notes` — Hiring cases do not have a dedicated backend notes model; ActivityFeed runs in UI-only mode for notes while mapping approval items, compliance verification timestamps, case creation, and joining dates into FeedEntry events.
 - `Collapsible Component Choice` — As no pre-existing Accordion component exists in `apps/web/src/components`, HiringCasePage uses native `<details open className="rf-panel ...">` with `<summary>` styled with `rf-panel`, `rf-border-subtle`, and `rf-surface-subtle` tokens.
-- Interview scorecard endpoints — NOT confirmed, likely missing
+- `POST /interviews/:id/scorecard` — Confirmed in P3.1/P3.2. Accepts `{ overallRating, recommendation, strengths, concerns, notes }`, locks on submit, requires interviewer role (403 otherwise), and returns 400 BadRequest (not 409) if resubmitting when locked.
+- `GET /interviews/:id` Scorecards — Confirmed in P3.1/P3.2. Read path returns `scorecards: InterviewScorecardItem[]`. UI matches `user.id` to `interviewerId` with fallback to single unlocked or latest card.
+- `Scorecard Recommendation Enum Mismatch` — UI component `Scorecard.tsx` uses `'strong_hire' | 'hire' | 'no_hire'`; backend uses `'Strong Hire' | 'Hire' | 'Neutral' | 'No Hire' | 'Strong No Hire'`. UI maps bidirectional with `'Neutral'` mapped to nearest supported `'hire'`.
+- `Locked Scorecard Inertness` — In `Scorecard.tsx`, omitting `onRatingChange`/`onRecommendationChange`/`onSubmit` eliminates mutation, while a scoped wrapper disables pointer events on ratings/recommendations and hides internal submit button, preserving category accordion expansion.
 
 ## 6. FRONTEND_SIMPLE_SYSTEM_PLAN.md Constraints
 - Never invent fields outside typed contracts

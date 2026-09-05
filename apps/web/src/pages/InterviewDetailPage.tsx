@@ -1,15 +1,117 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getApi } from '../api/client';
-import type { Interview } from '@recruitflow/contracts';
+import { getApi, postApi, ApiError } from '../api/client';
+import type { Interview, InterviewScorecardItem } from '@recruitflow/contracts';
+import { useAuth } from '../auth/AuthContext';
+import { Scorecard, type ScorecardCategory, type Recommendation } from '../components/ui/Scorecard';
+import { Badge } from '../components/ui/Badge';
+import { Button } from '../components/ui/Button';
+import { Alert } from '../components/ui/Alert';
+import { Skeleton } from '../components/ui/Skeleton';
+import { Textarea } from '../components/ui/Textarea';
 import { Icon } from '../components/Icon';
 import { Modal } from '../components/Modal';
 import './PageEnhancementsV2.css';
 
+type BackendRecommendation = 'Strong Hire' | 'Hire' | 'Neutral' | 'No Hire' | 'Strong No Hire';
+
+const DEFAULT_SCORECARD_CATEGORIES: ScorecardCategory[] = [
+  {
+    id: 'technical_skills',
+    name: 'Technical Skills',
+    isRequired: true,
+    criteria: [
+      {
+        id: 'tech_skills_crit',
+        name: 'Technical proficiency, system design, and domain knowledge',
+      },
+    ],
+  },
+  {
+    id: 'communication',
+    name: 'Communication',
+    isRequired: true,
+    criteria: [
+      {
+        id: 'comm_crit',
+        name: 'Clarity of thought, articulation, listening, and cross-team communication',
+      },
+    ],
+  },
+  {
+    id: 'problem_solving',
+    name: 'Problem Solving',
+    isRequired: true,
+    criteria: [
+      {
+        id: 'prob_crit',
+        name: 'Analytical approach, root-cause reasoning, and debugging ability',
+      },
+    ],
+  },
+  {
+    id: 'culture_fit',
+    name: 'Culture Fit',
+    isRequired: true,
+    criteria: [
+      {
+        id: 'culture_crit',
+        name: 'Values alignment, growth mindset, ownership, and collaborative attitude',
+      },
+    ],
+  },
+];
+
+function uiToBackendRecommendation(rec: Recommendation): BackendRecommendation {
+  switch (rec) {
+    case 'strong_hire':
+      return 'Strong Hire';
+    case 'hire':
+      return 'Hire';
+    case 'no_hire':
+      return 'No Hire';
+  }
+}
+
+function backendToUiRecommendation(rec?: string): Recommendation {
+  switch (rec) {
+    case 'Strong Hire':
+      return 'strong_hire';
+    case 'Hire':
+      return 'hire';
+    case 'No Hire':
+    case 'Strong No Hire':
+      return 'no_hire';
+    case 'Neutral':
+      // Map Neutral to nearest supported recommendation in Scorecard UI
+      return 'hire';
+    default:
+      return 'hire';
+  }
+}
+
 export function InterviewDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [, setInterview] = useState<Interview | null>(null);
+  const { user } = useAuth();
+
+  const [interview, setInterview] = useState<Interview | null>(null);
+  const [isLoadingInterview, setIsLoadingInterview] = useState(true);
+  const [submittedScorecard, setSubmittedScorecard] = useState<InterviewScorecardItem | null>(null);
+  const [isForbiddenUser, setIsForbiddenUser] = useState(false);
+
+  // Editable Scorecard form states
+  const [categories, setCategories] = useState<ScorecardCategory[]>(DEFAULT_SCORECARD_CATEGORIES);
+  const [recommendation, setRecommendation] = useState<Recommendation>('hire');
+  const [strengths, setStrengths] = useState('');
+  const [concerns, setConcerns] = useState('');
+  const [notes, setNotes] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<{
+    type: 'locked' | 'forbidden' | 'validation' | 'other';
+    message: string;
+  } | null>(null);
+
   const [feedbackTab, setFeedbackTab] = useState<'byQuestion' | 'byInterviewer'>('byInterviewer');
   const [isReminderSent, setIsReminderSent] = useState(false);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
@@ -21,12 +123,214 @@ export function InterviewDetailPage() {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  useEffect(() => {
+  const fetchInterview = useCallback(async () => {
     if (!id) return;
-    getApi<Interview>(`/interviews/${id}`)
-      .then((data) => setInterview(data))
-      .catch(() => {});
+    try {
+      setIsLoadingInterview(true);
+      const data = await getApi<Interview>(`/interviews/${id}`);
+      setInterview(data);
+    } catch {
+      // Ignored
+    } finally {
+      setIsLoadingInterview(false);
+    }
   }, [id]);
+
+  useEffect(() => {
+    fetchInterview();
+  }, [fetchInterview]);
+
+  // Derive current user's scorecard from interview.scorecards
+  // Grounded rule: match interviewerId to current user if identifiable via auth context,
+  // else the single unlocked card or latest card
+  const myScorecard = useMemo<InterviewScorecardItem | null>(() => {
+    if (!interview?.scorecards || interview.scorecards.length === 0) return null;
+    if (user?.id) {
+      const matched = interview.scorecards.find((sc) => sc.interviewerId === user.id);
+      if (matched) return matched;
+    }
+    const unlocked = interview.scorecards.find((sc) => !sc.isLocked);
+    if (unlocked) return unlocked;
+    return interview.scorecards[interview.scorecards.length - 1] ?? null;
+  }, [interview?.scorecards, user?.id]);
+
+  const activeScorecard = submittedScorecard || myScorecard;
+  const isLocked = Boolean(activeScorecard?.isLocked || submittedScorecard);
+
+  // Check if current user is an assigned interviewer from attendees list
+  const isAssignedInterviewer = useMemo(() => {
+    if (!interview?.attendees || interview.attendees.length === 0) return null;
+    if (!user?.id) return null;
+    return interview.attendees.some((att) => att.userId === user.id);
+  }, [interview?.attendees, user?.id]);
+
+  // Handle criterion rating changes in editable mode
+  const handleRatingChange = (categoryId: string, criterionId: string, rating: number) => {
+    setCategories((prev) =>
+      prev.map((cat) => {
+        if (cat.id !== categoryId) return cat;
+        const updatedCriteria = cat.criteria.map((crit) =>
+          crit.id === criterionId ? { ...crit, rating } : crit,
+        );
+        const isComplete = updatedCriteria.every(
+          (crit) => typeof crit.rating === 'number' && crit.rating >= 1 && crit.rating <= 5,
+        );
+        return {
+          ...cat,
+          criteria: updatedCriteria,
+          isComplete,
+        };
+      }),
+    );
+    if (submitError?.type === 'validation') {
+      setSubmitError(null);
+    }
+  };
+
+  const handleRecommendationChange = (rec: Recommendation) => {
+    setRecommendation(rec);
+    if (submitError?.type === 'validation') {
+      setSubmitError(null);
+    }
+  };
+
+  // Submit scorecard feedback
+  const handleSubmit = async () => {
+    // Validate all required criteria rated before POST
+    const missingRequired = categories.some(
+      (cat) =>
+        cat.isRequired &&
+        cat.criteria.some(
+          (crit) => typeof crit.rating !== 'number' || crit.rating < 1 || crit.rating > 5,
+        ),
+    );
+
+    if (missingRequired) {
+      setSubmitError({
+        type: 'validation',
+        message: 'Please provide a rating (1-5) for all required criteria before submitting.',
+      });
+      return;
+    }
+
+    if (!recommendation) {
+      setSubmitError({
+        type: 'validation',
+        message: 'Please select an overall recommendation.',
+      });
+      return;
+    }
+
+    // Calculate overallRating: rounded average of all criterion ratings clamped 1-5
+    const allRatings = categories.flatMap((cat) =>
+      cat.criteria
+        .map((c) => c.rating)
+        .filter((r): r is number => typeof r === 'number' && r >= 1 && r <= 5),
+    );
+    const average =
+      allRatings.length > 0 ? allRatings.reduce((sum, r) => sum + r, 0) / allRatings.length : 3;
+    const overallRating = Math.min(5, Math.max(1, Math.round(average)));
+
+    setIsSubmitting(true);
+    setSubmitError(null);
+
+    try {
+      const backendRec = uiToBackendRecommendation(recommendation);
+      const payload = {
+        overallRating,
+        recommendation: backendRec,
+        strengths: strengths.trim() || undefined,
+        concerns: concerns.trim() || undefined,
+        notes: notes.trim() || undefined,
+      };
+
+      const result = await postApi<InterviewScorecardItem>(
+        `/interviews/${id}/scorecard`,
+        payload,
+      );
+
+      setSubmittedScorecard(result);
+      showToast('✓ Feedback and scorecard submitted successfully.');
+      await fetchInterview();
+    } catch (err: unknown) {
+      const apiErr = err as ApiError;
+      if (apiErr.statusCode === 400) {
+        setSubmitError({
+          type: 'locked',
+          message: 'Feedback already submitted for this interview',
+        });
+        fetchInterview().catch(() => {});
+      } else if (apiErr.statusCode === 403) {
+        setIsForbiddenUser(true);
+        setSubmitError({
+          type: 'forbidden',
+          message: 'Only the assigned interviewer can submit feedback',
+        });
+      } else {
+        setSubmitError({
+          type: 'other',
+          message: apiErr.message || 'Failed to submit scorecard feedback. Please try again.',
+        });
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Categories formatted for read-only / locked display
+  const lockedCategories: ScorecardCategory[] = useMemo(() => {
+    const rating = activeScorecard?.overallRating ?? 3;
+    return [
+      {
+        id: 'technical_skills',
+        name: 'Technical Skills',
+        isComplete: true,
+        criteria: [
+          {
+            id: 'tech_skills_crit',
+            name: 'Technical proficiency, system design, and domain knowledge',
+            rating,
+          },
+        ],
+      },
+      {
+        id: 'communication',
+        name: 'Communication',
+        isComplete: true,
+        criteria: [
+          {
+            id: 'comm_crit',
+            name: 'Clarity of thought, articulation, listening, and cross-team communication',
+            rating,
+          },
+        ],
+      },
+      {
+        id: 'problem_solving',
+        name: 'Problem Solving',
+        isComplete: true,
+        criteria: [
+          {
+            id: 'prob_crit',
+            name: 'Analytical approach, root-cause reasoning, and debugging ability',
+            rating,
+          },
+        ],
+      },
+      {
+        id: 'culture_fit',
+        name: 'Culture Fit',
+        isComplete: true,
+        criteria: [
+          {
+            id: 'culture_crit',
+            name: 'Values alignment, growth mindset, ownership, and collaborative attitude',
+            rating,
+          },
+        ],
+      },
+    ];
+  }, [activeScorecard?.overallRating]);
 
   return (
     <div className="flex w-full flex-col p-4 sm:p-6 lg:p-7 max-w-[1720px] mx-auto space-y-6">
@@ -434,6 +738,306 @@ export function InterviewDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* ── Feedback & Scorecard Section (P3.2) ── */}
+      <section
+        aria-labelledby="feedback-scorecard-heading"
+        className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-5"
+      >
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
+          <div>
+            <h2
+              id="feedback-scorecard-heading"
+              className="text-base sm:text-lg font-extrabold text-slate-900 dark:text-white"
+            >
+              Feedback &amp; Scorecard
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              {isLocked
+                ? 'Structured feedback has been submitted and locked for this interview.'
+                : 'Evaluate candidate performance across key criteria and submit structured feedback.'}
+            </p>
+          </div>
+          <div>
+            {isLocked ? (
+              <Badge variant="success">Submitted</Badge>
+            ) : (
+              <Badge variant="warning">Feedback Pending</Badge>
+            )}
+          </div>
+        </div>
+
+        {/* Loading State: 2 rows of Skeleton */}
+        {isLoadingInterview ? (
+          <div className="space-y-4 py-2" role="status" aria-label="Loading scorecard">
+            <Skeleton height={52} className="rounded-xl w-full" />
+            <Skeleton height={220} className="rounded-xl w-full" />
+          </div>
+        ) : (
+          <div className="space-y-5">
+            {/* Status & Error Alerts */}
+            {submitError?.type === 'locked' && (
+              <Alert tone="warning" title="Scorecard Locked">
+                Feedback already submitted for this interview
+              </Alert>
+            )}
+
+            {submitError?.type === 'forbidden' && (
+              <Alert tone="warning" title="Access Restricted">
+                Only the assigned interviewer can submit feedback
+              </Alert>
+            )}
+
+            {submitError?.type === 'validation' && (
+              <Alert tone="danger" title="Incomplete Evaluation">
+                {submitError.message}
+              </Alert>
+            )}
+
+            {submitError?.type === 'other' && (
+              <Alert
+                tone="danger"
+                title="Submission Failed"
+                action={
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    onClick={handleSubmit}
+                    loading={isSubmitting}
+                    loadingLabel="Retrying..."
+                  >
+                    Retry
+                  </Button>
+                }
+              >
+                {submitError.message}
+              </Alert>
+            )}
+
+            {/* Non-interviewer guard when no card exists */}
+            {!isLocked && (isForbiddenUser || isAssignedInterviewer === false) ? (
+              <Alert tone="warning" title="Interviewer Access Required">
+                Only the assigned interviewer can submit feedback
+              </Alert>
+            ) : isLocked ? (
+              /* Non-null (Locked) Scorecard View */
+              <div className="space-y-6">
+                <div
+                  className="scorecard-locked [&_.rating-scale_button]:cursor-default [&_.rating-scale_button]:pointer-events-none [&_.recommendation-option]:cursor-default [&_.recommendation-option]:pointer-events-none [&_.scorecard-demo_button[type=submit]]:hidden"
+                  aria-disabled="true"
+                >
+                  <Scorecard
+                    title={
+                      interview?.title ? `${interview.title} Evaluation` : 'Interview Scorecard'
+                    }
+                    interviewer={
+                      activeScorecard?.interviewerName ||
+                      user?.displayName ||
+                      'Assigned Interviewer'
+                    }
+                    dueText={
+                      activeScorecard?.submittedAt
+                        ? `Submitted ${new Date(activeScorecard.submittedAt).toLocaleDateString(
+                            undefined,
+                            { month: 'short', day: 'numeric', year: 'numeric' },
+                          )}`
+                        : undefined
+                    }
+                    headerBadge={<Badge variant="success">Submitted</Badge>}
+                    categories={lockedCategories}
+                    recommendation={backendToUiRecommendation(activeScorecard?.recommendation)}
+                  />
+                </div>
+
+                {/* Read-only Strengths, Concerns & Notes Display */}
+                <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-5 space-y-4 bg-slate-50/50 dark:bg-slate-800/30">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200/60 dark:border-slate-700/60 pb-3">
+                    <div>
+                      <span className="text-[10.5px] font-semibold uppercase text-slate-400 block">
+                        Submission Timestamp
+                      </span>
+                      <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                        {activeScorecard?.submittedAt
+                          ? new Date(activeScorecard.submittedAt).toLocaleString(undefined, {
+                              dateStyle: 'medium',
+                              timeStyle: 'short',
+                            })
+                          : 'Submitted'}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <div className="text-right">
+                        <span className="text-[10.5px] font-semibold uppercase text-slate-400 block">
+                          Overall Rating
+                        </span>
+                        <span className="text-xs font-black text-slate-900 dark:text-white">
+                          {activeScorecard?.overallRating} / 5
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10.5px] font-semibold uppercase text-slate-400 block">
+                          Recommendation
+                        </span>
+                        <span className="text-xs font-black text-emerald-600 dark:text-emerald-400">
+                          {activeScorecard?.recommendation}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                    <div className="space-y-1">
+                      <strong className="block text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                        Key Strengths
+                      </strong>
+                      <div className="text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-900 rounded-lg border border-slate-100 dark:border-slate-800 p-3 text-[11.5px] leading-relaxed whitespace-pre-wrap min-h-[72px]">
+                        {activeScorecard?.strengths?.trim() || (
+                          <span className="text-slate-400 italic">None specified</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <strong className="block text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                        Areas of Concern / Growth
+                      </strong>
+                      <div className="text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-900 rounded-lg border border-slate-100 dark:border-slate-800 p-3 text-[11.5px] leading-relaxed whitespace-pre-wrap min-h-[72px]">
+                        {activeScorecard?.concerns?.trim() || (
+                          <span className="text-slate-400 italic">None specified</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-1">
+                      <strong className="block text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                        Additional Notes
+                      </strong>
+                      <div className="text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-900 rounded-lg border border-slate-100 dark:border-slate-800 p-3 text-[11.5px] leading-relaxed whitespace-pre-wrap min-h-[72px]">
+                        {activeScorecard?.notes?.trim() || (
+                          <span className="text-slate-400 italic">None specified</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* Editable Scorecard View (null card) */
+              <div className="space-y-6">
+                <div className="[&_.scorecard-demo_button[type=submit]]:hidden">
+                  <Scorecard
+                    title={
+                      interview?.title ? `${interview.title} Evaluation` : 'Interview Scorecard'
+                    }
+                    interviewer={
+                      user?.displayName ||
+                      interview?.attendees?.find((a) => a.userId === user?.id)?.userName ||
+                      'Assigned Interviewer'
+                    }
+                    dueText={
+                      interview?.scheduledStart
+                        ? `Scheduled: ${new Date(interview.scheduledStart).toLocaleDateString(
+                            undefined,
+                            { month: 'short', day: 'numeric', year: 'numeric' },
+                          )}`
+                        : undefined
+                    }
+                    categories={categories}
+                    recommendation={recommendation}
+                    onRatingChange={handleRatingChange}
+                    onRecommendationChange={handleRecommendationChange}
+                    onSubmit={handleSubmit}
+                  />
+                </div>
+
+                {/* Notes Fieldset */}
+                <fieldset className="rounded-xl border border-slate-200 dark:border-slate-800 p-4 sm:p-5 space-y-4 bg-slate-50/50 dark:bg-slate-800/30">
+                  <legend className="text-xs font-bold text-slate-700 dark:text-slate-300 px-1">
+                    Evaluation Notes &amp; Observations
+                  </legend>
+
+                  <div>
+                    <label
+                      htmlFor="scorecard-strengths"
+                      className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1"
+                    >
+                      Key Strengths
+                    </label>
+                    <Textarea
+                      id="scorecard-strengths"
+                      placeholder="What did the candidate do well? Highlight core strengths, domain knowledge, and standout answers..."
+                      value={strengths}
+                      onChange={(e) => setStrengths(e.target.value)}
+                      maxLength={5000}
+                      rows={3}
+                    />
+                    <span className="text-[10px] text-slate-400 block text-right mt-0.5">
+                      {strengths.length}/5000
+                    </span>
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="scorecard-concerns"
+                      className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1"
+                    >
+                      Areas of Concern / Growth
+                    </label>
+                    <Textarea
+                      id="scorecard-concerns"
+                      placeholder="Identify technical or behavioral gaps, potential risks, or areas requiring follow-up..."
+                      value={concerns}
+                      onChange={(e) => setConcerns(e.target.value)}
+                      maxLength={5000}
+                      rows={3}
+                    />
+                    <span className="text-[10px] text-slate-400 block text-right mt-0.5">
+                      {concerns.length}/5000
+                    </span>
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="scorecard-notes"
+                      className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1"
+                    >
+                      Additional Notes &amp; Summary
+                    </label>
+                    <Textarea
+                      id="scorecard-notes"
+                      placeholder="General interview notes, question responses, follow-up recommendations, or panel observations..."
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      maxLength={5000}
+                      rows={3}
+                    />
+                    <span className="text-[10px] text-slate-400 block text-right mt-0.5">
+                      {notes.length}/5000
+                    </span>
+                  </div>
+                </fieldset>
+
+                {/* Submit Action Bar */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+                  <span className="text-xs text-slate-400">
+                    * Please ensure all required criteria are rated before submitting.
+                  </span>
+                  <Button
+                    variant="primary"
+                    onClick={handleSubmit}
+                    loading={isSubmitting}
+                    loadingLabel="Submitting feedback..."
+                    size="lg"
+                    className="self-end"
+                  >
+                    Submit Scorecard
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </section>
 
       {/* ── Bottom Row: Scorecard (~45%), Feedback (~30%), Recommendation (~25%) ── */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">

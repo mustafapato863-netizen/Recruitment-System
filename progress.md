@@ -152,3 +152,21 @@
 - No dedicated GET /interviews/:id/scorecard, but GET /interviews/:id includes scorecards[] with interviewer -> P3.2 reads form state from there.
 - P3.2 unblocked with corrections: read scorecard from GET interview detail; expect 400 (not 409) on locked resubmit.
 
+### P3.2 Wire Scorecard component into InterviewDetailPage: DONE
+- InterviewDetailPage:
+  - Wired controlled `Scorecard` component into a dedicated "Feedback & Scorecard" section below interview metadata.
+  - Sourced scorecard read state from `interview.scorecards` via `GET /interviews/:id`, matching `interviewerId` with authenticated user `user.id` (with fallback to single unlocked card or latest submitted card).
+  - Configured default categories (`Technical Skills`, `Communication`, `Problem Solving`, `Culture Fit`) with criteria rated 1-5, tracking ratings in page state and computing dynamic `isComplete` badges.
+  - Implemented notes fieldset (`strengths`, `concerns`, `notes` <= 5000 chars) and primary Submit Scorecard button with loading state.
+  - Form validation: ensures all required criteria are rated 1-5 and an overall recommendation is chosen before POST.
+  - Calculated `overallRating`: rounded average of all criteria ratings clamped 1-5; mapped recommendation enums (`strong_hire` -> `'Strong Hire'`, `hire` -> `'Hire'`, `no_hire` -> `'No Hire'`; backend `'Neutral'` mapped to nearest `'hire'`).
+  - Scorecard lock on submit: transitions to locked state with `<Badge variant="success">Submitted</Badge>`, handlers omitted (`onRatingChange={undefined}`, `onRecommendationChange={undefined}`, `onSubmit={undefined}`), scoped lock styling to disable ratings/recommendations and hide internal submit button while preserving category accordion inspection, and renders read-only display for `submittedAt`, overall rating, recommendation, strengths, concerns, and notes.
+  - Access control & error handling:
+    - Non-interviewer guard: alerts "Only the assigned interviewer can submit feedback" when user is not in `interview.attendees` or when backend returns 403 on submit.
+    - 400 locked resubmission error: renders warning alert "Feedback already submitted for this interview" and refetches interview.
+    - General submission errors: renders danger alert with a "Retry" button.
+    - Loading state: renders 2-row `Skeleton` while interview data loads.
+- Verification: `pnpm --dir apps/web exec tsc -p tsconfig.app.json --noEmit` passed clean (0 errors); unit test `Scorecard.test.tsx` passed clean.
+- Orchestrator verification: opencode muse-spark-1.3 read-only PASS all (enum mapping, lock, guards, scope); tsc re-run clean. Known-accepted: Neutral->hire lossy map; pre-existing page literals + mock panel outside scope (final UI/UX sweep).
+
+
