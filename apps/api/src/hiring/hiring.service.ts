@@ -115,26 +115,38 @@ export class HiringService {
       include: {
         application: {
           include: { candidate: true, vacancy: { include: { position: true, branch: true } } }
-        }
+        },
+        complianceRequirements: {
+          select: { status: true },
+        },
       },
       orderBy: { createdAt: 'desc' }
     });
 
-    return cases.map(c => ({
-      id: c.id,
-      organizationId: c.organizationId,
-      applicationId: c.applicationId,
-      offerId: c.offerId,
-      status: c.status,
-      plannedJoiningDate: c.plannedJoiningDate?.toISOString() ?? null,
-      actualJoiningDate: c.actualJoiningDate?.toISOString() ?? null,
-      ownerUserId: c.ownerUserId,
-      candidateName: `${c.application.candidate.firstName} ${c.application.candidate.lastName}`,
-      positionTitle: c.application.vacancy.position.title,
-      branchName: c.application.vacancy.branch.name,
-      createdAt: c.createdAt.toISOString(),
-      updatedAt: c.updatedAt.toISOString(),
-    }));
+    return cases.map(c => {
+      const totalItems = c.complianceRequirements.length;
+      const completedItems = c.complianceRequirements.filter(
+        req => req.status === 'Verified' || req.status === 'Not Required'
+      ).length;
+
+      return {
+        id: c.id,
+        organizationId: c.organizationId,
+        applicationId: c.applicationId,
+        offerId: c.offerId,
+        status: c.status,
+        plannedJoiningDate: c.plannedJoiningDate?.toISOString() ?? null,
+        actualJoiningDate: c.actualJoiningDate?.toISOString() ?? null,
+        ownerUserId: c.ownerUserId,
+        candidateName: `${c.application.candidate.firstName} ${c.application.candidate.lastName}`,
+        positionTitle: c.application.vacancy.position.title,
+        branchName: c.application.vacancy.branch.name,
+        createdAt: c.createdAt.toISOString(),
+        updatedAt: c.updatedAt.toISOString(),
+        completedItems,
+        totalItems,
+      };
+    });
   }
 
   async getHiringCase(organizationId: string, id: string) {

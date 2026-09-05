@@ -1,15 +1,26 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { getApi } from '../api/client';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { getApi, postApi } from '../api/client';
 import type { Offer } from '@recruitflow/contracts';
 import { Icon } from '../components/Icon';
 import { Modal } from '../components/Modal';
+import { Button } from '../components/ui/Button';
+import { Alert } from '../components/ui/Alert';
 import './PageEnhancementsV2.css';
+
+interface HiringCaseLookup {
+  id: string;
+  offerId: string;
+}
 
 export function OfferDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const [, setOffer] = useState<Offer | null>(null);
+  const [offer, setOffer] = useState<Offer | null>(null);
+  const [joiningCase, setJoiningCase] = useState<HiringCaseLookup | null>(null);
+  const [isCheckingCase, setIsCheckingCase] = useState(false);
+  const [isCreatingCase, setIsCreatingCase] = useState(false);
+  const [createCaseError, setCreateCaseError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('Offer Details');
   const [isHired, setIsHired] = useState(false);
   const [isAddNoteModalOpen, setIsAddNoteModalOpen] = useState(false);
@@ -29,6 +40,50 @@ export function OfferDetailPage() {
       .then((data) => setOffer(data))
       .catch(() => {});
   }, [id]);
+
+  useEffect(() => {
+    if (!offer || offer.status !== 'Accepted') {
+      setJoiningCase(null);
+      return;
+    }
+    setIsCheckingCase(true);
+    getApi<HiringCaseLookup[]>('/hiring')
+      .then((cases) => {
+        const match = Array.isArray(cases) ? cases.find((c) => c.offerId === offer.id) : undefined;
+        setJoiningCase(match ?? null);
+      })
+      .catch(() => {
+        setJoiningCase(null);
+      })
+      .finally(() => {
+        setIsCheckingCase(false);
+      });
+  }, [offer]);
+
+  const handleCreateJoiningCase = async () => {
+    if (!offer?.id) return;
+    setIsCreatingCase(true);
+    setCreateCaseError(null);
+    try {
+      const response = await postApi<{ id?: string }>('/hiring', { offerId: offer.id });
+      if (response && typeof response.id === 'string' && response.id) {
+        navigate(`/hires/${response.id}`);
+        return;
+      }
+      // Fallback: reload hiring list match by offerId
+      const cases = await getApi<HiringCaseLookup[]>('/hiring');
+      const match = Array.isArray(cases) ? cases.find((c) => c.offerId === offer.id) : undefined;
+      if (match?.id) {
+        navigate(`/hires/${match.id}`);
+      } else {
+        throw new Error('Joining case was created, but unable to locate the new case ID.');
+      }
+    } catch (err: unknown) {
+      setCreateCaseError(err instanceof Error ? err.message : 'An unexpected error occurred while creating the joining case.');
+    } finally {
+      setIsCreatingCase(false);
+    }
+  };
 
   const handleAddNote = () => {
     if (!newNote.trim()) return;
@@ -198,6 +253,66 @@ export function OfferDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* ── Next Step: Joining (Gated by offer.status === 'Accepted') ── */}
+      {offer?.status === 'Accepted' && (
+        <section
+          aria-labelledby="next-step-joining-heading"
+          className="rounded-2xl border border-emerald-200/90 bg-emerald-50/50 p-5 shadow-xs dark:border-emerald-900/60 dark:bg-emerald-950/20"
+        >
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300">
+                  <Icon name="check-circle" size={14} />
+                </span>
+                <h2 id="next-step-joining-heading" className="text-sm font-extrabold text-slate-900 dark:text-white">
+                  Next Step: Joining
+                </h2>
+              </div>
+              <p className="text-xs text-slate-600 dark:text-slate-300">
+                {joiningCase
+                  ? 'Candidate accepted the offer. A pre-hire joining and compliance case is active.'
+                  : 'Candidate has accepted the offer. Initiate the joining and compliance case to track onboarding readiness and scheduled start date.'}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2.5 shrink-0">
+              {isCheckingCase ? (
+                <Button variant="secondary" size="sm" loading loadingLabel="Checking case...">
+                  Checking case...
+                </Button>
+              ) : joiningCase ? (
+                <Button variant="primary" size="sm" asChild>
+                  <Link to={`/hires/${joiningCase.id}`}>
+                    <Icon name="arrow-right" size={13} />
+                    View Joining Case
+                  </Link>
+                </Button>
+              ) : (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={handleCreateJoiningCase}
+                  loading={isCreatingCase}
+                  loadingLabel="Creating Case..."
+                >
+                  <Icon name="plus" size={13} />
+                  Create Joining Case
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {createCaseError && (
+            <div className="mt-3">
+              <Alert tone="danger" title="Unable to create joining case">
+                {createCaseError}
+              </Alert>
+            </div>
+          )}
+        </section>
+      )}
 
       {/* ── Sub-Navigation Tabs ── */}
       <div className="flex items-center gap-6 border-b border-slate-200 dark:border-slate-800 text-xs font-semibold overflow-x-auto pb-1">

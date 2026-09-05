@@ -233,5 +233,45 @@
   - `pnpm --dir apps/web test` passed clean (23 test files, 58 tests, 100% pass).
 - Orchestrator verification: opencode muse-spark-1.3 read-only PASS all 5; tsc re-run clean. Noted for post-plan UI sweep: Exempt/'Not Required' set-path dropped (items render unchecked, progress counts them done); two joining paths coexist (header quick-action + checklist ceremony) — both functional.
 
+### P4.3 Upgrade JoiningManagementPage rows + Offer→Joining bridge: DONE
+- Updated `apps/web/src/pages/JoiningManagementPage.tsx`:
+  - Extended `JoiningRow` type with optional `checklistProgress?: number`, `completedItems?: number`, and `totalItems?: number`.
+  - Enriched fetched items in `loadData` without altering fetch type (`getApi<JoiningRow[]>('/hiring')`): safely checks `complianceRequirements` with `Array.isArray`, counts completed requirements (`status === 'Verified' || 'Not Required'`), and calculates `checklistProgress` percentage.
+  - Added `"Checklist"` column (`priority: 'secondary'`): renders `<ProgressBar value={item.checklistProgress ?? 0} label={`${item.completedItems ?? 0}/${item.totalItems}`} />` when `totalItems > 0`, and neutral `<Badge>Not started</Badge>` when `totalItems === 0` or absent.
+  - Deep-linked row actions and candidate name to `/hires/${item.id}#checklist`.
+  - For `status === 'Joined'` rows: replaced "Manage" action with `<Badge variant="success">✓ Headcount closed</Badge>`, and wrapped status/action badges with `className="row--joined"`. (Since `ResponsiveDataView` does not expose a row-level className prop, badges are wrapped with `row--joined` per prompt guidance).
+  - Updated `TableSkeleton` columns count to 9.
+- Updated `apps/web/src/pages/OfferDetailPage.tsx`:
+  - Enabled fetched offer state `const [offer, setOffer] = useState<Offer | null>(null)`.
+  - Added `"Next Step: Joining"` section gated strictly by `offer?.status === 'Accepted'` (hidden if offer is null or not accepted):
+    - Queries `GET /hiring` to find case matching `offerId === offer.id`.
+    - When case found: renders primary button with `<Link to={`/hires/${joiningCase.id}`}>View Joining Case</Link>`.
+    - When none found: renders primary button with `onClick={handleCreateJoiningCase}` with loading spinner state.
+    - Displays error `<Alert tone="danger">` on failure.
+  - Implemented `handleCreateJoiningCase`: POSTs `/hiring` with `{ offerId: offer.id }`, validates `response.id`, and navigates to `/hires/${response.id}` with fallback reload matching by `offerId`.
+  - Preserved mocked letter content untouched.
+- Verification:
+  - `pnpm --dir apps/web exec tsc -p tsconfig.app.json --noEmit` passed clean (0 errors).
+  - `pnpm --dir apps/web build` passed clean (production build succeeded in 1.39s).
+  - Web unit tests (23 test files, 58 tests) passed clean (100% pass rate).
+- Phase 4 complete and closed. Full plan complete.
 
-
+### P4.3-fix Server-computed checklist counts + remove dead CSS class: DONE
+- Task ID: P4.3-fix (delta, completes P4.3 exit gate)
+- Updated `apps/api/src/hiring/hiring.service.ts`:
+  - Added `complianceRequirements: { select: { status: true } }` to the Prisma include in `listHiringCases`.
+  - Added additive server-computed counts to each returned case: `completedItems` (count of requirements with status `'Verified'` or `'Not Required'`) and `totalItems` (requirements count).
+  - Preserved all existing fields untouched without reshaping.
+- Shared contracts check:
+  - Checked `HiringCase` in `@recruitflow/contracts`. It already has optional `complianceRequirements?: ComplianceRequirementItem[]` and all required fields are satisfied. `JoiningManagementPage` uses its local `JoiningRow` which already has `completedItems?: number; totalItems?: number;`. Added nothing to contracts since existing interfaces are fully compatible.
+- Updated `apps/web/src/pages/JoiningManagementPage.tsx`:
+  - Updated `loadData` mapping to prefer server-provided counts: `completed = item.completedItems ?? runtimeCompleted ?? 0; total = item.totalItems ?? runtimeTotal ?? 0;`.
+  - Fallback to `<Badge variant="neutral">Not started</Badge>` strictly preserved when `total === 0`.
+  - Removed dead `row--joined` CSS class usages from the status column and action column while preserving `<Badge variant="success">✓ Headcount closed</Badge>`.
+- Verification:
+  - API typecheck: `tsc --noEmit` clean (0 errors).
+  - Web tsc: `tsc -p tsconfig.app.json --noEmit` clean (0 errors).
+  - API unit tests: 11/11 tests pass (error-normalizer).
+  - Web unit tests: 23/23 files, 58/58 tests pass (100% pass rate).
+  - Web build: `pnpm --dir apps/web build` passed clean (production build succeeded).
+- Orchestrator verification: opencode muse-spark-1.3 read-only PASS all (no N+1, server-preferred counts, dead class gone, no shape breaks); API tsc re-clean; web+API tests re-run green (58/58, 11/11). Noted for enhancements: License page expects full complianceRequirements from list (pre-existing gap); progress counts optionals vs required-only gate.

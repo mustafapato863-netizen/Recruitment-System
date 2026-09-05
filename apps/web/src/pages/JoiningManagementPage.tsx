@@ -11,6 +11,7 @@ import { DataToolbar } from '../components/ui/DataToolbar';
 import { FilterChip } from '../components/ui/FilterChips';
 import { Input } from '../components/ui/Input';
 import { MetricCard } from '../components/ui/MetricCard';
+import { ProgressBar } from '../components/ui/ProgressBar';
 import { ResponsiveDataView, type ResponsiveDataColumn } from '../components/ui/ResponsiveDataView';
 import { TableSkeleton } from '../components/ui/Skeleton';
 import { StatusBadge } from '../components/StatusBadge';
@@ -25,6 +26,9 @@ type JoiningRow = {
   plannedJoiningDate: string | null;
   status: string;
   ownerUserId: string | null;
+  checklistProgress?: number;
+  completedItems?: number;
+  totalItems?: number;
 };
 
 const JOINING_STATUSES = ['', 'Awaiting Joining', 'Joined', 'Postponed', 'No-show'] as const;
@@ -41,10 +45,13 @@ const joiningColumns: ResponsiveDataColumn<JoiningRow>[] = [
     header: 'Candidate',
     priority: 'primary',
     render: (item) => (
-      <div className="flex items-center gap-2.5">
+      <Link
+        to={`/hires/${item.id}#checklist`}
+        className="flex items-center gap-2.5 rounded-sm hover:underline focus:outline-none focus:ring-1 focus:ring-rf-action/40"
+      >
         <Avatar initials={item.candidateName ? item.candidateName.slice(0, 2).toUpperCase() : 'CP'} size="sm" />
         <span className="min-w-0 truncate font-bold text-rf-ink">{item.candidateName}</span>
-      </div>
+      </Link>
     ),
   },
   {
@@ -63,7 +70,29 @@ const joiningColumns: ResponsiveDataColumn<JoiningRow>[] = [
     key: 'planned-date',
     header: 'Planned date',
     priority: 'secondary',
-    render: (item) => <span className="font-medium text-rf-ink-muted">{item.plannedJoiningDate ? new Date(item.plannedJoiningDate).toLocaleDateString() : 'Not reported'}</span>,
+    render: (item) => (
+      <span className="font-medium text-rf-ink-muted">
+        {item.plannedJoiningDate ? new Date(item.plannedJoiningDate).toLocaleDateString() : 'Not reported'}
+      </span>
+    ),
+  },
+  {
+    key: 'checklist',
+    header: 'Checklist',
+    priority: 'secondary',
+    render: (item) => {
+      if (!item.totalItems || item.totalItems === 0) {
+        return <Badge variant="neutral">Not started</Badge>;
+      }
+      return (
+        <div className="w-28">
+          <ProgressBar
+            value={item.checklistProgress ?? 0}
+            label={`${item.completedItems ?? 0}/${item.totalItems}`}
+          />
+        </div>
+      );
+    },
   },
   {
     key: 'status',
@@ -94,7 +123,30 @@ export function JoiningManagementPage() {
     setIsLoading(true);
     setError(null);
     getApi<JoiningRow[]>('/hiring')
-      .then(setItems)
+      .then((data) => {
+        const enriched = data.map((item) => {
+          const rawItem = item as JoiningRow & {
+            complianceRequirements?: Array<{ status?: string }>;
+          };
+          const runtimeItems = rawItem.complianceRequirements;
+          const runtimeCompleted = Array.isArray(runtimeItems)
+            ? runtimeItems.filter((req) => req && (req.status === 'Verified' || req.status === 'Not Required')).length
+            : undefined;
+          const runtimeTotal = Array.isArray(runtimeItems) ? runtimeItems.length : undefined;
+
+          const completed = item.completedItems ?? runtimeCompleted ?? 0;
+          const total = item.totalItems ?? runtimeTotal ?? 0;
+          const checklistProgress = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+          return {
+            ...item,
+            checklistProgress,
+            completedItems: completed,
+            totalItems: total,
+          };
+        });
+        setItems(enriched);
+      })
       .catch((reason: unknown) => setError(getErrorMessage(reason)))
       .finally(() => setIsLoading(false));
   };
@@ -174,7 +226,7 @@ export function JoiningManagementPage() {
         />
 
         {isLoading ? (
-          <TableSkeleton columns={8} rows={6} />
+          <TableSkeleton columns={9} rows={6} />
         ) : filtered.length === 0 ? (
           <PageState kind="empty" title="No matching joining records" description="Adjust your search or status filter." />
         ) : (
@@ -185,9 +237,13 @@ export function JoiningManagementPage() {
             label="Joining cases"
             className="px-4 pb-4 sm:px-5 sm:pb-5"
             renderActions={(item) => (
-              <Button variant="secondary" size="sm" asChild>
-                <Link to={`/hires/${item.id}`}>Manage</Link>
-              </Button>
+              item.status === 'Joined' ? (
+                <Badge variant="success">✓ Headcount closed</Badge>
+              ) : (
+                <Button variant="secondary" size="sm" asChild>
+                  <Link to={`/hires/${item.id}#checklist`}>Manage</Link>
+                </Button>
+              )
             )}
           />
         )}
