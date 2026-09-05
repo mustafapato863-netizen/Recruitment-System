@@ -6,7 +6,6 @@ import { PageFrame } from '../components/ui/PageFrame';
 import { PageState } from '../components/ui/PageState';
 import { Alert } from '../components/ui/Alert';
 import { Button } from '../components/ui/Button';
-import { ResponsiveDataView } from '../components/ui/ResponsiveDataView';
 import { ActivityTimeline } from '../components/ui/ActivityTimeline';
 import { ProgressBar } from '../components/ui/ProgressBar';
 import { StatusBadge } from '../components/StatusBadge';
@@ -14,6 +13,8 @@ import { Icon, type IconName } from '../components/Icon';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ListSkeleton } from '../components/ui/Skeleton';
 import { ActivityFeed, type FeedEntry } from '../components/candidate/ActivityFeed';
+import { JoiningChecklist, type ComplianceItem } from '../components/candidate/JoiningChecklist';
+import { useAuth } from '../auth/AuthContext';
 import './PageEnhancementsV2.css';
 
 function getErrorMessage(error: unknown): string {
@@ -44,6 +45,7 @@ const initialConfirmState: ConfirmState = {
 export function HiringCasePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [hiringCase, setHiringCase] = useState<HiringCase | null>(null);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -51,6 +53,18 @@ export function HiringCasePage() {
   const [error, setError] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmState>(initialConfirmState);
+
+  const userRoleCodes = user?.roles?.map((r) => r.code) ?? [];
+  const canConfirmJoining = userRoleCodes.some((code) =>
+    [
+      'ADMIN',
+      'SYSADMIN',
+      'ADMINISTRATOR',
+      'HIRING_MANAGER',
+      'TALENT_MANAGER',
+      'HR_MANAGER',
+    ].includes(code.toUpperCase()),
+  );
 
   const loadCase = async () => {
     if (!id) return;
@@ -90,20 +104,21 @@ export function HiringCasePage() {
     }
   };
 
-  const handleUpdateCompliance = async (reqId: string, status: ComplianceStatus) => {
+  const handleItemToggle = async (itemId: string, isCompleted: boolean) => {
     if (!id) return;
-    setBusyAction(reqId);
-    setError(null);
-    setActionMessage(null);
-    try {
-      await patchApi(`/hiring/${id}/compliance/${reqId}`, { status });
-      setActionMessage(`Requirement marked as ${status}.`);
-      await loadCase();
-    } catch (reason: unknown) {
-      setError(getErrorMessage(reason));
-    } finally {
-      setBusyAction(null);
-    }
+    const status: ComplianceStatus = isCompleted ? 'Verified' : 'Pending';
+    await patchApi(`/hiring/${id}/compliance/${itemId}`, { status });
+    await loadCase();
+  };
+
+  const handleConfirmJoining = async () => {
+    if (!id) return;
+    await postApi(`/hiring/${id}/joining`, {
+      status: 'Joined',
+      actualJoiningDate: new Date().toISOString(),
+    });
+    setActionMessage('Candidate confirmed as Joined. Vacancy headcount has been atomically incremented.');
+    await loadCase();
   };
 
   const triggerFinalApproval = (decision: 'Approve' | 'Reject') => {
@@ -208,6 +223,14 @@ export function HiringCasePage() {
 
   const compliancePercentage = requirements.length === 0 ? 100 : Math.round((requirements.filter(r => ['Verified', 'Not Required'].includes(r.status)).length / requirements.length) * 100);
   const complianceTone = compliancePercentage >= 80 ? 'success' : compliancePercentage >= 50 ? 'warning' : 'danger';
+
+  const checklistItems: ComplianceItem[] = requirements.map((item) => ({
+    id: item.id,
+    label: item.name,
+    isCompleted: item.status === 'Verified',
+    notes: null,
+    completedAt: item.verifiedAt ?? null,
+  }));
 
   const approvalTimelineItems: Array<{ id: string; title: string; timestamp: string; actor?: string; tone: 'action' | 'success' | 'warning' | 'danger' | 'neutral'; description?: string }> = hiringCase.approvals && hiringCase.approvals.length > 0
     ? hiringCase.approvals.map((app) => ({
@@ -403,34 +426,16 @@ export function HiringCasePage() {
           </section>
 
           {/* Compliance Checklist */}
-          <section className="rf-table-shell overflow-hidden rounded-2xl border border-rf-border-subtle/90 bg-white shadow-xs">
-            <div className="p-4 border-b border-rf-border-subtle bg-rf-surface-subtle/50">
-              <h3 className="text-xs font-bold text-rf-ink m-0">Pre-Hire Compliance Checklist</h3>
-              <p className="text-[11px] text-rf-ink-muted font-medium m-0 mt-0.5">Verification of critical prerequisites before joining.</p>
-            </div>
-            {requirements.length === 0 ? (
-              <PageState kind="empty" title="No requirements" description="No compliance items defined." />
-            ) : (
-              <ResponsiveDataView
-                rows={requirements}
-                label="Requirements"
-                rowKey={(r) => r.id}
-                columns={[
-                  { key: 'name', header: 'Requirement', render: (row) => <div className="font-medium text-rf-ink">{row.name}</div> },
-                  { key: 'type', header: 'Type', render: (row) => <span className="font-mono text-[10.5px] font-bold text-rf-ink bg-rf-surface-subtle px-2 py-0.5 rounded-md">{row.type}</span> },
-                  { key: 'tier', header: 'Requirement Tier', render: (row) => <span className={['px-2 py-0.5 rounded-full text-[10.5px] font-bold border', row.isRequired ? 'bg-rf-action-soft text-rf-action border-rf-action/20' : 'bg-rf-surface-subtle text-rf-ink-muted border-rf-border-subtle'].join(' ')}>{row.isRequired ? 'Mandatory' : 'Optional'}</span> },
-                  { key: 'status', header: 'Status', render: (row) => <StatusBadge status={row.status} /> },
-                  { key: 'action', header: 'Action', render: (row) => (
-                    hiringCase.status === 'Pending Compliance' && row.status !== 'Verified' ? (
-                      <div className="flex gap-1.5 justify-end">
-                        <Button variant="secondary" size="sm" loading={busyAction === row.id} onClick={() => void handleUpdateCompliance(row.id, 'Verified')}>Verify</Button>
-                        <Button variant="ghost" size="sm" onClick={() => void handleUpdateCompliance(row.id, 'Not Required')}>Exempt</Button>
-                      </div>
-                    ) : null
-                  )},
-                ]}
-              />
-            )}
+          <section id="checklist">
+            <JoiningChecklist
+              hiringCaseId={hiringCase.id}
+              candidateName={hiringCase.candidateName ?? 'Candidate'}
+              items={checklistItems}
+              hiringCaseStatus={hiringCase.status}
+              canConfirmJoining={canConfirmJoining}
+              onItemToggle={handleItemToggle}
+              onConfirmJoining={handleConfirmJoining}
+            />
           </section>
 
           {/* Collapsible Activity & Notes Section */}

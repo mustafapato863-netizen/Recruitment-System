@@ -217,5 +217,21 @@
   - Web unit tests (23 test files, 58 tests) passed clean (100% pass rate).
 - Orchestrator verification: opencode muse-spark-1.3 read-only PASS all 5 (interfaces, toggle/optimistic, gating/dialog/Joined, primitives/a11y, scope); tsc re-run clean. Accepted: ✓ glyph literals, additive className, confirm-failure closes dialog (consistent with SmartActionBar).
 
+### P4.2 Integrate JoiningChecklist into HiringCasePage: DONE
+- Integrated `JoiningChecklist` into `apps/web/src/pages/HiringCasePage.tsx`:
+  - Replaced the raw compliance item list/table with `<JoiningChecklist>` wrapped in `<section id="checklist">` deep-link anchor.
+  - Mapped `ComplianceRequirementItem[]` -> `ComplianceItem[]`: `{ id, label: name, isCompleted: status === 'Verified', notes: null, completedAt: verifiedAt ?? null }`.
+  - Implemented `handleItemToggle` (`onItemToggle`): calls `PATCH /hiring/:id/compliance/:itemId` with `{ status: isCompleted ? 'Verified' : 'Pending' }`, awaits `loadCase()` on success for server-truth synchronization, and re-throws errors so `JoiningChecklist` rolls back optimistic updates and displays inline error alerts.
+  - Implemented `handleConfirmJoining` (`onConfirmJoining`): calls `POST /hiring/:id/joining` with `{ status: 'Joined', actualJoiningDate: new Date().toISOString() }`, updates action message alert, awaits `loadCase()`, and re-throws errors for the dialog confirmation error alert.
+  - Resolved `canConfirmJoining` permissions via `useAuth()` inspecting user roles against authorized codes (`ADMIN`, `SYSADMIN`, `ADMINISTRATOR`, `HIRING_MANAGER`, `TALENT_MANAGER`, `HR_MANAGER`).
+  - Passed `hiringCaseStatus={hiringCase.status}` and `candidateName={hiringCase.candidateName ?? 'Candidate'}`.
+  - Preserved pre-hire compliance percentage progress bar, submit for approval, final approval flows, and P2.4 `ActivityFeed` section untouched.
+  - Cleaned up unused `ResponsiveDataView` import (`noUnusedLocals` compliant).
+- Verification:
+  - `pnpm --dir apps/web exec tsc -p tsconfig.app.json --noEmit` passed clean (0 errors).
+  - `pnpm --dir apps/web build` passed clean (production build succeeded in 2.92s).
+  - `pnpm --dir apps/web test` passed clean (23 test files, 58 tests, 100% pass).
+- Orchestrator verification: opencode muse-spark-1.3 read-only PASS all 5; tsc re-run clean. Noted for post-plan UI sweep: Exempt/'Not Required' set-path dropped (items render unchecked, progress counts them done); two joining paths coexist (header quick-action + checklist ceremony) — both functional.
+
 
 
