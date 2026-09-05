@@ -312,3 +312,36 @@
   - `pnpm --dir apps/web test` passed clean (23 test files, 58/58 tests pass).
 - Orchestrator verification: opencode muse-spark-1.3 read-only PASS (zero literals, P3.2 untouched, mock gone, scope clean); tsc re-run clean; literal grep 0/0 on both files. Noted: schedule-form defaults (Clinical Assessment Round, Asia/Riyadh, Teams URL) left for follow-up.
 
+### E2 Remove hardcoded demo literals from offer pages: DONE
+- Task ID: E2
+- Scope: `apps/web/src/pages/OffersPage.tsx`, `apps/web/src/pages/OfferDetailPage.tsx`
+- Replaced literals in `OffersPage.tsx`:
+  - Removed `DEFAULT_OFFERS` array (8 mock rows including 'Ali Hassan', 'Sarah Ahmed', 'Mona Khaled', Unsplash photos, and hardcoded dates/salaries).
+  - Wired table rows directly to `apiOffers` fetched via `GET /offers` with strict null-safe fallbacks (`candidateName ?? 'Unknown candidate'`, `positionTitle ?? 'No position'`, `ownerName: o.createdByName || 'Unassigned'`).
+  - Derived compensation package dynamically from `currentVersion.monthlyPackage` or components sum, with fallback to `'—'` when missing.
+  - Derived expiry dates and dynamic SLA badge countdowns (`daysLeftTone`) from `currentVersion.offerExpiry`.
+  - Replaced hardcoded KPI card metrics (6, 4, 9, 5, 2) with real dynamic aggregates computed from `apiOffers`.
+  - Replaced hardcoded status filter pill counts (26, 3, 6, 8, 9, 3, 2) with real counts per status.
+  - Neutralized Create Offer modal inputs: removed `defaultValue="Ali Hassan"` and `defaultValue={28000}`, replacing them with clean placeholders.
+  - Integrated `<PageState kind="empty">` for empty offers list and filtered no-match states with reset action.
+  - Added real pagination mechanics and page size selector.
+- Replaced literals in `OfferDetailPage.tsx`:
+  - Replaced hardcoded candidate header 'Mona Saleh' and Unsplash photo with initials avatar and `offer?.candidateName ?? 'Unknown candidate'`.
+  - Replaced hardcoded 'Registered Nurse – ICU' with `offer?.positionTitle ?? 'No position'`.
+  - Contact links (`mailto:` / `tel:`): dynamically bound to real candidate email/phone if present on the application record; cleanly hidden when absent (no fake emails/phones).
+  - Replaced hardcoded offer code 'OFF-2026-1157' with `offer?.offerCode || id || '—'`.
+  - Derived status badge dynamically from `offer.status`.
+  - Letter Preview: added interactive Letter Preview modal rendering real employment parties, dates (`createdAt`, `proposedJoiningDate`, `offerExpiry`), components table with types/frequencies/amounts, and totals; renders `<PageState kind="empty">` when no current version is available.
+  - Dynamic Letter Download: replaced static template with dynamic letter generator pulling real parties, positions, dates, components, and package totals; download filename dynamically slugged with `Offer_Letter_${candidateSlug}_${offerCode}.txt`.
+  - Notes: replaced hardcoded seed note ('Mona accepted the offer...') with empty initial state `notesList: []`, empty-state card when no notes exist, and wired composer modal appending notes with current user display name and timestamp.
+  - Dates: dynamically derived all dates from `offer.createdAt`, `offer.updatedAt`, `offer.currentVersion.proposedJoiningDate`, and `offer.currentVersion.offerExpiry`.
+  - Compensation Package: replaced hardcoded salary/allowances with dynamic list of `offer.currentVersion.components`, monthly package, annual fixed totals, and real benefit components list.
+  - Approvals Timeline: derived timeline dynamically from `offer.currentVersion.approvals` and status milestones (`Sent`, `Accepted`), eliminating hardcoded approvers and dates.
+  - Checklist Card: replaced hardcoded checklist items and "7 of 9 completed" count with a status-aware banner linking directly to the active joining case when present or instructing to activate on acceptance.
+  - Strictly preserved P4.3 joining case bridge (`useEffect` lines 44-61, `handleCreateJoiningCase` lines 63-86) and Next Step joining section (lines 257-315) untouched.
+- Verification:
+  - `pnpm --dir apps/web exec tsc -p tsconfig.app.json --noEmit` passed clean (0 errors).
+  - `pnpm --dir apps/web build` passed clean (production build succeeded in 1.36s).
+  - `pnpm --dir apps/web test` passed clean (23 test files, 58/58 tests pass).
+
+
