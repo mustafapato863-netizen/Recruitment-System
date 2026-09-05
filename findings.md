@@ -12,6 +12,8 @@ Key pages for journey scope:
 - `CommentsThread.tsx` — wired to application notes API in P2.2 (@mention highlight, error alerts, UI-only fallback for hiring cases)
 - `ActivityFeed.tsx` — created in P2.3 (merged notes + system events timeline, newest-first, colored event left borders, plain JS Date math, bottom CommentsThread composer)
 - `Scorecard.tsx` — full star-rating UI, no write-back to application/interview record
+- `ScorecardSummary.tsx` — created in P3.3 (compact summary card, aggregates multi-scorecards, embedded in Candidate 360 and Application Detail headers)
+- `JoiningChecklist.tsx` — created in P4.1 (live compliance checklist, optimistic toggle with revert on reject, progress bar with ARIA, ConfirmDialog joining ceremony, terminal Joined locked state)
 - `ActivityTimeline.tsx` — imported in HiringCasePage only (style mirrored by ActivityFeed)
 - `PipelineStepper.tsx` — imported in ApplicationDetailPage but stage movement fires raw PATCH
 - `SLAIndicator.tsx` — exported from components/ui as of P0.3 (ready for Phase 1); unused in any page yet
@@ -52,6 +54,8 @@ From schema.prisma (confirmed):
 - `Locked Scorecard Inertness` — In `Scorecard.tsx`, omitting `onRatingChange`/`onRecommendationChange`/`onSubmit` eliminates mutation, while a scoped wrapper disables pointer events on ratings/recommendations and hides internal submit button, preserving category accordion expansion.
 - `GET /interviews` Scorecard Population — Verified in `interviews.service.ts` that `listInterviews` executes Prisma `findMany` with `include: { scorecards: { include: { interviewer: true } } }`. Therefore, both `GET /interviews` (client-filtered in Candidate 360) and `GET /interviews?applicationId=:id` (in Application Detail Page) return populated `scorecards: InterviewScorecardItem[]` array. No per-interview `GET /interviews/:id` N+1 queries are necessary.
 - `Multi-Scorecard Aggregation Strategy` — For interviews with multiple scorecards, `aggregateInterviewScorecards` calculates average overallRating (rounded to 1 decimal), finds majority recommendation with tie-break precedence `strong_hire` > `hire` > `no_hire`, joins deduplicated interviewer names, and checks locked status. Tab and page header badges reflect aggregate totals across all scheduled and evaluated rounds.
+- `JoiningChecklist Compliance Mapping` — Created `JoiningChecklist.tsx` in P4.1 with data-in only props (`ComplianceItem[]`, `onItemToggle`, `onConfirmJoining`). P4.2 will map backend `ComplianceRequirementItem` ({ id, type, name, status, isRequired, notes, completedAt }) boolean toggles to PATCH `/hiring/:id/compliance/:reqId` with status `'Verified'`/`'Pending'`, and `onConfirmJoining` to POST `/hiring/:id/joining`.
+- `CheckboxField Error & A11y Behavior` — `CheckboxField` receives `error: ReactNode` which dynamically applies `is-error` styling, sets `role="alert"` on description, and sets `aria-invalid={true}` on the hidden native checkbox input while preserving 44px touch-target accessibility.
 
 ## 6. FRONTEND_SIMPLE_SYSTEM_PLAN.md Constraints
 - Never invent fields outside typed contracts

@@ -193,4 +193,29 @@
 - Phase 3 complete and closed.
 - Orchestrator verification: opencode muse-spark-1.3 read-only PASS all (helpers logic, embeds, scope); tsc re-run clean; web tests re-run 58/58 pass. Accepted: null-default mapping, pending-fallback edge, generic /interviews link.
 
+### P4.1 Create JoiningChecklist component: DONE
+- Created `apps/web/src/components/candidate/JoiningChecklist.tsx`:
+  - Implemented `ComplianceItem` interface (`id`, `label`, `isCompleted`, `notes: string | null`, `completedAt: string | null`) and `JoiningChecklistProps` interface (`hiringCaseId`, `candidateName`, `items: ComplianceItem[]`, `hiringCaseStatus`, `canConfirmJoining`, `onItemToggle: (itemId, isCompleted) => Promise<void>`, `onConfirmJoining: () => Promise<void>`, `className?`).
+  - Layout & UI components:
+    - Header: `"Joining Checklist — {candidateName}"` with `tasks` icon and `Badge variant="success"` when `hiringCaseStatus === 'Joined'`.
+    - Terminal Joined banner: `<Alert tone="success" title="Joined ✓">` when `status === 'Joined'`.
+    - Progress: `<ProgressBar>` displaying `completedCount/totalCount complete` with dynamic tone (`success` when joined/complete, `action` otherwise) and native ARIA accessibility attributes (`role="progressbar"`, `aria-valuenow`, etc.).
+    - Checklist rows: `CheckboxField` per item with `label`, `description` (notes and formatted completedAt date when present), and optimistic updates with automatic rollback and inline error on rejection.
+    - Confirm action: Primary `<Button>` disabled unless `(allComplete && canConfirmJoining && status !== 'Joined')`.
+    - Modal confirmation: Connected to `<ConfirmDialog tone="success" title="Confirm joining and close headcount" description="Confirm that {candidateName} has reported for work. This will automatically update the vacancy filled headcount." confirmLabel="Confirm Joining">` with `isLoading` spinner state during async confirmation.
+  - States:
+    - In-flight item toggling spinner next to item label.
+    - Inline error state in CheckboxField with `alert-triangle` icon and red alert role.
+    - Confirm loading state during `onConfirmJoining`.
+    - Terminal joined state (`hiringCaseStatus === 'Joined'`) locking checklist rows into disabled read-only view.
+  - Accessibility & Architecture:
+    - Data-in only architecture with 0 fetch calls inside.
+    - Native checkbox labels via `CheckboxField` with 44px touch target.
+    - Strict design system tokens (`rf-panel`, `rf-border-subtle`, `text-rf-ink`, etc.) with zero hardcoded values.
+- Verification:
+  - `pnpm --dir apps/web exec tsc -p tsconfig.app.json --noEmit` passed clean (0 errors).
+  - Web unit tests (23 test files, 58 tests) passed clean (100% pass rate).
+- Orchestrator verification: opencode muse-spark-1.3 read-only PASS all 5 (interfaces, toggle/optimistic, gating/dialog/Joined, primitives/a11y, scope); tsc re-run clean. Accepted: ✓ glyph literals, additive className, confirm-failure closes dialog (consistent with SmartActionBar).
+
+
 
