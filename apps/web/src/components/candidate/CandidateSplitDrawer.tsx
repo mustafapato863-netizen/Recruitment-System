@@ -276,6 +276,27 @@ export function CandidateSplitDrawer({
     }
   };
 
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen, onClose]);
+
+  if (!isOpen || !application) return null;
+
   const currentStageIndex = PIPELINE_STAGES.indexOf(application.stage as ApplicationStage);
 
   return (
@@ -552,8 +573,8 @@ export function CandidateSplitDrawer({
           </section>
 
           {/* Right Column: Recruiter Action Center & Scorecard */}
-          <aside className="w-96 overflow-y-auto p-6 rf-scrollbar flex flex-col justify-between bg-white dark:bg-rf-surface">
-            <div className="space-y-5">
+          <aside className="w-96 flex flex-col border-l border-rf-border bg-white dark:bg-rf-surface shrink-0 h-full overflow-hidden">
+            <div className="flex-1 overflow-y-auto p-5 rf-scrollbar space-y-5">
               {/* Contact Info */}
               <div className="rounded-xl border border-rf-border bg-rf-surface-subtle p-3.5 space-y-2">
                 <span className="text-xs font-bold uppercase tracking-wider text-rf-ink-muted block">Contact Info</span>
@@ -670,8 +691,8 @@ export function CandidateSplitDrawer({
               )}
             </div>
 
-            {/* Stage Decision Actions */}
-            <div className="border-t border-rf-border pt-4 mt-4 space-y-2">
+            {/* Stage Decision Actions — Pinned at bottom */}
+            <div className="shrink-0 border-t border-rf-border p-4 bg-white/95 dark:bg-rf-surface/95 backdrop-blur-xs space-y-2 shadow-[0_-4px_12px_rgba(0,0,0,0.04)]">
               <span className="text-xs font-bold uppercase tracking-wider text-rf-ink-muted block mb-1">Recruitment Decision</span>
 
               {!isRejecting ? (

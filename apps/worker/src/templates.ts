@@ -1,4 +1,10 @@
-export type OutboxTemplate = 'password_reset' | 'email_verification' | 'invitation' | 'notification';
+export type OutboxTemplate =
+  | 'password_reset'
+  | 'email_verification'
+  | 'invitation'
+  | 'notification'
+  | 'stage_auto'
+  | 'stale_nudge_internal';
 
 interface TemplatePayload {
   token?: string;
@@ -85,7 +91,9 @@ export function renderTemplate(
         text: `Hi ${name},\n\nYou have been invited to join your team on RecruitFlow. Accept your invitation to create your account (expires at ${expiry}):\n\n${url}`,
       };
     }
-    case 'notification': {
+    case 'notification':
+    case 'stage_auto':
+    case 'stale_nudge_internal': {
       const title = payload.title?.trim() || 'RecruitFlow notification';
       const message = payload.message?.trim() || 'You have a new notification in RecruitFlow.';
       return {

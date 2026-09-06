@@ -4,9 +4,11 @@ import IORedis from 'ioredis';
 import { createOutboxProcessor } from './processor';
 import { assertOutboxEncryptionKey } from './outbox-crypto';
 import { createTransportFromEnv } from './transport';
+import { sweepStaleApplicants, sweepConsentExpiry } from './sweepers';
 
 const BATCH_SIZE = positiveInt(process.env.WORKER_BATCH_SIZE, 20, 100);
 const POLL_INTERVAL_MS = positiveInt(process.env.WORKER_POLL_INTERVAL_MS, 2_000, 60_000);
+const SWEEPER_INTERVAL_MS = positiveInt(process.env.SWEEPER_INTERVAL_MS, 5 * 60_000, 60 * 60_000);
 const IDLE_DELAY_MS = 250;
 const QUEUE_NAME = 'recruitflow-email-outbox';
 
@@ -28,8 +30,14 @@ async function main(): Promise<void> {
   console.log(
     `[worker] email outbox drain started — transport=${transport.name}, batch=${BATCH_SIZE}, poll=${POLL_INTERVAL_MS}ms, scheduler=${bullRuntime ? 'bullmq' : 'db-poll-fallback'}`,
   );
+  console.log(`[worker] sweeper loop started — interval=${SWEEPER_INTERVAL_MS}ms`);
 
-  await runPollingFallback();
+  // Run outbox drain and sweeper loops concurrently
+  await Promise.all([
+    runPollingFallback(),
+    runSweeperLoop(),
+  ]);
+
   await bullRuntime?.worker.close();
   await bullRuntime?.queue.close();
   bullRuntime?.connection.disconnect();
@@ -51,6 +59,30 @@ async function runPollingFallback(): Promise<void> {
     }
 
     await sleep(stopping ? 0 : processedAny ? IDLE_DELAY_MS : POLL_INTERVAL_MS);
+  }
+}
+
+/**
+ * C4 — Sweeper loop: runs stale-applicant nudge and consent-expiry sweepers
+ * on a separate cron-style interval. Bounded and idempotent; errors are logged
+ * but never crash the outbox drain loop.
+ */
+async function runSweeperLoop(): Promise<void> {
+  // Stagger by 30s so the first sweeper run doesn't coincide with startup
+  await sleep(30_000);
+  while (!stopping) {
+    try {
+      const [nudges, expiries] = await Promise.all([
+        sweepStaleApplicants(prisma),
+        sweepConsentExpiry(prisma),
+      ]);
+      if (nudges > 0 || expiries > 0) {
+        console.log(`[sweeper] stale-nudges=${nudges} consent-expiries=${expiries}`);
+      }
+    } catch (err) {
+      console.error(`[sweeper] error: ${err instanceof Error ? err.message : err}`);
+    }
+    await sleep(stopping ? 0 : SWEEPER_INTERVAL_MS);
   }
 }
 
@@ -133,3 +165,4 @@ function positiveInt(raw: string | undefined, fallback: number, max: number): nu
   const parsed = Number(raw ?? fallback);
   return Number.isInteger(parsed) ? Math.max(1, Math.min(max, parsed)) : fallback;
 }
+

@@ -56,6 +56,7 @@ const BulkImportPage = lazy(() => import('./pages/BulkImportPage').then((m) => (
 const CVIntakePage = lazy(() => import('./pages/CVIntakePage').then((m) => ({ default: m.CVIntakePage })));
 const ReportsPage = lazy(() => import('./pages/ReportsPage').then((m) => ({ default: m.ReportsPage })));
 const PipelineSettingsPage = lazy(() => import('./pages/PipelineSettingsPage').then((m) => ({ default: m.PipelineSettingsPage })));
+const EmailTemplatesPage = lazy(() => import('./pages/EmailTemplatesPage').then((m) => ({ default: m.EmailTemplatesPage })));
 const PositionLevelTargetSettingsPage = lazy(() => import('./pages/PositionLevelTargetSettingsPage').then((m) => ({ default: m.PositionLevelTargetSettingsPage })));
 const IntegrationsPage = lazy(() => import('./pages/IntegrationsPage').then((m) => ({ default: m.IntegrationsPage })));
 const NotificationsPage = lazy(() => import('./pages/NotificationsPage').then((m) => ({ default: m.NotificationsPage })));
@@ -75,6 +76,7 @@ const VerifyEmailPage = lazy(() => import('./auth/VerifyEmailPage').then((m) => 
 const PublicJobsPage = lazy(() => import('./public/PublicJobsPage').then((m) => ({ default: m.PublicJobsPage })));
 const PublicJobDetailPage = lazy(() => import('./public/PublicJobDetailPage').then((m) => ({ default: m.PublicJobDetailPage })));
 const PublicApplyPage = lazy(() => import('./public/PublicApplyPage').then((m) => ({ default: m.PublicApplyPage })));
+const CandidateSelfSchedulePage = lazy(() => import('./pages/CandidateSelfSchedulePage').then((m) => ({ default: m.CandidateSelfSchedulePage })));
 
 function App() {
   return (
@@ -90,6 +92,7 @@ function App() {
                 <Route path="/reset-password" element={<ResetPasswordPage />} />
                 <Route path="/accept-invitation" element={<AcceptInvitationPage />} />
                 <Route path="/verify-email" element={<VerifyEmailPage />} />
+                <Route path="/schedule/:token" element={<CandidateSelfSchedulePage />} />
                 <Route path="/careers/:organizationCode/jobs" element={<PublicJobsPage />} />
                 <Route path="/careers/:organizationCode/jobs/:vacancyCode/apply" element={<PublicApplyPage />} />
                 <Route path="/careers/:organizationCode/jobs/:vacancyCode" element={<PublicJobDetailPage />} />
@@ -179,6 +182,14 @@ function App() {
                     element={
                       <PermissionGate requiredPermission="OVERRIDE_WORKFLOW">
                         <PipelineSettingsPage />
+                      </PermissionGate>
+                    }
+                  />
+                  <Route
+                    path="/email-templates"
+                    element={
+                      <PermissionGate requiredPermission="MASTER_DATA_MANAGE">
+                        <EmailTemplatesPage />
                       </PermissionGate>
                     }
                   />

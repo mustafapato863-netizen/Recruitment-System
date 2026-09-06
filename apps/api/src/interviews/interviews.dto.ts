@@ -1,5 +1,6 @@
 import {
   IsArray,
+  IsBoolean,
   IsEnum,
   IsInt,
   IsISO8601,
@@ -42,6 +43,10 @@ export class CreateInterviewDto {
   @IsArray()
   @IsUUID('4', { each: true })
   attendeeUserIds!: string[];
+
+  @IsOptional()
+  @IsBoolean()
+  allowConflict?: boolean;
 }
 
 export class UpdateInterviewDto {
@@ -66,6 +71,20 @@ export class UpdateInterviewDto {
   @IsOptional()
   @IsEnum(['Scheduled', 'Completed', 'Cancelled', 'Rescheduled'])
   status?: InterviewStatus;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  cancellationReason?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  rescheduleReason?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  allowConflict?: boolean;
 }
 
 export class SubmitScorecardDto {
@@ -105,4 +124,63 @@ export class InterviewQueryDto {
   @IsOptional()
   @IsString()
   search?: string;
+}
+
+export class CheckAvailabilityDto {
+  @IsArray()
+  @IsUUID('4', { each: true })
+  attendeeUserIds!: string[];
+
+  @IsISO8601()
+  scheduledStart!: string;
+
+  @IsISO8601()
+  scheduledEnd!: string;
+
+  @IsOptional()
+  @IsUUID()
+  excludeInterviewId?: string;
+}
+
+export class GenerateSelfScheduleDto {
+  @IsUUID()
+  applicationId!: string;
+
+  @IsString()
+  @MaxLength(200)
+  title!: string;
+
+  @IsEnum(['Screening', 'Technical', 'Behavioral', 'Managerial', 'Executive'])
+  interviewType!: InterviewType;
+
+  @IsOptional()
+  @IsInt()
+  @Min(15)
+  @Max(240)
+  durationMinutes?: number;
+
+  @IsArray()
+  @IsUUID('4', { each: true })
+  attendeeUserIds!: string[];
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(336)
+  expiresInHours?: number;
+}
+
+export class PublicBookScheduleDto {
+  @IsISO8601()
+  selectedSlot!: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  timezone?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  candidateNotes?: string;
 }

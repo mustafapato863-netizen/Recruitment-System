@@ -236,6 +236,13 @@ export function AppShellInner() {
         .join(' ')}
     >
       <AtmosphericBackground variant="dashboard" />
+      {/* Skip to main content link — first focusable element for keyboard/screen-reader users */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:z-[200] focus:top-2 focus:left-2 focus:px-4 focus:py-2 focus:rounded-lg focus:bg-rf-action focus:text-white focus:text-sm focus:font-bold focus:shadow-lg"
+      >
+        Skip to main content
+      </a>
       {/* Mobile Backdrop */}
       {isMobileDrawerOpen && (
         <div
@@ -281,7 +288,7 @@ export function AppShellInner() {
           </IconButton>
         </div>
 
-        <div className="nav rf-scrollbar space-y-3">
+        <nav className="nav rf-scrollbar space-y-3" aria-label="Primary navigation">
           {/* Workspace */}
           <div>
             {!isSidebarCollapsed && (
@@ -347,10 +354,12 @@ export function AppShellInner() {
             )}
             <div className="space-y-0.5">
               <NavigationItem icon="report" label="Reports" to="/reports" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+              <NavigationItem icon="mail" label="Email Templates" to="/email-templates" allowedRoles={['ADMIN']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
               <NavigationItem icon="settings" label="Settings" to="/settings" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
             </div>
           </div>
-        </div>
+
+        </nav>
 
         {/* User Account / Footer Section */}
         <div className="user" aria-label="Account">
@@ -453,7 +462,7 @@ export function AppShellInner() {
         </div>
       </header>
 
-      <main className="main" aria-hidden={isMobileDrawerOpen ? 'true' : undefined}>
+      <main className="main" id="main-content" aria-hidden={isMobileDrawerOpen ? 'true' : undefined}>
         <BreadcrumbProvider>
           <BreadcrumbsBar />
           <Outlet />

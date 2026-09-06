@@ -2711,8 +2711,8 @@ textarea {
 
 /* Scrollbar polish for breadcrumbs and overflow containers */
 .rf-scrollbar::-webkit-scrollbar {
-  height: 4px;
-  width: 4px;
+  height: 6px;
+  width: 6px;
 }
 .rf-scrollbar::-webkit-scrollbar-track {
   background: transparent;
@@ -2722,7 +2722,7 @@ textarea {
   border-radius: 9999px;
 }
 .rf-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.6);
+  background: rgba(148, 163, 184, 0.65);
 }
 
 /* ==========================================================================

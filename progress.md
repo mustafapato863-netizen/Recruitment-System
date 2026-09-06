@@ -2,6 +2,31 @@
 
 ## Session 2026-09-06
 
+### Completed — P10-RELEASE-02: Final Release Hardening & Commercial Readiness
+- [x] **Mutation Test Coverage (P10-R02.1):**
+  - Added `ApplicationDetailPage.test.tsx` (5 tests): Stage transitions, optimistic locking, 409 conflict detection, 403 forbidden, activity notes.
+  - Added `OfferDetailPage.test.tsx` (6 tests): Offer details, approve/reject modals, POST dispatch, 404 state.
+  - Added `HiringCasePage.test.tsx` (6 tests): Clinical items, compliance progress, joining dialog, 403 forbidden.
+- [x] **Accessibility Hardening (P10-R02.2):**
+  - Injected skip-to-main link (`#main-content`) in `AppShell.tsx`.
+  - Wrapped primary navigation in semantic `<nav aria-label="Primary navigation">`.
+  - Added `AccessibilityRegression.test.tsx` (8 tests): `DataTable` column headers/scopes, `Modal` focus trap & Escape handling, `FormField` accessible errors & alert role, `IconButton` aria-label.
+- [x] **Performance Quick Wins (P10-R02.3):**
+  - Confirmed 100% of route pages in `App.tsx` use `React.lazy()`.
+  - Verified bundle build completes cleanly in ~1.3s.
+- [x] **Security Headers & API Hardening (P10-R02.4):**
+  - Confirmed global security headers middleware in `apps/api/src/main.ts` (X-Content-Type-Options, X-Frame-Options, CSP, Referrer-Policy, HSTS).
+  - CORS restricted to `WEB_ORIGIN`. Safe error envelope normalized across API exceptions.
+- [x] **Commercial Truth & Documentation (P10-R02.5):**
+  - Authored `RELEASE_NOTES.md` and `docs/development/RELEASE_CHECKLIST.md`.
+- [x] **Final Verification Gates:**
+  - `pnpm --dir apps/web test --run`: 35 test files passed, 121 tests passed (100% pass rate).
+  - `pnpm --dir apps/api test`: 11 tests passed.
+  - `apps/web tsc`: 0 errors.
+  - `apps/api tsc`: 0 errors.
+  - `apps/web build`: Success.
+- **Handoff:** Phase 10 / V1 Release Hardening is 100% complete and verified.
+
 ### Completed — Light & Dark Mode Contrast Enhancements + Gamified Autofocus Guide System
 - [x] **CSS Cascade Layer Fix (`apps/web/src/styles/tokens.css`):**
   - Wrapped unlayered `h1, h2, h3, h4, h5, h6` in `@layer base` and set `color: inherit;`.

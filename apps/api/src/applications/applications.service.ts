@@ -3,6 +3,7 @@ import {
   ConflictException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import type { Prisma } from '@recruitflow/database';
@@ -15,6 +16,11 @@ import type {
   PaginatedResult,
 } from '@recruitflow/contracts';
 import { PrismaService } from '../database/prisma.service';
+// Runtime service import must remain a value import for Nest DI metadata reflection.
+/* eslint-disable @typescript-eslint/consistent-type-imports */
+import { EmailOutboxService } from '../email/email-outbox.service';
+/* eslint-enable @typescript-eslint/consistent-type-imports */
+import { EmailTemplatesService } from '../email-templates/email-templates.service';
 import type {
   ApplicationQueryDto,
   CreateApplicationDto,
@@ -35,8 +41,12 @@ const ALLOWED_STAGE_TRANSITIONS: Record<ApplicationStage, ApplicationStage[]> = 
 
 @Injectable()
 export class ApplicationsService {
+  private readonly logger = new Logger(ApplicationsService.name);
+
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
+    private readonly emailOutbox: EmailOutboxService,
+    private readonly emailTemplates: EmailTemplatesService,
   ) {}
 
   async listApplications(
@@ -288,6 +298,11 @@ export class ApplicationsService {
       this.throwTransitionConflict(current);
     }
 
+    // C2 — Enter-stage runner (post-commit, best-effort; errors are logged but never surface to caller)
+    this.fireStageAutomation(organizationId, updated!, dto.stage).catch((err: unknown) => {
+      this.logger.error(`[automation] stage-enter runner failed for application ${id} → ${dto.stage}: ${err instanceof Error ? err.message : String(err)}`);
+    });
+
     return this.toApplication(updated);
   }
 
@@ -506,4 +521,96 @@ export class ApplicationsService {
       updatedAt: record.updatedAt.toISOString(),
     };
   }
+
+  /**
+   * C2 — Enter-stage automation runner.
+   *
+   * Runs AFTER the 409-safe stage commit. Finds the pipeline stage whose name
+   * matches `stageName` in the org's default template, then:
+   * 1. Resolves the linked EmailTemplate (if any).
+   * 2. Interpolates {{candidateName}} / {{positionTitle}} / {{stageName}} / {{organizationName}}.
+   * 3. Enqueues a candidate-facing email via the transactional outbox.
+   * 4. Creates an ApplicationNote tagged [Automation] for the timeline.
+   *
+   * All steps run in a single transaction. Failures are caught by the caller
+   * and only logged — they never surface as a 5xx to the recruiter.
+   */
+  private async fireStageAutomation(
+    organizationId: string,
+    app: Prisma.ApplicationGetPayload<{
+      include: {
+        candidate: true;
+        vacancy: { include: { position: true } };
+        primaryRecruiter: true;
+        taskOwner: true;
+      };
+    }>,
+    stageName: string,
+  ): Promise<void> {
+    // Look up default pipeline template for the org
+    const defaultTemplate = await this.prisma.pipelineTemplate.findFirst({
+      where: { organizationId, isDefault: true, status: { not: 'Archived' } },
+      include: {
+        stages: {
+          where: { status: { not: 'Archived' }, name: stageName },
+          include: { emailTemplate: true },
+        },
+      },
+    });
+
+    const matchedStage = defaultTemplate?.stages[0];
+    if (!matchedStage?.emailTemplate || matchedStage.emailTemplate.status === 'Archived') {
+      return; // No automation configured for this stage
+    }
+
+    const template = matchedStage.emailTemplate;
+    const candidateName = app.candidate
+      ? `${app.candidate.firstName} ${app.candidate.lastName}`.trim()
+      : 'Candidate';
+    const positionTitle = app.vacancy?.position?.title ?? 'the position';
+
+    // Resolve organization name
+    const org = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { name: true },
+    });
+
+    const vars: Record<string, string> = {
+      candidateName,
+      positionTitle,
+      stageName,
+      organizationName: org?.name ?? 'Our Organization',
+    };
+
+    const renderedSubject = EmailTemplatesService.render(template.subject, vars);
+    const renderedBody = EmailTemplatesService.render(template.bodyTemplate, vars);
+    const toEmail = app.candidate?.email;
+
+    if (!toEmail) {
+      this.logger.warn(`[automation] skipping email for application ${app.id}: candidate has no email address`);
+      return;
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await this.emailOutbox.enqueueWithTx(tx, {
+        toEmail,
+        subject: renderedSubject,
+        template: 'notification',
+        payload: { title: renderedSubject, message: renderedBody },
+        organizationId,
+      });
+
+      await tx.applicationNote.create({
+        data: {
+          organizationId,
+          applicationId: app.id,
+          authorId: null,
+          content: `[Automation] Stage email queued: "${renderedSubject}" → ${toEmail}`,
+        },
+      });
+    });
+
+    this.logger.log(`[automation] stage-enter email queued for application ${app.id} (stage=${stageName}, template="${template.name}")`);
+  }
 }
+

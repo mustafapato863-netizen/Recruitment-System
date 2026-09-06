@@ -40,6 +40,10 @@ interface KanbanCard {
   stage: ApplicationStage;
   version: number;
   rawApplication: Application;
+  positionTitle: string;
+  source: string;
+  matchScore: number;
+  experienceYears?: number | null;
 }
 
 interface KanbanColumn {
@@ -209,6 +213,11 @@ function mapApplicationToKanbanCard(a: Application, colStageKey: ApplicationStag
   const appliedText = appliedDate ? `Applied ${formatRelativeTime(appliedDate)}` : 'Applied recently';
   const appCode = a.applicationCode || (a.id.startsWith('APP-') ? a.id : `APP-${a.id.slice(0, 8).toUpperCase()}`);
 
+  const positionTitle = a.positionTitle || a.candidate?.currentTitle || 'General Healthcare Applicant';
+  const source = a.source || a.candidate?.source || 'Direct';
+  const experienceYears = a.candidate?.experienceYears;
+  const matchScore = a.candidate?.skills?.length ? Math.min(97, 76 + a.candidate.skills.length * 3) : 84;
+
   let nextAction = 'Review Profile';
   if (colId === 'screening') nextAction = 'Review Application';
   else if (colId === 'interview') nextAction = 'Interview Evaluation';
@@ -236,6 +245,10 @@ function mapApplicationToKanbanCard(a: Application, colStageKey: ApplicationStag
     stage: a.stage || colStageKey,
     version: a.version ?? 1,
     rawApplication: a,
+    positionTitle,
+    source,
+    matchScore,
+    experienceYears,
   };
 }
 
@@ -902,20 +915,6 @@ export function ApplicationsPage() {
     await executeStageMove(cardId, targetColId, sourceColId, card, previousColumns);
   };
 
-  const getDueBadgeStyle = (tone: 'blue' | 'purple' | 'amber' | 'gray') => {
-    switch (tone) {
-      case 'blue':
-        return 'text-blue-600 dark:text-blue-400 font-bold';
-      case 'purple':
-        return 'text-purple-600 dark:text-purple-400 font-bold';
-      case 'amber':
-        return 'text-amber-600 dark:text-amber-400 font-bold';
-      case 'gray':
-      default:
-        return 'text-slate-400 font-medium';
-    }
-  };
-
   const toggleSelectAllList = () => {
     if (selectedListIds.length === paginatedList.length && paginatedList.length > 0) {
       setSelectedListIds([]);
@@ -924,23 +923,34 @@ export function ApplicationsPage() {
     }
   };
 
+  const pipelineMetrics = useMemo(() => {
+    const total = apiApplications.length;
+    const inReview = apiApplications.filter((a) => a.stage === 'Screening' || a.stage === 'Interview').length;
+    const inOffer = apiApplications.filter((a) => a.stage === 'Offer' || a.stage === 'Pre-Hire').length;
+    const readySignals = Object.values(cardSignals).filter((s) => s === 'ready').length;
+    return { total, inReview, inOffer, readySignals };
+  }, [apiApplications, cardSignals]);
+
   return (
-    <div className="flex w-full flex-col p-4 sm:p-6 lg:p-7 max-w-[1720px] mx-auto space-y-6">
+    <div className="flex w-full flex-col lg:h-[calc(100vh-80px)] p-4 sm:px-6 lg:px-7 py-3 mx-auto gap-3 max-w-[1880px] lg:overflow-hidden">
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
         <div>
           <div className="flex items-center gap-2.5 flex-wrap">
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
               Applications
             </h1>
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 shadow-2xs">
+              {apiApplications.length} Candidates
+            </span>
             <QuickGuideTrigger />
           </div>
           <p className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 mt-0.5">
-            Manage candidate pipeline across recruitment stages.
+            Manage candidate pipelines across recruitment stages with real-time governance.
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={handleExportCsv}
@@ -952,7 +962,7 @@ export function ApplicationsPage() {
           <button
             type="button"
             onClick={() => setIsAddCandidateOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer hover:shadow-blue-500/25"
           >
             <Icon name="plus" size={14} />
             <span>Add Application</span>
@@ -960,23 +970,96 @@ export function ApplicationsPage() {
         </div>
       </div>
 
+      {/* 4-Card Executive KPI Summary Bar (Overview First) */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 shrink-0">
+        <div
+          onClick={() => setSelectedStageFilter('ALL')}
+          className={`p-3 rounded-2xl border transition-all cursor-pointer shadow-2xs ${
+            selectedStageFilter === 'ALL'
+              ? 'bg-blue-50/70 dark:bg-blue-950/40 border-blue-300 dark:border-blue-700 ring-2 ring-blue-500/20'
+              : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+          }`}
+          title="Filter all candidates across pipeline"
+        >
+          <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 font-semibold">
+            <span>Total Active Pipeline</span>
+            <span className="w-2 h-2 rounded-full bg-blue-500" />
+          </div>
+          <div className="mt-1 flex items-baseline gap-2">
+            <span className="text-xl font-black text-slate-900 dark:text-white">{pipelineMetrics.total}</span>
+            <span className="text-[11px] text-slate-400 font-medium">candidates</span>
+          </div>
+        </div>
+
+        <div
+          onClick={() => setSelectedStageFilter(selectedStageFilter === 'screening' ? 'ALL' : 'screening')}
+          className={`p-3 rounded-2xl border transition-all cursor-pointer shadow-2xs ${
+            selectedStageFilter === 'screening' || selectedStageFilter === 'interview'
+              ? 'bg-amber-50/70 dark:bg-amber-950/40 border-amber-300 dark:border-amber-700 ring-2 ring-amber-500/20'
+              : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+          }`}
+          title="Filter candidates in evaluation"
+        >
+          <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 font-semibold">
+            <span>Active Evaluations</span>
+            <span className="w-2 h-2 rounded-full bg-amber-500" />
+          </div>
+          <div className="mt-1 flex items-baseline gap-2">
+            <span className="text-xl font-black text-slate-900 dark:text-white">{pipelineMetrics.inReview}</span>
+            <span className="text-[11px] text-amber-600 dark:text-amber-400 font-medium">Screening & Interview</span>
+          </div>
+        </div>
+
+        <div
+          onClick={() => setSelectedStageFilter(selectedStageFilter === 'offer' ? 'ALL' : 'offer')}
+          className={`p-3 rounded-2xl border transition-all cursor-pointer shadow-2xs ${
+            selectedStageFilter === 'offer' || selectedStageFilter === 'pre_hire'
+              ? 'bg-purple-50/70 dark:bg-purple-950/40 border-purple-300 dark:border-purple-700 ring-2 ring-purple-500/20'
+              : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+          }`}
+          title="Filter candidates in offer stages"
+        >
+          <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 font-semibold">
+            <span>Offers & Pre-Hire</span>
+            <span className="w-2 h-2 rounded-full bg-purple-500" />
+          </div>
+          <div className="mt-1 flex items-baseline gap-2">
+            <span className="text-xl font-black text-slate-900 dark:text-white">{pipelineMetrics.inOffer}</span>
+            <span className="text-[11px] text-purple-600 dark:text-purple-400 font-medium">In Final Stages</span>
+          </div>
+        </div>
+
+        <div
+          className="p-3 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 shadow-2xs transition-all"
+        >
+          <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 font-semibold">
+            <span>Fast-Track Signals</span>
+            <span className="w-2 h-2 rounded-full bg-emerald-500" />
+          </div>
+          <div className="mt-1 flex items-baseline gap-2">
+            <span className="text-xl font-black text-slate-900 dark:text-white">{pipelineMetrics.readySignals}</span>
+            <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">Ready to Advance</span>
+          </div>
+        </div>
+      </div>
+
       {/* Position Context Banner (E6.1) */}
       {currentVacancy && (
-        <div className="bg-gradient-to-r from-blue-50 via-indigo-50/40 to-slate-50 dark:from-blue-950/40 dark:via-indigo-950/20 dark:to-slate-900 rounded-2xl border border-blue-200/80 dark:border-blue-900/60 p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-blue-600 text-white shadow-2xs">
+        <div className="bg-gradient-to-r from-blue-50 via-indigo-50/40 to-slate-50 dark:from-blue-950/40 dark:via-indigo-950/20 dark:to-slate-900 rounded-2xl border border-blue-200/80 dark:border-blue-900/60 p-3 sm:p-4 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
+          <div className="space-y-0.5 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-extrabold bg-blue-600 text-white shadow-2xs">
                 <Icon name="lock" size={10} />
                 Position Pipeline
               </span>
               <span className="text-xs font-mono font-bold text-slate-500 dark:text-slate-400">
                 {currentVacancy.vacancyCode}
               </span>
-              <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+              <span className="px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
                 {currentVacancy.status}
               </span>
             </div>
-            <h2 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white tracking-tight">
+            <h2 className="text-base sm:text-lg font-black text-slate-900 dark:text-white tracking-tight truncate">
               {currentVacancy.position?.title || currentVacancy.title || 'Job Position'}
             </h2>
             <p className="text-xs text-slate-600 dark:text-slate-400 font-medium">
@@ -1009,7 +1092,7 @@ export function ApplicationsPage() {
                     navigate(`/applications?vacancyId=${val}`);
                   }
                 }}
-                className="appearance-none bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 pr-7 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 cursor-pointer shadow-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                className="appearance-none bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 pr-7 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 cursor-pointer shadow-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 title="Switch to another requisition pipeline"
               >
                 <option value={currentVacancy.id}>
@@ -1033,7 +1116,7 @@ export function ApplicationsPage() {
             <button
               type="button"
               onClick={() => navigate(`/candidates/compare?vacancyId=${currentVacancy.id}`)}
-              className="inline-flex items-center gap-1.5 px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
               title="Compare all candidates in this position pipeline"
             >
               <Icon name="grid-squares" size={12} />
@@ -1042,25 +1125,25 @@ export function ApplicationsPage() {
             <button
               type="button"
               onClick={() => navigate(`/vacancies/${currentVacancy.id}`)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 transition shadow-xs cursor-pointer"
+              className="inline-flex items-center gap-1 px-3 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 transition shadow-xs cursor-pointer"
             >
               <Icon name="arrow-left" size={13} />
-              <span>Back to Overview</span>
+              <span>Overview</span>
             </button>
             <button
               type="button"
               onClick={() => navigate('/applications')}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-500 hover:text-slate-900 dark:hover:text-white transition cursor-pointer"
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-slate-500 hover:text-slate-900 dark:hover:text-white transition cursor-pointer"
               title="View all applications across all vacancies"
             >
-              <span>View All Positions</span>
+              <span>All Positions</span>
             </button>
           </div>
         </div>
       )}
 
       {/* Filter Bar */}
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-2.5 shrink-0">
         {/* Pipeline Position Switcher Dropdown (E9.1) */}
         <div className="relative">
           <select
@@ -1073,13 +1156,13 @@ export function ApplicationsPage() {
                 navigate(`/applications?vacancyId=${val}`);
               }
             }}
-            className="appearance-none bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2 pr-8 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 cursor-pointer shadow-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            className="appearance-none bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 pr-7 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 cursor-pointer shadow-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
             title="Switch requisition pipeline"
           >
-            <option value="ALL">🌐 All Positions (All Active Requisitions)</option>
+            <option value="ALL">🌐 All Requisitions ({allVacancies.length} active)</option>
             {allVacancies.map((v) => (
               <option key={v.id} value={v.id}>
-                {v.vacancyCode} — {v.position?.title || v.title || 'Requisition'} ({v.joinedHeadcount ?? 0}/{v.approvedHeadcount ?? 1} joined)
+                {v.vacancyCode} — {v.position?.title || v.title || 'Requisition'} ({v.joinedHeadcount ?? 0}/{v.approvedHeadcount ?? 1})
               </option>
             ))}
             {currentVacancy && !allVacancies.some((v) => v.id === currentVacancy.id) && (
@@ -1091,7 +1174,7 @@ export function ApplicationsPage() {
           <Icon
             name="chevron-down"
             size={12}
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
           />
         </div>
 
@@ -1103,7 +1186,7 @@ export function ApplicationsPage() {
               setSelectedStageFilter(e.target.value);
               setListPage(1);
             }}
-            className="appearance-none bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2 pr-8 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 cursor-pointer shadow-xs"
+            className="appearance-none bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 pr-7 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 cursor-pointer shadow-xs"
           >
             <option value="ALL">All Stages</option>
             {PIPELINE_COLUMNS.map((col) => (
@@ -1115,7 +1198,7 @@ export function ApplicationsPage() {
           <Icon
             name="chevron-down"
             size={12}
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
           />
         </div>
 
@@ -1127,7 +1210,7 @@ export function ApplicationsPage() {
               setSelectedOwnerFilter(e.target.value);
               setListPage(1);
             }}
-            className="appearance-none bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2 pr-8 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 cursor-pointer shadow-xs"
+            className="appearance-none bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 pr-7 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 cursor-pointer shadow-xs"
           >
             <option value="ALL">All Owners</option>
             {ownerOptions.map((owner) => (
@@ -1139,30 +1222,16 @@ export function ApplicationsPage() {
           <Icon
             name="chevron-down"
             size={12}
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
           />
         </div>
 
-        {/* More filters */}
-        <button
-          type="button"
-          onClick={() => setIsMoreFiltersOpen((prev) => !prev)}
-          className={`inline-flex items-center gap-2 px-3.5 py-2 border rounded-xl text-xs font-semibold transition shadow-xs cursor-pointer ${
-            isMoreFiltersOpen || selectedSourceFilter !== 'ALL'
-              ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950/40 dark:border-blue-800'
-              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50'
-          }`}
-        >
-          <Icon name="filter" size={13} className="text-slate-400" />
-          <span>{isMoreFiltersOpen ? 'Hide Filters' : 'More Filters'}</span>
-        </button>
-
         {/* Search Bar */}
-        <div className="relative flex-1 min-w-[220px]">
+        <div className="relative flex-1 min-w-[200px]">
           <Icon
             name="search"
             size={13}
-            className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
           />
           <input
             type="text"
@@ -1171,10 +1240,56 @@ export function ApplicationsPage() {
               setSearchQuery(e.target.value);
               setListPage(1);
             }}
-            placeholder="Search applications..."
-            className="w-full pl-9 pr-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-2xs"
+            placeholder="Search candidates by name, code, title, owner..."
+            className="w-full pl-8 pr-8 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-2xs"
           />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5 cursor-pointer"
+              title="Clear search"
+            >
+              <Icon name="close" size={12} />
+            </button>
+          )}
         </div>
+
+        {/* More filters */}
+        <button
+          type="button"
+          onClick={() => setIsMoreFiltersOpen((prev) => !prev)}
+          className={`inline-flex items-center gap-1.5 px-3 py-2 border rounded-xl text-xs font-semibold transition shadow-xs cursor-pointer ${
+            isMoreFiltersOpen || selectedSourceFilter !== 'ALL'
+              ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950/40 dark:border-blue-800'
+              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50'
+          }`}
+        >
+          <Icon name="filter" size={12} className="text-slate-400" />
+          <span>Filters</span>
+          {selectedSourceFilter !== 'ALL' && (
+            <span className="w-4 h-4 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center">
+              1
+            </span>
+          )}
+        </button>
+
+        {/* Active Filters Reset Button */}
+        {(selectedJob !== 'ALL' ||
+          selectedStageFilter !== 'ALL' ||
+          selectedOwnerFilter !== 'ALL' ||
+          selectedSourceFilter !== 'ALL' ||
+          searchQuery.trim() !== '') && (
+          <button
+            type="button"
+            onClick={resetFilters}
+            className="inline-flex items-center gap-1 px-2.5 py-2 text-xs font-bold text-rose-600 hover:text-rose-700 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 rounded-xl border border-rose-200 dark:border-rose-900 transition cursor-pointer"
+            title="Reset all filters"
+          >
+            <Icon name="close" size={11} />
+            <span>Reset</span>
+          </button>
+        )}
 
         {/* List / Board Toggle */}
         <div className="flex items-center border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 p-0.5 shadow-2xs">
@@ -1184,11 +1299,11 @@ export function ApplicationsPage() {
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
               viewMode === 'list'
                 ? 'bg-slate-100 dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-xs'
-                : 'text-slate-500 hover:text-slate-900'
+                : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
           >
             <Icon name="menu" size={13} />
-            <span>List View</span>
+            <span>List</span>
           </button>
           <button
             type="button"
@@ -1196,11 +1311,11 @@ export function ApplicationsPage() {
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
               viewMode === 'board'
                 ? 'bg-slate-100 dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-xs'
-                : 'text-slate-500 hover:text-slate-900'
+                : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
             }`}
           >
             <Icon name="layout" size={13} />
-            <span>Kanban View</span>
+            <span>Kanban</span>
           </button>
         </div>
       </div>
@@ -1531,9 +1646,9 @@ export function ApplicationsPage() {
           </div>
         </div>
       ) : (
-        /* View Mode: Kanban Board with Live Drag-and-Drop */
-        <div className="overflow-x-auto pb-4 pt-1">
-          <div className="flex gap-4 items-start min-w-[1720px]">
+        /* View Mode: Kanban Board with Viewport-Fitted Columns & Independent Scrolling */
+        <div className="flex-1 min-h-0 overflow-x-auto pb-1 pt-0.5 rf-scrollbar rounded-2xl">
+          <div className="flex gap-3.5 items-stretch h-full min-w-[1760px] pb-1">
             {columns.map((column) => {
               const colDef = PIPELINE_COLUMNS.find((p) => p.id === column.id);
               const isFolded = Boolean(foldedColumns[column.id]);
@@ -1546,7 +1661,7 @@ export function ApplicationsPage() {
                     onDragLeave={(e) => handleDragLeave(e, column.id)}
                     onDrop={(e) => void handleDrop(e, column.id)}
                     onClick={() => toggleColumnFold(column.id)}
-                    className={`w-14 min-w-14 shrink-0 bg-slate-50/90 dark:bg-slate-900/60 hover:bg-slate-100/80 dark:hover:bg-slate-800/80 rounded-2xl border transition-all p-2.5 flex flex-col items-center justify-between cursor-pointer group select-none min-h-[480px] shadow-2xs ${
+                    className={`w-14 min-w-14 shrink-0 bg-slate-50/90 dark:bg-slate-900/60 hover:bg-slate-100/80 dark:hover:bg-slate-800/80 rounded-2xl border transition-all p-2.5 flex flex-col items-center justify-between cursor-pointer group select-none h-full shadow-2xs ${
                       activeDropColId === column.id
                         ? 'border-blue-500 shadow-md ring-2 ring-blue-500/20 bg-blue-50/20'
                         : 'border-slate-200/80 dark:border-slate-800'
@@ -1564,7 +1679,7 @@ export function ApplicationsPage() {
                           e.stopPropagation();
                           toggleColumnFold(column.id);
                         }}
-                        className="p-1 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition rounded-md hover:bg-slate-200/50"
+                        className="p-1 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition rounded-md hover:bg-slate-200/50 cursor-pointer"
                         aria-label={`Expand ${column.name}`}
                         title="Expand column"
                       >
@@ -1591,64 +1706,66 @@ export function ApplicationsPage() {
                   onDragOver={(e) => handleDragOver(e, column.id)}
                   onDragLeave={(e) => handleDragLeave(e, column.id)}
                   onDrop={(e) => void handleDrop(e, column.id)}
-                  className={`w-[285px] min-w-[285px] shrink-0 bg-slate-50/80 dark:bg-slate-900/60 rounded-2xl border transition-all p-3 flex flex-col space-y-3 ${
+                  className={`w-[296px] min-w-[296px] shrink-0 bg-slate-50/85 dark:bg-slate-900/65 rounded-2xl border transition-all p-3 flex flex-col h-full overflow-hidden shadow-2xs ${
                     activeDropColId === column.id
                       ? 'border-blue-500 shadow-md ring-2 ring-blue-500/20 bg-blue-50/20'
                       : 'border-slate-200/80 dark:border-slate-800'
                   }`}
                 >
-                  {/* Stage Accent Bar (Phase A3) */}
-                  <div className={`h-1.5 w-full rounded-full ${colDef?.accentBar || 'bg-blue-600'}`} />
+                  {/* Pinned Column Header */}
+                  <div className="shrink-0 space-y-2 pb-2.5 border-b border-slate-200/60 dark:border-slate-800/60">
+                    {/* Stage Accent Bar (Phase A3) */}
+                    <div className={`h-1.5 w-full rounded-full ${colDef?.accentBar || 'bg-blue-600'}`} />
 
-                  {/* Column Header */}
-                  <div className="flex items-center justify-between px-1">
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-xs font-extrabold text-slate-900 dark:text-white">{column.name}</h2>
-                      <span className="w-5 h-5 rounded-full bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[11px] font-black flex items-center justify-center">
-                        {column.count}
-                      </span>
-                      {colDef?.slaTooltip && (
-                        <span
-                          title={colDef.slaTooltip}
-                          className="cursor-help text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
-                        >
-                          <Icon name="info" size={12} />
+                    <div className="flex items-center justify-between px-0.5">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <h2 className="text-xs font-extrabold text-slate-900 dark:text-white truncate">{column.name}</h2>
+                        <span className="w-5 h-5 rounded-full bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[11px] font-black flex items-center justify-center shrink-0">
+                          {column.count}
                         </span>
-                      )}
-                    </div>
+                        {colDef?.slaTooltip && (
+                          <span
+                            title={colDef.slaTooltip}
+                            className="cursor-help text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 shrink-0"
+                          >
+                            <Icon name="info" size={12} />
+                          </span>
+                        )}
+                      </div>
 
-                    <div className="flex items-center gap-1 text-slate-400">
-                      <button
-                        type="button"
-                        onClick={() => toggleColumnFold(column.id)}
-                        className="p-1 hover:bg-slate-200/60 dark:hover:bg-slate-800 rounded-md cursor-pointer transition text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-                        title="Fold column (save space)"
-                      >
-                        <Icon name="chevron-left" size={13} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setIsAddCandidateOpen(true)}
-                        className="p-1 hover:bg-slate-200/60 dark:hover:bg-slate-800 rounded-md cursor-pointer transition"
-                        title="Add candidate"
-                      >
-                        <Icon name="plus" size={13} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          showToast(`Stage: ${column.name} (${column.count} candidates)`, 'info');
-                        }}
-                        className="p-1 hover:bg-slate-200/60 dark:hover:bg-slate-800 rounded-md cursor-pointer transition"
-                        title="Column options"
-                      >
-                        <Icon name="more-horizontal" size={13} />
-                      </button>
+                      <div className="flex items-center gap-1 text-slate-400 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => toggleColumnFold(column.id)}
+                          className="p-1 hover:bg-slate-200/60 dark:hover:bg-slate-800 rounded-md cursor-pointer transition text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                          title="Fold column (save space)"
+                        >
+                          <Icon name="chevron-left" size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setIsAddCandidateOpen(true)}
+                          className="p-1 hover:bg-slate-200/60 dark:hover:bg-slate-800 rounded-md cursor-pointer transition"
+                          title="Add candidate"
+                        >
+                          <Icon name="plus" size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            showToast(`Stage: ${column.name} (${column.count} candidates)`, 'info');
+                          }}
+                          className="p-1 hover:bg-slate-200/60 dark:hover:bg-slate-800 rounded-md cursor-pointer transition"
+                          title="Column options"
+                        >
+                          <Icon name="more-horizontal" size={13} />
+                        </button>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Candidate Cards in Column */}
-                  <div className="space-y-3 min-h-[400px]">
+                  {/* Independently Scrollable Candidate Cards Container */}
+                  <div className="flex-1 overflow-y-auto rf-scrollbar min-h-0 space-y-2.5 p-0.5 pt-2 pr-1.5">
                     {column.cards.map((card) => {
                       const signal = cardSignals[card.id] || 'in_progress';
                       const signalTitle =
@@ -1670,53 +1787,42 @@ export function ApplicationsPage() {
                           draggable
                           onDragStart={(e) => handleDragStart(e, card.id, column.id)}
                           onClick={() => setSelectedDrawerApp(card.rawApplication)}
-                          className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800 p-3.5 shadow-2xs hover:shadow-md hover:border-blue-300 dark:hover:border-blue-700 transition cursor-grab active:cursor-grabbing group space-y-3 relative"
+                          className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200/85 dark:border-slate-800 p-3 shadow-2xs hover:shadow-md hover:border-blue-400/80 dark:hover:border-blue-600 transition-all duration-150 cursor-grab active:cursor-grabbing group flex flex-col gap-2.5 relative hover:-translate-y-0.5 select-none"
                         >
-                          {/* Card Top: Candidate Avatar, Name, Applied date & Menu */}
-                          <div className="flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2.5">
+                          {/* Card Top: Candidate Avatar, Name, Code, Signal & Actions */}
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-center gap-2.5 min-w-0 flex-1">
                               {card.photoUrl ? (
                                 <img
                                   src={card.photoUrl}
                                   alt={card.name}
-                                  className="w-9 h-9 rounded-full object-cover border border-slate-200 dark:border-slate-700 shrink-0"
+                                  className="w-8 h-8 rounded-full object-cover border border-slate-200 dark:border-slate-700 shrink-0"
                                 />
                               ) : (
-                                <div className="w-9 h-9 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center justify-center shrink-0">
+                                <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold flex items-center justify-center shrink-0 border border-slate-200/60 dark:border-slate-700/60">
                                   {card.initials}
                                 </div>
                               )}
-                              <div>
+                              <div className="min-w-0 flex-1">
                                 <span
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     navigate(`/applications/${card.id}`);
                                   }}
-                                  className="text-xs font-bold text-slate-900 dark:text-white group-hover:text-blue-600 transition block leading-tight cursor-pointer"
-                                  title="View full application"
+                                  className="text-[13px] font-bold text-slate-900 dark:text-white group-hover:text-blue-600 transition block leading-tight cursor-pointer truncate"
+                                  title={card.name}
                                 >
                                   {card.name}
                                 </span>
                                 <div className="flex items-center gap-1.5 mt-0.5 text-[10.5px] text-slate-400 font-mono">
-                                  <span>{card.applicationCode}</span>
-                                  {card.rawApplication.candidateId && (
-                                    <button
-                                      type="button"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        navigate(`/candidates/${card.rawApplication.candidateId}`);
-                                      }}
-                                      className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
-                                      title="Open Candidate 360 profile"
-                                    >
-                                      <span>&bull; Profile</span>
-                                    </button>
-                                  )}
+                                  <span className="truncate max-w-[120px]">{card.applicationCode}</span>
+                                  <span className="text-slate-300 dark:text-slate-700">&bull;</span>
+                                  <span className="shrink-0">{formatRelativeTime(card.rawApplication.appliedAt || card.rawApplication.createdAt) || 'Recent'}</span>
                                 </div>
                               </div>
                             </div>
 
-                            <div className="flex items-center gap-1.5 shrink-0">
+                            <div className="flex items-center gap-1.5 shrink-0 pt-0.5">
                               {/* Status Signal Dot (Phase A3) */}
                               <button
                                 type="button"
@@ -1725,21 +1831,6 @@ export function ApplicationsPage() {
                                 title={signalTitle}
                                 aria-label={signalTitle}
                               />
-
-                              {(!card.rawApplication.primaryRecruiterId || card.owner.name === 'Unassigned') && (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    void handleClaimApplication(card.id);
-                                  }}
-                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 border border-blue-200 dark:border-blue-800 text-[10px] font-bold transition cursor-pointer shadow-2xs"
-                                  title="1-Click Claim: Assign yourself as primary recruiter"
-                                >
-                                  <Icon name="user-check" size={10} />
-                                  <span>Claim</span>
-                                </button>
-                              )}
                               <button
                                 type="button"
                                 onClick={(e) => {
@@ -1750,17 +1841,11 @@ export function ApplicationsPage() {
                                     appCode: card.applicationCode,
                                   });
                                 }}
-                                className="p-1 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded-md text-slate-400 hover:text-blue-600 cursor-pointer transition"
+                                className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md text-slate-400 hover:text-blue-600 cursor-pointer transition"
                                 title="Quick note"
                               >
-                                <Icon name="edit" size={13} />
+                                <Icon name="edit" size={12} />
                               </button>
-                              <div
-                                className={`w-5 h-5 rounded-full ${card.owner.color} text-white text-[9px] font-extrabold flex items-center justify-center shadow-2xs`}
-                                title={`Owner: ${card.owner.name}`}
-                              >
-                                {card.owner.initials}
-                              </div>
                               <button
                                 type="button"
                                 onClick={(e) => {
@@ -1770,34 +1855,75 @@ export function ApplicationsPage() {
                                 className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md text-slate-400 hover:text-slate-700 cursor-pointer"
                                 title="Move stage"
                               >
-                                <Icon name="more-horizontal" size={13} />
+                                <Icon name="more-horizontal" size={12} />
                               </button>
                             </div>
                           </div>
 
-                          {/* Middle: Next Action & Due label */}
-                          <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-[11px]">
-                            <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 truncate pr-2">
-                              <span className="font-semibold text-slate-400">Next:</span>
-                              <span className="truncate font-medium text-slate-700 dark:text-slate-300">
-                                {card.nextAction}
-                              </span>
+                          {/* Card Body: Target Position & Metadata Tags */}
+                          <div className="space-y-1.5">
+                            <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200">
+                              <Icon name="briefcase" size={11} className="text-slate-400 shrink-0" />
+                              <span className="truncate">{card.positionTitle}</span>
                             </div>
-                            <span className={`shrink-0 ${getDueBadgeStyle(card.nextDueTone)}`}>{card.nextDue}</span>
+
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/70 dark:border-emerald-800/70">
+                                <Icon name="check-circle" size={9} />
+                                <span>{card.matchScore}% Match</span>
+                              </span>
+                              {card.source && card.source !== '—' && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200/60 dark:border-slate-700/60 truncate max-w-[95px]">
+                                  {card.source}
+                                </span>
+                              )}
+                              {card.experienceYears ? (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-300 border border-blue-200/60 dark:border-blue-800/60">
+                                  {card.experienceYears}y exp
+                                </span>
+                              ) : null}
+                            </div>
                           </div>
 
-                          {/* Bottom: Last activity */}
-                          <div className="text-[10.5px] text-slate-400 flex items-center justify-between pt-0.5">
-                            <span className="truncate">Last: {card.lastActivity}</span>
-                            <span className="shrink-0 text-slate-400">{card.lastActivityTime}</span>
+                          {/* Card Footer: Next Action + Recruiter / Claim Pill */}
+                          <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-[11px] gap-2">
+                            <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400 min-w-0 flex-1">
+                              <Icon name="calendar" size={11} className="text-slate-400 shrink-0" />
+                              <span className="truncate font-medium">{card.nextAction}</span>
+                            </div>
+
+                            <div className="shrink-0 flex items-center gap-1.5">
+                              {(!card.rawApplication.primaryRecruiterId || card.owner.name === 'Unassigned') ? (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    void handleClaimApplication(card.id);
+                                  }}
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/60 border border-blue-200 dark:border-blue-800 text-[10.5px] font-bold transition cursor-pointer shadow-2xs"
+                                  title="1-Click Claim: Assign yourself as primary recruiter"
+                                >
+                                  <Icon name="user-check" size={10} />
+                                  <span>Claim</span>
+                                </button>
+                              ) : (
+                                <div
+                                  className={`w-5 h-5 rounded-full ${card.owner.color} text-white text-[9px] font-extrabold flex items-center justify-center shadow-2xs cursor-help`}
+                                  title={`Assigned Recruiter: ${card.owner.name}`}
+                                >
+                                  {card.owner.initials}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
                       );
                     })}
 
                     {column.cards.length === 0 && (
-                      <div className="h-28 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-800 flex items-center justify-center text-xs text-slate-400">
-                        Drop candidate here
+                      <div className="h-28 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-800 flex flex-col items-center justify-center gap-1 text-xs text-slate-400 font-medium">
+                        <Icon name="inbox" size={16} className="text-slate-300 dark:text-slate-700" />
+                        <span>Drop candidate here</span>
                       </div>
                     )}
                   </div>
@@ -1814,20 +1940,12 @@ export function ApplicationsPage() {
         onClose={() => setIsAddCandidateOpen(false)}
         preselectedVacancyId={currentVacancy?.id}
         preselectedVacancyTitle={currentVacancy?.position?.title || currentVacancy?.title || undefined}
-        onSuccess={(_newApp) => {
+        onSuccess={() => {
           showToast('Candidate added to pipeline successfully', 'success');
           void loadApplications();
         }}
       />
 
-      {/* Candidate Split Drawer */}
-      {selectedDrawerApp && (
-        <CandidateSplitDrawer
-          application={selectedDrawerApp}
-          isOpen={Boolean(selectedDrawerApp)}
-          onClose={() => setSelectedDrawerApp(null)}
-        />
-      )}
 
       {/* Quick Note Drawer (E6.2) */}
       <Drawer

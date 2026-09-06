@@ -1,4 +1,4 @@
-import { IsString, IsBoolean, IsOptional, IsNumber } from 'class-validator';
+import { IsString, IsBoolean, IsOptional, IsNumber, IsUUID } from 'class-validator';
 
 export class CreatePipelineTemplateDto {
   @IsString()
@@ -50,6 +50,23 @@ export class CreatePipelineStageDto {
   @IsString()
   @IsOptional()
   exitGate?: string;
+
+  // Phase C — Stage Automation fields
+  @IsUUID()
+  @IsOptional()
+  emailTemplateId?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  folded?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  isHiredStage?: boolean;
+
+  @IsString()
+  @IsOptional()
+  tooltip?: string;
 }
 
 export class UpdatePipelineStageDto {
@@ -80,9 +97,27 @@ export class UpdatePipelineStageDto {
   @IsString()
   @IsOptional()
   exitGate?: string;
+
+  // Phase C — Stage Automation fields
+  @IsUUID()
+  @IsOptional()
+  emailTemplateId?: string | null;
+
+  @IsBoolean()
+  @IsOptional()
+  folded?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  isHiredStage?: boolean;
+
+  @IsString()
+  @IsOptional()
+  tooltip?: string | null;
 }
 
 export class ReorderStagesDto {
   @IsString({ each: true })
   stageIds!: string[];
 }
+

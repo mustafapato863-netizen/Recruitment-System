@@ -27,6 +27,8 @@ export interface InterviewAgendaItem {
 
 interface InterviewAgendaCardProps {
   item: InterviewAgendaItem;
+  onQuickScorecard?: (interviewId: string) => void;
+  onDownloadIcs?: (interviewId: string) => void;
 }
 
 const getStatusBadgeClass = (tone: 'green' | 'amber' | 'blue') => {
@@ -53,7 +55,11 @@ const getTypeTagClass = (tone: 'purple' | 'blue' | 'green') => {
   }
 };
 
-export const InterviewAgendaCard: React.FC<InterviewAgendaCardProps> = ({ item }) => {
+export const InterviewAgendaCard: React.FC<InterviewAgendaCardProps> = ({
+  item,
+  onQuickScorecard,
+  onDownloadIcs,
+}) => {
   const navigate = useNavigate();
 
   return (
@@ -160,40 +166,48 @@ export const InterviewAgendaCard: React.FC<InterviewAgendaCardProps> = ({ item }
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
-              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition shadow-2xs no-underline"
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition shadow-2xs no-underline"
               title="Launch Meeting"
             >
               <Icon name="video" size={12} />
-              <span>Join Meeting</span>
+              <span>Join</span>
             </a>
           ) : null}
 
-          <Link
-            to={`/interviews/${item.id}`}
-            onClick={(e) => e.stopPropagation()}
-            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 text-xs font-bold transition shadow-2xs no-underline"
-            title="View Scorecard & Evaluation"
-          >
-            <Icon name="edit" size={12} />
-            <span>Scorecard</span>
-          </Link>
-
-          {item.candidateId && (
-            <Link
-              to={`/candidates/${item.candidateId}`}
-              onClick={(e) => e.stopPropagation()}
-              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/40 dark:hover:bg-purple-900/60 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800 text-xs font-bold transition shadow-2xs no-underline"
-              title="View 360 Profile"
+          {onDownloadIcs && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDownloadIcs(item.id);
+              }}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 text-xs font-bold transition shadow-2xs cursor-pointer"
+              title="Download iCalendar (.ics)"
             >
-              <Icon name="user" size={12} />
-              <span>360° Profile</span>
-            </Link>
+              <Icon name="calendar" size={12} />
+              <span>.ICS</span>
+            </button>
+          )}
+
+          {onQuickScorecard && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onQuickScorecard(item.id);
+              }}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs font-bold transition shadow-2xs cursor-pointer"
+              title="Fast Scorecard Submit"
+            >
+              <Icon name="check-circle" size={12} />
+              <span>Feedback</span>
+            </button>
           )}
 
           <Link
             to={`/interviews/${item.id}`}
             onClick={(e) => e.stopPropagation()}
-            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold transition shadow-2xs no-underline"
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold transition shadow-2xs no-underline"
             title="View Interview Details"
           >
             <span>Details</span>

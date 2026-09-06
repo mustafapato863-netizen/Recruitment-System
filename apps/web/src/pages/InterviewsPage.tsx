@@ -1,13 +1,16 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { getApi, postApi } from '../api/client';
-import type { Interview, Application, PaginatedResult, VacancyDetailView } from '@recruitflow/contracts';
+import { getApi, postApi, ApiError } from '../api/client';
+import type { Interview, InterviewType, Application, PaginatedResult, VacancyDetailView } from '@recruitflow/contracts';
 import { Icon } from '../components/Icon';
 import { Modal } from '../components/Modal';
 import { PageState } from '../components/ui/PageState';
 import { TableSkeleton } from '../components/ui/Skeleton';
 import { InterviewAgendaCard } from '../components/interview/InterviewAgendaCard';
 import { InterviewFiltersBar } from '../components/interview/InterviewFiltersBar';
+import { FastScorecardModal } from '../components/interview/FastScorecardModal';
+import { SelfScheduleModal } from '../components/interview/SelfScheduleModal';
+import { useAuth } from '../auth/AuthContext';
 import { QuickGuideTrigger } from '../quickguide';
 import './PageEnhancementsV2.css';
 
@@ -39,22 +42,44 @@ interface InterviewGroup {
   }[];
 }
 
+interface OrgUser {
+  id: string;
+  displayName: string;
+  email: string;
+}
+
+interface InterviewApplicationView {
+  candidateId?: string;
+  positionTitle?: string;
+  candidate?: { firstName?: string; lastName?: string };
+  vacancy?: { department?: string };
+}
+
+type InterviewListItem = Interview & {
+  candidateId?: string;
+  application?: InterviewApplicationView;
+};
+
 export function InterviewsPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const vacancyId = searchParams.get('vacancyId');
   const [currentVacancy, setCurrentVacancy] = useState<VacancyDetailView | null>(null);
 
-  const [apiInterviews, setApiInterviews] = useState<Interview[]>([]);
+  const [apiInterviews, setApiInterviews] = useState<InterviewListItem[]>([]);
   const [applications, setApplications] = useState<Application[]>([]);
+  const [orgUsers, setOrgUsers] = useState<Array<{ id: string; displayName: string }>>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<'calendar' | 'list'>('list');
+  const [interviewsScope, setInterviewsScope] = useState<'all' | 'mine'>('all');
   const [dateRange, setDateRange] = useState('All Dates');
   const [isMoreFiltersOpen, setIsMoreFiltersOpen] = useState(false);
   const [selectedType, setSelectedType] = useState('ALL');
   const [selectedStatus, setSelectedStatus] = useState('ALL');
   const [selectedInterviewer, setSelectedInterviewer] = useState('ALL');
   const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
+  const [isSelfScheduleModalOpen, setIsSelfScheduleModalOpen] = useState(false);
+  const [scorecardInterview, setScorecardInterview] = useState<Interview | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Scheduling Form State
@@ -67,6 +92,9 @@ export function InterviewsPage() {
     d.setHours(10, 0, 0, 0);
     return d.toISOString().slice(0, 16);
   });
+  const [selectedAttendees, setSelectedAttendees] = useState<string[]>([]);
+  const [allowConflict, setAllowConflict] = useState(false);
+  const [conflictWarning, setConflictWarning] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const showToast = (msg: string) => {
@@ -77,9 +105,17 @@ export function InterviewsPage() {
   const loadData = useCallback(async () => {
     try {
       setIsLoading(true);
+      const [usersRes] = await Promise.allSettled([
+        getApi<OrgUser[] | { data?: OrgUser[] }>('/users'),
+      ]);
+      if (usersRes.status === 'fulfilled') {
+        const uList = Array.isArray(usersRes.value) ? usersRes.value : usersRes.value?.data || [];
+        setOrgUsers(uList.map((u) => ({ id: u.id, displayName: u.displayName || u.email })));
+      }
+
       if (vacancyId) {
         const [intRes, appRes, vacRes] = await Promise.allSettled([
-          getApi<any>('/interviews'),
+          getApi<InterviewListItem[] | { data?: InterviewListItem[] }>('/interviews'),
           getApi<PaginatedResult<Application>>(`/applications?vacancyId=${vacancyId}&page=1&pageSize=100`),
           getApi<VacancyDetailView>(`/vacancies/${vacancyId}`),
         ]);
@@ -95,16 +131,16 @@ export function InterviewsPage() {
         }
 
         const appIds = new Set(appList.map((a) => a.id));
-        const allInts = intRes.status === 'fulfilled' ? (Array.isArray(intRes.value) ? intRes.value : (intRes.value as any)?.data || []) : [];
-        const filteredInts = allInts.filter((int: any) => appIds.has(int.applicationId));
+        const allInts = intRes.status === 'fulfilled' ? (Array.isArray(intRes.value) ? intRes.value : intRes.value?.data || []) : [];
+        const filteredInts = allInts.filter((int) => appIds.has(int.applicationId));
         setApiInterviews(filteredInts);
       } else {
         setCurrentVacancy(null);
         const [intRes, appRes] = await Promise.all([
-          getApi<any>('/interviews').catch(() => []),
+          getApi<InterviewListItem[] | { data?: InterviewListItem[] }>('/interviews').catch((): InterviewListItem[] => []),
           getApi<PaginatedResult<Application>>('/applications?page=1&pageSize=50').catch(() => ({ data: [] })),
         ]);
-        const intList = Array.isArray(intRes) ? intRes : (intRes as any)?.data || [];
+        const intList = Array.isArray(intRes) ? intRes : intRes?.data || [];
         setApiInterviews(intList);
 
         const appList = appRes?.data || [];
@@ -124,18 +160,26 @@ export function InterviewsPage() {
     void loadData();
   }, [loadData]);
 
+  const myInterviewsCount = useMemo(() => {
+    if (!user?.id) return 0;
+    return apiInterviews.filter((int) =>
+      (Array.isArray(int.attendees) && int.attendees.some((a) => a.userId === user.id)) ||
+      int.candidateName === user.displayName
+    ).length;
+  }, [apiInterviews, user]);
+
   const interviewerOptions = useMemo(() => {
     const names = new Set<string>();
-    apiInterviews.forEach((int: any) => {
+    apiInterviews.forEach((int) => {
       if (Array.isArray(int.attendees)) {
-        int.attendees.forEach((att: any) => {
+        int.attendees.forEach((att) => {
           if (att.userName && att.userName.trim()) {
             names.add(att.userName.trim());
           }
         });
       }
       if (Array.isArray(int.scorecards)) {
-        int.scorecards.forEach((sc: any) => {
+        int.scorecards.forEach((sc) => {
           if (sc.interviewerName && sc.interviewerName.trim()) {
             names.add(sc.interviewerName.trim());
           }
@@ -148,7 +192,12 @@ export function InterviewsPage() {
   const interviewGroups: InterviewGroup[] = useMemo(() => {
     if (apiInterviews.length === 0) return [];
 
-    const filtered = apiInterviews.filter((int: any) => {
+    const filtered = apiInterviews.filter((int) => {
+      if (interviewsScope === 'mine' && user?.id) {
+        const isAssigned = Array.isArray(int.attendees) && int.attendees.some((a) => a.userId === user.id);
+        if (!isAssigned) return false;
+      }
+
       if (selectedType !== 'ALL') {
         const typeMatch = (int.interviewType || '').toLowerCase() === selectedType.toLowerCase();
         if (!typeMatch) return false;
@@ -156,15 +205,15 @@ export function InterviewsPage() {
       if (selectedStatus !== 'ALL') {
         const hasScorecards = Array.isArray(int.scorecards) && int.scorecards.length > 0;
         const isPast = int.scheduledStart && new Date(int.scheduledStart) < new Date();
-        let badge = int.status || 'Scheduled';
+        let badge: string = int.status || 'Scheduled';
         if (int.status === 'Completed' || hasScorecards) badge = 'Feedback Done';
         else if (isPast) badge = 'Feedback Pending';
 
         if (badge !== selectedStatus && int.status !== selectedStatus) return false;
       }
       if (selectedInterviewer !== 'ALL') {
-        const attendeeMatch = Array.isArray(int.attendees) && int.attendees.some((a: any) => a.userName === selectedInterviewer);
-        const scorecardMatch = Array.isArray(int.scorecards) && int.scorecards.some((s: any) => s.interviewerName === selectedInterviewer);
+        const attendeeMatch = Array.isArray(int.attendees) && int.attendees.some((a) => a.userName === selectedInterviewer);
+        const scorecardMatch = Array.isArray(int.scorecards) && int.scorecards.some((s) => s.interviewerName === selectedInterviewer);
         if (!attendeeMatch && !scorecardMatch) return false;
       }
       return true;
@@ -173,14 +222,14 @@ export function InterviewsPage() {
     if (filtered.length === 0) return [];
 
     // Group items by calendar date
-    const groupsMap = new Map<string, { dayTitle: string; daySubtitle: string; items: any[] }>();
+    const groupsMap = new Map<string, { dayTitle: string; daySubtitle: string; items: InterviewGroup['items'] }>();
     const now = new Date();
     const todayKey = now.toDateString();
     const tomorrow = new Date(now);
     tomorrow.setDate(tomorrow.getDate() + 1);
     const tomorrowKey = tomorrow.toDateString();
 
-    filtered.forEach((int: any) => {
+    filtered.forEach((int) => {
       const startDate = int.scheduledStart ? new Date(int.scheduledStart) : null;
       const dateKey = startDate ? startDate.toDateString() : 'Unscheduled';
 
@@ -212,7 +261,7 @@ export function InterviewsPage() {
         ? Math.round((new Date(int.scheduledEnd).getTime() - new Date(int.scheduledStart).getTime()) / 60000)
         : null;
 
-      const primaryAttendee = (Array.isArray(int.attendees) && int.attendees.find((a: any) => a.userName)?.userName) ||
+      const primaryAttendee = (Array.isArray(int.attendees) && int.attendees.find((a) => a.userName)?.userName) ||
         (Array.isArray(int.scorecards) && int.scorecards[0]?.interviewerName) ||
         'Unassigned';
       const interviewerAvatar = primaryAttendee === 'Unassigned'
@@ -248,7 +297,7 @@ export function InterviewsPage() {
 
       const hasScorecards = Array.isArray(int.scorecards) && int.scorecards.length > 0;
       const isPast = int.scheduledStart && new Date(int.scheduledStart) < new Date();
-      let statusBadge = int.status || 'Scheduled';
+      let statusBadge: string = int.status || 'Scheduled';
       let statusTone: 'green' | 'amber' | 'blue' = 'blue';
 
       if (int.status === 'Completed' || hasScorecards) {
@@ -257,29 +306,36 @@ export function InterviewsPage() {
       } else if (isPast) {
         statusBadge = 'Feedback Pending';
         statusTone = 'amber';
+      } else if (int.status === 'Scheduled') {
+        statusBadge = 'Scheduled';
+        statusTone = 'blue';
       }
 
-      const matchingApp = applications.find((a) => a.id === int.applicationId);
-      const candId = int.candidateId || int.application?.candidateId || int.application?.candidate?.id || matchingApp?.candidateId || '';
-      const appId = int.applicationId || matchingApp?.id || '';
-      const panelCount = Array.isArray(int.attendees) ? int.attendees.length : 0;
-      const panelLabel = panelCount > 1 ? `Panel (${panelCount})` : primaryAttendee;
+      const lowerType = (int.interviewType || '').toLowerCase();
+      const typeTone: 'purple' | 'blue' | 'green' =
+        lowerType.includes('technical') || lowerType.includes('clinical')
+          ? 'purple'
+          : lowerType.includes('screening')
+            ? 'blue'
+            : 'green';
 
       groupsMap.get(dateKey)!.items.push({
         id: int.id,
-        applicationId: appId,
-        candidateId: candId,
+        applicationId: int.applicationId,
+        candidateId: int.application?.candidateId || int.candidateId || '',
         locationUrl: int.locationUrl || undefined,
-        time: int.scheduledStart ? new Date(int.scheduledStart).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—',
-        duration: durationMins && durationMins > 0 ? `${durationMins}m` : '—',
+        time: startDate
+          ? startDate.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true })
+          : 'TBD',
+        duration: durationMins ? `${durationMins}m` : '45m',
         candidateName: name,
-        candidateRole: int.positionTitle || 'No position',
+        candidateRole: int.positionTitle || int.application?.positionTitle || 'Healthcare Specialist',
         candidateAvatar: initials,
-        jobTitle: int.positionTitle || 'No position',
-        department: int.department || '—',
-        typeTag: `${int.interviewType || 'General'} Interview`,
-        typeTone: int.interviewType === 'Technical' ? 'purple' : int.interviewType === 'Behavioral' || int.interviewType === 'HR' ? 'green' : 'blue',
-        panel: panelLabel,
+        jobTitle: int.positionTitle || int.application?.positionTitle || 'Position',
+        department: int.application?.vacancy?.department || 'Saudi German Health',
+        typeTag: int.interviewType ? `${int.interviewType} Round` : 'Panel Round',
+        typeTone,
+        panel: `${int.attendees?.length || 1} Interviewer${(int.attendees?.length || 1) > 1 ? 's' : ''}`,
         mode,
         modeIcon,
         interviewerName: primaryAttendee,
@@ -289,54 +345,68 @@ export function InterviewsPage() {
       });
     });
 
-    return Array.from(groupsMap.values()).map((grp) => ({
-      dayTitle: grp.dayTitle,
-      daySubtitle: grp.daySubtitle,
-      countLabel: `${grp.items.length} interview${grp.items.length !== 1 ? 's' : ''}`,
-      items: grp.items,
+    return Array.from(groupsMap.values()).map((g) => ({
+      ...g,
+      countLabel: `${g.items.length} interview${g.items.length > 1 ? 's' : ''}`,
     }));
-  }, [apiInterviews, selectedType, selectedStatus, selectedInterviewer]);
+  }, [apiInterviews, interviewsScope, selectedInterviewer, selectedStatus, selectedType, user]);
 
   const totalFilteredCount = useMemo(() => {
-    return interviewGroups.reduce((acc, grp) => acc + grp.items.length, 0);
+    return interviewGroups.reduce((acc, g) => acc + g.items.length, 0);
   }, [interviewGroups]);
-
-  const pendingFeedbackInterviews = useMemo(() => {
-    return apiInterviews.filter((int: any) => {
-      const isPast = int.scheduledStart && new Date(int.scheduledStart) < new Date();
-      const hasScorecards = Array.isArray(int.scorecards) && int.scorecards.length > 0;
-      return (int.status === 'Scheduled' && isPast) || (!hasScorecards && int.status !== 'Cancelled');
-    });
-  }, [apiInterviews]);
 
   const totalInterviews = apiInterviews.length;
   const completedCount = useMemo(() => {
-    return apiInterviews.filter((i: any) => i.status === 'Completed' || (Array.isArray(i.scorecards) && i.scorecards.length > 0)).length;
-  }, [apiInterviews]);
-  const panelsCount = useMemo(() => {
-    return apiInterviews.filter((i: any) => Array.isArray(i.attendees) && i.attendees.length > 1).length;
+    return apiInterviews.filter((i) => i.status === 'Completed' || (Array.isArray(i.scorecards) && i.scorecards.length > 0)).length;
   }, [apiInterviews]);
 
+  const pendingFeedbackInterviews = useMemo(() => {
+    const now = new Date();
+    return apiInterviews.filter((i) => {
+      const isPast = i.scheduledStart && new Date(i.scheduledStart) < now;
+      const noScorecards = !i.scorecards || i.scorecards.length === 0;
+      return isPast && noScorecards && i.status !== 'Cancelled';
+    });
+  }, [apiInterviews]);
+
+  const handleDownloadIcs = async (interviewId: string) => {
+    try {
+      const icsContent = await getApi<string>(`/interviews/${interviewId}/ics`);
+      const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `interview-${interviewId.slice(0, 8)}.ics`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('✓ Calendar invite (.ics) downloaded');
+    } catch {
+      showToast('Notice: Calendar invite download unavailable');
+    }
+  };
+
   const handleExportCsv = () => {
-    if (interviewGroups.length === 0) {
-      showToast('No interviews to export.');
+    if (apiInterviews.length === 0) {
+      showToast('No interviews available to export.');
       return;
     }
-    const headers = ['Candidate', 'Position', 'Type', 'Time', 'Interviewer', 'Status'];
-    const rows: string[][] = [];
-    interviewGroups.forEach((s) => {
-      s.items.forEach((inv) => {
-        rows.push([
-          `"${inv.candidateName}"`,
-          `"${inv.jobTitle}"`,
-          `"${inv.typeTag}"`,
-          `"${s.dayTitle} ${inv.time}"`,
-          `"${inv.interviewerName}"`,
-          `"${inv.statusBadge}"`,
-        ]);
-      });
-    });
-    const blob = new Blob([[headers.join(','), ...rows.map((r) => r.join(','))].join('\n')], { type: 'text/csv;charset=utf-8;' });
+
+    const headers = ['Interview Code', 'Candidate', 'Position', 'Type', 'Scheduled Start', 'Scheduled End', 'Status', 'Interviewer'];
+    const rows = apiInterviews.map((int) => [
+      `"${int.interviewCode || ''}"`,
+      `"${(int.candidateName || '').replace(/"/g, '""')}"`,
+      `"${(int.positionTitle || '').replace(/"/g, '""')}"`,
+      `"${int.interviewType || ''}"`,
+      `"${int.scheduledStart || ''}"`,
+      `"${int.scheduledEnd || ''}"`,
+      `"${int.status || ''}"`,
+      `"${(int.attendees?.[0]?.userName || '').replace(/"/g, '""')}"`,
+    ]);
+
+    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -354,27 +424,38 @@ export function InterviewsPage() {
     }
 
     setIsSubmitting(true);
+    setConflictWarning(null);
+
     try {
       const startDate = new Date(scheduledDateTime);
       const endDate = new Date(startDate.getTime() + 45 * 60000);
 
       const resolvedTitle = interviewTitle.trim() || `${interviewType} Interview Round`;
+      const attendeeIds = selectedAttendees.length > 0 ? selectedAttendees : (user?.id ? [user.id] : []);
+
       await postApi('/interviews', {
         applicationId: selectedAppId,
         title: resolvedTitle,
         interviewType,
         scheduledStart: startDate.toISOString(),
         scheduledEnd: endDate.toISOString(),
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Riyadh',
+        attendeeUserIds: attendeeIds,
+        allowConflict,
       });
 
       showToast(`✓ Interview "${resolvedTitle}" scheduled successfully!`);
       setIsScheduleModalOpen(false);
+      setAllowConflict(false);
+      setConflictWarning(null);
       await loadData();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to schedule interview';
-      showToast(`Notice: ${msg}`);
-      setIsScheduleModalOpen(false);
+      if (err instanceof ApiError && err.statusCode === 409) {
+        setConflictWarning(err.message);
+      } else {
+        const msg = err instanceof Error ? err.message : 'Failed to schedule interview';
+        showToast(`Notice: ${msg}`);
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -382,21 +463,21 @@ export function InterviewsPage() {
 
   return (
     <div className="flex w-full flex-col p-4 sm:p-6 lg:p-7 max-w-[1720px] mx-auto space-y-6">
-      {/* ── Page Header & Top Controls matching 09-interviews.png ── */}
+      {/* ── Page Header & Top Controls ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2.5 flex-wrap">
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-              Interviews
+              Interviews &amp; Scheduling
             </h1>
             <QuickGuideTrigger />
           </div>
           <p className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">
-            Manage and conduct interviews with candidates.
+            Coordinate panel interviews, candidate self-booking, and clinical evaluations.
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 flex-wrap">
           <button
             type="button"
             onClick={handleExportCsv}
@@ -408,7 +489,21 @@ export function InterviewsPage() {
 
           <button
             type="button"
-            onClick={() => setIsScheduleModalOpen(true)}
+            onClick={() => setIsSelfScheduleModalOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 rounded-xl text-xs font-bold hover:bg-emerald-100 transition shadow-xs cursor-pointer"
+            title="Generate Candidate Self-Schedule Link"
+          >
+            <Icon name="calendar" size={13} />
+            <span>Self-Schedule Link</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setConflictWarning(null);
+              setAllowConflict(false);
+              setIsScheduleModalOpen(true);
+            }}
             className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
           >
             <Icon name="plus" size={14} />
@@ -417,7 +512,7 @@ export function InterviewsPage() {
         </div>
       </div>
 
-      {/* Position Context Banner (E7.2) */}
+      {/* Position Context Banner (if vacancyId filtered) */}
       {currentVacancy && (
         <div className="bg-gradient-to-r from-blue-50 via-indigo-50/40 to-slate-50 dark:from-blue-950/40 dark:via-indigo-950/20 dark:to-slate-900 rounded-2xl border border-blue-200/80 dark:border-blue-900/60 p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
@@ -465,7 +560,47 @@ export function InterviewsPage() {
         </div>
       )}
 
-      {/* ── Filter Row (Extracted Component) ── */}
+      {/* ── Scope Toggle & Quick View Buttons ── */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setInterviewsScope('all')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition cursor-pointer ${
+              interviewsScope === 'all'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50'
+            }`}
+          >
+            All Interviews ({apiInterviews.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setInterviewsScope('mine')}
+            className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition cursor-pointer flex items-center gap-1.5 ${
+              interviewsScope === 'mine'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50'
+            }`}
+          >
+            <Icon name="user" size={12} />
+            <span>My Assigned Interviews ({myInterviewsCount})</span>
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2 text-xs">
+          <button
+            type="button"
+            onClick={() => navigate('/interviews/calendar')}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold transition cursor-pointer"
+          >
+            <Icon name="calendar" size={13} />
+            <span>Calendar View</span>
+          </button>
+        </div>
+      </div>
+
+      {/* ── Filter Row ── */}
       <InterviewFiltersBar
         dateRange={dateRange}
         setDateRange={setDateRange}
@@ -480,41 +615,6 @@ export function InterviewsPage() {
         setIsMoreFiltersOpen={setIsMoreFiltersOpen}
       />
 
-      {/* ── Tabs & Sort Bar ── */}
-      <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
-        <div className="flex items-center gap-6 text-xs font-semibold">
-          <button
-            type="button"
-            onClick={() => navigate('/interviews/calendar')}
-            className={`flex items-center gap-1.5 pb-2 transition cursor-pointer ${
-              viewMode === 'calendar' ? 'text-blue-600 font-extrabold border-b-2 border-blue-600' : 'text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            <Icon name="calendar" size={14} />
-            <span>Calendar</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setViewMode('list')}
-            className={`flex items-center gap-1.5 pb-2 transition cursor-pointer ${
-              viewMode === 'list' ? 'text-blue-600 font-extrabold border-b-2 border-blue-600' : 'text-slate-500 hover:text-slate-900'
-            }`}
-          >
-            <Icon name="menu" size={14} />
-            <span>List</span>
-          </button>
-        </div>
-
-        <div className="flex items-center gap-2 text-xs">
-          <span className="text-slate-400 font-medium">Sort by:</span>
-          <select className="bg-transparent border-none text-xs font-bold text-slate-800 dark:text-slate-200 cursor-pointer focus:outline-none">
-            <option value="Date">Date</option>
-            <option value="Status">Status</option>
-            <option value="Candidate">Candidate</option>
-          </select>
-        </div>
-      </div>
-
       {/* ── Main Layout: Interview List (~72%) & Right Sidebar (~28%) ── */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left Column: Interview Day Groups (8 cols) */}
@@ -527,10 +627,10 @@ export function InterviewsPage() {
               title="No interviews scheduled"
               description={
                 apiInterviews.length === 0
-                  ? "There are no scheduled interviews yet."
-                  : "No interviews match your selected filters."
+                  ? 'There are no scheduled interviews yet.'
+                  : 'No interviews match your selected filters.'
               }
-              actionLabel={apiInterviews.length === 0 ? "Schedule Interview" : "Reset Filters"}
+              actionLabel={apiInterviews.length === 0 ? 'Schedule Interview' : 'Reset Filters'}
               onAction={() => {
                 if (apiInterviews.length === 0) {
                   setIsScheduleModalOpen(true);
@@ -538,6 +638,7 @@ export function InterviewsPage() {
                   setSelectedType('ALL');
                   setSelectedStatus('ALL');
                   setSelectedInterviewer('ALL');
+                  setInterviewsScope('all');
                 }
               }}
             />
@@ -560,7 +661,15 @@ export function InterviewsPage() {
                   {/* Modernized Interview Agenda Cards */}
                   <div className="space-y-3">
                     {group.items.map((item) => (
-                      <InterviewAgendaCard key={item.id} item={item} />
+                      <InterviewAgendaCard
+                        key={item.id}
+                        item={item}
+                        onDownloadIcs={handleDownloadIcs}
+                        onQuickScorecard={(id) => {
+                          const int = apiInterviews.find((i) => i.id === id);
+                          if (int) setScorecardInterview(int);
+                        }}
+                      />
                     ))}
                   </div>
                 </div>
@@ -597,14 +706,14 @@ export function InterviewsPage() {
               {pendingFeedbackInterviews.length === 0 ? (
                 <p className="text-xs text-slate-400 italic py-2">No pending feedback.</p>
               ) : (
-                pendingFeedbackInterviews.slice(0, 4).map((int: any) => {
+                pendingFeedbackInterviews.slice(0, 4).map((int) => {
                   const name = int.candidateName || (int.application?.candidate ? `${int.application.candidate.firstName} ${int.application.candidate.lastName}` : 'Unknown candidate');
                   const role = int.positionTitle || 'No position';
                   const pendingCount = Math.max(1, (int.attendees?.length || 1) - (int.scorecards?.length || 0));
                   return (
                     <div
                       key={int.id}
-                      onClick={() => navigate(`/interviews/${int.id}`)}
+                      onClick={() => setScorecardInterview(int)}
                       className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800/60 transition cursor-pointer"
                     >
                       <div>
@@ -650,48 +759,7 @@ export function InterviewsPage() {
                 </span>
                 <span className="font-bold text-slate-900 dark:text-white">{pendingFeedbackInterviews.length}</span>
               </div>
-
-              <div className="flex items-center justify-between py-1">
-                <span className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
-                  <Icon name="users" size={14} className="text-purple-500" /> Interview Panels
-                </span>
-                <span className="font-bold text-slate-900 dark:text-white">{panelsCount}</span>
-              </div>
             </div>
-          </div>
-
-          {/* Quick Actions Card */}
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-2.5">
-            <h2 className="text-sm font-extrabold text-slate-900 dark:text-white mb-2">
-              Quick Actions
-            </h2>
-
-            {[
-              { label: 'Schedule Interview', sub: 'Plan a new interview', icon: 'calendar', tone: 'text-emerald-500' },
-              { label: 'Interview Templates', sub: 'Manage templates', icon: 'document', tone: 'text-blue-500' },
-              { label: 'Interview Types', sub: 'Manage interview types', icon: 'chat', tone: 'text-amber-500' },
-              { label: 'Interview Feedback', sub: 'View and provide feedback', icon: 'award', tone: 'text-purple-500' },
-              { label: 'Interview Guidelines', sub: 'Best practices & guidelines', icon: 'help', tone: 'text-blue-500' },
-            ].map((action) => (
-              <div
-                key={action.label}
-                onClick={() => setIsScheduleModalOpen(true)}
-                className="p-2 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer flex items-center justify-between group"
-              >
-                <div className="flex items-center gap-2.5">
-                  <Icon name={action.icon as any} size={15} className={action.tone} />
-                  <div>
-                    <span className="block text-xs font-bold text-slate-900 dark:text-white group-hover:text-blue-600 transition">
-                      {action.label}
-                    </span>
-                    <span className="block text-[10px] text-slate-400">
-                      {action.sub}
-                    </span>
-                  </div>
-                </div>
-                <Icon name="chevron-right" size={13} className="text-slate-300 group-hover:translate-x-0.5 transition" />
-              </div>
-            ))}
           </div>
         </div>
       </div>
@@ -741,7 +809,7 @@ export function InterviewsPage() {
             <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">Interview Type</label>
             <select
               value={interviewType}
-              onChange={(e) => setInterviewType(e.target.value as any)}
+                onChange={(e) => setInterviewType(e.target.value as InterviewType)}
               className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
             >
               <option value="Screening">Screening Round</option>
@@ -757,10 +825,57 @@ export function InterviewsPage() {
             <input
               type="datetime-local"
               value={scheduledDateTime}
-              onChange={(e) => setScheduledDateTime(e.target.value)}
+              onChange={(e) => {
+                setScheduledDateTime(e.target.value);
+                setConflictWarning(null);
+              }}
               className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
             />
           </div>
+
+          {orgUsers.length > 0 && (
+            <div>
+              <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">Assigned Interviewer Panel</label>
+              <div className="max-h-24 overflow-y-auto p-2 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 space-y-1">
+                {orgUsers.map((u) => {
+                  const isChecked = selectedAttendees.includes(u.id);
+                  return (
+                    <label key={u.id} className="flex items-center gap-2 cursor-pointer text-[11px]">
+                      <input
+                        type="checkbox"
+                        checked={isChecked}
+                        onChange={(e) => {
+                          if (e.target.checked) setSelectedAttendees([...selectedAttendees, u.id]);
+                          else setSelectedAttendees(selectedAttendees.filter((id) => id !== u.id));
+                        }}
+                        className="rounded text-blue-600 focus:ring-0"
+                      />
+                      <span className="text-slate-700 dark:text-slate-200 font-medium">{u.displayName}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Conflict Warning & Override Checkbox */}
+          {conflictWarning && (
+            <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl space-y-2 animate-fade-in">
+              <div className="text-xs text-amber-800 dark:text-amber-300 font-semibold flex items-start gap-1.5">
+                <Icon name="alert-triangle" size={14} className="text-amber-500 shrink-0 mt-0.5" />
+                <span>{conflictWarning}</span>
+              </div>
+              <label className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-slate-200 cursor-pointer pt-1">
+                <input
+                  type="checkbox"
+                  checked={allowConflict}
+                  onChange={(e) => setAllowConflict(e.target.checked)}
+                  className="rounded text-amber-600 focus:ring-0"
+                />
+                <span>Allow conflict &amp; book anyway (Urgent healthcare schedule)</span>
+              </label>
+            </div>
+          )}
 
           <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
             <button
@@ -773,13 +888,37 @@ export function InterviewsPage() {
             <button
               type="submit"
               disabled={isSubmitting || !selectedAppId}
-              className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold cursor-pointer transition disabled:opacity-50"
+              className={`px-4 py-1.5 text-white rounded-xl font-bold cursor-pointer transition disabled:opacity-50 ${
+                allowConflict ? 'bg-amber-600 hover:bg-amber-700' : 'bg-blue-600 hover:bg-blue-700'
+              }`}
             >
-              {isSubmitting ? 'Saving to DB...' : 'Schedule & Send Invite'}
+              {isSubmitting
+                ? 'Saving...'
+                : allowConflict
+                ? 'Force Book (Override Conflict)'
+                : 'Schedule & Send Invite'}
             </button>
           </div>
         </form>
       </Modal>
+
+      {/* Fast Scorecard Modal */}
+      <FastScorecardModal
+        isOpen={Boolean(scorecardInterview)}
+        interview={scorecardInterview}
+        onClose={() => setScorecardInterview(null)}
+        onSuccess={() => {
+          showToast('✓ Scorecard submitted & permanently locked in hospital records');
+          void loadData();
+        }}
+      />
+
+      {/* Candidate Self-Schedule Generator Modal */}
+      <SelfScheduleModal
+        isOpen={isSelfScheduleModalOpen}
+        onClose={() => setIsSelfScheduleModalOpen(false)}
+        applications={applications}
+      />
 
       {/* Toast Feedback */}
       {toastMessage && (

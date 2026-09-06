@@ -6,7 +6,7 @@
     "build": "nest build",
     "start": "node dist/apps/api/src/main.js",
     "start:dev": "nest build && node dist/apps/api/src/main.js",
-    "test": "pnpm --dir ../web exec vitest run --root ../.. --environment node --globals apps/api/src/common/errors/error-normalizer.spec.ts",
+    "test": "pnpm --dir ../web exec vitest run --root ../.. --environment node --globals apps/api/src",
     "typecheck": "tsc --noEmit",
     "lint": "pnpm --dir ../.. exec eslint apps/api/src --max-warnings=0"
   },

@@ -5,6 +5,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "tsx watch src/main.ts",
+    "test": "pnpm --dir ../web exec vitest run --root ../.. --environment node --globals apps/worker/src",
     "typecheck": "tsc --noEmit",
     "lint": "pnpm --dir ../.. exec eslint apps/worker/src --max-warnings=0"
   },

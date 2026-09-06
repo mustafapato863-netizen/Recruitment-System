@@ -17,6 +17,7 @@ Table organizations {
   applications applications [not null]
   candidateDocuments candidate_documents [not null]
   screeningLogs screening_logs [not null]
+  applicationNotes application_notes [not null]
   interviews interviews [not null]
   offers offers [not null]
   hiringCases hiring_cases [not null]
@@ -29,6 +30,7 @@ Table organizations {
   authTokens auth_tokens [not null]
   customRoles roles [not null]
   emailOutbox email_outbox [not null]
+  emailTemplates email_templates [not null]
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [not null]
 }
@@ -125,6 +127,7 @@ Table users {
   uploadedDocuments candidate_documents [not null]
   deletedDocuments candidate_documents [not null]
   screeningLogs screening_logs [not null]
+  applicationNotes application_notes [not null]
   interviewAttendeeLinks interview_attendees [not null]
   submittedScorecards interview_scorecards [not null]
   offerApprovals offer_approvals [not null]
@@ -400,6 +403,7 @@ Table applications {
   appliedAt DateTime [default: `now()`, not null]
   statusHistory application_status_histories [not null]
   screeningLogs screening_logs [not null]
+  notes application_notes [not null]
   interviews interviews [not null]
   offers offers [not null]
   hiringCase hiring_cases
@@ -421,6 +425,19 @@ Table application_status_histories {
   changedBy users
   reason String
   createdAt DateTime [default: `now()`, not null]
+}
+
+Table application_notes {
+  id String [pk]
+  organizationId String [not null]
+  organization organizations [not null]
+  applicationId String [not null]
+  application applications [not null]
+  authorId String
+  author users
+  content String [not null]
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
 }
 
 Table candidate_documents {
@@ -713,6 +730,21 @@ Table candidate_import_rows {
   createdAt DateTime [default: `now()`, not null]
 }
 
+Table email_templates {
+  id String [pk]
+  organizationId String [not null]
+  organization organizations [not null]
+  name String [not null]
+  category String [not null, default: 'stage_auto']
+  subject String [not null]
+  bodyTemplate String [not null]
+  isDefault Boolean [not null, default: false]
+  status String [not null, default: 'Active']
+  pipelineStages pipeline_stages [not null]
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+}
+
 Table pipeline_templates {
   id String [pk]
   organizationId String [not null]
@@ -737,6 +769,12 @@ Table pipeline_stages {
   entryGate String
   exitGate String
   status String [not null, default: 'Active']
+  emailTemplateId String
+  emailTemplate email_templates
+  autoMoveToStageId String
+  folded Boolean [not null, default: false]
+  isHiredStage Boolean [not null, default: false]
+  tooltip String
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [not null]
 }
@@ -863,6 +901,12 @@ Ref: application_status_histories.applicationId > applications.id [delete: Restr
 
 Ref: application_status_histories.changedById > users.id [delete: Restrict]
 
+Ref: application_notes.organizationId > organizations.id [delete: Restrict]
+
+Ref: application_notes.applicationId > applications.id [delete: Restrict]
+
+Ref: application_notes.authorId > users.id [delete: Restrict]
+
 Ref: candidate_documents.organizationId > organizations.id [delete: Restrict]
 
 Ref: candidate_documents.candidateId > candidates.id [delete: Restrict]
@@ -931,9 +975,13 @@ Ref: candidate_import_jobs.uploadedById > users.id [delete: Restrict]
 
 Ref: candidate_import_rows.jobId > candidate_import_jobs.id [delete: Cascade]
 
+Ref: email_templates.organizationId > organizations.id [delete: Restrict]
+
 Ref: pipeline_templates.organizationId > organizations.id [delete: Restrict]
 
 Ref: pipeline_stages.templateId > pipeline_templates.id [delete: Cascade]
+
+Ref: pipeline_stages.emailTemplateId > email_templates.id [delete: Set Null]
 
 Ref: integrations.organizationId > organizations.id [delete: Restrict]
 

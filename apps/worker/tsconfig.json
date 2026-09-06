@@ -7,5 +7,6 @@
     "outDir": "dist",
     "baseUrl": "."
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist", "src/**/__tests__/**", "src/**/*.spec.ts", "src/**/*.test.ts"]
 }

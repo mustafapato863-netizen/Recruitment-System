@@ -27,6 +27,7 @@ import { EmailModule } from './email/email.module';
 import { TasksModule } from './tasks/tasks.module';
 import { SearchModule } from './search/search.module';
 import { PublicJobsModule } from './public-jobs/public-jobs.module';
+import { EmailTemplatesModule } from './email-templates/email-templates.module';
 import { CorrelationIdMiddleware, TenantContextMiddleware } from './common/middleware';
 
 @Module({
@@ -60,6 +61,7 @@ import { CorrelationIdMiddleware, TenantContextMiddleware } from './common/middl
     TasksModule,
     SearchModule,
     PublicJobsModule,
+    EmailTemplatesModule,
   ],
   controllers: [HealthController],
 })

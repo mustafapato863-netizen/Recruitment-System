@@ -702,7 +702,8 @@ export interface ApplicationNote {
   id: string;
   organizationId: string;
   applicationId: string;
-  authorId: string;
+  // null = system/automation actor; string = user UUID
+  authorId: string | null;
   authorName?: string | undefined;
   authorEmail?: string | undefined;
   content: string;
@@ -825,8 +826,31 @@ export interface Interview {
   status: InterviewStatus;
   attendees?: InterviewAttendeeItem[] | undefined;
   scorecards?: InterviewScorecardItem[] | undefined;
+  cancellationReason?: string | null | undefined;
+  rescheduleReason?: string | null | undefined;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface InterviewerConflict {
+  interviewerId: string;
+  interviewerName?: string | undefined;
+  interviewId: string;
+  title: string;
+  scheduledStart: string;
+  scheduledEnd: string;
+}
+
+export interface CheckAvailabilityQuery {
+  interviewerUserIds: string[];
+  startDate: string;
+  endDate: string;
+  excludeInterviewId?: string | undefined;
+}
+
+export interface AvailabilityResult {
+  conflicts: InterviewerConflict[];
+  hasConflict: boolean;
 }
 
 export interface CreateInterviewInput {
@@ -838,6 +862,7 @@ export interface CreateInterviewInput {
   timezone?: string | undefined;
   locationUrl?: string | undefined;
   attendeeUserIds: string[];
+  allowConflict?: boolean | undefined;
 }
 
 export interface UpdateInterviewInput {
@@ -846,6 +871,9 @@ export interface UpdateInterviewInput {
   scheduledEnd?: string | undefined;
   locationUrl?: string | undefined;
   status?: InterviewStatus | undefined;
+  cancellationReason?: string | undefined;
+  rescheduleReason?: string | undefined;
+  allowConflict?: boolean | undefined;
 }
 
 export interface SubmitScorecardInput {
@@ -854,6 +882,54 @@ export interface SubmitScorecardInput {
   strengths?: string | undefined;
   concerns?: string | undefined;
   notes?: string | undefined;
+}
+
+export interface GenerateSelfScheduleInput {
+  applicationId: string;
+  title: string;
+  interviewType: InterviewType;
+  durationMinutes?: number | undefined;
+  attendeeUserIds: string[];
+  expiresInHours?: number | undefined;
+}
+
+export interface GenerateSelfScheduleResult {
+  token: string;
+  scheduleUrl: string;
+  expiresAt: string;
+}
+
+export interface CandidateSelfScheduleSlot {
+  start: string;
+  end: string;
+  formattedTime: string;
+}
+
+export interface SelfScheduleInvitationView {
+  valid: boolean;
+  candidateName: string;
+  positionTitle: string;
+  interviewTitle: string;
+  interviewType: InterviewType;
+  durationMinutes: number;
+  timezone: string;
+  availableSlots: CandidateSelfScheduleSlot[];
+  expiresAt: string;
+}
+
+export interface BookSelfScheduleInput {
+  selectedSlot: string;
+  timezone: string;
+  candidateNotes?: string | undefined;
+}
+
+export interface BookSelfScheduleResult {
+  success: boolean;
+  interviewId: string;
+  interviewCode: string;
+  scheduledStart: string;
+  scheduledEnd: string;
+  message: string;
 }
 
 // ─── Offers (Phase 5) ────────────────────────────────────────
@@ -1249,6 +1325,11 @@ export interface PipelineStageItem {
   entryGate?: string | null;
   exitGate?: string | null;
   status: string;
+  // Phase C — Stage Automation fields
+  emailTemplateId?: string | null;
+  folded?: boolean;
+  isHiredStage?: boolean;
+  tooltip?: string | null;
 }
 
 export interface IntegrationItem {
@@ -1259,6 +1340,22 @@ export interface IntegrationItem {
   status: string;
   lastSyncAt?: string | null;
 }
+
+// ─── Phase C: Stage Automation — Email Templates ────────────────
+export interface EmailTemplateItem {
+  id: string;
+  organizationId: string;
+  name: string;
+  category: string;
+  subject: string;
+  bodyTemplate: string;
+  isDefault: boolean;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type EmailTemplateDetail = EmailTemplateItem;
 
 // ─── Phase 10 Notifications & Tasks ───────────────────────────
 export type {
@@ -1271,3 +1368,4 @@ export type {
   UpdateTaskStatusInput,
   TaskFilterInput,
 } from './notifications-tasks';
+

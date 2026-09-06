@@ -2,6 +2,7 @@ import {
   Body,
   Controller,
   Get,
+  Header,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -12,11 +13,14 @@ import {
 // DTO classes must remain runtime imports for Nest metadata reflection.
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { InterviewsService } from './interviews.service';
+import { SelfScheduleService } from './self-schedule.service';
 import {
   CreateInterviewDto,
   UpdateInterviewDto,
   SubmitScorecardDto,
   InterviewQueryDto,
+  CheckAvailabilityDto,
+  GenerateSelfScheduleDto,
 } from './interviews.dto';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -30,7 +34,10 @@ import type { AuthUser } from '@recruitflow/contracts';
 @UseGuards(JwtAuthGuard)
 @Controller('interviews')
 export class InterviewsController {
-  constructor(private readonly interviewsService: InterviewsService) {}
+  constructor(
+    private readonly interviewsService: InterviewsService,
+    private readonly selfScheduleService: SelfScheduleService,
+  ) {}
 
   @Get()
   @RequirePermissions('VACANCY_VIEW')
@@ -41,12 +48,47 @@ export class InterviewsController {
     return this.interviewsService.listInterviews(user.organizationId, query);
   }
 
+  @Post('availability')
+  @RequirePermissions('VACANCY_VIEW')
+  checkAvailability(
+    @CurrentUser() user: AuthUser,
+    @Body() body: CheckAvailabilityDto,
+  ) {
+    return this.interviewsService.getAvailability(
+      user.organizationId,
+      body.attendeeUserIds,
+      body.scheduledStart,
+      body.scheduledEnd,
+      body.excludeInterviewId,
+    );
+  }
+
+  @Post('self-schedule-link')
+  @RequirePermissions('APPLICATION_MOVE_STAGE')
+  @AuditAction('INTERVIEW_GENERATE_SELF_SCHEDULE')
+  generateSelfScheduleLink(
+    @CurrentUser() user: AuthUser,
+    @Body() body: GenerateSelfScheduleDto,
+  ) {
+    return this.selfScheduleService.createInvitationLink(user.organizationId, body);
+  }
+
   @Get(':id')
   @RequirePermissions('VACANCY_VIEW')
   @UseGuards(TenantScopedGuard)
   @TenantResource({ resource: 'interview', param: 'id' })
   getInterview(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.interviewsService.getInterview(user.organizationId, id);
+  }
+
+  @Get(':id/ics')
+  @RequirePermissions('VACANCY_VIEW')
+  @UseGuards(TenantScopedGuard)
+  @TenantResource({ resource: 'interview', param: 'id' })
+  @Header('Content-Type', 'text/calendar; charset=utf-8')
+  @Header('Content-Disposition', 'attachment; filename="interview.ics"')
+  getInterviewIcs(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.interviewsService.getInterviewIcs(user.organizationId, id);
   }
 
   @Post()

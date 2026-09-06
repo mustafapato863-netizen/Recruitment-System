@@ -41,6 +41,7 @@ model Organization {
   authTokens          AuthToken[]
   customRoles         Role[]
   emailOutbox         EmailOutbox[]
+  emailTemplates      EmailTemplate[]
   createdAt           DateTime             @default(now()) @db.Timestamptz(6)
   updatedAt           DateTime             @updatedAt @db.Timestamptz(6)
 
@@ -482,8 +483,9 @@ model ApplicationNote {
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   applicationId  String       @db.Uuid
   application    Application  @relation(fields: [applicationId], references: [id], onDelete: Restrict)
-  authorId       String       @db.Uuid
-  author         User         @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  // authorId is nullable for system/automation notes (authorId = null means system actor)
+  authorId       String?      @db.Uuid
+  author         User?        @relation(fields: [authorId], references: [id], onDelete: Restrict)
   content        String       @db.Text
   createdAt      DateTime     @default(now()) @db.Timestamptz(6)
   updatedAt      DateTime     @updatedAt @db.Timestamptz(6)
@@ -492,6 +494,7 @@ model ApplicationNote {
   @@index([organizationId, applicationId])
   @@map("application_notes")
 }
+
 
 model CandidateDocument {
   id                     String                  @id @default(uuid()) @db.Uuid
@@ -838,6 +841,28 @@ model CandidateImportRow {
 
 // ─── Phase 8: Reports, Pipeline & Integrations ─────────────────
 
+// ─── Phase C: Stage Automation — email templates ─────────────────
+// Tenant-scoped reusable email templates for stage-enter automation.
+// Variables supported: {{candidateName}} {{positionTitle}} {{stageName}} {{organizationName}}
+model EmailTemplate {
+  id             String          @id @default(uuid()) @db.Uuid
+  organizationId String          @db.Uuid
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  name           String          @db.VarChar(200)
+  category       String          @default("stage_auto") @db.VarChar(50)
+  subject        String          @db.VarChar(500)
+  bodyTemplate   String
+  isDefault      Boolean         @default(false)
+  status         String          @default("Active") @db.VarChar(30)
+  pipelineStages PipelineStage[]
+  createdAt      DateTime        @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime        @updatedAt @db.Timestamptz(6)
+
+  @@index([organizationId, status])
+  @@index([organizationId, category])
+  @@map("email_templates")
+}
+
 model PipelineTemplate {
   id             String          @id @default(uuid()) @db.Uuid
   organizationId String          @db.Uuid
@@ -854,19 +879,26 @@ model PipelineTemplate {
 }
 
 model PipelineStage {
-  id           String           @id @default(uuid()) @db.Uuid
-  templateId   String           @db.Uuid
-  template     PipelineTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  name         String           @db.VarChar(100)
-  stageType    String           @db.VarChar(50)
-  sortOrder    Int              @default(0)
-  slaDays      Int?
-  defaultOwner String?          @db.VarChar(100)
-  entryGate    String?          @db.VarChar(200)
-  exitGate     String?          @db.VarChar(200)
-  status       String           @default("Active") @db.VarChar(30)
-  createdAt    DateTime         @default(now()) @db.Timestamptz(6)
-  updatedAt    DateTime         @updatedAt @db.Timestamptz(6)
+  id                 String           @id @default(uuid()) @db.Uuid
+  templateId         String           @db.Uuid
+  template           PipelineTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  name               String           @db.VarChar(100)
+  stageType          String           @db.VarChar(50)
+  sortOrder          Int              @default(0)
+  slaDays            Int?
+  defaultOwner       String?          @db.VarChar(100)
+  entryGate          String?          @db.VarChar(200)
+  exitGate           String?          @db.VarChar(200)
+  status             String           @default("Active") @db.VarChar(30)
+  // Stage automation fields (Phase C)
+  emailTemplateId    String?          @db.Uuid
+  emailTemplate      EmailTemplate?   @relation(fields: [emailTemplateId], references: [id], onDelete: SetNull)
+  autoMoveToStageId  String?          @db.Uuid   // reserved for future auto-advance
+  folded             Boolean          @default(false)
+  isHiredStage       Boolean          @default(false)
+  tooltip            String?          @db.VarChar(500)
+  createdAt          DateTime         @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime         @updatedAt @db.Timestamptz(6)
 
   @@index([templateId, sortOrder])
   @@map("pipeline_stages")

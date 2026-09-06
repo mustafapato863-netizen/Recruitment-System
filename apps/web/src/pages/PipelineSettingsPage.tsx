@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
-import type { PipelineStageItem, PipelineTemplateItem } from '@recruitflow/contracts';
+import type { PipelineStageItem, PipelineTemplateItem, EmailTemplateItem } from '@recruitflow/contracts';
 import { deleteApi, getApi, patchApi, postApi } from '../api/client';
 import { Icon } from '../components/Icon';
 import { Modal } from '../components/Modal';
@@ -22,10 +22,27 @@ import './PageEnhancementsV2.css';
 
 type PipelineTemplateDetail = PipelineTemplateItem & { stages: PipelineStageItem[] };
 type TemplateForm = { name: string; isDefault: boolean };
-type StageForm = { name: string; stageType: string; slaDays: string };
+type StageForm = {
+  name: string;
+  stageType: string;
+  slaDays: string;
+  // Phase C — Stage Automation fields
+  emailTemplateId: string;
+  folded: boolean;
+  isHiredStage: boolean;
+  tooltip: string;
+};
 
 const emptyTemplateForm: TemplateForm = { name: '', isDefault: false };
-const emptyStageForm: StageForm = { name: '', stageType: 'Screening', slaDays: '' };
+const emptyStageForm: StageForm = {
+  name: '',
+  stageType: 'Screening',
+  slaDays: '',
+  emailTemplateId: '',
+  folded: false,
+  isHiredStage: false,
+  tooltip: '',
+};
 
 const stageColumns: ResponsiveDataColumn<PipelineStageItem>[] = [
   {
@@ -64,7 +81,7 @@ export function PipelineSettingsPage() {
   const [templates, setTemplates] = useState<PipelineTemplateItem[]>([]);
   const [selected, setSelected] = useState<PipelineTemplateDetail | null>(null);
   const [templateForm, setTemplateForm] = useState(emptyTemplateForm);
-  const [stageForm, setStageForm] = useState(emptyStageForm);
+  const [stageForm, setStageForm] = useState<StageForm>(emptyStageForm);
   const [editingTemplate, setEditingTemplate] = useState(false);
   const [editingStage, setEditingStage] = useState<PipelineStageItem | null>(null);
   const [pendingDelete, setPendingDelete] = useState<{ kind: 'template' | 'stage'; id: string } | null>(null);
@@ -73,6 +90,7 @@ export function PipelineSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [emailTemplates, setEmailTemplates] = useState<EmailTemplateItem[]>([]);
 
   const loadTemplate = useCallback(async (id: string) => {
     const detail = await getApi<PipelineTemplateDetail>(`/pipeline-templates/${id}`);
@@ -99,6 +117,13 @@ export function PipelineSettingsPage() {
   }, [loadTemplate, selected?.id]);
 
   useEffect(() => { void loadTemplates(); }, [loadTemplates]);
+
+  // Load email templates for the stage automation dropdown
+  useEffect(() => {
+    getApi<EmailTemplateItem[]>('/email-templates')
+      .then(setEmailTemplates)
+      .catch(() => {/* non-blocking */});
+  }, []);
 
   const handleCreateTemplate = async (event: FormEvent) => {
     event.preventDefault();
@@ -143,6 +168,10 @@ export function PipelineSettingsPage() {
         name: stageForm.name.trim(),
         stageType: stageForm.stageType,
         slaDays: stageForm.slaDays ? Number(stageForm.slaDays) : undefined,
+        emailTemplateId: stageForm.emailTemplateId || undefined,
+        folded: stageForm.folded,
+        isHiredStage: stageForm.isHiredStage,
+        tooltip: stageForm.tooltip.trim() || undefined,
       });
       setStageForm(emptyStageForm);
       setIsStageModalOpen(false);
@@ -163,6 +192,10 @@ export function PipelineSettingsPage() {
         name: stageForm.name.trim(),
         stageType: stageForm.stageType,
         slaDays: stageForm.slaDays ? Number(stageForm.slaDays) : null,
+        emailTemplateId: stageForm.emailTemplateId || null,
+        folded: stageForm.folded,
+        isHiredStage: stageForm.isHiredStage,
+        tooltip: stageForm.tooltip.trim() || null,
       });
       setEditingStage(null);
       await loadTemplates(selected.id);
@@ -321,7 +354,15 @@ export function PipelineSettingsPage() {
                    <>
                      <Button variant="ghost" size="sm" onClick={() => {
                        setEditingStage(stage);
-                       setStageForm({ name: stage.name, stageType: stage.stageType, slaDays: stage.slaDays ? String(stage.slaDays) : '' });
+                       setStageForm({
+                         name: stage.name,
+                         stageType: stage.stageType,
+                         slaDays: stage.slaDays ? String(stage.slaDays) : '',
+                         emailTemplateId: stage.emailTemplateId ?? '',
+                         folded: stage.folded ?? false,
+                         isHiredStage: stage.isHiredStage ?? false,
+                         tooltip: stage.tooltip ?? '',
+                       });
                      }}>
                        <Icon name="edit" size={13} /> Edit
                      </Button>
@@ -391,6 +432,43 @@ export function PipelineSettingsPage() {
                 onChange={(event) => setStageForm({ ...stageForm, slaDays: event.target.value })}
               />
             </FormField>
+
+            {/* Phase C — Stage Automation fields */}
+            <FormField id="s-email-template" label="Auto-email on stage entry">
+              <Select
+                id="s-email-template"
+                value={stageForm.emailTemplateId}
+                onChange={(event) => setStageForm({ ...stageForm, emailTemplateId: event.target.value })}
+              >
+                <option value="">— None (no auto-email) —</option>
+                {emailTemplates.map((et) => (
+                  <option key={et.id} value={et.id}>{et.name}</option>
+                ))}
+              </Select>
+            </FormField>
+
+            <FormField id="s-tooltip" label="Tooltip (shown on Kanban column header)">
+              <Input
+                id="s-tooltip"
+                placeholder="e.g. SLA Target: 48h to review new applications"
+                value={stageForm.tooltip}
+                onChange={(event) => setStageForm({ ...stageForm, tooltip: event.target.value })}
+                maxLength={500}
+              />
+            </FormField>
+
+            <div className="flex flex-col gap-2">
+              <CheckboxField
+                checked={stageForm.folded}
+                label="Fold this column by default in the Kanban view"
+                onChange={(event) => setStageForm({ ...stageForm, folded: event.target.checked })}
+              />
+              <CheckboxField
+                checked={stageForm.isHiredStage}
+                label="This is the hired / terminal success stage"
+                onChange={(event) => setStageForm({ ...stageForm, isHiredStage: event.target.checked })}
+              />
+            </div>
           </div>
           <div className="mt-6 flex justify-end gap-2">
             <Button variant="ghost" type="button" onClick={() => setIsStageModalOpen(false)}>Cancel</Button>
