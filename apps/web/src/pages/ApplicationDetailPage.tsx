@@ -7,6 +7,7 @@ import type {
   ApplicationStage,
   ApplicationStatusHistoryItem,
   Interview,
+  PaginatedResult,
   ScreeningLog,
   UpdateApplicationStageInput,
 } from '@recruitflow/contracts';
@@ -42,6 +43,7 @@ export function ApplicationDetailPage() {
   const [, setScreeningLogs] = useState<ScreeningLog[]>([]);
   const [interviews, setInterviews] = useState<Interview[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [otherActiveApplications, setOtherActiveApplications] = useState<Application[]>([]);
   const [isFeedLoading, setIsFeedLoading] = useState(false);
   const [feedError, setFeedError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'resume' | 'interviews' | 'activity' | 'tasks'>('overview');
@@ -118,6 +120,20 @@ export function ApplicationDetailPage() {
         setApplication(appRes.value);
         if (appRes.value.candidate?.skills && appRes.value.candidate.skills.length > 0) {
           setTags(appRes.value.candidate.skills);
+        }
+        if (appRes.value.candidateId) {
+          try {
+            const candAppsRes = await getApi<PaginatedResult<Application>>(
+              `/applications?candidateId=${appRes.value.candidateId}&pageSize=50`
+            );
+            const candAppsList = candAppsRes?.data || [];
+            const parallel = candAppsList.filter(
+              (a) => a.id !== id && a.stage !== 'Rejected' && a.stage !== 'Withdrawn'
+            );
+            setOtherActiveApplications(parallel);
+          } catch {
+            // Non-blocking query failure
+          }
         }
       }
       if (histRes.status === 'fulfilled' && histRes.value) {
@@ -361,6 +377,39 @@ export function ApplicationDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* ── Cross-Application Collision Alert (E6.4) ── */}
+      {otherActiveApplications.length > 0 && (
+        <Alert
+          tone="warning"
+          title={`Parallel Application Detected (${otherActiveApplications.length} active)`}
+          className="w-full shadow-xs"
+        >
+          <div className="space-y-2 mt-1">
+            <p className="text-xs text-amber-900 dark:text-amber-200">
+              This candidate currently has {otherActiveApplications.length} other active application{otherActiveApplications.length > 1 ? 's' : ''} in the pipeline. Please coordinate with the respective hiring team to avoid double offers or scheduling conflicts:
+            </p>
+            <div className="flex flex-wrap items-center gap-2 pt-0.5">
+              {otherActiveApplications.map((otherApp) => (
+                <Link
+                  key={otherApp.id}
+                  to={`/applications/${otherApp.id}`}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-amber-300 dark:border-amber-800 text-amber-900 dark:text-amber-100 hover:border-amber-500 transition shadow-2xs group no-underline"
+                >
+                  <Icon name="briefcase" size={13} className="text-amber-600 dark:text-amber-400 shrink-0" />
+                  <span className="text-xs font-bold">{otherApp.positionTitle || 'Position'}</span>
+                  <span className="px-2 py-0.2 rounded-full text-[10.5px] font-extrabold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-700">
+                    {otherApp.stage || 'Active'}
+                  </span>
+                  <span className="text-[11px] font-bold text-amber-600 group-hover:translate-x-0.5 transition">
+                    View &rarr;
+                  </span>
+                </Link>
+              ))}
+            </div>
+          </div>
+        </Alert>
+      )}
 
       {/* ── Optimistic Concurrency Conflict / Server Error Banners ── */}
       {conflictAlert && (

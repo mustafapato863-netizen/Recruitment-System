@@ -18,13 +18,17 @@ Deliver as incremental vertical slices, each independently shippable.
 | 2 | Unified Chatter / Activity Thread (P2.0–P2.4) | High | `completed` |
 | 3 | Scorecard Loop: Interview → Decision (P3.1–P3.3) | High | `completed` |
 | 4 | Joining Gateway & Onboarding Handshake (P4.1–P4.3-fix) | Medium | `completed` |
+| E1–E5 | Lit Sweep & Operational Polish (E1–E5) | High | `completed` |
+| **E6** | **Per-Position Workflow & Odoo Alignment (E6.1–E6.4)** | **High** | `completed` |
+
+## Per-Position Workflow Enhancements (E6) - COMPLETED
+- **E6.1:** Vacancy-Locked Pipeline Mode (`VacancyOverviewPage.tsx` & `ApplicationsPage.tsx`) [DONE]
+- **E6.2:** Quick Action Drawer on Kanban Cards (`ApplicationsPage.tsx`) [DONE]
+- **E6.3:** Dynamic Position Competencies in Scorecards (`InterviewDetailPage.tsx` & `Scorecard.tsx`) [DONE]
+- **E6.4:** Cross-Application Collision Warning Banner (`ApplicationDetailPage.tsx`) [DONE]
 
 ## Verification & Build Status
 - **Web Typecheck (`tsc -p tsconfig.app.json --noEmit`):** Clean (0 errors).
 - **Web Build (`pnpm build`):** Clean (production build succeeded).
 - **Web Tests:** 23 test suites, 58/58 passing (100%).
-- **API Typecheck & Tests:** Clean.
-
-## Next Step (Post-Plan)
-- Full End-to-End verification with demo users / seed accounts across all roles.
-- Final UI/UX polish sweep (consistent tokens, responsive layouts, accessibility).
+- **API Typecheck & Tests:** Clean (11/11 passing).

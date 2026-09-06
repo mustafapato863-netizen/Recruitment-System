@@ -475,3 +475,30 @@
   - `pnpm --dir apps/web test` passed clean (23 test files, 58/58 tests pass).
   - `pnpm --dir apps/api test` passed clean (1 test file, 11/11 tests pass).
   - Eslint clean on `VacantListPage.tsx`, `HiringCasePage.tsx`, `JoiningChecklist.tsx`.
+
+### E6 Per-Position Workflow & Odoo Operational Alignment: DONE
+- Task ID: E6 (E6.1, E6.2, E6.3, E6.4)
+- Scope:
+  - `apps/web/src/pages/ApplicationsPage.tsx`
+  - `apps/web/src/pages/VacancyOverviewPage.tsx`
+  - `apps/web/src/pages/InterviewDetailPage.tsx`
+  - `apps/web/src/pages/ApplicationDetailPage.tsx`
+  - `task_plan.md`
+  - `progress.md`
+- Items Delivered:
+  1. **E6.1 (Vacancy Pipeline Lock & Context Banner)**:
+     - `ApplicationsPage.tsx`: Query param `?vacancyId=` triggers `GET /vacancies/:id` and renders a prominent gradient Position Pipeline Banner showing requisition code, position title, headcount progress (`joinedHeadcount / approvedHeadcount`), active applicants count, `[← Back to Overview]` navigation, and `[View All Positions]` clear filter action. Locks the job dropdown to this position with a lock icon.
+     - `VacancyOverviewPage.tsx`: Made all top tabs interactive (`Overview`, `Pipeline`, `Applications`, `Job Posting`, `Activity`, `Settings`). Implemented in-page 6-stage Vacancy Kanban Board (`Applied`, `Screening`, `Interview`, `Offer`, `Pre-Hire`, `Joined`) with candidate cards, avatars, codes, and stage counts, plus dedicated tabs for applications list, requisition posting, activity feed, and team settings.
+  2. **E6.2 (Kanban Quick Actions & Candidate 360 Linking)**:
+     - `ApplicationsPage.tsx`: Added Candidate 360 link (`• Profile ↗`) on Kanban cards pointing to `/candidates/:candidateId`.
+     - Added Quick Note button (`edit` icon) on Kanban card headers and List View rows. Clicking opens a `<Drawer>` hosting `<CommentsThread entityType="application" entityId={quickNoteApp.id} />` enabling frictionless inline note-taking and chatter without navigating away.
+  3. **E6.3 (Dynamic Position Competencies in Scorecard)**:
+     - `InterviewDetailPage.tsx`: Fetches application details for the interview and extracts candidate skills and position title. Automatically generates a dynamic `"Role & Position Competencies (${title})"` category in both editable and locked scorecards alongside standard competencies (`Technical Skills`, `Communication`, `Problem Solving`, `Culture Fit`).
+  4. **E6.4 (Cross-Application Collision Warning Alert)**:
+     - `ApplicationDetailPage.tsx`: Queries `GET /applications?candidateId=:candidateId&pageSize=50` to detect parallel applications. Filters out the current application and terminated stages (`Rejected`, `Withdrawn`). If other active applications exist, displays a prominent amber warning banner (`<Alert tone="warning">`) detailing each parallel position, stage, and direct navigation links.
+- Verification:
+  - `pnpm --dir apps/web exec tsc -p tsconfig.app.json --noEmit` passed clean (0 errors).
+  - `pnpm --dir apps/web test --run` passed clean (23 test files, 58/58 tests pass).
+  - `pnpm --dir apps/web build` passed clean (production build succeeded in 1.44s).
+  - `pnpm --dir apps/api exec tsc --noEmit` passed clean (0 errors).
+  - `pnpm --dir apps/api test` passed clean (1 test file, 11/11 tests pass).

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getApi, postApi, ApiError } from '../api/client';
-import type { Interview, InterviewScorecardItem } from '@recruitflow/contracts';
+import type { Application, Interview, InterviewScorecardItem } from '@recruitflow/contracts';
 import { useAuth } from '../auth/AuthContext';
 import { Scorecard, type ScorecardCategory, type Recommendation } from '../components/ui/Scorecard';
 import { Badge } from '../components/ui/Badge';
@@ -14,6 +14,38 @@ import { Modal } from '../components/Modal';
 import './PageEnhancementsV2.css';
 
 type BackendRecommendation = 'Strong Hire' | 'Hire' | 'Neutral' | 'No Hire' | 'Strong No Hire';
+
+function buildRoleCompetencyCategory(positionTitle?: string | null, skills?: string[]): ScorecardCategory {
+  const title = positionTitle?.trim() || 'Role';
+  const criteriaList = [];
+
+  if (skills && skills.length > 0) {
+    skills.slice(0, 4).forEach((skill) => {
+      criteriaList.push({
+        id: `skill_${skill.toLowerCase().replace(/[^a-z0-9]/g, '_')}`,
+        name: `${skill} Competency & Application`,
+      });
+    });
+  } else {
+    criteriaList.push(
+      {
+        id: 'role_domain_knowledge',
+        name: `${title} Domain Proficiency & Standards`,
+      },
+      {
+        id: 'role_execution_ability',
+        name: `Applied Technical Competency & Execution for ${title}`,
+      }
+    );
+  }
+
+  return {
+    id: 'role_competencies',
+    name: `Role & Position Competencies (${title})`,
+    isRequired: true,
+    criteria: criteriaList,
+  };
+}
 
 const DEFAULT_SCORECARD_CATEGORIES: ScorecardCategory[] = [
   {
@@ -101,6 +133,7 @@ export function InterviewDetailPage() {
   const [isForbiddenUser, setIsForbiddenUser] = useState(false);
 
   // Editable Scorecard form states
+  const [roleCompetencyCategory, setRoleCompetencyCategory] = useState<ScorecardCategory | null>(null);
   const [categories, setCategories] = useState<ScorecardCategory[]>(DEFAULT_SCORECARD_CATEGORIES);
   const [recommendation, setRecommendation] = useState<Recommendation>('hire');
   const [strengths, setStrengths] = useState('');
@@ -129,6 +162,27 @@ export function InterviewDetailPage() {
       setIsLoadingInterview(true);
       const data = await getApi<Interview>(`/interviews/${id}`);
       setInterview(data);
+
+      if (data?.applicationId) {
+        try {
+          const app = await getApi<Application>(`/applications/${data.applicationId}`);
+          const skills = app?.candidate?.skills;
+          const posTitle = data.positionTitle || app?.positionTitle || (app as unknown as { vacancy?: { position?: { title?: string } } })?.vacancy?.position?.title;
+          const roleCat = buildRoleCompetencyCategory(posTitle, skills);
+          setRoleCompetencyCategory(roleCat);
+          setCategories([roleCat, ...DEFAULT_SCORECARD_CATEGORIES]);
+        } catch {
+          if (data.positionTitle) {
+            const roleCat = buildRoleCompetencyCategory(data.positionTitle);
+            setRoleCompetencyCategory(roleCat);
+            setCategories([roleCat, ...DEFAULT_SCORECARD_CATEGORIES]);
+          }
+        }
+      } else if (data?.positionTitle) {
+        const roleCat = buildRoleCompetencyCategory(data.positionTitle);
+        setRoleCompetencyCategory(roleCat);
+        setCategories([roleCat, ...DEFAULT_SCORECARD_CATEGORIES]);
+      }
     } catch {
       // Ignored
     } finally {
@@ -280,7 +334,7 @@ export function InterviewDetailPage() {
   // Categories formatted for read-only / locked display
   const lockedCategories: ScorecardCategory[] = useMemo(() => {
     const rating = activeScorecard?.overallRating ?? 3;
-    return [
+    const coreCats: ScorecardCategory[] = [
       {
         id: 'technical_skills',
         name: 'Technical Skills',
@@ -330,7 +384,21 @@ export function InterviewDetailPage() {
         ],
       },
     ];
-  }, [activeScorecard?.overallRating]);
+
+    if (roleCompetencyCategory) {
+      const lockedRoleCat: ScorecardCategory = {
+        ...roleCompetencyCategory,
+        isComplete: true,
+        criteria: roleCompetencyCategory.criteria.map((crit) => ({
+          ...crit,
+          rating,
+        })),
+      };
+      return [lockedRoleCat, ...coreCats];
+    }
+
+    return coreCats;
+  }, [activeScorecard?.overallRating, roleCompetencyCategory]);
 
   const candidateDisplayName = interview?.candidateName ?? 'Unknown candidate';
   const positionDisplayName = interview?.positionTitle ?? 'No position';

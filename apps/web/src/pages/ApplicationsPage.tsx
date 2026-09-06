@@ -1,9 +1,17 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getApi, patchApi, ApiError } from '../api/client';
-import type { Application, ApplicationStage, PaginatedResult, UpdateApplicationStageInput } from '@recruitflow/contracts';
+import type {
+  Application,
+  ApplicationStage,
+  PaginatedResult,
+  UpdateApplicationStageInput,
+  VacancyDetailView,
+} from '@recruitflow/contracts';
 import { Icon } from '../components/Icon';
 import { CandidateSplitDrawer } from '../components/candidate/CandidateSplitDrawer';
+import { Drawer } from '../components/ui/Drawer';
+import { CommentsThread } from '../components/ui/CommentsThread';
 import { Modal } from '../components/Modal';
 import { PageState } from '../components/ui/PageState';
 import './PageEnhancementsV2.css';
@@ -170,6 +178,13 @@ export function ApplicationsPage() {
   const [searchParams] = useSearchParams();
   const vacancyId = searchParams.get('vacancyId');
 
+  const [currentVacancy, setCurrentVacancy] = useState<VacancyDetailView | null>(null);
+  const [quickNoteApp, setQuickNoteApp] = useState<{
+    id: string;
+    candidateName: string;
+    appCode: string;
+  } | null>(null);
+
   const [apiApplications, setApiApplications] = useState<Application[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -238,10 +253,24 @@ export function ApplicationsPage() {
       : '/applications?page=1&pageSize=100';
 
     try {
-      const res = await getApi<PaginatedResult<Application>>(url);
-      const list = res?.data || [];
-      setApiApplications(list);
-      setBoardColumns(buildColumnsFromApplications(list));
+      if (vacancyId) {
+        const [res, vacRes] = await Promise.allSettled([
+          getApi<PaginatedResult<Application>>(url),
+          getApi<VacancyDetailView>(`/vacancies/${vacancyId}`),
+        ]);
+        const list = res.status === 'fulfilled' && res.value?.data ? res.value.data : [];
+        setApiApplications(list);
+        setBoardColumns(buildColumnsFromApplications(list));
+        if (vacRes.status === 'fulfilled' && vacRes.value) {
+          setCurrentVacancy(vacRes.value);
+        }
+      } else {
+        setCurrentVacancy(null);
+        const res = await getApi<PaginatedResult<Application>>(url);
+        const list = res?.data || [];
+        setApiApplications(list);
+        setBoardColumns(buildColumnsFromApplications(list));
+      }
     } catch (err: unknown) {
       setLoadError(err instanceof Error ? err.message : 'Failed to load applications');
     } finally {
@@ -304,7 +333,7 @@ export function ApplicationsPage() {
         return false;
       }
 
-      if (selectedJob !== 'ALL' && app.positionTitle !== selectedJob) {
+      if (!currentVacancy && selectedJob !== 'ALL' && app.positionTitle !== selectedJob) {
         return false;
       }
 
@@ -434,7 +463,7 @@ export function ApplicationsPage() {
             c.nextAction.toLowerCase().includes(q)
         );
       }
-      if (selectedJob !== 'ALL') {
+      if (!currentVacancy && selectedJob !== 'ALL') {
         cards = cards.filter((c) => c.rawApplication.positionTitle === selectedJob);
       }
       if (
@@ -462,7 +491,7 @@ export function ApplicationsPage() {
         count: cards.length,
       };
     });
-  }, [boardColumns, searchQuery, selectedJob, selectedStageFilter, selectedOwnerFilter, selectedSourceFilter]);
+  }, [boardColumns, searchQuery, selectedJob, selectedStageFilter, selectedOwnerFilter, selectedSourceFilter, currentVacancy]);
 
   const handleCardClick = (cardId: string) => {
     navigate(`/applications/${cardId}`);
@@ -660,27 +689,97 @@ export function ApplicationsPage() {
         </div>
       </div>
 
+      {/* Position Context Banner (E6.1) */}
+      {currentVacancy && (
+        <div className="bg-gradient-to-r from-blue-50 via-indigo-50/40 to-slate-50 dark:from-blue-950/40 dark:via-indigo-950/20 dark:to-slate-900 rounded-2xl border border-blue-200/80 dark:border-blue-900/60 p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-blue-600 text-white shadow-2xs">
+                <Icon name="lock" size={10} />
+                Position Pipeline
+              </span>
+              <span className="text-xs font-mono font-bold text-slate-500 dark:text-slate-400">
+                {currentVacancy.vacancyCode}
+              </span>
+              <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                {currentVacancy.status}
+              </span>
+            </div>
+            <h2 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white tracking-tight">
+              {currentVacancy.position?.title || currentVacancy.title || 'Job Position'}
+            </h2>
+            <p className="text-xs text-slate-600 dark:text-slate-400 font-medium">
+              {(currentVacancy as unknown as { department?: string })?.department || currentVacancy.branch?.name || 'Department'} &bull;{' '}
+              Headcount:{' '}
+              <span className="font-bold text-slate-900 dark:text-white">
+                {currentVacancy.joinedHeadcount ?? 0}
+              </span>{' '}
+              joined /{' '}
+              <span className="font-bold text-slate-900 dark:text-white">
+                {currentVacancy.approvedHeadcount || 1}
+              </span>{' '}
+              approved &bull;{' '}
+              <span className="font-bold text-blue-600 dark:text-blue-400">
+                {apiApplications.length} active candidates
+              </span>
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => navigate(`/vacancies/${currentVacancy.id}`)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 transition shadow-xs cursor-pointer"
+            >
+              <Icon name="arrow-left" size={13} />
+              <span>Back to Overview</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/applications')}
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-500 hover:text-slate-900 dark:hover:text-white transition cursor-pointer"
+              title="View all applications across all vacancies"
+            >
+              <span>View All Positions</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Filter Bar */}
       <div className="flex flex-wrap items-center gap-3">
         {/* All Positions dropdown */}
         <div className="relative">
           <select
-            value={selectedJob}
+            value={currentVacancy ? (currentVacancy.position?.title || currentVacancy.title || 'ALL') : selectedJob}
+            disabled={Boolean(currentVacancy)}
             onChange={(e) => {
               setSelectedJob(e.target.value);
               setListPage(1);
             }}
-            className="appearance-none bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2 pr-8 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 cursor-pointer shadow-xs"
+            className={`appearance-none bg-white dark:bg-slate-900 border rounded-xl px-3.5 py-2 pr-8 text-xs font-semibold shadow-xs ${
+              currentVacancy
+                ? 'border-blue-300 dark:border-blue-800 text-blue-700 dark:text-blue-300 bg-blue-50/50 cursor-not-allowed'
+                : 'border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 cursor-pointer'
+            }`}
           >
-            <option value="ALL">All Positions</option>
-            {jobOptions.map((job) => (
-              <option key={job} value={job}>
-                {job}
+            {currentVacancy ? (
+              <option value={currentVacancy.position?.title || currentVacancy.title || 'ALL'}>
+                {currentVacancy.position?.title || currentVacancy.title || 'Locked to Position'}
               </option>
-            ))}
+            ) : (
+              <>
+                <option value="ALL">All Positions</option>
+                {jobOptions.map((job) => (
+                  <option key={job} value={job}>
+                    {job}
+                  </option>
+                ))}
+              </>
+            )}
           </select>
           <Icon
-            name="chevron-down"
+            name={currentVacancy ? 'lock' : 'chevron-down'}
             size={12}
             className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
           />
@@ -1032,14 +1131,30 @@ export function ApplicationsPage() {
                     </td>
 
                     <td className="py-3.5 pr-4 text-right" onClick={(e) => e.stopPropagation()}>
-                      <button
-                        type="button"
-                        onClick={() => navigate(`/applications/${row.id}`)}
-                        className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400 hover:text-blue-600 transition cursor-pointer"
-                        title="View application details"
-                      >
-                        <Icon name="more-horizontal" size={14} />
-                      </button>
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setQuickNoteApp({
+                              id: row.id,
+                              candidateName: row.name,
+                              appCode: row.applicationCode,
+                            })
+                          }
+                          className="p-1 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded-lg text-slate-400 hover:text-blue-600 transition cursor-pointer"
+                          title="Quick note"
+                        >
+                          <Icon name="edit" size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/applications/${row.id}`)}
+                          className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400 hover:text-blue-600 transition cursor-pointer"
+                          title="View application details"
+                        >
+                          <Icon name="more-horizontal" size={14} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -1167,13 +1282,41 @@ export function ApplicationsPage() {
                             <span className="text-xs font-bold text-slate-900 dark:text-white group-hover:text-blue-600 transition block leading-tight">
                               {card.name}
                             </span>
-                            <span className="text-[10.5px] text-slate-400 block mt-0.5 font-mono">
-                              {card.applicationCode}
-                            </span>
+                            <div className="flex items-center gap-1.5 mt-0.5 text-[10.5px] text-slate-400 font-mono">
+                              <span>{card.applicationCode}</span>
+                              {card.rawApplication.candidateId && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigate(`/candidates/${card.rawApplication.candidateId}`);
+                                  }}
+                                  className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                                  title="Open Candidate 360 profile"
+                                >
+                                  <span>&bull; Profile</span>
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-1.5 shrink-0">
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setQuickNoteApp({
+                                id: card.id,
+                                candidateName: card.name,
+                                appCode: card.applicationCode,
+                              });
+                            }}
+                            className="p-1 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded-md text-slate-400 hover:text-blue-600 cursor-pointer transition"
+                            title="Quick note"
+                          >
+                            <Icon name="edit" size={13} />
+                          </button>
                           <div
                             className={`w-5 h-5 rounded-full ${card.owner.color} text-white text-[9px] font-extrabold flex items-center justify-center shadow-2xs`}
                             title={`Owner: ${card.owner.name}`}
@@ -1276,6 +1419,35 @@ export function ApplicationsPage() {
           onClose={() => setSelectedDrawerApp(null)}
         />
       )}
+
+      {/* Quick Note Drawer (E6.2) */}
+      <Drawer
+        isOpen={Boolean(quickNoteApp)}
+        onClose={() => setQuickNoteApp(null)}
+        title={quickNoteApp ? `Notes — ${quickNoteApp.candidateName}` : 'Candidate Notes'}
+        subtitle={quickNoteApp ? `Application ${quickNoteApp.appCode}` : undefined}
+        width="standard"
+      >
+        {quickNoteApp && (
+          <div className="p-4 space-y-4">
+            <div className="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-700 text-xs">
+              <span className="font-semibold text-slate-600 dark:text-slate-300">
+                Logged against application:
+              </span>
+              <span className="font-mono font-bold text-blue-600 dark:text-blue-400">
+                {quickNoteApp.appCode}
+              </span>
+            </div>
+            <CommentsThread
+              entityType="application"
+              entityId={quickNoteApp.id}
+              onPostComment={() => {
+                showToast('Note added to timeline', 'success');
+              }}
+            />
+          </div>
+        )}
+      </Drawer>
     </div>
   );
 }

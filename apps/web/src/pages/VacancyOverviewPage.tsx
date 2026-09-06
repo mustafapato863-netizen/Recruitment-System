@@ -15,6 +15,14 @@ interface InterviewerUser {
   email?: string;
 }
 
+function getInitials(name?: string | null): string {
+  if (!name) return 'UN';
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return 'UN';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 export function VacancyOverviewPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -254,8 +262,12 @@ export function VacancyOverviewPage() {
 
         <button
           type="button"
-          onClick={() => navigate(`/applications?vacancyId=${id || ''}`)}
-          className="pb-3.5 border-b-2 border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white transition cursor-pointer flex items-center gap-1.5 shrink-0"
+          onClick={() => setActiveTab('applications')}
+          className={`pb-3.5 border-b-2 transition cursor-pointer flex items-center gap-1.5 shrink-0 ${
+            activeTab === 'applications'
+              ? 'border-blue-600 text-blue-600 font-extrabold'
+              : 'border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white'
+          }`}
         >
           <span>Applications</span>
           <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
@@ -265,8 +277,12 @@ export function VacancyOverviewPage() {
 
         <button
           type="button"
-          onClick={() => navigate(`/applications?vacancyId=${id || ''}`)}
-          className="pb-3.5 border-b-2 border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white transition cursor-pointer shrink-0"
+          onClick={() => setActiveTab('pipeline')}
+          className={`pb-3.5 border-b-2 transition cursor-pointer shrink-0 ${
+            activeTab === 'pipeline'
+              ? 'border-blue-600 text-blue-600 font-extrabold'
+              : 'border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white'
+          }`}
         >
           Pipeline
         </button>
@@ -319,8 +335,11 @@ export function VacancyOverviewPage() {
         </button>
       </div>
 
-      {/* ── Row 1: 4 Top Metric Cards (Applications, Interviews, Offers, Hires) ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+      {/* ── Tab: Overview ── */}
+      {activeTab === 'overview' && (
+        <>
+          {/* ── Row 1: 4 Top Metric Cards (Applications, Interviews, Offers, Hires) ── */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
         {/* Card 1: Applications */}
         <div
           onClick={() => navigate(`/applications?vacancyId=${id || ''}`)}
@@ -748,6 +767,303 @@ export function VacancyOverviewPage() {
           </div>
         </div>
       </div>
+        </>
+      )}
+
+      {/* ── Tab: Pipeline (E6.1 In-Context Vacancy Kanban) ── */}
+      {activeTab === 'pipeline' && (
+        <div className="space-y-5">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                  <Icon name="pipeline" size={12} />
+                  Position Pipeline
+                </span>
+                <span className="text-xs font-semibold text-slate-500">
+                  {vacancyApps.length} Applicants in Pipeline
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Track candidate progression across recruitment stages for {jobTitle}.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <div className="text-right hidden sm:block">
+                <span className="block text-[11px] text-slate-400 font-semibold uppercase">Headcount Closed</span>
+                <span className="block text-xs font-bold text-slate-900 dark:text-white">
+                  {hiresCount} / {vacancy?.approvedHeadcount || 1} Filled
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => navigate(`/applications?vacancyId=${id || ''}`)}
+                className="inline-flex items-center gap-2 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+              >
+                <span>Full-Screen Kanban</span>
+                <Icon name="arrow-right" size={13} />
+              </button>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto pb-4 pt-1">
+            <div className="flex gap-4 items-start min-w-[1300px]">
+              {[
+                { id: 'Applied', name: 'New Applied', tone: 'bg-slate-500' },
+                { id: 'Screening', name: 'Screening', tone: 'bg-emerald-500' },
+                { id: 'Interview', name: 'Interview', tone: 'bg-blue-500' },
+                { id: 'Offer', name: 'Offer', tone: 'bg-amber-500' },
+                { id: 'Pre-Hire', name: 'Pre-Hire', tone: 'bg-purple-500' },
+                { id: 'Joined', name: 'Hired', tone: 'bg-teal-500' },
+              ].map((col) => {
+                const stageApps = vacancyApps.filter((a) => {
+                  if (col.id === 'Joined') return a.stage === 'Joined';
+                  if (col.id === 'Applied') return a.stage === 'Applied' || !a.stage;
+                  return a.stage === col.id;
+                });
+
+                return (
+                  <div
+                    key={col.id}
+                    className="w-[210px] min-w-[210px] shrink-0 bg-slate-50/80 dark:bg-slate-900/60 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-3 flex flex-col space-y-3"
+                  >
+                    <div className="flex items-center justify-between px-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className={`w-2 h-2 rounded-full ${col.tone}`} />
+                        <h3 className="text-xs font-extrabold text-slate-900 dark:text-white">{col.name}</h3>
+                      </div>
+                      <span className="w-5 h-5 rounded-full bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[11px] font-black flex items-center justify-center">
+                        {stageApps.length}
+                      </span>
+                    </div>
+
+                    <div className="space-y-2.5 min-h-[220px]">
+                      {stageApps.map((app) => {
+                        const candName = app.candidate
+                          ? `${app.candidate.firstName} ${app.candidate.lastName}`.trim()
+                          : (app as unknown as { candidateName?: string })?.candidateName || 'Candidate';
+                        const candInitials = getInitials(candName);
+
+                        return (
+                          <div
+                            key={app.id}
+                            onClick={() => navigate(`/applications/${app.id}`)}
+                            className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800 p-3 shadow-2xs hover:shadow-md hover:border-blue-300 dark:hover:border-blue-700 transition cursor-pointer group space-y-2"
+                          >
+                            <div className="flex items-center justify-between gap-1.5">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <div className="w-7 h-7 rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 text-[10px] font-extrabold flex items-center justify-center shrink-0">
+                                  {candInitials}
+                                </div>
+                                <div className="min-w-0">
+                                  <span className="text-xs font-bold text-slate-900 dark:text-white group-hover:text-blue-600 transition block truncate">
+                                    {candName}
+                                  </span>
+                                  <span className="text-[10px] text-slate-400 block font-mono">
+                                    {app.applicationCode || `APP-${app.id.slice(0, 8)}`}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="pt-1.5 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-[10.5px] text-slate-400">
+                              <span>{app.source || 'Portal'}</span>
+                              <span className="text-blue-600 dark:text-blue-400 font-semibold group-hover:underline">
+                                View &rarr;
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      {stageApps.length === 0 && (
+                        <div className="h-24 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 flex items-center justify-center text-[11px] text-slate-400">
+                          No candidates
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Tab: Applications List ── */}
+      {activeTab === 'applications' && (
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs overflow-hidden">
+          <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+            <h2 className="text-sm font-extrabold text-slate-900 dark:text-white">
+              Applicants for {jobTitle} ({vacancyApps.length})
+            </h2>
+            <button
+              type="button"
+              onClick={() => navigate(`/applications?vacancyId=${id || ''}`)}
+              className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+            >
+              Open in Applications workspace &rarr;
+            </button>
+          </div>
+          {vacancyApps.length === 0 ? (
+            <div className="py-12 text-center text-slate-400 text-xs">
+              No applications recorded for this requisition yet.
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-100 dark:divide-slate-800">
+              {vacancyApps.map((app) => {
+                const candName = app.candidate
+                  ? `${app.candidate.firstName} ${app.candidate.lastName}`.trim()
+                  : (app as unknown as { candidateName?: string })?.candidateName || 'Candidate';
+                return (
+                  <div
+                    key={app.id}
+                    onClick={() => navigate(`/applications/${app.id}`)}
+                    className="p-4 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/40 transition cursor-pointer"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 text-xs font-bold flex items-center justify-center shrink-0">
+                        {getInitials(candName)}
+                      </div>
+                      <div>
+                        <span className="text-xs font-bold text-slate-900 dark:text-white block">
+                          {candName}
+                        </span>
+                        <span className="text-[11px] text-slate-400 block font-mono">
+                          {app.applicationCode || `APP-${app.id.slice(0, 8)}`} &bull; Applied{' '}
+                          {app.appliedAt ? new Date(app.appliedAt).toLocaleDateString('en-GB') : 'Recently'}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                        {app.stage || 'Applied'}
+                      </span>
+                      <Icon name="chevron-right" size={16} className="text-slate-300" />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Tab: Job Posting ── */}
+      {activeTab === 'posting' && (
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-6 shadow-xs space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
+            <div>
+              <h2 className="text-lg font-extrabold text-slate-900 dark:text-white">{jobTitle}</h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {departmentName} &bull; {locationText} &bull; Requisition Code: {vacancy?.vacancyCode || '—'}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setIsShareModalOpen(true)}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer shrink-0"
+            >
+              <Icon name="share" size={13} />
+              <span>Share Job Link</span>
+            </button>
+          </div>
+
+          <div className="space-y-4">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Position Overview</h3>
+            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+              {vacancy?.vacancyRequest?.justification ||
+                vacancy?.vacancyRequest?.reason ||
+                'No detailed job description has been published for this requisition yet.'}
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+              <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-100 dark:border-slate-800">
+                <span className="block text-[10px] text-slate-400 font-semibold uppercase">Employment Type</span>
+                <span className="block text-xs font-bold text-slate-900 dark:text-white mt-1">
+                  {vacancy?.vacancyRequest?.employmentType || 'Full-time'}
+                </span>
+              </div>
+              <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-100 dark:border-slate-800">
+                <span className="block text-[10px] text-slate-400 font-semibold uppercase">Approved Headcount</span>
+                <span className="block text-xs font-bold text-slate-900 dark:text-white mt-1">
+                  {vacancy?.approvedHeadcount || 1} Position{vacancy?.approvedHeadcount === 1 ? '' : 's'}
+                </span>
+              </div>
+              <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-100 dark:border-slate-800">
+                <span className="block text-[10px] text-slate-400 font-semibold uppercase">Budget Status</span>
+                <span className="block text-xs font-bold text-slate-900 dark:text-white mt-1">
+                  {vacancy?.vacancyRequest?.budgetStatus || 'Approved'}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Tab: Activity Feed ── */}
+      {activeTab === 'activity' && (
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-4">
+          <div className="border-b border-slate-100 dark:border-slate-800 pb-3">
+            <h2 className="text-base font-extrabold text-slate-900 dark:text-white">
+              Position Activity Log ({activities.length})
+            </h2>
+          </div>
+          {activities.length === 0 ? (
+            <div className="py-8 text-center text-slate-400 text-xs italic">
+              No activity recorded for this position yet.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {activities.map((act) => (
+                <div key={act.id} className="flex items-start gap-3 p-3 bg-slate-50/60 dark:bg-slate-800/40 rounded-xl">
+                  <div className={`w-8 h-8 rounded-full ${act.color} flex items-center justify-center shrink-0 mt-0.5`}>
+                    <Icon name={act.icon} size={14} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <span className="block text-xs font-bold text-slate-900 dark:text-white">{act.title}</span>
+                    <span className="block text-xs text-slate-500">{act.desc}</span>
+                    <span className="block text-[10px] text-slate-400 mt-1">
+                      {act.date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Tab: Settings ── */}
+      {activeTab === 'settings' && (
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-6 shadow-xs space-y-6">
+          <div className="border-b border-slate-100 dark:border-slate-800 pb-3">
+            <h2 className="text-base font-extrabold text-slate-900 dark:text-white">Requisition Settings</h2>
+            <p className="text-xs text-slate-500">Manage vacancy configuration, budget, and assigned hiring team.</p>
+          </div>
+
+          <div className="space-y-4">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Assigned Hiring Team</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {teamMembers.map((member) => (
+                <div key={member.id} className="p-3 rounded-xl border border-slate-200/80 dark:border-slate-800 flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-extrabold flex items-center justify-center shrink-0">
+                    {member.initials}
+                  </div>
+                  <div>
+                    <span className="block text-xs font-bold text-slate-900 dark:text-white">{member.name}</span>
+                    <span className="block text-[11px] text-slate-500">{member.role}</span>
+                  </div>
+                </div>
+              ))}
+              {teamMembers.length === 0 && (
+                <p className="text-xs text-slate-400 italic">No team members assigned.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Share Modal ── */}
       <Modal
