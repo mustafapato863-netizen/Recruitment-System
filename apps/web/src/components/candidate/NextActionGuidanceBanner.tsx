@@ -117,18 +117,21 @@ export const NextActionGuidanceBanner: React.FC<NextActionGuidanceBannerProps> =
   const guidance = getStageGuidance();
 
   return (
-    <div className="bg-gradient-to-r from-slate-900 via-blue-950 to-indigo-950 text-white rounded-2xl p-5 shadow-sm border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4 animate-fade-in">
+    <div
+      data-tour="next-action-banner"
+      className="bg-gradient-to-r from-slate-900 via-blue-950 to-indigo-950 text-white rounded-2xl p-5 shadow-sm border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4 animate-fade-in"
+    >
       <div className="space-y-1.5 max-w-2xl">
         <div className="flex items-center gap-2">
           <span className={`px-2.5 py-0.5 rounded-full text-[10.5px] font-black tracking-wide uppercase ${guidance.badgeColor}`}>
             {guidance.badge}
           </span>
-          <span className="text-slate-400 text-xs font-semibold">&bull; Intelligent Next Action</span>
+          <span className="text-slate-300 text-xs font-semibold">&bull; Intelligent Next Action</span>
         </div>
-        <h3 className="text-base font-extrabold text-white tracking-tight">
+        <h3 className="text-base font-extrabold !text-white text-white tracking-tight">
           {guidance.title}
         </h3>
-        <p className="text-xs text-slate-300 leading-relaxed">
+        <p className="text-xs text-slate-200 leading-relaxed">
           {guidance.description}
         </p>
       </div>

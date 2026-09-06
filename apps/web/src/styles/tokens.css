@@ -344,25 +344,27 @@ body {
   color: var(--color-ink-950);
 }
 
-h1, h2, h3, h4, h5, h6 {
-  font-family: var(--font-heading);
-  color: var(--color-ink-950);
-  font-weight: 700;
-  margin-top: 0;
-  letter-spacing: -0.02em;
-}
+@layer base {
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading);
+    color: inherit;
+    font-weight: 700;
+    margin-top: 0;
+    letter-spacing: -0.02em;
+  }
 
-button, input, select, textarea {
-  font-family: var(--font-sans);
-}
+  button, input, select, textarea {
+    font-family: var(--font-sans);
+  }
 
-button:focus-visible,
-a:focus-visible,
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible {
-  outline: none;
-  box-shadow: var(--focus-ring);
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: none;
+    box-shadow: var(--focus-ring);
+  }
 }
 
 /* SGH Brand Utilities */

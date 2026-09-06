@@ -588,7 +588,7 @@ export function ApplicationDetailPage() {
               description="Candidate details are not linked to this application."
             />
           ) : (
-            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-5">
+            <div data-tour="candidate-card" className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-5">
               {/* Candidate Photo & Basic Info */}
               <div className="flex flex-col items-center text-center">
                 <div className="w-20 h-20 rounded-full bg-slate-100 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 flex items-center justify-center text-xl font-bold text-slate-700 dark:text-slate-200 mb-3 shadow-xs">
@@ -730,7 +730,7 @@ export function ApplicationDetailPage() {
         {/* ════════ Right Main Column (~72% width / 8 cols) ════════ */}
         <div className="lg:col-span-8 xl:col-span-9 space-y-6">
           {/* ── Top KPI Summary Strip (5 metric cells) ── */}
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs">
+          <div data-tour="stage-sla-banner" className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs">
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4 divide-y md:divide-y-0 md:divide-x divide-slate-100 dark:divide-slate-800">
               {/* Cell 1: Current stage */}
               <div className="space-y-1">
@@ -873,7 +873,7 @@ export function ApplicationDetailPage() {
               {/* ── Middle Row: Timeline (Left ~60%) & Quick Actions / About (Right ~40%) ── */}
               <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
                 {/* Left: Timeline Card (7 cols) */}
-                <div className="md:col-span-7 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-4">
+                <div data-tour="timeline-section" className="md:col-span-7 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-4">
                   <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
                     <h2 className="text-base font-extrabold text-slate-900 dark:text-white tracking-tight">
                       Timeline
@@ -929,7 +929,7 @@ export function ApplicationDetailPage() {
                 {/* Right: Quick Actions & About this application (5 cols) */}
                 <div className="md:col-span-5 space-y-6">
                   {/* Quick Actions Card */}
-                  <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-3">
+                  <div data-tour="quick-actions" className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-3">
                     <h2 className="text-base font-extrabold text-slate-900 dark:text-white tracking-tight mb-2">
                       Quick actions
                     </h2>
@@ -1022,7 +1022,7 @@ export function ApplicationDetailPage() {
                   </div>
 
                   {/* About this application Card */}
-                  <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-3">
+                  <div data-tour="about-application" className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-3">
                     <h2 className="text-base font-extrabold text-slate-900 dark:text-white tracking-tight mb-2">
                       About this application
                     </h2>

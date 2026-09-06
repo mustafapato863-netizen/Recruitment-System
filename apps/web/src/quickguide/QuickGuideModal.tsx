@@ -16,6 +16,8 @@ export const QuickGuideModal: React.FC = () => {
     markCurrentPageSeen,
     toggleAutoOpen,
     resetAllGuides,
+    startGameTour,
+    isQuestCompleted,
   } = useQuickGuide();
 
   const modalRef = useRef<HTMLDivElement>(null);
@@ -97,14 +99,28 @@ export const QuickGuideModal: React.FC = () => {
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={handleDismiss}
-              className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition cursor-pointer shrink-0"
-              aria-label="Close Quick Guide"
-            >
-              <Icon name="close" size={16} />
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={startGameTour}
+                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-black text-xs shadow-md shadow-emerald-500/20 transition cursor-pointer active:scale-95"
+                title="Launch autofocus spotlight game tour"
+              >
+                <span>🎮 Play Quest</span>
+                <span className="px-1.5 py-0.5 rounded bg-black/15 text-[10px] font-mono font-bold">
+                  +{currentGuide.totalQuestXp || currentGuide.steps.length * 50} XP
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDismiss}
+                className="p-1.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition cursor-pointer"
+                aria-label="Close Quick Guide"
+              >
+                <Icon name="close" size={16} />
+              </button>
+            </div>
           </div>
 
           {/* Navigation Tabs */}
@@ -171,6 +187,47 @@ export const QuickGuideModal: React.FC = () => {
           {/* TAB 1: OVERVIEW */}
           {activeTab === 'overview' && (
             <div className="space-y-4 animate-fade-in">
+              {/* Game Quest Spotlight Banner */}
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 border border-cyan-500/40 shadow-lg text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-cyan-500/20 border border-cyan-400/40 flex items-center justify-center text-xl shrink-0">
+                    🎮
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-cyan-400">
+                        Interactive Game Tour
+                      </span>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                        Autofocus Spotlight
+                      </span>
+                      {isQuestCompleted && (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                          Quest Completed 🏆
+                        </span>
+                      )}
+                    </div>
+                    <h4 className="text-sm font-bold text-white mt-0.5">
+                      {currentGuide.questRoleTitle || `${currentGuide.title} Quest`}
+                    </h4>
+                    <p className="text-[11px] text-slate-300 mt-0.5 leading-relaxed">
+                      Guided walkthrough with live autofocus spotlights, retro game audio chimes, and instant XP rewards!
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={startGameTour}
+                  className="px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-400 to-emerald-400 hover:from-cyan-300 hover:to-emerald-300 text-slate-950 font-black text-xs transition shadow-md shadow-cyan-500/20 cursor-pointer shrink-0 flex items-center justify-center gap-1.5"
+                >
+                  <span>Start Quest</span>
+                  <span className="px-1.5 py-0.5 rounded bg-black/15 font-mono text-[10px]">
+                    +{currentGuide.totalQuestXp || currentGuide.steps.length * 50} XP
+                  </span>
+                </button>
+              </div>
+
               <div className="p-4 rounded-xl bg-blue-50/60 dark:bg-blue-950/20 border border-blue-200/60 dark:border-blue-900/40">
                 <h3 className="font-bold text-slate-900 dark:text-white flex items-center gap-2 text-xs uppercase tracking-wider">
                   <Icon name="award" size={14} className="text-blue-600" />
@@ -215,6 +272,21 @@ export const QuickGuideModal: React.FC = () => {
           {/* TAB 2: 3-STEP WORKFLOW */}
           {activeTab === 'steps' && (
             <div className="space-y-3 animate-fade-in">
+              <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm">🎯</span>
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                    Want an interactive on-screen walkthrough?
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={startGameTour}
+                  className="px-3 py-1.5 rounded-lg bg-gradient-to-r from-cyan-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-black text-xs transition shadow-xs cursor-pointer flex items-center gap-1 shrink-0"
+                >
+                  <span>🎮 Autofocus Tour</span>
+                </button>
+              </div>
               {currentGuide.steps.map((step) => (
                 <div
                   key={step.number}
@@ -329,13 +401,24 @@ export const QuickGuideModal: React.FC = () => {
             </button>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <button
+              type="button"
+              onClick={startGameTour}
+              className="flex-1 sm:flex-initial px-4 py-2 rounded-xl bg-gradient-to-r from-cyan-500 via-teal-500 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 text-slate-950 font-black text-xs shadow-md shadow-emerald-500/20 transition cursor-pointer flex items-center justify-center gap-1.5"
+            >
+              <span>🎮 Start Game Tour</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-black/15 font-mono font-bold">
+                +{currentGuide.totalQuestXp || currentGuide.steps.length * 50} XP
+              </span>
+            </button>
+
             <button
               type="button"
               onClick={handleDismiss}
-              className="w-full sm:w-auto px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-500/20 transition cursor-pointer flex items-center justify-center gap-1.5"
+              className="flex-1 sm:flex-initial px-4 py-2 rounded-xl bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs transition cursor-pointer flex items-center justify-center gap-1.5"
             >
-              <span>{hasSeenCurrentPage ? 'Close Guide' : 'Got It, Let’s Start! 🚀'}</span>
+              <span>{hasSeenCurrentPage ? 'Close' : 'Got It'}</span>
             </button>
           </div>
         </div>

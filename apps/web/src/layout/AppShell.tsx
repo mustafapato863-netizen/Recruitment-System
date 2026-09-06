@@ -11,7 +11,7 @@ import { SghHeartSvg } from '../design-system/brand/sgh-heart-svg';
 import { UserProfileDropdown } from '../components/ui/UserProfileDropdown';
 import { BreadcrumbsBar } from '../components/ui/BreadcrumbsBar';
 import { BreadcrumbProvider } from '../context/BreadcrumbContext';
-import { QuickGuideProvider, QuickGuideModal, useQuickGuide } from '../quickguide';
+import { QuickGuideProvider, QuickGuideModal, GameTourOverlay, useQuickGuide } from '../quickguide';
 
 type NavigationItemProps = {
   label: string;
@@ -344,6 +344,7 @@ export function AppShellInner() {
 
       <CommandPalette isOpen={isCommandPaletteOpen} onClose={() => setIsCommandPaletteOpen(false)} />
       <QuickGuideModal />
+      <GameTourOverlay />
     </div>
   );
 }

@@ -1,6 +1,33 @@
 # Progress Log — RecruitFlow Candidate Journey
 
-## Session 2026-09-04
+## Session 2026-09-06
+
+### Completed — Light & Dark Mode Contrast Enhancements + Gamified Autofocus Guide System
+- [x] **CSS Cascade Layer Fix (`apps/web/src/styles/tokens.css`):**
+  - Wrapped unlayered `h1, h2, h3, h4, h5, h6` in `@layer base` and set `color: inherit;`.
+  - Resolved Tailwind CSS v4 cascade conflict where unlayered base styles overrode `@layer utilities` classes (`text-white`, `dark:text-white`, `text-slate-900`), fixing black-on-black headings in dark banners under light mode.
+- [x] **Custom Dark Mode Variant (`apps/web/src/index.css`):**
+  - Updated `@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *, .dark, .dark *));` to seamlessly support both data-theme attribute and `.dark` class across all nested trees.
+- [x] **Contrast Fix in Candidate Banners (`apps/web/src/components/candidate/NextActionGuidanceBanner.tsx`):**
+  - Applied `!text-white` on banner heading and adjusted subtext to `text-slate-300` / `text-slate-200` for WCAG AAA contrast compliance against dark gradient.
+  - Added `data-tour="next-action-banner"`.
+- [x] **Autofocus Spotlight Target Hooks (`apps/web/src/pages/ApplicationDetailPage.tsx`):**
+  - Added DOM tour hooks: `candidate-card`, `stage-sla-banner`, `timeline-section`, `quick-actions`, `about-application`.
+- [x] **Gamified Autofocus Guide System:**
+  - Built `apps/web/src/quickguide/gameSounds.ts` using zero-dependency Web Audio API oscillator synthesis for retro 8-bit / RPG step advancement chimes and victory fanfare.
+  - Built `apps/web/src/quickguide/GameTourOverlay.tsx`:
+    - Full-screen SVG/box-shadow spotlight mask focusing on target elements with smooth scrolling.
+    - Pulsing target highlight ring.
+    - Floating Gamer HUD with level progression bar, mission objective, junior recruiter caution tips, XP counter, audio toggle, and keyboard shortcuts (ArrowLeft/ArrowRight, Enter, Escape).
+    - Level Up / Quest Completed celebration modal with trophy animation and XP reward celebration.
+  - Extended `QuickGuideContext.tsx` with game tour state machine, `localStorage` persistence, and sound controls.
+  - Updated `QuickGuideModal.tsx` with "🎮 Play Quest" CTA headers, overview banner, workflow tabs button, and modal footer game launch button.
+  - Updated `QuickGuideTrigger.tsx` with quest notification indicator.
+  - Enriched `pageGuidesData.ts` with missions, quest titles, and target selectors.
+- [x] **Verification & Test Coverage:**
+  - `npx tsc -b`: 0 errors.
+  - `npm test -- --run`: 26 test files passed, 81 tests passed (100% pass rate).
+
 
 ### Completed
 - [x] Read planning-with-files SKILL.md

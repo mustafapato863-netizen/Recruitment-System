@@ -5,7 +5,7 @@
 @source not "./**/*.test.*";
 @source not "./design-system/components";
 
-@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *, .dark, .dark *));
 
 @keyframes rf-drift {
   0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
