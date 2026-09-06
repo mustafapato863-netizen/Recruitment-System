@@ -23,11 +23,17 @@ interface JobPositionRow {
   slaStatus: 'on track' | 'at risk';
   lastActivity: string;
   status: 'Open' | 'On Hold' | 'Draft' | 'Closed';
+  vacancyCode: string;
+  approvedHeadcount: number;
+  joinedHeadcount: number;
 }
 
 interface RawVacancyResponseItem {
   id: string;
   title?: string;
+  vacancyCode?: string;
+  approvedHeadcount?: number;
+  joinedHeadcount?: number;
   position?: { title?: string; department?: string };
   positionTitle?: string;
   location?: string;
@@ -50,6 +56,7 @@ export function VacantListPage() {
   const navigate = useNavigate();
   const [apiVacancies, setApiVacancies] = useState<JobPositionRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
   const [search, setSearch] = useState('');
   const [selectedDept, setSelectedDept] = useState('ALL');
   const [selectedLocation, setSelectedLocation] = useState('ALL');
@@ -59,7 +66,7 @@ export function VacantListPage() {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isMoreFiltersOpen, setIsMoreFiltersOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 10;
+  const pageSize = 12;
 
   useEffect(() => {
     setIsLoading(true);
@@ -92,6 +99,9 @@ export function VacantListPage() {
 
           return {
             id: v.id,
+            vacancyCode: v.vacancyCode || `VAC-${v.id.slice(0, 6).toUpperCase()}`,
+            approvedHeadcount: v.approvedHeadcount ?? 1,
+            joinedHeadcount: v.joinedHeadcount ?? 0,
             title: v.title || v.position?.title || v.positionTitle || 'No position',
             location: v.location || v.branch?.name || '—',
             workType: v.workType || '—',
@@ -285,18 +295,49 @@ export function VacantListPage() {
           </button>
         </div>
 
-        <div className="relative min-w-[260px]">
-          <input
-            type="text"
-            placeholder="Search positions..."
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setCurrentPage(1);
-            }}
-            className="w-full h-9 pl-3.5 pr-9 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-medium text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-xs"
-          />
-          <Icon name="search" size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
+        <div className="flex items-center gap-2">
+          <div className="relative min-w-[240px]">
+            <input
+              type="text"
+              placeholder="Search positions..."
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full h-9 pl-3.5 pr-9 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-medium text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-xs"
+            />
+            <Icon name="search" size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          </div>
+
+          <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded-xl border border-slate-200 dark:border-slate-700">
+            <button
+              type="button"
+              onClick={() => setViewMode('cards')}
+              title="Cards View"
+              className={`p-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
+                viewMode === 'cards'
+                  ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs font-bold'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Icon name="grid-squares" size={14} />
+              <span className="hidden sm:inline">Cards</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('table')}
+              title="Table View"
+              className={`p-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
+                viewMode === 'table'
+                  ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs font-bold'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Icon name="list" size={14} />
+              <span className="hidden sm:inline">Table</span>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -439,6 +480,115 @@ export function VacantListPage() {
               }
             />
           </div>
+        ) : viewMode === 'cards' ? (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-5 bg-slate-50/40 dark:bg-slate-950/20">
+              {paginatedPositions.map((row) => (
+                <div
+                  key={row.id}
+                  className="group relative bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 hover:border-blue-400 dark:hover:border-blue-500 rounded-2xl p-5 shadow-xs hover:shadow-md transition-all duration-200 flex flex-col justify-between"
+                >
+                  <div>
+                    {/* Top meta: Code + Status Badge */}
+                    <div className="flex items-center justify-between gap-2 mb-3">
+                      <span className="font-mono text-[11px] font-bold tracking-wider px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                        {row.vacancyCode}
+                      </span>
+                      <span
+                        className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold capitalize ${
+                          row.status === 'Open'
+                            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/60'
+                            : row.status === 'On Hold'
+                            ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400 border border-amber-200/60 dark:border-amber-800/60'
+                            : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400 border border-slate-200 dark:border-slate-700'
+                        }`}
+                      >
+                        {row.status}
+                      </span>
+                    </div>
+
+                    {/* Position Title */}
+                    <h3
+                      onClick={() => navigate(`/vacancies/${row.id}`)}
+                      className="text-base font-extrabold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition cursor-pointer line-clamp-1"
+                      title={row.title}
+                    >
+                      {row.title}
+                    </h3>
+
+                    {/* Department & Location */}
+                    <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 mt-1 mb-4">
+                      <span className="font-semibold text-slate-700 dark:text-slate-300">{row.department}</span>
+                      <span>&bull;</span>
+                      <span>{row.location}</span>
+                      {row.workType && row.workType !== '—' && (
+                        <>
+                          <span>&bull;</span>
+                          <span className="capitalize">{row.workType}</span>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Key Metrics Grid */}
+                    <div className="grid grid-cols-2 gap-2 py-3 border-y border-slate-100 dark:border-slate-800/80 mb-4 bg-slate-50/50 dark:bg-slate-800/30 rounded-xl px-3">
+                      <div>
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Target Headcount</div>
+                        <div className="text-xs font-extrabold text-slate-800 dark:text-slate-200 mt-0.5">
+                          {row.joinedHeadcount} / {row.approvedHeadcount} <span className="text-[11px] font-normal text-slate-400">filled</span>
+                        </div>
+                      </div>
+                      <div>
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">SLA Performance</div>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <div className="text-xs font-extrabold text-slate-800 dark:text-slate-200">
+                            {row.slaPercent}%
+                          </div>
+                          <span className={`w-2 h-2 rounded-full ${row.isOverdue ? 'bg-rose-500' : 'bg-emerald-500'}`} />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Recruiter / Owner */}
+                    <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-4">
+                      <div className="flex items-center gap-2">
+                        <span className="w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400 font-bold text-[10px] flex items-center justify-center border border-blue-200 dark:border-blue-900">
+                          {row.recruiter.initials}
+                        </span>
+                        <span className="font-medium truncate max-w-[140px] text-slate-700 dark:text-slate-300">
+                          {row.recruiter.name}
+                        </span>
+                      </div>
+                      {row.needActionCount > 0 && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-50 text-rose-600 dark:bg-rose-950/50 dark:text-rose-400 border border-rose-200/60 dark:border-rose-900/60">
+                          {row.needActionCount} action{row.needActionCount > 1 ? 's' : ''}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Action Footer */}
+                  <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/applications?vacancyId=${row.id}`)}
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/80 text-blue-700 dark:text-blue-300 text-xs font-bold transition cursor-pointer border border-blue-200/60 dark:border-blue-800/60"
+                    >
+                      <Icon name="users" size={13} />
+                      <span>{row.applicationsCount} Applications ↗</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/vacancies/${row.id}`)}
+                      title="View Requisition Overview"
+                      className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition cursor-pointer"
+                    >
+                      <Icon name="chevron-right" size={15} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         ) : (
           <>
             <div className="overflow-x-auto rf-scrollbar">

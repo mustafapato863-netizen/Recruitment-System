@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getApi, postApi } from '../api/client';
-import type { Interview, Application, PaginatedResult } from '@recruitflow/contracts';
+import type { Interview, Application, PaginatedResult, VacancyDetailView } from '@recruitflow/contracts';
 import { Icon } from '../components/Icon';
 import { Modal } from '../components/Modal';
 import { PageState } from '../components/ui/PageState';
@@ -35,6 +35,10 @@ interface InterviewGroup {
 
 export function InterviewsPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const vacancyId = searchParams.get('vacancyId');
+  const [currentVacancy, setCurrentVacancy] = useState<VacancyDetailView | null>(null);
+
   const [apiInterviews, setApiInterviews] = useState<Interview[]>([]);
   const [applications, setApplications] = useState<Application[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -67,24 +71,48 @@ export function InterviewsPage() {
   const loadData = useCallback(async () => {
     try {
       setIsLoading(true);
-      const [intRes, appRes] = await Promise.all([
-        getApi<any>('/interviews').catch(() => []),
-        getApi<PaginatedResult<Application>>('/applications?page=1&pageSize=50').catch(() => ({ data: [] })),
-      ]);
-      const intList = Array.isArray(intRes) ? intRes : intRes?.data || [];
-      setApiInterviews(intList);
+      if (vacancyId) {
+        const [intRes, appRes, vacRes] = await Promise.allSettled([
+          getApi<any>('/interviews'),
+          getApi<PaginatedResult<Application>>(`/applications?vacancyId=${vacancyId}&page=1&pageSize=100`),
+          getApi<VacancyDetailView>(`/vacancies/${vacancyId}`),
+        ]);
 
-      const appList = appRes?.data || [];
-      setApplications(appList);
-      if (appList.length > 0 && !selectedAppId) {
-        setSelectedAppId(appList[0].id);
+        const appList = appRes.status === 'fulfilled' && appRes.value?.data ? appRes.value.data : [];
+        setApplications(appList);
+        if (appList.length > 0 && !selectedAppId) {
+          setSelectedAppId(appList[0].id);
+        }
+
+        if (vacRes.status === 'fulfilled' && vacRes.value) {
+          setCurrentVacancy(vacRes.value);
+        }
+
+        const appIds = new Set(appList.map((a) => a.id));
+        const allInts = intRes.status === 'fulfilled' ? (Array.isArray(intRes.value) ? intRes.value : (intRes.value as any)?.data || []) : [];
+        const filteredInts = allInts.filter((int: any) => appIds.has(int.applicationId));
+        setApiInterviews(filteredInts);
+      } else {
+        setCurrentVacancy(null);
+        const [intRes, appRes] = await Promise.all([
+          getApi<any>('/interviews').catch(() => []),
+          getApi<PaginatedResult<Application>>('/applications?page=1&pageSize=50').catch(() => ({ data: [] })),
+        ]);
+        const intList = Array.isArray(intRes) ? intRes : (intRes as any)?.data || [];
+        setApiInterviews(intList);
+
+        const appList = appRes?.data || [];
+        setApplications(appList);
+        if (appList.length > 0 && !selectedAppId) {
+          setSelectedAppId(appList[0].id);
+        }
       }
     } catch {
       // Ignore network errors
     } finally {
       setIsLoading(false);
     }
-  }, [selectedAppId]);
+  }, [selectedAppId, vacancyId]);
 
   useEffect(() => {
     void loadData();
@@ -397,6 +425,54 @@ export function InterviewsPage() {
           </button>
         </div>
       </div>
+
+      {/* Position Context Banner (E7.2) */}
+      {currentVacancy && (
+        <div className="bg-gradient-to-r from-blue-50 via-indigo-50/40 to-slate-50 dark:from-blue-950/40 dark:via-indigo-950/20 dark:to-slate-900 rounded-2xl border border-blue-200/80 dark:border-blue-900/60 p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-blue-600 text-white shadow-2xs">
+                <Icon name="lock" size={10} />
+                Position Interviews
+              </span>
+              <span className="text-xs font-mono font-bold text-slate-500 dark:text-slate-400">
+                {currentVacancy.vacancyCode}
+              </span>
+              <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                {currentVacancy.status}
+              </span>
+            </div>
+            <h2 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white tracking-tight">
+              {currentVacancy.position?.title || currentVacancy.title || 'Job Position'}
+            </h2>
+            <p className="text-xs text-slate-600 dark:text-slate-400 font-medium">
+              {(currentVacancy as unknown as { department?: string })?.department || currentVacancy.branch?.name || 'Department'} &bull;{' '}
+              <span className="font-bold text-blue-600 dark:text-blue-400">
+                {apiInterviews.length} interview{apiInterviews.length === 1 ? '' : 's'} scheduled
+              </span>
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => navigate(`/vacancies/${currentVacancy.id}`)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 transition shadow-xs cursor-pointer"
+            >
+              <Icon name="arrow-left" size={13} />
+              <span>Back to Overview</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/interviews')}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-500 hover:text-slate-900 dark:hover:text-white transition cursor-pointer"
+              title="View all interviews across all vacancies"
+            >
+              <span>View All Interviews</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── Filter Row ── */}
       <div className="flex flex-wrap items-center gap-3">

@@ -339,13 +339,26 @@ export function ApplicationDetailPage() {
       {/* ── Breadcrumb & Top Bar ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="text-xs font-semibold text-slate-400">
+          <div className="text-xs font-semibold text-slate-400 flex flex-wrap items-center">
             <span
               onClick={() => navigate('/applications')}
               className="hover:text-blue-600 cursor-pointer"
             >
               Applications
             </span>
+            {application?.vacancyId && (
+              <>
+                <span className="mx-2">&bull;</span>
+                <span
+                  onClick={() => navigate(`/vacancies/${application.vacancyId}`)}
+                  className="hover:text-blue-600 cursor-pointer text-blue-600 dark:text-blue-400 font-bold inline-flex items-center gap-1"
+                  title="View Job Requisition Overview"
+                >
+                  <Icon name="briefcase" size={12} />
+                  <span>Requisition: {application.vacancyCode ? `${application.vacancyCode} • ` : ''}{roleName} ↗</span>
+                </span>
+              </>
+            )}
             <span className="mx-2">&bull;</span>
             <span className="text-slate-700 dark:text-slate-200">{appIdDisplay || '—'}</span>
           </div>
@@ -354,10 +367,11 @@ export function ApplicationDetailPage() {
               Applicant Profile
             </h1>
             {application?.stage && <StatusBadge status={application.stage} />}
-            <Link
-              to="/interviews"
-              className="inline-flex items-center gap-1.5 no-underline hover:opacity-85 transition-opacity"
-              title="View interviews"
+            <button
+              type="button"
+              onClick={() => setActiveTab('interviews')}
+              className="inline-flex items-center gap-1.5 no-underline hover:opacity-85 transition-opacity cursor-pointer bg-transparent border-0 p-0"
+              title="View interviews tab"
             >
               {interviews.length === 0 ? (
                 <Badge variant="neutral">No interviews</Badge>
@@ -373,9 +387,22 @@ export function ApplicationDetailPage() {
                   )}
                 </>
               )}
-            </Link>
+            </button>
           </div>
         </div>
+
+        {application?.vacancyId && (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => navigate(`/vacancies/${application.vacancyId}`)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50/60 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-xs font-bold transition shadow-xs cursor-pointer"
+            >
+              <Icon name="briefcase" size={13} />
+              <span>Requisition Overview ↗</span>
+            </button>
+          </div>
+        )}
       </div>
 
       {/* ── Cross-Application Collision Alert (E6.4) ── */}
@@ -445,10 +472,7 @@ export function ApplicationDetailPage() {
           <button
             key={tab}
             type="button"
-            onClick={() => {
-              if (tab === 'interviews') navigate('/interviews');
-              else setActiveTab(tab);
-            }}
+            onClick={() => setActiveTab(tab)}
             className={`pb-3.5 border-b-2 transition capitalize cursor-pointer shrink-0 ${
               activeTab === tab
                 ? 'border-blue-600 text-blue-600 font-extrabold'
@@ -980,6 +1004,169 @@ export function ApplicationDetailPage() {
                 </div>
               </div>
             </>
+          )}
+
+          {activeTab === 'interviews' && (
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-5">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-4">
+                <div>
+                  <h2 className="text-base font-extrabold text-slate-900 dark:text-white tracking-tight">
+                    Interviews &amp; Evaluations
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Structured interview feedback, scorecards, and scheduling history.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsScheduleModalOpen(true)}
+                    className="inline-flex items-center gap-2 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-2xs cursor-pointer"
+                  >
+                    <Icon name="calendar" size={13} />
+                    <span>Schedule Interview</span>
+                  </button>
+                  {application.vacancyId && (
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/interviews?vacancyId=${application.vacancyId}`)}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
+                    >
+                      <Icon name="users" size={13} />
+                      <span>All Requisition Interviews ↗</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Scorecard Metric Summary Cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="p-3.5 rounded-xl bg-emerald-50/60 dark:bg-emerald-950/30 border border-emerald-200/60 dark:border-emerald-900/60">
+                  <div className="text-[10px] font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider">Strong Hire</div>
+                  <div className="text-xl font-extrabold text-emerald-900 dark:text-emerald-200 mt-1">{interviewStats.strongHire}</div>
+                </div>
+                <div className="p-3.5 rounded-xl bg-blue-50/60 dark:bg-blue-950/30 border border-blue-200/60 dark:border-blue-900/60">
+                  <div className="text-[10px] font-bold text-blue-800 dark:text-blue-300 uppercase tracking-wider">Hire</div>
+                  <div className="text-xl font-extrabold text-blue-900 dark:text-blue-200 mt-1">{interviewStats.hire}</div>
+                </div>
+                <div className="p-3.5 rounded-xl bg-rose-50/60 dark:bg-rose-950/30 border border-rose-200/60 dark:border-rose-900/60">
+                  <div className="text-[10px] font-bold text-rose-800 dark:text-rose-300 uppercase tracking-wider">No Hire</div>
+                  <div className="text-xl font-extrabold text-rose-900 dark:text-rose-200 mt-1">{interviewStats.noHire}</div>
+                </div>
+                <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+                  <div className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Pending Feedback</div>
+                  <div className="text-xl font-extrabold text-slate-800 dark:text-slate-200 mt-1">{interviewStats.pending}</div>
+                </div>
+              </div>
+
+              {/* Interview List */}
+              {interviews.length === 0 ? (
+                <PageState
+                  kind="empty"
+                  title="No interviews scheduled"
+                  description="No interview sessions have been scheduled yet for this candidate."
+                  actionLabel="Schedule First Interview"
+                  onAction={() => setIsScheduleModalOpen(true)}
+                />
+              ) : (
+                <div className="space-y-3">
+                  {interviews.map((intv) => {
+                    const start = new Date(intv.scheduledStart);
+                    const end = new Date(intv.scheduledEnd);
+                    const isUpcoming = end.getTime() > Date.now();
+                    return (
+                      <div
+                        key={intv.id}
+                        className="p-4 rounded-xl border border-slate-200/90 dark:border-slate-800 bg-slate-50/30 dark:bg-slate-800/20 space-y-3"
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                          <div className="flex items-center gap-2.5">
+                            <span className="p-2 rounded-lg bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400">
+                              <Icon name="calendar-check" size={16} />
+                            </span>
+                            <div>
+                              <div className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                <span>{intv.title}</span>
+                                <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                                  {intv.interviewCode}
+                                </span>
+                              </div>
+                              <div className="text-[11px] text-slate-400 mt-0.5">
+                                {start.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })} • {start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ({intv.timezone || 'UTC'})
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`px-2.5 py-0.5 rounded-full text-[10.5px] font-bold ${
+                                intv.status === 'Completed'
+                                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                                  : intv.status === 'Cancelled'
+                                  ? 'bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300 border border-rose-200 dark:border-rose-800'
+                                  : isUpcoming
+                                  ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
+                                  : 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
+                              }`}
+                            >
+                              {intv.status}
+                            </span>
+                            <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                              {intv.interviewType}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Interviewers & Scorecards */}
+                        <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[11px] font-semibold text-slate-500">Interviewers:</span>
+                            {intv.attendees && intv.attendees.length > 0 ? (
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                {intv.attendees.map((att) => (
+                                  <span
+                                    key={att.id}
+                                    className="px-2 py-0.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px] font-medium text-slate-700 dark:text-slate-300"
+                                  >
+                                    {att.userName || 'Assigned Interviewer'}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : (
+                              <span className="text-[11px] text-slate-400 italic">No interviewers assigned</span>
+                            )}
+                          </div>
+
+                          {/* Scorecard Status */}
+                          <div className="flex items-center gap-1.5">
+                            {intv.scorecards && intv.scorecards.length > 0 ? (
+                              intv.scorecards.map((sc) => (
+                                <span
+                                  key={sc.id}
+                                  className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                    sc.recommendation === 'Strong Hire' || sc.recommendation === 'Hire'
+                                      ? 'bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300'
+                                      : sc.recommendation === 'No Hire' || sc.recommendation === 'Strong No Hire'
+                                      ? 'bg-rose-100 dark:bg-rose-950 text-rose-800 dark:text-rose-300'
+                                      : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
+                                  }`}
+                                >
+                                  {sc.interviewerName || 'Scorecard'}: {sc.recommendation} ({sc.overallRating}/5)
+                                </span>
+                              ))
+                            ) : (
+                              <span className="text-[11px] text-amber-600 dark:text-amber-400 italic">
+                                Scorecard pending
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           )}
 
           {activeTab === 'resume' && (

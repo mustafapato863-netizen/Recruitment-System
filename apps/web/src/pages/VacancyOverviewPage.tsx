@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { VacancyDetailView, Application, PaginatedResult, Interview, Offer } from '@recruitflow/contracts';
 import { fetchApi, getApi } from '../api/client';
 import { Icon } from '../components/Icon';
 import { Modal } from '../components/Modal';
+import { AddApplicationModal } from '../components/candidate/AddApplicationModal';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { PageState } from '../components/ui/PageState';
@@ -35,6 +36,7 @@ export function VacancyOverviewPage() {
   const [activeTab, setActiveTab] = useState<'overview' | 'applications' | 'pipeline' | 'interviews' | 'posting' | 'activity' | 'settings'>('overview');
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isAddApplicantModalOpen, setIsAddApplicantModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const showToast = (msg: string) => {
@@ -42,37 +44,40 @@ export function VacancyOverviewPage() {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
-  useEffect(() => {
+  const loadAllData = useCallback(async () => {
     if (!id) return;
     setIsLoading(true);
-    Promise.allSettled([
-      fetchApi<VacancyDetailView>(`/vacancies/${id}`),
-      getApi<PaginatedResult<Application>>(`/applications?vacancyId=${id}&pageSize=100`),
-      getApi<Interview[]>('/interviews'),
-      getApi<Offer[]>('/offers'),
-      getApi<InterviewerUser[]>('/users/interviewers'),
-    ])
-      .then(([vRes, appsRes, intsRes, offsRes, usersRes]) => {
-        if (vRes.status === 'fulfilled' && vRes.value) {
-          setVacancy(vRes.value);
-        }
-        if (appsRes.status === 'fulfilled' && appsRes.value?.data) {
-          setApplications(appsRes.value.data);
-        }
-        if (intsRes.status === 'fulfilled' && intsRes.value) {
-          setInterviews(intsRes.value);
-        }
-        if (offsRes.status === 'fulfilled' && offsRes.value) {
-          setOffers(offsRes.value);
-        }
-        if (usersRes.status === 'fulfilled' && usersRes.value) {
-          setInterviewers(usersRes.value);
-        }
-      })
-      .finally(() => {
-        setIsLoading(false);
-      });
+    try {
+      const [vRes, appsRes, intsRes, offsRes, usersRes] = await Promise.allSettled([
+        fetchApi<VacancyDetailView>(`/vacancies/${id}`),
+        getApi<PaginatedResult<Application>>(`/applications?vacancyId=${id}&pageSize=100`),
+        getApi<Interview[]>('/interviews'),
+        getApi<Offer[]>('/offers'),
+        getApi<InterviewerUser[]>('/users/interviewers'),
+      ]);
+      if (vRes.status === 'fulfilled' && vRes.value) {
+        setVacancy(vRes.value);
+      }
+      if (appsRes.status === 'fulfilled' && appsRes.value?.data) {
+        setApplications(appsRes.value.data);
+      }
+      if (intsRes.status === 'fulfilled' && intsRes.value) {
+        setInterviews(intsRes.value);
+      }
+      if (offsRes.status === 'fulfilled' && offsRes.value) {
+        setOffers(offsRes.value);
+      }
+      if (usersRes.status === 'fulfilled' && usersRes.value) {
+        setInterviewers(usersRes.value);
+      }
+    } finally {
+      setIsLoading(false);
+    }
   }, [id]);
+
+  useEffect(() => {
+    void loadAllData();
+  }, [loadAllData]);
 
   const jobTitle = vacancy?.position?.title || vacancy?.title || 'No position';
   const departmentName = (vacancy as unknown as { department?: string } | null | undefined)?.department || vacancy?.branch?.name || '—';
@@ -219,6 +224,15 @@ export function VacancyOverviewPage() {
         <div className="flex items-center gap-2.5">
           <button
             type="button"
+            onClick={() => setIsAddApplicantModalOpen(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+          >
+            <Icon name="plus" size={14} />
+            <span>Add Candidate</span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setIsShareModalOpen(true)}
             className="inline-flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs cursor-pointer"
           >
@@ -289,12 +303,23 @@ export function VacancyOverviewPage() {
 
         <button
           type="button"
-          onClick={() => navigate(`/interviews`)}
+          onClick={() => navigate(`/interviews?vacancyId=${id || ''}`)}
           className="pb-3.5 border-b-2 border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white transition cursor-pointer flex items-center gap-1.5 shrink-0"
         >
           <span>Interviews</span>
           <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
             {interviewsCount}
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => navigate(`/offers?vacancyId=${id || ''}`)}
+          className="pb-3.5 border-b-2 border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white transition cursor-pointer flex items-center gap-1.5 shrink-0"
+        >
+          <span>Offers</span>
+          <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+            {offersCount}
           </span>
         </button>
 
@@ -333,6 +358,15 @@ export function VacancyOverviewPage() {
         >
           Settings
         </button>
+
+        <button
+          type="button"
+          onClick={() => navigate(`/vacancies/${id || ''}/analytics`)}
+          className="pb-3.5 border-b-2 border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white transition cursor-pointer flex items-center gap-1.5 shrink-0"
+        >
+          <span>Analytics</span>
+          <Icon name="arrow-right" size={11} className="text-slate-400" />
+        </button>
       </div>
 
       {/* ── Tab: Overview ── */}
@@ -362,7 +396,7 @@ export function VacancyOverviewPage() {
 
         {/* Card 2: Interviews */}
         <div
-          onClick={() => navigate('/interviews')}
+          onClick={() => navigate(`/interviews?vacancyId=${id || ''}`)}
           className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs hover:shadow-md transition cursor-pointer flex items-center justify-between group"
         >
           <div className="flex items-center gap-4">
@@ -382,7 +416,7 @@ export function VacancyOverviewPage() {
 
         {/* Card 3: Offers */}
         <div
-          onClick={() => navigate('/offers')}
+          onClick={() => navigate(`/offers?vacancyId=${id || ''}`)}
           className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs hover:shadow-md transition cursor-pointer flex items-center justify-between group"
         >
           <div className="flex items-center gap-4">
@@ -796,14 +830,24 @@ export function VacancyOverviewPage() {
                   {hiresCount} / {vacancy?.approvedHeadcount || 1} Filled
                 </span>
               </div>
-              <button
-                type="button"
-                onClick={() => navigate(`/applications?vacancyId=${id || ''}`)}
-                className="inline-flex items-center gap-2 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
-              >
-                <span>Full-Screen Kanban</span>
-                <Icon name="arrow-right" size={13} />
-              </button>
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setIsAddApplicantModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+                >
+                  <Icon name="plus" size={13} />
+                  <span>Add Candidate</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate(`/applications?vacancyId=${id || ''}`)}
+                  className="inline-flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition shadow-xs cursor-pointer"
+                >
+                  <span>Full-Screen Kanban</span>
+                  <Icon name="arrow-right" size={13} />
+                </button>
+              </div>
             </div>
           </div>
 
@@ -894,17 +938,27 @@ export function VacancyOverviewPage() {
       {/* ── Tab: Applications List ── */}
       {activeTab === 'applications' && (
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs overflow-hidden">
-          <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+          <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <h2 className="text-sm font-extrabold text-slate-900 dark:text-white">
               Applicants for {jobTitle} ({vacancyApps.length})
             </h2>
-            <button
-              type="button"
-              onClick={() => navigate(`/applications?vacancyId=${id || ''}`)}
-              className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
-            >
-              Open in Applications workspace &rarr;
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setIsAddApplicantModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+              >
+                <Icon name="plus" size={12} />
+                <span>Add Candidate</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate(`/applications?vacancyId=${id || ''}`)}
+                className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+              >
+                Open in Applications workspace &rarr;
+              </button>
+            </div>
           </div>
           {vacancyApps.length === 0 ? (
             <div className="py-12 text-center text-slate-400 text-xs">
@@ -1135,6 +1189,18 @@ export function VacancyOverviewPage() {
           </div>
         </div>
       </Modal>
+
+      {/* Add Candidate Modal */}
+      <AddApplicationModal
+        isOpen={isAddApplicantModalOpen}
+        onClose={() => setIsAddApplicantModalOpen(false)}
+        preselectedVacancyId={id}
+        preselectedVacancyTitle={jobTitle}
+        onSuccess={(_newApp) => {
+          showToast('Candidate added to requisition pipeline successfully');
+          void loadAllData();
+        }}
+      />
 
       {/* Toast Notification */}
       {toastMessage && (

@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getApi } from '../api/client';
-import type { Offer } from '@recruitflow/contracts';
+import type { Offer, VacancyDetailView } from '@recruitflow/contracts';
 import { Icon } from '../components/Icon';
 import { Modal } from '../components/Modal';
 import { PageState } from '../components/ui/PageState';
@@ -9,6 +9,7 @@ import './PageEnhancementsV2.css';
 
 interface OfferRow {
   id: string;
+  vacancyId?: string;
   offerCode: string;
   candidateName: string;
   candidateType: string;
@@ -36,6 +37,10 @@ interface OfferRow {
 
 export function OffersPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const vacancyId = searchParams.get('vacancyId');
+  const [currentVacancy, setCurrentVacancy] = useState<VacancyDetailView | null>(null);
+
   const [apiOffers, setApiOffers] = useState<OfferRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activePill, setActivePill] = useState('ALL');
@@ -48,10 +53,26 @@ export function OffersPage() {
 
   useEffect(() => {
     setIsLoading(true);
-    getApi<Offer[]>('/offers')
-      .then((res) => {
+    const offersPromise = getApi<Offer[]>('/offers');
+    const vacancyPromise = vacancyId ? getApi<VacancyDetailView>(`/vacancies/${vacancyId}`) : Promise.resolve(null);
+
+    Promise.allSettled([offersPromise, vacancyPromise])
+      .then(([offersRes, vacRes]) => {
+        if (vacRes.status === 'fulfilled' && vacRes.value) {
+          setCurrentVacancy(vacRes.value);
+        } else {
+          setCurrentVacancy(null);
+        }
+
+        const res = offersRes.status === 'fulfilled' ? offersRes.value : [];
         const list = Array.isArray(res) ? res : (res as any)?.data || [];
-        const mapped: OfferRow[] = list.map((o: any) => {
+        const filteredList = list.filter((o: any) => {
+          if (!vacancyId) return true;
+          const appVacId = o.vacancyId || o.application?.vacancyId || o.application?.vacancy?.id;
+          return appVacId === vacancyId;
+        });
+
+        const mapped: OfferRow[] = filteredList.map((o: any) => {
           const candidateName =
             o.candidateName ||
             (o.application?.candidate
@@ -188,6 +209,7 @@ export function OffersPage() {
 
           return {
             id: o.id,
+            vacancyId: o.vacancyId || o.application?.vacancyId || o.application?.vacancy?.id,
             offerCode: o.offerCode || '—',
             candidateName,
             candidateType: 'External Candidate',
@@ -221,7 +243,7 @@ export function OffersPage() {
       .finally(() => {
         setIsLoading(false);
       });
-  }, []);
+  }, [vacancyId]);
 
   const kpiMetrics = useMemo(() => {
     const awaitingApproval = apiOffers.filter(
@@ -356,6 +378,54 @@ export function OffersPage() {
           </button>
         </div>
       </div>
+
+      {/* Position Context Banner (E7.2) */}
+      {currentVacancy && (
+        <div className="bg-gradient-to-r from-blue-50 via-indigo-50/40 to-slate-50 dark:from-blue-950/40 dark:via-indigo-950/20 dark:to-slate-900 rounded-2xl border border-blue-200/80 dark:border-blue-900/60 p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-blue-600 text-white shadow-2xs">
+                <Icon name="lock" size={10} />
+                Position Offers
+              </span>
+              <span className="text-xs font-mono font-bold text-slate-500 dark:text-slate-400">
+                {currentVacancy.vacancyCode}
+              </span>
+              <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                {currentVacancy.status}
+              </span>
+            </div>
+            <h2 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white tracking-tight">
+              {currentVacancy.position?.title || currentVacancy.title || 'Job Position'}
+            </h2>
+            <p className="text-xs text-slate-600 dark:text-slate-400 font-medium">
+              {(currentVacancy as unknown as { department?: string })?.department || currentVacancy.branch?.name || 'Department'} &bull;{' '}
+              <span className="font-bold text-blue-600 dark:text-blue-400">
+                {apiOffers.length} offer{apiOffers.length === 1 ? '' : 's'} recorded
+              </span>
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => navigate(`/vacancies/${currentVacancy.id}`)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 transition shadow-xs cursor-pointer"
+            >
+              <Icon name="arrow-left" size={13} />
+              <span>Back to Overview</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/offers')}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-500 hover:text-slate-900 dark:hover:text-white transition cursor-pointer"
+              title="View all offers across all vacancies"
+            >
+              <span>View All Offers</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Expandable filters */}
       {isMoreFiltersOpen && (

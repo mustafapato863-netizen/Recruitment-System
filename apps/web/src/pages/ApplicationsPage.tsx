@@ -12,7 +12,7 @@ import { Icon } from '../components/Icon';
 import { CandidateSplitDrawer } from '../components/candidate/CandidateSplitDrawer';
 import { Drawer } from '../components/ui/Drawer';
 import { CommentsThread } from '../components/ui/CommentsThread';
-import { Modal } from '../components/Modal';
+import { AddApplicationModal } from '../components/candidate/AddApplicationModal';
 import { PageState } from '../components/ui/PageState';
 import './PageEnhancementsV2.css';
 
@@ -1369,47 +1369,16 @@ export function ApplicationsPage() {
       )}
 
       {/* Add Candidate Modal */}
-      <Modal
+      <AddApplicationModal
         isOpen={isAddCandidateOpen}
         onClose={() => setIsAddCandidateOpen(false)}
-        title="Add Candidate to Pipeline"
-        maxWidthClass="max-w-md"
-      >
-        <div className="space-y-4 text-xs">
-          <div>
-            <label className="font-bold block mb-1">Candidate Full Name</label>
-            <input
-              type="text"
-              placeholder="e.g. Full Name"
-              className="w-full p-2.5 border rounded-xl"
-            />
-          </div>
-          <div>
-            <label className="font-bold block mb-1">Email Address</label>
-            <input
-              type="email"
-              placeholder="candidate@example.com"
-              className="w-full p-2.5 border rounded-xl"
-            />
-          </div>
-          <div className="flex justify-end gap-2 pt-2 border-t">
-            <button
-              type="button"
-              onClick={() => setIsAddCandidateOpen(false)}
-              className="px-3 py-1.5 text-slate-500 cursor-pointer"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsAddCandidateOpen(false)}
-              className="px-4 py-1.5 bg-blue-600 text-white rounded-xl font-bold cursor-pointer"
-            >
-              Add to New Stage
-            </button>
-          </div>
-        </div>
-      </Modal>
+        preselectedVacancyId={currentVacancy?.id}
+        preselectedVacancyTitle={currentVacancy?.position?.title || currentVacancy?.title || undefined}
+        onSuccess={(_newApp) => {
+          showToast('Candidate added to pipeline successfully', 'success');
+          void loadApplications();
+        }}
+      />
 
       {/* Candidate Split Drawer */}
       {selectedDrawerApp && (

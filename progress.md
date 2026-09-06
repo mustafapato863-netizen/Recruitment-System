@@ -502,3 +502,43 @@
   - `pnpm --dir apps/web build` passed clean (production build succeeded in 1.44s).
   - `pnpm --dir apps/api exec tsc --noEmit` passed clean (0 errors).
   - `pnpm --dir apps/api test` passed clean (1 test file, 11/11 tests pass).
+
+### E7 Per-Position Operational Parity Blueprint: DONE
+- Task ID: E7 (E7.1, E7.2, E7.3, E7.4)
+- Scope:
+  - `apps/web/src/components/candidate/AddApplicationModal.tsx` (NEW)
+  - `apps/web/src/pages/ApplicationsPage.tsx`
+  - `apps/web/src/pages/VacancyOverviewPage.tsx`
+  - `apps/web/src/pages/InterviewsPage.tsx`
+  - `apps/web/src/pages/OffersPage.tsx`
+  - `apps/web/src/pages/VacantListPage.tsx`
+  - `apps/web/src/pages/ApplicationDetailPage.tsx`
+  - `task_plan.md`
+  - `findings.md`
+  - `progress.md`
+- Items Delivered:
+  1. **E7.1 (Direct Candidate Sourcing Modal)**:
+     - Created `AddApplicationModal.tsx`: Dual-mode modal for searching existing candidates (`GET /candidates`) or creating new candidates on the fly (`POST /candidates`).
+     - Features vacancy lock badge if preselected, or dropdown selector if global; sourcing channel select (`LinkedIn`, `Career Site`, `Referral`, etc.); and optional recruiter note.
+     - Submits `POST /applications` and conditionally `POST /applications/:id/notes`.
+     - Wired into `ApplicationsPage.tsx` replacing previous dummy modal.
+     - Wired into `VacancyOverviewPage.tsx` header action bar, Pipeline tab toolbar, and Applications tab.
+  2. **E7.2 (Position-Scoped Sub-flows for Interviews & Offers)**:
+     - `InterviewsPage.tsx`: Reads `?vacancyId=`, fetches requisition details (`GET /vacancies/:id`), filters interviews to only applications belonging to the vacancy, limits interview scheduling modal applicant dropdown to only that vacancy's candidates, and renders a gradient Position Context Banner with `[← Back to Requisition Overview]` and `[View All Interviews]`.
+     - `OffersPage.tsx`: Reads `?vacancyId=`, filters offers table by `row.vacancyId === vacancyId`, and displays a gradient Position Context Banner with return and clear links.
+     - `VacancyOverviewPage.tsx`: Wired Quick Metrics and Tab navigation buttons for Interviews and Offers to pass `?vacancyId=${id}` to maintain scoped context across the entire recruitment journey. Added `[Analytics ↗]` tab navigating directly to `/vacancies/${id}/analytics`.
+  3. **E7.3 (Odoo-Style Position Cards & Grid View)**:
+     - `VacantListPage.tsx`: Added Cards vs Table view toggle switch (defaulting to Cards view).
+     - Responsive 3-column requisition cards displaying requisition code (`vacancyCode`), status pill badge, position title (navigates to `/vacancies/:id`), department, location, work type, filled headcount progress (`joinedHeadcount / approvedHeadcount`), SLA performance percentage and health dot, recruiter avatar initials, need-action warning badge, and prominent `[X Applications ↗]` action button jumping directly into the vacancy-locked pipeline.
+     - Preserves clean pagination across both card and table views (`pageSize = 12`).
+  4. **E7.4 (Requisition Bidirectional Linkage & Inline Evaluation Tab)**:
+     - `ApplicationDetailPage.tsx`: Added clickable requisition breadcrumb link (`Requisition: VAC-CODE • Title ↗`) and top-right `[Requisition Overview ↗]` button.
+     - Removed premature page eject on clicking the horizontal `interviews` tab (`if (tab === 'interviews') navigate('/interviews')`).
+     - Rendered inline Interviews & Evaluations tab with 4 summary metric cards (`Strong Hire`, `Hire`, `No Hire`, `Pending`), scheduled interview sessions, interviewer tags, individual scorecard recommendations, and quick `[Schedule Interview]` and `[All Requisition Interviews ↗]` actions.
+- Verification:
+  - `pnpm --dir apps/web exec tsc -p tsconfig.app.json --noEmit` passed clean (0 errors).
+  - `pnpm --dir apps/web test --run` passed clean (23 test files, 58/58 tests pass).
+  - `pnpm --dir apps/web build` passed clean (production build succeeded in 1.61s).
+  - `pnpm --dir apps/api exec tsc --noEmit` passed clean (0 errors).
+  - `pnpm --dir apps/api test` passed clean (1 test file, 11/11 tests pass).
+
