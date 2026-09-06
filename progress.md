@@ -1,4 +1,4 @@
-# Progress Log â€” RecruitFlow Candidate Journey
+ï»¿# Progress Log â€” RecruitFlow Candidate Journey
 
 ## Session 2026-09-04
 
@@ -399,11 +399,37 @@
 
 
 
-### E3 orchestrator verdict (opencode review unavailable — 2 interrupted runs; first-hand verification stands in)
-1. Literals PASS — orchestrator grep 0 hits for person/place literals across all 5 pages.
-2. TasksPage GET /tasks wiring PASS — TasksPage.tsx:200 fetches `/tasks?pageSize=100` with array/{data} normalization; POST create kept (:261).
-3. Mechanics PASS — VacantList rows/filters from GET /vacancies; ManagerDashboard/JobAnalytics/VacancyOverview derived from real fetches; empty PageStates present.
-4. Scope PASS — diff stat: 5 pages + findings.md/progress.md only; no backend/contracts/deps changes.
-5. Casts PASS — orchestrator replaced all E3-introduced `as any` with precise structural casts; eslint clean on 4 files (VacantListPage 3 pre-existing errors left); tsc clean; epoch fallback for optional interview dates.
+### E3 orchestrator verdict (opencode review unavailable ï¿½ 2 interrupted runs; first-hand verification stands in)
+1. Literals PASS ï¿½ orchestrator grep 0 hits for person/place literals across all 5 pages.
+2. TasksPage GET /tasks wiring PASS ï¿½ TasksPage.tsx:200 fetches `/tasks?pageSize=100` with array/{data} normalization; POST create kept (:261).
+3. Mechanics PASS ï¿½ VacantList rows/filters from GET /vacancies; ManagerDashboard/JobAnalytics/VacancyOverview derived from real fetches; empty PageStates present.
+4. Scope PASS ï¿½ diff stat: 5 pages + findings.md/progress.md only; no backend/contracts/deps changes.
+5. Casts PASS ï¿½ orchestrator replaced all E3-introduced `as any` with precise structural casts; eslint clean on 4 files (VacantListPage 3 pre-existing errors left); tsc clean; epoch fallback for optional interview dates.
 - Gates: tsc clean, web tests 58/58 pass.
-- Open: VacantListPage 3 pre-existing lint errors; mojibake glyphs (`?`) in string literals across touched files — queued in E5 encoding normalization.
+- Open: VacantListPage 3 pre-existing lint errors; mojibake glyphs (`?`) in string literals across touched files ï¿½ queued in E5 encoding normalization.
+
+
+### E4 Remove hardcoded demo literals from CV Intake, Applications, and Stage Transition pages (E4a + E4b): DONE
+- Task ID: E4 (E4a CVIntakePage + E4b ApplicationsPage and StageTransitionPage)
+- Scope: `apps/web/src/pages/CVIntakePage.tsx` (E4a, preserved untouched), `apps/web/src/pages/ApplicationsPage.tsx` (E4b), `apps/web/src/pages/StageTransitionPage.tsx` (E4b)
+- Replaced literals and fixed kanban locking in `ApplicationsPage.tsx`:
+  - Replaced hardcoded `DEFAULT_COLUMNS` cards (15 mock candidates with Unsplash photos) and `DEFAULT_LIST_ROWS` with dynamic data mapped from `GET /applications?pageSize=100` (`apiApplications`).
+  - Fixed kanban drag-and-drop optimistic locking: cards preserve `version: a.version ?? 1` and `stage: a.stage`; `handleDrop` takes a snapshot of `boardColumns`, checks `card.version` (falling back to `GET /applications/:id`), and dispatches `patchApi('/applications/:id/stage', { stage: targetCol.stageKey, expectedStage, expectedVersion, reason })`.
+  - Implemented 409 CONFLICT handling: detects `statusCode === 409` or `code === 'CONFLICT'`, displays warning toast, and calls `loadApplications()` to resync state from server truth.
+  - Implemented non-409 error handling: reverts `boardColumns` back to snapshot and displays error toast.
+  - Removed all person and location literals ('Ali Hassan', 'Sarah Ahmed', 'Mona Saleh', 'Omar Farouk', 'Yousef Ahmed', 'Khaled Mostafa', 'Nourhan Sami', 'Tarek Ibrahim', 'Fatima Zahra', 'Ahmed Samy', 'Omar Ashraf', 'Mariam Adel', 'Noha Farouk', 'Ahmed Mostafa', 'Sara Ahmed', 'Heba Mohamed', 'Cairo, Egypt', 'Cairo, EG', 'LinkedIn', 'SA', Unsplash photo URLs).
+  - Derived filter dropdown options dynamically from `apiApplications` (unique positions, stages, owners, sources), resetting filters cleanly to `'ALL'`.
+  - Integrated `<PageState kind="loading" | "error" | "empty">` for empty states and filter no-match results.
+  - Fixed CSV export to download real filtered application records with real fields.
+- Replaced literals and aligned P0.1 transition contract in `StageTransitionPage.tsx`:
+  - Fixed `handleConfirmTransition`: payload matches P0.1 shape `{ stage: targetStage, expectedStage: application.stage, expectedVersion: application.version ?? 1, reason?: string }`.
+  - Implemented 409 CONFLICT handling: displays warning alert and automatically re-fetches latest application state.
+  - Implemented error handling: displays retryable danger Alert for non-409 errors instead of swallowing errors.
+  - Removed hardcoded candidate literals ('Ali Hassan', 'Frontend Developer', 'APP-02481', 'Sarah Ahmed', 'SA', 'AH', static dates).
+  - Derived candidate name, initials, position title, application ID, stage owner, and applied date dynamically from `application` and `candidate`.
+  - Added interactive "To stage" selector populated from `application.allowedTransitions` (or standard pipeline stages).
+  - Integrated `<PageState kind="loading" | "not-found">` when application is loading or missing.
+- Verification:
+  - `pnpm --dir apps/web exec tsc -p tsconfig.app.json --noEmit` passed clean (0 errors).
+  - `pnpm --dir apps/web build` passed clean (production build succeeded in 1.38s).
+  - `pnpm --dir apps/web test` passed clean (23 test files, 58/58 tests pass).

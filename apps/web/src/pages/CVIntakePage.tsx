@@ -23,65 +23,65 @@ const INTAKE_STEPS = ['Upload', 'Validate & Edit', 'Resolve', 'Confirm'];
 
 const SAMPLE_CV_PRESETS: { name: string; title: string; filename: string; department: string; data: ExtractedCandidate }[] = [
   {
-    name: 'Dr. Mona Al-Hashemi',
+    name: 'Sample Candidate 1',
     title: 'Specialist Dermatologist',
-    filename: 'Mona_AlHashemi_Dermatology_CV.pdf',
+    filename: 'sample_candidate_1_cv.pdf',
     department: 'Medical Specialties',
     data: {
-      firstName: 'Mona',
-      lastName: 'Al-Hashemi',
-      email: 'dr.mona@sample.com',
+      firstName: 'Sample',
+      lastName: 'Candidate 1',
+      email: 'sample.candidate.1@example.com',
       phone: '+971 50 999 0011',
       title: 'Specialist Dermatologist',
-      currentCompany: 'DermaCare Dubai',
+      currentCompany: 'Medical Specialties Clinic',
       experienceYears: 9,
       location: 'Dubai, UAE',
-      education: 'MBBS, Master of Clinical Dermatology (King Saud University)',
-      summary: 'Board-certified Specialist Dermatologist with 9+ years of extensive clinical and cosmetic dermatology experience in premier Middle East medical centers. Specializes in laser therapies, clinical diagnostics, and patient-centered skincare plans.',
+      education: 'MBBS, Master of Clinical Dermatology',
+      summary: 'Board-certified Specialist Dermatologist with 9+ years of extensive clinical and cosmetic dermatology experience. Specializes in laser therapies, clinical diagnostics, and patient-centered skincare plans.',
       skills: ['Clinical Dermatology', 'Cosmetic Injectables', 'Laser Therapy', 'Skin Biopsy', 'Dermatosurgery', 'Patient Care'],
-      certifications: ['DHA Specialist License', 'Saudi Board of Dermatology', 'BLS Certified'],
+      certifications: ['Specialist License', 'Board of Dermatology', 'BLS Certified'],
       languages: ['Arabic (Native)', 'English (Fluent)', 'French (Intermediate)'],
     },
   },
   {
-    name: 'Ali Hassan',
+    name: 'Sample Candidate 2',
     title: 'Senior Frontend Engineer',
-    filename: 'Ali_Hassan_Senior_Engineer_2026.docx',
+    filename: 'sample_candidate_2_cv.docx',
     department: 'Information Technology',
     data: {
-      firstName: 'Ali',
-      lastName: 'Hassan',
-      email: 'ali.hassan.dev@sample.com',
+      firstName: 'Sample',
+      lastName: 'Candidate 2',
+      email: 'sample.candidate.2@example.com',
       phone: '+966 55 444 3322',
       title: 'Senior Frontend Engineer',
-      currentCompany: 'TechServices UAE',
+      currentCompany: 'Enterprise Tech Services',
       experienceYears: 6,
       location: 'Riyadh, Saudi Arabia',
-      education: 'B.Sc. in Computer Science (Cairo University)',
+      education: 'B.Sc. in Computer Science',
       summary: 'Senior Frontend Engineer with 6+ years specializing in high-performance web applications using React, TypeScript, Next.js, and modern CSS architecture. Proven track record scaling enterprise healthcare and e-commerce portals.',
       skills: ['React 19', 'TypeScript', 'Next.js', 'Tailwind CSS', 'Vite', 'GraphQL', 'State Management', 'Jest / Vitest', 'Design Systems'],
-      certifications: ['AWS Certified Cloud Practitioner', 'Meta Frontend Developer Professional Certificate'],
+      certifications: ['Cloud Practitioner', 'Frontend Developer Professional Certificate'],
       languages: ['Arabic (Native)', 'English (Professional)'],
     },
   },
   {
-    name: 'Sara Ahmed',
+    name: 'Sample Candidate 3',
     title: 'Staff Nurse (ICU)',
-    filename: 'Sara_Ahmed_ICU_Nursing_Resume.pdf',
+    filename: 'sample_candidate_3_cv.pdf',
     department: 'Critical Care & Nursing',
     data: {
-      firstName: 'Sara',
-      lastName: 'Ahmed',
-      email: 'sara.ahmed.card@sample.com',
+      firstName: 'Sample',
+      lastName: 'Candidate 3',
+      email: 'sample.candidate.3@example.com',
       phone: '+966 54 111 3355',
       title: 'Staff Nurse (ICU)',
-      currentCompany: 'Saudi German Hospital',
+      currentCompany: 'General Hospital',
       experienceYears: 5,
       location: 'Jeddah, Saudi Arabia',
-      education: 'Bachelor of Science in Nursing (BSN) - Ain Shams University',
-      summary: 'Dedicated Critical Care Staff Nurse with 5 years in high-acuity ICUs and emergency cardiac units. Skilled in ventilator management, hemodynamic monitoring, and acute patient stabilization within JCI-accredited hospitals.',
+      education: 'Bachelor of Science in Nursing (BSN)',
+      summary: 'Dedicated Critical Care Staff Nurse with 5 years in high-acuity ICUs and emergency cardiac units. Skilled in ventilator management, hemodynamic monitoring, and acute patient stabilization within accredited hospitals.',
       skills: ['Critical Care Nursing', 'ICU Protocol', 'Hemodynamic Monitoring', 'Ventilator Management', 'Emergency Response', 'Electronic Medical Records (EMR)'],
-      certifications: ['Saudi Commission for Health Specialties (SCFHS) Registered', 'ACLS Certified', 'BLS Certified', 'PALS Certified'],
+      certifications: ['Commission for Health Specialties Registered', 'ACLS Certified', 'BLS Certified', 'PALS Certified'],
       languages: ['Arabic (Native)', 'English (Fluent)'],
     },
   },
@@ -533,6 +533,9 @@ export function CVIntakePage() {
                   <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">
                     Quick-Load Presets (Instant Demo)
                   </h3>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
+                    Sample data
+                  </span>
                 </div>
                 <span className="text-[11px] text-slate-400">Click to test the full 4-stage intake</span>
               </div>
@@ -630,6 +633,11 @@ export function CVIntakePage() {
                     <Icon name="check" size={12} />
                     Parsed from {uploadedFileName}
                   </span>
+                  {uploadedFileName?.toLowerCase().includes('sample_candidate') && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
+                      Sample data
+                    </span>
+                  )}
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                   Stage 2 of 4: Validate and adjust extracted fields before duplicate resolution and vacancy matching.
