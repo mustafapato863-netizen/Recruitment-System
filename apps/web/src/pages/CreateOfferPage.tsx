@@ -55,8 +55,10 @@ export function CreateOfferPage() {
   });
 
   const [components, setComponents] = useState<OfferComponentDraft[]>([
-    { type: 'Salary', name: 'Basic Salary', amount: 0, currency: 'USD', frequency: 'Monthly', isTaxable: true },
+    { type: 'Salary', name: 'Basic Salary', amount: 0, currency: 'SAR', frequency: 'Monthly', isTaxable: true },
   ]);
+
+  const [targetGrossSalary, setTargetGrossSalary] = useState<number>(0);
 
   useEffect(() => {
     if (selectedAppId) {
@@ -99,8 +101,35 @@ export function CreateOfferPage() {
   const addComponent = () => {
     setComponents([
       ...components,
-      { type: 'Allowance', name: 'Other Allowance', amount: 1000, currency: 'AED', frequency: 'Monthly', isTaxable: true },
+      { type: 'Allowance', name: 'Other Allowance', amount: 1000, currency: 'SAR', frequency: 'Monthly', isTaxable: true },
     ]);
+  };
+
+  const applySaudiStandardPackage = (gross: number) => {
+    if (!gross || gross <= 0) return;
+    const basic = Math.round(gross * 0.60);
+    const housing = Math.round(gross * 0.25);
+    const transport = Math.round(gross * 0.10);
+    const other = gross - (basic + housing + transport);
+
+    const newComps: OfferComponentDraft[] = [
+      { type: 'Salary', name: 'Basic Salary (60%)', amount: basic, currency: 'SAR', frequency: 'Monthly', isTaxable: true },
+      { type: 'Allowance', name: 'Housing Allowance (25%)', amount: housing, currency: 'SAR', frequency: 'Monthly', isTaxable: true },
+      { type: 'Allowance', name: 'Transportation Allowance (10%)', amount: transport, currency: 'SAR', frequency: 'Monthly', isTaxable: true },
+    ];
+
+    if (other > 0) {
+      newComps.push({
+        type: 'Allowance',
+        name: 'Special / Medical Allowance (5%)',
+        amount: other,
+        currency: 'SAR',
+        frequency: 'Monthly',
+        isTaxable: true,
+      });
+    }
+
+    setComponents(newComps);
   };
 
   const removeComponent = (index: number) => {
@@ -220,7 +249,7 @@ export function CreateOfferPage() {
 
             <FormSection
               title="Compensation Breakdown"
-              description="Define salary, housing, transport and variable allowances."
+              description="Define salary, housing, transport and variable allowances in Saudi Riyals (SAR)."
               actions={
                 <Button variant="secondary" size="sm" type="button" onClick={addComponent}>
                   <Icon name="plus" size={13} />
@@ -228,6 +257,60 @@ export function CreateOfferPage() {
                 </Button>
               }
             >
+              {/* Saudi Standard 1-Click Calculator Helper */}
+              <div className="p-3.5 rounded-xl bg-gradient-to-r from-blue-50/80 via-emerald-50/60 to-white dark:from-slate-800/80 dark:via-slate-800/40 dark:to-slate-900 border border-blue-200/80 dark:border-blue-900/50 mb-3 space-y-2.5">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <span className="text-amber-500 font-bold">⚡</span>
+                    <strong className="text-xs font-bold text-slate-900 dark:text-white">
+                      Saudi Labor Law Standard Package Calculator
+                    </strong>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                      SAR Currency
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Auto-split: 60% Basic • 25% Housing • 10% Transport • 5% Other
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2 flex-wrap">
+                  <div className="w-48">
+                    <Input
+                      type="number"
+                      placeholder="Target Gross (e.g. 35000)"
+                      value={targetGrossSalary || ''}
+                      onChange={(e) => setTargetGrossSalary(Number(e.target.value))}
+                    />
+                  </div>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    type="button"
+                    disabled={!targetGrossSalary || targetGrossSalary <= 0}
+                    onClick={() => applySaudiStandardPackage(targetGrossSalary)}
+                  >
+                    Apply 1-Click Saudi Breakdown
+                  </Button>
+                  <div className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 ml-auto">
+                    <span>Presets:</span>
+                    {[15000, 25000, 45000, 60000].map((amt) => (
+                      <button
+                        key={amt}
+                        type="button"
+                        onClick={() => {
+                          setTargetGrossSalary(amt);
+                          applySaudiStandardPackage(amt);
+                        }}
+                        className="px-2 py-0.5 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:border-blue-500 transition text-[10px] font-bold cursor-pointer"
+                      >
+                        {amt.toLocaleString()} SAR
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
               <div className="flex flex-col gap-3">
                 {components.map((comp, idx) => (
                   <div
@@ -254,7 +337,7 @@ export function CreateOfferPage() {
                     <div className="sm:col-span-3">
                       <Input
                         type="number"
-                        placeholder="Amount (AED)"
+                        placeholder="Amount (SAR)"
                         value={comp.amount}
                         onChange={(e) => handleComponentChange(idx, 'amount', Number(e.target.value))}
                       />

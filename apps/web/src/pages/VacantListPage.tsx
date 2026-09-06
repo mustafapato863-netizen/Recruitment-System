@@ -486,7 +486,7 @@ export function VacantListPage() {
               {paginatedPositions.map((row) => (
                 <div
                   key={row.id}
-                  className="group relative bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 hover:border-blue-400 dark:hover:border-blue-500 rounded-2xl p-5 shadow-xs hover:shadow-md transition-all duration-200 flex flex-col justify-between"
+                  className="group relative rounded-2xl p-5 card-glow h-[285px] flex flex-col justify-between"
                 >
                   <div>
                     {/* Top meta: Code + Status Badge */}

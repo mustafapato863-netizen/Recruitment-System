@@ -19,6 +19,7 @@ import type {
   ApplicationQueryDto,
   CreateApplicationDto,
   UpdateApplicationStageDto,
+  UpdateApplicationDto,
 } from './applications.dto';
 
 const ALLOWED_STAGE_TRANSITIONS: Record<ApplicationStage, ApplicationStage[]> = {
@@ -217,6 +218,17 @@ export class ApplicationsService {
       );
     }
 
+    if (dto.stage === 'Joined') {
+      const vacancy = await this.prisma.vacancy.findUnique({
+        where: { id: application.vacancyId },
+      });
+      if (vacancy && vacancy.joinedHeadcount >= vacancy.approvedHeadcount) {
+        throw new BadRequestException(
+          `Requisition approved headcount is already fulfilled (${vacancy.joinedHeadcount}/${vacancy.approvedHeadcount}).`,
+        );
+      }
+    }
+
     const updated = await this.prisma.$transaction(async (tx) => {
       const changed = await tx.application.updateMany({
         where: {
@@ -232,6 +244,23 @@ export class ApplicationsService {
       });
 
       if (changed.count !== 1) return null;
+
+      if (dto.stage === 'Joined') {
+        const vacancy = await tx.vacancy.findUnique({
+          where: { id: application.vacancyId },
+        });
+        if (vacancy) {
+          const newJoined = vacancy.joinedHeadcount + 1;
+          const shouldClose = newJoined >= vacancy.approvedHeadcount;
+          await tx.vacancy.update({
+            where: { id: vacancy.id },
+            data: {
+              joinedHeadcount: { increment: 1 },
+              ...(shouldClose ? { status: 'Closed' } : {}),
+            },
+          });
+        }
+      }
 
       await tx.applicationStatusHistory.create({
         data: {
@@ -258,6 +287,58 @@ export class ApplicationsService {
       const current = await this.getApplication(organizationId, id);
       this.throwTransitionConflict(current);
     }
+
+    return this.toApplication(updated);
+  }
+
+  async updateApplication(
+    organizationId: string,
+    id: string,
+    _actorUserId: string,
+    dto: UpdateApplicationDto,
+  ): Promise<Application> {
+    await this.getApplication(organizationId, id);
+
+    const updateData: Prisma.ApplicationUpdateInput = {};
+
+    if (dto.primaryRecruiterId !== undefined) {
+      if (dto.primaryRecruiterId === null) {
+        updateData.primaryRecruiter = { disconnect: true };
+      } else {
+        const recruiter = await this.prisma.user.findFirst({
+          where: { id: dto.primaryRecruiterId, organizationId, status: 'Active' },
+        });
+        if (!recruiter) {
+          throw new NotFoundException('Recruiter not found in this organization');
+        }
+        updateData.primaryRecruiter = { connect: { id: dto.primaryRecruiterId } };
+      }
+    }
+
+    if (dto.taskOwnerId !== undefined) {
+      if (dto.taskOwnerId === null) {
+        updateData.taskOwner = { disconnect: true };
+      } else {
+        const owner = await this.prisma.user.findFirst({
+          where: { id: dto.taskOwnerId, organizationId, status: 'Active' },
+        });
+        if (!owner) {
+          throw new NotFoundException('Task owner not found in this organization');
+        }
+        updateData.taskOwner = { connect: { id: dto.taskOwnerId } };
+      }
+    }
+
+    const updated = await this.prisma.application.update({
+      where: { id },
+      data: updateData,
+      include: {
+        candidate: true,
+        vacancy: { include: { position: true } },
+        primaryRecruiter: true,
+        taskOwner: true,
+      },
+    });
 
     return this.toApplication(updated);
   }

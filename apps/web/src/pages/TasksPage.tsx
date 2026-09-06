@@ -106,6 +106,18 @@ export function TasksPage() {
   const [instructions, setInstructions] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const userRoleCodes = useMemo(() => {
+    return (user?.roles || []).map((r) => ((r.code || r.name || '').toUpperCase()));
+  }, [user]);
+
+  const isManagerOrAdmin = useMemo(() => {
+    const managerRoles = ['ADMIN', 'SYSADMIN', 'ADMINISTRATOR', 'HIRING_MANAGER', 'TALENT_MANAGER', 'HR_MANAGER'];
+    return (
+      userRoleCodes.some((code) => managerRoles.includes(code)) ||
+      Boolean(user?.permissions?.includes('VACANCY_MANAGE'))
+    );
+  }, [userRoleCodes, user?.permissions]);
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
@@ -247,6 +259,10 @@ export function TasksPage() {
 
   const handleAssignTask = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isManagerOrAdmin) {
+      showToast('Recruiters are not authorized to assign or reassign tasks.');
+      return;
+    }
     const vacancy = apiVacancies.find((v) => v.id === selectedVacancyId);
     const recruiter = apiRecruiters.find((r) => r.id === selectedRecruiterId) || apiRecruiters[0];
 
@@ -397,14 +413,16 @@ export function TasksPage() {
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => setIsAssignModalOpen(true)}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer self-start sm:self-auto"
-        >
-          <Icon name="plus" size={14} />
-          <span>Assign Task</span>
-        </button>
+        {isManagerOrAdmin && (
+          <button
+            type="button"
+            onClick={() => setIsAssignModalOpen(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer self-start sm:self-auto"
+          >
+            <Icon name="plus" size={14} />
+            <span>Assign Task</span>
+          </button>
+        )}
       </div>
 
       {/* ── 5 Metric Cards ── */}
@@ -896,7 +914,7 @@ export function TasksPage() {
 
       {/* Assign Open Vacancy & Target Modal */}
       <Modal
-        isOpen={isAssignModalOpen}
+        isOpen={isAssignModalOpen && isManagerOrAdmin}
         onClose={() => setIsAssignModalOpen(false)}
         title="Assign Open Vacancy & Target to Recruiter"
         maxWidthClass="max-w-lg"

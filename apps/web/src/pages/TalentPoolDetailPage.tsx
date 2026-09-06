@@ -12,6 +12,7 @@ import { FormField } from '../components/ui/FormField';
 import { Input } from '../components/ui/Input';
 import { useToast } from '../components/ui/ToastContext';
 import { CandidateCombobox } from '../components/CandidateCombobox';
+import { useSetBreadcrumbTitle } from '../context/BreadcrumbContext';
 import type { TalentPoolCandidateItem, TalentPoolItem } from '@recruitflow/contracts';
 
 interface PoolDetail {
@@ -31,6 +32,8 @@ export function TalentPoolDetailPage() {
   const [data, setData] = useState<PoolDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  useSetBreadcrumbTitle(data?.pool?.name || 'Talent Pool Details');
   
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [addCandidateId, setAddCandidateId] = useState('');

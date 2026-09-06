@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  ForbiddenException,
   Get,
   Param,
   ParseUUIDPipe,
@@ -65,10 +66,15 @@ export class TasksController {
     return this.tasksService.getOne(user.organizationId, user.userId, id);
   }
 
-  /** POST /tasks — create and assign a new task */
+  /** POST /tasks — create and assign a new task (Managers / Admins only; Recruiters are restricted) */
   @Post()
-  @RequirePermissions('TASK_VIEW')
+  @RequirePermissions('VACANCY_MANAGE')
   create(@CurrentUser() user: AuthUser, @Body() dto: CreateTaskDto) {
+    const roleCodes = (user.roleCodes || []).map((r) => r.toUpperCase());
+    const isRecruiterOnly = roleCodes.length > 0 && roleCodes.every((r) => r === 'RECRUITER');
+    if (isRecruiterOnly) {
+      throw new ForbiddenException('Recruiters are not authorized to assign or reassign tasks');
+    }
     return this.tasksService.create(user.organizationId, user.userId, dto);
   }
 

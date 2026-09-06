@@ -31,3 +31,4 @@ apps/api/storage/
 # Keep the planning/reference pack, but never commit local database dumps.
 *.dump
 *.sql.gz
+graphify-out/

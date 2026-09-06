@@ -372,18 +372,23 @@ export class HiringService {
       });
 
       if (dto.status === 'Joined') {
-        const vacancyUpdate = await tx.vacancy.updateMany({
-          where: {
-            id: hiringCase.application.vacancyId,
-            organizationId,
-            joinedHeadcount: { lt: hiringCase.application.vacancy.approvedHeadcount },
-          },
-          data: { joinedHeadcount: { increment: 1 } },
+        const vacancy = await tx.vacancy.findUnique({
+          where: { id: hiringCase.application.vacancyId },
         });
-
-        if (vacancyUpdate.count !== 1) {
+        if (!vacancy || vacancy.joinedHeadcount >= vacancy.approvedHeadcount) {
           throw new BadRequestException('Vacancy headcount is already full');
         }
+
+        const newJoined = vacancy.joinedHeadcount + 1;
+        const shouldClose = newJoined >= vacancy.approvedHeadcount;
+
+        await tx.vacancy.update({
+          where: { id: vacancy.id },
+          data: {
+            joinedHeadcount: { increment: 1 },
+            ...(shouldClose ? { status: 'Closed' } : {}),
+          },
+        });
 
         await tx.application.update({
           where: { id: hiringCase.applicationId },

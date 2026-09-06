@@ -1,14 +1,17 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getApi, patchApi, ApiError } from '../api/client';
+import { useAuth } from '../auth/AuthContext';
 import type {
   Application,
   ApplicationStage,
   PaginatedResult,
   UpdateApplicationStageInput,
+  Vacancy,
   VacancyDetailView,
 } from '@recruitflow/contracts';
 import { Icon } from '../components/Icon';
+import { Modal } from '../components/Modal';
 import { CandidateSplitDrawer } from '../components/candidate/CandidateSplitDrawer';
 import { Drawer } from '../components/ui/Drawer';
 import { CommentsThread } from '../components/ui/CommentsThread';
@@ -173,12 +176,24 @@ function mapApplicationToKanbanCard(a: Application, colStageKey: ApplicationStag
   };
 }
 
+const REJECTION_REASONS = [
+  'Missing Required SCFHS Medical License / Registration',
+  'Insufficient Clinical / Specialized Experience',
+  'Salary Expectations Exceed Approved Budget',
+  'Failed Technical / Clinical Interview Assessment',
+  'Candidate Withdrew / Relocation Issue',
+  'Better Qualified Candidate Selected',
+  'Other / Custom Reason',
+];
+
 export function ApplicationsPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const vacancyId = searchParams.get('vacancyId');
+  const { user } = useAuth();
 
   const [currentVacancy, setCurrentVacancy] = useState<VacancyDetailView | null>(null);
+  const [allVacancies, setAllVacancies] = useState<Vacancy[]>([]);
   const [quickNoteApp, setQuickNoteApp] = useState<{
     id: string;
     candidateName: string;
@@ -196,6 +211,27 @@ export function ApplicationsPage() {
   const [viewMode, setViewMode] = useState<'board' | 'list'>('board');
   const [selectedDrawerApp, setSelectedDrawerApp] = useState<Application | null>(null);
   const [isAddCandidateOpen, setIsAddCandidateOpen] = useState(false);
+
+  // Rejection & Refusal Reason Modal State (E9.4)
+  const [rejectionModalData, setRejectionModalData] = useState<{
+    cardId: string;
+    cardName: string;
+    sourceColId: string;
+    targetColId: string;
+    card: KanbanCard;
+    previousColumns: KanbanColumn[];
+  } | null>(null);
+  const [selectedReason, setSelectedReason] = useState<string>(REJECTION_REASONS[0]);
+  const [customReasonNote, setCustomReasonNote] = useState<string>('');
+
+  // Headcount Fulfillment & Auto-Closure Handshake Modal State (E9.3)
+  const [headcountConfirmData, setHeadcountConfirmData] = useState<{
+    cardId: string;
+    sourceColId: string;
+    targetColId: string;
+    card: KanbanCard;
+    previousColumns: KanbanColumn[];
+  } | null>(null);
 
   // Mutable Kanban board state with live drag-and-drop
   const [boardColumns, setBoardColumns] = useState<KanbanColumn[]>(() =>
@@ -282,14 +318,62 @@ export function ApplicationsPage() {
     void loadApplications();
   }, [loadApplications]);
 
-  // Derived options for filters from live data
-  const jobOptions = useMemo(() => {
-    const titles = new Set<string>();
-    apiApplications.forEach((a) => {
-      if (a.positionTitle) titles.add(a.positionTitle);
-    });
-    return Array.from(titles).sort();
-  }, [apiApplications]);
+  useEffect(() => {
+    void getApi<Vacancy[]>('/vacancies')
+      .then((res) => {
+        if (Array.isArray(res)) {
+          setAllVacancies(res);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleClaimApplication = async (cardId: string) => {
+    if (!user?.id) {
+      showToast('Please log in to claim this application', 'warning');
+      return;
+    }
+    try {
+      await patchApi(`/applications/${cardId}`, { primaryRecruiterId: user.id });
+      const currentUserName = user.displayName || user.email || 'Current Recruiter';
+      showToast('Application claimed! You are now the assigned recruiter.', 'success');
+      setBoardColumns((prev) =>
+        prev.map((col) => ({
+          ...col,
+          cards: col.cards.map((c) =>
+            c.id === cardId
+              ? {
+                  ...c,
+                  owner: {
+                    name: currentUserName,
+                    initials: getInitials(currentUserName),
+                    color: 'bg-blue-600',
+                  },
+                  rawApplication: {
+                    ...c.rawApplication,
+                    primaryRecruiterId: user.id,
+                    primaryRecruiterName: currentUserName,
+                  },
+                }
+              : c
+          ),
+        }))
+      );
+      setApiApplications((prev) =>
+        prev.map((a) =>
+          a.id === cardId
+            ? {
+                ...a,
+                primaryRecruiterId: user.id,
+                primaryRecruiterName: currentUserName,
+              }
+            : a
+        )
+      );
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : 'Failed to claim application', 'error');
+    }
+  };
 
   const ownerOptions = useMemo(() => {
     const owners = new Set<string>();
@@ -518,29 +602,18 @@ export function ApplicationsPage() {
     }
   };
 
-  const handleDrop = async (e: React.DragEvent, targetColId: string) => {
-    e.preventDefault();
-    setActiveDropColId(null);
-
-    if (!draggedCard || draggedCard.sourceColId === targetColId) {
-      setDraggedCard(null);
-      return;
-    }
-
-    const { cardId, sourceColId } = draggedCard;
-    setDraggedCard(null);
-
-    const sourceCol = boardColumns.find((c) => c.id === sourceColId);
+  const executeStageMove = async (
+    cardId: string,
+    targetColId: string,
+    sourceColId: string,
+    card: KanbanCard,
+    previousColumns: KanbanColumn[],
+    customReason?: string
+  ) => {
     const targetCol = boardColumns.find((c) => c.id === targetColId);
-    if (!sourceCol || !targetCol) return;
-
-    const card = sourceCol.cards.find((c) => c.id === cardId);
-    if (!card) return;
-
-    // Snapshot for revert on non-409 error
-    const previousColumns = boardColumns;
-
+    if (!targetCol) return;
     const targetStage = targetCol.stageKey;
+
     const updatedCard: KanbanCard = {
       ...card,
       stage: targetStage,
@@ -559,7 +632,7 @@ export function ApplicationsPage() {
           };
         }
         if (col.id === targetColId) {
-          const newCards = [updatedCard, ...col.cards];
+          const newCards = [updatedCard, ...col.cards.filter((c) => c.id !== cardId)];
           return {
             ...col,
             count: newCards.length,
@@ -574,7 +647,7 @@ export function ApplicationsPage() {
     try {
       // Check card version field; use it (fallback: GET /applications/:id first)
       let expectedVersion = card.version;
-      let expectedStage = card.stage || sourceCol.stageKey;
+      let expectedStage = card.stage || sourceColId;
 
       if (typeof expectedVersion !== 'number' || !expectedStage) {
         try {
@@ -592,11 +665,10 @@ export function ApplicationsPage() {
         stage: targetStage,
         expectedStage: (expectedStage as ApplicationStage) || 'Applied',
         expectedVersion: typeof expectedVersion === 'number' ? expectedVersion : 1,
-        reason: `Moved to ${targetCol.name} via Kanban`,
+        reason: customReason || `Moved to ${targetCol.name} via Kanban`,
       };
 
       const updated = await patchApi<Application>(`/applications/${cardId}/stage`, payload);
-
       const newVersion = updated?.version ?? (typeof expectedVersion === 'number' ? expectedVersion + 1 : 2);
 
       // Update card version in state
@@ -606,6 +678,20 @@ export function ApplicationsPage() {
           cards: col.cards.map((c) => (c.id === cardId ? { ...c, version: newVersion, stage: targetStage } : c)),
         }));
       });
+
+      // Synchronized Headcount increment & auto-closure handshake (E9.3)
+      if (targetStage === 'Joined' && currentVacancy) {
+        setCurrentVacancy((prev) => {
+          if (!prev) return prev;
+          const newJoined = (prev.joinedHeadcount ?? 0) + 1;
+          const isClosed = newJoined >= (prev.approvedHeadcount ?? 1);
+          return {
+            ...prev,
+            joinedHeadcount: newJoined,
+            status: isClosed ? 'Filled' : prev.status,
+          };
+        });
+      }
 
       showToast(`Moved ${card.name} to ${targetCol.name}`, 'success');
     } catch (err: unknown) {
@@ -632,6 +718,67 @@ export function ApplicationsPage() {
         showToast(errorMsg, 'error');
       }
     }
+  };
+
+  const handleDrop = async (e: React.DragEvent, targetColId: string) => {
+    e.preventDefault();
+    setActiveDropColId(null);
+
+    if (!draggedCard || draggedCard.sourceColId === targetColId) {
+      setDraggedCard(null);
+      return;
+    }
+
+    const { cardId, sourceColId } = draggedCard;
+    setDraggedCard(null);
+
+    const sourceCol = boardColumns.find((c) => c.id === sourceColId);
+    const targetCol = boardColumns.find((c) => c.id === targetColId);
+    if (!sourceCol || !targetCol) return;
+
+    const card = sourceCol.cards.find((c) => c.id === cardId);
+    if (!card) return;
+
+    const previousColumns = boardColumns;
+    const targetStage = targetCol.stageKey;
+
+    // E9.4: Rejection & Refusal Reason Modal
+    if (targetStage === 'Rejected') {
+      setRejectionModalData({
+        cardId,
+        cardName: card.name,
+        sourceColId,
+        targetColId,
+        card,
+        previousColumns,
+      });
+      return;
+    }
+
+    // E9.3: Headcount limit and auto-closure check
+    if (targetStage === 'Joined' && currentVacancy) {
+      const joined = currentVacancy.joinedHeadcount ?? 0;
+      const approved = currentVacancy.approvedHeadcount ?? 1;
+      if (joined >= approved) {
+        showToast(
+          `Requisition headcount is already full (${joined}/${approved}). Cannot mark additional candidate as Joined.`,
+          'error'
+        );
+        return;
+      }
+      if (joined + 1 === approved) {
+        setHeadcountConfirmData({
+          cardId,
+          sourceColId,
+          targetColId,
+          card,
+          previousColumns,
+        });
+        return;
+      }
+    }
+
+    await executeStageMove(cardId, targetColId, sourceColId, card, previousColumns);
   };
 
   const getDueBadgeStyle = (tone: 'blue' | 'purple' | 'amber' | 'gray') => {
@@ -725,7 +872,49 @@ export function ApplicationsPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            {/* Quick Switcher inside banner */}
+            <div className="relative">
+              <select
+                value={currentVacancy.id}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === 'ALL') {
+                    navigate('/applications');
+                  } else {
+                    navigate(`/applications?vacancyId=${val}`);
+                  }
+                }}
+                className="appearance-none bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2 pr-7 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 cursor-pointer shadow-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                title="Switch to another requisition pipeline"
+              >
+                <option value={currentVacancy.id}>
+                  📍 {currentVacancy.position?.title || currentVacancy.title} (Current)
+                </option>
+                <option value="ALL">🌐 Switch to: All Positions</option>
+                {allVacancies
+                  .filter((v) => v.id !== currentVacancy.id)
+                  .map((v) => (
+                    <option key={v.id} value={v.id}>
+                      Switch to: {v.vacancyCode} — {v.position?.title || v.title} ({v.joinedHeadcount ?? 0}/{v.approvedHeadcount ?? 1})
+                    </option>
+                  ))}
+              </select>
+              <Icon
+                name="chevron-down"
+                size={12}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={() => navigate(`/candidates/compare?vacancyId=${currentVacancy.id}`)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+              title="Compare all candidates in this position pipeline"
+            >
+              <Icon name="grid-squares" size={12} />
+              <span>Compare</span>
+            </button>
             <button
               type="button"
               onClick={() => navigate(`/vacancies/${currentVacancy.id}`)}
@@ -748,38 +937,35 @@ export function ApplicationsPage() {
 
       {/* Filter Bar */}
       <div className="flex flex-wrap items-center gap-3">
-        {/* All Positions dropdown */}
+        {/* Pipeline Position Switcher Dropdown (E9.1) */}
         <div className="relative">
           <select
-            value={currentVacancy ? (currentVacancy.position?.title || currentVacancy.title || 'ALL') : selectedJob}
-            disabled={Boolean(currentVacancy)}
+            value={vacancyId || 'ALL'}
             onChange={(e) => {
-              setSelectedJob(e.target.value);
-              setListPage(1);
+              const val = e.target.value;
+              if (val === 'ALL') {
+                navigate('/applications');
+              } else {
+                navigate(`/applications?vacancyId=${val}`);
+              }
             }}
-            className={`appearance-none bg-white dark:bg-slate-900 border rounded-xl px-3.5 py-2 pr-8 text-xs font-semibold shadow-xs ${
-              currentVacancy
-                ? 'border-blue-300 dark:border-blue-800 text-blue-700 dark:text-blue-300 bg-blue-50/50 cursor-not-allowed'
-                : 'border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 cursor-pointer'
-            }`}
+            className="appearance-none bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2 pr-8 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 cursor-pointer shadow-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            title="Switch requisition pipeline"
           >
-            {currentVacancy ? (
-              <option value={currentVacancy.position?.title || currentVacancy.title || 'ALL'}>
-                {currentVacancy.position?.title || currentVacancy.title || 'Locked to Position'}
+            <option value="ALL">🌐 All Positions (All Active Requisitions)</option>
+            {allVacancies.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.vacancyCode} — {v.position?.title || v.title || 'Requisition'} ({v.joinedHeadcount ?? 0}/{v.approvedHeadcount ?? 1} joined)
               </option>
-            ) : (
-              <>
-                <option value="ALL">All Positions</option>
-                {jobOptions.map((job) => (
-                  <option key={job} value={job}>
-                    {job}
-                  </option>
-                ))}
-              </>
+            ))}
+            {currentVacancy && !allVacancies.some((v) => v.id === currentVacancy.id) && (
+              <option value={currentVacancy.id}>
+                {currentVacancy.vacancyCode} — {currentVacancy.position?.title || currentVacancy.title}
+              </option>
             )}
           </select>
           <Icon
-            name={currentVacancy ? 'lock' : 'chevron-down'}
+            name="chevron-down"
             size={12}
             className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
           />
@@ -1087,6 +1273,20 @@ export function ApplicationsPage() {
                           {row.ownerAvatar}
                         </div>
                         <span className="font-semibold text-slate-800 dark:text-slate-200">{row.ownerName}</span>
+                        {(!row.rawApplication.primaryRecruiterId || row.ownerName === 'Unassigned') && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              void handleClaimApplication(row.id);
+                            }}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 border border-blue-200 dark:border-blue-800 text-[10px] font-bold transition cursor-pointer shadow-2xs"
+                            title="1-Click Claim: Assign yourself as primary recruiter"
+                          >
+                            <Icon name="user-check" size={10} />
+                            <span>Claim</span>
+                          </button>
+                        )}
                       </div>
                     </td>
 
@@ -1301,7 +1501,21 @@ export function ApplicationsPage() {
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-1 shrink-0">
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {(!card.rawApplication.primaryRecruiterId || card.owner.name === 'Unassigned') && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void handleClaimApplication(card.id);
+                              }}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 border border-blue-200 dark:border-blue-800 text-[10px] font-bold transition cursor-pointer shadow-2xs"
+                              title="1-Click Claim: Assign yourself as primary recruiter"
+                            >
+                              <Icon name="user-check" size={10} />
+                              <span>Claim</span>
+                            </button>
+                          )}
                           <button
                             type="button"
                             onClick={(e) => {
@@ -1417,6 +1631,156 @@ export function ApplicationsPage() {
           </div>
         )}
       </Drawer>
+
+      {/* Refusal / Rejection Reason Taxonomy Modal (E9.4) */}
+      <Modal
+        isOpen={Boolean(rejectionModalData)}
+        onClose={() => {
+          setRejectionModalData(null);
+          setCustomReasonNote('');
+        }}
+        title="Candidate Refusal / Rejection Reason"
+        maxWidthClass="max-w-md"
+      >
+        {rejectionModalData && (
+          <div className="space-y-4 text-xs">
+            <div className="p-3 bg-red-50 dark:bg-red-950/40 rounded-xl border border-red-200 dark:border-red-900/60 flex items-start gap-2.5">
+              <Icon name="alert-circle" size={16} className="text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold text-red-900 dark:text-red-200 block">
+                  Moving {rejectionModalData.cardName} to Rejected
+                </span>
+                <span className="text-red-700 dark:text-red-400 text-[11px] block mt-0.5">
+                  Select a structured refusal reason for audit compliance and candidate reporting.
+                </span>
+              </div>
+            </div>
+
+            <div>
+              <label className="font-bold text-slate-700 dark:text-slate-200 block mb-1.5">
+                Refusal Reason Category <span className="text-red-500">*</span>
+              </label>
+              <div className="space-y-1.5 max-h-52 overflow-y-auto rf-scrollbar pr-1">
+                {REJECTION_REASONS.map((r) => (
+                  <label
+                    key={r}
+                    className={`flex items-center gap-2.5 p-2 rounded-xl border transition cursor-pointer ${
+                      selectedReason === r
+                        ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-950/30 text-blue-900 dark:text-blue-200 font-semibold'
+                        : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/60 text-slate-700 dark:text-slate-300'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="refusalReason"
+                      value={r}
+                      checked={selectedReason === r}
+                      onChange={() => setSelectedReason(r)}
+                      className="text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="text-[11.5px] leading-tight">{r}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <label className="font-bold text-slate-700 dark:text-slate-200 block mb-1">
+                Additional Notes / Feedback (Optional)
+              </label>
+              <textarea
+                value={customReasonNote}
+                onChange={(e) => setCustomReasonNote(e.target.value)}
+                rows={2}
+                placeholder="Specific interview feedback, missing certification details, etc."
+                className="w-full px-3 py-2 border border-slate-200 dark:border-slate-800 rounded-xl text-xs bg-white dark:bg-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => {
+                  setRejectionModalData(null);
+                  setCustomReasonNote('');
+                }}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const { cardId, targetColId, sourceColId, card, previousColumns } = rejectionModalData;
+                  const finalReason = customReasonNote
+                    ? `${selectedReason}: ${customReasonNote}`
+                    : selectedReason;
+                  void executeStageMove(cardId, targetColId, sourceColId, card, previousColumns, finalReason);
+                  setRejectionModalData(null);
+                  setCustomReasonNote('');
+                }}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+              >
+                Confirm Rejection
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Headcount Fulfillment & Auto-Closure Confirmation Modal (E9.3) */}
+      <Modal
+        isOpen={Boolean(headcountConfirmData)}
+        onClose={() => setHeadcountConfirmData(null)}
+        title="Headcount Target Reached — Auto-Closure Handshake"
+        maxWidthClass="max-w-md"
+      >
+        {headcountConfirmData && (
+          <div className="space-y-4 text-xs">
+            <div className="p-3 bg-amber-50 dark:bg-amber-950/40 rounded-xl border border-amber-200 dark:border-amber-900/60 flex items-start gap-2.5">
+              <Icon name="check-circle" size={18} className="text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold text-amber-900 dark:text-amber-200 block">
+                  Requisition Headcount Will Be Fulfilled
+                </span>
+                <span className="text-amber-700 dark:text-amber-400 text-[11px] block mt-0.5">
+                  Marking this candidate as Joined will achieve {(currentVacancy?.joinedHeadcount ?? 0) + 1} of{' '}
+                  {currentVacancy?.approvedHeadcount ?? 1} approved positions.
+                </span>
+              </div>
+            </div>
+
+            <p className="text-slate-600 dark:text-slate-300">
+              In accordance with recruitment policy, vacancy{' '}
+              <span className="font-bold text-slate-900 dark:text-white font-mono">
+                {currentVacancy?.vacancyCode}
+              </span>{' '}
+              will automatically transition to <span className="font-bold text-emerald-600">Closed</span> upon confirmation.
+            </p>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setHeadcountConfirmData(null)}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const { cardId, targetColId, sourceColId, card, previousColumns } = headcountConfirmData;
+                  void executeStageMove(cardId, targetColId, sourceColId, card, previousColumns);
+                  setHeadcountConfirmData(null);
+                }}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+              >
+                Confirm &amp; Close Requisition
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

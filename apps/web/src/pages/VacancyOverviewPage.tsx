@@ -1,13 +1,15 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import type { VacancyDetailView, Application, PaginatedResult, Interview, Offer } from '@recruitflow/contracts';
-import { fetchApi, getApi } from '../api/client';
+import type { VacancyDetailView, Application, PaginatedResult, Interview, Offer, VacancyStatus } from '@recruitflow/contracts';
+import { fetchApi, getApi, patchApi, postApi } from '../api/client';
 import { Icon } from '../components/Icon';
 import { Modal } from '../components/Modal';
 import { AddApplicationModal } from '../components/candidate/AddApplicationModal';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
+import { Textarea } from '../components/ui/Textarea';
 import { PageState } from '../components/ui/PageState';
+import { useSetBreadcrumbTitle } from '../context/BreadcrumbContext';
 
 interface InterviewerUser {
   id: string;
@@ -39,9 +41,110 @@ export function VacancyOverviewPage() {
   const [isAddApplicantModalOpen, setIsAddApplicantModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  const [editFormData, setEditFormData] = useState<{
+    title: string;
+    approvedHeadcount: number;
+    status: VacancyStatus;
+    location: string;
+    department: string;
+    jobSummary: string;
+    description: string;
+  }>({
+    title: '',
+    approvedHeadcount: 1,
+    status: 'Open',
+    location: '',
+    department: '',
+    jobSummary: '',
+    description: '',
+  });
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [isActionsDropdownOpen, setIsActionsDropdownOpen] = useState(false);
+  const [isCloning, setIsCloning] = useState(false);
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  const handleCloneRequisition = async () => {
+    if (!vacancy) return;
+    setIsCloning(true);
+    try {
+      const cloned = await postApi<VacancyDetailView>('/vacancies', {
+        title: `Copy of ${vacancy.position?.title || vacancy.title || 'Requisition'}`,
+        positionId: vacancy.positionId,
+        branchId: vacancy.branchId,
+        approvedHeadcount: vacancy.approvedHeadcount ?? 1,
+        location: vacancy.location,
+        workType: (vacancy as unknown as { workType?: string })?.workType || 'Full-time',
+      });
+      showToast('✓ Requisition cloned successfully!');
+      setIsActionsDropdownOpen(false);
+      if (cloned?.id) {
+        navigate(`/vacancies/${cloned.id}`);
+      }
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : 'Failed to clone requisition');
+    } finally {
+      setIsCloning(false);
+    }
+  };
+
+  const handleStatusChange = async (newStatus: VacancyStatus) => {
+    if (!id) return;
+    try {
+      const updated = await patchApi<VacancyDetailView>(`/vacancies/${id}`, { status: newStatus });
+      if (updated) {
+        setVacancy(updated);
+      }
+      showToast(`✓ Requisition status updated to ${newStatus}`);
+      setIsActionsDropdownOpen(false);
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : 'Failed to update status');
+    }
+  };
+
+  const openEditModal = () => {
+    if (vacancy) {
+      setEditFormData({
+        title: vacancy.position?.title || vacancy.title || '',
+        approvedHeadcount: vacancy.approvedHeadcount ?? 1,
+        status: (vacancy.status as VacancyStatus) || 'Open',
+        location: vacancy.location || '',
+        department: (vacancy as unknown as { department?: string })?.department || '',
+        jobSummary: (vacancy as unknown as { jobSummary?: string })?.jobSummary || '',
+        description: (vacancy as unknown as { description?: string })?.description || '',
+      });
+    }
+    setIsEditModalOpen(true);
+  };
+
+  const handleSaveVacancyEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!id) return;
+    setIsSavingEdit(true);
+    try {
+      const updated = await patchApi<VacancyDetailView>(`/vacancies/${id}`, {
+        title: editFormData.title.trim(),
+        approvedHeadcount: Number(editFormData.approvedHeadcount) || 1,
+        status: editFormData.status,
+        location: editFormData.location.trim() || undefined,
+        department: editFormData.department.trim() || undefined,
+        jobSummary: editFormData.jobSummary.trim() || undefined,
+        description: editFormData.description.trim() || undefined,
+      });
+      if (updated) {
+        setVacancy(updated);
+      }
+      showToast('Position updated successfully');
+      setIsEditModalOpen(false);
+      void loadAllData();
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : 'Failed to save changes');
+    } finally {
+      setIsSavingEdit(false);
+    }
   };
 
   const loadAllData = useCallback(async () => {
@@ -80,6 +183,7 @@ export function VacancyOverviewPage() {
   }, [loadAllData]);
 
   const jobTitle = vacancy?.position?.title || vacancy?.title || 'No position';
+  useSetBreadcrumbTitle(jobTitle && jobTitle !== 'No position' ? jobTitle : 'Job Requisition');
   const departmentName = (vacancy as unknown as { department?: string } | null | undefined)?.department || vacancy?.branch?.name || '—';
   const locationText = vacancy?.location || vacancy?.branch?.name || '—';
   const statusLabel = vacancy?.status || '—';
@@ -222,6 +326,17 @@ export function VacancyOverviewPage() {
         </div>
 
         <div className="flex items-center gap-2.5">
+          <a
+            href={`/careers/sgh/jobs/${encodeURIComponent(vacancy?.vacancyCode || id || '')}`}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 rounded-xl text-xs font-bold hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition shadow-xs cursor-pointer"
+            title="Preview live public career application page"
+          >
+            <Icon name="external-link" size={13} />
+            <span>Public Preview</span>
+          </a>
+
           <button
             type="button"
             onClick={() => setIsAddApplicantModalOpen(true)}
@@ -242,21 +357,164 @@ export function VacancyOverviewPage() {
 
           <button
             type="button"
-            onClick={() => setIsEditModalOpen(true)}
+            onClick={openEditModal}
             className="inline-flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs cursor-pointer"
           >
             <span>Edit</span>
             <Icon name="edit" size={13} className="text-slate-400" />
           </button>
 
-          <button
-            type="button"
-            onClick={() => showToast('Position options: Clone requisition, Archive, or Change status')}
-            className="p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-50 transition shadow-xs cursor-pointer"
-            title="Position actions"
-          >
-            <Icon name="more-vertical" size={15} />
-          </button>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setIsActionsDropdownOpen((prev) => !prev)}
+              className="p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-50 transition shadow-xs cursor-pointer"
+              title="Position actions"
+            >
+              <Icon name="more-vertical" size={15} />
+            </button>
+
+            {isActionsDropdownOpen && (
+              <div className="absolute right-0 mt-1.5 w-52 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-lg z-30 py-1 text-xs">
+                <button
+                  type="button"
+                  onClick={() => navigate(`/applications?vacancyId=${id}`)}
+                  className="w-full text-left px-3.5 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2 font-semibold text-slate-700 dark:text-slate-200 cursor-pointer"
+                >
+                  <Icon name="folder-kanban" size={13} className="text-blue-500" />
+                  <span>Open Kanban Pipeline</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate(`/vacancies/${id}/analytics`)}
+                  className="w-full text-left px-3.5 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2 font-semibold text-slate-700 dark:text-slate-200 cursor-pointer"
+                >
+                  <Icon name="report" size={13} className="text-purple-500" />
+                  <span>View Job Analytics</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleCloneRequisition()}
+                  disabled={isCloning}
+                  className="w-full text-left px-3.5 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2 font-semibold text-slate-700 dark:text-slate-200 cursor-pointer disabled:opacity-50"
+                >
+                  <Icon name="copy" size={13} className="text-emerald-500" />
+                  <span>{isCloning ? 'Cloning...' : 'Clone Requisition'}</span>
+                </button>
+                <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
+                <div className="px-3.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  Change Status
+                </div>
+                {(['Open', 'On Hold', 'Closed'] as VacancyStatus[]).map((st) => (
+                  <button
+                    key={st}
+                    type="button"
+                    onClick={() => void handleStatusChange(st)}
+                    disabled={vacancy?.status === st}
+                    className={`w-full text-left px-3.5 py-1.5 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center justify-between text-xs font-semibold cursor-pointer ${
+                      vacancy?.status === st
+                        ? 'text-blue-600 dark:text-blue-400 font-bold bg-blue-50/50'
+                        : 'text-slate-700 dark:text-slate-200'
+                    }`}
+                  >
+                    <span>{st}</span>
+                    {vacancy?.status === st && <Icon name="check" size={12} />}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── Persistent Odoo Smart Stat Buttons (E9.2) ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+        {/* Card 1: Applications */}
+        <div
+          onClick={() => navigate(`/applications?vacancyId=${id || ''}`)}
+          className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs hover:shadow-md hover:border-blue-300 dark:hover:border-blue-800 transition cursor-pointer flex items-center justify-between group"
+          title="View candidate pipeline for this position"
+        >
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+              <Icon name="users" size={22} />
+            </div>
+            <div>
+              <span className="block text-xs font-semibold text-slate-500 dark:text-slate-400">Applications</span>
+              <span className="block text-2xl font-black text-slate-900 dark:text-white mt-0.5">{applicationsCount}</span>
+              <span className="block text-xs font-bold text-blue-600 dark:text-blue-400 mt-0.5">
+                {appsThisWeek > 0 ? `+${appsThisWeek} this week` : '0 this week'}
+              </span>
+            </div>
+          </div>
+          <Icon name="chevron-right" size={18} className="text-slate-300 dark:text-slate-600 group-hover:translate-x-0.5 transition" />
+        </div>
+
+        {/* Card 2: Interviews */}
+        <div
+          onClick={() => navigate(`/interviews?vacancyId=${id || ''}`)}
+          className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs hover:shadow-md hover:border-emerald-300 dark:hover:border-emerald-800 transition cursor-pointer flex items-center justify-between group"
+          title="View scheduled interviews for this position"
+        >
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+              <Icon name="calendar" size={22} />
+            </div>
+            <div>
+              <span className="block text-xs font-semibold text-slate-500 dark:text-slate-400">Interviews</span>
+              <span className="block text-2xl font-black text-slate-900 dark:text-white mt-0.5">{interviewsCount}</span>
+              <span className="block text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
+                {intsThisWeek > 0 ? `${intsThisWeek} this week` : '0 this week'}
+              </span>
+            </div>
+          </div>
+          <Icon name="chevron-right" size={18} className="text-slate-300 dark:text-slate-600 group-hover:translate-x-0.5 transition" />
+        </div>
+
+        {/* Card 3: Offers */}
+        <div
+          onClick={() => navigate(`/offers?vacancyId=${id || ''}`)}
+          className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs hover:shadow-md hover:border-purple-300 dark:hover:border-purple-800 transition cursor-pointer flex items-center justify-between group"
+          title="View offers for this position"
+        >
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
+              <Icon name="offer" size={22} />
+            </div>
+            <div>
+              <span className="block text-xs font-semibold text-slate-500 dark:text-slate-400">Offers</span>
+              <span className="block text-2xl font-black text-slate-900 dark:text-white mt-0.5">{offersCount}</span>
+              <span className="block text-xs font-bold text-purple-600 dark:text-purple-400 mt-0.5">
+                {offersThisWeek > 0 ? `${offersThisWeek} this week` : '0 this week'}
+              </span>
+            </div>
+          </div>
+          <Icon name="chevron-right" size={18} className="text-slate-300 dark:text-slate-600 group-hover:translate-x-0.5 transition" />
+        </div>
+
+        {/* Card 4: Headcount Fulfillment & Hires */}
+        <div
+          onClick={() => navigate(`/applications?vacancyId=${id || ''}&stage=Joined`)}
+          className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs hover:shadow-md hover:border-orange-300 dark:hover:border-orange-800 transition cursor-pointer flex items-center justify-between group"
+          title="View joined candidates & headcount fulfillment"
+        >
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 flex items-center justify-center shrink-0">
+              <Icon name="user-check" size={22} />
+            </div>
+            <div>
+              <span className="block text-xs font-semibold text-slate-500 dark:text-slate-400">Headcount Joined</span>
+              <span className="block text-2xl font-black text-slate-900 dark:text-white mt-0.5">
+                {hiresCount} / {vacancy?.approvedHeadcount ?? 1}
+              </span>
+              <span className="block text-xs font-bold text-orange-600 dark:text-orange-400 mt-0.5">
+                {hiresCount >= (vacancy?.approvedHeadcount ?? 1)
+                  ? 'Fulfilled (100%)'
+                  : `${Math.round((hiresCount / (vacancy?.approvedHeadcount ?? 1)) * 100)}% filled`}
+              </span>
+            </div>
+          </div>
+          <Icon name="chevron-right" size={18} className="text-slate-300 dark:text-slate-600 group-hover:translate-x-0.5 transition" />
         </div>
       </div>
 
@@ -372,91 +630,8 @@ export function VacancyOverviewPage() {
       {/* ── Tab: Overview ── */}
       {activeTab === 'overview' && (
         <>
-          {/* ── Row 1: 4 Top Metric Cards (Applications, Interviews, Offers, Hires) ── */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
-        {/* Card 1: Applications */}
-        <div
-          onClick={() => navigate(`/applications?vacancyId=${id || ''}`)}
-          className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs hover:shadow-md transition cursor-pointer flex items-center justify-between group"
-        >
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
-              <Icon name="users" size={22} />
-            </div>
-            <div>
-              <span className="block text-xs font-semibold text-slate-500 dark:text-slate-400">Applications</span>
-              <span className="block text-2xl font-black text-slate-900 dark:text-white mt-0.5">{applicationsCount}</span>
-              <span className="block text-xs font-bold text-blue-600 dark:text-blue-400 mt-0.5">
-                {appsThisWeek > 0 ? `+${appsThisWeek} this week` : '0 this week'}
-              </span>
-            </div>
-          </div>
-          <Icon name="chevron-right" size={18} className="text-slate-300 dark:text-slate-600 group-hover:translate-x-0.5 transition" />
-        </div>
-
-        {/* Card 2: Interviews */}
-        <div
-          onClick={() => navigate(`/interviews?vacancyId=${id || ''}`)}
-          className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs hover:shadow-md transition cursor-pointer flex items-center justify-between group"
-        >
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
-              <Icon name="calendar" size={22} />
-            </div>
-            <div>
-              <span className="block text-xs font-semibold text-slate-500 dark:text-slate-400">Interviews</span>
-              <span className="block text-2xl font-black text-slate-900 dark:text-white mt-0.5">{interviewsCount}</span>
-              <span className="block text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
-                {intsThisWeek > 0 ? `${intsThisWeek} this week` : '0 this week'}
-              </span>
-            </div>
-          </div>
-          <Icon name="chevron-right" size={18} className="text-slate-300 dark:text-slate-600 group-hover:translate-x-0.5 transition" />
-        </div>
-
-        {/* Card 3: Offers */}
-        <div
-          onClick={() => navigate(`/offers?vacancyId=${id || ''}`)}
-          className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs hover:shadow-md transition cursor-pointer flex items-center justify-between group"
-        >
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
-              <Icon name="offer" size={22} />
-            </div>
-            <div>
-              <span className="block text-xs font-semibold text-slate-500 dark:text-slate-400">Offers</span>
-              <span className="block text-2xl font-black text-slate-900 dark:text-white mt-0.5">{offersCount}</span>
-              <span className="block text-xs font-bold text-purple-600 dark:text-purple-400 mt-0.5">
-                {offersThisWeek > 0 ? `${offersThisWeek} this week` : '0 this week'}
-              </span>
-            </div>
-          </div>
-          <Icon name="chevron-right" size={18} className="text-slate-300 dark:text-slate-600 group-hover:translate-x-0.5 transition" />
-        </div>
-
-        {/* Card 4: Hires */}
-        <div
-          onClick={() => navigate('/hires')}
-          className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs hover:shadow-md transition cursor-pointer flex items-center justify-between group"
-        >
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 flex items-center justify-center shrink-0">
-              <Icon name="user-check" size={22} />
-            </div>
-            <div>
-              <span className="block text-xs font-semibold text-slate-500 dark:text-slate-400">Hires</span>
-              <span className="block text-2xl font-black text-slate-900 dark:text-white mt-0.5">{hiresCount}</span>
-              <span className="block text-xs font-bold text-orange-600 dark:text-orange-400 mt-0.5">
-                {hiresCount > 0 ? `${hiresCount} total hired` : '0 hired'}
-              </span>
-            </div>
-          </div>
-          <Icon name="chevron-right" size={18} className="text-slate-300 dark:text-slate-600 group-hover:translate-x-0.5 transition" />
-        </div>
-      </div>
-
-      {/* ── Row 2: 3-Column Middle Grid (SLA Progress, Owner & Hiring Team, Last Activity) ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* ── 3-Column Middle Grid (SLA Progress, Owner & Hiring Team, Last Activity) ── */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Column 1: SLA Progress */}
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-4">
           <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
@@ -1128,66 +1303,139 @@ export function VacancyOverviewPage() {
       >
         <div className="space-y-4">
           <p className="text-xs text-slate-500">
-            Share this job opening link with candidates or publish directly to career portals.
+            Share this live career portal link with candidates or publish directly to external job boards.
           </p>
           <div className="flex items-center gap-2">
-            <Input readOnly value={`https://careers.sgh.com/jobs/${id || ''}`} className="text-xs" />
+            <Input
+              readOnly
+              value={`${typeof window !== 'undefined' ? window.location.origin : ''}/careers/sgh/jobs/${encodeURIComponent(vacancy?.vacancyCode || id || '')}`}
+              className="text-xs font-mono select-all"
+            />
             <button
               type="button"
               onClick={() => {
-                navigator.clipboard?.writeText(`https://careers.sgh.com/jobs/${id || ''}`);
+                const url = `${window.location.origin}/careers/sgh/jobs/${encodeURIComponent(vacancy?.vacancyCode || id || '')}`;
+                void navigator.clipboard?.writeText(url);
                 showToast('Link copied to clipboard!');
                 setIsShareModalOpen(false);
               }}
-              className="px-3 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold cursor-pointer"
+              className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition cursor-pointer shrink-0"
             >
               Copy
             </button>
           </div>
+          <div className="pt-2 flex justify-end">
+            <a
+              href={`/careers/sgh/jobs/${encodeURIComponent(vacancy?.vacancyCode || id || '')}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              <span>Open career page in new tab</span>
+              <Icon name="external-link" size={13} />
+            </a>
+          </div>
         </div>
       </Modal>
 
-      {/* ── Edit Modal ── */}
+      {/* ── Real Vacancy Edit Modal (E9.6) ── */}
       <Modal
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
         title="Edit Job Position Details"
-        maxWidthClass="max-w-lg"
+        maxWidthClass="max-w-xl"
       >
-        <div className="space-y-3 text-xs">
-          <div>
-            <label className="font-bold block mb-1">Job Title</label>
-            <Input defaultValue={jobTitle} />
+        <form onSubmit={handleSaveVacancyEdit} className="space-y-4 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="sm:col-span-2">
+              <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">Job Title *</label>
+              <Input
+                required
+                value={editFormData.title}
+                onChange={(e) => setEditFormData((prev) => ({ ...prev, title: e.target.value }))}
+                placeholder="e.g. Senior ICU Specialist"
+              />
+            </div>
+            <div>
+              <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">Target Headcount *</label>
+              <Input
+                type="number"
+                min={1}
+                max={999}
+                required
+                value={editFormData.approvedHeadcount}
+                onChange={(e) => setEditFormData((prev) => ({ ...prev, approvedHeadcount: parseInt(e.target.value, 10) || 1 }))}
+              />
+            </div>
+            <div>
+              <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">Requisition Status</label>
+              <Select
+                value={editFormData.status}
+                onChange={(e) => setEditFormData((prev) => ({ ...prev, status: e.target.value as VacancyStatus }))}
+              >
+                <option value="Open">Open</option>
+                <option value="On Hold">On Hold</option>
+                <option value="Filled">Filled</option>
+                <option value="Partially Filled">Partially Filled</option>
+                <option value="Cancelled">Cancelled</option>
+                <option value="Pending Activation">Pending Activation</option>
+              </Select>
+            </div>
+            <div>
+              <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">Location / Facility</label>
+              <Input
+                value={editFormData.location}
+                onChange={(e) => setEditFormData((prev) => ({ ...prev, location: e.target.value }))}
+                placeholder="e.g. Riyadh Central Hospital"
+              />
+            </div>
+            <div>
+              <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">Department</label>
+              <Input
+                value={editFormData.department}
+                onChange={(e) => setEditFormData((prev) => ({ ...prev, department: e.target.value }))}
+                placeholder="e.g. Clinical Operations"
+              />
+            </div>
           </div>
+
           <div>
-            <label className="font-bold block mb-1">Department</label>
-            <Select defaultValue={departmentName}>
-              <option value="Engineering">Engineering</option>
-              <option value="Clinical Operations">Clinical Operations</option>
-              <option value="Digital Health">Digital Health</option>
-              <option value="Human Resources">Human Resources</option>
-            </Select>
+            <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">Short Summary / Teaser</label>
+            <Input
+              value={editFormData.jobSummary}
+              onChange={(e) => setEditFormData((prev) => ({ ...prev, jobSummary: e.target.value }))}
+              placeholder="Brief summary displayed on job listings"
+            />
           </div>
-          <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
+
+          <div>
+            <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">Detailed Description & Responsibilities</label>
+            <Textarea
+              rows={4}
+              value={editFormData.description}
+              onChange={(e) => setEditFormData((prev) => ({ ...prev, description: e.target.value }))}
+              placeholder="Full role requirements, expectations, and benefits..."
+            />
+          </div>
+
+          <div className="flex justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
             <button
               type="button"
               onClick={() => setIsEditModalOpen(false)}
-              className="px-3 py-1.5 text-xs text-slate-500 hover:text-slate-900 cursor-pointer"
+              className="px-3.5 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white cursor-pointer"
             >
               Cancel
             </button>
             <button
-              type="button"
-              onClick={() => {
-                setIsEditModalOpen(false);
-                showToast('Position updated successfully');
-              }}
-              className="px-4 py-1.5 bg-blue-600 text-white rounded-xl text-xs font-bold cursor-pointer"
+              type="submit"
+              disabled={isSavingEdit}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer flex items-center gap-1.5"
             >
-              Save Changes
+              {isSavingEdit && <Icon name="refresh-cw" size={13} className="animate-spin" />}
+              <span>{isSavingEdit ? 'Saving...' : 'Save Changes'}</span>
             </button>
           </div>
-        </div>
+        </form>
       </Modal>
 
       {/* Add Candidate Modal */}

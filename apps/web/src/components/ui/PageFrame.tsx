@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Icon } from '../Icon';
+import { QuickGuideTrigger } from '../../quickguide';
 
 interface PageFrameProps {
   eyebrow?: string;
@@ -28,7 +29,10 @@ export function PageFrame({ eyebrow, title, description, actions, children, clas
             </Link>
           )}
           {eyebrow && <div className="rf-page-eyebrow mb-1.5 text-xs font-bold uppercase tracking-[0.08em] text-rf-ink-muted">{eyebrow}</div>}
-          <h1 className="m-0 font-rf-heading text-[20px] font-bold leading-[1.16] tracking-[-0.03em] text-rf-ink sm:text-[22px]">{title}</h1>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h1 className="m-0 font-rf-heading text-[20px] font-bold leading-[1.16] tracking-[-0.03em] text-rf-ink sm:text-[22px]">{title}</h1>
+            <QuickGuideTrigger />
+          </div>
           {description && <p className="m-0 mt-1.5 max-w-[860px] text-xs font-medium leading-5 text-rf-ink-muted">{description}</p>}
         </div>
         {actions && <div className="rf-page-actions flex w-full flex-wrap items-center gap-2 md:w-auto md:shrink-0 md:justify-end">{actions}</div>}

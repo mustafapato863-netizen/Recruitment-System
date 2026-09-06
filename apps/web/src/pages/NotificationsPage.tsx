@@ -188,12 +188,6 @@ export function NotificationsPage() {
           aria-hidden="true"
         />
 
-        {/* Breadcrumb Navigation */}
-        <nav className="flex items-center gap-2 text-xs font-semibold text-rf-ink-muted" aria-label="Breadcrumb">
-          <Link to="/" className="hover:text-rf-ink transition-colors">Workspace</Link>
-          <span className="text-rf-ink-muted/50 font-normal">›</span>
-          <span className="text-rf-ink font-bold">Notifications</span>
-        </nav>
 
         {/* Page Hero Header */}
         <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">

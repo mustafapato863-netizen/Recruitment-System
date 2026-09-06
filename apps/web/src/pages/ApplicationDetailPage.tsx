@@ -24,6 +24,10 @@ import { StatusBadge } from '../components/StatusBadge';
 import { ActivityFeed, type FeedEntry } from '../components/candidate/ActivityFeed';
 import { SmartActionBar, getDefaultActions } from '../components/candidate/SmartActionBar';
 import { computeInterviewsStats } from '../components/candidate/ScorecardSummary';
+import { ScheduleInterviewModal } from '../components/candidate/ScheduleInterviewModal';
+import { RejectApplicantModal } from '../components/candidate/RejectApplicantModal';
+import { NextActionGuidanceBanner } from '../components/candidate/NextActionGuidanceBanner';
+import { useSetBreadcrumbTitle } from '../context/BreadcrumbContext';
 import './PageEnhancementsV2.css';
 
 function getInitials(name?: string | null): string {
@@ -62,6 +66,24 @@ export function ApplicationDetailPage() {
   const [tags, setTags] = useState<string[]>([]);
   const [newTagInput, setNewTagInput] = useState('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Scheduling modal state
+  const [schedInterviewTitle, setSchedInterviewTitle] = useState('');
+  const [schedInterviewType, setSchedInterviewType] = useState<
+    'Screening' | 'Technical' | 'Behavioral' | 'Managerial' | 'Executive'
+  >('Technical');
+  const [schedDateTime, setSchedDateTime] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    d.setHours(10, 0, 0, 0);
+    return d.toISOString().slice(0, 16);
+  });
+  const [isSchedulingInterview, setIsSchedulingInterview] = useState(false);
+
+  // Rejection modal state
+  const [selectedRejectReason, setSelectedRejectReason] = useState('Skills mismatch');
+  const [rejectNote, setRejectNote] = useState('');
+  const [isSubmittingRejection, setIsSubmittingRejection] = useState(false);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -233,11 +255,89 @@ export function ApplicationDetailPage() {
   const cleanAppId = rawAppId.replace(/^app[-_]?/i, '');
   const appIdDisplay = rawAppId ? `APP-${(cleanAppId || rawAppId).slice(0, 8).toUpperCase()}` : '';
 
-  const handleAddTag = () => {
-    if (newTagInput.trim() && !tags.includes(newTagInput.trim())) {
-      setTags([...tags, newTagInput.trim()]);
-      setNewTagInput('');
-      setIsAddTagModalOpen(false);
+  useSetBreadcrumbTitle(
+    candidateName && candidateName !== 'Unknown candidate'
+      ? `${candidateName} (${appIdDisplay || 'Application'})`
+      : 'Application Details'
+  );
+
+  const handleAddTag = async () => {
+    if (!newTagInput.trim() || tags.includes(newTagInput.trim())) return;
+    const nextTags = [...tags, newTagInput.trim()];
+    setTags(nextTags);
+    setNewTagInput('');
+    setIsAddTagModalOpen(false);
+    if (application?.candidateId) {
+      try {
+        await patchApi(`/candidates/${application.candidateId}`, { skills: nextTags });
+        showToast('Tag added and saved to candidate profile');
+      } catch {
+        showToast('Tag updated locally');
+      }
+    }
+  };
+
+  const handleScheduleInterviewSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!id || !schedDateTime) return;
+    setIsSchedulingInterview(true);
+    try {
+      const startDate = new Date(schedDateTime);
+      const endDate = new Date(startDate.getTime() + 45 * 60000);
+      const resolvedTitle = schedInterviewTitle.trim() || `${candidateName} - ${schedInterviewType} Interview`;
+      const created = await postApi<Interview>('/interviews', {
+        applicationId: id,
+        title: resolvedTitle,
+        interviewType: schedInterviewType,
+        scheduledStart: startDate.toISOString(),
+        scheduledEnd: endDate.toISOString(),
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+      });
+      if (created) {
+        setInterviews((prev) => [created, ...prev]);
+      }
+      showToast(`✓ Interview "${resolvedTitle}" scheduled successfully!`);
+      setIsScheduleModalOpen(false);
+      void refetchAll();
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : 'Failed to schedule interview');
+    } finally {
+      setIsSchedulingInterview(false);
+    }
+  };
+
+  const handleConfirmRejection = async () => {
+    if (!id || !application) return;
+    setIsSubmittingRejection(true);
+    try {
+      const fullReason = rejectNote.trim()
+        ? `${selectedRejectReason}: ${rejectNote.trim()}`
+        : selectedRejectReason;
+
+      const payload: UpdateApplicationStageInput = {
+        stage: 'Rejected',
+        expectedStage: application.stage,
+        expectedVersion: application.version ?? 1,
+        reason: fullReason,
+      };
+
+      const updated = await patchApi<Application>(`/applications/${id}/stage`, payload);
+      try {
+        await patchApi(`/applications/${id}`, { rejectionReason: fullReason });
+      } catch {
+        // Stage update succeeded
+      }
+
+      if (updated) {
+        setApplication(updated);
+      }
+      showToast(`✓ Candidate moved to Rejected (${selectedRejectReason})`);
+      setIsRejectModalOpen(false);
+      void refetchAll();
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : 'Failed to reject applicant');
+    } finally {
+      setIsSubmittingRejection(false);
     }
   };
 
@@ -336,36 +436,18 @@ export function ApplicationDetailPage() {
 
   return (
     <div className="flex w-full flex-col p-4 sm:p-6 lg:p-7 max-w-[1720px] mx-auto space-y-6">
-      {/* ── Breadcrumb & Top Bar ── */}
+      {/* ── Page Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="text-xs font-semibold text-slate-400 flex flex-wrap items-center">
-            <span
-              onClick={() => navigate('/applications')}
-              className="hover:text-blue-600 cursor-pointer"
-            >
-              Applications
-            </span>
-            {application?.vacancyId && (
-              <>
-                <span className="mx-2">&bull;</span>
-                <span
-                  onClick={() => navigate(`/vacancies/${application.vacancyId}`)}
-                  className="hover:text-blue-600 cursor-pointer text-blue-600 dark:text-blue-400 font-bold inline-flex items-center gap-1"
-                  title="View Job Requisition Overview"
-                >
-                  <Icon name="briefcase" size={12} />
-                  <span>Requisition: {application.vacancyCode ? `${application.vacancyCode} • ` : ''}{roleName} ↗</span>
-                </span>
-              </>
-            )}
-            <span className="mx-2">&bull;</span>
-            <span className="text-slate-700 dark:text-slate-200">{appIdDisplay || '—'}</span>
-          </div>
-          <div className="flex flex-wrap items-center gap-3 mt-1">
+          <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight m-0">
               Applicant Profile
             </h1>
+            {appIdDisplay && (
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-mono border border-slate-200 dark:border-slate-700">
+                {appIdDisplay}
+              </span>
+            )}
             {application?.stage && <StatusBadge status={application.stage} />}
             <button
               type="button"
@@ -391,8 +473,17 @@ export function ApplicationDetailPage() {
           </div>
         </div>
 
-        {application?.vacancyId && (
-          <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2">
+          {application?.candidateId && (
+            <Link
+              to={`/candidates/${application.candidateId}`}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-purple-200 dark:border-purple-800 bg-purple-50/80 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/60 text-xs font-bold transition shadow-xs no-underline"
+            >
+              <Icon name="user" size={13} />
+              <span>Candidate 360 Profile ↗</span>
+            </Link>
+          )}
+          {application?.vacancyId && (
             <button
               type="button"
               onClick={() => navigate(`/vacancies/${application.vacancyId}`)}
@@ -401,8 +492,8 @@ export function ApplicationDetailPage() {
               <Icon name="briefcase" size={13} />
               <span>Requisition Overview ↗</span>
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* ── Cross-Application Collision Alert (E6.4) ── */}
@@ -507,18 +598,32 @@ export function ApplicationDetailPage() {
                     .slice(0, 2)
                     .toUpperCase() || '?'}
                 </div>
-                <h2 className="text-lg font-extrabold text-slate-900 dark:text-white">
-                  {candidateName}
-                </h2>
+                <Link
+                  to={`/candidates/${application.candidateId}`}
+                  className="text-lg font-extrabold text-slate-900 dark:text-white hover:text-purple-600 dark:hover:text-purple-400 transition flex items-center gap-1.5 justify-center group no-underline"
+                  title="View Candidate 360 Profile"
+                >
+                  <span>{candidateName}</span>
+                  <Icon name="external-link" size={13} className="opacity-0 group-hover:opacity-100 transition text-purple-600" />
+                </Link>
                 <p className="text-xs text-slate-500 font-medium mt-0.5">
                   {roleName}
                 </p>
 
-                {application.candidate.status && (
-                  <span className="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 mt-2 border border-slate-200 dark:border-slate-700">
-                    Status: {application.candidate.status}
-                  </span>
-                )}
+                <div className="flex flex-wrap items-center justify-center gap-1.5 mt-2">
+                  {application.candidate.status && (
+                    <span className="inline-block px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                      Status: {application.candidate.status}
+                    </span>
+                  )}
+                  <Link
+                    to={`/candidates/${application.candidateId}`}
+                    className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-800 hover:bg-purple-200 transition no-underline"
+                  >
+                    <span>360° Profile</span>
+                    <Icon name="arrow-right" size={10} />
+                  </Link>
+                </div>
               </div>
 
               {/* Contact & Meta Rows */}
@@ -702,6 +807,25 @@ export function ApplicationDetailPage() {
               </div>
             </div>
           </div>
+
+          {/* ── Intelligent Next Action Guidance ── */}
+          <NextActionGuidanceBanner
+            stage={application?.stage}
+            candidateName={candidateName}
+            onAdvanceStage={() => setIsMoveStageModalOpen(true)}
+            onScheduleInterview={() => setIsScheduleModalOpen(true)}
+            onCreateOffer={() => {
+              const candId = application?.candidateId || application?.candidate?.id;
+              const vacId = application?.vacancyId;
+              navigate(
+                `/offers/create?${candId ? `candidateId=${candId}` : ''}${vacId ? `&vacancyId=${vacId}` : ''}`
+              );
+            }}
+            onViewCandidate360={() => {
+              const candId = application?.candidateId || application?.candidate?.id;
+              if (candId) navigate(`/candidates/${candId}`);
+            }}
+          />
 
           {/* ── Tab Views ── */}
           {activeTab === 'activity' && (
@@ -1325,44 +1449,20 @@ export function ApplicationDetailPage() {
         </div>
       </Modal>
 
-      {/* 2. Schedule Interview Modal */}
-      <Modal
+      {/* 2. Schedule Interview Modal (Extracted Component) */}
+      <ScheduleInterviewModal
         isOpen={isScheduleModalOpen}
         onClose={() => setIsScheduleModalOpen(false)}
-        title="Schedule Interview"
-        maxWidthClass="max-w-md"
-      >
-        <div className="space-y-3 text-xs">
-          <div>
-            <label className="font-bold block mb-1">Interview Type</label>
-            <Select defaultValue="Technical Interview">
-              <option value="Phone Screen">Phone Screen</option>
-              <option value="Technical Interview">Technical Interview</option>
-              <option value="HM Interview">HM Interview</option>
-            </Select>
-          </div>
-          <div>
-            <label className="font-bold block mb-1">Date &amp; Time</label>
-            <Input type="datetime-local" />
-          </div>
-          <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
-            <button
-              type="button"
-              onClick={() => setIsScheduleModalOpen(false)}
-              className="px-3 py-1.5 text-slate-500 hover:text-slate-900 cursor-pointer"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsScheduleModalOpen(false)}
-              className="px-4 py-1.5 bg-emerald-600 text-white rounded-xl font-bold cursor-pointer"
-            >
-              Send Invitation
-            </button>
-          </div>
-        </div>
-      </Modal>
+        candidateName={candidateName}
+        interviewTitle={schedInterviewTitle}
+        setInterviewTitle={setSchedInterviewTitle}
+        interviewType={schedInterviewType}
+        setInterviewType={setSchedInterviewType}
+        scheduledDateTime={schedDateTime}
+        setScheduledDateTime={setSchedDateTime}
+        isSubmitting={isSchedulingInterview}
+        onSubmit={(e) => void handleScheduleInterviewSubmit(e)}
+      />
 
       {/* 3. Add Note Modal */}
       <Modal
@@ -1406,44 +1506,17 @@ export function ApplicationDetailPage() {
         </div>
       </Modal>
 
-      {/* 4. Reject Modal */}
-      <Modal
+      {/* 4. Reject Modal (Extracted Component) */}
+      <RejectApplicantModal
         isOpen={isRejectModalOpen}
         onClose={() => setIsRejectModalOpen(false)}
-        title="Reject Applicant"
-        maxWidthClass="max-w-md"
-      >
-        <div className="space-y-3 text-xs">
-          <p className="text-slate-500">
-            Are you sure you want to reject this applicant? This will transition their status to Rejected.
-          </p>
-          <div>
-            <label className="font-bold block mb-1">Reason for Rejection</label>
-            <Select defaultValue="Skills mismatch">
-              <option value="Skills mismatch">Skills mismatch</option>
-              <option value="Salary expectations">Salary expectations</option>
-              <option value="Not responsive">Not responsive</option>
-              <option value="Position filled">Position filled</option>
-            </Select>
-          </div>
-          <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
-            <button
-              type="button"
-              onClick={() => setIsRejectModalOpen(false)}
-              className="px-3 py-1.5 text-slate-500 hover:text-slate-900 cursor-pointer"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsRejectModalOpen(false)}
-              className="px-4 py-1.5 bg-red-600 text-white rounded-xl font-bold cursor-pointer"
-            >
-              Confirm Rejection
-            </button>
-          </div>
-        </div>
-      </Modal>
+        selectedRejectReason={selectedRejectReason}
+        setSelectedRejectReason={setSelectedRejectReason}
+        rejectNote={rejectNote}
+        setRejectNote={setRejectNote}
+        isSubmitting={isSubmittingRejection}
+        onConfirm={() => void handleConfirmRejection()}
+      />
 
       {/* 5. View Resume Modal */}
       <Modal

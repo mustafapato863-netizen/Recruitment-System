@@ -6,6 +6,8 @@ import { Icon } from '../components/Icon';
 import { Modal } from '../components/Modal';
 import { PageState } from '../components/ui/PageState';
 import { TableSkeleton } from '../components/ui/Skeleton';
+import { InterviewAgendaCard } from '../components/interview/InterviewAgendaCard';
+import { InterviewFiltersBar } from '../components/interview/InterviewFiltersBar';
 import './PageEnhancementsV2.css';
 
 interface InterviewGroup {
@@ -14,6 +16,9 @@ interface InterviewGroup {
   countLabel: string;
   items: {
     id: string;
+    applicationId: string;
+    candidateId: string;
+    locationUrl?: string;
     time: string;
     duration: string;
     candidateName: string;
@@ -253,11 +258,17 @@ export function InterviewsPage() {
         statusTone = 'amber';
       }
 
+      const matchingApp = applications.find((a) => a.id === int.applicationId);
+      const candId = int.candidateId || int.application?.candidateId || int.application?.candidate?.id || matchingApp?.candidateId || '';
+      const appId = int.applicationId || matchingApp?.id || '';
       const panelCount = Array.isArray(int.attendees) ? int.attendees.length : 0;
       const panelLabel = panelCount > 1 ? `Panel (${panelCount})` : primaryAttendee;
 
       groupsMap.get(dateKey)!.items.push({
         id: int.id,
+        applicationId: appId,
+        candidateId: candId,
+        locationUrl: int.locationUrl || undefined,
         time: int.scheduledStart ? new Date(int.scheduledStart).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—',
         duration: durationMins && durationMins > 0 ? `${durationMins}m` : '—',
         candidateName: name,
@@ -368,30 +379,6 @@ export function InterviewsPage() {
     }
   };
 
-  const getStatusBadgeClass = (tone: 'green' | 'amber' | 'blue') => {
-    switch (tone) {
-      case 'green':
-        return 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800';
-      case 'amber':
-        return 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800';
-      case 'blue':
-      default:
-        return 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800';
-    }
-  };
-
-  const getTypeTagClass = (tone: 'purple' | 'blue' | 'green') => {
-    switch (tone) {
-      case 'purple':
-        return 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800';
-      case 'blue':
-        return 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800';
-      case 'green':
-      default:
-        return 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800';
-    }
-  };
-
   return (
     <div className="flex w-full flex-col p-4 sm:p-6 lg:p-7 max-w-[1720px] mx-auto space-y-6">
       {/* ── Page Header & Top Controls matching 09-interviews.png ── */}
@@ -474,117 +461,20 @@ export function InterviewsPage() {
         </div>
       )}
 
-      {/* ── Filter Row ── */}
-      <div className="flex flex-wrap items-center gap-3">
-        {/* Date range filter */}
-        <div className="relative">
-          <button
-            type="button"
-            onClick={() => setDateRange((prev) => prev === 'All Dates' ? 'Today' : prev === 'Today' ? 'Upcoming' : 'All Dates')}
-            className="inline-flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 shadow-xs cursor-pointer"
-          >
-            <Icon name="calendar" size={13} className="text-slate-400" />
-            <span>{dateRange}</span>
-            <Icon name="chevron-down" size={12} className="text-slate-400" />
-          </button>
-        </div>
-
-        {/* All interview types */}
-        <div className="relative">
-          <select
-            value={selectedType}
-            onChange={(e) => setSelectedType(e.target.value)}
-            className="appearance-none bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2 pr-8 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 cursor-pointer shadow-xs"
-          >
-            <option value="ALL">All Interview Types</option>
-            <option value="Screening">Screening Round</option>
-            <option value="Technical">Technical Interview</option>
-            <option value="Behavioral">Behavioral / Leadership</option>
-            <option value="Managerial">Managerial Round</option>
-            <option value="Executive">Executive Board</option>
-          </select>
-          <Icon name="chevron-down" size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-        </div>
-
-        {/* All interviewers */}
-        <div className="relative">
-          <select
-            value={selectedInterviewer}
-            onChange={(e) => setSelectedInterviewer(e.target.value)}
-            className="appearance-none bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2 pr-8 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 cursor-pointer shadow-xs"
-          >
-            <option value="ALL">All Interviewers</option>
-            {interviewerOptions.map((name) => (
-              <option key={name} value={name}>{name}</option>
-            ))}
-          </select>
-          <Icon name="chevron-down" size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-        </div>
-
-        {/* All statuses */}
-        <div className="relative">
-          <select
-            value={selectedStatus}
-            onChange={(e) => setSelectedStatus(e.target.value)}
-            className="appearance-none bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2 pr-8 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 cursor-pointer shadow-xs"
-          >
-            <option value="ALL">All Statuses</option>
-            <option value="Scheduled">Scheduled</option>
-            <option value="Feedback Done">Feedback Done</option>
-            <option value="Feedback Pending">Feedback Pending</option>
-            <option value="Completed">Completed</option>
-            <option value="Cancelled">Cancelled</option>
-          </select>
-          <Icon name="chevron-down" size={12} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-        </div>
-
-        {/* More filters */}
-        <button
-          type="button"
-          onClick={() => setIsMoreFiltersOpen((prev) => !prev)}
-          className={`inline-flex items-center gap-2 px-3.5 py-2 border rounded-xl text-xs font-semibold transition shadow-xs cursor-pointer ${
-            isMoreFiltersOpen
-              ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950/40 dark:border-blue-800'
-              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50'
-          }`}
-        >
-          <Icon name="filter" size={13} className="text-slate-400" />
-          <span>{isMoreFiltersOpen ? 'Hide filters' : 'More filters'}</span>
-        </button>
-      </div>
-
-      {/* Expandable filters */}
-      {isMoreFiltersOpen && (
-        <div className="flex flex-wrap items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200/60 dark:border-slate-700/60 text-xs">
-          <span className="font-bold text-slate-500">Quick Filters:</span>
-          <button
-            type="button"
-            onClick={() => setSelectedStatus('Feedback Pending')}
-            className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 text-amber-700 dark:text-amber-400 cursor-pointer"
-          >
-            Feedback Pending
-          </button>
-          <button
-            type="button"
-            onClick={() => setSelectedType('Technical')}
-            className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 text-blue-600 dark:text-blue-400 cursor-pointer"
-          >
-            Technical Rounds
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setSelectedType('ALL');
-              setSelectedStatus('ALL');
-              setSelectedInterviewer('ALL');
-              setDateRange('All Dates');
-            }}
-            className="ml-auto text-xs font-bold text-slate-500 hover:text-rose-600 cursor-pointer"
-          >
-            Reset All
-          </button>
-        </div>
-      )}
+      {/* ── Filter Row (Extracted Component) ── */}
+      <InterviewFiltersBar
+        dateRange={dateRange}
+        setDateRange={setDateRange}
+        selectedType={selectedType}
+        setSelectedType={setSelectedType}
+        selectedInterviewer={selectedInterviewer}
+        setSelectedInterviewer={setSelectedInterviewer}
+        selectedStatus={selectedStatus}
+        setSelectedStatus={setSelectedStatus}
+        interviewerOptions={interviewerOptions}
+        isMoreFiltersOpen={isMoreFiltersOpen}
+        setIsMoreFiltersOpen={setIsMoreFiltersOpen}
+      />
 
       {/* ── Tabs & Sort Bar ── */}
       <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-2">
@@ -663,84 +553,10 @@ export function InterviewsPage() {
                     </span>
                   </div>
 
-                  {/* Interview Item Cards */}
-                  <div className="space-y-2.5">
+                  {/* Modernized Interview Agenda Cards */}
+                  <div className="space-y-3">
                     {group.items.map((item) => (
-                      <div
-                        key={item.id}
-                        onClick={() => navigate(`/interviews/${item.id}`)}
-                        className="p-3.5 sm:p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 hover:border-blue-300 hover:shadow-md transition cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3 group"
-                      >
-                        {/* Time & Duration */}
-                        <div className="w-16 sm:w-20 shrink-0">
-                          <span className="block text-xs font-extrabold text-slate-900 dark:text-white leading-tight">
-                            {item.time}
-                          </span>
-                          <span className="block text-[11px] text-slate-400 font-medium">
-                            {item.duration}
-                          </span>
-                        </div>
-
-                        {/* Candidate Avatar & Details */}
-                        <div className="flex items-center gap-2.5 min-w-0 flex-1 sm:flex-initial sm:w-44">
-                          <div className="w-8 h-8 rounded-full bg-teal-600 text-white font-black text-xs flex items-center justify-center shrink-0">
-                            {item.candidateAvatar}
-                          </div>
-                          <div className="min-w-0">
-                            <span className="block text-xs font-bold text-slate-900 dark:text-white group-hover:text-blue-600 transition truncate">
-                              {item.candidateName}
-                            </span>
-                            <span className="block text-[10.5px] text-slate-400 truncate">
-                              {item.candidateRole}
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Job Position & Department */}
-                        <div className="min-w-0 flex-1 hidden xl:block">
-                          <span className="block font-bold text-slate-800 dark:text-slate-200 truncate">
-                            {item.jobTitle}
-                          </span>
-                          <span className="block text-[10.5px] text-slate-400 truncate">
-                            {item.department}
-                          </span>
-                        </div>
-
-                        {/* Type Tag & Mode */}
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          <span className={`px-2.5 py-0.5 rounded-full text-[10.5px] font-bold ${getTypeTagClass(item.typeTone)}`}>
-                            {item.typeTag}
-                          </span>
-                          <span className="text-[11px] text-slate-500 font-medium hidden 2xl:inline">
-                            {item.panel}
-                          </span>
-                        </div>
-
-                        {/* Mode (Teams/Phone) */}
-                        <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium shrink-0 hidden md:flex">
-                          <Icon name={item.modeIcon === 'phone' ? 'phone' : item.modeIcon === 'map-pin' ? 'map-pin' : 'video'} size={13} className="text-slate-400" />
-                          <span>{item.mode}</span>
-                        </div>
-
-                        {/* Interviewer Host Avatar & Status Badge */}
-                        <div className="flex items-center gap-2.5 shrink-0 ml-auto sm:ml-0">
-                          {item.interviewerAvatar && item.interviewerAvatar.startsWith('http') ? (
-                            <img
-                              src={item.interviewerAvatar}
-                              alt={item.interviewerName}
-                              className="w-7 h-7 rounded-full object-cover border border-slate-200 shrink-0 hidden sm:block"
-                            />
-                          ) : (
-                            <div className="w-7 h-7 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-[10px] flex items-center justify-center border border-slate-200 dark:border-slate-700 shrink-0 hidden sm:flex">
-                              {item.interviewerAvatar}
-                            </div>
-                          )}
-                          <span className={`px-2.5 py-0.5 rounded-full text-[10.5px] font-bold whitespace-nowrap shrink-0 ${getStatusBadgeClass(item.statusTone)}`}>
-                            {item.statusBadge}
-                          </span>
-                          <Icon name="more-vertical" size={13} className="text-slate-300 group-hover:text-slate-600 shrink-0" />
-                        </div>
-                      </div>
+                      <InterviewAgendaCard key={item.id} item={item} />
                     ))}
                   </div>
                 </div>

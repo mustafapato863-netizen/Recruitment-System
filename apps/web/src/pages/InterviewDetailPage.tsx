@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getApi, postApi, ApiError } from '../api/client';
+import { getApi, postApi, patchApi, ApiError } from '../api/client';
 import type { Application, Interview, InterviewScorecardItem } from '@recruitflow/contracts';
 import { useAuth } from '../auth/AuthContext';
 import { Scorecard, type ScorecardCategory, type Recommendation } from '../components/ui/Scorecard';
@@ -11,6 +11,7 @@ import { Skeleton } from '../components/ui/Skeleton';
 import { Textarea } from '../components/ui/Textarea';
 import { Icon } from '../components/Icon';
 import { Modal } from '../components/Modal';
+import { useSetBreadcrumbTitle } from '../context/BreadcrumbContext';
 import './PageEnhancementsV2.css';
 
 type BackendRecommendation = 'Strong Hire' | 'Hire' | 'Neutral' | 'No Hire' | 'Strong No Hire';
@@ -129,6 +130,8 @@ export function InterviewDetailPage() {
 
   const [interview, setInterview] = useState<Interview | null>(null);
   const [isLoadingInterview, setIsLoadingInterview] = useState(true);
+
+  useSetBreadcrumbTitle(interview?.title || 'Interview Details');
   const [submittedScorecard, setSubmittedScorecard] = useState<InterviewScorecardItem | null>(null);
   const [isForbiddenUser, setIsForbiddenUser] = useState(false);
 
@@ -151,9 +154,62 @@ export function InterviewDetailPage() {
   const [isScoreGuideOpen, setIsScoreGuideOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
+  // Reschedule & Actions Modal States
+  const [isRescheduleModalOpen, setIsRescheduleModalOpen] = useState(false);
+  const [rescheduleDateTime, setRescheduleDateTime] = useState('');
+  const [isSubmittingReschedule, setIsSubmittingReschedule] = useState(false);
+  const [isActionsDropdownOpen, setIsActionsDropdownOpen] = useState(false);
+
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  const openRescheduleModal = () => {
+    if (interview?.scheduledStart) {
+      try {
+        setRescheduleDateTime(new Date(interview.scheduledStart).toISOString().slice(0, 16));
+      } catch {
+        setRescheduleDateTime('');
+      }
+    }
+    setIsRescheduleModalOpen(true);
+    setIsActionsDropdownOpen(false);
+  };
+
+  const handleRescheduleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!id || !rescheduleDateTime) return;
+    setIsSubmittingReschedule(true);
+    try {
+      const start = new Date(rescheduleDateTime);
+      const end = new Date(start.getTime() + 45 * 60000);
+      const updated = await patchApi<Interview>(`/interviews/${id}`, {
+        scheduledStart: start.toISOString(),
+        scheduledEnd: end.toISOString(),
+      });
+      if (updated) {
+        setInterview(updated);
+      }
+      showToast('✓ Interview rescheduled successfully!');
+      setIsRescheduleModalOpen(false);
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : 'Failed to reschedule interview');
+    } finally {
+      setIsSubmittingReschedule(false);
+    }
+  };
+
+  const handleCancelInterview = async () => {
+    if (!id) return;
+    try {
+      await patchApi(`/interviews/${id}`, { status: 'Cancelled' });
+      setInterview((prev) => (prev ? { ...prev, status: 'Cancelled' as unknown as any } : prev));
+      showToast('✓ Interview status set to Cancelled');
+      setIsActionsDropdownOpen(false);
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : 'Failed to cancel interview');
+    }
   };
 
   const fetchInterview = useCallback(async () => {
@@ -481,22 +537,10 @@ export function InterviewDetailPage() {
 
   return (
     <div className="flex w-full flex-col p-4 sm:p-6 lg:p-7 max-w-[1720px] mx-auto space-y-6">
-      {/* ── Breadcrumbs & Top Action Bar matching 10-interview-detail-feedback.png ── */}
+      {/* ── Top Action Bar ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="text-xs font-semibold text-slate-400">
-            <span onClick={() => navigate('/')} className="hover:text-blue-600 cursor-pointer">
-              My Work
-            </span>
-            <span className="mx-2">&gt;</span>
-            <span onClick={() => navigate('/interviews')} className="hover:text-blue-600 cursor-pointer">
-              Interviews
-            </span>
-            <span className="mx-2">&gt;</span>
-            <span className="text-slate-900 dark:text-white font-bold">Interview Details</span>
-          </div>
-
-          <div className="flex items-center gap-3 mt-1.5">
+          <div className="flex items-center gap-3">
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
               {interview?.title || 'Interview Details'}
             </h1>
@@ -511,14 +555,50 @@ export function InterviewDetailPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => showToast('Interview options: Reschedule, Cancel, or Reassign Panel')}
-            className="inline-flex items-center gap-1.5 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 transition shadow-xs cursor-pointer"
-          >
-            <span>Actions</span>
-            <Icon name="more-vertical" size={13} />
-          </button>
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setIsActionsDropdownOpen((prev) => !prev)}
+              className="inline-flex items-center gap-1.5 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 transition shadow-xs cursor-pointer"
+            >
+              <span>Actions</span>
+              <Icon name="more-vertical" size={13} />
+            </button>
+
+            {isActionsDropdownOpen && (
+              <div className="absolute right-0 mt-1.5 w-48 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-lg z-30 py-1 text-xs">
+                <button
+                  type="button"
+                  onClick={openRescheduleModal}
+                  className="w-full text-left px-3.5 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2 font-semibold text-slate-700 dark:text-slate-200 cursor-pointer"
+                >
+                  <Icon name="calendar" size={13} className="text-blue-500" />
+                  <span>Reschedule Time</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.clipboard.writeText(interview?.locationUrl || window.location.href);
+                    showToast('✓ Meeting link copied to clipboard!');
+                    setIsActionsDropdownOpen(false);
+                  }}
+                  className="w-full text-left px-3.5 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2 font-semibold text-slate-700 dark:text-slate-200 cursor-pointer"
+                >
+                  <Icon name="link" size={13} className="text-emerald-500" />
+                  <span>Copy Meeting Link</span>
+                </button>
+                <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
+                <button
+                  type="button"
+                  onClick={() => void handleCancelInterview()}
+                  className="w-full text-left px-3.5 py-2 hover:bg-rose-50 dark:hover:bg-rose-950/40 flex items-center gap-2 font-semibold text-rose-600 cursor-pointer"
+                >
+                  <Icon name="close" size={13} />
+                  <span>Cancel Interview</span>
+                </button>
+              </div>
+            )}
+          </div>
 
           <div className="flex items-center border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 overflow-hidden shadow-xs">
             <button
@@ -681,7 +761,7 @@ export function InterviewDetailPage() {
             </h2>
             <button
               type="button"
-              onClick={() => showToast(`Opening reschedule options for ${interview?.title || 'Interview'}...`)}
+              onClick={openRescheduleModal}
               className="text-xs font-bold text-blue-600 hover:underline cursor-pointer"
             >
               Edit
@@ -1453,6 +1533,53 @@ export function InterviewDetailPage() {
           <div className="p-2 border rounded-lg"><b>1.0 - Unacceptable:</b> Major deficiencies.</div>
         </div>
       </Modal>
+
+      {/* Reschedule Interview Modal */}
+      <Modal
+        isOpen={isRescheduleModalOpen}
+        onClose={() => {
+          if (!isSubmittingReschedule) setIsRescheduleModalOpen(false);
+        }}
+        title="Reschedule Interview"
+        maxWidthClass="max-w-md"
+      >
+        <form onSubmit={(e) => void handleRescheduleSubmit(e)} className="space-y-4 text-xs">
+          <p className="text-slate-500 dark:text-slate-400">
+            Select the new date and time for this interview. All panel members and the candidate will be notified of the updated schedule.
+          </p>
+          <div>
+            <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">
+              New Date &amp; Time
+            </label>
+            <input
+              type="datetime-local"
+              value={rescheduleDateTime}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRescheduleDateTime(e.target.value)}
+              required
+              disabled={isSubmittingReschedule}
+              className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
+            <button
+              type="button"
+              onClick={() => setIsRescheduleModalOpen(false)}
+              disabled={isSubmittingReschedule}
+              className="px-3 py-1.5 text-slate-500 hover:text-slate-900 font-semibold cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmittingReschedule || !rescheduleDateTime}
+              className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold cursor-pointer transition shadow-xs disabled:opacity-50"
+            >
+              {isSubmittingReschedule ? 'Rescheduling...' : 'Confirm Reschedule'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
       {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-xl text-xs font-bold flex items-center gap-2 border border-slate-700 animate-fade-in">

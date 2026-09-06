@@ -222,11 +222,11 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  min-height: 34px;
+  min-height: 38px;
   padding: 6px 10px;
-  border-radius: 8px;
+  border-radius: 10px;
   text-decoration: none;
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--color-ink-700);
   transition: all var(--motion-standard) var(--ease-standard);
@@ -238,10 +238,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
-  border-radius: 6px;
-  font-size: 13px;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
   color: var(--color-ink-500);
   flex-shrink: 0;
   transition: all var(--motion-fast);
@@ -253,7 +252,14 @@
 }
 
 .nav a:hover:not(.active) .ico {
+  background: rgba(0, 136, 204, 0.08);
   color: var(--color-action);
+}
+
+[data-theme='dark'] .nav a:hover:not(.active) .ico,
+.dark .nav a:hover:not(.active) .ico {
+  background: rgba(56, 189, 248, 0.12);
+  color: #38bdf8;
 }
 
 .nav a.active {
@@ -265,7 +271,16 @@
 }
 
 .nav a.active .ico {
-  color: var(--color-action);
+  background: var(--color-action);
+  color: #ffffff;
+  box-shadow: 0 2px 6px rgba(0, 136, 204, 0.3);
+}
+
+[data-theme='dark'] .nav a.active .ico,
+.dark .nav a.active .ico {
+  background: #0088cc;
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 136, 204, 0.4);
 }
 
 /* Sidebar Footer (User Card + Settings & Logout Only) */

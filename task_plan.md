@@ -21,6 +21,8 @@ Deliver as incremental vertical slices, each independently shippable.
 | E1–E5 | Lit Sweep & Operational Polish (E1–E5) | High | `completed` |
 | E6 | Per-Position Workflow & Odoo Alignment (E6.1–E6.4) | High | `completed` |
 | **E7** | **Per-Position Operational Parity Blueprint (E7.1–E7.4)** | **High** | `completed` |
+| **E8** | **Workspace Ergonomics, Breadcrumbs, Card Glow & Recruiter Restrictions** | **High** | `completed` |
+| **E9** | **Full Per-Position Workflow Logic & Odoo Parity Implementation (E9.1–E9.6)** | **High** | `in_progress` |
 
 ## Per-Position Workflow Enhancements (E6) - COMPLETED
 - **E6.1:** Vacancy-Locked Pipeline Mode (`VacancyOverviewPage.tsx` & `ApplicationsPage.tsx`) [DONE]
@@ -34,9 +36,27 @@ Deliver as incremental vertical slices, each independently shippable.
 - **E7.3:** Odoo-Style Job Positions Cards/Grid View Toggle (`VacantListPage.tsx` with 3-column cards, SLA indicators, and 1-click pipeline jump) [DONE]
 - **E7.4:** Requisition Bidirectional Linkage & Inline Evaluation Flow (`ApplicationDetailPage.tsx` requisition breadcrumbs, header jump, and inline interviews evaluation panel) [DONE]
 
+## Workspace Ergonomics, Breadcrumbs, Card Glow & Recruiter Restrictions (E8) - COMPLETED
+- **E8.1:** Removed redundant "+ New" menu from top header navbar (`AppShell.tsx`).
+- **E8.2:** Standardized icon sizes across sidebar & header (`AppShell.tsx`, `shell.css` enlarged `.nav a .ico` container from 20px to 28px, active pill glow, hover tint).
+- **E8.3:** Enhanced breadcrumb navigation (`BreadcrumbsBar.tsx` with chevron-right separators, comprehensive label mapping, polished badges).
+- **E8.4:** Added `.card-glow` and uniform card sizing (`design-system.css`, `ManagerDashboard.tsx` KPI cards `h-[105px]` and columns `min-h-[460px]`/`min-h-[380px]`, `VacantListPage.tsx` cards `h-[285px]`).
+- **E8.5:** Restricted recruiters from assigning or reassigning tasks across UI & backend API (`TasksPage.tsx`, `ManagerDashboard.tsx`, and `apps/api/src/tasks/tasks.controller.ts` with `@RequirePermissions('VACANCY_MANAGE')` and role checks).
+- **E8.6:** Breadcrumb Context & Deduplication (`BreadcrumbContext.tsx`, `BreadcrumbsBar.tsx`, removal of in-page duplicate breadcrumb bars across detail pages, contextual route ID fallback resolution, dynamic entity titles).
+
+## Full Per-Position Workflow Logic & Odoo Parity (E9) - IN PROGRESS
+- **E9.1:** Pipeline Position Switcher Dropdown in `ApplicationsPage.tsx` [TODO]
+- **E9.2:** Persistent Odoo Smart Stat Buttons & Clean Sub-flows on `VacancyOverviewPage.tsx` [TODO]
+- **E9.3:** Headcount Synchronized Incrementing & Auto-Closure Handshake (API + UI) [TODO]
+- **E9.4:** Structured Refusal / Rejection Reason Taxonomy & Modal [TODO]
+- **E9.5:** 1-Click Recruiter "Claim Application" on Kanban Card [TODO]
+- **E9.6:** Real Vacancy Edit Persistence & Public Careers Preview [TODO]
+
 ## Verification & Build Status
 - **Web Typecheck (`tsc -p tsconfig.app.json --noEmit`):** Clean (0 errors).
-- **Web Build (`pnpm build`):** Clean (production build succeeded in 1.61s).
-- **Web Tests:** 23 test suites, 58/58 passing (100%).
+- **Web Build (`pnpm build`):** Clean (production build succeeded in 1.38s).
+- **Web Tests:** 23 test suites, 61/61 passing (100%).
 - **API Typecheck & Tests:** Clean (11/11 passing).
+
+
 

@@ -15,6 +15,7 @@ import {
   CreateApplicationDto,
   CreateApplicationNoteDto,
   UpdateApplicationStageDto,
+  UpdateApplicationDto,
   ApplicationQueryDto,
 } from './applications.dto';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
@@ -115,4 +116,23 @@ export class ApplicationsController {
       body,
     );
   }
+
+  @Patch(':id')
+  @RequirePermissions('APPLICATION_MOVE_STAGE')
+  @AuditAction('APPLICATION_UPDATE')
+  @UseGuards(TenantScopedGuard)
+  @TenantResource({ resource: 'application', param: 'id' })
+  updateApplication(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: UpdateApplicationDto,
+  ) {
+    return this.applicationsService.updateApplication(
+      user.organizationId,
+      id,
+      user.userId,
+      body,
+    );
+  }
 }
+

@@ -127,6 +127,32 @@ export class UpdateVacancyStatusDto {
   reason?: string;
 }
 
+export class UpdateVacancyDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  title?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  location?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  approvedHeadcount?: number;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(5000)
+  description?: string;
+
+  @IsOptional()
+  @IsDateString()
+  targetStartDate?: string;
+}
+
 export class VacancyRequestActionDto {
   @IsOptional()
   @IsString()

@@ -1,20 +1,23 @@
 import { useMemo } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Icon } from '../Icon';
+import { useBreadcrumb } from '../../context/BreadcrumbContext';
 
 const PATH_NAME_MAP: Record<string, string> = {
   '': 'Home',
   vacancies: 'Job Positions',
   'vacancy-requests': 'Vacancy Requests',
-  applications: 'Applications Kanban',
+  applications: 'Applications',
   interviews: 'Interviews & Scheduling',
   calendar: 'Calendar',
   offers: 'Offers & Packages',
   candidates: 'Candidates DB',
   'cv-intake': 'Smart CV Intake',
+  'cv-bank': 'CV Bank',
   'talent-pool': 'Talent Pools',
   'talent-pools': 'Talent Pools',
   reports: 'Reports & Analytics',
+  analytics: 'Analytics',
   settings: 'Settings Hub',
   targets: 'Position Targets',
   'master-data': 'Master Data',
@@ -26,17 +29,25 @@ const PATH_NAME_MAP: Record<string, string> = {
   notifications: 'Notifications',
   profile: 'My Profile',
   new: 'Create New',
+  create: 'Create',
   'approval-inbox': 'Approvals Inbox',
   hires: 'Pre-Hire & Hires',
   joinings: 'Joinings Management',
   licenses: 'Licenses & Credentials',
   'candidate-documents': 'Candidate Documents',
   compare: 'Candidate Comparison',
+  edit: 'Edit',
+  view: 'Details',
+  transition: 'Stage Transition',
+  scorecard: 'Scorecard',
+  documents: 'Documents',
+  import: 'Bulk Import',
 };
 
 export function BreadcrumbsBar() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { customLabels } = useBreadcrumb();
 
   const pathnames = useMemo(() => {
     return location.pathname.split('/').filter(Boolean);
@@ -48,7 +59,43 @@ export function BreadcrumbsBar() {
   }
 
   const isUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
-  const isCode = (str: string) => /^(APP|OFF|VAC|INT|REQ|CMD)-[0-9A-Za-z-]+$/i.test(str);
+  const isCode = (str: string) => /^(APP|OFF|VAC|INT|REQ|CMD|USR|CAN)-[0-9A-Za-z-]+$/i.test(str);
+  const isNumericOrShortId = (str: string) => /^\d{3,}$/.test(str) || /^[0-9a-f]{6,}$/i.test(str);
+
+  const getContextualLabel = (segment: string, prevSegment: string): string => {
+    if (isCode(segment)) {
+      return segment;
+    }
+
+    const isId = isUUID(segment) || isNumericOrShortId(segment);
+    if (isId) {
+      switch (prevSegment.toLowerCase()) {
+        case 'interviews':
+          return 'Interview Details';
+        case 'offers':
+          return 'Offer Details';
+        case 'applications':
+          return 'Application Details';
+        case 'candidates':
+          return 'Candidate Profile';
+        case 'vacancies':
+          return 'Job Requisition';
+        case 'vacancy-requests':
+          return 'Requisition Request';
+        case 'talent-pool':
+        case 'talent-pools':
+          return 'Talent Pool Details';
+        case 'hires':
+          return 'Hiring Case Details';
+        case 'users':
+          return 'User Details';
+        default:
+          return 'Details';
+      }
+    }
+
+    return segment.charAt(0).toUpperCase() + segment.slice(1).replace(/-/g, ' ');
+  };
 
   return (
     <nav
@@ -82,21 +129,16 @@ export function BreadcrumbsBar() {
         {pathnames.map((segment, index) => {
           const routeTo = `/${pathnames.slice(0, index + 1).join('/')}`;
           const isLast = index === pathnames.length - 1;
+          const prevSegment = index > 0 ? pathnames[index - 1] : '';
 
-          let friendlyLabel = PATH_NAME_MAP[segment.toLowerCase()];
+          let friendlyLabel = customLabels[routeTo] || PATH_NAME_MAP[segment.toLowerCase()];
           if (!friendlyLabel) {
-            if (isUUID(segment)) {
-              friendlyLabel = `Item #${segment.substring(0, 6)}`;
-            } else if (isCode(segment)) {
-              friendlyLabel = segment;
-            } else {
-              friendlyLabel = segment.charAt(0).toUpperCase() + segment.slice(1).replace(/-/g, ' ');
-            }
+            friendlyLabel = getContextualLabel(segment, prevSegment);
           }
 
           return (
             <div key={routeTo} className="inline-flex items-center gap-2 shrink-0">
-              <span className="text-slate-300 dark:text-slate-600 select-none">/</span>
+              <Icon name="chevron-right" size={11} className="text-slate-300 dark:text-slate-600 select-none shrink-0" />
               {isLast ? (
                 <span
                   aria-current="page"

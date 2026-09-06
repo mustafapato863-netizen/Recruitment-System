@@ -441,30 +441,31 @@ export function CandidatesPage() {
         </div>
 
         {selectedCandidateIds.length > 0 && (
-          <div className="flex items-center gap-2 bg-blue-50 dark:bg-blue-950/40 px-3 py-1 rounded-xl text-xs text-blue-700 dark:text-blue-300 font-bold animate-fade-in">
-            <span>{selectedCandidateIds.length} candidates selected</span>
+          <div className="flex flex-wrap items-center gap-2.5 bg-blue-50 dark:bg-blue-950/40 px-3.5 py-1.5 rounded-xl text-xs text-blue-700 dark:text-blue-300 font-bold animate-fade-in border border-blue-200 dark:border-blue-900/60">
+            <span>{selectedCandidateIds.length} candidate{selectedCandidateIds.length !== 1 ? 's' : ''} selected</span>
+            <button
+              type="button"
+              onClick={() => navigate(`/candidates/compare?ids=${selectedCandidateIds.join(',')}`)}
+              className="inline-flex items-center gap-1.5 px-3 py-1 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold transition shadow-xs cursor-pointer"
+              title="Compare selected candidates side-by-side"
+            >
+              <Icon name="grid-squares" size={12} />
+              <span>Compare Selected ({selectedCandidateIds.length})</span>
+            </button>
             <button
               type="button"
               onClick={() => showToast(`✓ Added ${selectedCandidateIds.length} candidates to Talent Pool`)}
-              className="text-xs text-blue-600 hover:underline cursor-pointer"
+              className="text-xs text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
             >
               Add to Pool
             </button>
             <span>&bull;</span>
             <button
               type="button"
-              onClick={() => navigate('/candidates/compare')}
-              className="text-xs text-purple-600 dark:text-purple-400 hover:underline cursor-pointer font-bold"
-            >
-              Compare
-            </button>
-            <span>&bull;</span>
-            <button
-              type="button"
               onClick={() => setSelectedCandidateIds([])}
-              className="text-xs text-slate-500 hover:text-slate-800 cursor-pointer"
+              className="text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 cursor-pointer"
             >
-              Deselect
+              Deselect All
             </button>
           </div>
         )}

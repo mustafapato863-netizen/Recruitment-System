@@ -4,6 +4,7 @@ import type { VacancyDetailView, Application, PaginatedResult, Interview } from 
 import { fetchApi, getApi } from '../api/client';
 import { Icon } from '../components/Icon';
 import { PageState } from '../components/ui/PageState';
+import { useSetBreadcrumbTitle } from '../context/BreadcrumbContext';
 import './PageEnhancementsV2.css';
 
 interface InterviewerUser {
@@ -58,6 +59,7 @@ export function JobAnalyticsPage() {
   }, [id]);
 
   const jobTitle = vacancy?.position?.title || vacancy?.title || 'No position';
+  useSetBreadcrumbTitle(jobTitle && jobTitle !== 'No position' ? `${jobTitle} Analytics` : 'Job Analytics');
   const statusLabel = vacancy?.status || '—';
   const departmentName = (vacancy as unknown as { department?: string } | null | undefined)?.department || vacancy?.branch?.name || '—';
   const locationText = vacancy?.location || vacancy?.branch?.name || '—';
@@ -133,16 +135,10 @@ export function JobAnalyticsPage() {
 
   return (
     <div className="flex w-full flex-col p-4 sm:p-6 lg:p-7 max-w-[1720px] mx-auto space-y-6">
-      {/* ── Breadcrumb & Page Header matching 15-job-analytics.png ── */}
+      {/* ── Page Header matching 15-job-analytics.png ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="text-xs font-semibold text-slate-400">
-            <span>Application Analysis</span>
-            <span className="mx-2">/</span>
-            <span className="text-slate-900 dark:text-white font-bold">Job Analytics</span>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3 mt-1.5">
+          <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
               {jobTitle}
             </h1>

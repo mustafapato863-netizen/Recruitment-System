@@ -7,6 +7,7 @@ import { Alert } from '../components/ui/Alert';
 import { Button } from '../components/ui/Button';
 import { Select } from '../components/ui/Select';
 import { PageState } from '../components/ui/PageState';
+import { useBreadcrumb, useSetBreadcrumbTitle } from '../context/BreadcrumbContext';
 import './PageEnhancementsV2.css';
 
 function getInitials(name?: string | null): string {
@@ -103,6 +104,15 @@ export function StageTransitionPage() {
     application?.applicationCode ||
     (id ? (id.startsWith('APP-') ? id : `APP-${id.slice(0, 8).toUpperCase()}`) : '—');
   const ownerName = application?.primaryRecruiterName || application?.taskOwnerName || 'Unassigned';
+
+  const { setBreadcrumbLabel } = useBreadcrumb();
+  useSetBreadcrumbTitle('Stage Transition');
+
+  useEffect(() => {
+    if (id && candidateName && candidateName !== 'Candidate') {
+      setBreadcrumbLabel(`/applications/${id}`, candidateName);
+    }
+  }, [id, candidateName, setBreadcrumbLabel]);
   const ownerInitials = getInitials(ownerName);
   const currentStage = application?.stage || 'Applied';
 
@@ -207,27 +217,10 @@ export function StageTransitionPage() {
 
   return (
     <div className="flex w-full flex-col p-4 sm:p-6 lg:p-7 max-w-[1720px] mx-auto space-y-6">
-      {/* Breadcrumb & Top Bar */}
+      {/* ── Top Bar ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="text-xs font-semibold text-slate-400">
-            <span
-              onClick={() => navigate('/applications')}
-              className="hover:text-blue-600 cursor-pointer"
-            >
-              Applications
-            </span>
-            <span className="mx-2">/</span>
-            <span
-              onClick={() => navigate(`/applications/${id}`)}
-              className="hover:text-blue-600 cursor-pointer text-slate-600 dark:text-slate-300"
-            >
-              {candidateName}
-            </span>
-            <span className="mx-2">/</span>
-            <span className="text-slate-900 dark:text-white font-bold">Stage Transition</span>
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight mt-1">
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
             Stage Transition
           </h1>
           <p className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 mt-0.5">

@@ -12,7 +12,7 @@ import {
 import type { AuthUser } from '@recruitflow/contracts';
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { VacancyCoreService } from './vacancy-core.service';
-import { UpdateVacancyStatusDto, AssignTeamMemberDto, VacancyWorkQueueQueryDto } from './vacancy-core.dto';
+import { UpdateVacancyStatusDto, UpdateVacancyDto, AssignTeamMemberDto, VacancyWorkQueueQueryDto } from './vacancy-core.dto';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { TenantScopedGuard } from '../common/guards/tenant-scoped.guard';
@@ -61,6 +61,19 @@ export class VacanciesController {
       user.organizationId,
       body.status,
     );
+  }
+
+  @Patch(':id')
+  @RequirePermissions('VACANCY_MANAGE')
+  @AuditAction('VACANCY_UPDATE')
+  @UseGuards(TenantScopedGuard)
+  @TenantResource({ resource: 'vacancy', param: 'id' })
+  updateVacancy(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: UpdateVacancyDto,
+  ) {
+    return this.vacancyCoreService.updateVacancy(id, user.organizationId, body);
   }
 
   @Post(':id/assignments')

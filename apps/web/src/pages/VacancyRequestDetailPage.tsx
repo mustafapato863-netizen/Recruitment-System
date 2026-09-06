@@ -11,6 +11,7 @@ import { Icon, type IconName } from '../components/Icon';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ActivityTimeline } from '../components/ui/ActivityTimeline';
 import { BorderGlow } from '../components/ui/BorderGlow';
+import { useSetBreadcrumbTitle } from '../context/BreadcrumbContext';
 import './PageEnhancementsV2.css';
 
 interface ConfirmState {
@@ -45,6 +46,12 @@ export function VacancyRequestDetailPage() {
   const [feedback, setFeedback] = useState('');
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmState>(initialConfirmState);
+
+  useSetBreadcrumbTitle(
+    request?.requestCode
+      ? `Request ${request.requestCode}`
+      : 'Requisition Request'
+  );
 
   const load = async () => {
     if (!id) return;

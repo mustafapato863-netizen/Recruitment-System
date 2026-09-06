@@ -21,6 +21,7 @@ import {
   Database,
   Download,
   Ellipsis,
+  ExternalLink,
   Eye,
   EyeOff,
   FileCheck,
@@ -148,6 +149,7 @@ export type IconName =
   | 'trend-up'
   | 'arrow-up'
   | 'alert-circle'
+  | 'external-link'
   | 'link';
 
 const icons: Record<IconName, LucideIcon> = {
@@ -232,6 +234,7 @@ const icons: Record<IconName, LucideIcon> = {
   slash: X,
   'trend-up': BarChart3,
   'arrow-up': ChevronRight,
+  'external-link': ExternalLink,
 };
 
 export function Icon({

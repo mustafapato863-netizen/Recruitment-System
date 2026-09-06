@@ -1,0 +1,592 @@
+import type { PageGuide } from './types';
+
+export const PAGE_GUIDES: PageGuide[] = [
+  {
+    id: 'dashboard',
+    routePattern: '^/$',
+    title: 'Recruitment Ops Hub & Daily Work',
+    category: 'Daily Operations',
+    oneLiner: 'Your personalized command center for pending tasks, today’s interviews, and candidate actions.',
+    purpose: 'Helps recruiters prioritize urgent workload, monitor clinical interview schedules, unblock approvals, and maintain time-to-hire SLAs.',
+    steps: [
+      {
+        number: 1,
+        title: 'Review Today’s Priority Actions',
+        description: 'Check the top Alert Banner for expired offers, stalled applications, or interviews scheduled in the next 4 hours.',
+        actionHint: 'Look at the Urgent Action Items list at the top.',
+      },
+      {
+        number: 2,
+        title: 'Track Clinical Interview Rounds',
+        description: 'Verify which consultant doctors or head nurses are interviewing today and confirm meeting links are set.',
+        actionHint: 'Check the Today’s Agenda section.',
+      },
+      {
+        number: 3,
+        title: 'Monitor Velocity & Headcount SLAs',
+        description: 'Review filled vs open vacancy numbers across hospital branches (Jeddah, Riyadh, Dammam).',
+        actionHint: 'Review the KPI metric tiles.',
+      },
+    ],
+    hardPartCaution: {
+      title: 'Junior Guardrail: 48-Hour Screening SLA',
+      description: 'Never let new clinical applications sit in "Applied" or "Screening" for more than 48 hours. Medical candidates receive multiple competing offers from Riyadh and Gulf hospitals.',
+      severity: 'warning',
+    },
+    keyTerms: [
+      { term: 'SLA', definition: 'Service Level Agreement: standard max days allowed per hiring stage.' },
+      { term: 'Open Headcount', definition: 'Number of approved doctor/nurse positions funded and waiting to be filled.' },
+    ],
+    proTips: [
+      'Press ⌘K (or Ctrl+K) anywhere to jump directly to any candidate, job opening, or action.',
+      'Check notifications in the top bar daily for hiring manager feedback.',
+    ],
+  },
+  {
+    id: 'vacancies',
+    routePattern: '^/vacancies$',
+    title: 'Approved Job Positions & Openings',
+    category: 'Requisitions',
+    oneLiner: 'Directory of all hospital positions, approved headcount, and live talent pipelines.',
+    purpose: 'Allows recruiters to track open doctor, nurse, allied health, and administrative openings across all Saudi German Health facilities.',
+    steps: [
+      {
+        number: 1,
+        title: 'Filter by Hospital Branch & Department',
+        description: 'Narrow down listings by branch (e.g. SGH Jeddah, SGH Riyadh) or specialty (e.g. Cardiology, Intensive Care).',
+        actionHint: 'Use the branch filter chips at the top.',
+      },
+      {
+        number: 2,
+        title: 'Inspect Filled vs. Target Headcount',
+        description: 'Check progress bars to see how many slots have been filled versus total authorized headcount.',
+        actionHint: 'Review the Headcount column.',
+      },
+      {
+        number: 3,
+        title: 'Access the Candidate Pipeline',
+        description: 'Click any vacancy row to jump into its applicant pool, stage breakdown, and candidate scorecards.',
+        actionHint: 'Click on a position title.',
+      },
+    ],
+    hardPartCaution: {
+      title: 'Junior Guardrail: Position vs. Vacancy Request',
+      description: 'The "[Create Job Position]" button routes to Vacancy Requests. Only publish or advance candidates on positions with confirmed Finance and VP budget approval to prevent unbudgeted commitments.',
+      severity: 'critical',
+    },
+    keyTerms: [
+      { term: 'Budgeted Headcount', definition: 'Formally approved number of hires authorized by Hospital Finance.' },
+      { term: 'Target Level', definition: 'Seniority band (e.g., Consultant, Specialist, Resident, Charge Nurse).' },
+    ],
+    proTips: [
+      'Hover over the headcount bar to see the exact breakdown of applicants currently in Interview vs Offer stages.',
+    ],
+  },
+  {
+    id: 'vacancy-detail',
+    routePattern: '^/vacancies/[^/]+$',
+    title: 'Position 360 & Applicant Pipeline',
+    category: 'Requisitions',
+    oneLiner: 'Deep-dive into a single job requisition, assigned recruiters, and candidate stages.',
+    purpose: 'Provides complete visibility into a requisition’s candidate funnel, hiring manager notes, and job specifications.',
+    steps: [
+      {
+        number: 1,
+        title: 'Review Position Specifications',
+        description: 'Verify required clinical certifications (e.g. Saudi Board, Arab Board, MRCP), minimum years of experience, and salary band.',
+      },
+      {
+        number: 2,
+        title: 'Examine Pipeline Funnel',
+        description: 'See how many doctors or nurses are in Screening, Interview, Offer, and Pre-Hire.',
+      },
+      {
+        number: 3,
+        title: 'Manage Team Assignments',
+        description: 'See which hiring managers, medical directors, and interviewers are assigned to this opening.',
+      },
+    ],
+    hardPartCaution: {
+      title: 'Junior Guardrail: Check License Mandates',
+      description: 'Review the required clinical licensing level before screening CVs. For example, a Consultant role requires 3+ years post-Doctorate/Fellowship under SCFHS guidelines.',
+      severity: 'warning',
+    },
+  },
+  {
+    id: 'vacancy-requests',
+    routePattern: '^/vacancy-requests(/.*)?$',
+    title: 'Headcount Requests & Budget Approvals',
+    category: 'Governance',
+    oneLiner: 'Internal requisition workflow for requesting new or replacement hospital headcount.',
+    purpose: 'Manages the multi-stage approval chain (Department Head -> HR Director -> Finance -> CEO) required before a position can be actively recruited.',
+    steps: [
+      {
+        number: 1,
+        title: 'Submit or Review Justification',
+        description: 'Ensure the requisition includes clinical patient load data, bed expansion justification, or replacement details.',
+      },
+      {
+        number: 2,
+        title: 'Verify Budget & Grade Band',
+        description: 'Confirm the requested salary range aligns with SGH clinical compensation bands.',
+      },
+      {
+        number: 3,
+        title: 'Track Approval Status',
+        description: 'Monitor pending approvals to prompt department heads or finance directors.',
+      },
+    ],
+    hardPartCaution: {
+      title: 'Junior Guardrail: Never Pre-Sponsor Before Approval',
+      description: 'Do not make verbal offers or issue job invitations to overseas doctors until the Vacancy Request achieves "Approved" status in this registry.',
+      severity: 'critical',
+    },
+  },
+  {
+    id: 'cv-intake',
+    routePattern: '^/cv-intake$',
+    title: 'Smart CV Intake & Entity Extraction Studio',
+    category: 'Sourcing & Ingestion',
+    oneLiner: 'AI-assisted resume parsing, duplicate identity resolution, and direct vacancy assignment.',
+    purpose: 'Ingests PDF/Word CVs, automatically parses candidate details (experience, education, contact info), resolves identity duplicates, and registers candidates.',
+    steps: [
+      {
+        number: 1,
+        title: 'Upload or Drop CV Document',
+        description: 'Drag and drop candidate CVs or select a preset demo profile to trigger automated entity parsing.',
+        actionHint: 'Use the dropzone in Step 1.',
+      },
+      {
+        number: 2,
+        title: 'Review & Verify Parsed Metadata',
+        description: 'Double check extracted names, email, phone number (+966 for Saudi), and clinical skills tags.',
+        actionHint: 'Edit fields directly in the Step 2 editor card.',
+      },
+      {
+        number: 3,
+        title: 'Resolve Duplicate Identity Conflicts',
+        description: 'If the system detects an existing candidate with matching email/phone, select whether to Update Profile, Create New, or Link Application.',
+        actionHint: 'Choose your resolution radio option in Step 3.',
+      },
+      {
+        number: 4,
+        title: 'Assign Vacancy & Pipeline Stage',
+        description: 'Select the target job opening and initial stage (Screening or Interview) to finalize ingestion.',
+      },
+    ],
+    hardPartCaution: {
+      title: 'Junior Guardrail: Prevent Blind Profile Merging',
+      description: 'When an email match is detected, do not blindly choose "Update Existing Profile" if you are unsure. Selecting "Update" may overwrite previous clinical interview ratings or verified documents from prior years.',
+      severity: 'critical',
+    },
+    keyTerms: [
+      { term: 'Duplicate Resolution', definition: 'System decision determining whether an uploaded CV updates an existing database profile or creates a fresh identity.' },
+      { term: 'Candidate Code', definition: 'Unique hospital identifier (e.g. CMD-SGH-012) assigned to each healthcare professional.' },
+    ],
+    proTips: [
+      'For doctor profiles, ensure the Sub-Specialty is tagged (e.g. "Interventional Cardiology" rather than just "Internal Medicine").',
+    ],
+  },
+  {
+    id: 'applications',
+    routePattern: '^/applications$',
+    title: 'Applications Pipeline & Stage Kanban',
+    category: 'Pipeline Management',
+    oneLiner: 'Visual Kanban board and list view of all active applicants moving through recruitment stages.',
+    purpose: 'Allows recruiters to track applicants from Applied through Screening, Interview, Offer, Pre-Hire, and Joined.',
+    steps: [
+      {
+        number: 1,
+        title: 'Toggle Between Kanban & List View',
+        description: 'Use Kanban for drag-and-drop stage progression; use List view for bulk screening and sorting.',
+        actionHint: 'Switch view mode via the top right toggles.',
+      },
+      {
+        number: 2,
+        title: 'Filter by Position & Recruiter',
+        description: 'Select specific job positions to focus on your assigned requisitions and eliminate noise.',
+        actionHint: 'Use the Position dropdown filter.',
+      },
+      {
+        number: 3,
+        title: 'Advance or Reject Candidates',
+        description: 'Drag candidate cards to advance stages, or click an application card to open their 360 evaluation dossier.',
+      },
+    ],
+    hardPartCaution: {
+      title: 'Junior Guardrail: Optimistic Locking & Conflicts',
+      description: 'If another recruiter updates an application simultaneously, you will see a "Version Conflict" alert. The system prevents silent data overwrites. Simply refresh to sync with server truth.',
+      severity: 'info',
+    },
+    keyTerms: [
+      { term: 'Optimistic Locking', definition: 'A safety mechanism preventing two recruiters from accidentally overwriting candidate stages at the same time.' },
+      { term: 'Terminal Stage', definition: 'The final state of an application: "Joined", "Rejected", or "Withdrawn".' },
+    ],
+  },
+  {
+    id: 'application-detail',
+    routePattern: '^/applications/[^/]+$',
+    title: 'Candidate Application 360 Dossier',
+    category: 'Evaluation & Screening',
+    oneLiner: 'Unified candidate profile, clinical qualifications, interview scorecards, and stage transition controls.',
+    purpose: 'The central workbench for screening a specific applicant, reviewing AI match scores, scheduling interviews, logging notes, and issuing offers.',
+    steps: [
+      {
+        number: 1,
+        title: 'Review Match Grade & Clinical Skills',
+        description: 'Check the AI Match Score, extracted clinical competencies, and verified hospital experience.',
+      },
+      {
+        number: 2,
+        title: 'Verify Regulatory & SCFHS Eligibility',
+        description: 'Inspect licensing status (Saudi Commission for Health Specialties) and DataFlow primary source verification.',
+      },
+      {
+        number: 3,
+        title: 'Schedule Interview or Advance Stage',
+        description: 'Use the Smart Action Bar at the top or the Schedule Interview button to set up panel evaluations.',
+      },
+      {
+        number: 4,
+        title: 'Log Internal Team Notes',
+        description: 'Record screening call observations and tag team members using @mentions in the Notes tab.',
+      },
+    ],
+    hardPartCaution: {
+      title: 'Junior Guardrail: AI Match vs. Regulatory Reality',
+      description: 'A 95% AI Match Score reflects resume keyword alignment, NOT clinical license legality. Always verify SCFHS eligibility before scheduling an expensive panel interview with senior medical directors.',
+      severity: 'critical',
+    },
+    keyTerms: [
+      { term: 'SCFHS', definition: 'Saudi Commission for Health Specialties — the mandatory licensing authority for all medical practitioners in KSA.' },
+      { term: 'Scorecard', definition: 'Structured evaluation submitted by physicians evaluating clinical competence.' },
+    ],
+  },
+  {
+    id: 'interviews',
+    routePattern: '^/interviews(/.*)?$',
+    title: 'Interviews Hub & Clinical Panel Coordination',
+    category: 'Interview Coordination',
+    oneLiner: 'Agenda, scheduling, and scorecard tracking for medical and administrative interviews.',
+    purpose: 'Organizes panel interviews between candidates and hospital department heads, ensuring structured scorecards are submitted.',
+    steps: [
+      {
+        number: 1,
+        title: 'Review Upcoming Panel Rounds',
+        description: 'Check today’s upcoming interviews, meeting links (MS Teams / Boardroom), and assigned panel members.',
+      },
+      {
+        number: 2,
+        title: 'Track Scorecard Completion',
+        description: 'Identify interviews marked "Completed" where physicians have not yet submitted their rating scorecards.',
+        actionHint: 'Filter by "Pending Scorecard".',
+      },
+      {
+        number: 3,
+        title: 'Follow Up with Hiring Managers',
+        description: 'Send reminders to panel members to lock their scorecards within 24 hours of interview conclusion.',
+      },
+    ],
+    hardPartCaution: {
+      title: 'Junior Guardrail: Physician Clinic & Surgery Schedules',
+      description: 'Consultant doctors and surgeons have fixed clinic hours, on-call duties, and surgical operating blocks. Confirm availability with the department coordinator before booking an interview datetime.',
+      severity: 'warning',
+    },
+    keyTerms: [
+      { term: 'Scorecard Lock', definition: 'Once submitted by an interviewer, ratings are locked to ensure tamper-proof evaluation integrity.' },
+      { term: 'Panel Round', definition: 'A multi-interviewer session including the Medical Director, Head of Dept, and HR.' },
+    ],
+  },
+  {
+    id: 'candidate-comparison',
+    routePattern: '^/candidates/compare$',
+    title: 'Candidate Evaluation & Scorecard Matrix',
+    category: 'Evaluation & Screening',
+    oneLiner: 'Side-by-side comparison matrix comparing finalist applicants across skills, ratings, and recommendations.',
+    purpose: 'Helps recruiters and hiring managers make objective, evidence-based hiring decisions by contrasting top candidates.',
+    steps: [
+      {
+        number: 1,
+        title: 'Select Job Position',
+        description: 'Choose the vacancy you are recruiting for from the top dropdown selector.',
+      },
+      {
+        number: 2,
+        title: 'Compare Technical & Clinical Ratings',
+        description: 'Examine doctor evaluations side-by-side: Technical Skills, Communication, Teamwork, and Medical Knowledge.',
+      },
+      {
+        number: 3,
+        title: 'Balance Algorithm vs. Human Evaluation',
+        description: 'Synthesize the algorithmic match score with qualitative panel scorecard feedback.',
+      },
+      {
+        number: 4,
+        title: 'Formulate Final Recommendation',
+        description: 'Identify the top-ranked candidate and proceed directly to "Create Offer".',
+      },
+    ],
+    hardPartCaution: {
+      title: 'Junior Guardrail: Scorecard Trumps Algorithm',
+      description: 'If Candidate A has a higher match score (e.g. 94%) but Candidate B received a higher rating from the Clinical Director (4.8 vs 3.2), prioritize the Clinical Director’s expert evaluation.',
+      severity: 'warning',
+    },
+  },
+  {
+    id: 'offers',
+    routePattern: '^/offers$',
+    title: 'Offers Registry & Contract Approvals',
+    category: 'Offer & Compensation',
+    oneLiner: 'Central registry of all employment offers, executive approvals, and candidate acceptances.',
+    purpose: 'Tracks the offer lifecycle from initial draft compensation package through CEO approval, candidate signature, and onboarding handoff.',
+    steps: [
+      {
+        number: 1,
+        title: 'Monitor Offer Approval Statuses',
+        description: 'Filter offers by status: Draft, In Approval, Sent to Candidate, Accepted, or Declined.',
+      },
+      {
+        number: 2,
+        title: 'Check Expiring Offers',
+        description: 'Identify candidates whose offer letters expire within 48 hours and follow up directly.',
+      },
+      {
+        number: 3,
+        title: 'Bridge Accepted Offers to Pre-Hire',
+        description: 'Once a candidate accepts and signs, click to generate a Hiring Case for onboarding and credentialing.',
+      },
+    ],
+    hardPartCaution: {
+      title: 'Junior Guardrail: Executive Approval Gate',
+      description: 'Never email or send an offer letter directly to a candidate until all required digital signatures (HR Director, Finance, Hospital Director) are complete.',
+      severity: 'critical',
+    },
+  },
+  {
+    id: 'create-offer',
+    routePattern: '^/offers/create$',
+    title: 'Saudi Compensation & Offer Builder',
+    category: 'Offer & Compensation',
+    oneLiner: 'Formulate compliant compensation packages, allowance breakdowns, and contract terms.',
+    purpose: 'Builds legally binding employment offers structured according to Saudi Labor Law and hospital compensation bands.',
+    steps: [
+      {
+        number: 1,
+        title: 'Select Approved Applicant',
+        description: 'Pick the applicant from the dropdown or verify pre-selected candidate information.',
+      },
+      {
+        number: 2,
+        title: 'Structure the Saudi Package (SAR)',
+        description: 'Divide gross monthly salary into Basic Salary (standard 60-65%), Housing Allowance (25%), and Transportation Allowance (10%).',
+      },
+      {
+        number: 3,
+        title: 'Verify Currency is SAR (Saudi Riyal)',
+        description: 'Ensure all component line items use SAR currency to avoid multi-currency computation errors.',
+      },
+      {
+        number: 4,
+        title: 'Set Terms, Probation & Joining Date',
+        description: 'Specify standard probation (90 or 180 days max under Saudi Labor Law) and proposed joining date.',
+      },
+      {
+        number: 5,
+        title: 'Submit for Executive Routing',
+        description: 'Send the structured offer package into the approval inbox.',
+      },
+    ],
+    hardPartCaution: {
+      title: 'Junior Guardrail: Saudi Salary Breakdown Math',
+      description: 'Saudi Labor Law calculates End of Service Benefits (EOSB) and overtime strictly from the Basic Salary, while GOSI calculates from Basic + Housing. Splitting gross salary incorrectly creates legal liabilities.',
+      severity: 'critical',
+    },
+    keyTerms: [
+      { term: 'Basic Salary', definition: 'Core contractual salary (typically 60-65% of total gross package in Saudi Arabia).' },
+      { term: 'Housing Allowance', definition: 'Standard 25% allowance (or equivalent to 3 months basic salary divided by 12).' },
+      { term: 'GOSI', definition: 'General Organization for Social Insurance — social insurance contributions mandatory in Saudi Arabia.' },
+    ],
+  },
+  {
+    id: 'hiring-case',
+    routePattern: '^/hires/[^/]+$',
+    title: 'Pre-Hire Onboarding & Healthcare Credentialing',
+    category: 'Credentialing & Joining',
+    oneLiner: 'Verification of clinical licenses, DataFlow background checks, and official first-day joining.',
+    purpose: 'Enforces medical and regulatory compliance before a new healthcare employee reports for work and atomically closes vacancy headcount.',
+    steps: [
+      {
+        number: 1,
+        title: 'Verify DataFlow Primary Source Verification',
+        description: 'Confirm overseas medical degrees and past hospital service letters have been authenticated by DataFlow.',
+      },
+      {
+        number: 2,
+        title: 'Validate SCFHS Mumaris+ Registration',
+        description: 'Ensure the practitioner has an active Saudi Commission classification license appropriate for their clinical title.',
+      },
+      {
+        number: 3,
+        title: 'Complete Medical Fitness & Visa Clearance',
+        description: 'Verify Iqama transfer (for inside KSA) or Work Visa stamping (outside KSA) plus occupational health screening.',
+      },
+      {
+        number: 4,
+        title: 'Execute "Confirm Joining" Ceremony',
+        description: 'Once all compliance items are verified and the candidate reports on their first day, confirm joining to atomically increment vacancy filled headcount.',
+      },
+    ],
+    hardPartCaution: {
+      title: 'Junior Guardrail: Never Confirm Joining Prematurely!',
+      description: 'CRITICAL: In Saudi healthcare, permitting a physician or nurse to report as "Joined" without verified SCFHS registration and medical clearance carries severe Ministry of Health (MOH) penalties and invalidates malpractice coverage.',
+      severity: 'critical',
+    },
+    keyTerms: [
+      { term: 'DataFlow', definition: 'Global primary source verification verifying medical diplomas, transcripts, and licenses directly with issuing institutions.' },
+      { term: 'Mumaris+', definition: 'The official SCFHS portal managing healthcare practitioner classification and licensing in Saudi Arabia.' },
+    ],
+  },
+  {
+    id: 'candidates',
+    routePattern: '^/candidates(/.*)?$',
+    title: 'Hospital Talent Repository & Candidate Directory',
+    category: 'Talent Management',
+    oneLiner: 'Searchable master database of all historical and active healthcare candidates.',
+    purpose: 'Allows recruiters to search across thousands of doctor and nurse profiles, view historical applications, and redispatch talent.',
+    steps: [
+      {
+        number: 1,
+        title: 'Search by Specialty & Keywords',
+        description: 'Search for clinical skills, certifications (e.g. BLS, ACLS, ATLS), or candidate codes (CMD-SGH-XXX).',
+      },
+      {
+        number: 2,
+        title: 'Inspect Candidate 360 History',
+        description: 'Review past applications, interview notes, and previous rejection reasons across all hospital branches.',
+      },
+      {
+        number: 3,
+        title: 'Add to Talent Pool or Re-engage',
+        description: 'Link promising silver-medalist candidates directly to newly approved vacancies.',
+      },
+    ],
+    hardPartCaution: {
+      title: 'Junior Guardrail: Check Candidate History',
+      description: 'Always check previous application history before re-contacting a candidate to verify they were not previously rejected for clinical malpractice or falsified documents.',
+      severity: 'warning',
+    },
+  },
+  {
+    id: 'cv-bank',
+    routePattern: '^/cv-bank$',
+    title: 'CV Bank & Talent Sourcing Archive',
+    category: 'Talent Sourcing',
+    oneLiner: 'Search and mine historical resumes and uploaded CV documents.',
+    purpose: 'Enables proactive candidate sourcing from the hospital’s internal resume vault to reduce agency spend and time-to-hire.',
+    steps: [
+      {
+        number: 1,
+        title: 'Query by Specialty & Experience',
+        description: 'Filter resumes by medical subspecialty, years of clinical practice, and language skills.',
+      },
+      {
+        number: 2,
+        title: 'Preview Extracted Resume Snippets',
+        description: 'Review parsed summary text and original CV documents without downloading files.',
+      },
+      {
+        number: 3,
+        title: 'Direct Link to Open Vacancies',
+        description: 'Assign matched CVs directly into active vacancy pipelines.',
+      },
+    ],
+    hardPartCaution: {
+      title: 'Junior Guardrail: Verify License Recency',
+      description: 'Resumes in the CV Bank may be over a year old. When reaching out, always ask for an updated CV and current SCFHS Mumaris+ registration status.',
+      severity: 'info',
+    },
+  },
+  {
+    id: 'reports',
+    routePattern: '^/reports(/.*)?$',
+    title: 'Recruitment Analytics & Velocity Reports',
+    category: 'Reporting & KPIs',
+    oneLiner: 'Executive recruitment metrics, time-to-fill analytics, and pipeline conversion rates.',
+    purpose: 'Empowers recruiting leadership and management to track hiring velocity, identify interview bottlenecks, and optimize sourcing channels.',
+    steps: [
+      {
+        number: 1,
+        title: 'Analyze Time-to-Fill by Department',
+        description: 'Identify specialties with longer hiring cycles (e.g. Rare Sub-Specialty Consultants vs Registered Nurses).',
+      },
+      {
+        number: 2,
+        title: 'Inspect Stage Bottlenecks',
+        description: 'Detect where candidates spend the most days (Screening, Interview scheduling, or Executive approvals).',
+      },
+      {
+        number: 3,
+        title: 'Evaluate Sourcing Channels',
+        description: 'Compare hire quality across Direct Ingestion, Hospital Career Portal, and Medical Recruitment Agencies.',
+      },
+    ],
+    hardPartCaution: {
+      title: 'Junior Guardrail: Stage Hygiene',
+      description: 'Ensure you close out rejected or withdrawn candidates promptly. Stale applications in intermediate stages distort hospital-wide SLA reports.',
+      severity: 'info',
+    },
+  },
+];
+
+// Fallback guide for generic/unlisted pages
+export const DEFAULT_PAGE_GUIDE: PageGuide = {
+  id: 'generic',
+  routePattern: '.*',
+  title: 'Saudi German Health • ATS Navigation Guide',
+  category: 'General',
+  oneLiner: 'Standard operational workbench for healthcare recruitment and talent management.',
+  purpose: 'Enables hospital talent acquisition professionals to execute clinical staffing workflows with accuracy and compliance.',
+  steps: [
+    {
+      number: 1,
+      title: 'Check Header Controls & Actions',
+      description: 'Review primary actions in the top right header (Create, Filter, Export, or Search).',
+    },
+    {
+      number: 2,
+      title: 'Use Universal Search (⌘K)',
+      description: 'Quickly find any job position, doctor, or applicant across all branches using keyboard shortcuts.',
+    },
+    {
+      number: 3,
+      title: 'Consult SGH Recruitment Guidelines',
+      description: 'Ensure compliance with Saudi Labor Law and SCFHS healthcare licensing standards.',
+    },
+  ],
+  hardPartCaution: {
+    title: 'Recruiter Best Practice',
+    description: 'When in doubt regarding clinical eligibility or compensation bands, consult your Senior Talent Acquisition Manager before finalizing stage movements.',
+    severity: 'info',
+  },
+  proTips: [
+    'Use the breadcrumbs bar at the top to navigate back to parent dashboards.',
+    'You can reopen this Quick Guide at any time by clicking "💡 Quick Learn" in the page header.',
+  ],
+};
+
+/**
+ * Resolves the appropriate PageGuide based on the current window pathname.
+ */
+export function getPageGuideForPath(pathname: string): PageGuide {
+  // Normalize path by stripping query params and trailing slash
+  const cleanPath = pathname.split('?')[0].replace(/\/$/, '') || '/';
+
+  for (const guide of PAGE_GUIDES) {
+    const regex = new RegExp(guide.routePattern);
+    if (regex.test(cleanPath)) {
+      return guide;
+    }
+  }
+
+  return DEFAULT_PAGE_GUIDE;
+}

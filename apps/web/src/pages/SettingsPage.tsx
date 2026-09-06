@@ -333,16 +333,10 @@ export function SettingsPage() {
 
   return (
     <div className="flex w-full flex-col p-4 sm:p-6 lg:p-7 max-w-[1720px] mx-auto space-y-6">
-      {/* ── Breadcrumbs & Top Action Bar ── */}
+      {/* ── Top Action Bar ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="text-xs font-semibold text-slate-400">
-            <span>Settings</span>
-            <span className="mx-2">/</span>
-            <span className="text-slate-900 dark:text-white font-bold">Recruitment Settings & Governance</span>
-          </div>
-
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight mt-1">
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
             Recruitment Settings
           </h1>
 

@@ -49,6 +49,7 @@ export function ManagerDashboard() {
   const [activityType, setActivityType] = useState('Call');
   const [activityDueDate, setActivityDueDate] = useState(new Date().toISOString().slice(0, 10));
   const [activitySummary, setActivitySummary] = useState('');
+  const [isSchedulingActivity, setIsSchedulingActivity] = useState(false);
 
   // Target Velocity Period Toggle
   const [targetPeriod, setTargetPeriod] = useState<'daily' | 'monthly'>('daily');
@@ -66,12 +67,28 @@ export function ManagerDashboard() {
   const [isAssigning, setIsAssigning] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
+  const userRoleCodes = useMemo(() => {
+    return (user?.roles || []).map((r) => ((r.code || r.name || '').toUpperCase()));
+  }, [user]);
+
+  const isManagerOrAdmin = useMemo(() => {
+    const managerRoles = ['ADMIN', 'SYSADMIN', 'ADMINISTRATOR', 'HIRING_MANAGER', 'TALENT_MANAGER', 'HR_MANAGER'];
+    return (
+      userRoleCodes.some((code) => managerRoles.includes(code)) ||
+      Boolean(user?.permissions?.includes('VACANCY_MANAGE'))
+    );
+  }, [userRoleCodes, user?.permissions]);
+
   const showToast = (msg: string) => {
     setToastMsg(msg);
     setTimeout(() => setToastMsg(null), 3500);
   };
 
   const openAssignModalForVacancy = (vacId?: string) => {
+    if (!isManagerOrAdmin) {
+      showToast('Recruiters are not authorized to assign or reassign tasks.');
+      return;
+    }
     if (vacId) {
       setSelectedVacancyId(vacId);
       const found = openVacanciesList.find((v) => v.id === vacId);
@@ -84,6 +101,10 @@ export function ManagerDashboard() {
 
   const handleAssignTaskSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isManagerOrAdmin) {
+      showToast('Recruiters are not authorized to assign or reassign tasks.');
+      return;
+    }
     const vacancy = openVacanciesList.find((v) => v.id === selectedVacancyId) || openVacanciesList[0];
     const recruiter = recruiterOptions.find((r) => r.id === selectedRecruiterId) || recruiterOptions[0];
 
@@ -120,8 +141,33 @@ export function ManagerDashboard() {
       );
       setIsAssignTaskModalOpen(false);
       setTaskInstructions('');
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : 'Failed to assign target task');
     } finally {
       setIsAssigning(false);
+    }
+  };
+
+  const handleScheduleActivitySubmit = async () => {
+    if (!activitySummary.trim() || !user?.id) return;
+    setIsSchedulingActivity(true);
+    try {
+      const dueIso = new Date(activityDueDate).toISOString();
+      await postApi('/tasks', {
+        assigneeUserId: user.id,
+        type: activityType,
+        title: activitySummary.trim(),
+        priority: 'Normal',
+        dueAt: dueIso,
+      });
+      showToast(`✓ Scheduled ${activityType}: "${activitySummary.trim()}"`);
+      setIsActivityModalOpen(false);
+      setActivitySummary('');
+      void loadData();
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : 'Failed to schedule activity');
+    } finally {
+      setIsSchedulingActivity(false);
     }
   };
 
@@ -274,14 +320,16 @@ export function ManagerDashboard() {
             <Icon name="users" size={14} className="text-slate-500" />
           </button>
 
-          <button
-            type="button"
-            onClick={() => openAssignModalForVacancy()}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
-          >
-            <Icon name="check-circle" size={14} />
-            <span>Assign Vacancy &amp; Target</span>
-          </button>
+          {isManagerOrAdmin && (
+            <button
+              type="button"
+              onClick={() => openAssignModalForVacancy()}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+            >
+              <Icon name="check-circle" size={14} />
+              <span>Assign Vacancy &amp; Target</span>
+            </button>
+          )}
 
           <button
             type="button"
@@ -299,7 +347,7 @@ export function ManagerDashboard() {
         {/* Card 1: Interviews */}
         <div
           onClick={() => navigate('/interviews')}
-          className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs hover:shadow-md transition cursor-pointer flex items-center justify-between group"
+          className="card-glow rounded-2xl p-4 sm:p-5 cursor-pointer flex items-center justify-between group"
         >
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
@@ -319,7 +367,7 @@ export function ManagerDashboard() {
         {/* Card 2: Applications to Review */}
         <div
           onClick={() => navigate('/applications')}
-          className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs hover:shadow-md transition cursor-pointer flex items-center justify-between group"
+          className="card-glow rounded-2xl p-4 sm:p-5 cursor-pointer flex items-center justify-between group"
         >
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
@@ -339,7 +387,7 @@ export function ManagerDashboard() {
         {/* Card 3: Offers to Approve */}
         <div
           onClick={() => navigate('/offers')}
-          className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs hover:shadow-md transition cursor-pointer flex items-center justify-between group"
+          className="card-glow rounded-2xl p-4 sm:p-5 cursor-pointer flex items-center justify-between group"
         >
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
@@ -359,7 +407,7 @@ export function ManagerDashboard() {
         {/* Card 4: Tasks Due */}
         <div
           onClick={() => navigate('/tasks')}
-          className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs hover:shadow-md transition cursor-pointer flex items-center justify-between group"
+          className="card-glow rounded-2xl p-4 sm:p-5 cursor-pointer flex items-center justify-between group"
         >
           <div className="flex items-center gap-4">
             <div className="w-12 h-12 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
@@ -428,14 +476,16 @@ export function ManagerDashboard() {
               </button>
             </div>
 
-            <button
-              type="button"
-              onClick={() => openAssignModalForVacancy()}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
-            >
-              <Icon name="plus" size={13} />
-              <span>Set Vacancy Target</span>
-            </button>
+            {isManagerOrAdmin && (
+              <button
+                type="button"
+                onClick={() => openAssignModalForVacancy()}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+              >
+                <Icon name="plus" size={13} />
+                <span>Set Vacancy Target</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -443,7 +493,7 @@ export function ManagerDashboard() {
         {targetPeriod === 'daily' ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-1">
             {/* Metric 1: Screened */}
-            <div className="p-3.5 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/60 space-y-2">
+            <div className="p-3.5 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/60 h-[105px] flex flex-col justify-between">
               <div className="flex items-center justify-between text-xs font-semibold">
                 <span className="text-slate-500 dark:text-slate-400">Candidates Screened</span>
                 <span className="font-extrabold text-slate-900 dark:text-white">
@@ -467,7 +517,7 @@ export function ManagerDashboard() {
             </div>
 
             {/* Metric 2: Interviews */}
-            <div className="p-3.5 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/60 space-y-2">
+            <div className="p-3.5 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/60 h-[105px] flex flex-col justify-between">
               <div className="flex items-center justify-between text-xs font-semibold">
                 <span className="text-slate-500 dark:text-slate-400">Interviews Conducted</span>
                 <span className="font-extrabold text-slate-900 dark:text-white">
@@ -491,7 +541,7 @@ export function ManagerDashboard() {
             </div>
 
             {/* Metric 3: Offers */}
-            <div className="p-3.5 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/60 space-y-2">
+            <div className="p-3.5 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/60 h-[105px] flex flex-col justify-between">
               <div className="flex items-center justify-between text-xs font-semibold">
                 <span className="text-slate-500 dark:text-slate-400">Offers Prepared</span>
                 <span className="font-extrabold text-emerald-600 dark:text-emerald-400">
@@ -513,7 +563,7 @@ export function ManagerDashboard() {
             </div>
 
             {/* Metric 4: Time to Fill */}
-            <div className="p-3.5 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/60 space-y-2">
+            <div className="p-3.5 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/60 h-[105px] flex flex-col justify-between">
               <div className="flex items-center justify-between text-xs font-semibold">
                 <span className="text-slate-500 dark:text-slate-400">Time-to-Fill Pace</span>
                 <span className="font-extrabold text-slate-900 dark:text-white">
@@ -532,7 +582,7 @@ export function ManagerDashboard() {
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-1">
             {/* Monthly Metric 1 */}
-            <div className="p-3.5 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/60 space-y-2">
+            <div className="p-3.5 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/60 h-[105px] flex flex-col justify-between">
               <div className="flex items-center justify-between text-xs font-semibold">
                 <span className="text-slate-500 dark:text-slate-400">Total Joined Headcount</span>
                 <span className="font-extrabold text-slate-900 dark:text-white">{joinedCount}</span>
@@ -547,7 +597,7 @@ export function ManagerDashboard() {
             </div>
 
             {/* Monthly Metric 2 */}
-            <div className="p-3.5 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/60 space-y-2">
+            <div className="p-3.5 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/60 h-[105px] flex flex-col justify-between">
               <div className="flex items-center justify-between text-xs font-semibold">
                 <span className="text-slate-500 dark:text-slate-400">Total Applicants</span>
                 <span className="font-extrabold text-slate-900 dark:text-white">{applications.length}</span>
@@ -562,7 +612,7 @@ export function ManagerDashboard() {
             </div>
 
             {/* Monthly Metric 3 */}
-            <div className="p-3.5 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/60 space-y-2">
+            <div className="p-3.5 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/60 h-[105px] flex flex-col justify-between">
               <div className="flex items-center justify-between text-xs font-semibold">
                 <span className="text-slate-500 dark:text-slate-400">Offer Acceptance Rate</span>
                 <span className="font-extrabold text-emerald-600 dark:text-emerald-400">
@@ -582,7 +632,7 @@ export function ManagerDashboard() {
             </div>
 
             {/* Monthly Metric 4 */}
-            <div className="p-3.5 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/60 space-y-2">
+            <div className="p-3.5 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-700/60 h-[105px] flex flex-col justify-between">
               <div className="flex items-center justify-between text-xs font-semibold">
                 <span className="text-slate-500 dark:text-slate-400">Avg Time-to-Offer</span>
                 <span className="font-extrabold text-purple-600 dark:text-purple-400">
@@ -604,7 +654,7 @@ export function ManagerDashboard() {
       {/* ── Middle Row: 2 Big Columns (My Priorities & Open Jobs) ── */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left Column: My Priorities (6 cols) */}
-        <div className="lg:col-span-6 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-4">
+        <div className="lg:col-span-6 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs min-h-[460px] flex flex-col space-y-4">
           <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
             <h2 className="text-base font-extrabold text-slate-900 dark:text-white tracking-tight">
               My Priorities
@@ -671,7 +721,7 @@ export function ManagerDashboard() {
         </div>
 
         {/* Right Column: Open Jobs (You Own) (6 cols) */}
-        <div className="lg:col-span-6 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-4">
+        <div className="lg:col-span-6 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs min-h-[460px] flex flex-col space-y-4">
           <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
             <h2 className="text-base font-extrabold text-slate-900 dark:text-white tracking-tight">
               Open Jobs
@@ -718,18 +768,20 @@ export function ManagerDashboard() {
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openAssignModalForVacancy(job.id);
-                      }}
-                      className="px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 font-bold text-[11px] flex items-center gap-1 transition cursor-pointer shadow-2xs"
-                      title={`Assign or reassign ${job.title} and set targets`}
-                    >
-                      <span>🎯</span>
-                      <span>{job.currentRecruiter === 'Unassigned' ? 'Assign & Target' : 'Reassign'}</span>
-                    </button>
+                    {isManagerOrAdmin && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openAssignModalForVacancy(job.id);
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 font-bold text-[11px] flex items-center gap-1 transition cursor-pointer shadow-2xs"
+                        title={`Assign or reassign ${job.title} and set targets`}
+                      >
+                        <span>🎯</span>
+                        <span>{job.currentRecruiter === 'Unassigned' ? 'Assign & Target' : 'Reassign'}</span>
+                      </button>
+                    )}
                     <Icon name="chevron-right" size={16} className="text-slate-300 dark:text-slate-600 group-hover:translate-x-0.5 transition" />
                   </div>
                 </div>
@@ -742,7 +794,7 @@ export function ManagerDashboard() {
       {/* ── Bottom Row: 3 Columns (Upcoming Interviews, Recent Activity, Quick Actions) ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Column 1: Upcoming Interviews */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs flex flex-col justify-between space-y-4">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs min-h-[380px] flex flex-col justify-between space-y-4">
           <div>
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 mb-3">
               <h2 className="text-base font-extrabold text-slate-900 dark:text-white tracking-tight">
@@ -807,7 +859,7 @@ export function ManagerDashboard() {
         </div>
 
         {/* Column 2: Recent Activity */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-4">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs min-h-[380px] flex flex-col justify-between space-y-4">
           <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
             <h2 className="text-base font-extrabold text-slate-900 dark:text-white tracking-tight">
               Recent Activity
@@ -857,7 +909,7 @@ export function ManagerDashboard() {
         </div>
 
         {/* Column 3: Quick Actions */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-4">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs min-h-[380px] flex flex-col justify-between space-y-4">
           <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
             <h2 className="text-base font-extrabold text-slate-900 dark:text-white tracking-tight">
               Quick Actions
@@ -1017,20 +1069,16 @@ export function ManagerDashboard() {
           </div>
 
           <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
-            <Button variant="ghost" size="sm" onClick={() => setIsActivityModalOpen(false)}>
+            <Button variant="ghost" size="sm" onClick={() => setIsActivityModalOpen(false)} disabled={isSchedulingActivity}>
               Cancel
             </Button>
             <Button
               variant="primary"
               size="sm"
-              onClick={() => {
-                setIsActivityModalOpen(false);
-                setActivitySummary('');
-                showToast(`✓ Scheduled ${activityType}: "${activitySummary}"`);
-              }}
-              disabled={!activitySummary.trim()}
+              onClick={() => void handleScheduleActivitySubmit()}
+              disabled={!activitySummary.trim() || isSchedulingActivity}
             >
-              Schedule
+              {isSchedulingActivity ? 'Scheduling...' : 'Schedule'}
             </Button>
           </div>
         </div>
@@ -1038,7 +1086,7 @@ export function ManagerDashboard() {
 
       {/* Assign Open Vacancy & Target Modal */}
       <Modal
-        isOpen={isAssignTaskModalOpen}
+        isOpen={isAssignTaskModalOpen && isManagerOrAdmin}
         onClose={() => setIsAssignTaskModalOpen(false)}
         title="Assign Open Vacancy & Target to Recruiter"
         maxWidthClass="max-w-lg"

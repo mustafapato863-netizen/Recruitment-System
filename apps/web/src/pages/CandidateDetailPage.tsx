@@ -38,6 +38,7 @@ import type {
   Vacancy,
   PaginatedResult,
 } from '@recruitflow/contracts';
+import { useSetBreadcrumbTitle } from '../context/BreadcrumbContext';
 import './PageEnhancementsV2.css';
 
 type TabKey = 'overview' | 'applications' | 'interviews' | 'offers' | 'timeline';
@@ -50,6 +51,12 @@ export function CandidateDetailPage() {
   const [candidate, setCandidate] = useState<Candidate | null>(null);
   const [candidateLoading, setCandidateLoading] = useState(true);
   const [candidateError, setCandidateError] = useState<string | null>(null);
+
+  const candidateDisplayName = candidate
+    ? [candidate.firstName, candidate.lastName].filter(Boolean).join(' ').trim() || 'Candidate'
+    : 'Candidate';
+
+  useSetBreadcrumbTitle(candidateDisplayName !== 'Candidate' ? `${candidateDisplayName} (360° Profile)` : 'Candidate 360° Profile');
 
   // Sub-resource states per tab
   const [applications, setApplications] = useState<Application[]>([]);
@@ -433,7 +440,7 @@ export function CandidateDetailPage() {
 
   return (
     <PageFrame
-      eyebrow={`Talent / Candidates / ${candidate.candidateCode || ''}`}
+      eyebrow={`Candidate 360° Profile • ${candidate.candidateCode || ''}`}
       title={fullName}
       description={
         candidate.currentTitle
@@ -442,6 +449,10 @@ export function CandidateDetailPage() {
       }
       actions={
         <>
+          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-black bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-800">
+            <Icon name="user" size={12} />
+            <span>Candidate 360°</span>
+          </span>
           <StatusBadge status={candidate.status} />
           <Button variant="primary" size="sm" onClick={() => setIsApplyModalOpen(true)}>
             <Icon name="plus" size={13} />

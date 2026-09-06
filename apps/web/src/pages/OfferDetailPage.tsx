@@ -8,6 +8,7 @@ import { Button } from '../components/ui/Button';
 import { Alert } from '../components/ui/Alert';
 import { PageState } from '../components/ui/PageState';
 import { useAuth } from '../auth/AuthContext';
+import { useSetBreadcrumbTitle } from '../context/BreadcrumbContext';
 import './PageEnhancementsV2.css';
 
 interface HiringCaseLookup {
@@ -21,6 +22,8 @@ export function OfferDetailPage() {
   const { user } = useAuth();
   const [offer, setOffer] = useState<Offer | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  useSetBreadcrumbTitle(offer?.offerCode ? `Offer ${offer.offerCode}` : 'Offer Details');
   const [joiningCase, setJoiningCase] = useState<HiringCaseLookup | null>(null);
   const [isCheckingCase, setIsCheckingCase] = useState(false);
   const [isCreatingCase, setIsCreatingCase] = useState(false);
@@ -279,21 +282,18 @@ export function OfferDetailPage() {
 
   return (
     <div className="flex w-full flex-col p-4 sm:p-6 lg:p-7 max-w-[1720px] mx-auto space-y-6">
-      {/* ── Breadcrumbs & Top Header ── */}
+      {/* ── Top Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="text-xs font-semibold text-slate-400">
-            <span onClick={() => navigate('/offers')} className="hover:text-blue-600 cursor-pointer">
-              Offers
-            </span>
-            <span className="mx-2">/</span>
-            <span className="text-slate-900 dark:text-white font-bold">{offer.offerCode || id || '—'}</span>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3 mt-1.5">
+          <div className="flex flex-wrap items-center gap-3">
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
               Offer Detail
             </h1>
+            {offer.offerCode && (
+              <span className="text-xs font-mono font-bold text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                {offer.offerCode}
+              </span>
+            )}
             <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold flex items-center gap-1.5 ${getStatusBadge(offer.status)}`}>
               <span className="w-1.5 h-1.5 rounded-full bg-current" /> Offer {offer.status}
             </span>

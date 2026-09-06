@@ -119,3 +119,18 @@ export class CreateApplicationNoteDto {
   @MaxLength(10000)
   content!: string;
 }
+
+export class UpdateApplicationDto {
+  @IsOptional()
+  @IsUUID()
+  primaryRecruiterId?: string | null;
+
+  @IsOptional()
+  @IsUUID()
+  taskOwnerId?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  rejectionReason?: string | null;
+}

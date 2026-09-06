@@ -15,6 +15,7 @@ import { ListSkeleton } from '../components/ui/Skeleton';
 import { ActivityFeed, type FeedEntry } from '../components/candidate/ActivityFeed';
 import { JoiningChecklist, type ComplianceItem } from '../components/candidate/JoiningChecklist';
 import { useAuth } from '../auth/AuthContext';
+import { useSetBreadcrumbTitle } from '../context/BreadcrumbContext';
 import './PageEnhancementsV2.css';
 
 function getErrorMessage(error: unknown): string {
@@ -53,6 +54,12 @@ export function HiringCasePage() {
   const [error, setError] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmState>(initialConfirmState);
+
+  useSetBreadcrumbTitle(
+    hiringCase?.candidateName
+      ? `${hiringCase.candidateName} - Hire`
+      : 'Hiring Case'
+  );
 
   const userRoleCodes = user?.roles?.map((r) => r.code) ?? [];
   const canConfirmJoining = userRoleCodes.some((code) =>
@@ -379,6 +386,8 @@ export function HiringCasePage() {
               size="sm"
               loading={busyAction === 'joining'}
               loadingLabel="Confirming"
+              disabled={!isReady}
+              title={!isReady ? 'All mandatory compliance items must be verified before confirming joining' : undefined}
               onClick={triggerConfirmJoining}
             >
               <Icon name="check-circle" size={14} />
@@ -405,6 +414,12 @@ export function HiringCasePage() {
           }
         >
           {error}
+        </Alert>
+      )}
+
+      {!isReady && hiringCase.status === 'Awaiting Joining' && (
+        <Alert tone="warning" title="Clinical Compliance & Verification Gate Active">
+          Cannot confirm candidate joining: {requiredCount - verifiedCount} mandatory compliance item(s) (such as SCFHS Medical Classification or DataFlow Primary Source Verification) are still pending. In accordance with Saudi Ministry of Health regulations, clinical staff cannot commence work without full licensing clearance.
         </Alert>
       )}
 

@@ -5,12 +5,13 @@ import { Icon, type IconName } from '../components/Icon';
 import { IconButton } from '../components/ui/IconButton';
 import { CommandPalette } from '../components/ui/CommandPalette';
 import { NotificationAlertDialog } from '../components/ui/notification-alert-dialog';
-import { QuickCreateMenu } from '../components/ui/QuickCreateMenu';
 import { ThemeToggle } from '../components/ui/ThemeToggle';
 import { AtmosphericBackground } from '../components/ui/AtmosphericBackground';
 import { SghHeartSvg } from '../design-system/brand/sgh-heart-svg';
 import { UserProfileDropdown } from '../components/ui/UserProfileDropdown';
 import { BreadcrumbsBar } from '../components/ui/BreadcrumbsBar';
+import { BreadcrumbProvider } from '../context/BreadcrumbContext';
+import { QuickGuideProvider, QuickGuideModal, useQuickGuide } from '../quickguide';
 
 type NavigationItemProps = {
   label: string;
@@ -64,7 +65,7 @@ export function NavigationItem({
       title={isCollapsed ? label : undefined}
       onClick={onNavigate}
     >
-      <span className="ico"><Icon name={icon} size={18} /></span>
+      <span className="ico"><Icon name={icon} size={17} /></span>
       {!isCollapsed && (
         <span className="nav-label font-semibold text-[13.5px] leading-tight normal-case tracking-normal">{label}</span>
       )}
@@ -80,8 +81,9 @@ export function NavigationItem({
   );
 }
 
-export function AppShell() {
+export function AppShellInner() {
   const { user, logout } = useAuth();
+  const { openGuide } = useQuickGuide();
   const location = useLocation();
   const navigate = useNavigate();
   const searchTriggerRef = useRef<HTMLButtonElement>(null);
@@ -163,65 +165,7 @@ export function AppShell() {
       .substring(0, 2)
       .toUpperCase();
 
-  type RouteLabelEntry = {
-    path: string;
-    label: string;
-    parent?: string;
-  };
 
-  const routeLabels: RouteLabelEntry[] = [
-    { path: '/', label: 'Dashboard' },
-    { path: '/tasks', label: 'My Tasks', parent: 'My Work' },
-    { path: '/profile', label: 'Profile & Settings' },
-    { path: '/notifications', label: 'Notifications' },
-    { path: '/cv-intake/', label: 'Import Review', parent: 'CV Intake & Parser' },
-    { path: '/cv-intake', label: 'CV Intake & Parser', parent: 'Talent & Sourcing' },
-    { path: '/cv-bank', label: 'CV Bank', parent: 'Talent & Sourcing' },
-    { path: '/import/', label: 'Bulk Import Review', parent: 'Bulk Import Center' },
-    { path: '/import', label: 'Bulk Import Center', parent: 'Talent & Sourcing' },
-    { path: '/users', label: 'Users & Roles', parent: 'Settings & Governance' },
-    { path: '/master-data', label: 'Master Data', parent: 'Settings & Governance' },
-    { path: '/audit-log', label: 'Audit Log', parent: 'Settings & Governance' },
-    { path: '/settings/targets', label: 'Position Targets', parent: 'Settings & Governance' },
-    { path: '/vacancy-requests/create', label: 'Create Vacancy Request', parent: 'Vacancy Requests' },
-    { path: '/vacancy-requests/', label: 'Vacancy Request Detail', parent: 'Vacancy Requests' },
-    { path: '/vacancy-requests', label: 'Vacancy Requests', parent: 'My Work' },
-    { path: '/approval-inbox', label: 'Approval Inbox', parent: 'My Work' },
-    { path: '/vacancies/', label: 'Vacancy Overview', parent: 'Openings & Job Cards' },
-    { path: '/vacancies', label: 'Openings & Job Cards', parent: 'Jobs & Pipeline' },
-    { path: '/candidates/compare', label: 'Compare Candidates', parent: 'Candidates Directory' },
-    { path: '/candidates/', label: 'Candidate Profile', parent: 'Candidates Directory' },
-    { path: '/candidates', label: 'Candidates DB', parent: 'Talent & Sourcing' },
-    { path: '/portal', label: 'My Applications', parent: 'Candidate Portal' },
-    { path: '/applications/', label: 'Application Detail', parent: 'Applications Pipeline' },
-    { path: '/applications', label: 'Applications Pipeline', parent: 'Jobs & Pipeline' },
-    { path: '/offers/create', label: 'Create Offer', parent: 'Offers & Pre-Hire' },
-    { path: '/offers/approvals/inbox', label: 'Offer Approval Inbox', parent: 'Offers & Pre-Hire' },
-    { path: '/offers/', label: 'Offer Detail', parent: 'Offers & Pre-Hire' },
-    { path: '/offers', label: 'Offers & Pre-Hire', parent: 'Jobs & Pipeline' },
-    { path: '/joinings/', label: 'Joining Detail', parent: 'Joinings Management' },
-    { path: '/joinings', label: 'Joinings Management', parent: 'Jobs & Pipeline' },
-    { path: '/interviews/calendar', label: 'Interview Calendar', parent: 'Jobs & Pipeline' },
-    { path: '/interviews/', label: 'Interview Evaluation', parent: 'Interviews & Scheduling' },
-    { path: '/interviews', label: 'Interviews & Scheduling', parent: 'Jobs & Pipeline' },
-    { path: '/hires/approvals/inbox', label: 'Final Hiring Approval', parent: 'Pre-Hire & Hires' },
-    { path: '/hires/', label: 'Hiring Case', parent: 'Pre-Hire & Hires' },
-    { path: '/hires', label: 'Pre-Hire & Hires', parent: 'Jobs & Pipeline' },
-    { path: '/talent-pool/', label: 'Talent Pool Detail', parent: 'Talent Pool' },
-    { path: '/talent-pool', label: 'Talent Pool', parent: 'Talent & Sourcing' },
-    { path: '/reports', label: 'Reports & Analytics', parent: 'Insights & Performance' },
-    { path: '/pipeline-settings', label: 'Pipeline Settings', parent: 'Settings & Governance' },
-    { path: '/integrations', label: 'Integrations & API', parent: 'Settings & Governance' },
-    { path: '/settings', label: 'Settings & Governance' },
-  ];
-
-  const matchedRoute = routeLabels.find(({ path }) =>
-    path === '/'
-      ? location.pathname === '/'
-      : location.pathname === path || location.pathname.startsWith(path),
-  );
-
-  void matchedRoute;
 
   return (
     <div
@@ -336,7 +280,7 @@ export function AppShell() {
               onClick={() => setIsSidebarCollapsed((prev) => !prev)}
               title={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             >
-              <Icon name={isSidebarCollapsed ? 'menu' : 'menu'} size={18} />
+              <Icon name={isSidebarCollapsed ? 'chevron-right' : 'chevron-left'} size={16} />
             </IconButton>
 
             {/* Global Search Bar matching reference */}
@@ -361,9 +305,9 @@ export function AppShell() {
             {/* Help button */}
             <button
               type="button"
-              onClick={() => setIsCommandPaletteOpen(true)}
+              onClick={openGuide}
               className="hidden md:flex w-9 h-9 items-center justify-center rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs text-xs font-bold cursor-pointer"
-              title="Help & Quick Command Search (⌘K)"
+              title="Page Quick Learn Guide"
             >
               ?
             </button>
@@ -375,7 +319,7 @@ export function AppShell() {
               className="hidden md:flex w-9 h-9 items-center justify-center rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs cursor-pointer"
               title="Recent Activity & Task Queue"
             >
-              <Icon name="clock" size={15} />
+              <Icon name="clock" size={16} />
             </button>
 
             {/* Notifications Bell */}
@@ -385,9 +329,6 @@ export function AppShell() {
 
             <ThemeToggle className="hidden sm:flex" />
 
-            {/* Quick Create Menu */}
-            <QuickCreateMenu />
-
             <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 mx-0.5 hidden sm:block" aria-hidden="true" />
             <UserProfileDropdown />
           </div>
@@ -395,12 +336,23 @@ export function AppShell() {
       </header>
 
       <main className="main" aria-hidden={isMobileDrawerOpen ? 'true' : undefined}>
-        <BreadcrumbsBar />
-        <Outlet />
+        <BreadcrumbProvider>
+          <BreadcrumbsBar />
+          <Outlet />
+        </BreadcrumbProvider>
       </main>
 
       <CommandPalette isOpen={isCommandPaletteOpen} onClose={() => setIsCommandPaletteOpen(false)} />
+      <QuickGuideModal />
     </div>
+  );
+}
+
+export function AppShell() {
+  return (
+    <QuickGuideProvider>
+      <AppShellInner />
+    </QuickGuideProvider>
   );
 }
 

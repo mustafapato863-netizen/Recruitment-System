@@ -22,6 +22,7 @@ import type {
   CreateVacancyRequestDto,
   VacancyRequestActionDto,
   UpdateVacancyRequestDto,
+  UpdateVacancyDto,
   AssignTeamMemberDto,
   VacancyWorkQueueQueryDto,
 } from './vacancy-core.dto';
@@ -583,6 +584,58 @@ export class VacancyCoreService {
 
     vacancy.updatedAt = new Date().toISOString();
     return this.repository.saveVacancy(vacancy);
+  }
+
+  async updateVacancy(
+    id: string,
+    organizationId: string,
+    dto: UpdateVacancyDto,
+  ): Promise<VacancyDetailView> {
+    const vacancy = await this.prisma.vacancy.findUnique({
+      where: { id },
+      include: { position: true },
+    });
+    if (!vacancy || vacancy.organizationId !== organizationId) {
+      throw new NotFoundException(`Vacancy ${id} was not found.`);
+    }
+
+    if (dto.approvedHeadcount !== undefined && dto.approvedHeadcount < vacancy.joinedHeadcount) {
+      throw new BadRequestException(
+        `Approved headcount cannot be less than already joined headcount (${vacancy.joinedHeadcount}).`,
+      );
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      if (
+        dto.approvedHeadcount !== undefined ||
+        dto.location !== undefined ||
+        dto.targetStartDate !== undefined
+      ) {
+        await tx.vacancy.update({
+          where: { id },
+          data: {
+            ...(dto.approvedHeadcount !== undefined ? { approvedHeadcount: dto.approvedHeadcount } : {}),
+            ...(dto.location !== undefined ? { location: dto.location } : {}),
+            ...(dto.targetStartDate !== undefined
+              ? { targetStartDate: dto.targetStartDate ? new Date(dto.targetStartDate) : null }
+              : {}),
+          },
+        });
+      }
+
+      if (dto.title !== undefined || dto.description !== undefined) {
+        await tx.position.update({
+          where: { id: vacancy.positionId },
+          data: {
+            ...(dto.title !== undefined ? { title: dto.title } : {}),
+            ...(dto.description !== undefined ? { description: dto.description } : {}),
+          },
+        });
+      }
+    });
+
+    const detail = await this.getVacancyDetail(organizationId, id);
+    return detail!;
   }
 }
 
