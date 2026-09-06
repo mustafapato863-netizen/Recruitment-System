@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { getApi, postApi } from '../api/client';
+import { getApi, postApi, patchApi } from '../api/client';
 import type { Offer } from '@recruitflow/contracts';
 import { Icon } from '../components/Icon';
 import { Modal } from '../components/Modal';
@@ -9,6 +9,7 @@ import { Alert } from '../components/ui/Alert';
 import { PageState } from '../components/ui/PageState';
 import { useAuth } from '../auth/AuthContext';
 import { useSetBreadcrumbTitle } from '../context/BreadcrumbContext';
+import { QuickGuideTrigger } from '../quickguide';
 import './PageEnhancementsV2.css';
 
 interface HiringCaseLookup {
@@ -35,6 +36,10 @@ export function OfferDetailPage() {
   const [notesList, setNotesList] = useState<
     Array<{ author: string; authorAvatar: string; date: string; text: string }>
   >([]);
+  const [decisionModal, setDecisionModal] = useState<'Approve' | 'Reject' | null>(null);
+  const [decisionComment, setDecisionComment] = useState('');
+  const [isDeciding, setIsDeciding] = useState(false);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -119,6 +124,51 @@ export function OfferDetailPage() {
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  const pendingApproval = offer?.currentVersion?.approvals?.find((a) => a.status === 'Pending') || null;
+
+  const handleDecisionSubmit = async () => {
+    if (!decisionModal) return;
+    setIsDeciding(true);
+    try {
+      if (pendingApproval) {
+        await postApi(`/offers/approvals/${pendingApproval.id}/decide`, {
+          decision: decisionModal,
+          comment: decisionComment.trim() || undefined,
+        });
+      } else if (offer?.id) {
+        await patchApi(`/offers/${offer.id}/status`, {
+          status: decisionModal === 'Approve' ? 'Approved' : 'Declined',
+        });
+      }
+      showToast(`Offer successfully marked as ${decisionModal === 'Approve' ? 'Approved' : 'Rejected'}.`);
+      setDecisionModal(null);
+      setDecisionComment('');
+      if (id) {
+        const updated = await getApi<Offer>(`/offers/${id}`);
+        setOffer(updated);
+      }
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : 'Failed to submit decision');
+    } finally {
+      setIsDeciding(false);
+    }
+  };
+
+  const handleUpdateStatus = async (newStatus: 'Sent' | 'Accepted' | 'Declined' | 'Withdrawn') => {
+    if (!offer?.id || !id) return;
+    setIsUpdatingStatus(true);
+    try {
+      await patchApi(`/offers/${offer.id}/status`, { status: newStatus });
+      showToast(`Offer successfully updated to ${newStatus}.`);
+      const updated = await getApi<Offer>(`/offers/${id}`);
+      setOffer(updated);
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : `Failed to update offer status to ${newStatus}`);
+    } finally {
+      setIsUpdatingStatus(false);
+    }
   };
 
   const handleDownloadOfferLetter = () => {
@@ -289,6 +339,7 @@ export function OfferDetailPage() {
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
               Offer Detail
             </h1>
+            <QuickGuideTrigger />
             {offer.offerCode && (
               <span className="text-xs font-mono font-bold text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
                 {offer.offerCode}
@@ -305,7 +356,7 @@ export function OfferDetailPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 flex-wrap">
           <button
             type="button"
             onClick={() => showToast(`Offer ${offer.offerCode}: Options panel`)}
@@ -323,6 +374,65 @@ export function OfferDetailPage() {
             <Icon name="download" size={13} className="text-slate-400" />
             <span>Download Offer Letter</span>
           </button>
+
+          {/* Executive Approver Decision Buttons */}
+          {offer.status === 'Pending Approval' && (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setDecisionModal('Reject')}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 rounded-xl text-xs font-bold hover:bg-rose-100 transition shadow-xs cursor-pointer"
+              >
+                <Icon name="close" size={13} />
+                <span>Reject Package</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setDecisionModal('Approve')}
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+              >
+                <Icon name="check" size={13} />
+                <span>Authorize &amp; Approve</span>
+              </button>
+            </div>
+          )}
+
+          {/* Recruiter Dispatch Button */}
+          {offer.status === 'Approved' && (
+            <button
+              type="button"
+              onClick={() => void handleUpdateStatus('Sent')}
+              disabled={isUpdatingStatus}
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer disabled:opacity-60"
+            >
+              <Icon name="mail" size={13} />
+              <span>{isUpdatingStatus ? 'Dispatching...' : 'Dispatch Offer to Candidate'}</span>
+            </button>
+          )}
+
+          {/* Candidate Decision Recording Buttons */}
+          {offer.status === 'Sent' && (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void handleUpdateStatus('Declined')}
+                disabled={isUpdatingStatus}
+                className="inline-flex items-center gap-1.5 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold hover:bg-slate-50 transition shadow-xs cursor-pointer disabled:opacity-60"
+              >
+                <Icon name="close" size={13} />
+                <span>Candidate Declined</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleUpdateStatus('Accepted')}
+                disabled={isUpdatingStatus}
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer disabled:opacity-60"
+              >
+                <Icon name="check" size={13} />
+                <span>Candidate Accepted</span>
+              </button>
+            </div>
+          )}
 
           {offer.status === 'Accepted' && (
             joiningCase ? (
@@ -1070,6 +1180,59 @@ export function OfferDetailPage() {
               className="px-4 py-1.5 bg-blue-600 text-white rounded-xl font-bold cursor-pointer"
             >
               Save Note
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Executive Decision Modal */}
+      <Modal
+        isOpen={Boolean(decisionModal)}
+        onClose={() => setDecisionModal(null)}
+        title={decisionModal === 'Approve' ? 'Authorize & Approve Offer' : 'Reject Offer Package'}
+        maxWidthClass="max-w-md"
+      >
+        <div className="space-y-4 text-xs">
+          <p className="text-slate-600 dark:text-slate-300">
+            {decisionModal === 'Approve'
+              ? 'You are authorizing this compensation package for dispatch to the candidate under institutional salary guidelines.'
+              : 'Specify the reason for returning this offer package for renegotiation or rejection.'}
+          </p>
+          <div>
+            <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1">
+              Executive Notes / Audit Comment (Optional)
+            </label>
+            <textarea
+              rows={3}
+              value={decisionComment}
+              onChange={(e) => setDecisionComment(e.target.value)}
+              placeholder="Provide context for the hiring committee or compensation team..."
+              className="w-full p-2.5 border border-slate-200 dark:border-slate-700 rounded-xl bg-white dark:bg-slate-800 text-xs focus:outline-none"
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <button
+              type="button"
+              onClick={() => setDecisionModal(null)}
+              className="px-3 py-1.5 text-slate-500 cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleDecisionSubmit}
+              disabled={isDeciding}
+              className={`px-4 py-1.5 rounded-xl font-bold text-white cursor-pointer ${
+                decisionModal === 'Approve'
+                  ? 'bg-emerald-600 hover:bg-emerald-700'
+                  : 'bg-rose-600 hover:bg-rose-700'
+              }`}
+            >
+              {isDeciding
+                ? 'Submitting...'
+                : decisionModal === 'Approve'
+                ? 'Confirm Approval'
+                : 'Confirm Rejection'}
             </button>
           </div>
         </div>

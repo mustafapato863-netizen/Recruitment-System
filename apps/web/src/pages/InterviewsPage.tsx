@@ -8,6 +8,7 @@ import { PageState } from '../components/ui/PageState';
 import { TableSkeleton } from '../components/ui/Skeleton';
 import { InterviewAgendaCard } from '../components/interview/InterviewAgendaCard';
 import { InterviewFiltersBar } from '../components/interview/InterviewFiltersBar';
+import { QuickGuideTrigger } from '../quickguide';
 import './PageEnhancementsV2.css';
 
 interface InterviewGroup {
@@ -384,9 +385,12 @@ export function InterviewsPage() {
       {/* ── Page Header & Top Controls matching 09-interviews.png ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-            Interviews
-          </h1>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+              Interviews
+            </h1>
+            <QuickGuideTrigger />
+          </div>
           <p className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">
             Manage and conduct interviews with candidates.
           </p>

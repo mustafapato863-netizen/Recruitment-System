@@ -8,6 +8,7 @@ import { Button } from '../components/ui/Button';
 import { Select } from '../components/ui/Select';
 import { PageState } from '../components/ui/PageState';
 import { useBreadcrumb, useSetBreadcrumbTitle } from '../context/BreadcrumbContext';
+import { QuickGuideTrigger } from '../quickguide';
 import './PageEnhancementsV2.css';
 
 function getInitials(name?: string | null): string {
@@ -220,9 +221,12 @@ export function StageTransitionPage() {
       {/* ── Top Bar ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-            Stage Transition
-          </h1>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+              Stage Transition
+            </h1>
+            <QuickGuideTrigger />
+          </div>
           <p className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 mt-0.5">
             Move {candidateName} to the next stage in the recruitment process.
           </p>

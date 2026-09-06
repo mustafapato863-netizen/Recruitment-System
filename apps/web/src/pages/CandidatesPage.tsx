@@ -14,6 +14,7 @@ import {
 import { Icon } from '../components/Icon';
 import { useAuth } from '../auth/AuthContext';
 import { confirmDiscardChanges, useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import { QuickGuideTrigger } from '../quickguide';
 import './PageEnhancementsV2.css';
 
 interface CandidateForm {
@@ -223,9 +224,12 @@ export function CandidatesPage() {
             <span>&bull;</span>
             <span className="text-blue-600 dark:text-blue-400">Global Talent Directory</span>
           </div>
-          <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight mt-1">
-            Candidate Database
-          </h1>
+          <div className="flex items-center gap-2.5 flex-wrap mt-1">
+            <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+              Candidate Database
+            </h1>
+            <QuickGuideTrigger />
+          </div>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
             Manage unique candidate identities, clinical licenses, CV documents, and historic applications.
           </p>

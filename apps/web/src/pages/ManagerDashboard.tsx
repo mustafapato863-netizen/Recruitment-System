@@ -9,6 +9,7 @@ import { Modal } from '../components/Modal';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { PageState } from '../components/ui/PageState';
+import { QuickGuideTrigger } from '../quickguide';
 
 export interface OpenVacancyOption {
   id: string;
@@ -302,9 +303,12 @@ export function ManagerDashboard() {
       {/* ── Page Header: Greeting & Quick Buttons ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-            Good morning, {greetingName}
-          </h1>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+              Good morning, {greetingName}
+            </h1>
+            <QuickGuideTrigger />
+          </div>
           <p className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">
             Here&apos;s what needs your attention today.
           </p>

@@ -7,6 +7,7 @@ import { Button } from '../components/ui/Button';
 import { StatusBadge } from '../components/StatusBadge';
 import { Icon } from '../components/Icon';
 import { Alert } from '../components/ui/Alert';
+import { QuickGuideTrigger } from '../quickguide';
 
 export function EmployeeDashboard() {
   const { user } = useAuth();
@@ -59,9 +60,12 @@ export function EmployeeDashboard() {
             <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
             Employee Workspace
           </div>
-          <h1 className="text-2xl font-rf-heading font-black tracking-tight text-rf-ink m-0">
-            Welcome back, {greetingName} 👋
-          </h1>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h1 className="text-2xl font-rf-heading font-black tracking-tight text-rf-ink m-0">
+              Welcome back, {greetingName} 👋
+            </h1>
+            <QuickGuideTrigger />
+          </div>
           <p className="text-sm font-medium text-rf-ink-muted m-0 mt-1">
             Request new team headcount, track approval workflows, and view assigned recruitment tasks.
           </p>

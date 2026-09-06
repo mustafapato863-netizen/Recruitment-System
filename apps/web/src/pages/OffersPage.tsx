@@ -5,6 +5,7 @@ import type { Offer, VacancyDetailView } from '@recruitflow/contracts';
 import { Icon } from '../components/Icon';
 import { Modal } from '../components/Modal';
 import { PageState } from '../components/ui/PageState';
+import { QuickGuideTrigger } from '../quickguide';
 import './PageEnhancementsV2.css';
 
 interface OfferRow {
@@ -346,9 +347,12 @@ export function OffersPage() {
       {/* ── Page Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-            Offers
-          </h1>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+              Offers
+            </h1>
+            <QuickGuideTrigger />
+          </div>
           <p className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">
             Manage and track all job offers throughout the approval and negotiation process.
           </p>
@@ -370,7 +374,7 @@ export function OffersPage() {
 
           <button
             type="button"
-            onClick={() => navigate('/offers/new')}
+            onClick={() => navigate('/offers/create')}
             className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
           >
             <Icon name="plus" size={14} />

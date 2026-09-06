@@ -129,6 +129,12 @@ export function AddApplicationModal({
     );
   }, [candidates, candidateSearch]);
 
+  const matchingCandidate = useMemo(() => {
+    if (!newEmail.trim() || mode !== 'new') return null;
+    const target = newEmail.trim().toLowerCase();
+    return candidates.find((c) => c.email.toLowerCase() === target) || null;
+  }, [newEmail, mode, candidates]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
@@ -400,6 +406,23 @@ export function AddApplicationModal({
                   onChange={(e) => setNewEmail(e.target.value)}
                   className="text-xs"
                 />
+                {matchingCandidate && (
+                  <div className="mt-1.5 p-2 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-[11px] text-amber-800 dark:text-amber-300 flex items-center justify-between gap-2 animate-fade-in">
+                    <span>
+                      Existing profile found: <strong>{matchingCandidate.firstName} {matchingCandidate.lastName}</strong>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedCandidateId(matchingCandidate.id);
+                        setMode('existing');
+                      }}
+                      className="px-2 py-0.5 rounded bg-amber-200 dark:bg-amber-800 text-amber-900 dark:text-white font-bold hover:bg-amber-300 transition cursor-pointer shrink-0"
+                    >
+                      Use Profile
+                    </button>
+                  </div>
+                )}
               </div>
               <div>
                 <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1">

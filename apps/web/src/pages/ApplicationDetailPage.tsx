@@ -23,6 +23,7 @@ import { ListSkeleton } from '../components/ui/Skeleton';
 import { StatusBadge } from '../components/StatusBadge';
 import { ActivityFeed, type FeedEntry } from '../components/candidate/ActivityFeed';
 import { SmartActionBar, getDefaultActions } from '../components/candidate/SmartActionBar';
+import { QuickGuideTrigger } from '../quickguide';
 import { computeInterviewsStats } from '../components/candidate/ScorecardSummary';
 import { ScheduleInterviewModal } from '../components/candidate/ScheduleInterviewModal';
 import { RejectApplicantModal } from '../components/candidate/RejectApplicantModal';
@@ -443,6 +444,7 @@ export function ApplicationDetailPage() {
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight m-0">
               Applicant Profile
             </h1>
+            <QuickGuideTrigger />
             {appIdDisplay && (
               <span className="text-xs font-semibold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-mono border border-slate-200 dark:border-slate-700">
                 {appIdDisplay}

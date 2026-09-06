@@ -52,7 +52,7 @@ const offerApprovalColumns: ResponsiveDataColumn<OfferApprovalRow>[] = [
     priority: 'secondary',
     render: (row) => (
       <div className="grid gap-0.5">
-        <span className="font-bold text-rf-ink">AED {row.monthlyPackage.toLocaleString()}</span>
+        <span className="font-bold text-rf-ink">SAR {row.monthlyPackage.toLocaleString()}</span>
         <span className="font-medium text-rf-ink-muted">Monthly gross</span>
       </div>
     ),

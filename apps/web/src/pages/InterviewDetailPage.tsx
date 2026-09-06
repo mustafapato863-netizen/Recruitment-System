@@ -12,6 +12,7 @@ import { Textarea } from '../components/ui/Textarea';
 import { Icon } from '../components/Icon';
 import { Modal } from '../components/Modal';
 import { useSetBreadcrumbTitle } from '../context/BreadcrumbContext';
+import { QuickGuideTrigger } from '../quickguide';
 import './PageEnhancementsV2.css';
 
 type BackendRecommendation = 'Strong Hire' | 'Hire' | 'Neutral' | 'No Hire' | 'Strong No Hire';
@@ -540,13 +541,14 @@ export function InterviewDetailPage() {
       {/* ── Top Action Bar ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
             <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
               {interview?.title || 'Interview Details'}
             </h1>
             <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
               {interview?.status || 'Scheduled'}
             </span>
+            <QuickGuideTrigger />
           </div>
 
           <p className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 mt-0.5">

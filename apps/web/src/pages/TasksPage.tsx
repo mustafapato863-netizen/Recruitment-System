@@ -6,6 +6,7 @@ import { Modal } from '../components/Modal';
 import { PageState } from '../components/ui/PageState';
 import { getApi, postApi } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
+import { QuickGuideTrigger } from '../quickguide';
 import './PageEnhancementsV2.css';
 
 interface TaskQueueItem {
@@ -405,9 +406,12 @@ export function TasksPage() {
       {/* ── Page Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-            My Work &mdash; Full Task Queue
-          </h1>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+              My Work &mdash; Full Task Queue
+            </h1>
+            <QuickGuideTrigger />
+          </div>
           <p className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">
             All your recruitment tasks in one place. Stay on top of every action that moves hiring forward.
           </p>

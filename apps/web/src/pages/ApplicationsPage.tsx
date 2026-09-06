@@ -17,6 +17,7 @@ import { Drawer } from '../components/ui/Drawer';
 import { CommentsThread } from '../components/ui/CommentsThread';
 import { AddApplicationModal } from '../components/candidate/AddApplicationModal';
 import { PageState } from '../components/ui/PageState';
+import { QuickGuideTrigger } from '../quickguide';
 import './PageEnhancementsV2.css';
 
 interface KanbanCard {
@@ -808,9 +809,12 @@ export function ApplicationsPage() {
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-            Applications
-          </h1>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+              Applications
+            </h1>
+            <QuickGuideTrigger />
+          </div>
           <p className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 mt-0.5">
             Manage candidate pipeline across recruitment stages.
           </p>

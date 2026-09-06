@@ -6,6 +6,7 @@ import { Icon } from '../components/Icon';
 import { Modal } from '../components/Modal';
 import { Spinner } from '../components/Spinner';
 import { ComparisonMatrixCard, type ComparisonCandidate } from '../components/candidate/ComparisonMatrixCard';
+import { QuickGuideTrigger } from '../quickguide';
 import './PageEnhancementsV2.css';
 
 const AVATAR_COLORS = [
@@ -298,6 +299,7 @@ export function CandidateComparisonPage() {
             <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
               Compare Candidates
             </h1>
+            <QuickGuideTrigger />
           </div>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 ml-9">
             Side-by-side evaluation of competency ratings, match algorithms, and clinical credentials to finalize hiring decisions.

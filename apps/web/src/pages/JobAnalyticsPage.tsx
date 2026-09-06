@@ -5,6 +5,7 @@ import { fetchApi, getApi } from '../api/client';
 import { Icon } from '../components/Icon';
 import { PageState } from '../components/ui/PageState';
 import { useSetBreadcrumbTitle } from '../context/BreadcrumbContext';
+import { QuickGuideTrigger } from '../quickguide';
 import './PageEnhancementsV2.css';
 
 interface InterviewerUser {
@@ -145,6 +146,7 @@ export function JobAnalyticsPage() {
             <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
               {statusLabel}
             </span>
+            <QuickGuideTrigger />
           </div>
 
           <p className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-2 flex-wrap">
