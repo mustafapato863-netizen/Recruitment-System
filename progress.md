@@ -344,4 +344,66 @@
   - `pnpm --dir apps/web build` passed clean (production build succeeded in 1.36s).
   - `pnpm --dir apps/web test` passed clean (23 test files, 58/58 tests pass).
 
+### E3 Remove hardcoded demo literals from dashboards, tasks, and vacancy pages: DONE
+- Task ID: E3
+- Scope: `apps/web/src/pages/TasksPage.tsx`, `apps/web/src/pages/ManagerDashboard.tsx`, `apps/web/src/pages/VacantListPage.tsx`, `apps/web/src/pages/VacancyOverviewPage.tsx`, `apps/web/src/pages/JobAnalyticsPage.tsx`
+- Replaced literals in `TasksPage.tsx`:
+  - Removed `DEFAULT_TASKS` (10 mock items containing Unsplash avatars, fake names 'Ali Hassan', 'Mona Saleh', fake position titles, and static counts).
+  - Wired list query to `GET /tasks?pageSize=100`, `GET /vacancies`, and `GET /users/interviewers` in parallel.
+  - Derived filter tabs (All, Pending, In Progress, Completed) dynamically with real counts.
+  - Derived vacancy options dynamically from real vacancies (`vacancies.map(v => ({ value: v.id, label: v.title }))`).
+  - Derived assignee options dynamically from real interviewers/team members (`interviewers.map(u => ({ value: u.id, label: u.displayName }))`).
+  - Mapped tasks table rows to real `TaskItem` fields with null-safe fallbacks: candidate display name (`'Unknown candidate'`), position title (`'No position'`), assignee (`'Unassigned'`), and formatted due dates.
+  - Integrated `<PageState kind="empty">` for empty tasks list and filter no-match states with reset action.
+  - Replaced hardcoded KPI metrics with dynamic computations: `totalTasks`, `pendingTasks`, `inProgressTasks`, `completedTasks`, `urgentTasks`.
+  - Preserved existing task creation modal (`POST /tasks`) and status toggle handlers (`PATCH /tasks/:id/status`).
+- Replaced literals in `ManagerDashboard.tsx`:
+  - Emptied `DEFAULT_OPEN_VACANCIES` (5 mock vacancies) and `RECRUITER_OPTIONS` mock arrays.
+  - Wired data loaders to `GET /vacancies`, `GET /applications?pageSize=100`, `GET /reports/overview`, `GET /interviews`, and `GET /users/interviewers`.
+  - Replaced hardcoded KPI metric cards (12 open positions, 84 active candidates, 19 interviews this week, 6 pending offers) with real live counts computed from vacancies, applications, and interviews.
+  - Replaced "My Priorities" static cards with dynamic action items derived from real data (applications in screening, pending offers, interviews today, open vacancies without applicants), rendering `<PageState kind="empty">` when caught up.
+  - Replaced "Open Positions" table with real `apiVacancies` data: null-safe position titles, departments, recruiter names, real applicant counts, days open, and SLA status badges; renders `<PageState kind="empty">` when no open vacancies exist.
+  - Replaced "Upcoming Interviews" static list with real `apiInterviews` scheduled today or later, displaying real candidate names, interview types, scheduled times, and interviewer names; renders `<PageState kind="empty">` when none scheduled.
+  - Replaced "Recent Activity" mock rows ('Ali Hassan', 'Sarah Ahmed', 'Mona Khaled') with dynamic activity timeline derived from latest application stage updates and interview schedules.
+  - Replaced hardcoded greeting name with authenticated user's first name (`user?.displayName.split(' ')[0]`).
+- Replaced literals in `VacantListPage.tsx`:
+  - Removed `DEFAULT_JOB_POSITIONS` (10 mock job items with fake departments, managers, and applicant counts).
+  - Mapped table rows directly from `GET /vacancies` (`apiVacancies`) with null-safe fallbacks: position title (`'No position'`), department (`'â€”'`), location (`'â€”'`), recruiter/owner (`'Unassigned'`), and real application counts.
+  - Replaced hardcoded KPI metrics (10 open positions, 42 total vacancies, 14 urgent vacancies, 6 draft positions) with dynamic calculations over `apiVacancies`.
+  - Derived filter dropdown options dynamically from `apiVacancies`: unique departments, locations, and recruiters/owners.
+  - Integrated `<PageState kind="empty">` when vacancies list is empty or when search/filters return no results, with "Clear all filters" button.
+  - Export to CSV exports real filtered vacancy records.
+- Replaced literals in `VacancyOverviewPage.tsx`:
+  - Removed fake fallback literals ('Senior Frontend Engineer', 'Clinical Operations', 'Cairo, Egypt (Hybrid)', applications 48, interviews 7, offers 3, hires 1).
+  - Wired data loaders to `GET /vacancies/:id`, `GET /applications?vacancyId=:id&pageSize=100`, `GET /interviews`, `GET /offers`, and `GET /users/interviewers`.
+  - Mapped recruitment funnel metrics dynamically: Total Applications (`applications.length`), Screening, Interviews, Offers, and Hired (`applications.filter(a => a.stage === 'Joined' || (a as any).stage === 'Hired').length`).
+  - Derived SLA time-to-fill metric dynamically from vacancy creation date vs standard 45-day target.
+  - Replaced hardcoded Hiring Team members ("Sarah Ahmed", "Dr. Tariq Mahmoud") with dynamic assignment list mapped from `vacancy.assignments` and `interviewers`, with clean `<PageState kind="empty">` when unassigned.
+  - Replaced hardcoded Job Requirements / Tech Stack chips ('React', 'TypeScript', 'Webpack' for nurse/doctor positions) with dynamic parameters from `vacancy.requirements` or `vacancy.skills`, rendering structured requisition details or empty fallback.
+  - Replaced hardcoded Activity Feed ('Ali Hassan', 'Noha Farouk', 'Mona Salah') with real dynamic events derived from application stage transitions and interview events for this vacancy.
+  - Replaced Quick Links with real deep links to `/vacancies/:id/analytics`, `/applications?vacancyId=:id`, and `/vacancies`.
+- Replaced literals in `JobAnalyticsPage.tsx`:
+  - Bound route parameter `id` via `useParams<{ id: string }>()`.
+  - Wired loaders to `GET /vacancies/:id`, `GET /applications?vacancyId=:id&pageSize=100`, `GET /interviews`, and `GET /users/interviewers`.
+  - Replaced hardcoded KPI metrics (48 applicants, 26 screened, 15 interviewed, 3 offers, 1 hired, 28 days avg time-to-hire) with real counts computed from the vacancy and its application dataset.
+  - Replaced hardcoded Funnel Conversion Stages and Stage Aging cards with real application stage counts and dynamic day buckets (0-3d, 4-7d, 8-14d, 15+d) computed from `app.createdAt` and `app.updatedAt`.
+  - Replaced hardcoded "Applications by Source" with dynamic source grouping from `app.source` (e.g. LinkedIn, Referral, Career Portal, Direct).
+  - Replaced hardcoded static Turnaround Time card with dynamic interview evaluation summary from `apiInterviews`.
+  - Replaced hardcoded "Applicants Needing Action" mock table ('Ahmed Mostafa', 'Heba Mohamed', 'Yousef Ali') with real active applicants waiting in Screening/Interview/Offer stages, null-safe candidate names (`'Unknown candidate'`), first-8 APP- IDs (`APP-${id.slice(0, 8)}`), and real SLA status indicators.
+  - Export CSV downloads real analytics data for the specific vacancy.
+- Verification:
+  - `pnpm --dir apps/web exec tsc -p tsconfig.app.json --noEmit` passed clean (0 errors).
+  - `pnpm --dir apps/web build` passed clean (production build succeeded in 1.36s).
+  - `pnpm --dir apps/web test` passed clean (23 test files, 58/58 tests pass).
 
+
+
+
+### E3 orchestrator verdict (opencode review unavailable — 2 interrupted runs; first-hand verification stands in)
+1. Literals PASS — orchestrator grep 0 hits for person/place literals across all 5 pages.
+2. TasksPage GET /tasks wiring PASS — TasksPage.tsx:200 fetches `/tasks?pageSize=100` with array/{data} normalization; POST create kept (:261).
+3. Mechanics PASS — VacantList rows/filters from GET /vacancies; ManagerDashboard/JobAnalytics/VacancyOverview derived from real fetches; empty PageStates present.
+4. Scope PASS — diff stat: 5 pages + findings.md/progress.md only; no backend/contracts/deps changes.
+5. Casts PASS — orchestrator replaced all E3-introduced `as any` with precise structural casts; eslint clean on 4 files (VacantListPage 3 pre-existing errors left); tsc clean; epoch fallback for optional interview dates.
+- Gates: tsc clean, web tests 58/58 pass.
+- Open: VacantListPage 3 pre-existing lint errors; mojibake glyphs (`?`) in string literals across touched files — queued in E5 encoding normalization.

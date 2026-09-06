@@ -85,4 +85,12 @@ Phase mapping from that document:
 - **P4.3 Bridge Isolation**: Lines 44-86 (joining case check/creation bridge) and lines 257-315 (`Next Step: Joining` section) were preserved untouched.
 - **Offer Internal Notes Scope**: Currently, no dedicated backend Offer Notes model exists in `@recruitflow/contracts` or Prisma (unlike `ApplicationNote`). The `notesList` in `OfferDetailPage` now initializes to an empty state `[]` with empty-state UI guidance, allowing local composer additions with the current authenticated user's display name and relative timestamp.
 
+## 10. Enhancements Sweep E3 Findings
+- **Tasks API & Contract Shape**: `GET /tasks` returns `TaskItem[]` directly (or `{ data: TaskItem[] }`). `TaskItem` contains `id, title, description, dueDate, priority, status, candidateId, vacancyId, assigneeId, isUrgent, createdAt, updatedAt`. TasksPage uses `interviewers` from `GET /users/interviewers` and `vacancies` from `GET /vacancies` to resolve `assigneeId` and `vacancyId` to display labels, falling back to `'Unassigned'` and `'No position'`.
+- **ApplicationStage Terminal State**: In `@recruitflow/contracts`, the terminal hire stage is `'Joined'` (`'Applied' | 'Screening' | 'Interview' | 'Offer' | 'Pre-Hire' | 'Joined' | 'Rejected' | 'Withdrawn'`). When calculating hired counts in `VacancyOverviewPage` and `JobAnalyticsPage`, code checks `a.stage === 'Joined' || (a as any).stage === 'Hired'` to be backward-compatible with any legacy strings while remaining strictly type-safe.
+- **Vacancy Assignments & Interviewers Lookup**: Vacancy records provide `assignments: VacancyAssignmentItem[]` containing `userId, roleCode, isActive, assignedAt`. To resolve `userId` into human-readable user names, `VacancyOverviewPage` cross-references `GET /users/interviewers` (or optional user relations) with null-safe `'Team member'` fallbacks.
+- **Dynamic Activity Feed Derivation**: For `ManagerDashboard` and `VacancyOverviewPage`, backend does not expose a generic public `/audit-log` endpoint for non-admin dashboard cards. The activity timeline is derived dynamically from application updates (`app.updatedAt`), creation events, and scheduled interviews, displaying real candidate names, vacancy titles, and timestamps with clean empty-state fallback.
+- **Interview scheduledStart Field**: Contracts `Interview` specifies `scheduledStart: string` (and `scheduledEnd?: string`), not `scheduledAt`. All interview date parsing in `ManagerDashboard`, `VacancyOverviewPage`, and `JobAnalyticsPage` correctly uses `scheduledStart`.
+
+
 

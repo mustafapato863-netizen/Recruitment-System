@@ -1,9 +1,11 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import type { TaskRecord, Vacancy } from '@recruitflow/contracts';
 import { Icon } from '../components/Icon';
 import { Modal } from '../components/Modal';
-import { postApi } from '../api/client';
-import { DEFAULT_OPEN_VACANCIES, RECRUITER_OPTIONS } from './ManagerDashboard';
+import { PageState } from '../components/ui/PageState';
+import { getApi, postApi } from '../api/client';
+import { useAuth } from '../auth/AuthContext';
 import './PageEnhancementsV2.css';
 
 interface TaskQueueItem {
@@ -13,7 +15,6 @@ interface TaskQueueItem {
   taskType: string;
   candidateName: string;
   candidateAppId: string;
-  candidateAvatar: string;
   positionTitle: string;
   department: string;
   location: string;
@@ -24,215 +25,80 @@ interface TaskQueueItem {
   slaState: 'On track' | 'At risk' | 'Overdue';
   nextActionLabel: string;
   nextActionRoute: string;
+  status: string;
 }
 
-const DEFAULT_TASKS: TaskQueueItem[] = [
-  {
-    id: 'task-1',
-    priority: 'High',
-    taskTitle: 'Technical interview',
-    taskType: 'Interview',
-    candidateName: 'Ali Hassan',
-    candidateAppId: 'APP-02481',
-    candidateAvatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=100&auto=format&fit=crop&q=80',
-    positionTitle: 'Senior Frontend Engineer',
-    department: 'Engineering',
-    location: 'Cairo, Egypt',
-    ownerName: 'Sarah Ahmed',
-    ownerAvatar: 'SA',
-    dueTime: 'Today, 2:00 PM',
-    dueLeft: '2h 15m left',
-    slaState: 'On track',
-    nextActionLabel: 'Start interview',
-    nextActionRoute: '/interviews/int-1',
-  },
-  {
-    id: 'task-2',
-    priority: 'High',
-    taskTitle: 'Review CV',
-    taskType: 'Screening',
-    candidateName: 'Mona Saleh',
-    candidateAppId: 'APP-02517',
-    candidateAvatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=100&auto=format&fit=crop&q=80',
-    positionTitle: 'Registered Nurse – ICU',
-    department: 'Clinical Operations',
-    location: 'Jeddah',
-    ownerName: 'Mona Saleh',
-    ownerAvatar: 'MS',
-    dueTime: 'Today, 10:30 AM',
-    dueLeft: '10m left',
-    slaState: 'At risk',
-    nextActionLabel: 'Review now',
-    nextActionRoute: '/applications/APP-02481',
-  },
-  {
-    id: 'task-3',
-    priority: 'Medium',
-    taskTitle: 'Offer approval',
-    taskType: 'Offer',
-    candidateName: 'Ahmed Samy',
-    candidateAppId: 'APP-02455',
-    candidateAvatar: 'https://images.unsplash.com/photo-1519345182560-3f2917c472ef?w=100&auto=format&fit=crop&q=80',
-    positionTitle: 'Product Manager',
-    department: 'Digital Health',
-    location: 'Riyadh',
-    ownerName: 'Sarah Ahmed',
-    ownerAvatar: 'SA',
-    dueTime: 'Today, 4:30 PM',
-    dueLeft: '6h left',
-    slaState: 'On track',
-    nextActionLabel: 'Approve offer',
-    nextActionRoute: '/offers/OFF-2026-1157',
-  },
-  {
-    id: 'task-4',
-    priority: 'Medium',
-    taskTitle: 'Phone screen',
-    taskType: 'Screening',
-    candidateName: 'Nourhan Sami',
-    candidateAppId: 'APP-02533',
-    candidateAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&auto=format&fit=crop&q=80',
-    positionTitle: 'Backend Engineer',
-    department: 'Engineering',
-    location: 'Cairo, Egypt',
-    ownerName: 'Nourhan Sami',
-    ownerAvatar: 'NS',
-    dueTime: 'Tomorrow, 9:00 AM',
-    dueLeft: '21h left',
-    slaState: 'On track',
-    nextActionLabel: 'Schedule call',
-    nextActionRoute: '/interviews',
-  },
-  {
-    id: 'task-5',
-    priority: 'Low',
-    taskTitle: 'Follow up',
-    taskType: 'Follow-up',
-    candidateName: 'Yousef Ahmed',
-    candidateAppId: 'APP-02466',
-    candidateAvatar: 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?w=100&auto=format&fit=crop&q=80',
-    positionTitle: 'UX Designer',
-    department: 'Digital Health',
-    location: 'Cairo, Egypt',
-    ownerName: 'Yousef Ahmed',
-    ownerAvatar: 'YA',
-    dueTime: 'Tomorrow, 11:30 AM',
-    dueLeft: '23h left',
-    slaState: 'On track',
-    nextActionLabel: 'Send message',
-    nextActionRoute: '/applications/APP-02481',
-  },
-  {
-    id: 'task-6',
-    priority: 'High',
-    taskTitle: 'Interview feedback',
-    taskType: 'Interview',
-    candidateName: 'Khaled Mostafa',
-    candidateAppId: 'APP-02501',
-    candidateAvatar: 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?w=100&auto=format&fit=crop&q=80',
-    positionTitle: 'Data Analyst',
-    department: 'Strategy & Analytics',
-    location: 'Cairo',
-    ownerName: 'Sara Mohamed',
-    ownerAvatar: 'SM',
-    dueTime: 'Tomorrow, 2:00 PM',
-    dueLeft: '1 day left',
-    slaState: 'At risk',
-    nextActionLabel: 'Add feedback',
-    nextActionRoute: '/interviews/int-1',
-  },
-  {
-    id: 'task-7',
-    priority: 'Medium',
-    taskTitle: 'Compensation review',
-    taskType: 'Offer',
-    candidateName: 'Omar Ashraf',
-    candidateAppId: 'APP-02412',
-    candidateAvatar: 'https://images.unsplash.com/photo-1501196354995-cbb51c65aaea?w=100&auto=format&fit=crop&q=80',
-    positionTitle: 'Senior Frontend Engineer',
-    department: 'Engineering',
-    location: 'Cairo, Egypt',
-    ownerName: 'Omar Ashraf',
-    ownerAvatar: 'OA',
-    dueTime: '2 Sep, 10:00 AM',
-    dueLeft: '2 days left',
-    slaState: 'On track',
-    nextActionLabel: 'Review offer',
-    nextActionRoute: '/offers/OFF-2026-1157',
-  },
-  {
-    id: 'task-8',
-    priority: 'Low',
-    taskTitle: 'Reference check',
-    taskType: 'Verification',
-    candidateName: 'Heba Mohamed',
-    candidateAppId: 'APP-02544',
-    candidateAvatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?w=100&auto=format&fit=crop&q=80',
-    positionTitle: 'Radiology Technologist',
-    department: 'Clinical Operations',
-    location: 'Dammam',
-    ownerName: 'Heba Mohamed',
-    ownerAvatar: 'HM',
-    dueTime: '2 Sep, 3:00 PM',
-    dueLeft: '2 days left',
-    slaState: 'On track',
-    nextActionLabel: 'Check references',
-    nextActionRoute: '/applications/APP-02481',
-  },
-  {
-    id: 'task-9',
-    priority: 'Low',
-    taskTitle: 'Send offer letter',
-    taskType: 'Offer',
-    candidateName: 'Islam Fathy',
-    candidateAppId: 'APP-02480',
-    candidateAvatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=100&auto=format&fit=crop&q=80',
-    positionTitle: 'DevOps Engineer',
-    department: 'Engineering',
-    location: 'Jeddah',
-    ownerName: 'Sarah Ahmed',
-    ownerAvatar: 'SA',
-    dueTime: '3 Sep, 11:00 AM',
-    dueLeft: '3 days left',
-    slaState: 'On track',
-    nextActionLabel: 'Send offer',
-    nextActionRoute: '/offers/OFF-2026-1157',
-  },
-  {
-    id: 'task-10',
-    priority: 'Medium',
-    taskTitle: 'Panel interview',
-    taskType: 'Interview',
-    candidateName: 'Lina Hassan',
-    candidateAppId: 'APP-02520',
-    candidateAvatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
-    positionTitle: 'HR Business Partner',
-    department: 'People & Culture',
-    location: 'Riyadh',
-    ownerName: 'Lina Hassan',
-    ownerAvatar: 'LH',
-    dueTime: '3 Sep, 2:00 PM',
-    dueLeft: '3 days left',
-    slaState: 'On track',
-    nextActionLabel: 'Prepare panel',
-    nextActionRoute: '/interviews/int-1',
-  },
-];
+interface RecruiterOption {
+  id: string;
+  name: string;
+  role: string;
+}
+
+function getInitials(name: string): string {
+  if (!name || name === 'Unassigned') return '—';
+  return name
+    .split(' ')
+    .filter(Boolean)
+    .map((n) => n[0])
+    .join('')
+    .substring(0, 2)
+    .toUpperCase();
+}
+
+function formatDueTime(dueAt: string | null): { dueTime: string; dueLeft: string } {
+  if (!dueAt) return { dueTime: 'No deadline', dueLeft: '—' };
+  const d = new Date(dueAt);
+  if (isNaN(d.getTime())) return { dueTime: '—', dueLeft: '—' };
+
+  const now = new Date();
+  const diffMs = d.getTime() - now.getTime();
+  const isToday = d.toDateString() === now.toDateString();
+  const tomorrow = new Date(now.getTime() + 86400000);
+  const isTomorrow = d.toDateString() === tomorrow.toDateString();
+
+  const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const dueTime = isToday
+    ? `Today, ${timeStr}`
+    : isTomorrow
+    ? `Tomorrow, ${timeStr}`
+    : `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })}, ${timeStr}`;
+
+  if (diffMs < 0) {
+    const overdueHours = Math.floor(Math.abs(diffMs) / (1000 * 60 * 60));
+    const overdueDays = Math.floor(overdueHours / 24);
+    const dueLeft = overdueDays > 0 ? `${overdueDays}d overdue` : `${overdueHours}h overdue`;
+    return { dueTime, dueLeft };
+  }
+
+  const hoursLeft = Math.floor(diffMs / (1000 * 60 * 60));
+  const daysLeft = Math.floor(hoursLeft / 24);
+  const dueLeft = daysLeft > 0 ? `${daysLeft} days left` : `${hoursLeft}h left`;
+  return { dueTime, dueLeft };
+}
 
 export function TasksPage() {
   const navigate = useNavigate();
-  const [tasksList, setTasksList] = useState<TaskQueueItem[]>(DEFAULT_TASKS);
+  const { user } = useAuth();
+  const [tasksList, setTasksList] = useState<TaskQueueItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [activeFilterTab, setActiveFilterTab] = useState('All Tasks');
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedOwnerFilter, setSelectedOwnerFilter] = useState('ALL');
+  const [selectedTypeFilter, setSelectedTypeFilter] = useState('ALL');
+  const [selectedPriorityFilter, setSelectedPriorityFilter] = useState('ALL');
+  const [selectedDepartmentFilter, setSelectedDepartmentFilter] = useState('ALL');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isMoreFiltersOpen, setIsMoreFiltersOpen] = useState(false);
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
-  // Vacancy & Target Assignment State
-  const [selectedVacancyId, setSelectedVacancyId] = useState<string>('vac-1');
-  const [selectedRecruiterId, setSelectedRecruiterId] = useState<string>('231c4106-9094-478d-8c20-0ff0bc9ee592');
+  // Vacancy & Recruiter options loaded from API
+  const [apiVacancies, setApiVacancies] = useState<Vacancy[]>([]);
+  const [apiRecruiters, setApiRecruiters] = useState<RecruiterOption[]>([]);
+  const [selectedVacancyId, setSelectedVacancyId] = useState<string>('');
+  const [selectedRecruiterId, setSelectedRecruiterId] = useState<string>('');
   const [targetType, setTargetType] = useState<'Hires' | 'Screenings' | 'Interviews'>('Hires');
   const [targetQuota, setTargetQuota] = useState<number>(3);
   const [targetDeadline, setTargetDeadline] = useState<string>('7 Days (Standard SLA)');
@@ -245,80 +111,238 @@ export function TasksPage() {
     setTimeout(() => setToastMessage(null), 3500);
   };
 
+  const mapTaskRecord = useCallback((task: TaskRecord, currentUserName: string): TaskQueueItem => {
+    const { dueTime, dueLeft } = formatDueTime(task.dueAt);
+
+    let priorityMapped: 'High' | 'Medium' | 'Low' = 'Medium';
+    if (task.priority === 'High' || task.priority === 'Critical') {
+      priorityMapped = 'High';
+    } else if (task.priority === 'Low') {
+      priorityMapped = 'Low';
+    }
+
+    let slaState: 'On track' | 'At risk' | 'Overdue' = 'On track';
+    if (task.isOverdue || (task.dueAt && new Date(task.dueAt) < new Date() && task.status !== 'Completed')) {
+      slaState = 'Overdue';
+    } else if (task.dueAt && (new Date(task.dueAt).getTime() - Date.now() < 24 * 3600 * 1000) && task.status !== 'Completed') {
+      slaState = 'At risk';
+    }
+
+    // Parse descriptive metadata if packed in description string (e.g. "Position: ... | Candidate: ...")
+    const desc = task.description || '';
+    const posMatch = desc.match(/Position:\s*([^|,\n]+)/);
+    const candMatch = desc.match(/Candidate:\s*([^|,\n]+)/);
+    const deptMatch = desc.match(/Department:\s*([^|,\n]+)/);
+    const locMatch = desc.match(/Location:\s*([^|,\n]+)/);
+
+    const positionTitle = posMatch ? posMatch[1].trim() : 'No position';
+    const candidateName = candMatch
+      ? candMatch[1].trim()
+      : task.entityType === 'Application'
+      ? 'Unknown candidate'
+      : '—';
+    const department = deptMatch ? deptMatch[1].trim() : '—';
+    const location = locMatch ? locMatch[1].trim() : '—';
+
+    let candidateAppId = '—';
+    if (task.entityType === 'Application' && task.entityId) {
+      candidateAppId = `APP-${task.entityId.slice(0, 8)}`;
+    } else if (task.entityType === 'Vacancy' && task.entityId) {
+      candidateAppId = `REQ-${task.entityId.slice(0, 8)}`;
+    } else if (task.entityId) {
+      candidateAppId = task.entityId.slice(0, 8);
+    }
+
+    const ownerName = currentUserName || 'Unassigned';
+    const ownerAvatar = getInitials(ownerName);
+
+    let nextActionRoute = '/tasks';
+    let nextActionLabel = 'View details';
+    if (task.entityType === 'Application' && task.entityId) {
+      nextActionRoute = `/applications/${task.entityId}`;
+      nextActionLabel = task.type === 'Screening' ? 'Review CV' : 'View application';
+    } else if (task.entityType === 'Interview' && task.entityId) {
+      nextActionRoute = `/interviews/${task.entityId}`;
+      nextActionLabel = 'Open interview';
+    } else if (task.entityType === 'Offer' && task.entityId) {
+      nextActionRoute = `/offers/${task.entityId}`;
+      nextActionLabel = 'Review offer';
+    } else if (task.entityType === 'Vacancy' && task.entityId) {
+      nextActionRoute = `/vacancies/${task.entityId}`;
+      nextActionLabel = 'Review pipeline';
+    }
+
+    return {
+      id: task.id,
+      priority: priorityMapped,
+      taskTitle: task.title,
+      taskType: task.type || 'General',
+      candidateName,
+      candidateAppId,
+      positionTitle,
+      department,
+      location,
+      ownerName,
+      ownerAvatar,
+      dueTime,
+      dueLeft,
+      slaState,
+      nextActionLabel,
+      nextActionRoute,
+      status: task.status,
+    };
+  }, []);
+
+  const loadData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const [tasksRes, vacRes, recRes] = await Promise.allSettled([
+        getApi<{ data?: TaskRecord[] } | TaskRecord[]>('/tasks?pageSize=100'),
+        getApi<Vacancy[]>('/vacancies'),
+        getApi<{ id: string; displayName?: string; name?: string; roleCode?: string }[]>('/users/interviewers'),
+      ]);
+
+      const currentUserName = user?.displayName || 'You';
+
+      if (tasksRes.status === 'fulfilled' && tasksRes.value) {
+        const raw = Array.isArray(tasksRes.value)
+          ? tasksRes.value
+          : tasksRes.value.data || [];
+        setTasksList(raw.map((t) => mapTaskRecord(t, currentUserName)));
+      } else {
+        setTasksList([]);
+      }
+
+      if (vacRes.status === 'fulfilled' && Array.isArray(vacRes.value)) {
+        setApiVacancies(vacRes.value);
+        if (vacRes.value.length > 0 && !selectedVacancyId) {
+          setSelectedVacancyId(vacRes.value[0].id);
+        }
+      }
+
+      if (recRes.status === 'fulfilled' && Array.isArray(recRes.value)) {
+        const mapped = recRes.value.map((r) => ({
+          id: r.id,
+          name: r.displayName || r.name || 'Recruiter',
+          role: r.roleCode || 'Recruiter',
+        }));
+        setApiRecruiters(mapped);
+        if (mapped.length > 0 && !selectedRecruiterId) {
+          setSelectedRecruiterId(mapped[0].id);
+        }
+      } else if (user) {
+        setApiRecruiters([{ id: user.id, name: user.displayName || 'Current User', role: 'Recruiter' }]);
+        if (!selectedRecruiterId) setSelectedRecruiterId(user.id);
+      }
+    } catch {
+      setTasksList([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user, mapTaskRecord, selectedVacancyId, selectedRecruiterId]);
+
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
+
   const handleAssignTask = async (e: React.FormEvent) => {
     e.preventDefault();
-    const vacancy = DEFAULT_OPEN_VACANCIES.find((v) => v.id === selectedVacancyId) || DEFAULT_OPEN_VACANCIES[0];
-    const recruiter = RECRUITER_OPTIONS.find((r) => r.id === selectedRecruiterId) || RECRUITER_OPTIONS[0];
+    const vacancy = apiVacancies.find((v) => v.id === selectedVacancyId);
+    const recruiter = apiRecruiters.find((r) => r.id === selectedRecruiterId) || apiRecruiters[0];
+
+    const vacancyTitle = vacancy?.title || vacancy?.position?.title || 'Open Vacancy';
+    const vacancyDept = (vacancy as unknown as { department?: string } | null | undefined)?.department || vacancy?.branch?.name || 'Operations';
+    const vacancyLoc = vacancy?.location || vacancy?.branch?.name || '—';
 
     setIsSubmitting(true);
-    const taskTitle = `${targetType === 'Hires' ? 'Hire Target' : 'Screening Target'}: ${targetQuota} ${targetType} for ${vacancy.title}`;
-    const newTask: TaskQueueItem = {
-      id: `task-${Date.now()}`,
-      priority,
-      taskTitle,
-      taskType: targetType === 'Hires' ? 'Hiring' : 'Screening',
-      candidateName: `${vacancy.title} Pipeline`,
-      candidateAppId: `REQ-${vacancy.id.toUpperCase()}`,
-      candidateAvatar: 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?w=100&auto=format&fit=crop&q=80',
-      positionTitle: vacancy.title,
-      department: vacancy.department,
-      location: vacancy.location,
-      ownerName: recruiter.name,
-      ownerAvatar: recruiter.name.split(' ').map((n) => n[0]).join('').substring(0, 2).toUpperCase(),
-      dueTime: targetDeadline,
-      dueLeft: targetDeadline.split('(')[0].trim(),
-      slaState: priority === 'High' ? 'At risk' : 'On track',
-      nextActionLabel: 'Review pipeline',
-      nextActionRoute: '/vacancies',
-    };
+    const taskTitle = `${targetType === 'Hires' ? 'Hire Target' : 'Screening Target'}: ${targetQuota} ${targetType} for ${vacancyTitle}`;
 
     try {
       await postApi('/tasks', {
-        title: newTask.taskTitle,
-        type: newTask.taskType,
-        priority: newTask.priority === 'High' ? 'High' : 'Normal',
-        description: `Position: ${vacancy.title} (${vacancy.department}) | Quota: ${targetQuota} ${targetType} | Due: ${targetDeadline} | Notes: ${instructions || 'Target assigned by recruitment manager'}`,
-        assigneeUserId: recruiter.id,
+        title: taskTitle,
+        type: targetType === 'Hires' ? 'Hiring' : 'Screening',
+        priority: priority === 'High' ? 'High' : 'Normal',
+        description: `Position: ${vacancyTitle} | Department: ${vacancyDept} | Location: ${vacancyLoc} | Quota: ${targetQuota} ${targetType} | Due: ${targetDeadline} | Notes: ${instructions || 'Target assigned by recruitment manager'}`,
+        assigneeUserId: recruiter?.id || user?.id,
+        entityType: 'Vacancy',
+        entityId: vacancy?.id || null,
       }).catch(() => {});
 
-      setTasksList((prev) => [newTask, ...prev]);
-      const isReassign = vacancy.currentRecruiter !== 'Unassigned' && vacancy.currentRecruiter !== recruiter.name;
       showToast(
-        isReassign
-          ? `✓ Reassigned "${vacancy.title}" to ${recruiter.name} (Target: ${targetQuota} ${targetType})!`
-          : `✓ Assigned "${vacancy.title}" to ${recruiter.name} (Target: ${targetQuota} ${targetType})!`
+        `✓ Assigned "${vacancyTitle}" target to ${recruiter?.name || 'recruiter'} (${targetQuota} ${targetType})!`
       );
       setIsAssignModalOpen(false);
       setInstructions('');
+      await loadData();
     } finally {
       setIsSubmitting(false);
     }
   };
 
+  // Metrics derived dynamically
+  const metrics = useMemo(() => {
+    const all = tasksList.length;
+    const overdue = tasksList.filter((t) => t.slaState === 'Overdue').length;
+    const dueToday = tasksList.filter((t) => t.dueTime.includes('Today')).length;
+    const upcoming = tasksList.filter((t) => t.slaState === 'On track' && t.status !== 'Completed').length;
+    const completed = tasksList.filter((t) => t.status === 'Completed').length;
+    return { all, overdue, dueToday, upcoming, completed };
+  }, [tasksList]);
+
+  // Dynamic filter options
+  const filterOptions = useMemo(() => {
+    const types = Array.from(new Set(tasksList.map((t) => t.taskType).filter(Boolean)));
+    const owners = Array.from(new Set(tasksList.map((t) => t.ownerName).filter((o) => o && o !== 'Unassigned')));
+    const departments = Array.from(new Set(tasksList.map((t) => t.department).filter((d) => d && d !== '—')));
+    return { types, owners, departments };
+  }, [tasksList]);
+
   const filteredTasks = useMemo(() => {
     return tasksList.filter((task) => {
-      if (activeFilterTab === 'Overdue (9)' && task.slaState !== 'Overdue') return false;
-      if (activeFilterTab === 'Due Today (12)' && !task.dueTime.includes('Today')) return false;
-      if (activeFilterTab === 'Interviews (14)' && task.taskType !== 'Interview') return false;
-      if (activeFilterTab === 'Offers (7)' && task.taskType !== 'Offer') return false;
+      if (activeFilterTab.startsWith('Overdue') && task.slaState !== 'Overdue') return false;
+      if (activeFilterTab.startsWith('Due Today') && !task.dueTime.includes('Today')) return false;
+      if (activeFilterTab.startsWith('Interviews') && !task.taskType.toLowerCase().includes('interview')) return false;
+      if (activeFilterTab.startsWith('Offers') && !task.taskType.toLowerCase().includes('offer')) return false;
+      if (activeFilterTab.startsWith('Screening') && !task.taskType.toLowerCase().includes('screen')) return false;
+
+      if (selectedOwnerFilter !== 'ALL' && task.ownerName !== selectedOwnerFilter) return false;
+      if (selectedTypeFilter !== 'ALL' && task.taskType !== selectedTypeFilter) return false;
+      if (selectedPriorityFilter !== 'ALL' && task.priority !== selectedPriorityFilter) return false;
+      if (selectedDepartmentFilter !== 'ALL' && task.department !== selectedDepartmentFilter) return false;
 
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         return (
           task.taskTitle.toLowerCase().includes(q) ||
           task.candidateName.toLowerCase().includes(q) ||
-          task.positionTitle.toLowerCase().includes(q)
+          task.positionTitle.toLowerCase().includes(q) ||
+          task.department.toLowerCase().includes(q)
         );
       }
       return true;
     });
-  }, [tasksList, activeFilterTab, searchQuery]);
+  }, [
+    tasksList,
+    activeFilterTab,
+    searchQuery,
+    selectedOwnerFilter,
+    selectedTypeFilter,
+    selectedPriorityFilter,
+    selectedDepartmentFilter,
+  ]);
+
+  const paginatedTasks = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return filteredTasks.slice(start, start + pageSize);
+  }, [filteredTasks, page, pageSize]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredTasks.length / pageSize));
 
   const toggleSelectAll = () => {
-    if (selectedIds.length === filteredTasks.length) {
+    if (selectedIds.length === paginatedTasks.length && paginatedTasks.length > 0) {
       setSelectedIds([]);
     } else {
-      setSelectedIds(filteredTasks.map((t) => t.id));
+      setSelectedIds(paginatedTasks.map((t) => t.id));
     }
   };
 
@@ -331,30 +355,38 @@ export function TasksPage() {
   const getPriorityBadge = (p: TaskQueueItem['priority']) => {
     switch (p) {
       case 'High':
-        return 'bg-rose-50 text-rose-700 border-rose-200';
+        return 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900';
       case 'Medium':
-        return 'bg-amber-50 text-amber-700 border-amber-200';
+        return 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900';
       case 'Low':
       default:
-        return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+        return 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900';
     }
   };
 
   const getSlaBadge = (s: TaskQueueItem['slaState']) => {
     switch (s) {
       case 'Overdue':
-        return 'bg-rose-50 text-rose-700 border-rose-200';
+        return 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-900';
       case 'At risk':
-        return 'bg-amber-50 text-amber-700 border-amber-200';
+        return 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900';
       case 'On track':
       default:
-        return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+        return 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-900';
     }
   };
 
+  const dynamicTabs = [
+    { label: 'All Tasks', count: metrics.all },
+    { label: 'Overdue', count: metrics.overdue },
+    { label: 'Due Today', count: metrics.dueToday },
+    { label: 'Interviews', count: tasksList.filter((t) => t.taskType.toLowerCase().includes('interview')).length },
+    { label: 'Offers', count: tasksList.filter((t) => t.taskType.toLowerCase().includes('offer')).length },
+  ];
+
   return (
     <div className="flex w-full flex-col p-4 sm:p-6 lg:p-7 max-w-[1720px] mx-auto space-y-6">
-      {/* ── Page Header matching 14-my-work-full-task-queue.png ── */}
+      {/* ── Page Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
@@ -384,8 +416,10 @@ export function TasksPage() {
           </div>
           <div>
             <span className="text-xs font-semibold text-slate-400 block">All Tasks</span>
-            <span className="text-2xl font-black text-slate-900 dark:text-white block mt-0.5">48</span>
-            <span className="text-xs font-bold text-blue-600 block mt-1">+6 vs yesterday</span>
+            <span className="text-2xl font-black text-slate-900 dark:text-white block mt-0.5">
+              {metrics.all}
+            </span>
+            <span className="text-xs font-bold text-slate-500 block mt-1">Active queue</span>
           </div>
         </div>
 
@@ -396,8 +430,12 @@ export function TasksPage() {
           </div>
           <div>
             <span className="text-xs font-semibold text-slate-400 block">Overdue</span>
-            <span className="text-2xl font-black text-slate-900 dark:text-white block mt-0.5">9</span>
-            <span className="text-xs font-bold text-rose-600 block mt-1">+3 vs yesterday</span>
+            <span className="text-2xl font-black text-slate-900 dark:text-white block mt-0.5">
+              {metrics.overdue}
+            </span>
+            <span className="text-xs font-bold text-rose-600 block mt-1">
+              {metrics.overdue > 0 ? 'Requires attention' : 'Zero overdue'}
+            </span>
           </div>
         </div>
 
@@ -408,8 +446,10 @@ export function TasksPage() {
           </div>
           <div>
             <span className="text-xs font-semibold text-slate-400 block">Due Today</span>
-            <span className="text-2xl font-black text-slate-900 dark:text-white block mt-0.5">12</span>
-            <span className="text-xs font-bold text-amber-600 block mt-1">+2 vs yesterday</span>
+            <span className="text-2xl font-black text-slate-900 dark:text-white block mt-0.5">
+              {metrics.dueToday}
+            </span>
+            <span className="text-xs font-bold text-amber-600 block mt-1">Scheduled today</span>
           </div>
         </div>
 
@@ -420,20 +460,24 @@ export function TasksPage() {
           </div>
           <div>
             <span className="text-xs font-semibold text-slate-400 block">Upcoming</span>
-            <span className="text-2xl font-black text-slate-900 dark:text-white block mt-0.5">27</span>
-            <span className="text-xs font-bold text-emerald-600 block mt-1">+1 vs yesterday</span>
+            <span className="text-2xl font-black text-slate-900 dark:text-white block mt-0.5">
+              {metrics.upcoming}
+            </span>
+            <span className="text-xs font-bold text-emerald-600 block mt-1">Within SLA</span>
           </div>
         </div>
 
-        {/* Card 5: Completed Today */}
+        {/* Card 5: Completed */}
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs space-y-2">
           <div className="w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 flex items-center justify-center">
             <Icon name="check" size={18} />
           </div>
           <div>
-            <span className="text-xs font-semibold text-slate-400 block">Completed Today</span>
-            <span className="text-2xl font-black text-slate-900 dark:text-white block mt-0.5">6</span>
-            <span className="text-xs font-bold text-purple-600 block mt-1">+4 vs yesterday</span>
+            <span className="text-xs font-semibold text-slate-400 block">Completed</span>
+            <span className="text-2xl font-black text-slate-900 dark:text-white block mt-0.5">
+              {metrics.completed}
+            </span>
+            <span className="text-xs font-bold text-purple-600 block mt-1">Closed items</span>
           </div>
         </div>
       </div>
@@ -441,20 +485,26 @@ export function TasksPage() {
       {/* ── Filter Tabs & Search ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-2">
         <div className="flex items-center gap-2 overflow-x-auto text-xs font-semibold pb-1">
-          {['All Tasks', 'Overdue (9)', 'Due Today (12)', 'Interviews (14)', 'Follow-ups (18)', 'Offers (7)', 'Approvals (6)'].map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              onClick={() => setActiveFilterTab(tab)}
-              className={`px-3 py-1.5 rounded-full whitespace-nowrap transition cursor-pointer ${
-                activeFilterTab === tab
-                  ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 font-bold border border-blue-200 dark:border-blue-800'
-                  : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
-              }`}
-            >
-              {tab}
-            </button>
-          ))}
+          {dynamicTabs.map((tab) => {
+            const isActive = activeFilterTab.startsWith(tab.label);
+            return (
+              <button
+                key={tab.label}
+                type="button"
+                onClick={() => {
+                  setActiveFilterTab(tab.label);
+                  setPage(1);
+                }}
+                className={`px-3 py-1.5 rounded-full whitespace-nowrap transition cursor-pointer ${
+                  isActive
+                    ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 font-bold border border-blue-200 dark:border-blue-800'
+                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
+                }`}
+              >
+                {tab.label} ({tab.count})
+              </button>
+            );
+          })}
         </div>
 
         <div className="relative w-full sm:w-64 shrink-0">
@@ -462,7 +512,10 @@ export function TasksPage() {
           <input
             type="text"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setPage(1);
+            }}
             placeholder="Search tasks..."
             className="w-full pl-8 pr-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-2xs"
           />
@@ -472,26 +525,48 @@ export function TasksPage() {
       {/* ── Filter Selectors Row ── */}
       <div className="flex flex-wrap items-center gap-3 text-xs">
         <div className="relative">
-          <select className="appearance-none bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-1.5 pr-7 text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer shadow-xs">
+          <select
+            value={selectedOwnerFilter}
+            onChange={(e) => {
+              setSelectedOwnerFilter(e.target.value);
+              setPage(1);
+            }}
+            className="appearance-none bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-1.5 pr-7 text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer shadow-xs"
+          >
             <option value="ALL">All Owners</option>
-            <option value="Sarah Ahmed">Sarah Ahmed</option>
-            <option value="Mona Saleh">Mona Saleh</option>
+            {filterOptions.owners.map((owner) => (
+              <option key={owner} value={owner}>{owner}</option>
+            ))}
           </select>
           <Icon name="chevron-down" size={11} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
         </div>
 
         <div className="relative">
-          <select className="appearance-none bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-1.5 pr-7 text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer shadow-xs">
+          <select
+            value={selectedTypeFilter}
+            onChange={(e) => {
+              setSelectedTypeFilter(e.target.value);
+              setPage(1);
+            }}
+            className="appearance-none bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-1.5 pr-7 text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer shadow-xs"
+          >
             <option value="ALL">All Task Types</option>
-            <option value="Interview">Interview</option>
-            <option value="Screening">Screening</option>
-            <option value="Offer">Offer</option>
+            {filterOptions.types.map((type) => (
+              <option key={type} value={type}>{type}</option>
+            ))}
           </select>
           <Icon name="chevron-down" size={11} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
         </div>
 
         <div className="relative">
-          <select className="appearance-none bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-1.5 pr-7 text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer shadow-xs">
+          <select
+            value={selectedPriorityFilter}
+            onChange={(e) => {
+              setSelectedPriorityFilter(e.target.value);
+              setPage(1);
+            }}
+            className="appearance-none bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-1.5 pr-7 text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer shadow-xs"
+          >
             <option value="ALL">All Priorities</option>
             <option value="High">High</option>
             <option value="Medium">Medium</option>
@@ -500,15 +575,24 @@ export function TasksPage() {
           <Icon name="chevron-down" size={11} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
         </div>
 
-        <div className="relative">
-          <select className="appearance-none bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-1.5 pr-7 text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer shadow-xs">
-            <option value="ALL">All Departments</option>
-            <option value="Engineering">Engineering</option>
-            <option value="Clinical">Clinical Operations</option>
-            <option value="Digital">Digital Health</option>
-          </select>
-          <Icon name="chevron-down" size={11} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-        </div>
+        {filterOptions.departments.length > 0 && (
+          <div className="relative">
+            <select
+              value={selectedDepartmentFilter}
+              onChange={(e) => {
+                setSelectedDepartmentFilter(e.target.value);
+                setPage(1);
+              }}
+              className="appearance-none bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-1.5 pr-7 text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer shadow-xs"
+            >
+              <option value="ALL">All Departments</option>
+              {filterOptions.departments.map((dept) => (
+                <option key={dept} value={dept}>{dept}</option>
+              ))}
+            </select>
+            <Icon name="chevron-down" size={11} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+          </div>
+        )}
 
         <button
           type="button"
@@ -528,18 +612,21 @@ export function TasksPage() {
       {isMoreFiltersOpen && (
         <div className="flex flex-wrap items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200/60 dark:border-slate-700/60 text-xs">
           <span className="font-bold text-slate-500">Quick Filter:</span>
-          {['All Tasks', 'Overdue (9)', 'Due Today (12)', 'Interviews (14)', 'Offers (6)'].map((tab) => (
+          {dynamicTabs.map((tab) => (
             <button
-              key={tab}
+              key={tab.label}
               type="button"
-              onClick={() => setActiveFilterTab(tab)}
+              onClick={() => {
+                setActiveFilterTab(tab.label);
+                setPage(1);
+              }}
               className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer border ${
-                activeFilterTab === tab
+                activeFilterTab.startsWith(tab.label)
                   ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
                   : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100'
               }`}
             >
-              {tab}
+              {tab.label}
             </button>
           ))}
           <button
@@ -547,6 +634,11 @@ export function TasksPage() {
             onClick={() => {
               setActiveFilterTab('All Tasks');
               setSearchQuery('');
+              setSelectedOwnerFilter('ALL');
+              setSelectedTypeFilter('ALL');
+              setSelectedPriorityFilter('ALL');
+              setSelectedDepartmentFilter('ALL');
+              setPage(1);
             }}
             className="ml-auto text-xs font-bold text-slate-500 hover:text-rose-600 cursor-pointer"
           >
@@ -555,206 +647,253 @@ export function TasksPage() {
         </div>
       )}
 
-      {/* ── Table matching 14-my-work-full-task-queue.png ── */}
+      {/* ── Table or Empty State ── */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="border-b border-slate-200 dark:border-slate-800 text-[11px] font-semibold text-slate-400 bg-slate-50/50 dark:bg-slate-800/30 text-left">
-                <th className="p-3.5 pl-4 w-10">
-                  <input
-                    type="checkbox"
-                    checked={selectedIds.length === filteredTasks.length && filteredTasks.length > 0}
-                    onChange={toggleSelectAll}
-                    className="rounded border-slate-300 text-blue-600 cursor-pointer"
-                  />
-                </th>
-                <th className="py-3.5 px-3">Priority ↕</th>
-                <th className="py-3.5 px-3">Task</th>
-                <th className="py-3.5 px-3">Related Candidate</th>
-                <th className="py-3.5 px-3">Related Position</th>
-                <th className="py-3.5 px-3">Owner</th>
-                <th className="py-3.5 px-3">Due ↕</th>
-                <th className="py-3.5 px-3">SLA State</th>
-                <th className="py-3.5 px-3">Next Action</th>
-                <th className="py-3.5 pr-4 text-right">
-                  <Icon name="settings" size={13} className="text-slate-400 inline" />
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-              {filteredTasks.map((t) => (
-                <tr
-                  key={t.id}
-                  onClick={() => navigate(t.nextActionRoute)}
-                  className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition cursor-pointer group"
-                >
-                  {/* Checkbox */}
-                  <td className="p-3.5 pl-4" onClick={(e) => e.stopPropagation()}>
-                    <input
-                      type="checkbox"
-                      checked={selectedIds.includes(t.id)}
-                      onChange={() => toggleSelectOne(t.id)}
-                      className="rounded border-slate-300 text-blue-600 cursor-pointer"
-                    />
-                  </td>
-
-                  {/* Priority */}
-                  <td className="py-3.5 px-3">
-                    <span className={`px-2.5 py-0.5 rounded-full text-[10.5px] font-bold border ${getPriorityBadge(t.priority)}`}>
-                      {t.priority}
-                    </span>
-                  </td>
-
-                  {/* Task */}
-                  <td className="py-3.5 px-3">
-                    <div>
-                      <span className="block font-bold text-slate-900 dark:text-white group-hover:text-blue-600 transition">
-                        {t.taskTitle}
-                      </span>
-                      <span className="block text-[10.5px] text-slate-400">{t.taskType}</span>
-                    </div>
-                  </td>
-
-                  {/* Candidate */}
-                  <td className="py-3.5 px-3">
-                    <div className="flex items-center gap-2.5">
-                      <img
-                        src={t.candidateAvatar}
-                        alt={t.candidateName}
-                        className="w-7 h-7 rounded-full object-cover border shrink-0"
+        {isLoading ? (
+          <div className="p-8">
+            <PageState kind="loading" title="Loading tasks..." description="Fetching your recruitment task queue." />
+          </div>
+        ) : filteredTasks.length === 0 ? (
+          <div className="p-8">
+            <PageState
+              kind="empty"
+              title={searchQuery || activeFilterTab !== 'All Tasks' ? 'No matching tasks found' : 'No tasks assigned'}
+              description={
+                searchQuery || activeFilterTab !== 'All Tasks'
+                  ? 'Try adjusting your search terms or active filters.'
+                  : 'Your recruitment task queue is currently empty.'
+              }
+              actionLabel={searchQuery || activeFilterTab !== 'All Tasks' ? 'Reset filters' : 'Assign task'}
+              onAction={
+                searchQuery || activeFilterTab !== 'All Tasks'
+                  ? () => {
+                      setActiveFilterTab('All Tasks');
+                      setSearchQuery('');
+                      setSelectedOwnerFilter('ALL');
+                      setSelectedTypeFilter('ALL');
+                      setSelectedPriorityFilter('ALL');
+                      setSelectedDepartmentFilter('ALL');
+                    }
+                  : () => setIsAssignModalOpen(true)
+              }
+            />
+          </div>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-slate-200 dark:border-slate-800 text-[11px] font-semibold text-slate-400 bg-slate-50/50 dark:bg-slate-800/30 text-left">
+                    <th className="p-3.5 pl-4 w-10">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.length === paginatedTasks.length && paginatedTasks.length > 0}
+                        onChange={toggleSelectAll}
+                        className="rounded border-slate-300 text-blue-600 cursor-pointer"
                       />
-                      <div>
-                        <span className="block font-bold text-slate-900 dark:text-white leading-tight">
-                          {t.candidateName}
-                        </span>
-                        <span className="block text-[10px] text-slate-400 font-mono">
-                          {t.candidateAppId}
-                        </span>
-                      </div>
-                    </div>
-                  </td>
-
-                  {/* Position */}
-                  <td className="py-3.5 px-3">
-                    <div>
-                      <span className="block font-bold text-slate-800 dark:text-slate-200">
-                        {t.positionTitle}
-                      </span>
-                      <span className="block text-[10.5px] text-slate-400">
-                        {t.department} &bull; {t.location}
-                      </span>
-                    </div>
-                  </td>
-
-                  {/* Owner */}
-                  <td className="py-3.5 px-3">
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-5 h-5 rounded-full bg-teal-600 text-white text-[8px] font-extrabold flex items-center justify-center shrink-0">
-                        {t.ownerAvatar}
-                      </div>
-                      <span className="font-bold text-slate-900 dark:text-white">
-                        {t.ownerName}
-                      </span>
-                    </div>
-                  </td>
-
-                  {/* Due */}
-                  <td className="py-3.5 px-3">
-                    <div>
-                      <span className="block font-bold text-slate-900 dark:text-white">
-                        {t.dueTime}
-                      </span>
-                      <span className="block text-[10.5px] font-semibold text-amber-600">
-                        {t.dueLeft}
-                      </span>
-                    </div>
-                  </td>
-
-                  {/* SLA State */}
-                  <td className="py-3.5 px-3">
-                    <span className={`px-2.5 py-0.5 rounded-full text-[10.5px] font-bold border ${getSlaBadge(t.slaState)}`}>
-                      {t.slaState}
-                    </span>
-                  </td>
-
-                  {/* Next Action */}
-                  <td className="py-3.5 px-3">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigate(t.nextActionRoute);
-                      }}
-                      className="inline-flex items-center gap-1 px-3 py-1 bg-white dark:bg-slate-800 border border-blue-200 dark:border-blue-900 text-blue-600 dark:text-blue-400 rounded-xl text-xs font-bold hover:bg-blue-50 transition shadow-2xs cursor-pointer"
-                    >
-                      <span>{t.nextActionLabel}</span>
-                      <Icon name="chevron-right" size={11} />
-                    </button>
-                  </td>
-
-                  {/* Row Menu */}
-                  <td className="py-3.5 pr-4 text-right" onClick={(e) => e.stopPropagation()}>
-                    <button
-                      type="button"
+                    </th>
+                    <th className="py-3.5 px-3">Priority</th>
+                    <th className="py-3.5 px-3">Task</th>
+                    <th className="py-3.5 px-3">Related Candidate</th>
+                    <th className="py-3.5 px-3">Related Position</th>
+                    <th className="py-3.5 px-3">Owner</th>
+                    <th className="py-3.5 px-3">Due</th>
+                    <th className="py-3.5 px-3">SLA State</th>
+                    <th className="py-3.5 px-3">Next Action</th>
+                    <th className="py-3.5 pr-4 text-right">
+                      <Icon name="settings" size={13} className="text-slate-400 inline" />
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {paginatedTasks.map((t) => (
+                    <tr
+                      key={t.id}
                       onClick={() => navigate(t.nextActionRoute)}
-                      className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400 hover:text-blue-600 transition cursor-pointer"
-                      title="Open task route"
+                      className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition cursor-pointer group"
                     >
-                      <Icon name="more-horizontal" size={14} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+                      {/* Checkbox */}
+                      <td className="p-3.5 pl-4" onClick={(e) => e.stopPropagation()}>
+                        <input
+                          type="checkbox"
+                          checked={selectedIds.includes(t.id)}
+                          onChange={() => toggleSelectOne(t.id)}
+                          className="rounded border-slate-300 text-blue-600 cursor-pointer"
+                        />
+                      </td>
 
-        {/* Table Footer with Pagination */}
-        <div className="p-3.5 px-4 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-400">
-          <span>Showing {(page - 1) * 10 + 1} to {Math.min(page * 10, 48)} of 48 tasks</span>
+                      {/* Priority */}
+                      <td className="py-3.5 px-3">
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10.5px] font-bold border ${getPriorityBadge(t.priority)}`}>
+                          {t.priority}
+                        </span>
+                      </td>
 
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page === 1}
-                className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 disabled:opacity-40 cursor-pointer"
-              >
-                &lt;
-              </button>
-              {[1, 2, 3, 4, 5].map((num) => (
-                <button
-                  key={num}
-                  type="button"
-                  onClick={() => setPage(num)}
-                  className={`w-7 h-7 flex items-center justify-center rounded-lg text-xs font-bold transition cursor-pointer ${
-                    page === num
-                      ? 'bg-blue-600 text-white shadow-2xs'
-                      : 'border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50'
-                  }`}
-                >
-                  {num}
-                </button>
-              ))}
-              <button
-                type="button"
-                onClick={() => setPage((p) => Math.min(5, p + 1))}
-                disabled={page === 5}
-                className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 disabled:opacity-40 cursor-pointer"
-              >
-                &gt;
-              </button>
+                      {/* Task */}
+                      <td className="py-3.5 px-3">
+                        <div>
+                          <span className="block font-bold text-slate-900 dark:text-white group-hover:text-blue-600 transition">
+                            {t.taskTitle}
+                          </span>
+                          <span className="block text-[10.5px] text-slate-400">{t.taskType}</span>
+                        </div>
+                      </td>
+
+                      {/* Candidate */}
+                      <td className="py-3.5 px-3">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-7 h-7 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 text-[10px] font-bold flex items-center justify-center shrink-0">
+                            {getInitials(t.candidateName)}
+                          </div>
+                          <div>
+                            <span className="block font-bold text-slate-900 dark:text-white leading-tight">
+                              {t.candidateName}
+                            </span>
+                            <span className="block text-[10px] text-slate-400 font-mono">
+                              {t.candidateAppId}
+                            </span>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Position */}
+                      <td className="py-3.5 px-3">
+                        <div>
+                          <span className="block font-bold text-slate-800 dark:text-slate-200">
+                            {t.positionTitle}
+                          </span>
+                          <span className="block text-[10.5px] text-slate-400">
+                            {t.department !== '—' && t.location !== '—'
+                              ? `${t.department} • ${t.location}`
+                              : t.department !== '—'
+                              ? t.department
+                              : t.location}
+                          </span>
+                        </div>
+                      </td>
+
+                      {/* Owner */}
+                      <td className="py-3.5 px-3">
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-5 h-5 rounded-full bg-teal-600 text-white text-[8px] font-extrabold flex items-center justify-center shrink-0">
+                            {t.ownerAvatar}
+                          </div>
+                          <span className="font-bold text-slate-900 dark:text-white">
+                            {t.ownerName}
+                          </span>
+                        </div>
+                      </td>
+
+                      {/* Due */}
+                      <td className="py-3.5 px-3">
+                        <div>
+                          <span className="block font-bold text-slate-900 dark:text-white">
+                            {t.dueTime}
+                          </span>
+                          <span className="block text-[10.5px] font-semibold text-amber-600 dark:text-amber-400">
+                            {t.dueLeft}
+                          </span>
+                        </div>
+                      </td>
+
+                      {/* SLA State */}
+                      <td className="py-3.5 px-3">
+                        <span className={`px-2.5 py-0.5 rounded-full text-[10.5px] font-bold border ${getSlaBadge(t.slaState)}`}>
+                          {t.slaState}
+                        </span>
+                      </td>
+
+                      {/* Next Action */}
+                      <td className="py-3.5 px-3">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(t.nextActionRoute);
+                          }}
+                          className="inline-flex items-center gap-1 px-3 py-1 bg-white dark:bg-slate-800 border border-blue-200 dark:border-blue-900 text-blue-600 dark:text-blue-400 rounded-xl text-xs font-bold hover:bg-blue-50 transition shadow-2xs cursor-pointer"
+                        >
+                          <span>{t.nextActionLabel}</span>
+                          <Icon name="chevron-right" size={11} />
+                        </button>
+                      </td>
+
+                      {/* Row Menu */}
+                      <td className="py-3.5 pr-4 text-right" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={() => navigate(t.nextActionRoute)}
+                          className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400 hover:text-blue-600 transition cursor-pointer"
+                          title="Open task route"
+                        >
+                          <Icon name="more-horizontal" size={14} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
 
-            <select className="border rounded-lg px-2 py-1 text-xs">
-              <option value="10">10 per page</option>
-              <option value="25">25 per page</option>
-            </select>
-          </div>
-        </div>
+            {/* Table Footer with Pagination */}
+            <div className="p-3.5 px-4 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-400">
+              <span>
+                Showing {Math.min((page - 1) * pageSize + 1, filteredTasks.length)} to{' '}
+                {Math.min(page * pageSize, filteredTasks.length)} of {filteredTasks.length} tasks
+              </span>
+
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page === 1}
+                    className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 disabled:opacity-40 cursor-pointer"
+                  >
+                    &lt;
+                  </button>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).slice(0, 5).map((num) => (
+                    <button
+                      key={num}
+                      type="button"
+                      onClick={() => setPage(num)}
+                      className={`w-7 h-7 flex items-center justify-center rounded-lg text-xs font-bold transition cursor-pointer ${
+                        page === num
+                          ? 'bg-blue-600 text-white shadow-2xs'
+                          : 'border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50'
+                      }`}
+                    >
+                      {num}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={page === totalPages}
+                    className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 disabled:opacity-40 cursor-pointer"
+                  >
+                    &gt;
+                  </button>
+                </div>
+
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setPage(1);
+                  }}
+                  className="border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-xs bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 cursor-pointer"
+                >
+                  <option value={10}>10 per page</option>
+                  <option value={25}>25 per page</option>
+                  <option value={50}>50 per page</option>
+                </select>
+              </div>
+            </div>
+          </>
+        )}
       </div>
+
       {/* Assign Open Vacancy & Target Modal */}
       <Modal
         isOpen={isAssignModalOpen}
@@ -764,215 +903,160 @@ export function TasksPage() {
       >
         <form onSubmit={handleAssignTask} className="space-y-4 text-xs">
           <p className="text-slate-500 dark:text-slate-400">
-            Select an active vacancy position, assign or reassign to a recruiter, and establish clinical recruitment targets with SLAs.
+            Select an active vacancy position, assign to a recruiter, and establish recruitment targets with SLAs.
           </p>
 
-          {/* Vacancy Selector */}
-          <div>
-            <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">
-              Select Open Vacancy Position
-            </label>
-            <select
-              value={selectedVacancyId}
-              onChange={(e) => {
-                const id = e.target.value;
-                setSelectedVacancyId(id);
-                const vac = DEFAULT_OPEN_VACANCIES.find((v) => v.id === id);
-                if (vac && vac.currentRecruiterId) {
-                  setSelectedRecruiterId(vac.currentRecruiterId);
-                }
-              }}
-              className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-semibold cursor-pointer"
-            >
-              {DEFAULT_OPEN_VACANCIES.map((vac) => (
-                <option key={vac.id} value={vac.id}>
-                  {vac.title} — {vac.department} ({vac.location}) [Current: {vac.currentRecruiter}]
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Vacancy Details Card & Reassignment Logic */}
-          {(() => {
-            const currentVac = DEFAULT_OPEN_VACANCIES.find((v) => v.id === selectedVacancyId) || DEFAULT_OPEN_VACANCIES[0];
-            const selectedRecruiter = RECRUITER_OPTIONS.find((r) => r.id === selectedRecruiterId) || RECRUITER_OPTIONS[0];
-            const isReassignment = currentVac.currentRecruiter !== 'Unassigned' && currentVac.currentRecruiter !== selectedRecruiter.name;
-
-            return (
-              <div className="space-y-3.5">
-                <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2">
-                  <div className="flex items-center justify-between text-[11px]">
-                    <span className="font-bold text-slate-500 uppercase tracking-wider">Position Status</span>
-                    <span className="px-2 py-0.5 rounded-full font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
-                      ACTIVE REQUISITION
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-slate-500">Department &amp; Location:</span>
-                    <span className="font-semibold text-slate-900 dark:text-white">{currentVac.department} &bull; {currentVac.location}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="text-slate-500">Active Pipeline Candidates:</span>
-                    <span className="font-bold text-blue-600 dark:text-blue-400">{currentVac.openApplications} candidates</span>
-                  </div>
-                  <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-200/60 dark:border-slate-700/60">
-                    <span className="text-slate-500">Current Assigned Recruiter:</span>
-                    <span className="font-bold text-slate-900 dark:text-white">
-                      {currentVac.currentRecruiter === 'Unassigned' ? (
-                        <span className="text-amber-600 font-semibold">⚠️ Unassigned</span>
-                      ) : (
-                        `👤 ${currentVac.currentRecruiter}`
-                      )}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Reassignment Status Notice */}
-                {isReassignment ? (
-                  <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 text-xs flex items-start gap-2">
-                    <span className="text-base">🔄</span>
-                    <div>
-                      <span className="font-bold block">Reassigning Position</span>
-                      <span className="text-[11px] block mt-0.5">
-                        Transferring <b>{currentVac.title}</b> from <b>{currentVac.currentRecruiter}</b> to <b>{selectedRecruiter.name}</b>.
-                      </span>
-                    </div>
-                  </div>
-                ) : currentVac.currentRecruiter === 'Unassigned' ? (
-                  <div className="p-3 rounded-xl bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300 text-xs flex items-start gap-2">
-                    <span className="text-base">✨</span>
-                    <div>
-                      <span className="font-bold block">Initial Position Assignment</span>
-                      <span className="text-[11px] block mt-0.5">
-                        Assigning <b>{currentVac.title}</b> to <b>{selectedRecruiter.name}</b>.
-                      </span>
-                    </div>
-                  </div>
-                ) : null}
-
-                {/* Recruiter Selector */}
-                <div>
-                  <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">
-                    {isReassignment ? 'Reassign To Recruiter' : 'Assign To Recruiter'}
-                  </label>
-                  <select
-                    value={selectedRecruiterId}
-                    onChange={(e) => setSelectedRecruiterId(e.target.value)}
-                    className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-semibold cursor-pointer"
-                  >
-                    {RECRUITER_OPTIONS.map((rec) => (
-                      <option key={rec.id} value={rec.id}>
-                        {rec.name} — {rec.role}
+          {apiVacancies.length === 0 ? (
+            <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-xl text-center text-slate-500">
+              No active vacancies found. Create a vacancy first before assigning targets.
+            </div>
+          ) : (
+            <>
+              {/* Vacancy Selector */}
+              <div>
+                <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">
+                  Select Open Vacancy Position
+                </label>
+                <select
+                  value={selectedVacancyId}
+                  onChange={(e) => setSelectedVacancyId(e.target.value)}
+                  className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-semibold cursor-pointer"
+                >
+                  {apiVacancies.map((vac) => {
+                    const title = vac.title || vac.position?.title || 'Untitled Vacancy';
+                    const dept = (vac as unknown as { department?: string })?.department || vac.branch?.name || 'Operations';
+                    const loc = vac.location || vac.branch?.name || '—';
+                    return (
+                      <option key={vac.id} value={vac.id}>
+                        {title} — {dept} ({loc})
                       </option>
-                    ))}
-                  </select>
+                    );
+                  })}
+                </select>
+              </div>
+
+              {/* Recruiter Selector */}
+              <div>
+                <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">
+                  Assign To Recruiter
+                </label>
+                <select
+                  value={selectedRecruiterId}
+                  onChange={(e) => setSelectedRecruiterId(e.target.value)}
+                  className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-semibold cursor-pointer"
+                >
+                  {apiRecruiters.map((rec) => (
+                    <option key={rec.id} value={rec.id}>
+                      {rec.name} — {rec.role}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Target Configuration Section */}
+              <div className="p-3.5 rounded-xl border border-blue-200 dark:border-blue-900/60 bg-blue-50/40 dark:bg-blue-950/20 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="font-extrabold text-blue-900 dark:text-blue-300 text-xs flex items-center gap-1.5">
+                    <span>🎯</span> Recruiter Target &amp; SLA Quota
+                  </span>
+                  <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400">
+                    SLA Velocity
+                  </span>
                 </div>
 
-                {/* Target Configuration Section */}
-                <div className="p-3.5 rounded-xl border border-blue-200 dark:border-blue-900/60 bg-blue-50/40 dark:bg-blue-950/20 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="font-extrabold text-blue-900 dark:text-blue-300 text-xs flex items-center gap-1.5">
-                      <span>🎯</span> Recruiter Target &amp; SLA Quota
-                    </span>
-                    <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400">
-                      SLA Velocity
-                    </span>
+                {/* Target Type Selector */}
+                <div>
+                  <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300 text-[11px]">
+                    Target Objective Type
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {(['Hires', 'Screenings', 'Interviews'] as const).map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setTargetType(t)}
+                        className={`py-1.5 px-2 rounded-lg text-[11px] font-bold transition cursor-pointer border ${
+                          targetType === t
+                            ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                            : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                        }`}
+                      >
+                        {t === 'Hires' ? '🎯 Hires Target' : t === 'Screenings' ? '📄 CV Screenings' : '📅 Interviews'}
+                      </button>
+                    ))}
                   </div>
+                </div>
 
-                  {/* Target Type Selector */}
+                <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300 text-[11px]">
-                      Target Objective Type
+                      Target Quota (Quantity)
                     </label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {(['Hires', 'Screenings', 'Interviews'] as const).map((t) => (
-                        <button
-                          key={t}
-                          type="button"
-                          onClick={() => setTargetType(t)}
-                          className={`py-1.5 px-2 rounded-lg text-[11px] font-bold transition cursor-pointer border ${
-                            targetType === t
-                              ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                              : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
-                          }`}
-                        >
-                          {t === 'Hires' ? '🎯 Hires Target' : t === 'Screenings' ? '📄 CV Screenings' : '📅 Interviews'}
-                        </button>
-                      ))}
-                    </div>
+                    <input
+                      type="number"
+                      min={1}
+                      max={50}
+                      value={targetQuota}
+                      onChange={(e) => setTargetQuota(parseInt(e.target.value, 10) || 1)}
+                      className="w-full p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-bold"
+                    />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300 text-[11px]">
-                        Target Quota (Quantity)
-                      </label>
-                      <input
-                        type="number"
-                        min={1}
-                        max={50}
-                        value={targetQuota}
-                        onChange={(e) => setTargetQuota(parseInt(e.target.value) || 1)}
-                        className="w-full p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-bold"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300 text-[11px]">
-                        Target SLA Timeline
-                      </label>
-                      <select
-                        value={targetDeadline}
-                        onChange={(e) => setTargetDeadline(e.target.value)}
-                        className="w-full p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-semibold cursor-pointer"
-                      >
-                        <option value="3 Days (Urgent SLA)">3 Days (Urgent SLA)</option>
-                        <option value="7 Days (Standard SLA)">7 Days (Standard SLA)</option>
-                        <option value="14 Days (2 Weeks)">14 Days (2 Weeks)</option>
-                        <option value="30 Days (End of Month)">30 Days (End of Month)</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300 text-[11px]">Priority</label>
-                      <select
-                        value={priority}
-                        onChange={(e) => setPriority(e.target.value as any)}
-                        className="w-full p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white cursor-pointer"
-                      >
-                        <option value="High">High (Critical Priority)</option>
-                        <option value="Medium">Medium (Normal SLA)</option>
-                        <option value="Low">Low</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300 text-[11px]">Calculated Pacing</label>
-                      <div className="p-2 bg-white/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
-                        {targetQuota} {targetType.toLowerCase()} / {targetDeadline.split('(')[0]}
-                      </div>
-                    </div>
+                  <div>
+                    <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300 text-[11px]">
+                      Target SLA Timeline
+                    </label>
+                    <select
+                      value={targetDeadline}
+                      onChange={(e) => setTargetDeadline(e.target.value)}
+                      className="w-full p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-semibold cursor-pointer"
+                    >
+                      <option value="3 Days (Urgent SLA)">3 Days (Urgent SLA)</option>
+                      <option value="7 Days (Standard SLA)">7 Days (Standard SLA)</option>
+                      <option value="14 Days (2 Weeks)">14 Days (2 Weeks)</option>
+                      <option value="30 Days (End of Month)">30 Days (End of Month)</option>
+                    </select>
                   </div>
                 </div>
 
-                {/* Instructions */}
-                <div>
-                  <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">
-                    Manager Instructions &amp; Candidate Sourcing Criteria
-                  </label>
-                  <textarea
-                    rows={2}
-                    value={instructions}
-                    onChange={(e) => setInstructions(e.target.value)}
-                    placeholder="e.g. Expedite review of applicants with GCC experience. Ensure salary aligns with clinical operations budget."
-                    className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
-                  />
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300 text-[11px]">Priority</label>
+                    <select
+                      value={priority}
+                      onChange={(e) => setPriority(e.target.value as 'High' | 'Medium' | 'Low')}
+                      className="w-full p-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white cursor-pointer"
+                    >
+                      <option value="High">High (Critical Priority)</option>
+                      <option value="Medium">Medium (Normal SLA)</option>
+                      <option value="Low">Low</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300 text-[11px]">Calculated Pacing</label>
+                    <div className="p-2 bg-white/80 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+                      {targetQuota} {targetType.toLowerCase()} / {targetDeadline.split('(')[0]}
+                    </div>
+                  </div>
                 </div>
               </div>
-            );
-          })()}
+
+              {/* Instructions */}
+              <div>
+                <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">
+                  Manager Instructions &amp; Candidate Sourcing Criteria
+                </label>
+                <textarea
+                  rows={2}
+                  value={instructions}
+                  onChange={(e) => setInstructions(e.target.value)}
+                  placeholder="e.g. Expedite review of applicants with GCC experience. Ensure salary aligns with clinical operations budget."
+                  className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
+                />
+              </div>
+            </>
+          )}
 
           <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
             <button
@@ -984,7 +1068,7 @@ export function TasksPage() {
             </button>
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || apiVacancies.length === 0}
               className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold transition shadow-xs cursor-pointer disabled:opacity-50"
             >
               {isSubmitting ? 'Assigning...' : 'Assign Vacancy & Target'}

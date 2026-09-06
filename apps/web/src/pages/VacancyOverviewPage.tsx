@@ -6,6 +6,14 @@ import { Icon } from '../components/Icon';
 import { Modal } from '../components/Modal';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
+import { PageState } from '../components/ui/PageState';
+
+interface InterviewerUser {
+  id: string;
+  displayName: string;
+  name?: string;
+  email?: string;
+}
 
 export function VacancyOverviewPage() {
   const { id } = useParams<{ id: string }>();
@@ -14,7 +22,8 @@ export function VacancyOverviewPage() {
   const [applications, setApplications] = useState<Application[]>([]);
   const [interviews, setInterviews] = useState<Interview[]>([]);
   const [offers, setOffers] = useState<Offer[]>([]);
-  const [, setIsLoading] = useState(false);
+  const [interviewers, setInterviewers] = useState<InterviewerUser[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'applications' | 'pipeline' | 'interviews' | 'posting' | 'activity' | 'settings'>('overview');
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -33,8 +42,9 @@ export function VacancyOverviewPage() {
       getApi<PaginatedResult<Application>>(`/applications?vacancyId=${id}&pageSize=100`),
       getApi<Interview[]>('/interviews'),
       getApi<Offer[]>('/offers'),
+      getApi<InterviewerUser[]>('/users/interviewers'),
     ])
-      .then(([vRes, appsRes, intsRes, offsRes]) => {
+      .then(([vRes, appsRes, intsRes, offsRes, usersRes]) => {
         if (vRes.status === 'fulfilled' && vRes.value) {
           setVacancy(vRes.value);
         }
@@ -47,20 +57,127 @@ export function VacancyOverviewPage() {
         if (offsRes.status === 'fulfilled' && offsRes.value) {
           setOffers(offsRes.value);
         }
+        if (usersRes.status === 'fulfilled' && usersRes.value) {
+          setInterviewers(usersRes.value);
+        }
       })
       .finally(() => {
         setIsLoading(false);
       });
   }, [id]);
 
-  const jobTitle = vacancy?.position?.title || 'Senior Frontend Engineer';
-  const departmentName = vacancy?.position?.title?.includes('Nurse') ? 'Clinical Operations' : 'Engineering';
-  const locationText = vacancy?.location || 'Cairo, Egypt (Hybrid)';
-  const statusLabel = vacancy?.status || 'Open';
-  const applicationsCount = applications.length > 0 ? applications.length : 48;
-  const interviewsCount = interviews.length > 0 ? interviews.length : 7;
-  const offersCount = offers.length > 0 ? offers.length : 3;
-  const hiresCount = vacancy?.joinedHeadcount || 1;
+  const jobTitle = vacancy?.position?.title || vacancy?.title || 'No position';
+  const departmentName = (vacancy as unknown as { department?: string } | null | undefined)?.department || vacancy?.branch?.name || '—';
+  const locationText = vacancy?.location || vacancy?.branch?.name || '—';
+  const statusLabel = vacancy?.status || '—';
+
+  const vacancyApps = applications;
+  const appIds = new Set(applications.map((a) => a.id));
+  const vacancyInterviews = interviews.filter((i) => appIds.has(i.applicationId));
+  const vacancyOffers = offers.filter((o) => appIds.has(o.applicationId));
+
+  const applicationsCount = vacancy?.funnelCounts?.applied ?? vacancyApps.length;
+  const interviewsCount = vacancy?.funnelCounts?.interviews ?? vacancyInterviews.length;
+  const offersCount = vacancy?.funnelCounts?.offer ?? vacancyOffers.length;
+  const hiresCount = vacancy?.joinedHeadcount ?? vacancy?.funnelCounts?.joined ?? vacancyApps.filter((a) => a.stage === 'Joined' || (a as unknown as { stage?: string; status?: string }).stage === 'Hired' || (a as unknown as { status?: string }).status === 'HIRED').length;
+
+  const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const appsThisWeek = vacancyApps.filter((a) => new Date(a.appliedAt || a.createdAt) >= oneWeekAgo).length;
+  const intsThisWeek = vacancyInterviews.filter((i) => new Date(i.scheduledStart || (i as unknown as { scheduledAt?: string }).scheduledAt || '1970-01-01') >= oneWeekAgo).length;
+  const offersThisWeek = vacancyOffers.filter((o) => new Date(o.createdAt) >= oneWeekAgo).length;
+
+  const daysOpen = vacancy?.openedAt || vacancy?.createdAt
+    ? Math.max(0, Math.floor((Date.now() - new Date(vacancy.openedAt || vacancy.createdAt).getTime()) / (1000 * 60 * 60 * 24)))
+    : 0;
+  const targetDays = 45;
+  const slaPercent = Math.min(100, Math.round((daysOpen / targetDays) * 100));
+
+  const teamMembers = (vacancy?.assignments || []).map((assignment) => {
+    const user = interviewers.find((u) => u.id === assignment.userId) || (assignment as unknown as { user?: { displayName?: string; name?: string } }).user;
+    const name = user?.displayName || user?.name || 'Unassigned';
+    const role = assignment.roleCode
+      ? assignment.roleCode.replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase())
+      : 'Recruiter';
+    const initials =
+      name
+        .split(' ')
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((n: string) => n[0].toUpperCase())
+        .join('') || 'U';
+    return {
+      id: assignment.id || assignment.userId,
+      name,
+      role,
+      initials,
+    };
+  });
+
+  const activities = [
+    ...vacancyApps.map((a) => {
+      const candidateName = a.candidate
+        ? `${a.candidate.firstName} ${a.candidate.lastName}`.trim()
+        : (a as unknown as { candidateName?: string }).candidateName || 'Unknown candidate';
+      return {
+        id: `app-${a.id}`,
+        icon: 'users' as const,
+        color: 'bg-blue-50 dark:bg-blue-950/40 text-blue-600',
+        title: 'Application received',
+        desc: `${candidateName} (APP-${a.id.slice(0, 8)}) applied`,
+        date: new Date(a.appliedAt || a.createdAt),
+      };
+    }),
+    ...vacancyInterviews.map((i) => {
+      const app = vacancyApps.find((a) => a.id === i.applicationId);
+      const candidateName = app?.candidate
+        ? `${app.candidate.firstName} ${app.candidate.lastName}`.trim()
+        : (app as unknown as { candidateName?: string })?.candidateName || 'Candidate';
+      return {
+        id: `int-${i.id}`,
+        icon: 'calendar' as const,
+        color: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600',
+        title: 'Interview scheduled',
+        desc: `With ${candidateName} (${i.status || 'Scheduled'})`,
+          date: new Date(i.scheduledStart || (i as unknown as { scheduledAt?: string; createdAt?: string }).scheduledAt || (i as unknown as { createdAt?: string }).createdAt || '1970-01-01'),
+      };
+    }),
+    ...(vacancy?.createdAt
+      ? [
+          {
+            id: `vac-${vacancy.id}`,
+            icon: 'file-text' as const,
+            color: 'bg-amber-50 dark:bg-amber-950/40 text-amber-600',
+            title: 'Requisition opened',
+            desc: `${jobTitle} (${vacancy.vacancyCode || 'REQ'})`,
+            date: new Date(vacancy.createdAt),
+          },
+        ]
+      : []),
+  ]
+    .sort((a, b) => b.date.getTime() - a.date.getTime())
+    .slice(0, 4);
+
+  if (isLoading && !vacancy) {
+    return (
+      <div className="flex w-full flex-col p-6 max-w-[1720px] mx-auto">
+        <PageState kind="loading" title="Loading job position..." description="Fetching vacancy details and pipeline metrics." />
+      </div>
+    );
+  }
+
+  if (!isLoading && !vacancy && id) {
+    return (
+      <div className="flex w-full flex-col p-6 max-w-[1720px] mx-auto">
+        <PageState
+          kind="empty"
+          title="Job position not found"
+          description="The requested job position could not be found or has been removed."
+          actionLabel="Back to Job Positions"
+          onAction={() => navigate('/vacancies')}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="flex w-full flex-col p-4 sm:p-6 lg:p-7 max-w-[1720px] mx-auto space-y-6">
@@ -87,7 +204,7 @@ export function VacancyOverviewPage() {
             </span>
           </div>
           <p className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">
-            {departmentName} &bull; {locationText} &bull; Full-time &bull; Created 12 Aug 2025
+            {departmentName} &bull; {locationText} &bull; {vacancy?.vacancyRequest?.employmentType || 'Full-time'} &bull; Created {vacancy?.createdAt ? new Date(vacancy.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
           </p>
         </div>
 
@@ -121,7 +238,7 @@ export function VacancyOverviewPage() {
         </div>
       </div>
 
-      {/* ── Horizontal Navigation Tabs (Overview, Applications 48, Pipeline, Interviews 7, etc.) ── */}
+      {/* ── Horizontal Navigation Tabs (Overview, Applications, Pipeline, Interviews, etc.) ── */}
       <div className="border-b border-slate-200 dark:border-slate-800 flex items-center gap-6 overflow-x-auto rf-scrollbar text-xs font-semibold">
         <button
           type="button"
@@ -137,7 +254,7 @@ export function VacancyOverviewPage() {
 
         <button
           type="button"
-          onClick={() => navigate(`/applications?vacancyId=${id || 'job-1'}`)}
+          onClick={() => navigate(`/applications?vacancyId=${id || ''}`)}
           className="pb-3.5 border-b-2 border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white transition cursor-pointer flex items-center gap-1.5 shrink-0"
         >
           <span>Applications</span>
@@ -148,7 +265,7 @@ export function VacancyOverviewPage() {
 
         <button
           type="button"
-          onClick={() => navigate(`/applications?vacancyId=${id || 'job-1'}`)}
+          onClick={() => navigate(`/applications?vacancyId=${id || ''}`)}
           className="pb-3.5 border-b-2 border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white transition cursor-pointer shrink-0"
         >
           Pipeline
@@ -206,7 +323,7 @@ export function VacancyOverviewPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
         {/* Card 1: Applications */}
         <div
-          onClick={() => navigate(`/applications?vacancyId=${id || 'job-1'}`)}
+          onClick={() => navigate(`/applications?vacancyId=${id || ''}`)}
           className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs hover:shadow-md transition cursor-pointer flex items-center justify-between group"
         >
           <div className="flex items-center gap-4">
@@ -216,7 +333,9 @@ export function VacancyOverviewPage() {
             <div>
               <span className="block text-xs font-semibold text-slate-500 dark:text-slate-400">Applications</span>
               <span className="block text-2xl font-black text-slate-900 dark:text-white mt-0.5">{applicationsCount}</span>
-              <span className="block text-xs font-bold text-blue-600 dark:text-blue-400 mt-0.5">+12 this week</span>
+              <span className="block text-xs font-bold text-blue-600 dark:text-blue-400 mt-0.5">
+                {appsThisWeek > 0 ? `+${appsThisWeek} this week` : '0 this week'}
+              </span>
             </div>
           </div>
           <Icon name="chevron-right" size={18} className="text-slate-300 dark:text-slate-600 group-hover:translate-x-0.5 transition" />
@@ -234,7 +353,9 @@ export function VacancyOverviewPage() {
             <div>
               <span className="block text-xs font-semibold text-slate-500 dark:text-slate-400">Interviews</span>
               <span className="block text-2xl font-black text-slate-900 dark:text-white mt-0.5">{interviewsCount}</span>
-              <span className="block text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">2 this week</span>
+              <span className="block text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
+                {intsThisWeek > 0 ? `${intsThisWeek} this week` : '0 this week'}
+              </span>
             </div>
           </div>
           <Icon name="chevron-right" size={18} className="text-slate-300 dark:text-slate-600 group-hover:translate-x-0.5 transition" />
@@ -252,7 +373,9 @@ export function VacancyOverviewPage() {
             <div>
               <span className="block text-xs font-semibold text-slate-500 dark:text-slate-400">Offers</span>
               <span className="block text-2xl font-black text-slate-900 dark:text-white mt-0.5">{offersCount}</span>
-              <span className="block text-xs font-bold text-purple-600 dark:text-purple-400 mt-0.5">1 this week</span>
+              <span className="block text-xs font-bold text-purple-600 dark:text-purple-400 mt-0.5">
+                {offersThisWeek > 0 ? `${offersThisWeek} this week` : '0 this week'}
+              </span>
             </div>
           </div>
           <Icon name="chevron-right" size={18} className="text-slate-300 dark:text-slate-600 group-hover:translate-x-0.5 transition" />
@@ -270,7 +393,9 @@ export function VacancyOverviewPage() {
             <div>
               <span className="block text-xs font-semibold text-slate-500 dark:text-slate-400">Hires</span>
               <span className="block text-2xl font-black text-slate-900 dark:text-white mt-0.5">{hiresCount}</span>
-              <span className="block text-xs font-bold text-orange-600 dark:text-orange-400 mt-0.5">+1 this week</span>
+              <span className="block text-xs font-bold text-orange-600 dark:text-orange-400 mt-0.5">
+                {hiresCount > 0 ? `${hiresCount} total hired` : '0 hired'}
+              </span>
             </div>
           </div>
           <Icon name="chevron-right" size={18} className="text-slate-300 dark:text-slate-600 group-hover:translate-x-0.5 transition" />
@@ -287,7 +412,7 @@ export function VacancyOverviewPage() {
             </h2>
             <button
               type="button"
-              onClick={() => showToast('SLA metrics: Time-to-screen (1.8d), Time-to-interview (4.2d), Time-to-offer (32d / 45d target)')}
+              onClick={() => showToast(`SLA metrics: Days open: ${daysOpen}d / ${targetDays}d target (${slaPercent}%)`)}
               className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
             >
               View details
@@ -299,13 +424,16 @@ export function VacancyOverviewPage() {
             <div>
               <div className="flex items-baseline justify-between">
                 <div>
-                  <span className="block text-xs font-bold text-slate-900 dark:text-white">32 days</span>
-                  <span className="block text-[11px] text-slate-500">Target: 45 days</span>
+                  <span className="block text-xs font-bold text-slate-900 dark:text-white">{daysOpen} days</span>
+                  <span className="block text-[11px] text-slate-500">Target: {targetDays} days</span>
                 </div>
-                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">71%</span>
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">{slaPercent}%</span>
               </div>
               <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full mt-2 overflow-hidden">
-                <div className="bg-emerald-500 h-full rounded-full" style={{ width: '71%' }} />
+                <div
+                  className={`h-full rounded-full ${slaPercent > 80 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                  style={{ width: `${slaPercent}%` }}
+                />
               </div>
             </div>
 
@@ -313,13 +441,18 @@ export function VacancyOverviewPage() {
             <div>
               <div className="flex items-baseline justify-between">
                 <div>
-                  <span className="block text-xs font-bold text-slate-900 dark:text-white">Interview Stage: 12 days</span>
-                  <span className="block text-[11px] text-slate-500">Target: 14 days</span>
+                  <span className="block text-xs font-bold text-slate-900 dark:text-white">Active in Pipeline</span>
+                  <span className="block text-[11px] text-slate-500">{vacancyApps.length} candidates total</span>
                 </div>
-                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">85%</span>
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  {interviewsCount} in interview
+                </span>
               </div>
               <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full mt-2 overflow-hidden">
-                <div className="bg-blue-600 h-full rounded-full" style={{ width: '85%' }} />
+                <div
+                  className="bg-blue-600 h-full rounded-full"
+                  style={{ width: `${vacancyApps.length > 0 ? Math.min(100, Math.round((interviewsCount / vacancyApps.length) * 100)) : 0}%` }}
+                />
               </div>
             </div>
           </div>
@@ -333,36 +466,38 @@ export function VacancyOverviewPage() {
             </h2>
             <button
               type="button"
-              onClick={() => showToast('Team: Sarah Ahmed (Lead Recruiter), Dr. Tariq (Hiring Manager)')}
+              onClick={() =>
+                showToast(
+                  teamMembers.length > 0
+                    ? `Team: ${teamMembers.map((t) => `${t.name} (${t.role})`).join(', ')}`
+                    : 'No team members assigned'
+                )
+              }
               className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
             >
               Manage
             </button>
           </div>
 
-          <div className="space-y-3">
-            {/* Primary Recruiter */}
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-teal-600 text-white font-black text-xs flex items-center justify-center">
-                SA
-              </div>
-              <div>
-                <span className="block text-xs font-bold text-slate-900 dark:text-white">Sarah Ahmed</span>
-                <span className="block text-[11px] text-slate-500">Lead Recruiter</span>
-              </div>
+          {teamMembers.length === 0 ? (
+            <div className="py-6 text-center">
+              <p className="text-xs text-slate-500 dark:text-slate-400 italic">No hiring team members assigned yet.</p>
             </div>
-
-            {/* Hiring Manager */}
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-purple-600 text-white font-black text-xs flex items-center justify-center">
-                TM
-              </div>
-              <div>
-                <span className="block text-xs font-bold text-slate-900 dark:text-white">Dr. Tariq Mahmoud</span>
-                <span className="block text-[11px] text-slate-500">Hiring Manager &bull; Engineering Director</span>
-              </div>
+          ) : (
+            <div className="space-y-3">
+              {teamMembers.map((member) => (
+                <div key={member.id} className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full bg-teal-600 text-white font-black text-xs flex items-center justify-center">
+                    {member.initials}
+                  </div>
+                  <div>
+                    <span className="block text-xs font-bold text-slate-900 dark:text-white">{member.name}</span>
+                    <span className="block text-[11px] text-slate-500">{member.role}</span>
+                  </div>
+                </div>
+              ))}
             </div>
-          </div>
+          )}
         </div>
 
         {/* Column 3: Last Activity */}
@@ -381,55 +516,28 @@ export function VacancyOverviewPage() {
               </button>
             </div>
 
-            <div className="space-y-3">
-              {/* Item 1 */}
-              <div className="flex items-start gap-2.5">
-                <div className="w-7 h-7 rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 flex items-center justify-center shrink-0 mt-0.5">
-                  <Icon name="chat" size={13} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <span className="block text-xs font-bold text-slate-900 dark:text-white">Interview scheduled</span>
-                  <span className="block text-[10px] text-slate-500">With Ali Hassan for Technical Interview</span>
-                  <span className="block text-[10px] text-slate-400 mt-0.5">Today, 10:30 AM</span>
-                </div>
+            {activities.length === 0 ? (
+              <div className="py-6 text-center">
+                <p className="text-xs text-slate-500 dark:text-slate-400 italic">No recent activity recorded for this position.</p>
               </div>
-
-              {/* Item 2 */}
-              <div className="flex items-start gap-2.5">
-                <div className="w-7 h-7 rounded-full bg-blue-50 dark:bg-blue-950/40 text-blue-600 flex items-center justify-center shrink-0 mt-0.5">
-                  <Icon name="users" size={13} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <span className="block text-xs font-bold text-slate-900 dark:text-white">New application received</span>
-                  <span className="block text-[10px] text-slate-500">Noha Farouk applied</span>
-                  <span className="block text-[10px] text-slate-400 mt-0.5">Today, 9:15 AM</span>
-                </div>
+            ) : (
+              <div className="space-y-3">
+                {activities.map((act) => (
+                  <div key={act.id} className="flex items-start gap-2.5">
+                    <div className={`w-7 h-7 rounded-full ${act.color} flex items-center justify-center shrink-0 mt-0.5`}>
+                      <Icon name={act.icon} size={13} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <span className="block text-xs font-bold text-slate-900 dark:text-white">{act.title}</span>
+                      <span className="block text-[10px] text-slate-500 truncate">{act.desc}</span>
+                      <span className="block text-[10px] text-slate-400 mt-0.5">
+                        {act.date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                  </div>
+                ))}
               </div>
-
-              {/* Item 3 */}
-              <div className="flex items-start gap-2.5">
-                <div className="w-7 h-7 rounded-full bg-purple-50 dark:bg-purple-950/40 text-purple-600 flex items-center justify-center shrink-0 mt-0.5">
-                  <Icon name="calendar" size={13} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <span className="block text-xs font-bold text-slate-900 dark:text-white">Phone screen completed</span>
-                  <span className="block text-[10px] text-slate-500">With Mona Salah</span>
-                  <span className="block text-[10px] text-slate-400 mt-0.5">Yesterday, 4:45 PM</span>
-                </div>
-              </div>
-
-              {/* Item 4 */}
-              <div className="flex items-start gap-2.5">
-                <div className="w-7 h-7 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-600 flex items-center justify-center shrink-0 mt-0.5">
-                  <Icon name="file-text" size={13} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <span className="block text-xs font-bold text-slate-900 dark:text-white">Job description updated</span>
-                  <span className="block text-[10px] text-slate-500">By Sarah Ahmed</span>
-                  <span className="block text-[10px] text-slate-400 mt-0.5">2 Sep 2025, 2:10 PM</span>
-                </div>
-              </div>
-            </div>
+            )}
           </div>
 
           <div className="pt-2 border-t border-slate-100 dark:border-slate-800 text-center">
@@ -446,7 +554,7 @@ export function VacancyOverviewPage() {
 
       {/* ── Row 3: 2-Column Bottom Grid (Role Summary [2 cols internal] & Job Details) ── */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left: Role Summary (Card with 2 internal columns: 8 cols out of 12) */}
+        {/* Left: Role Summary */}
         <div className="lg:col-span-8 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-5">
           <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
             <h2 className="text-base font-extrabold text-slate-900 dark:text-white tracking-tight">
@@ -461,12 +569,13 @@ export function VacancyOverviewPage() {
             </button>
           </div>
 
-          {/* Internal 2-Column Layout matching 03-job-overview.png */}
           <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
-            {/* Left Sub-Column: Description, Dept/Team, Key Responsibilities (7 cols) */}
+            {/* Left Sub-Column: Description, Dept/Team */}
             <div className="md:col-span-7 space-y-4">
               <p className="text-xs leading-relaxed text-slate-600 dark:text-slate-300">
-                We are looking for a Senior Frontend Engineer to join our dynamic engineering team and help build exceptional user experiences. You will lead the design and implementation of scalable, performant, and maintainable web applications using modern frontend technologies.
+                {vacancy?.vacancyRequest?.justification ||
+                  vacancy?.vacancyRequest?.reason ||
+                  'Requisition justification and job summary are defined per department approval.'}
               </p>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -485,49 +594,40 @@ export function VacancyOverviewPage() {
                     <Icon name="users" size={16} />
                   </div>
                   <div>
-                    <span className="block text-[10px] text-slate-400 font-semibold uppercase">Team</span>
-                    <span className="block text-xs font-bold text-slate-900 dark:text-white">Frontend Engineering</span>
+                    <span className="block text-[10px] text-slate-400 font-semibold uppercase">Requisition Code</span>
+                    <span className="block text-xs font-bold text-slate-900 dark:text-white">{vacancy?.vacancyCode || '—'}</span>
                   </div>
                 </div>
               </div>
 
               <div className="pt-2">
-                <h3 className="text-xs font-bold text-slate-900 dark:text-white mb-2">Key Responsibilities</h3>
-                <ul className="space-y-1.5 text-xs text-slate-600 dark:text-slate-300 list-disc list-inside leading-relaxed">
-                  <li>Design, develop, and maintain high-quality web applications using React and TypeScript.</li>
-                  <li>Collaborate with UX/UI designers to implement pixel-perfect, accessible interfaces.</li>
-                  <li>Optimize applications for maximum speed and scalability.</li>
-                  <li>Mentor junior engineers and conduct code reviews.</li>
-                  <li>Work closely with backend engineers to integrate APIs and services.</li>
-                </ul>
+                <h3 className="text-xs font-bold text-slate-900 dark:text-white mb-2">Requisition Justification</h3>
+                <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
+                  {vacancy?.vacancyRequest?.justification ||
+                    'Requisition justification details are managed in the vacancy request module.'}
+                </p>
               </div>
             </div>
 
-            {/* Right Sub-Column: Skills & Requirements, Experience, Education (5 cols) */}
+            {/* Right Sub-Column: Requisition Requirements & Details */}
             <div className="md:col-span-5 space-y-4 border-t md:border-t-0 md:border-l border-slate-100 dark:border-slate-800 pt-4 md:pt-0 md:pl-5">
               <div>
-                <h3 className="text-xs font-bold text-slate-900 dark:text-white mb-2.5">Skills &amp; Requirements</h3>
+                <h3 className="text-xs font-bold text-slate-900 dark:text-white mb-2.5">Requisition Parameters</h3>
                 <div className="flex flex-wrap gap-1.5">
                   {[
-                    'React',
-                    'TypeScript',
-                    'JavaScript',
-                    'HTML5',
-                    'CSS3 / Sass',
-                    'Next.js',
-                    'Redux / Zustand',
-                    'REST APIs',
-                    'Git',
-                    'Jest / Testing Library',
-                    'Webpack',
-                    'Agile',
-                    'Problem Solving',
-                  ].map((skill) => (
+                    `Position: ${jobTitle}`,
+                    `Branch: ${vacancy?.branch?.name || 'Main Branch'}`,
+                    `Type: ${vacancy?.vacancyRequest?.employmentType || 'Full-time'}`,
+                    `Budget: ${vacancy?.vacancyRequest?.budgetStatus || 'Approved'}`,
+                    `Priority: ${vacancy?.vacancyRequest?.criticality || 'Standard'}`,
+                    `Headcount: ${vacancy?.approvedHeadcount || 1}`,
+                    ...(vacancy?.position?.code ? [`Code: ${vacancy.position.code}`] : []),
+                  ].map((attr) => (
                     <span
-                      key={skill}
+                      key={attr}
                       className="px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-[11px] font-semibold border border-slate-200 dark:border-slate-700"
                     >
-                      {skill}
+                      {attr}
                     </span>
                   ))}
                 </div>
@@ -539,8 +639,10 @@ export function VacancyOverviewPage() {
                     <Icon name="briefcase" size={15} />
                   </div>
                   <div>
-                    <span className="block text-[10px] text-slate-400 font-semibold uppercase">Experience</span>
-                    <span className="block text-xs font-bold text-slate-900 dark:text-white">5+ years</span>
+                    <span className="block text-[10px] text-slate-400 font-semibold uppercase">Requisition Priority</span>
+                    <span className="block text-xs font-bold text-slate-900 dark:text-white">
+                      {vacancy?.vacancyRequest?.criticality || 'Standard'}
+                    </span>
                   </div>
                 </div>
 
@@ -549,8 +651,10 @@ export function VacancyOverviewPage() {
                     <Icon name="award" size={15} />
                   </div>
                   <div>
-                    <span className="block text-[10px] text-slate-400 font-semibold uppercase">Education</span>
-                    <span className="block text-xs font-bold text-slate-900 dark:text-white">BSc in Computer Science or related field</span>
+                    <span className="block text-[10px] text-slate-400 font-semibold uppercase">Target Headcount</span>
+                    <span className="block text-xs font-bold text-slate-900 dark:text-white">
+                      {vacancy?.approvedHeadcount || 1} approved ({hiresCount} joined)
+                    </span>
                   </div>
                 </div>
               </div>
@@ -579,7 +683,9 @@ export function VacancyOverviewPage() {
                 <Icon name="calendar" size={14} className="text-slate-400" />
                 Employment Type
               </span>
-              <span className="font-bold text-slate-900 dark:text-white">Full-time</span>
+              <span className="font-bold text-slate-900 dark:text-white">
+                {vacancy?.vacancyRequest?.employmentType || 'Full-time'}
+              </span>
             </div>
 
             <div className="flex items-center justify-between gap-3 py-1 border-b border-slate-100/60 dark:border-slate-800/60">
@@ -587,31 +693,35 @@ export function VacancyOverviewPage() {
                 <Icon name="map-pin" size={14} className="text-slate-400" />
                 Work Location
               </span>
-              <span className="font-bold text-slate-900 dark:text-white">Cairo, Egypt (Hybrid)</span>
+              <span className="font-bold text-slate-900 dark:text-white">{locationText}</span>
             </div>
 
             <div className="flex items-center justify-between gap-3 py-1 border-b border-slate-100/60 dark:border-slate-800/60">
               <span className="text-slate-500 dark:text-slate-400 flex items-center gap-2">
                 <Icon name="award" size={14} className="text-slate-400" />
-                Experience Level
+                Budget Status
               </span>
-              <span className="font-bold text-slate-900 dark:text-white">Senior (5+ years)</span>
+              <span className="font-bold text-slate-900 dark:text-white">
+                {vacancy?.vacancyRequest?.budgetStatus || 'Approved'}
+              </span>
             </div>
 
             <div className="flex items-center justify-between gap-3 py-1 border-b border-slate-100/60 dark:border-slate-800/60">
               <span className="text-slate-500 dark:text-slate-400 flex items-center gap-2">
                 <Icon name="briefcase" size={14} className="text-slate-400" />
-                Career Level
+                Requisition Code
               </span>
-              <span className="font-bold text-slate-900 dark:text-white">Individual Contributor</span>
+              <span className="font-bold text-slate-900 dark:text-white">{vacancy?.vacancyCode || '—'}</span>
             </div>
 
             <div className="flex items-center justify-between gap-3 py-1 border-b border-slate-100/60 dark:border-slate-800/60">
               <span className="text-slate-500 dark:text-slate-400 flex items-center gap-2">
                 <Icon name="offer" size={14} className="text-slate-400" />
-                Salary Range
+                Headcount
               </span>
-              <span className="font-bold text-slate-900 dark:text-white">EGP 35,000 - 50,000 / month</span>
+              <span className="font-bold text-slate-900 dark:text-white">
+                {vacancy?.approvedHeadcount || 1} approved / {hiresCount} joined
+              </span>
             </div>
 
             <div className="flex items-center justify-between gap-3 py-1 border-b border-slate-100/60 dark:border-slate-800/60">
@@ -619,16 +729,20 @@ export function VacancyOverviewPage() {
                 <Icon name="calendar" size={14} className="text-slate-400" />
                 Posted On
               </span>
-              <span className="font-bold text-slate-900 dark:text-white">12 Aug 2025</span>
+              <span className="font-bold text-slate-900 dark:text-white">
+                {vacancy?.createdAt ? new Date(vacancy.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
+              </span>
             </div>
 
             <div className="flex items-center justify-between gap-3 py-1">
               <span className="text-slate-500 dark:text-slate-400 flex items-center gap-2">
                 <Icon name="clock" size={14} className="text-slate-400" />
-                Closing Date
+                Target Start Date
               </span>
               <span className="font-bold text-emerald-600 dark:text-emerald-400">
-                12 Sep 2025 (31 days left)
+                {vacancy?.targetStartDate || vacancy?.vacancyRequest?.targetStartDate
+                  ? new Date(vacancy?.targetStartDate || vacancy?.vacancyRequest?.targetStartDate!).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+                  : '—'}
               </span>
             </div>
           </div>
@@ -647,10 +761,14 @@ export function VacancyOverviewPage() {
             Share this job opening link with candidates or publish directly to career portals.
           </p>
           <div className="flex items-center gap-2">
-            <Input readOnly value={`https://careers.sgh.com/jobs/${id || 'job-1'}`} className="text-xs" />
+            <Input readOnly value={`https://careers.sgh.com/jobs/${id || ''}`} className="text-xs" />
             <button
               type="button"
-              onClick={() => setIsShareModalOpen(false)}
+              onClick={() => {
+                navigator.clipboard?.writeText(`https://careers.sgh.com/jobs/${id || ''}`);
+                showToast('Link copied to clipboard!');
+                setIsShareModalOpen(false);
+              }}
               className="px-3 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold cursor-pointer"
             >
               Copy
@@ -677,6 +795,7 @@ export function VacancyOverviewPage() {
               <option value="Engineering">Engineering</option>
               <option value="Clinical Operations">Clinical Operations</option>
               <option value="Digital Health">Digital Health</option>
+              <option value="Human Resources">Human Resources</option>
             </Select>
           </div>
           <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
@@ -689,7 +808,10 @@ export function VacancyOverviewPage() {
             </button>
             <button
               type="button"
-              onClick={() => setIsEditModalOpen(false)}
+              onClick={() => {
+                setIsEditModalOpen(false);
+                showToast('Position updated successfully');
+              }}
               className="px-4 py-1.5 bg-blue-600 text-white rounded-xl text-xs font-bold cursor-pointer"
             >
               Save Changes
