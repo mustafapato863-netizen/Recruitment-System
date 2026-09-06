@@ -542,3 +542,19 @@
   - `pnpm --dir apps/api exec tsc --noEmit` passed clean (0 errors).
   - `pnpm --dir apps/api test` passed clean (1 test file, 11/11 tests pass).
 
+### Session 2026-09-06: Universal Quick Learn System & Role Workflow Enhancements: DONE
+- Scope:
+  - Universal Quick Guide System (`apps/web/src/quickguide/*`)
+  - Standalone and PageFrame page guide integration across all 18 major routes
+  - Role-specific UI/UX & workflow enhancements:
+    - Junior Recruiter: Instant candidate duplicate detection (`AddApplicationModal.tsx`), Fixed navigation routes (`OffersPage.tsx`), Requisition clarity (`VacantListPage.tsx`).
+    - Clinical Chief & Interviewer: Lead Panelist selector, AST timezone, Teams/Clinic meeting mode (`ScheduleInterviewModal.tsx`), side-by-side CV Match Assigner visual diff (`CVMatchAssigner.tsx`).
+    - Executive Approver & Finance VP: Saudi Labor Law compensation calculator with 60/25/10/5 preset & GOSI preview (`CreateOfferPage.tsx`), interactive offer approval/rejection machine with audit comment modal (`OfferDetailPage.tsx`), SAR currency display (`OfferApprovalInboxPage.tsx`).
+    - HR Ops / Compliance Specialist: Regulatory compliance gatekeeper preventing premature joining date confirmation without SCFHS & DataFlow clearance (`HiringCasePage.tsx`).
+- Verification:
+  - `npx tsc -b` clean (0 errors).
+  - Vitest: 24 test files passed, 72/72 tests passed (100% pass rate).
+  - Commits: `43c3975` and `6419977`.
+  - Pushed to `github main` (`https://github.com/mustafapato863-netizen/Recruitment-System.git`).
+
+
