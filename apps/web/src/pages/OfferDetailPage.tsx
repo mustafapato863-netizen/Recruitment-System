@@ -26,7 +26,6 @@ export function OfferDetailPage() {
   const [isCreatingCase, setIsCreatingCase] = useState(false);
   const [createCaseError, setCreateCaseError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState('Offer Details');
-  const [isHired, setIsHired] = useState(false);
   const [isAddNoteModalOpen, setIsAddNoteModalOpen] = useState(false);
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
   const [newNote, setNewNote] = useState('');
@@ -325,14 +324,27 @@ export function OfferDetailPage() {
             <span>Download Offer Letter</span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => setIsHired(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
-          >
-            <Icon name="check" size={14} />
-            <span>{isHired ? '✓ Marked as Hired' : 'Mark as Hired'}</span>
-          </button>
+          {offer.status === 'Accepted' && (
+            joiningCase ? (
+              <Link
+                to={`/hires/${joiningCase.id}`}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+              >
+                <Icon name="check" size={14} />
+                <span>View Joining Case</span>
+              </Link>
+            ) : (
+              <button
+                type="button"
+                onClick={handleCreateJoiningCase}
+                disabled={isCreatingCase}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer disabled:opacity-60"
+              >
+                <Icon name="check" size={14} />
+                <span>{isCreatingCase ? 'Creating Case...' : 'Start Onboarding'}</span>
+              </button>
+            )
+          )}
         </div>
       </div>
 

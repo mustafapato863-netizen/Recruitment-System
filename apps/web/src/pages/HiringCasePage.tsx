@@ -227,8 +227,8 @@ export function HiringCasePage() {
   const checklistItems: ComplianceItem[] = requirements.map((item) => ({
     id: item.id,
     label: item.name,
-    isCompleted: item.status === 'Verified',
-    notes: null,
+    isCompleted: item.status === 'Verified' || item.status === 'Not Required',
+    notes: item.status === 'Not Required' ? 'Exempt / Not Required' : null,
     completedAt: item.verifiedAt ?? null,
   }));
 

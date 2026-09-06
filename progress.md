@@ -1,4 +1,4 @@
-﻿# Progress Log — RecruitFlow Candidate Journey
+# Progress Log — RecruitFlow Candidate Journey
 
 ## Session 2026-09-04
 
@@ -276,7 +276,7 @@
 - Orchestrator verification: opencode muse-spark-1.3 read-only PASS all (no N+1, server-preferred counts, dead class gone, no shape breaks); API tsc re-clean; web+API tests re-run green (58/58, 11/11). Noted for enhancements: License page expects full complianceRequirements from list (pre-existing gap); progress counts optionals vs required-only gate.
 
 ### FINAL GATE (orchestrator, 2026-09-05): FULL PLAN COMPLETE
-- Code gates on final tree: web tsc clean, web build ok, web tests 58/58 pass, API tsc clean, API tests 11/11 pass. Prisma schema valid. Migration 20260905 applied directly (idempotent SQL) � repo `migrate deploy` still P3005-unbaselined (pre-existing: no _prisma_migrations table; REPORTED as ops item, not silently fixed).
+- Code gates on final tree: web tsc clean, web build ok, web tests 58/58 pass, API tsc clean, API tests 11/11 pass. Prisma schema valid. Migration 20260905 applied directly (idempotent SQL) — repo `migrate deploy` still P3005-unbaselined (pre-existing: no _prisma_migrations table; REPORTED as ops item, not silently fixed).
 - Live demo verification (API :3000, demo org RECRUITFLOW-DEMO, password Password123!): logins a@test.com (ADMINISTRATOR) / m@test.com (HIRING_MANAGER) / e@test.com (RECRUITER) + named staff all ok; applications list (18); notes POST->GET round-trip with author; scorecard submit ok + locked resubmit 400; offer create->approve->Sent->Accepted; hiring case create; list counts 2/2 live; compliance toggles; submit->final-approve->Joined. Invalid transitions correctly 400 (offer accept guard, joining-status guard). Demo rows cleaned up afterward; state re-verified pristine (0 cases, 1 offer, app Offer stage, 0 notes, 1 scorecard).
 - UI/UX audit: 12/49 pages still contain hardcoded demo literals (ApplicationsPage 14, TasksPage 16, InterviewDetailPage 13, OffersPage 12, ManagerDashboard 11, OfferDetailPage 10, VacantListPage 10, StageTransitionPage 9, VacancyOverviewPage 6, JobAnalyticsPage 5, InterviewsPage 5, CVIntakePage 2). Scheduled as enhancements sweep E1-E5 (pre-approved).
 - API left RUNNING (PID 2472, fresh build with all phases) for manual browser verification.
@@ -399,14 +399,14 @@
 
 
 
-### E3 orchestrator verdict (opencode review unavailable � 2 interrupted runs; first-hand verification stands in)
-1. Literals PASS � orchestrator grep 0 hits for person/place literals across all 5 pages.
-2. TasksPage GET /tasks wiring PASS � TasksPage.tsx:200 fetches `/tasks?pageSize=100` with array/{data} normalization; POST create kept (:261).
-3. Mechanics PASS � VacantList rows/filters from GET /vacancies; ManagerDashboard/JobAnalytics/VacancyOverview derived from real fetches; empty PageStates present.
-4. Scope PASS � diff stat: 5 pages + findings.md/progress.md only; no backend/contracts/deps changes.
-5. Casts PASS � orchestrator replaced all E3-introduced `as any` with precise structural casts; eslint clean on 4 files (VacantListPage 3 pre-existing errors left); tsc clean; epoch fallback for optional interview dates.
+### E3 orchestrator verdict (opencode review unavailable — 2 interrupted runs; first-hand verification stands in)
+1. Literals PASS — orchestrator grep 0 hits for person/place literals across all 5 pages.
+2. TasksPage GET /tasks wiring PASS — TasksPage.tsx:200 fetches `/tasks?pageSize=100` with array/{data} normalization; POST create kept (:261).
+3. Mechanics PASS — VacantList rows/filters from GET /vacancies; ManagerDashboard/JobAnalytics/VacancyOverview derived from real fetches; empty PageStates present.
+4. Scope PASS — diff stat: 5 pages + findings.md/progress.md only; no backend/contracts/deps changes.
+5. Casts PASS — orchestrator replaced all E3-introduced `as any` with precise structural casts; eslint clean on 4 files (VacantListPage 3 pre-existing errors left); tsc clean; epoch fallback for optional interview dates.
 - Gates: tsc clean, web tests 58/58 pass.
-- Open: VacantListPage 3 pre-existing lint errors; mojibake glyphs (`?`) in string literals across touched files � queued in E5 encoding normalization.
+- Open: VacantListPage 3 pre-existing lint errors; mojibake glyphs (—) in string literals across touched files — queued in E5 encoding normalization.
 
 
 ### E4 Remove hardcoded demo literals from CV Intake, Applications, and Stage Transition pages (E4a + E4b): DONE
@@ -433,3 +433,45 @@
   - `pnpm --dir apps/web exec tsc -p tsconfig.app.json --noEmit` passed clean (0 errors).
   - `pnpm --dir apps/web build` passed clean (production build succeeded in 1.38s).
   - `pnpm --dir apps/web test` passed clean (23 test files, 58/58 tests pass).
+- Committed in dedf8e1: feat(web): E4 remove hardcoded literals from CV intake, applications, stage transition pages.
+
+### E5 Polish sweep & follow-ups: DONE
+- Task ID: E5 (7 follow-up items)
+- Scope:
+  - `apps/api/src/hiring/hiring.service.ts`
+  - `apps/web/src/components/candidate/JoiningChecklist.tsx`
+  - `apps/web/src/pages/HiringCasePage.tsx`
+  - `apps/web/src/pages/InterviewsPage.tsx`
+  - `apps/web/src/pages/OfferDetailPage.tsx`
+  - `apps/web/src/pages/VacantListPage.tsx`
+  - `progress.md`
+- Items Delivered:
+  1. **Exempt / 'Not Required' path (`HiringCasePage.tsx`)**:
+     - Updated `checklistItems` mapping: `isCompleted: item.status === 'Verified' || item.status === 'Not Required'`, with `notes: item.status === 'Not Required' ? 'Exempt / Not Required' : null`.
+     - Ensures checklist display aligns with server progress counting.
+  2. **License page data (`apps/api/src/hiring/hiring.service.ts`)**:
+     - Updated `listHiringCases` Prisma include to include `complianceRequirements: { include: { verifier: true } }`.
+     - Mapped full compliance items (`id`, `name`, `type`, `isRequired`, `status`, `verifiedBy`, `verifiedAt`, `expiryDate`) in returned cases, feeding live data to `LicenseManagementPage`.
+  3. **Offer header gating (`OfferDetailPage.tsx`)**:
+     - Removed disconnected `setIsHired` local state.
+     - Replaced ungated button with status-gated action strictly shown when `offer.status === 'Accepted'`.
+     - Seamlessly connects to real joining case (`/hires/${joiningCase.id}`) or invokes `handleCreateJoiningCase()`.
+  4. **Joining status gate (`JoiningChecklist.tsx`)**:
+     - Added `isAwaitingJoining = hiringCaseStatus === 'Awaiting Joining'` check to `isConfirmDisabled`.
+     - Updated footer status copy to indicate when awaiting executive final approval, eliminating premature 400 BadRequest submissions.
+  5. **Encoding normalization (`progress.md`)**:
+     - Replaced all legacy mojibake replacement characters (`\uFFFD`) with clean em dashes (`—`).
+  6. **VacantListPage lint (`VacantListPage.tsx`)**:
+     - Replaced 3 `@typescript-eslint/no-explicit-any` usages with typed `RawVacancyResponseItem` interface and status mapping.
+     - Eslint on `VacantListPage.tsx` passes with 0 errors.
+  7. **Schedule-form defaults (`InterviewsPage.tsx`)**:
+     - Initialized `interviewTitle` to empty string.
+     - Made `scheduledDateTime` dynamic (tomorrow at 10:00 AM) rather than hardcoded past date.
+     - Resolved timezone dynamically from system and eliminated hardcoded meeting link.
+- Verification:
+  - `pnpm --dir apps/web exec tsc -p tsconfig.app.json --noEmit` passed clean (0 errors).
+  - `pnpm --dir apps/api exec tsc --noEmit` passed clean (0 errors).
+  - `pnpm --dir apps/web build` passed clean (1.41s).
+  - `pnpm --dir apps/web test` passed clean (23 test files, 58/58 tests pass).
+  - `pnpm --dir apps/api test` passed clean (1 test file, 11/11 tests pass).
+  - Eslint clean on `VacantListPage.tsx`, `HiringCasePage.tsx`, `JoiningChecklist.tsx`.

@@ -83,6 +83,7 @@ export function JoiningChecklist({
   const [confirmError, setConfirmError] = useState<string | null>(null);
 
   const isJoined = hiringCaseStatus === 'Joined';
+  const isAwaitingJoining = hiringCaseStatus === 'Awaiting Joining';
 
   // Synchronize with parent items while preserving optimistic in-flight toggles
   useEffect(() => {
@@ -102,7 +103,7 @@ export function JoiningChecklist({
   const totalCount = localItems.length;
   const completedCount = localItems.filter((i) => i.isCompleted).length;
   const allComplete = totalCount > 0 && localItems.every((i) => i.isCompleted);
-  const isConfirmDisabled = !(allComplete && canConfirmJoining && !isJoined);
+  const isConfirmDisabled = !(allComplete && canConfirmJoining && isAwaitingJoining);
 
   const handleToggle = async (itemId: string) => {
     if (isJoined || togglingIds.has(itemId)) return;
@@ -286,6 +287,8 @@ export function JoiningChecklist({
         <span className="text-xs text-rf-ink-muted">
           {isJoined
             ? 'Headcount closed — candidate joined.'
+            : !isAwaitingJoining
+            ? 'Awaiting final approval before candidate joining can be confirmed.'
             : allComplete
             ? 'All compliance items verified. Ready to confirm joining.'
             : `${totalCount - completedCount} requirement${totalCount - completedCount === 1 ? '' : 's'} remaining`}

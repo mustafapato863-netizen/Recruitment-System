@@ -117,7 +117,7 @@ export class HiringService {
           include: { candidate: true, vacancy: { include: { position: true, branch: true } } }
         },
         complianceRequirements: {
-          select: { status: true },
+          include: { verifier: true },
         },
       },
       orderBy: { createdAt: 'desc' }
@@ -145,6 +145,14 @@ export class HiringService {
         updatedAt: c.updatedAt.toISOString(),
         completedItems,
         totalItems,
+        complianceRequirements: c.complianceRequirements.map(req => ({
+          ...req,
+          verifiedBy: req.verifier ? req.verifier.displayName : null,
+          verifiedAt: req.verifiedAt?.toISOString() ?? null,
+          expiryDate: req.expiryDate?.toISOString() ?? null,
+          createdAt: req.createdAt.toISOString(),
+          updatedAt: req.updatedAt.toISOString(),
+        })),
       };
     });
   }

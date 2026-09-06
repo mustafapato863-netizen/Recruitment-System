@@ -25,6 +25,27 @@ interface JobPositionRow {
   status: 'Open' | 'On Hold' | 'Draft' | 'Closed';
 }
 
+interface RawVacancyResponseItem {
+  id: string;
+  title?: string;
+  position?: { title?: string; department?: string };
+  positionTitle?: string;
+  location?: string;
+  branch?: { name?: string };
+  workType?: string;
+  department?: string;
+  recruiter?: { displayName?: string; firstName?: string; lastName?: string };
+  primaryRecruiterName?: string;
+  assignments?: Array<{ user?: { displayName?: string } }>;
+  applicationsCount?: number;
+  _count?: { applications?: number };
+  needActionCount?: number;
+  isOverdue?: boolean;
+  slaPercent?: number;
+  updatedAt?: string;
+  status?: string;
+}
+
 export function VacantListPage() {
   const navigate = useNavigate();
   const [apiVacancies, setApiVacancies] = useState<JobPositionRow[]>([]);
@@ -42,10 +63,16 @@ export function VacantListPage() {
 
   useEffect(() => {
     setIsLoading(true);
-    getApi<any>('/vacancies')
+    getApi<RawVacancyResponseItem[] | { data: RawVacancyResponseItem[] }>('/vacancies')
       .then((res) => {
         const rawList = Array.isArray(res) ? res : res?.data || [];
-        const mapped: JobPositionRow[] = rawList.map((v: any) => {
+        const statusMap: Record<string, JobPositionRow['status']> = {
+          Open: 'Open',
+          'On Hold': 'On Hold',
+          Draft: 'Draft',
+          Closed: 'Closed',
+        };
+        const mapped: JobPositionRow[] = rawList.map((v: RawVacancyResponseItem) => {
           const recruiterName =
             v.recruiter?.displayName ||
             (v.recruiter ? `${v.recruiter.firstName || ''} ${v.recruiter.lastName || ''}`.trim() : null) ||
@@ -79,7 +106,7 @@ export function VacantListPage() {
             slaPercent: typeof v.slaPercent === 'number' ? v.slaPercent : 100,
             slaStatus: (v.isOverdue ? 'at risk' : 'on track') as 'at risk' | 'on track',
             lastActivity: v.updatedAt ? new Date(v.updatedAt).toLocaleDateString() : '—',
-            status: (v.status as any) || 'Open',
+            status: (v.status && statusMap[v.status]) ? statusMap[v.status] : 'Open',
           };
         });
         setApiVacancies(mapped);

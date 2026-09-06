@@ -49,9 +49,14 @@ export function InterviewsPage() {
 
   // Scheduling Form State
   const [selectedAppId, setSelectedAppId] = useState('');
-  const [interviewTitle, setInterviewTitle] = useState('Clinical Assessment Round');
+  const [interviewTitle, setInterviewTitle] = useState('');
   const [interviewType, setInterviewType] = useState<'Screening' | 'Technical' | 'Behavioral' | 'Managerial' | 'Executive'>('Technical');
-  const [scheduledDateTime, setScheduledDateTime] = useState('2026-09-04T10:00');
+  const [scheduledDateTime, setScheduledDateTime] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    d.setHours(10, 0, 0, 0);
+    return d.toISOString().slice(0, 16);
+  });
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const showToast = (msg: string) => {
@@ -313,17 +318,17 @@ export function InterviewsPage() {
       const startDate = new Date(scheduledDateTime);
       const endDate = new Date(startDate.getTime() + 45 * 60000);
 
+      const resolvedTitle = interviewTitle.trim() || `${interviewType} Interview Round`;
       await postApi('/interviews', {
         applicationId: selectedAppId,
-        title: interviewTitle.trim() || 'Interview Round',
+        title: resolvedTitle,
         interviewType,
         scheduledStart: startDate.toISOString(),
         scheduledEnd: endDate.toISOString(),
-        timezone: 'Asia/Riyadh',
-        locationUrl: 'https://teams.microsoft.com/l/meetup-join/sgh-interview',
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
       });
 
-      showToast(`✓ Interview "${interviewTitle}" scheduled successfully in database!`);
+      showToast(`✓ Interview "${resolvedTitle}" scheduled successfully!`);
       setIsScheduleModalOpen(false);
       await loadData();
     } catch (err: unknown) {
