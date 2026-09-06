@@ -1128,14 +1128,23 @@ export function OfferDetailPage() {
               <button
                 type="button"
                 onClick={() => setIsPreviewModalOpen(false)}
-                className="px-3 py-1.5 text-slate-500 cursor-pointer"
+                className="px-3 py-1.5 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 cursor-pointer text-xs"
               >
                 Close
               </button>
               <button
                 type="button"
+                onClick={() => window.print()}
+                className="px-3 py-1.5 border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-200 rounded-xl font-semibold cursor-pointer inline-flex items-center gap-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs"
+                title="Print or export as PDF"
+              >
+                <Icon name="document" size={13} />
+                <span>Print</span>
+              </button>
+              <button
+                type="button"
                 onClick={handleDownloadOfferLetter}
-                className="px-4 py-1.5 bg-blue-600 text-white rounded-xl font-bold cursor-pointer inline-flex items-center gap-1.5"
+                className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold cursor-pointer inline-flex items-center gap-1.5 text-xs transition"
               >
                 <Icon name="download" size={13} />
                 <span>Download Letter</span>

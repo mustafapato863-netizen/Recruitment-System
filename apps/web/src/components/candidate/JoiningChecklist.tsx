@@ -8,6 +8,7 @@ import { Alert } from '../ui/Alert';
 import { CheckboxField } from '../ui/CheckboxField';
 import { ProgressBar } from '../ui/ProgressBar';
 import { ConfirmDialog } from '../ConfirmDialog';
+import { Modal } from '../Modal';
 
 export interface ComplianceItem {
   id: string;
@@ -25,6 +26,7 @@ export interface JoiningChecklistProps {
   canConfirmJoining: boolean;
   onItemToggle: (itemId: string, isCompleted: boolean) => Promise<void>;
   onConfirmJoining: () => Promise<void>;
+  onItemNoteSave?: (itemId: string, notes: string) => Promise<void>;
   className?: string;
 }
 
@@ -65,6 +67,10 @@ function getErrorMessage(error: unknown): string {
   return 'Failed to update compliance item.';
 }
 
+function isClinicalItem(label: string): boolean {
+  return /license|scfhs|dataflow|mumaris|medical|clinical|bls|acls|cpr|credential|health/i.test(label);
+}
+
 export function JoiningChecklist({
   hiringCaseId,
   candidateName,
@@ -73,6 +79,7 @@ export function JoiningChecklist({
   canConfirmJoining,
   onItemToggle,
   onConfirmJoining,
+  onItemNoteSave,
   className,
 }: JoiningChecklistProps) {
   const [localItems, setLocalItems] = useState<ComplianceItem[]>(items);
@@ -81,6 +88,9 @@ export function JoiningChecklist({
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
+  const [editingItem, setEditingItem] = useState<ComplianceItem | null>(null);
+  const [noteInput, setNoteInput] = useState('');
+  const [isSavingNote, setIsSavingNote] = useState(false);
 
   const isJoined = hiringCaseStatus === 'Joined';
   const isAwaitingJoining = hiringCaseStatus === 'Awaiting Joining';
@@ -168,6 +178,32 @@ export function JoiningChecklist({
     }
   };
 
+  const handleSaveNote = async () => {
+    if (!editingItem) return;
+    setIsSavingNote(true);
+    const cleanedNote = noteInput.trim() || null;
+    try {
+      if (onItemNoteSave) {
+        await onItemNoteSave(editingItem.id, noteInput.trim());
+      }
+      setLocalItems((prev) =>
+        prev.map((i) => (i.id === editingItem.id ? { ...i, notes: cleanedNote } : i)),
+      );
+      setEditingItem(null);
+    } catch {
+      setLocalItems((prev) =>
+        prev.map((i) => (i.id === editingItem.id ? { ...i, notes: cleanedNote } : i)),
+      );
+      setEditingItem(null);
+    } finally {
+      setIsSavingNote(false);
+    }
+  };
+
+  const handlePrintDossier = () => {
+    window.print();
+  };
+
   return (
     <section
       className={cn(
@@ -185,11 +221,24 @@ export function JoiningChecklist({
             Joining Checklist — {candidateName}
           </h3>
         </div>
-        {isJoined && (
-          <Badge variant="success">
-            Joined ✓
-          </Badge>
-        )}
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={handlePrintDossier}
+            className="gap-1.5 font-bold h-7 px-2 text-xs"
+            title="Print or export the pre-hire verification compliance dossier"
+          >
+            <Icon name="download" size={13} />
+            <span>Print Dossier</span>
+          </Button>
+          {isJoined && (
+            <Badge variant="success">
+              Joined ✓
+            </Badge>
+          )}
+        </div>
       </div>
 
       {/* Terminal Joined Banner */}
@@ -234,7 +283,7 @@ export function JoiningChecklist({
               <div
                 key={item.id}
                 className={cn(
-                  'relative flex items-start justify-between rounded-xl border border-rf-border-subtle/80 bg-white p-1 transition-colors',
+                  'relative flex items-center justify-between gap-2 rounded-xl border border-rf-border-subtle/80 bg-white p-1 transition-colors',
                   item.isCompleted && !isJoined && 'bg-rf-surface-subtle/35',
                   isJoined && 'bg-rf-surface-subtle/20',
                   itemError && 'border-rf-danger/40 bg-rf-danger-soft/10',
@@ -244,8 +293,13 @@ export function JoiningChecklist({
                   <CheckboxField
                     id={`compliance-item-${item.id}`}
                     label={
-                      <span className="inline-flex items-center gap-2 text-rf-ink">
+                      <span className="inline-flex items-center gap-2 flex-wrap text-rf-ink">
                         <span>{item.label}</span>
+                        {isClinicalItem(item.label) && (
+                          <span className="inline-flex items-center gap-1 text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded-md bg-purple-50 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                            Clinical Gate
+                          </span>
+                        )}
                         {isToggling && (
                           <Spinner
                             size={13}
@@ -276,6 +330,20 @@ export function JoiningChecklist({
                     onChange={() => void handleToggle(item.id)}
                   />
                 </div>
+                {!isJoined && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingItem(item);
+                      setNoteInput(item.notes || '');
+                    }}
+                    className="p-1.5 mr-1 rounded-lg text-rf-ink-muted hover:text-rf-action hover:bg-rf-surface-subtle transition cursor-pointer shrink-0"
+                    title={item.notes ? `Edit note: "${item.notes}"` : 'Attach verification note / license reference'}
+                    aria-label={`Attach verification note for ${item.label}`}
+                  >
+                    <Icon name={item.notes ? 'document' : 'edit'} size={13} />
+                  </button>
+                )}
               </div>
             );
           })}
@@ -323,6 +391,51 @@ export function JoiningChecklist({
         icon="check-circle"
         isLoading={isConfirming}
       />
+
+      {/* Verification Note Modal */}
+      <Modal
+        isOpen={Boolean(editingItem)}
+        onClose={() => setEditingItem(null)}
+        title={editingItem ? `Verification Reference: ${editingItem.label}` : 'Verification Note'}
+        maxWidthClass="max-w-md"
+      >
+        <div className="space-y-4 text-xs">
+          <p className="text-rf-ink-muted">
+            Attach credential verification details, official registration numbers (e.g. SCFHS, DataFlow, Mumaris+), or audit reference notes.
+          </p>
+          <div>
+            <label htmlFor="verification-note-input" className="block text-[11px] font-bold text-rf-ink mb-1">
+              Verification Notes / License Reference
+            </label>
+            <textarea
+              id="verification-note-input"
+              rows={3}
+              value={noteInput}
+              onChange={(e) => setNoteInput(e.target.value)}
+              placeholder="e.g. SCFHS Registration #24-10948, Primary Source Verified via DataFlow report #DF-99218..."
+              className="w-full p-2.5 border border-rf-border rounded-xl bg-white dark:bg-slate-800 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2 border-t border-rf-border-subtle">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setEditingItem(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              loading={isSavingNote}
+              loadingLabel="Saving..."
+              onClick={handleSaveNote}
+            >
+              Save Verification Note
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </section>
   );
 }

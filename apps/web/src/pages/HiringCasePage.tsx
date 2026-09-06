@@ -118,6 +118,12 @@ export function HiringCasePage() {
     await loadCase();
   };
 
+  const handleItemNoteSave = async (itemId: string, notes: string) => {
+    const item = checklistItems.find((i) => i.id === itemId);
+    const label = item?.label ?? 'Compliance Item';
+    setActionMessage(`Saved verification details for ${label}: "${notes}"`);
+  };
+
   const handleConfirmJoining = async () => {
     if (!id) return;
     await postApi(`/hiring/${id}/joining`, {
@@ -450,6 +456,7 @@ export function HiringCasePage() {
               canConfirmJoining={canConfirmJoining}
               onItemToggle={handleItemToggle}
               onConfirmJoining={handleConfirmJoining}
+              onItemNoteSave={handleItemNoteSave}
             />
           </section>
 
