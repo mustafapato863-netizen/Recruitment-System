@@ -5,141 +5,138 @@ import {
   QuickGuideProvider,
   QuickGuideModal,
   GameTourOverlay,
+  GuidedTourOverlay,
   useQuickGuide,
 } from '../index';
 
-describe('Gamified Autofocus Tour System', () => {
+describe('Clean Autofocus Spotlight Tour (famous-apps style)', () => {
   beforeEach(() => {
     localStorage.clear();
     vi.restoreAllMocks();
   });
 
-  function TestGameApp() {
-    const { startGameTour, isGameTourActive } = useQuickGuide();
+  function TestTourApp() {
+    const { startTour, startGameTour, isTourActive, isGameTourActive } = useQuickGuide();
+    const begin = startTour ?? startGameTour;
+    const active = isTourActive || isGameTourActive;
     return (
       <div>
         <div data-tour="candidate-card" id="test-target-1">Candidate Profile Card</div>
         <div data-tour="stage-sla-banner" id="test-target-2">Stage & SLA Status</div>
         <div data-tour="timeline-section" id="test-target-3">Audit Timeline</div>
-        <button type="button" onClick={startGameTour}>
-          Launch Test Game Quest
+        <button type="button" onClick={begin}>
+          Launch Guided Tour
         </button>
-        <span data-testid="game-active-status">{isGameTourActive ? 'ACTIVE' : 'INACTIVE'}</span>
+        <span data-testid="tour-active-status">{active ? 'ACTIVE' : 'INACTIVE'}</span>
         <QuickGuideModal />
-        <GameTourOverlay />
+        <GuidedTourOverlay />
       </div>
     );
   }
 
-  it('starts game tour and displays quest HUD with XP and target autofocus', () => {
+  function renderTour() {
     render(
       <MemoryRouter initialEntries={['/applications/app-123']}>
         <QuickGuideProvider>
-          <TestGameApp />
+          <TestTourApp />
         </QuickGuideProvider>
       </MemoryRouter>
     );
+  }
 
-    // Initial state: inactive
-    expect(screen.getByTestId('game-active-status')).toHaveTextContent('INACTIVE');
+  it('starts tour and displays clean tooltip with step counter and autofocus', () => {
+    renderTour();
+
+    expect(screen.getByTestId('tour-active-status')).toHaveTextContent('INACTIVE');
+    expect(screen.queryByText(/Review Candidate Vitals/i)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Launch Guided Tour'));
+
+    expect(screen.getByTestId('tour-active-status')).toHaveTextContent('ACTIVE');
+    // Clean step counter, no game language
+    expect(screen.getByText(/Step 1 of 4/i)).toBeInTheDocument();
+    expect(screen.getByText(/Review Candidate Vitals/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Next$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Back/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Skip tour/i })).toBeInTheDocument();
+    // No gamification leftovers
+    expect(screen.queryByText(/\+\d+ XP|Total XP Earned/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Mission:/i)).not.toBeInTheDocument();
-
-    // Start tour
-    fireEvent.click(screen.getByText('Launch Test Game Quest'));
-
-    // HUD should now be active
-    expect(screen.getByTestId('game-active-status')).toHaveTextContent('ACTIVE');
-    expect(screen.getByText(/Mission:/i)).toBeInTheDocument();
-    expect(screen.getByText(/Quest Step 1 of 4/i)).toBeInTheDocument();
-    expect(screen.getByText(/\+25 XP/i)).toBeInTheDocument();
+    expect(screen.queryByText(/Quest Step|Play Quest|Complete Quest/i)).not.toBeInTheDocument();
   });
 
-  it('navigates through quest steps and completes quest with victory splash', () => {
-    render(
-      <MemoryRouter initialEntries={['/applications/app-123']}>
-        <QuickGuideProvider>
-          <TestGameApp />
-        </QuickGuideProvider>
-      </MemoryRouter>
-    );
+  it('navigates through steps and finishes cleanly with Done (no victory splash)', () => {
+    renderTour();
+    fireEvent.click(screen.getByText('Launch Guided Tour'));
 
-    fireEvent.click(screen.getByText('Launch Test Game Quest'));
+    expect(screen.getByText(/Step 1 of 4/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^Next$/i }));
 
-    // Step 1
-    expect(screen.getByText(/Quest Step 1 of 4/i)).toBeInTheDocument();
-    const nextBtn = screen.getByRole('button', { name: /Next Step →/i });
-    fireEvent.click(nextBtn);
+    expect(screen.getByText(/Step 2 of 4/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^Next$/i }));
 
-    // Step 2
-    expect(screen.getByText(/Quest Step 2 of 4/i)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Next Step →/i }));
+    expect(screen.getByText(/Step 3 of 4/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^Next$/i }));
 
-    // Step 3
-    expect(screen.getByText(/Quest Step 3 of 4/i)).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Next Step →/i }));
+    expect(screen.getByText(/Step 4 of 4/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^Done$/i }));
 
-    // Step 4 (Final step button says Complete Quest)
-    expect(screen.getByText(/Quest Step 4 of 4/i)).toBeInTheDocument();
-    const completeBtn = screen.getByRole('button', { name: /Complete Quest! 🏆/i });
-    fireEvent.click(completeBtn);
-
-    // Victory celebration screen
-    expect(screen.getByText(/Quest Completed!/i)).toBeInTheDocument();
-    expect(screen.getByText(/You have mastered the workflow/i)).toBeInTheDocument();
-
-    // Confirm completion saved in localStorage
-    expect(localStorage.getItem('rf_quest_completed_application-detail')).toBe('true');
-
-    // Dismiss victory screen
-    fireEvent.click(screen.getByRole('button', { name: /Enter Workspace & Recruit!/i }));
-    expect(screen.getByTestId('game-active-status')).toHaveTextContent('INACTIVE');
+    // Tour closed, completion persisted, no victory modal
+    expect(screen.getByTestId('tour-active-status')).toHaveTextContent('INACTIVE');
+    expect(screen.queryByText(/Quest Completed/i)).not.toBeInTheDocument();
+    expect(localStorage.getItem('rf_tour_completed_application-detail')).toBe('true');
   });
 
-  it('toggles sound on and off within game tour HUD', () => {
-    render(
-      <MemoryRouter initialEntries={['/applications/app-123']}>
-        <QuickGuideProvider>
-          <TestGameApp />
-        </QuickGuideProvider>
-      </MemoryRouter>
-    );
+  it('supports Back navigation and Skip', () => {
+    renderTour();
+    fireEvent.click(screen.getByText('Launch Guided Tour'));
+    fireEvent.click(screen.getByRole('button', { name: /^Next$/i }));
+    expect(screen.getByText(/Step 2 of 4/i)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByText('Launch Test Game Quest'));
+    fireEvent.click(screen.getByRole('button', { name: /Back/i }));
+    expect(screen.getByText(/Step 1 of 4/i)).toBeInTheDocument();
 
-    const soundBtn = screen.getByRole('button', { name: /Mute Game Chimes|Unmute Game Chimes/i });
-    expect(soundBtn).toBeInTheDocument();
-
-    // Click to mute
-    fireEvent.click(soundBtn);
-    expect(localStorage.getItem('rf_game_sound_enabled')).toBe('false');
-
-    // Click to unmute
-    fireEvent.click(soundBtn);
-    expect(localStorage.getItem('rf_game_sound_enabled')).toBe('true');
+    fireEvent.click(screen.getByRole('button', { name: /Skip tour/i }));
+    expect(screen.getByTestId('tour-active-status')).toHaveTextContent('INACTIVE');
   });
 
   it('supports keyboard navigation (Escape to exit, Arrow keys to navigate)', () => {
+    renderTour();
+    fireEvent.click(screen.getByText('Launch Guided Tour'));
+    expect(screen.getByText(/Step 1 of 4/i)).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: 'ArrowRight' });
+    expect(screen.getByText(/Step 2 of 4/i)).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: 'ArrowLeft' });
+    expect(screen.getByText(/Step 1 of 4/i)).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.getByTestId('tour-active-status')).toHaveTextContent('INACTIVE');
+  });
+
+  it('legacy game aliases still start/end the same clean tour', () => {
+    function LegacyApp() {
+      const { startGameTour, isGameTourActive } = useQuickGuide();
+      return (
+        <div>
+          <button type="button" onClick={startGameTour}>
+            Legacy Start
+          </button>
+          <span data-testid="legacy-status">{isGameTourActive ? 'ACTIVE' : 'INACTIVE'}</span>
+          <GameTourOverlay />
+        </div>
+      );
+    }
     render(
       <MemoryRouter initialEntries={['/applications/app-123']}>
         <QuickGuideProvider>
-          <TestGameApp />
+          <LegacyApp />
         </QuickGuideProvider>
       </MemoryRouter>
     );
-
-    fireEvent.click(screen.getByText('Launch Test Game Quest'));
-    expect(screen.getByText(/Quest Step 1 of 4/i)).toBeInTheDocument();
-
-    // Press ArrowRight
-    fireEvent.keyDown(window, { key: 'ArrowRight' });
-    expect(screen.getByText(/Quest Step 2 of 4/i)).toBeInTheDocument();
-
-    // Press ArrowLeft
-    fireEvent.keyDown(window, { key: 'ArrowLeft' });
-    expect(screen.getByText(/Quest Step 1 of 4/i)).toBeInTheDocument();
-
-    // Press Escape to close
-    fireEvent.keyDown(window, { key: 'Escape' });
-    expect(screen.getByTestId('game-active-status')).toHaveTextContent('INACTIVE');
+    fireEvent.click(screen.getByText('Legacy Start'));
+    expect(screen.getByTestId('legacy-status')).toHaveTextContent('ACTIVE');
+    expect(screen.getByText(/Step 1 of 4/i)).toBeInTheDocument();
   });
 });

@@ -69,7 +69,7 @@ describe('QuickGuideTrigger Component', () => {
     render(<QuickGuideTrigger />);
     const btn = screen.getByRole('button', { name: /open page guide/i });
     expect(btn).toBeInTheDocument();
-    expect(screen.getByText('Quick Learn')).toBeInTheDocument();
+    expect(screen.getByText('Page guide')).toBeInTheDocument();
   });
 
   it('renders with "New" badge when page is unseen', () => {
@@ -82,7 +82,7 @@ describe('QuickGuideTrigger Component', () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByText('Quick Learn')).toBeInTheDocument();
+    expect(screen.getByText('Page guide')).toBeInTheDocument();
     expect(screen.getByText('New')).toBeInTheDocument();
   });
 });
@@ -121,14 +121,14 @@ describe('QuickGuideModal Component & User Interaction', () => {
     expect(screen.getByText('Offer & Compensation')).toBeInTheDocument();
 
     // Check Overview tab content
-    expect(screen.getByText('Why This Page Exists')).toBeInTheDocument();
+    expect(screen.getByText(/why this page exists/i)).toBeInTheDocument();
 
     // Click on 3-Step Workflow tab
-    fireEvent.click(screen.getByRole('button', { name: /3-step workflow/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /3-step workflow/i }));
     expect(screen.getByText('Structure the Saudi Package (SAR)')).toBeInTheDocument();
 
     // Click on Golden Rules tab
-    fireEvent.click(screen.getByRole('button', { name: /golden rules/i }));
+    fireEvent.click(screen.getByRole('tab', { name: /golden rules/i }));
     expect(screen.getByText(/saudi salary breakdown math/i)).toBeInTheDocument();
 
     // Click "Got It, Let’s Start!"

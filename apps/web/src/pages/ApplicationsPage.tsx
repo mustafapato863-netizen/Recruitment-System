@@ -78,13 +78,75 @@ interface ListRowCandidate {
   rawApplication: Application;
 }
 
-const PIPELINE_COLUMNS: { id: string; name: string; stageKey: ApplicationStage }[] = [
-  { id: 'new', name: 'New Applied', stageKey: 'Applied' },
-  { id: 'screening', name: 'Screening', stageKey: 'Screening' },
-  { id: 'interview', name: 'Interview', stageKey: 'Interview' },
-  { id: 'offer', name: 'Offer', stageKey: 'Offer' },
-  { id: 'pre_hire', name: 'Pre-Hire', stageKey: 'Pre-Hire' },
-  { id: 'hired', name: 'Hired', stageKey: 'Joined' },
+export interface PipelineColumnDef {
+  id: string;
+  name: string;
+  stageKey: ApplicationStage;
+  accentBg: string;
+  accentBorder: string;
+  accentBar: string;
+  slaTooltip: string;
+  defaultFolded?: boolean;
+}
+
+export type CardStatusSignal = 'ready' | 'in_progress' | 'blocked';
+
+const PIPELINE_COLUMNS: PipelineColumnDef[] = [
+  {
+    id: 'new',
+    name: 'New Applied',
+    stageKey: 'Applied',
+    accentBg: 'bg-slate-500',
+    accentBorder: 'border-slate-300 dark:border-slate-700',
+    accentBar: 'bg-slate-500',
+    slaTooltip: 'Intake: New applicant submissions awaiting initial review within 24h SLA.',
+  },
+  {
+    id: 'screening',
+    name: 'Screening',
+    stageKey: 'Screening',
+    accentBg: 'bg-teal-500',
+    accentBorder: 'border-teal-300 dark:border-teal-700',
+    accentBar: 'bg-teal-500',
+    slaTooltip: 'Screening: CV qualification, credentials check & telephone screening within 48h SLA.',
+  },
+  {
+    id: 'interview',
+    name: 'Interview',
+    stageKey: 'Interview',
+    accentBg: 'bg-blue-600',
+    accentBorder: 'border-blue-300 dark:border-blue-700',
+    accentBar: 'bg-blue-600',
+    slaTooltip: 'Interviews: Panel and technical evaluations with structured scorecards.',
+  },
+  {
+    id: 'offer',
+    name: 'Offer',
+    stageKey: 'Offer',
+    accentBg: 'bg-amber-500',
+    accentBorder: 'border-amber-300 dark:border-amber-700',
+    accentBar: 'bg-amber-500',
+    slaTooltip: 'Offer: Executive & Finance approvals with Saudi Labor Law compensation breakdown.',
+  },
+  {
+    id: 'pre_hire',
+    name: 'Pre-Hire',
+    stageKey: 'Pre-Hire',
+    accentBg: 'bg-purple-600',
+    accentBorder: 'border-purple-300 dark:border-purple-700',
+    accentBar: 'bg-purple-600',
+    slaTooltip: 'Pre-Hire: Mandatory SCFHS license registration, DataFlow verification & medical checks.',
+  },
+  {
+    id: 'hired',
+    name: 'Hired',
+    stageKey: 'Joined',
+    accentBg: 'bg-emerald-600',
+    accentBorder: 'border-emerald-300 dark:border-emerald-700',
+    accentBar: 'bg-emerald-600',
+    slaTooltip: 'Joined: Official onboarding, contract commencement and employee file handover.',
+    defaultFolded: true,
+  },
 ];
 
 function getInitials(name?: string | null): string {
@@ -248,6 +310,68 @@ export function ApplicationsPage() {
   const [draggedCard, setDraggedCard] = useState<{ cardId: string; sourceColId: string } | null>(null);
   const [activeDropColId, setActiveDropColId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; tone: 'success' | 'warning' | 'error' | 'info' } | null>(null);
+
+  // Card Status Signals State (Phase A3: Ready / In Progress / Blocked)
+  const [cardSignals, setCardSignals] = useState<Record<string, CardStatusSignal>>(() => {
+    const map: Record<string, CardStatusSignal> = {};
+    if (typeof window !== 'undefined') {
+      try {
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && k.startsWith('rf_signal_')) {
+            const appId = k.replace('rf_signal_', '');
+            const val = localStorage.getItem(k) as CardStatusSignal;
+            if (val) map[appId] = val;
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+    return map;
+  });
+
+  const toggleCardSignal = useCallback((cardId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setCardSignals((prev) => {
+      const current = prev[cardId] || 'in_progress';
+      const next: CardStatusSignal =
+        current === 'in_progress' ? 'ready' : current === 'ready' ? 'blocked' : 'in_progress';
+      try {
+        localStorage.setItem(`rf_signal_${cardId}`, next);
+      } catch {
+        // ignore
+      }
+      return { ...prev, [cardId]: next };
+    });
+  }, []);
+
+  // Folded Terminal Stages State (Phase A3: Folded Joined / Hired Column)
+  const [foldedColumns, setFoldedColumns] = useState<Record<string, boolean>>(() => {
+    const defaults: Record<string, boolean> = {};
+    PIPELINE_COLUMNS.forEach((col) => {
+      if (col.defaultFolded) defaults[col.id] = true;
+    });
+    return defaults;
+  });
+
+  const toggleColumnFold = useCallback((colId: string) => {
+    setFoldedColumns((prev) => ({
+      ...prev,
+      [colId]: !prev[colId],
+    }));
+  }, []);
+
+  // Vacancy persistence (Phase A1)
+  useEffect(() => {
+    if (vacancyId) {
+      try {
+        localStorage.setItem('rf_last_vacancy_id', vacancyId);
+      } catch {
+        // ignore
+      }
+    }
+  }, [vacancyId]);
 
   // List view state
   const [selectedListIds, setSelectedListIds] = useState<string[]>([]);
@@ -577,10 +701,6 @@ export function ApplicationsPage() {
       };
     });
   }, [boardColumns, searchQuery, selectedJob, selectedStageFilter, selectedOwnerFilter, selectedSourceFilter, currentVacancy]);
-
-  const handleCardClick = (cardId: string) => {
-    navigate(`/applications/${cardId}`);
-  };
 
   // Drag & Drop Handlers with Optimistic Locking
   const handleDragStart = (e: React.DragEvent, cardId: string, sourceColId: string) => {
@@ -1414,174 +1534,276 @@ export function ApplicationsPage() {
         /* View Mode: Kanban Board with Live Drag-and-Drop */
         <div className="overflow-x-auto pb-4 pt-1">
           <div className="flex gap-4 items-start min-w-[1720px]">
-            {columns.map((column) => (
-              <div
-                key={column.id}
-                onDragOver={(e) => handleDragOver(e, column.id)}
-                onDragLeave={(e) => handleDragLeave(e, column.id)}
-                onDrop={(e) => void handleDrop(e, column.id)}
-                className={`w-[280px] min-w-[280px] shrink-0 bg-slate-50/80 dark:bg-slate-900/60 rounded-2xl border transition-all p-3 flex flex-col space-y-3 ${
-                  activeDropColId === column.id
-                    ? 'border-blue-500 shadow-md ring-2 ring-blue-500/20 bg-blue-50/20'
-                    : 'border-slate-200/80 dark:border-slate-800'
-                }`}
-              >
-                {/* Column Header */}
-                <div className="flex items-center justify-between px-1">
-                  <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-blue-600" />
-                    <h2 className="text-xs font-extrabold text-slate-900 dark:text-white">{column.name}</h2>
-                    <span className="w-5 h-5 rounded-full bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[11px] font-black flex items-center justify-center">
-                      {column.count}
-                    </span>
+            {columns.map((column) => {
+              const colDef = PIPELINE_COLUMNS.find((p) => p.id === column.id);
+              const isFolded = Boolean(foldedColumns[column.id]);
+
+              if (isFolded) {
+                return (
+                  <div
+                    key={column.id}
+                    onDragOver={(e) => handleDragOver(e, column.id)}
+                    onDragLeave={(e) => handleDragLeave(e, column.id)}
+                    onDrop={(e) => void handleDrop(e, column.id)}
+                    onClick={() => toggleColumnFold(column.id)}
+                    className={`w-14 min-w-14 shrink-0 bg-slate-50/90 dark:bg-slate-900/60 hover:bg-slate-100/80 dark:hover:bg-slate-800/80 rounded-2xl border transition-all p-2.5 flex flex-col items-center justify-between cursor-pointer group select-none min-h-[480px] shadow-2xs ${
+                      activeDropColId === column.id
+                        ? 'border-blue-500 shadow-md ring-2 ring-blue-500/20 bg-blue-50/20'
+                        : 'border-slate-200/80 dark:border-slate-800'
+                    }`}
+                    title={`Click to expand ${column.name} (${column.count} candidates)`}
+                  >
+                    <div className="flex flex-col items-center gap-2 pt-1 w-full">
+                      <span className={`w-2.5 h-2.5 rounded-full ${colDef?.accentBg || 'bg-blue-600'}`} />
+                      <span className="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[10px] font-black flex items-center justify-center">
+                        {column.count}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleColumnFold(column.id);
+                        }}
+                        className="p-1 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition rounded-md hover:bg-slate-200/50"
+                        aria-label={`Expand ${column.name}`}
+                        title="Expand column"
+                      >
+                        <Icon name="chevron-right" size={13} />
+                      </button>
+                    </div>
+
+                    <div className="flex-1 flex items-center justify-center py-6">
+                      <span className="[writing-mode:vertical-rl] rotate-180 text-xs font-black tracking-wider text-slate-500 dark:text-slate-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 uppercase">
+                        {column.name}
+                      </span>
+                    </div>
+
+                    <div className="pb-1 text-slate-400 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition">
+                      <Icon name="folder-kanban" size={14} />
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <div
+                  key={column.id}
+                  onDragOver={(e) => handleDragOver(e, column.id)}
+                  onDragLeave={(e) => handleDragLeave(e, column.id)}
+                  onDrop={(e) => void handleDrop(e, column.id)}
+                  className={`w-[285px] min-w-[285px] shrink-0 bg-slate-50/80 dark:bg-slate-900/60 rounded-2xl border transition-all p-3 flex flex-col space-y-3 ${
+                    activeDropColId === column.id
+                      ? 'border-blue-500 shadow-md ring-2 ring-blue-500/20 bg-blue-50/20'
+                      : 'border-slate-200/80 dark:border-slate-800'
+                  }`}
+                >
+                  {/* Stage Accent Bar (Phase A3) */}
+                  <div className={`h-1.5 w-full rounded-full ${colDef?.accentBar || 'bg-blue-600'}`} />
+
+                  {/* Column Header */}
+                  <div className="flex items-center justify-between px-1">
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-xs font-extrabold text-slate-900 dark:text-white">{column.name}</h2>
+                      <span className="w-5 h-5 rounded-full bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[11px] font-black flex items-center justify-center">
+                        {column.count}
+                      </span>
+                      {colDef?.slaTooltip && (
+                        <span
+                          title={colDef.slaTooltip}
+                          className="cursor-help text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+                        >
+                          <Icon name="info" size={12} />
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1 text-slate-400">
+                      <button
+                        type="button"
+                        onClick={() => toggleColumnFold(column.id)}
+                        className="p-1 hover:bg-slate-200/60 dark:hover:bg-slate-800 rounded-md cursor-pointer transition text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                        title="Fold column (save space)"
+                      >
+                        <Icon name="chevron-left" size={13} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsAddCandidateOpen(true)}
+                        className="p-1 hover:bg-slate-200/60 dark:hover:bg-slate-800 rounded-md cursor-pointer transition"
+                        title="Add candidate"
+                      >
+                        <Icon name="plus" size={13} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          showToast(`Stage: ${column.name} (${column.count} candidates)`, 'info');
+                        }}
+                        className="p-1 hover:bg-slate-200/60 dark:hover:bg-slate-800 rounded-md cursor-pointer transition"
+                        title="Column options"
+                      >
+                        <Icon name="more-horizontal" size={13} />
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="flex items-center gap-1 text-slate-400">
-                    <button
-                      type="button"
-                      onClick={() => setIsAddCandidateOpen(true)}
-                      className="p-1 hover:bg-slate-200/60 dark:hover:bg-slate-800 rounded-md cursor-pointer transition"
-                      title="Add candidate"
-                    >
-                      <Icon name="plus" size={13} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        showToast(`Stage: ${column.name} (${column.count} candidates)`, 'info');
-                      }}
-                      className="p-1 hover:bg-slate-200/60 dark:hover:bg-slate-800 rounded-md cursor-pointer transition"
-                      title="Column options"
-                    >
-                      <Icon name="more-horizontal" size={13} />
-                    </button>
-                  </div>
-                </div>
+                  {/* Candidate Cards in Column */}
+                  <div className="space-y-3 min-h-[400px]">
+                    {column.cards.map((card) => {
+                      const signal = cardSignals[card.id] || 'in_progress';
+                      const signalTitle =
+                        signal === 'ready'
+                          ? 'Status: Ready for Next Stage (Click to toggle)'
+                          : signal === 'blocked'
+                          ? 'Status: Blocked / Action Required (Click to toggle)'
+                          : 'Status: In Progress / Active (Click to toggle)';
+                      const signalDotClass =
+                        signal === 'ready'
+                          ? 'bg-emerald-500 ring-2 ring-emerald-300 dark:ring-emerald-700'
+                          : signal === 'blocked'
+                          ? 'bg-rose-500 ring-2 ring-rose-300 dark:ring-rose-700 animate-pulse'
+                          : 'bg-amber-400 ring-2 ring-amber-200 dark:ring-amber-700';
 
-                {/* Candidate Cards in Column */}
-                <div className="space-y-3 min-h-[400px]">
-                  {column.cards.map((card) => (
-                    <div
-                      key={card.id}
-                      draggable
-                      onDragStart={(e) => handleDragStart(e, card.id, column.id)}
-                      onClick={() => handleCardClick(card.id)}
-                      className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800 p-3.5 shadow-2xs hover:shadow-md hover:border-blue-300 dark:hover:border-blue-700 transition cursor-grab active:cursor-grabbing group space-y-3"
-                    >
-                      {/* Card Top: Candidate Avatar, Name, Applied date & Menu */}
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2.5">
-                          {card.photoUrl ? (
-                            <img
-                              src={card.photoUrl}
-                              alt={card.name}
-                              className="w-9 h-9 rounded-full object-cover border border-slate-200 dark:border-slate-700 shrink-0"
-                            />
-                          ) : (
-                            <div className="w-9 h-9 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center justify-center shrink-0">
-                              {card.initials}
+                      return (
+                        <div
+                          key={card.id}
+                          draggable
+                          onDragStart={(e) => handleDragStart(e, card.id, column.id)}
+                          onClick={() => setSelectedDrawerApp(card.rawApplication)}
+                          className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800 p-3.5 shadow-2xs hover:shadow-md hover:border-blue-300 dark:hover:border-blue-700 transition cursor-grab active:cursor-grabbing group space-y-3 relative"
+                        >
+                          {/* Card Top: Candidate Avatar, Name, Applied date & Menu */}
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2.5">
+                              {card.photoUrl ? (
+                                <img
+                                  src={card.photoUrl}
+                                  alt={card.name}
+                                  className="w-9 h-9 rounded-full object-cover border border-slate-200 dark:border-slate-700 shrink-0"
+                                />
+                              ) : (
+                                <div className="w-9 h-9 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center justify-center shrink-0">
+                                  {card.initials}
+                                </div>
+                              )}
+                              <div>
+                                <span
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigate(`/applications/${card.id}`);
+                                  }}
+                                  className="text-xs font-bold text-slate-900 dark:text-white group-hover:text-blue-600 transition block leading-tight cursor-pointer"
+                                  title="View full application"
+                                >
+                                  {card.name}
+                                </span>
+                                <div className="flex items-center gap-1.5 mt-0.5 text-[10.5px] text-slate-400 font-mono">
+                                  <span>{card.applicationCode}</span>
+                                  {card.rawApplication.candidateId && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        navigate(`/candidates/${card.rawApplication.candidateId}`);
+                                      }}
+                                      className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                                      title="Open Candidate 360 profile"
+                                    >
+                                      <span>&bull; Profile</span>
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
                             </div>
-                          )}
-                          <div>
-                            <span className="text-xs font-bold text-slate-900 dark:text-white group-hover:text-blue-600 transition block leading-tight">
-                              {card.name}
-                            </span>
-                            <div className="flex items-center gap-1.5 mt-0.5 text-[10.5px] text-slate-400 font-mono">
-                              <span>{card.applicationCode}</span>
-                              {card.rawApplication.candidateId && (
+
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {/* Status Signal Dot (Phase A3) */}
+                              <button
+                                type="button"
+                                onClick={(e) => toggleCardSignal(card.id, e)}
+                                className={`w-3 h-3 rounded-full ${signalDotClass} cursor-pointer shadow-xs hover:scale-125 transition shrink-0`}
+                                title={signalTitle}
+                                aria-label={signalTitle}
+                              />
+
+                              {(!card.rawApplication.primaryRecruiterId || card.owner.name === 'Unassigned') && (
                                 <button
                                   type="button"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    navigate(`/candidates/${card.rawApplication.candidateId}`);
+                                    void handleClaimApplication(card.id);
                                   }}
-                                  className="inline-flex items-center gap-0.5 text-[10px] font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
-                                  title="Open Candidate 360 profile"
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 border border-blue-200 dark:border-blue-800 text-[10px] font-bold transition cursor-pointer shadow-2xs"
+                                  title="1-Click Claim: Assign yourself as primary recruiter"
                                 >
-                                  <span>&bull; Profile</span>
+                                  <Icon name="user-check" size={10} />
+                                  <span>Claim</span>
                                 </button>
                               )}
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setQuickNoteApp({
+                                    id: card.id,
+                                    candidateName: card.name,
+                                    appCode: card.applicationCode,
+                                  });
+                                }}
+                                className="p-1 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded-md text-slate-400 hover:text-blue-600 cursor-pointer transition"
+                                title="Quick note"
+                              >
+                                <Icon name="edit" size={13} />
+                              </button>
+                              <div
+                                className={`w-5 h-5 rounded-full ${card.owner.color} text-white text-[9px] font-extrabold flex items-center justify-center shadow-2xs`}
+                                title={`Owner: ${card.owner.name}`}
+                              >
+                                {card.owner.initials}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  navigate(`/applications/${card.id}/transition`);
+                                }}
+                                className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md text-slate-400 hover:text-slate-700 cursor-pointer"
+                                title="Move stage"
+                              >
+                                <Icon name="more-horizontal" size={13} />
+                              </button>
                             </div>
                           </div>
-                        </div>
 
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          {(!card.rawApplication.primaryRecruiterId || card.owner.name === 'Unassigned') && (
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                void handleClaimApplication(card.id);
-                              }}
-                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 border border-blue-200 dark:border-blue-800 text-[10px] font-bold transition cursor-pointer shadow-2xs"
-                              title="1-Click Claim: Assign yourself as primary recruiter"
-                            >
-                              <Icon name="user-check" size={10} />
-                              <span>Claim</span>
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setQuickNoteApp({
-                                id: card.id,
-                                candidateName: card.name,
-                                appCode: card.applicationCode,
-                              });
-                            }}
-                            className="p-1 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded-md text-slate-400 hover:text-blue-600 cursor-pointer transition"
-                            title="Quick note"
-                          >
-                            <Icon name="edit" size={13} />
-                          </button>
-                          <div
-                            className={`w-5 h-5 rounded-full ${card.owner.color} text-white text-[9px] font-extrabold flex items-center justify-center shadow-2xs`}
-                            title={`Owner: ${card.owner.name}`}
-                          >
-                            {card.owner.initials}
+                          {/* Middle: Next Action & Due label */}
+                          <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-[11px]">
+                            <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 truncate pr-2">
+                              <span className="font-semibold text-slate-400">Next:</span>
+                              <span className="truncate font-medium text-slate-700 dark:text-slate-300">
+                                {card.nextAction}
+                              </span>
+                            </div>
+                            <span className={`shrink-0 ${getDueBadgeStyle(card.nextDueTone)}`}>{card.nextDue}</span>
                           </div>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigate(`/applications/${card.id}/transition`);
-                            }}
-                            className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md text-slate-400 hover:text-slate-700 cursor-pointer"
-                            title="Move stage"
-                          >
-                            <Icon name="more-horizontal" size={13} />
-                          </button>
+
+                          {/* Bottom: Last activity */}
+                          <div className="text-[10.5px] text-slate-400 flex items-center justify-between pt-0.5">
+                            <span className="truncate">Last: {card.lastActivity}</span>
+                            <span className="shrink-0 text-slate-400">{card.lastActivityTime}</span>
+                          </div>
                         </div>
-                      </div>
+                      );
+                    })}
 
-                      {/* Middle: Next Action & Due label */}
-                      <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-[11px]">
-                        <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 truncate pr-2">
-                          <span className="font-semibold text-slate-400">Next:</span>
-                          <span className="truncate font-medium text-slate-700 dark:text-slate-300">
-                            {card.nextAction}
-                          </span>
-                        </div>
-                        <span className={`shrink-0 ${getDueBadgeStyle(card.nextDueTone)}`}>{card.nextDue}</span>
+                    {column.cards.length === 0 && (
+                      <div className="h-28 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-800 flex items-center justify-center text-xs text-slate-400">
+                        Drop candidate here
                       </div>
-
-                      {/* Bottom: Last activity */}
-                      <div className="text-[10.5px] text-slate-400 flex items-center justify-between pt-0.5">
-                        <span className="truncate">Last: {card.lastActivity}</span>
-                        <span className="shrink-0 text-slate-400">{card.lastActivityTime}</span>
-                      </div>
-                    </div>
-                  ))}
-
-                  {column.cards.length === 0 && (
-                    <div className="h-28 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-800 flex items-center justify-center text-xs text-slate-400">
-                      Drop candidate here
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -1785,6 +2007,28 @@ export function ApplicationsPage() {
           </div>
         )}
       </Modal>
+
+      {/* Quick-action split drawer on cards (Phase A6) */}
+      <CandidateSplitDrawer
+        isOpen={Boolean(selectedDrawerApp)}
+        application={selectedDrawerApp}
+        onClose={() => setSelectedDrawerApp(null)}
+        onMoveStage={async (appId, nextStage) => {
+          try {
+            const app = apiApplications.find((a) => a.id === appId) || selectedDrawerApp;
+            const expectedVersion = app?.version ?? 1;
+            await patchApi(`/applications/${appId}/stage`, {
+              stage: nextStage,
+              expectedVersion,
+            });
+            showToast(`Stage updated to ${nextStage}`, 'success');
+            setSelectedDrawerApp(null);
+            void loadApplications();
+          } catch {
+            showToast('Failed to update stage from drawer', 'error');
+          }
+        }}
+      />
     </div>
   );
 }

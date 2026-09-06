@@ -11,7 +11,9 @@ import { SghHeartSvg } from '../design-system/brand/sgh-heart-svg';
 import { UserProfileDropdown } from '../components/ui/UserProfileDropdown';
 import { BreadcrumbsBar } from '../components/ui/BreadcrumbsBar';
 import { BreadcrumbProvider } from '../context/BreadcrumbContext';
-import { QuickGuideProvider, QuickGuideModal, GameTourOverlay, useQuickGuide } from '../quickguide';
+import { QuickGuideProvider, QuickGuideModal, GuidedTourOverlay, useQuickGuide } from '../quickguide';
+
+import { getApi } from '../api/client';
 
 type NavigationItemProps = {
   label: string;
@@ -21,6 +23,8 @@ type NavigationItemProps = {
   allowedRoles?: ('ADMIN' | 'MANAGER' | 'EMPLOYEE')[];
   isCollapsed?: boolean;
   onNavigate?: () => void;
+  badge?: number | string;
+  badgeTone?: 'blue' | 'amber' | 'emerald' | 'red';
 };
 
 export function NavigationItem({
@@ -31,6 +35,8 @@ export function NavigationItem({
   allowedRoles,
   isCollapsed = false,
   onNavigate,
+  badge,
+  badgeTone = 'blue',
 }: NavigationItemProps) {
   const { user } = useAuth();
   
@@ -67,7 +73,24 @@ export function NavigationItem({
     >
       <span className="ico"><Icon name={icon} size={17} /></span>
       {!isCollapsed && (
-        <span className="nav-label font-semibold text-[13.5px] leading-tight normal-case tracking-normal">{label}</span>
+        <span className="nav-label font-semibold text-[13.5px] leading-tight normal-case tracking-normal flex-1 flex items-center justify-between">
+          <span>{label}</span>
+          {badge !== undefined && Number(badge) > 0 && (
+            <span
+              className={`ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+                badgeTone === 'amber'
+                  ? 'bg-amber-500/20 text-amber-500 dark:text-amber-400'
+                  : badgeTone === 'red'
+                  ? 'bg-rose-500/20 text-rose-500 dark:text-rose-400'
+                  : badgeTone === 'emerald'
+                  ? 'bg-emerald-500/20 text-emerald-500 dark:text-emerald-400'
+                  : 'bg-blue-500/20 text-blue-500 dark:text-blue-400'
+              }`}
+            >
+              {badge}
+            </span>
+          )}
+        </span>
       )}
       {isCollapsed && (
         <span
@@ -167,6 +190,41 @@ export function AppShellInner() {
 
 
 
+  const [inboxBadgeCount, setInboxBadgeCount] = useState<number>(0);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchPendingCounts = async () => {
+      try {
+        const canApprove = Boolean(
+          user?.permissions?.some((p) =>
+            ['VACANCY_REQUEST_APPROVE', 'APPROVE_OFFERS', 'FINAL_HIRING_APPROVAL', 'VACANCY_MANAGE'].includes(p)
+          )
+        );
+        if (!canApprove) return;
+
+        const [vrRes, offRes, hireRes] = await Promise.allSettled([
+          getApi<unknown[]>('/vacancy-requests/inbox'),
+          getApi<unknown[]>('/offers/approvals/inbox'),
+          getApi<unknown[]>('/hiring/final-approvals'),
+        ]);
+
+        let total = 0;
+        if (vrRes.status === 'fulfilled' && Array.isArray(vrRes.value)) total += vrRes.value.length;
+        if (offRes.status === 'fulfilled' && Array.isArray(offRes.value)) total += offRes.value.length;
+        if (hireRes.status === 'fulfilled' && Array.isArray(hireRes.value)) total += hireRes.value.length;
+
+        if (isMounted) setInboxBadgeCount(total);
+      } catch {
+        // silent fallback
+      }
+    };
+    void fetchPendingCounts();
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.permissions]);
+
   return (
     <div
       className={[
@@ -223,15 +281,75 @@ export function AppShellInner() {
           </IconButton>
         </div>
 
-        <div className="nav rf-scrollbar">
-          <NavigationItem end icon="dashboard" label="My Work" to="/" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
-          <NavigationItem icon="briefcase" label="Job Positions" to="/vacancies" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
-          <NavigationItem icon="users" label="Applications" to="/applications" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
-          <NavigationItem icon="calendar" label="Interviews" to="/interviews" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
-          <NavigationItem icon="offer" label="Offers" to="/offers" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
-          <NavigationItem icon="database" label="Candidates DB" to="/candidates" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
-          <NavigationItem icon="report" label="Reports" to="/reports" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
-          <NavigationItem icon="settings" label="Settings" to="/settings" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+        <div className="nav rf-scrollbar space-y-3">
+          {/* Workspace */}
+          <div>
+            {!isSidebarCollapsed && (
+              <div className="px-3 pt-1 pb-0.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500 select-none">
+                Workspace
+              </div>
+            )}
+            <div className="space-y-0.5">
+              <NavigationItem end icon="dashboard" label="Command Center" to="/" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+              <NavigationItem icon="file-text" label="Requisitions" to="/vacancy-requests" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+              <NavigationItem icon="briefcase" label="Job Positions" to="/vacancies" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+            </div>
+          </div>
+
+          {/* Recruitment Pipeline */}
+          <div>
+            {!isSidebarCollapsed && (
+              <div className="px-3 pt-1 pb-0.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500 select-none">
+                Recruitment
+              </div>
+            )}
+            <div className="space-y-0.5">
+              <NavigationItem icon="users" label="Applications" to="/applications" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+              <NavigationItem icon="check-circle" label="Approval Inboxes" to="/inbox" badge={inboxBadgeCount > 0 ? inboxBadgeCount : undefined} badgeTone="amber" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+              <NavigationItem icon="calendar" label="Interviews" to="/interviews" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+              <NavigationItem icon="offer" label="Offers" to="/offers" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+            </div>
+          </div>
+
+          {/* Sourcing & Talent */}
+          <div>
+            {!isSidebarCollapsed && (
+              <div className="px-3 pt-1 pb-0.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500 select-none">
+                Sourcing &amp; Talent
+              </div>
+            )}
+            <div className="space-y-0.5">
+              <NavigationItem icon="database" label="Candidates DB" to="/candidates" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+              <NavigationItem icon="upload" label="CV Intake" to="/cv-intake" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+              <NavigationItem icon="folder" label="Talent Pools" to="/talent-pool" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+            </div>
+          </div>
+
+          {/* Compliance & Onboarding */}
+          <div>
+            {!isSidebarCollapsed && (
+              <div className="px-3 pt-1 pb-0.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500 select-none">
+                Compliance &amp; Hires
+              </div>
+            )}
+            <div className="space-y-0.5">
+              <NavigationItem icon="user-check" label="Hires & Joining" to="/joining" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+              <NavigationItem icon="shield-check" label="Medical Licenses" to="/licenses" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+            </div>
+          </div>
+
+          {/* Governance */}
+          <div>
+            {!isSidebarCollapsed && (
+              <div className="px-3 pt-1 pb-0.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500 select-none">
+                Governance
+              </div>
+            )}
+            <div className="space-y-0.5">
+              <NavigationItem icon="report" label="Reports" to="/reports" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+              <NavigationItem icon="settings" label="Settings" to="/settings" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+            </div>
+          </div>
         </div>
 
         {/* User Account / Footer Section */}
@@ -307,7 +425,7 @@ export function AppShellInner() {
               type="button"
               onClick={openGuide}
               className="hidden md:flex w-9 h-9 items-center justify-center rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs text-xs font-bold cursor-pointer"
-              title="Page Quick Learn Guide"
+              title="Page guide"
             >
               ?
             </button>
@@ -344,7 +462,7 @@ export function AppShellInner() {
 
       <CommandPalette isOpen={isCommandPaletteOpen} onClose={() => setIsCommandPaletteOpen(false)} />
       <QuickGuideModal />
-      <GameTourOverlay />
+      <GuidedTourOverlay />
     </div>
   );
 }
