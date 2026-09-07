@@ -21,6 +21,11 @@ import { Switch } from '../components/ui/Switch';
 import { Tabs } from '../components/ui/Tabs';
 import { TableSkeleton } from '../components/ui/Skeleton';
 import { Icon } from '../components/Icon';
+import { UserResponsibilityModal } from '../components/UserResponsibilityModal';
+import type {
+  UserResponsibilitiesResponse,
+  UserResponsibilityConfig,
+} from '../types/accessControl';
 import './PageEnhancementsV2.css';
 
 export type DataVisibilityScope = 'ALL' | 'ASSIGNED_ONLY' | 'BRANCH' | 'DEPARTMENT';
@@ -124,14 +129,20 @@ export function UsersRolesPage() {
     isLoading: false,
   });
 
+  // User Responsibilities State
+  const [userRespData, setUserRespData] = useState<UserResponsibilitiesResponse | null>(null);
+  const [selectedUserForModal, setSelectedUserForModal] = useState<UserResponsibilityConfig | null>(null);
+  const [isResponsibilityModalOpen, setIsResponsibilityModalOpen] = useState(false);
+
   const load = async () => {
     setIsLoading(true);
     setError('');
     try {
-      const [usersRes, rolesRes, rlsRes] = await Promise.all([
+      const [usersRes, rolesRes, rlsRes, userRespRes] = await Promise.all([
         fetchApi<UserRecord[] | { data?: UserRecord[] }>('/users'),
         fetchApi<RoleRecord[] | { data?: RoleRecord[] }>('/roles'),
         fetchApi<RlsGovernanceResponse>('/access-control/rls-policies').catch(() => null),
+        fetchApi<UserResponsibilitiesResponse>('/access-control/user-responsibilities').catch(() => null),
       ]);
       setUsers(Array.isArray(usersRes) ? usersRes : usersRes.data || []);
       setRoles(Array.isArray(rolesRes) ? rolesRes : rolesRes.data || []);
@@ -140,12 +151,120 @@ export function UsersRolesPage() {
         setRlsScopes(rlsRes.availableScopes || []);
         setRlsPolicies(rlsRes.roles || {});
       }
+      if (userRespRes) {
+        setUserRespData(userRespRes);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load users and roles');
     } finally {
       setIsLoading(false);
     }
   };
+
+  const dynamicUserColumns: ResponsiveDataColumn<UserRecord>[] = useMemo(() => [
+    {
+      key: 'user',
+      header: 'User',
+      priority: 'primary',
+      render: (user) => (
+        <div className="flex items-center gap-2.5">
+          <Avatar initials={user.displayName.slice(0, 2).toUpperCase() || 'US'} size="sm" />
+          <div className="min-w-0">
+            <span className="min-w-0 truncate font-bold text-rf-ink block">{user.displayName}</span>
+            <span className="text-[11px] text-rf-ink-muted truncate block">{user.email}</span>
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: 'roles',
+      header: 'Assigned roles',
+      priority: 'secondary',
+      render: (user) => (
+        <div className="flex flex-wrap gap-1.5">
+          {user.roles.length > 0 ? (
+            user.roles.map((role) => (
+              <Badge key={role.code} variant="neutral" className="font-mono">
+                {role.name}
+              </Badge>
+            ))
+          ) : (
+            <span className="font-medium text-rf-ink-muted">No roles</span>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'responsibilities',
+      header: 'Workflow Responsibilities',
+      priority: 'secondary',
+      render: (user) => {
+        const config = userRespData?.users.find((u) => u.userId === user.id);
+        const count = config?.workflowResponsibilities?.length || 0;
+        return (
+          <div className="flex items-center gap-2">
+            <span
+              className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                count > 0
+                  ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300'
+                  : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
+              }`}
+            >
+              {count > 0 ? `${count} Selected` : 'Default'}
+            </span>
+            {config?.branches && config.branches.length > 0 && !config.branches.includes('ALL') ? (
+              <span className="text-[10.5px] text-slate-400 font-medium">
+                ({config.branches.length} facilities)
+              </span>
+            ) : (
+              <span className="text-[10.5px] text-slate-400 font-medium">(All facilities)</span>
+            )}
+          </div>
+        );
+      },
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      priority: 'secondary',
+      render: (user) => <StatusBadge status={user.status} />,
+    },
+    {
+      key: 'actions',
+      header: 'Responsibilities & Scope',
+      priority: 'primary',
+      render: (user) => {
+        const config = userRespData?.users.find((u) => u.userId === user.id) || {
+          userId: user.id,
+          displayName: user.displayName,
+          email: user.email,
+          status: user.status,
+          roles: user.roles,
+          branches: [],
+          departments: [],
+          workflowResponsibilities: [],
+          canViewPii: true,
+          canViewSalary: false,
+          canDownloadDocs: true,
+          canApprove: false,
+        };
+        return (
+          <Button
+            size="sm"
+            variant="secondary"
+            className="flex items-center gap-1.5"
+            onClick={() => {
+              setSelectedUserForModal(config);
+              setIsResponsibilityModalOpen(true);
+            }}
+          >
+            <Icon name="settings" size={13} />
+            <span>Configure</span>
+          </Button>
+        );
+      },
+    },
+  ], [userRespData]);
 
   useEffect(() => {
     void load();
@@ -442,7 +561,7 @@ export function UsersRolesPage() {
           ) : (
             <ResponsiveDataView
               rows={filteredUsers}
-              columns={userColumns}
+              columns={dynamicUserColumns}
               rowKey={(user) => user.id}
               label="Users"
               className="px-4 pb-4 sm:px-5 sm:pb-5"
@@ -873,6 +992,31 @@ export function UsersRolesPage() {
           </div>
         </form>
       </Modal>
+
+      {/* User Responsibility & Scope Modal */}
+      <UserResponsibilityModal
+        isOpen={isResponsibilityModalOpen}
+        onClose={() => setIsResponsibilityModalOpen(false)}
+        user={selectedUserForModal}
+        availableBranches={userRespData?.branches || []}
+        availableDepartments={userRespData?.departments || []}
+        availableResponsibilities={userRespData?.availableResponsibilities || []}
+        availableRoles={userRespData?.availableRoles || []}
+        availableScopes={userRespData?.availableScopes || []}
+        onSaveSuccess={(updated) => {
+          setUserRespData((prev) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              users: prev.users.map((u) => (u.userId === updated.userId ? updated : u)),
+            };
+          });
+          setRlsNotification({
+            type: 'success',
+            message: `Updated responsibilities and security scope for ${updated.displayName}`,
+          });
+        }}
+      />
     </PageFrame>
   );
 }

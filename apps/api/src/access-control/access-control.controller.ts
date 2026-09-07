@@ -45,4 +45,21 @@ export class AccessControlController {
   ) {
     return this.accessControlService.getAuditSimulation(user.organizationId, roleCode);
   }
+
+  @Get('user-responsibilities')
+  @RequirePermissions('USERS_VIEW')
+  getUserResponsibilities(@CurrentUser() user: AuthUser) {
+    return this.accessControlService.getUserResponsibilities(user.organizationId);
+  }
+
+  @Put('user-responsibilities/:userId')
+  @RequirePermissions('USERS_MANAGE')
+  @AuditAction('USER_RESPONSIBILITIES_UPDATE')
+  updateUserResponsibility(
+    @CurrentUser() user: AuthUser,
+    @Param('userId') userId: string,
+    @Body() body: any,
+  ) {
+    return this.accessControlService.updateUserResponsibility(user.organizationId, userId, body);
+  }
 }

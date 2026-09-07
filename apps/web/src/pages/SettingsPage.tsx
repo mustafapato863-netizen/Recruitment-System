@@ -1,8 +1,13 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { getApi, postApi, patchApi } from '../api/client';
 import { Icon } from '../components/Icon';
 import { Modal } from '../components/Modal';
+import { UserResponsibilityModal } from '../components/UserResponsibilityModal';
+import type {
+  UserResponsibilitiesResponse,
+  UserResponsibilityConfig,
+} from '../types/accessControl';
 import './PageEnhancementsV2.css';
 
 interface StageSetting {
@@ -172,6 +177,76 @@ const REJECTION_REASONS_DATA = [
   { code: 'REJ-OFR', label: 'Candidate Accepted Competing Hospital Offer', category: 'Market Competition', autoEmail: false, coolDown: '60 Days' },
 ];
 
+const RESPONSIBILITY_DEFINITIONS: Record<
+  string,
+  { label: string; desc: string; icon: string; category: string; color: string; badgeTone: string }
+> = {
+  REQUISITIONS: {
+    label: 'Requisitions & Vacancies',
+    desc: 'Create and authorize clinical and operational vacancy requisitions.',
+    icon: 'file-text',
+    category: 'Intake & Governance',
+    color: 'border-blue-500 bg-blue-50/70 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300',
+    badgeTone: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200/80 dark:border-blue-800',
+  },
+  SOURCING: {
+    label: 'Fast Sourcing Intake',
+    desc: 'Direct resume ingestion, batch CV intake, and talent pipeline parsing.',
+    icon: 'users',
+    category: 'Intake & Governance',
+    color: 'border-cyan-500 bg-cyan-50/70 text-cyan-700 dark:bg-cyan-950/40 dark:text-cyan-300',
+    badgeTone: 'bg-cyan-50 dark:bg-cyan-950/40 text-cyan-700 dark:text-cyan-300 border border-cyan-200/80 dark:border-cyan-800',
+  },
+  PRE_SCREENING: {
+    label: 'Clinical Pre-Screening',
+    desc: 'Conduct initial candidate qualification screening, phone triage, and baseline assessments.',
+    icon: 'clipboard',
+    category: 'Clinical Assessment',
+    color: 'border-emerald-500 bg-emerald-50/70 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300',
+    badgeTone: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800',
+  },
+  INTERVIEWS: {
+    label: 'Interview Panel & Scorecards',
+    desc: 'Schedule clinical panels, evaluate peer competencies, and submit scorecards.',
+    icon: 'calendar',
+    category: 'Clinical Assessment',
+    color: 'border-purple-500 bg-purple-50/70 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300',
+    badgeTone: 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200/80 dark:border-purple-800',
+  },
+  COMPENSATION: {
+    label: 'Salary Structuring & Packages',
+    desc: 'Structure base remuneration, housing, transport allowances, and executive bands.',
+    icon: 'offer',
+    category: 'Offers & Legal',
+    color: 'border-amber-500 bg-amber-50/70 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300',
+    badgeTone: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200/80 dark:border-amber-800',
+  },
+  OFFER_SIGNOFF: {
+    label: 'Offer Approval Authority',
+    desc: 'Final authorization to sign off, seal, and issue official hospital employment offers.',
+    icon: 'check-circle',
+    category: 'Offers & Legal',
+    color: 'border-rose-500 bg-rose-50/70 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300',
+    badgeTone: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200/80 dark:border-rose-800',
+  },
+  CREDENTIALING: {
+    label: 'Medical Credentialing & SCFHS',
+    desc: 'Audit Saudi Commission for Health Specialties licenses, DataFlow, and primary source docs.',
+    icon: 'shield',
+    category: 'Compliance & Verification',
+    color: 'border-indigo-500 bg-indigo-50/70 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300',
+    badgeTone: 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800',
+  },
+  ONBOARDING: {
+    label: 'Onboarding & Clinical Induction',
+    desc: 'Coordinate medical examinations, visa stamping, ERP handoff, and hospital orientation.',
+    icon: 'users',
+    category: 'Compliance & Verification',
+    color: 'border-teal-500 bg-teal-50/70 text-teal-700 dark:bg-teal-950/40 dark:text-teal-300',
+    badgeTone: 'bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 border border-teal-200/80 dark:border-teal-800',
+  },
+};
+
 export function SettingsPage() {
   const [activeSubTab, setActiveSubTab] = useState('Pipeline Stages');
   const [templates, setTemplates] = useState<PipelineTemplateSummary[]>([]);
@@ -185,6 +260,17 @@ export function SettingsPage() {
   const [newStageName, setNewStageName] = useState('');
   const [newStageCategory, setNewStageCategory] = useState('Interview');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // User Responsibilities state
+  const [userRespData, setUserRespData] = useState<UserResponsibilitiesResponse | null>(null);
+  const [selectedUserForModal, setSelectedUserForModal] = useState<UserResponsibilityConfig | null>(null);
+  const [isResponsibilityModalOpen, setIsResponsibilityModalOpen] = useState(false);
+  const [respSearchQuery, setRespSearchQuery] = useState('');
+  const [respRoleFilter, setRespRoleFilter] = useState('');
+  const [respBranchFilter, setRespBranchFilter] = useState('');
+  const [respDeptFilter, setRespDeptFilter] = useState('');
+  const [respWorkflowFilter, setRespWorkflowFilter] = useState('');
+  const [isLoadingResp, setIsLoadingResp] = useState(false);
 
   // Pipeline behavior toggles
   const [allowReordering, setAllowReordering] = useState(true);
@@ -225,19 +311,82 @@ export function SettingsPage() {
     }
   }, []);
 
-  // Load live users & roles for Hiring Teams & Permissions tabs
+  // Load live users, roles, and user responsibilities from database
   const loadUsersAndRoles = useCallback(async () => {
+    setIsLoadingResp(true);
     try {
-      const [userData, roleData] = await Promise.all([
+      const [userData, roleData, respData] = await Promise.all([
         getApi<UserSummary[]>('/users').catch(() => []),
         getApi<RoleSummary[]>('/roles').catch(() => []),
+        getApi<UserResponsibilitiesResponse>('/access-control/user-responsibilities').catch(() => null),
       ]);
       if (Array.isArray(userData)) setUsers(userData);
       if (Array.isArray(roleData)) setRoles(roleData);
+      if (respData) setUserRespData(respData);
     } catch {
       // Ignore network errors
+    } finally {
+      setIsLoadingResp(false);
     }
   }, []);
+
+  const handleSaveResponsibility = (updated: UserResponsibilityConfig) => {
+    setUserRespData((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        users: prev.users.map((u) => (u.userId === updated.userId ? updated : u)),
+      };
+    });
+    setUsers((prev) =>
+      prev.map((u) =>
+        u.id === updated.userId
+          ? {
+              ...u,
+              roles: updated.roles.map((r) => ({ id: r.id, name: r.name, code: r.code })),
+            }
+          : u
+      )
+    );
+    showToast(`Saved responsibilities and access scope for ${updated.displayName}`);
+  };
+
+  const filteredRespUsers = useMemo(() => {
+    if (!userRespData?.users) return [];
+    return userRespData.users.filter((u) => {
+      const q = respSearchQuery.toLowerCase().trim();
+      if (q) {
+        const matchesName = (u.displayName || '').toLowerCase().includes(q);
+        const matchesEmail = (u.email || '').toLowerCase().includes(q);
+        const matchesRole = u.roles?.some((r) => r.name.toLowerCase().includes(q) || r.code.toLowerCase().includes(q));
+        const matchesBranch = u.branches?.some((b) => b.toLowerCase().includes(q));
+        const matchesDept = u.departments?.some((d) => d.toLowerCase().includes(q));
+        const matchesResp = u.workflowResponsibilities?.some((r) => r.toLowerCase().includes(q));
+        if (!matchesName && !matchesEmail && !matchesRole && !matchesBranch && !matchesDept && !matchesResp) {
+          return false;
+        }
+      }
+      if (respRoleFilter && !u.roles?.some((r) => r.code === respRoleFilter)) {
+        return false;
+      }
+      if (respBranchFilter) {
+        const isAll = !u.branches || u.branches.length === 0 || u.branches.includes('ALL');
+        if (!isAll && !u.branches.includes(respBranchFilter)) {
+          return false;
+        }
+      }
+      if (respDeptFilter) {
+        const isAll = !u.departments || u.departments.length === 0 || u.departments.includes('All Departments') || u.departments.includes('ALL');
+        if (!isAll && !u.departments.includes(respDeptFilter)) {
+          return false;
+        }
+      }
+      if (respWorkflowFilter && !u.workflowResponsibilities?.includes(respWorkflowFilter)) {
+        return false;
+      }
+      return true;
+    });
+  }, [userRespData, respSearchQuery, respRoleFilter, respBranchFilter, respDeptFilter, respWorkflowFilter]);
 
   useEffect(() => {
     void loadTemplates();
@@ -408,7 +557,7 @@ export function SettingsPage() {
           { label: 'Interview Templates', icon: 'file-text' },
           { label: 'Offer Templates', icon: 'offer' },
           { label: 'Rejection Reasons', icon: 'close' },
-          { label: 'Hiring Teams', icon: 'users' },
+          { label: 'User Control & Responsibilities', icon: 'users' },
           { label: 'Permissions', icon: 'shield' },
         ].map((tab) => (
           <button
@@ -785,53 +934,463 @@ export function SettingsPage() {
         </div>
       )}
 
-      {/* ── TAB 6: Hiring Teams (Live Database Users) ── */}
-      {activeSubTab === 'Hiring Teams' && (
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
-            <div>
-              <h2 className="text-base font-extrabold text-slate-900 dark:text-white">
-                Hiring Teams & Organization Personnel
-              </h2>
+      {/* ── TAB 6: User Control & Selected Responsibilities ── */}
+      {activeSubTab === 'User Control & Responsibilities' && (
+        <div className="space-y-6">
+          {/* Executive Header */}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20 shrink-0">
+                <Icon name="users" size={24} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <h2 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white tracking-tight">
+                    User Control Panel & Delegated Responsibilities
+                  </h2>
+                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 border border-blue-200/80 dark:border-blue-800">
+                    Live Database Control
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-3xl leading-relaxed">
+                  Delegate hospital facility branches, clinical and medical departments, recruitment workflow responsibilities (sourcing, screening, interviews, compensation, offer sign-off, credentialing, onboarding), and Row-Level Security (RLS) data scopes per user.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2.5 self-start lg:self-center shrink-0">
+              <button
+                type="button"
+                onClick={() => void loadUsersAndRoles()}
+                disabled={isLoadingResp}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold transition cursor-pointer disabled:opacity-50"
+              >
+                <Icon name="integrations" size={14} className={isLoadingResp ? 'animate-spin' : ''} />
+                <span>{isLoadingResp ? 'Syncing...' : 'Refresh Personnel'}</span>
+              </button>
+
+              <Link
+                to="/users"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+              >
+                <Icon name="shield" size={14} />
+                <span>Full RLS Security Hub</span>
+              </Link>
+            </div>
+          </div>
+
+          {/* Operational Metrics Row */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+            <div className="p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs space-y-1">
+              <div className="flex items-center justify-between text-slate-400">
+                <span className="text-[11px] font-bold uppercase tracking-wider">Authorized Personnel</span>
+                <Icon name="users" size={16} className="text-blue-500" />
+              </div>
+              <div className="text-2xl font-black text-slate-900 dark:text-white">
+                {userRespData?.users.length ?? users.length}
+              </div>
+              <p className="text-[11px] text-slate-400">Active accounts in organization</p>
+            </div>
+
+            <div className="p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs space-y-1">
+              <div className="flex items-center justify-between text-slate-400">
+                <span className="text-[11px] font-bold uppercase tracking-wider">Hospital Facilities</span>
+                <Icon name="grid-squares" size={16} className="text-emerald-500" />
+              </div>
+              <div className="text-2xl font-black text-slate-900 dark:text-white">
+                {userRespData?.branches.length || 32}
+              </div>
+              <p className="text-[11px] text-slate-400">Branches across network</p>
+            </div>
+
+            <div className="p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs space-y-1">
+              <div className="flex items-center justify-between text-slate-400">
+                <span className="text-[11px] font-bold uppercase tracking-wider">Clinical Units</span>
+                <Icon name="clipboard" size={16} className="text-purple-500" />
+              </div>
+              <div className="text-2xl font-black text-slate-900 dark:text-white">
+                {userRespData?.departments.length || 18}
+              </div>
+              <p className="text-[11px] text-slate-400">Medical & operational depts</p>
+            </div>
+
+            <div className="p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs space-y-1">
+              <div className="flex items-center justify-between text-slate-400">
+                <span className="text-[11px] font-bold uppercase tracking-wider">Workflow Stages</span>
+                <Icon name="pipeline" size={16} className="text-amber-500" />
+              </div>
+              <div className="text-2xl font-black text-slate-900 dark:text-white">
+                8 Stages
+              </div>
+              <p className="text-[11px] text-slate-400">Granular responsibilities</p>
+            </div>
+          </div>
+
+          {/* Search & Filter Controls Toolbar */}
+          <div className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs space-y-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5">
+              {/* Search */}
+              <div className="lg:col-span-2 relative">
+                <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-slate-400">
+                  <Icon name="search" size={14} />
+                </div>
+                <input
+                  type="text"
+                  value={respSearchQuery}
+                  onChange={(e) => setRespSearchQuery(e.target.value)}
+                  placeholder="Search user name, email, department, or responsibility..."
+                  className="w-full pl-9 pr-8 py-2 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                {respSearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setRespSearchQuery('')}
+                    className="absolute inset-y-0 right-2.5 flex items-center text-slate-400 hover:text-slate-600"
+                  >
+                    <Icon name="close" size={12} />
+                  </button>
+                )}
+              </div>
+
+              {/* Role filter */}
+              <div>
+                <select
+                  value={respRoleFilter}
+                  onChange={(e) => setRespRoleFilter(e.target.value)}
+                  className="w-full py-2 px-3 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">All Roles ({roles.length})</option>
+                  {roles.map((r) => (
+                    <option key={r.code} value={r.code}>
+                      {r.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Department filter */}
+              <div>
+                <select
+                  value={respDeptFilter}
+                  onChange={(e) => setRespDeptFilter(e.target.value)}
+                  className="w-full py-2 px-3 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">All Departments</option>
+                  {userRespData?.departments.map((d) => (
+                    <option key={d} value={d}>
+                      {d}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Workflow Responsibility filter */}
+              <div>
+                <select
+                  value={respWorkflowFilter}
+                  onChange={(e) => setRespWorkflowFilter(e.target.value)}
+                  className="w-full py-2 px-3 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">All Responsibilities</option>
+                  {Object.entries(RESPONSIBILITY_DEFINITIONS).map(([key, item]) => (
+                    <option key={key} value={key}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* Filter status row */}
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-100 dark:border-slate-800/70 text-xs">
+              <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
+                <span className="font-semibold">
+                  Showing {filteredRespUsers.length} of {userRespData?.users.length || users.length} personnel
+                </span>
+                {(respSearchQuery || respRoleFilter || respDeptFilter || respWorkflowFilter || respBranchFilter) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRespSearchQuery('');
+                      setRespRoleFilter('');
+                      setRespBranchFilter('');
+                      setRespDeptFilter('');
+                      setRespWorkflowFilter('');
+                    }}
+                    className="text-blue-600 hover:text-blue-700 dark:text-blue-400 font-bold ml-2 underline cursor-pointer"
+                  >
+                    Reset all filters
+                  </button>
+                )}
+              </div>
+
+              <div className="text-[11px] text-slate-400">
+                Click <span className="font-bold text-slate-700 dark:text-slate-300">"Configure Responsibilities & Scope"</span> on any user card to adjust delegations.
+              </div>
+            </div>
+          </div>
+
+          {/* User Responsibilities Cards Grid */}
+          {filteredRespUsers.length === 0 ? (
+            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-12 text-center space-y-3">
+              <div className="w-12 h-12 mx-auto rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center">
+                <Icon name="users" size={20} />
+              </div>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">No personnel found</h3>
+              <p className="text-xs text-slate-400 max-w-md mx-auto">
+                No users match your selected search query or filters. Clear the filters or adjust your query.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+              {filteredRespUsers.map((user) => {
+                const initials = user.displayName
+                  ? user.displayName.split(' ').map((n) => n[0]).join('').substring(0, 2).toUpperCase()
+                  : user.email.slice(0, 2).toUpperCase();
+
+                const isAllBranches = !user.branches || user.branches.length === 0 || user.branches.includes('ALL');
+                const isAllDepts = !user.departments || user.departments.length === 0 || user.departments.includes('All Departments') || user.departments.includes('ALL');
+                const userWorkflows = user.workflowResponsibilities || [];
+
+                return (
+                  <div
+                    key={user.userId}
+                    className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs hover:border-blue-500/40 hover:shadow-md transition-all flex flex-col justify-between space-y-4"
+                  >
+                    <div className="space-y-4">
+                      {/* Top User Header */}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-black flex items-center justify-center text-sm shadow-xs shrink-0">
+                            {initials}
+                          </div>
+                          <div className="min-w-0">
+                            <h3 className="text-sm font-extrabold text-slate-900 dark:text-white truncate">
+                              {user.displayName || user.email}
+                            </h3>
+                            <p className="text-xs text-slate-400 truncate mt-0.5">
+                              {user.email}
+                            </p>
+                          </div>
+                        </div>
+
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase shrink-0 ${
+                            user.status === 'Active'
+                              ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                              : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                          }`}
+                        >
+                          {user.status || 'Active'}
+                        </span>
+                      </div>
+
+                      {/* Roles Badges */}
+                      <div className="flex flex-wrap gap-1.5">
+                        {user.roles && user.roles.length > 0 ? (
+                          user.roles.map((r) => (
+                            <span
+                              key={r.code}
+                              className="px-2.5 py-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-bold text-[11px] border border-slate-200/60 dark:border-slate-700/60"
+                            >
+                              {r.name}
+                            </span>
+                          ))
+                        ) : (
+                          <span className="text-[11px] text-slate-400 italic">No role assigned</span>
+                        )}
+                      </div>
+
+                      {/* Facility & Department Allocation */}
+                      <div className="space-y-2.5 pt-2 border-t border-slate-100 dark:border-slate-800/80">
+                        {/* Branches */}
+                        <div>
+                          <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-1">
+                            <Icon name="grid-squares" size={12} className="text-blue-500" />
+                            <span>Hospital Facility Allocation</span>
+                          </div>
+                          {isAllBranches ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200/70 dark:border-blue-800">
+                              <span>🏥 All 32 Hospital Facilities</span>
+                            </span>
+                          ) : (
+                            <div className="flex flex-wrap gap-1">
+                              {user.branches.slice(0, 3).map((b) => (
+                                <span
+                                  key={b}
+                                  className="px-2 py-0.5 rounded-md text-[10.5px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 truncate max-w-[200px]"
+                                >
+                                  {b}
+                                </span>
+                              ))}
+                              {user.branches.length > 3 && (
+                                <span className="px-1.5 py-0.5 rounded-md text-[10.5px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500">
+                                  +{user.branches.length - 3} more
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Departments */}
+                        <div>
+                          <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-1">
+                            <Icon name="clipboard" size={12} className="text-purple-500" />
+                            <span>Department / Clinical Unit Scope</span>
+                          </div>
+                          {isAllDepts ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200/70 dark:border-purple-800">
+                              <span>🩺 All Clinical & Administrative Units</span>
+                            </span>
+                          ) : (
+                            <div className="flex flex-wrap gap-1">
+                              {user.departments.slice(0, 3).map((d) => (
+                                <span
+                                  key={d}
+                                  className="px-2 py-0.5 rounded-md text-[10.5px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 truncate max-w-[200px]"
+                                >
+                                  {d}
+                                </span>
+                              ))}
+                              {user.departments.length > 3 && (
+                                <span className="px-1.5 py-0.5 rounded-md text-[10.5px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-500">
+                                  +{user.departments.length - 3} more
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Selected Workflow Responsibilities */}
+                      <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80">
+                        <div className="flex items-center justify-between text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-2">
+                          <span className="flex items-center gap-1.5">
+                            <Icon name="pipeline" size={12} className="text-amber-500" />
+                            <span>Selected Responsibilities</span>
+                          </span>
+                          <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                            {userWorkflows.length} / 8 Active
+                          </span>
+                        </div>
+
+                        {userWorkflows.length === 0 ? (
+                          <p className="text-xs text-slate-400 italic py-1">
+                            No workflow responsibilities assigned.
+                          </p>
+                        ) : (
+                          <div className="flex flex-wrap gap-1.5">
+                            {userWorkflows.map((respKey) => {
+                              const info = RESPONSIBILITY_DEFINITIONS[respKey];
+                              if (!info) return null;
+                              return (
+                                <span
+                                  key={respKey}
+                                  title={info.desc}
+                                  className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10.5px] font-bold ${info.badgeTone}`}
+                                >
+                                  <Icon name={info.icon as any} size={11} />
+                                  <span>{info.label}</span>
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* RLS Scoping & Safeguards */}
+                      <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 space-y-1.5">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="font-bold text-slate-500 dark:text-slate-400">Data Visibility Scope:</span>
+                          <span className="font-extrabold font-mono text-[10.5px] px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300">
+                            {user.customScope || 'Default (Role Scoped)'}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-1.5 text-[10.5px]">
+                          <div className={`p-1.5 rounded-lg flex items-center gap-1 font-semibold ${user.canViewPii ?? true ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300' : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300'}`}>
+                            <Icon name={user.canViewPii ?? true ? 'check-circle' : 'shield'} size={11} />
+                            <span>{user.canViewPii ?? true ? 'PII Visible' : 'PII Masked'}</span>
+                          </div>
+
+                          <div className={`p-1.5 rounded-lg flex items-center gap-1 font-semibold ${user.canViewSalary ?? false ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400'}`}>
+                            <Icon name={user.canViewSalary ?? false ? 'check-circle' : 'lock'} size={11} />
+                            <span>{user.canViewSalary ?? false ? 'Salary Visible' : 'Salary Hidden'}</span>
+                          </div>
+
+                          <div className={`p-1.5 rounded-lg flex items-center gap-1 font-semibold ${user.canDownloadDocs ?? true ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>
+                            <Icon name="file-text" size={11} />
+                            <span>{user.canDownloadDocs ?? true ? 'Downloads OK' : 'No Downloads'}</span>
+                          </div>
+
+                          <div className={`p-1.5 rounded-lg flex items-center gap-1 font-semibold ${user.canApprove ?? false ? 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300' : 'bg-slate-100 dark:bg-slate-800 text-slate-500'}`}>
+                            <Icon name="check-circle" size={11} />
+                            <span>{user.canApprove ?? false ? 'Offer Sign-Off' : 'No Sign-Off'}</span>
+                          </div>
+                        </div>
+
+                        {user.notes && (
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 italic bg-slate-50 dark:bg-slate-800/40 p-2 rounded-lg border border-slate-200/50 dark:border-slate-700/50">
+                            "{user.notes}"
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Configure Button */}
+                    <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedUserForModal(user);
+                          setIsResponsibilityModalOpen(true);
+                        }}
+                        className="w-full py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-xs font-extrabold flex items-center justify-center gap-2 transition shadow-xs cursor-pointer"
+                      >
+                        <Icon name="settings" size={13} />
+                        <span>Configure Responsibilities & Scope</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Workflow Responsibilities Reference Matrix */}
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-4">
+            <div className="border-b border-slate-100 dark:border-slate-800 pb-3">
+              <h3 className="text-sm font-extrabold text-slate-900 dark:text-white">
+                Delegated Workflow Responsibilities Governance Matrix
+              </h3>
               <p className="text-xs text-slate-400 mt-0.5">
-                Active recruitment operations staff and hiring managers synced from database ({users.length} members).
+                Hospital workflow stages and the operational responsibilities delegated to clinical evaluators, HR recruiters, and department leadership.
               </p>
             </div>
 
-            <Link
-              to="/users"
-              className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs"
-            >
-              <Icon name="users" size={14} />
-              <span>Manage Users & Roles</span>
-            </Link>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {users.slice(0, 9).map((u) => {
-              const name = u.displayName || `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email;
-              const roleName = u.roles?.[0]?.name || 'Workspace Member';
-              const initials = name.split(' ').map((n) => n[0]).join('').substring(0, 2).toUpperCase();
-
-              return (
-                <div key={u.id} className="p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-800/30 flex items-center gap-3.5">
-                  <div className="w-10 h-10 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center text-xs shadow-xs shrink-0">
-                    {initials}
-                  </div>
-                  <div className="truncate">
-                    <span className="block text-xs font-extrabold text-slate-900 dark:text-white truncate">
-                      {name}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+              {Object.entries(RESPONSIBILITY_DEFINITIONS).map(([key, item]) => (
+                <div
+                  key={key}
+                  className="p-3.5 rounded-xl border border-slate-200/70 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-800/30 space-y-1.5"
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="p-1.5 rounded-lg bg-white dark:bg-slate-800 text-blue-600 shadow-xs border border-slate-200/50 dark:border-slate-700">
+                      <Icon name={item.icon as any} size={13} />
                     </span>
-                    <span className="block text-[11px] text-slate-400 truncate">
-                      {u.email}
-                    </span>
-                    <span className="inline-block mt-1 px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 font-bold text-[10px]">
-                      {roleName}
+                    <span className="text-xs font-extrabold text-slate-900 dark:text-white leading-tight">
+                      {item.label}
                     </span>
                   </div>
+                  <span className="inline-block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                    {item.category}
+                  </span>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                    {item.desc}
+                  </p>
                 </div>
-              );
-            })}
+              ))}
+            </div>
           </div>
         </div>
       )}
@@ -926,6 +1485,19 @@ export function SettingsPage() {
           </div>
         </div>
       </Modal>
+
+      {/* User Responsibility & Scope Modal */}
+      <UserResponsibilityModal
+        isOpen={isResponsibilityModalOpen}
+        onClose={() => setIsResponsibilityModalOpen(false)}
+        user={selectedUserForModal}
+        availableBranches={userRespData?.branches || []}
+        availableDepartments={userRespData?.departments || []}
+        availableResponsibilities={userRespData?.availableResponsibilities || []}
+        availableRoles={userRespData?.availableRoles || []}
+        availableScopes={userRespData?.availableScopes || []}
+        onSaveSuccess={handleSaveResponsibility}
+      />
     </div>
   );
 }

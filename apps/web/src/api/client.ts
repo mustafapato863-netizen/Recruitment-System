@@ -210,6 +210,13 @@ export function patchApi<T>(path: string, body?: unknown): Promise<T> {
   });
 }
 
+export function putApi<T>(path: string, body?: unknown): Promise<T> {
+  return fetchApi<T>(path, {
+    method: 'PUT',
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  });
+}
+
 export function deleteApi<T>(path: string): Promise<T> {
   return fetchApi<T>(path, { method: 'DELETE' });
 }
