@@ -20,7 +20,7 @@ type LoginField = 'email' | 'password';
 type LoginFieldErrors = Partial<Record<LoginField, string>>;
 
 // Local QA helpers exist only in development builds; production bundles carry no seeded credentials.
-const TEST_PASSWORD: string | null = import.meta.env.DEV ? 'Password123!' : null;
+const TEST_PASSWORD: string | null = import.meta.env.DEV ? 'Admin@123456' : null;
 
 const TEST_PERSONAS: Array<{
   name: string;
@@ -33,19 +33,7 @@ const TEST_PERSONAS: Array<{
         name: 'System Administrator',
         initials: 'AD',
         role: 'Administrator / Full Access',
-        email: 'admin@sgh.com',
-      },
-      {
-        name: 'Sarah Ahmed',
-        initials: 'SA',
-        role: 'Recruiter / Talent Operations',
-        email: 'sarah.ahmed@recruitflow.local',
-      },
-      {
-        name: 'Dr. Hassan Ali',
-        initials: 'HA',
-        role: 'Hiring Manager / Clinical Head',
-        email: 'hassan.ali@recruitflow.local',
+        email: 'admin@me.com',
       },
     ]
   : [];

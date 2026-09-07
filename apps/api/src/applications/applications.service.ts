@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
   Logger,
@@ -12,6 +13,7 @@ import type {
   ApplicationNote,
   ApplicationStage,
   ApplicationStatusHistoryItem,
+  AuthUser,
   Candidate,
   PaginatedResult,
 } from '@recruitflow/contracts';
@@ -19,6 +21,7 @@ import { PrismaService } from '../database/prisma.service';
 // Runtime service import must remain a value import for Nest DI metadata reflection.
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { EmailOutboxService } from '../email/email-outbox.service';
+import { AccessControlService } from '../access-control/access-control.service';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import { EmailTemplatesService } from '../email-templates/email-templates.service';
 import type {
@@ -47,17 +50,42 @@ export class ApplicationsService {
     @Inject(PrismaService) private readonly prisma: PrismaService,
     private readonly emailOutbox: EmailOutboxService,
     private readonly emailTemplates: EmailTemplatesService,
+    private readonly accessControl: AccessControlService,
   ) {}
 
   async listApplications(
     organizationId: string,
     query: ApplicationQueryDto,
+    user?: AuthUser,
   ): Promise<PaginatedResult<Application>> {
     const page = query.page && query.page > 0 ? query.page : 1;
     const pageSize = query.pageSize && query.pageSize > 0 ? query.pageSize : 20;
     const skip = (page - 1) * pageSize;
 
     const where: Prisma.ApplicationWhereInput = { organizationId };
+
+    let canViewPii = true;
+
+    if (user) {
+      const policy = await this.accessControl.getUserEffectiveScope(
+        organizationId,
+        user.userId,
+        user.roleCodes,
+      );
+      canViewPii = policy.canViewPii;
+
+      if (policy.dataScope === 'ASSIGNED_ONLY') {
+        const assignedClause: Prisma.ApplicationWhereInput[] = [
+          { primaryRecruiterId: user.userId },
+          { taskOwnerId: user.userId },
+          { vacancy: { assignments: { some: { userId: user.userId } } } },
+        ];
+        where.AND = [
+          ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
+          { OR: assignedClause },
+        ];
+      }
+    }
 
     if (query.vacancyId) where.vacancyId = query.vacancyId;
     if (query.candidateId) where.candidateId = query.candidateId;
@@ -66,11 +94,15 @@ export class ApplicationsService {
 
     if (query.search?.trim()) {
       const term = query.search.trim();
-      where.OR = [
+      const searchClause: Prisma.ApplicationWhereInput[] = [
         { applicationCode: { contains: term, mode: 'insensitive' } },
         { candidate: { firstName: { contains: term, mode: 'insensitive' } } },
         { candidate: { lastName: { contains: term, mode: 'insensitive' } } },
         { candidate: { email: { contains: term, mode: 'insensitive' } } },
+      ];
+      where.AND = [
+        ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
+        { OR: searchClause },
       ];
     }
 
@@ -96,20 +128,27 @@ export class ApplicationsService {
     ]);
 
     return {
-      data: items.map((app) => this.toApplication(app)),
+      data: items.map((app) => this.toApplication(app, canViewPii)),
       total,
       page,
       pageSize,
     };
   }
 
-  async getApplication(organizationId: string, id: string): Promise<Application> {
+  async getApplication(
+    organizationId: string,
+    id: string,
+    user?: AuthUser,
+  ): Promise<Application> {
     const application = await this.prisma.application.findUnique({
       where: { id },
       include: {
         candidate: true,
         vacancy: {
-          include: { position: true },
+          include: {
+            position: true,
+            assignments: true,
+          },
         },
         primaryRecruiter: true,
         taskOwner: true,
@@ -120,7 +159,30 @@ export class ApplicationsService {
       throw new NotFoundException(`Application ${id} was not found.`);
     }
 
-    return this.toApplication(application);
+    let canViewPii = true;
+    if (user) {
+      const policy = await this.accessControl.getUserEffectiveScope(
+        organizationId,
+        user.userId,
+        user.roleCodes,
+      );
+      canViewPii = policy.canViewPii;
+
+      if (policy.dataScope === 'ASSIGNED_ONLY') {
+        const isAssigned =
+          application.primaryRecruiterId === user.userId ||
+          application.taskOwnerId === user.userId ||
+          application.vacancy?.assignments?.some((a) => a.userId === user.userId);
+
+        if (!isAssigned) {
+          throw new ForbiddenException(
+            'Row-Level Security: You are not assigned to this application or requisition.',
+          );
+        }
+      }
+    }
+
+    return this.toApplication(application, canViewPii);
   }
 
   async createApplication(
@@ -440,14 +502,31 @@ export class ApplicationsService {
     return `APP-${year}-${String(seq.lastIssued).padStart(3, '0')}`;
   }
 
-  private toApplication(record: Prisma.ApplicationGetPayload<{
-    include: {
-      candidate: true;
-      vacancy: { include: { position: true } };
-      primaryRecruiter: true;
-      taskOwner: true;
-    };
-  }>): Application {
+  private maskEmail(email: string | null | undefined): string {
+    if (!email || !email.includes('@')) return '***';
+    const parts = email.split('@');
+    const local = parts[0] ?? '';
+    const domain = parts[1] ?? '';
+    const visible = local.length > 2 ? local.slice(0, 2) : local.slice(0, 1);
+    return `${visible}***@${domain}`;
+  }
+
+  private maskPhone(phone: string | null | undefined): string {
+    if (!phone) return '***';
+    return phone.length > 4 ? `${phone.slice(0, 4)}****${phone.slice(-2)}` : '****';
+  }
+
+  private toApplication(
+    record: Prisma.ApplicationGetPayload<{
+      include: {
+        candidate: true;
+        vacancy: { include: { position: true } };
+        primaryRecruiter: true;
+        taskOwner: true;
+      };
+    }>,
+    canViewPii = true,
+  ): Application {
     return {
       id: record.id,
       organizationId: record.organizationId,
@@ -469,8 +548,8 @@ export class ApplicationsService {
             candidateCode: record.candidate.candidateCode,
             firstName: record.candidate.firstName,
             lastName: record.candidate.lastName,
-            email: record.candidate.email,
-            phone: record.candidate.phone,
+            email: canViewPii ? record.candidate.email : this.maskEmail(record.candidate.email),
+            phone: canViewPii ? record.candidate.phone : this.maskPhone(record.candidate.phone),
             currentTitle: record.candidate.currentTitle,
             currentCompany: record.candidate.currentCompany,
             source: record.candidate.source,

@@ -38,7 +38,7 @@ export class ApplicationsController {
     @CurrentUser() user: AuthUser,
     @Query() query: ApplicationQueryDto,
   ) {
-    return this.applicationsService.listApplications(user.organizationId, query);
+    return this.applicationsService.listApplications(user.organizationId, query, user);
   }
 
   @Get(':id')
@@ -46,7 +46,7 @@ export class ApplicationsController {
   @UseGuards(TenantScopedGuard)
   @TenantResource({ resource: 'application', param: 'id' })
   getApplication(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
-    return this.applicationsService.getApplication(user.organizationId, id);
+    return this.applicationsService.getApplication(user.organizationId, id, user);
   }
 
   @Get(':id/history')

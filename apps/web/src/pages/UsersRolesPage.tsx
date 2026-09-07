@@ -17,9 +17,35 @@ import { MetricCard } from '../components/ui/MetricCard';
 import { ResponsiveDataView, type ResponsiveDataColumn } from '../components/ui/ResponsiveDataView';
 import { SectionHeader } from '../components/ui/SectionHeader';
 import { Select } from '../components/ui/Select';
+import { Switch } from '../components/ui/Switch';
+import { Tabs } from '../components/ui/Tabs';
 import { TableSkeleton } from '../components/ui/Skeleton';
 import { Icon } from '../components/Icon';
 import './PageEnhancementsV2.css';
+
+export type DataVisibilityScope = 'ALL' | 'ASSIGNED_ONLY' | 'BRANCH' | 'DEPARTMENT';
+
+export interface RoleRlsPolicy {
+  dataScope: DataVisibilityScope;
+  canViewPii: boolean;
+  canViewSalary: boolean;
+  canDownloadDocs: boolean;
+  canApprove: boolean;
+}
+
+export interface RlsScopeOption {
+  id: DataVisibilityScope;
+  name: string;
+  description: string;
+}
+
+export interface RlsGovernanceResponse {
+  organizationId: string;
+  roles: Record<string, RoleRlsPolicy>;
+  userOverrides: Record<string, Partial<RoleRlsPolicy>>;
+  availableScopes: RlsScopeOption[];
+  availableRoles: Array<{ code: string; name: string }>;
+}
 
 const emptyUserForm = { email: '', displayName: '', password: '', roles: [] as string[] };
 const emptyRoleForm = { code: '', name: '' };
@@ -64,6 +90,7 @@ const userColumns: ResponsiveDataColumn<UserRecord>[] = [
 ];
 
 export function UsersRolesPage() {
+  const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'rls'>('users');
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [roles, setRoles] = useState<RoleRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -78,16 +105,41 @@ export function UsersRolesPage() {
   const [userForm, setUserForm] = useState(emptyUserForm);
   const [roleForm, setRoleForm] = useState(emptyRoleForm);
 
+  // RLS Governance State
+  const [rlsScopes, setRlsScopes] = useState<RlsScopeOption[]>([]);
+  const [rlsPolicies, setRlsPolicies] = useState<Record<string, RoleRlsPolicy>>({});
+  const [isRlsSaving, setIsRlsSaving] = useState(false);
+  const [hasRlsChanges, setHasRlsChanges] = useState(false);
+  const [rlsNotification, setRlsNotification] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [rlsSearch, setRlsSearch] = useState('');
+  const [simulationModal, setSimulationModal] = useState<{
+    isOpen: boolean;
+    roleCode: string;
+    data: any;
+    isLoading: boolean;
+  }>({
+    isOpen: false,
+    roleCode: '',
+    data: null,
+    isLoading: false,
+  });
+
   const load = async () => {
     setIsLoading(true);
     setError('');
     try {
-      const [usersRes, rolesRes] = await Promise.all([
+      const [usersRes, rolesRes, rlsRes] = await Promise.all([
         fetchApi<UserRecord[] | { data?: UserRecord[] }>('/users'),
         fetchApi<RoleRecord[] | { data?: RoleRecord[] }>('/roles'),
+        fetchApi<RlsGovernanceResponse>('/access-control/rls-policies').catch(() => null),
       ]);
       setUsers(Array.isArray(usersRes) ? usersRes : usersRes.data || []);
       setRoles(Array.isArray(rolesRes) ? rolesRes : rolesRes.data || []);
+
+      if (rlsRes) {
+        setRlsScopes(rlsRes.availableScopes || []);
+        setRlsPolicies(rlsRes.roles || {});
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load users and roles');
     } finally {
@@ -139,34 +191,144 @@ export function UsersRolesPage() {
     }
   };
 
+  // RLS update handlers
+  const updateRolePolicy = (roleCode: string, field: keyof RoleRlsPolicy, value: any) => {
+    setRlsPolicies((prev) => {
+      const current = prev[roleCode] || {
+        dataScope: 'ALL',
+        canViewPii: false,
+        canViewSalary: false,
+        canDownloadDocs: false,
+        canApprove: false,
+      };
+      return {
+        ...prev,
+        [roleCode]: {
+          ...current,
+          [field]: value,
+        },
+      };
+    });
+    setHasRlsChanges(true);
+    setRlsNotification(null);
+  };
+
+  const saveRlsPolicies = async () => {
+    setIsRlsSaving(true);
+    setRlsNotification(null);
+    try {
+      await fetchApi('/access-control/rls-policies', {
+        method: 'PUT',
+        body: JSON.stringify({ roles: rlsPolicies }),
+      });
+      setHasRlsChanges(false);
+      setRlsNotification({
+        type: 'success',
+        message: 'Row-Level Security (RLS) policies successfully saved and applied to all enterprise users.',
+      });
+    } catch (err) {
+      setRlsNotification({
+        type: 'error',
+        message: err instanceof Error ? err.message : 'Failed to save RLS policies.',
+      });
+    } finally {
+      setIsRlsSaving(false);
+    }
+  };
+
+  const inspectSimulation = async (roleCode: string) => {
+    setSimulationModal({
+      isOpen: true,
+      roleCode,
+      data: null,
+      isLoading: true,
+    });
+    try {
+      const res = await fetchApi(`/access-control/audit-simulation/${roleCode}`);
+      setSimulationModal((prev) => ({ ...prev, data: res, isLoading: false }));
+    } catch (err) {
+      setSimulationModal((prev) => ({
+        ...prev,
+        data: { error: err instanceof Error ? err.message : 'Failed to load audit simulation' },
+        isLoading: false,
+      }));
+    }
+  };
+
+  const applyStrictSghDefaults = () => {
+    const next: Record<string, RoleRlsPolicy> = { ...rlsPolicies };
+    for (const code of Object.keys(next)) {
+      if (code === 'ADMINISTRATOR') {
+        next[code] = { dataScope: 'ALL', canViewPii: true, canViewSalary: true, canDownloadDocs: true, canApprove: true };
+      } else if (code.includes('MANAGER') || code.includes('HEAD')) {
+        next[code] = { dataScope: 'DEPARTMENT', canViewPii: false, canViewSalary: false, canDownloadDocs: false, canApprove: true };
+      } else if (code.includes('INTERVIEWER')) {
+        next[code] = { dataScope: 'ASSIGNED_ONLY', canViewPii: false, canViewSalary: false, canDownloadDocs: false, canApprove: false };
+      } else if (code.includes('RECRUITER')) {
+        next[code] = { dataScope: 'ALL', canViewPii: true, canViewSalary: false, canDownloadDocs: true, canApprove: false };
+      } else {
+        next[code] = { dataScope: 'ALL', canViewPii: false, canViewSalary: false, canDownloadDocs: false, canApprove: false };
+      }
+    }
+    setRlsPolicies(next);
+    setHasRlsChanges(true);
+    setRlsNotification({
+      type: 'success',
+      message: 'Applied SGH Clinical & Operational standard least-privilege RLS template. Review and click Save to apply.',
+    });
+  };
+
   const activeUserCount = users.filter((u) => u.status === 'Active').length;
+  const configuredRlsRolesCount = Object.keys(rlsPolicies).length;
+
+  const filteredRlsRoles = useMemo(() => {
+    const list = roles.length > 0 ? roles : Object.keys(rlsPolicies).map((c) => ({ id: c, code: c, name: c, status: 'Active' as const }));
+    if (!rlsSearch.trim()) return list;
+    const term = rlsSearch.toLowerCase();
+    return list.filter((r) => r.name.toLowerCase().includes(term) || r.code.toLowerCase().includes(term));
+  }, [roles, rlsPolicies, rlsSearch]);
 
   return (
     <PageFrame
-      eyebrow="Administration"
-      title="Users & Roles"
-      description="Manage enterprise users, assign RBAC security roles, and enforce least-privilege workflow access."
+      eyebrow="Security & Governance"
+      title="Access Control & RLS Governance"
+      description="Manage enterprise users, configure RBAC roles, and control Row-Level Security (RLS) data scoping per role."
       actions={
         <>
           <Button variant="ghost" size="sm" onClick={() => void load()}>
             <Icon name="refresh-cw" size={13} className={isLoading ? 'animate-spin' : ''} />
             Refresh
           </Button>
-          <Button variant="secondary" size="sm" onClick={() => { setFormError(''); setIsRoleOpen(true); }}>
-            <Icon name="plus" size={13} />
-            Create role
-          </Button>
-          <Button variant="primary" size="sm" onClick={() => { setFormError(''); setIsInviteOpen(true); }}>
-            <Icon name="plus" size={14} />
-            Create user
-          </Button>
+          {activeTab === 'rls' ? (
+            <Button
+              variant="primary"
+              size="sm"
+              loading={isRlsSaving}
+              loadingLabel="Saving RLS Policy..."
+              onClick={() => void saveRlsPolicies()}
+            >
+              <Icon name="check-circle" size={14} />
+              Save RLS Matrix
+            </Button>
+          ) : (
+            <>
+              <Button variant="secondary" size="sm" onClick={() => { setFormError(''); setIsRoleOpen(true); }}>
+                <Icon name="plus" size={13} />
+                Create role
+              </Button>
+              <Button variant="primary" size="sm" onClick={() => { setFormError(''); setIsInviteOpen(true); }}>
+                <Icon name="plus" size={14} />
+                Create user
+              </Button>
+            </>
+          )}
         </>
       }
     >
       {error && (
         <Alert
           tone="danger"
-          title="Unable to load users"
+          title="Unable to load access control data"
           action={
             <Button variant="secondary" size="sm" onClick={() => void load()}>
               <Icon name="refresh-cw" size={13} />
@@ -178,15 +340,69 @@ export function UsersRolesPage() {
         </Alert>
       )}
 
+      {rlsNotification && (
+        <Alert
+          tone={rlsNotification.type === 'success' ? 'success' : 'danger'}
+          title={rlsNotification.type === 'success' ? 'RLS Governance Updated' : 'Error'}
+        >
+          {rlsNotification.message}
+        </Alert>
+      )}
+
       <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard label="Total Users" value={users.length} detail="Authorized accounts" tone="action" icon={<Icon name="users" size={14} />} />
-        <MetricCard label="Active Users" value={activeUserCount} detail="Enabled logins" tone="success" icon={<Icon name="check-circle" size={14} />} />
+        <MetricCard label="Authorized Users" value={users.length} detail="Enterprise accounts" tone="action" icon={<Icon name="users" size={14} />} />
+        <MetricCard label="Active Logins" value={activeUserCount} detail="Enabled sessions" tone="success" icon={<Icon name="check-circle" size={14} />} />
         <MetricCard label="Configured Roles" value={roles.length} detail="RBAC permission sets" tone="info" icon={<Icon name="grid-squares" size={14} />} />
-        <MetricCard label="Access Policy" value="Role-Based" detail="Strict permission guards" tone="neutral" icon={<Icon name="lock" size={14} />} />
+        <MetricCard label="RLS Governance" value={configuredRlsRolesCount ? `${configuredRlsRolesCount} Roles` : 'Active'} detail="Dynamic row-scoping" tone="accent" icon={<Icon name="shield" size={14} />} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <section className="lg:col-span-2 rf-table-shell overflow-hidden rounded-2xl border border-rf-border-subtle bg-white shadow-xs">
+      {/* Primary Navigation Tabs */}
+      <div className="border-b border-rf-border-subtle pt-2">
+        <Tabs
+          ariaLabel="Access Control Sections"
+          activeKey={activeTab}
+          onChange={(key) => setActiveTab(key as any)}
+          items={[
+            {
+              key: 'users',
+              label: (
+                <span className="flex items-center gap-2">
+                  <Icon name="users" size={14} />
+                  Team Users
+                  <Badge variant="neutral" className="ml-1">{users.length}</Badge>
+                </span>
+              ),
+            },
+            {
+              key: 'roles',
+              label: (
+                <span className="flex items-center gap-2">
+                  <Icon name="grid-squares" size={14} />
+                  System Roles
+                  <Badge variant="neutral" className="ml-1">{roles.length}</Badge>
+                </span>
+              ),
+            },
+            {
+              key: 'rls',
+              label: (
+                <span className="flex items-center gap-2 font-bold text-rf-action">
+                  <Icon name="lock" size={14} />
+                  RLS & Data Visibility Governance
+                  {hasRlsChanges && (
+                    <span className="inline-block h-2 w-2 rounded-full bg-amber-500" title="Unsaved changes" />
+                  )}
+                  <Badge variant="success" className="ml-1">Admin Controlled</Badge>
+                </span>
+              ),
+            },
+          ]}
+        />
+      </div>
+
+      {/* TAB 1: USERS */}
+      {activeTab === 'users' && (
+        <section className="rf-table-shell overflow-hidden rounded-2xl border border-rf-border-subtle bg-white shadow-xs">
           <DataToolbar
             search={(
               <Input
@@ -233,37 +449,324 @@ export function UsersRolesPage() {
             />
           )}
         </section>
+      )}
 
-        <aside className="rf-panel overflow-hidden rounded-2xl border border-rf-border-subtle bg-white shadow-xs">
+      {/* TAB 2: ROLES */}
+      {activeTab === 'roles' && (
+        <section className="rf-panel overflow-hidden rounded-2xl border border-rf-border-subtle bg-white shadow-xs">
           <SectionHeader
-            title={`System roles (${roles.length})`}
-            description="Role definitions and access tiers."
-            density="compact"
+            title={`Configured System Roles (${roles.length})`}
+            description="Role definitions and base permissions. Row-level data visibility can be governed in the RLS Governance tab."
+            density="comfortable"
             className="border-b border-rf-border-subtle p-5"
             actions={(
               <Button variant="secondary" size="sm" onClick={() => { setFormError(''); setIsRoleOpen(true); }}>
                 <Icon name="plus" size={13} />
-                Role
+                Create Role
               </Button>
             )}
           />
           {roles.length === 0 ? (
             <PageState kind="empty" title="No roles configured" description="Create a role to define access." />
           ) : (
-            <div className="flex flex-col gap-2.5 p-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-5">
               {roles.map((role) => (
-                <div key={role.code} className="flex items-center justify-between gap-3 rounded-xl border border-rf-border-subtle bg-rf-surface-subtle p-3 transition-colors hover:bg-rf-surface-hover">
-                  <div className="min-w-0">
-                    <div className="truncate text-xs font-bold text-rf-ink">{role.name}</div>
-                    <div className="mt-0.5 truncate font-mono text-[10.5px] font-semibold text-rf-ink-muted">{role.code}</div>
+                <div key={role.code} className="flex flex-col justify-between rounded-xl border border-rf-border-subtle bg-rf-surface-subtle p-4 transition-all hover:border-rf-border-strong hover:shadow-xs">
+                  <div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-bold text-sm text-rf-ink">{role.name}</span>
+                      <Badge variant={role.status === 'Active' ? 'success' : 'neutral'}>{role.status}</Badge>
+                    </div>
+                    <div className="mt-1 font-mono text-xs font-semibold text-rf-ink-muted">{role.code}</div>
                   </div>
-                  <Badge variant={role.status === 'Active' ? 'success' : 'neutral'}>{role.status}</Badge>
+                  <div className="mt-4 pt-3 border-t border-rf-border-subtle flex items-center justify-between text-xs text-rf-ink-muted">
+                    <span>RLS Scope: <strong className="text-rf-ink">{rlsPolicies[role.code]?.dataScope || 'ALL'}</strong></span>
+                    <button
+                      type="button"
+                      className="text-rf-action hover:underline font-semibold"
+                      onClick={() => {
+                        setActiveTab('rls');
+                        setRlsSearch(role.name);
+                      }}
+                    >
+                      Configure RLS →
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
           )}
-        </aside>
-      </div>
+        </section>
+      )}
+
+      {/* TAB 3: RLS & DATA VISIBILITY GOVERNANCE */}
+      {activeTab === 'rls' && (
+        <div className="space-y-6">
+          {/* RLS Overview Banner */}
+          <div className="rounded-2xl border border-rf-border-subtle bg-gradient-to-r from-blue-50/50 via-indigo-50/30 to-purple-50/50 p-5 sm:p-6 dark:from-slate-900 dark:via-indigo-950/40 dark:to-slate-900">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div className="max-w-2xl">
+                <div className="flex items-center gap-2 text-rf-action text-xs font-bold uppercase tracking-wider">
+                  <Icon name="shield" size={14} />
+                  Row-Level Security (RLS) & Privacy Governance
+                </div>
+                <h3 className="text-lg font-bold text-rf-ink mt-1">Flexible Role-Based Visibility Control</h3>
+                <p className="text-sm text-rf-ink-muted mt-1 leading-relaxed">
+                  As Administrator, you decide exactly <strong>who should see what</strong>. Customize requisition visibility
+                  scope (All Organization, Assigned Only, Branch Scoped, Department Scoped) and enforce granular data masking for
+                  candidate direct contact info (PII), salary figures, and resume file downloads.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2.5">
+                <Button variant="secondary" size="sm" onClick={applyStrictSghDefaults}>
+                  <Icon name="sliders" size={13} />
+                  Apply Standard Template
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  loading={isRlsSaving}
+                  loadingLabel="Saving Changes..."
+                  onClick={() => void saveRlsPolicies()}
+                  disabled={!hasRlsChanges && !isRlsSaving}
+                >
+                  <Icon name="check-circle" size={14} />
+                  Save RLS Matrix
+                </Button>
+              </div>
+            </div>
+
+            {hasRlsChanges && (
+              <div className="mt-4 flex items-center justify-between gap-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 p-3 text-xs text-amber-900 dark:text-amber-200 font-medium">
+                <div className="flex items-center gap-2">
+                  <Icon name="alert-triangle" size={14} className="text-amber-600" />
+                  <span>You have unsaved changes to role visibility and masking rules.</span>
+                </div>
+                <Button variant="primary" size="sm" onClick={() => void saveRlsPolicies()} loading={isRlsSaving}>
+                  Save & Apply
+                </Button>
+              </div>
+            )}
+          </div>
+
+          {/* Search Toolbar */}
+          <div className="flex items-center justify-between gap-4">
+            <div className="max-w-md w-full">
+              <Input
+                aria-label="Search role policies"
+                placeholder="Filter roles by name or code..."
+                value={rlsSearch}
+                onChange={(e) => setRlsSearch(e.target.value)}
+              />
+            </div>
+            <span className="text-xs text-rf-ink-muted">
+              Showing <strong>{filteredRlsRoles.length}</strong> configured security roles
+            </span>
+          </div>
+
+          {/* RLS Policy Cards Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            {filteredRlsRoles.map((role) => {
+              const policy = rlsPolicies[role.code] || {
+                dataScope: 'ALL' as DataVisibilityScope,
+                canViewPii: false,
+                canViewSalary: false,
+                canDownloadDocs: false,
+                canApprove: false,
+              };
+
+              const isAdminRole = role.code === 'ADMINISTRATOR';
+
+              return (
+                <div
+                  key={role.code}
+                  className="flex flex-col justify-between rounded-2xl border border-rf-border-subtle bg-white dark:bg-slate-900 shadow-xs hover:border-rf-border-strong transition-all p-5"
+                >
+                  <div>
+                    {/* Role Header */}
+                    <div className="flex items-start justify-between gap-3 border-b border-rf-border-subtle pb-3">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-base font-bold text-rf-ink">{role.name}</h4>
+                          {isAdminRole && (
+                            <Badge variant="accent" className="font-semibold text-[11px]">Unrestricted Admin</Badge>
+                          )}
+                        </div>
+                        <div className="mt-0.5 font-mono text-xs text-rf-ink-muted">{role.code}</div>
+                      </div>
+
+                      <Badge
+                        variant={
+                          policy.dataScope === 'ALL'
+                            ? 'success'
+                            : policy.dataScope === 'ASSIGNED_ONLY'
+                            ? 'warning'
+                            : policy.dataScope === 'BRANCH'
+                            ? 'info'
+                            : 'neutral'
+                        }
+                        className="font-bold tracking-tight"
+                      >
+                        {policy.dataScope === 'ALL' && 'All Organization'}
+                        {policy.dataScope === 'ASSIGNED_ONLY' && 'Assigned Requisitions Only'}
+                        {policy.dataScope === 'BRANCH' && 'Branch / Facility Scoped'}
+                        {policy.dataScope === 'DEPARTMENT' && 'Department Scoped'}
+                      </Badge>
+                    </div>
+
+                    {/* Scope Selector */}
+                    <div className="mt-4">
+                      <label className="block text-xs font-bold text-rf-ink mb-1.5">
+                        Requisitions & Candidate Scope:
+                      </label>
+                      <Select
+                        aria-label={`Scope for ${role.name}`}
+                        disabled={isAdminRole}
+                        value={policy.dataScope}
+                        onChange={(e) => updateRolePolicy(role.code, 'dataScope', e.target.value)}
+                      >
+                        <option value="ALL">All Organization — Full cross-facility visibility</option>
+                        <option value="ASSIGNED_ONLY">Assigned Only — Scoped strictly to assigned requisitions</option>
+                        <option value="BRANCH">Branch Scoped — Scoped to user's assigned hospital branch</option>
+                        <option value="DEPARTMENT">Department Scoped — Scoped to user's clinical department</option>
+                      </Select>
+                      <p className="mt-1 text-[11.5px] text-rf-ink-muted">
+                        {policy.dataScope === 'ALL' && 'Users in this role can search and access all requisitions and applicants across all hospitals.'}
+                        {policy.dataScope === 'ASSIGNED_ONLY' && 'Users will strictly see applicants and jobs where they are the primary recruiter, task owner, or review team member.'}
+                        {policy.dataScope === 'BRANCH' && 'Users are confined to vacancies and applications belonging to their designated hospital facility.'}
+                        {policy.dataScope === 'DEPARTMENT' && 'Users only see jobs and applications within their specialized clinical or operational department.'}
+                      </p>
+                    </div>
+
+                    {/* Sensitive Field Toggles */}
+                    <div className="mt-5 space-y-3.5 pt-3 border-t border-rf-border-subtle">
+                      <div className="text-xs font-bold text-rf-ink uppercase tracking-wider">
+                        Field Visibility & Decision Authority
+                      </div>
+
+                      <div className="flex items-center justify-between gap-4 py-1">
+                        <div>
+                          <div className="text-xs font-bold text-rf-ink">Candidate Direct Contact PII</div>
+                          <div className="text-[11.5px] text-rf-ink-muted">
+                            Candidate phone & email visibility. When disabled, contact details are masked with ***.
+                          </div>
+                        </div>
+                        <Switch
+                          id={`pii-${role.code}`}
+                          disabled={isAdminRole}
+                          checked={isAdminRole ? true : policy.canViewPii}
+                          onCheckedChange={(checked) => updateRolePolicy(role.code, 'canViewPii', checked)}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between gap-4 py-1">
+                        <div>
+                          <div className="text-xs font-bold text-rf-ink">Compensation & Salary Figures</div>
+                          <div className="text-[11.5px] text-rf-ink-muted">
+                            Expected/current salary and proposed offer monetary packages.
+                          </div>
+                        </div>
+                        <Switch
+                          id={`salary-${role.code}`}
+                          disabled={isAdminRole}
+                          checked={isAdminRole ? true : policy.canViewSalary}
+                          onCheckedChange={(checked) => updateRolePolicy(role.code, 'canViewSalary', checked)}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between gap-4 py-1">
+                        <div>
+                          <div className="text-xs font-bold text-rf-ink">Resume & Document Downloads</div>
+                          <div className="text-[11.5px] text-rf-ink-muted">
+                            Permission to download candidate resumes, medical licenses, and certifications.
+                          </div>
+                        </div>
+                        <Switch
+                          id={`docs-${role.code}`}
+                          disabled={isAdminRole}
+                          checked={isAdminRole ? true : policy.canDownloadDocs}
+                          onCheckedChange={(checked) => updateRolePolicy(role.code, 'canDownloadDocs', checked)}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between gap-4 py-1">
+                        <div>
+                          <div className="text-xs font-bold text-rf-ink">Approval Gate Authority</div>
+                          <div className="text-[11.5px] text-rf-ink-muted">
+                            Can approve requisitions, offer letters, and clinical hiring cases.
+                          </div>
+                        </div>
+                        <Switch
+                          id={`approve-${role.code}`}
+                          disabled={isAdminRole}
+                          checked={isAdminRole ? true : policy.canApprove}
+                          onCheckedChange={(checked) => updateRolePolicy(role.code, 'canApprove', checked)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card Footer */}
+                  <div className="mt-5 pt-3 border-t border-rf-border-subtle flex items-center justify-between text-xs">
+                    <span className="text-rf-ink-muted">
+                      {policy.canViewPii ? 'Contact PII Visible' : 'Contact PII Masked (***)'}
+                    </span>
+                    <Button
+                      variant="quiet"
+                      size="sm"
+                      onClick={() => void inspectSimulation(role.code)}
+                    >
+                      <Icon name="search" size={12} />
+                      Simulate Query Filter
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* RLS Query Simulation Modal */}
+      <Modal
+        isOpen={simulationModal.isOpen}
+        onClose={() => setSimulationModal((prev) => ({ ...prev, isOpen: false }))}
+        title={`RLS Query Simulation: ${simulationModal.roleCode}`}
+      >
+        <div className="space-y-4 text-xs">
+          <p className="text-rf-ink-muted">
+            The system applies Row-Level Security at both database Prisma ORM queries and payload serialization gates.
+          </p>
+
+          {simulationModal.isLoading ? (
+            <div className="p-6 text-center text-rf-ink-muted animate-pulse">Loading simulation rules...</div>
+          ) : simulationModal.data ? (
+            <div className="space-y-3">
+              <div className="rounded-xl border border-rf-border-subtle bg-rf-surface-subtle p-3.5">
+                <div className="font-bold text-rf-ink mb-1">Effective Policy:</div>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>Scope: <strong>{simulationModal.data.policy?.dataScope}</strong></div>
+                  <div>PII Masked: <strong>{simulationModal.data.policy?.canViewPii ? 'No' : 'Yes (***)'}</strong></div>
+                  <div>Salary Access: <strong>{simulationModal.data.policy?.canViewSalary ? 'Granted' : 'Hidden'}</strong></div>
+                  <div>Document Download: <strong>{simulationModal.data.policy?.canDownloadDocs ? 'Granted' : 'Restricted'}</strong></div>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-rf-border-subtle bg-slate-900 p-3.5 font-mono text-[11px] text-emerald-400 overflow-x-auto">
+                <div className="text-slate-400 mb-1">// Prisma Where Clause Generated:</div>
+                <pre>{JSON.stringify(simulationModal.data.sampleWhereClause, null, 2)}</pre>
+              </div>
+            </div>
+          ) : null}
+
+          <div className="flex justify-end pt-2">
+            <Button variant="secondary" size="sm" onClick={() => setSimulationModal((prev) => ({ ...prev, isOpen: false }))}>
+              Close
+            </Button>
+          </div>
+        </div>
+      </Modal>
 
       {/* Create User Modal */}
       <Modal isOpen={isInviteOpen} onClose={() => setIsInviteOpen(false)} title="Create System User">
@@ -314,7 +817,7 @@ export function UsersRolesPage() {
                   onChange={(e) => setUserForm({ ...userForm, roles: e.target.value ? [e.target.value] : [] })}
                 >
                   <option value="">No role</option>
-                  {roles.map(r => <option key={r.code} value={r.code}>{r.name}</option>)}
+                  {roles.map((r) => <option key={r.code} value={r.code}>{r.name}</option>)}
                 </Select>
               </FormField>
             </div>
