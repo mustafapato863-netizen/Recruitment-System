@@ -1,7 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PageFrame } from '../components/ui/PageFrame';
-import { BreadcrumbsBar } from '../components/ui/BreadcrumbsBar';
 import { PipelineStepper } from '../components/PipelineStepper';
 import { Alert } from '../components/ui/Alert';
 import { Toast } from '../components/ui/Toast';
@@ -34,6 +33,7 @@ export const CVIntakePage: React.FC = () => {
     duplicateDecision,
     setDuplicateDecision,
     vacancies,
+    scoredVacancies,
     confirmedCandidateCode,
     confirmedCandidateId,
     confirmedAppId,
@@ -53,7 +53,7 @@ export const CVIntakePage: React.FC = () => {
 
   return (
     <PageFrame
-      eyebrow="Odoo-Grade Parsing Engine • Saudi German Health ATS"
+      eyebrow="AI Clinical Intake Engine • Saudi German Health RecruitFlow"
       title="CV Intake & Profile Extraction"
       description="Automated entity parsing, duplicate identity resolution, and direct candidate ingestion."
       actions={
@@ -73,9 +73,6 @@ export const CVIntakePage: React.FC = () => {
           <Toast tone="success" title={successToast} />
         </div>
       )}
-
-      {/* Breadcrumbs Navigation */}
-      <BreadcrumbsBar />
 
       {/* Connected 4-Stage Stepper */}
       <PipelineStepper steps={INTAKE_STEPS} currentStep={currentStep} />
@@ -159,6 +156,7 @@ export const CVIntakePage: React.FC = () => {
         <CVParsedEditor
           profile={profile}
           setProfile={setProfile}
+          scoredVacancies={scoredVacancies}
           uploadedFileName={uploadedFileName}
           onReset={resetToParsed}
           onBack={clearUpload}
@@ -171,6 +169,7 @@ export const CVIntakePage: React.FC = () => {
         <CVMatchAssigner
           profile={profile}
           vacancies={vacancies}
+          scoredVacancies={scoredVacancies}
           targetVacancy={targetVacancy}
           setTargetVacancy={setTargetVacancy}
           targetStage={targetStage}
@@ -189,6 +188,7 @@ export const CVIntakePage: React.FC = () => {
       {currentStep === 3 && profile && (
         <CVIngestSuccess
           profile={profile}
+          vacancies={vacancies}
           confirmedCandidateCode={confirmedCandidateCode}
           confirmedCandidateId={confirmedCandidateId}
           confirmedAppId={confirmedAppId}

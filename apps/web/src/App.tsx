@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './auth/AuthContext';
 import { ProtectedRoute } from './auth/ProtectedRoute';
 import { PermissionGate } from './auth/PermissionGate';
@@ -50,7 +50,6 @@ const FinalApprovalInboxPage = lazy(() => import('./pages/FinalApprovalInboxPage
 const LicenseManagementPage = lazy(() => import('./pages/LicenseManagementPage').then((m) => ({ default: m.LicenseManagementPage })));
 const JoiningManagementPage = lazy(() => import('./pages/JoiningManagementPage').then((m) => ({ default: m.JoiningManagementPage })));
 const TalentPoolPage = lazy(() => import('./pages/TalentPoolPage').then((m) => ({ default: m.TalentPoolPage })));
-const TalentPoolDetailPage = lazy(() => import('./pages/TalentPoolDetailPage').then((m) => ({ default: m.TalentPoolDetailPage })));
 const ImportPreviewPage = lazy(() => import('./pages/ImportPreviewPage').then((m) => ({ default: m.ImportPreviewPage })));
 const BulkImportPage = lazy(() => import('./pages/BulkImportPage').then((m) => ({ default: m.BulkImportPage })));
 const CVIntakePage = lazy(() => import('./pages/CVIntakePage').then((m) => ({ default: m.CVIntakePage })));
@@ -130,6 +129,7 @@ function App() {
                   <Route path="/vacancy-requests/create" element={<PermissionGate requiredPermission="VACANCY_REQUEST_CREATE"><CreateVacancyRequestPage /></PermissionGate>} />
                   <Route path="/vacancy-requests/:id" element={<PermissionGate requiredPermission="VACANCY_REQUEST_VIEW"><VacancyRequestDetailPage /></PermissionGate>} />
                   <Route path="/approval-inbox" element={<PermissionGate requiredAnyPermission={['VACANCY_REQUEST_APPROVE', 'APPROVE_OFFERS', 'FINAL_HIRING_APPROVAL']}><ApprovalInboxPage /></PermissionGate>} />
+                  <Route path="/inbox" element={<Navigate to="/approval-inbox" replace />} />
                   <Route path="/vacancies" element={<PermissionGate requiredPermission="VACANCY_VIEW"><VacantListPage /></PermissionGate>} />
                   <Route path="/vacancies/:id" element={<PermissionGate requiredPermission="VACANCY_VIEW"><VacancyOverviewPage /></PermissionGate>} />
                   <Route path="/vacancies/:id/analytics" element={<PermissionGate requiredPermission="VACANCY_VIEW"><JobAnalyticsPage /></PermissionGate>} />
@@ -140,8 +140,11 @@ function App() {
                   <Route path="/candidates/:id" element={<PermissionGate requiredPermission="CANDIDATE_VIEW"><CandidateDetailPage /></PermissionGate>} />
                   <Route path="/candidates/:id/documents" element={<PermissionGate requiredPermission="CANDIDATE_VIEW"><CandidateDocumentsPage /></PermissionGate>} />
                   <Route path="/cv-bank" element={<PermissionGate requiredPermission="CANDIDATE_VIEW"><CVBankPage /></PermissionGate>} />
-                  <Route path="/talent-pool" element={<PermissionGate requiredPermission="CANDIDATE_VIEW"><TalentPoolPage /></PermissionGate>} />
-                  <Route path="/talent-pool/:id" element={<PermissionGate requiredPermission="CANDIDATE_VIEW"><TalentPoolDetailPage /></PermissionGate>} />
+                  <Route path="/sourcing-match" element={<PermissionGate requiredPermission="CANDIDATE_VIEW"><TalentPoolPage /></PermissionGate>} />
+                  <Route path="/talent-pool" element={<Navigate to="/sourcing-match" replace />} />
+                  <Route path="/talent-pools" element={<Navigate to="/sourcing-match" replace />} />
+                  <Route path="/sourcing-match/:id" element={<Navigate to="/sourcing-match" replace />} />
+                  <Route path="/talent-pool/:id" element={<Navigate to="/sourcing-match" replace />} />
                   <Route path="/cv-intake" element={<PermissionGate requiredPermission="CANDIDATE_CREATE"><CVIntakePage /></PermissionGate>} />
                   <Route path="/cv-intake/:jobId" element={<PermissionGate requiredPermission="CANDIDATE_CREATE"><ImportPreviewPage /></PermissionGate>} />
                   <Route path="/import/:dataset/:jobId" element={<PermissionGate requiredAnyPermission={['CANDIDATE_VIEW', 'VACANCY_REQUEST_VIEW', 'MASTER_DATA_VIEW']}><BulkImportPage /></PermissionGate>} />
@@ -167,6 +170,7 @@ function App() {
                   <Route path="/hires/approvals/inbox" element={<PermissionGate requiredPermission="FINAL_HIRING_APPROVAL"><FinalApprovalInboxPage /></PermissionGate>} />
                   <Route path="/licenses" element={<PermissionGate requiredPermission="APPLICATION_VIEW"><LicenseManagementPage /></PermissionGate>} />
                   <Route path="/joinings" element={<PermissionGate requiredPermission="APPLICATION_VIEW"><JoiningManagementPage /></PermissionGate>} />
+                  <Route path="/joining" element={<Navigate to="/joinings" replace />} />
 
                   {/* Analytics & System */}
                   <Route

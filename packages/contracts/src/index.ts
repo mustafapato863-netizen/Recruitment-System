@@ -122,6 +122,11 @@ export interface VacancyRequest {
   criticality: string | null;
   targetStartDate: string | null;
   justification: string | null;
+  jobSummary: string | null;
+  description: string | null;
+  responsibilities: string | null;
+  qualifications: string | null;
+  benefits: string | null;
   submittedAt: string | null;
   approvalRevision: number;
   approvals: VacancyRequestApproval[];
@@ -139,6 +144,14 @@ export interface Vacancy {
   branch?: { id: string; name: string; code?: string } | null;
   title?: string | null;
   location?: string | null;
+  department?: string | null;
+  requiredSkills?: string[] | null;
+  minExperienceYears?: number | null;
+  jobSummary?: string | null;
+  description?: string | null;
+  responsibilities?: string | null;
+  qualifications?: string | null;
+  benefits?: string | null;
   vacancyRequestId: string;
   vacancyCode: string;
   status: VacancyStatus;
@@ -205,6 +218,11 @@ export interface CreateVacancyRequestInput {
   criticality?: string | null;
   targetStartDate?: string | null;
   justification?: string | null;
+  jobSummary?: string | null;
+  description?: string | null;
+  responsibilities?: string | null;
+  qualifications?: string | null;
+  benefits?: string | null;
 }
 
 export interface VacancyRequestActionInput {
@@ -231,6 +249,11 @@ export interface UpdateVacancyRequestInput {
   criticality?: string | null;
   targetStartDate?: string | null;
   justification?: string | null;
+  jobSummary?: string | null;
+  description?: string | null;
+  responsibilities?: string | null;
+  qualifications?: string | null;
+  benefits?: string | null;
 }
 
 export interface VacancyRequestFilterInput {
@@ -601,6 +624,10 @@ export interface PublicJob {
   organizationName: string;
   positionTitle: string;
   description: string | null;
+  jobSummary: string | null;
+  responsibilities: string | null;
+  qualifications: string | null;
+  benefits: string | null;
   branchName: string;
   location: string | null;
   employmentType: string | null;

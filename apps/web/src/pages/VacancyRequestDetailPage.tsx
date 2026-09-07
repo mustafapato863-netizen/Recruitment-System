@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import type { VacancyCoreContext, VacancyRequest } from '@recruitflow/contracts';
 import { fetchApi } from '../api/client';
 import { StatusBadge } from '../components/StatusBadge';
@@ -38,7 +38,6 @@ const initialConfirmState: ConfirmState = {
 
 export function VacancyRequestDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
   const [request, setRequest] = useState<VacancyRequest | null>(null);
   const [context, setContext] = useState<VacancyCoreContext | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -245,16 +244,19 @@ export function VacancyRequestDetailPage() {
 
   return (
     <PageFrame
-      eyebrow={`VACANCY REQUESTS / ${request.requestCode}`}
-      title={`Requisition ${request.requestCode}`}
-      description={`Created on ${new Date(request.createdAt).toLocaleDateString()} · Last modified ${new Date(request.updatedAt).toLocaleDateString()}`}
+      eyebrow="Requisition Dossier"
+      title={
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <span className="px-2.5 py-0.5 rounded-md text-xs font-bold text-rf-action bg-rf-action-soft border border-rf-action/20 font-mono">
+            {request.requestCode}
+          </span>
+          <span>{positionTitle}</span>
+        </div>
+      }
+      description={`${branchName} · ${request.reason || 'New Position Demand'} · Created on ${new Date(request.createdAt).toLocaleDateString()} · Last modified ${new Date(request.updatedAt).toLocaleDateString()}`}
       actions={
         <div className="flex items-center gap-2.5 flex-wrap">
           <StatusBadge status={request.status} />
-          <Button variant="ghost" size="sm" onClick={() => navigate('/vacancy-requests')}>
-            <Icon name="arrow-left" size={13} />
-            Back to Requests
-          </Button>
           {canCancel && (
             <Button
               variant="danger"
@@ -304,52 +306,6 @@ export function VacancyRequestDetailPage() {
           {feedback}
         </Alert>
       )}
-
-      {/* Enhanced Hero Requisition Banner */}
-      <div className="rounded-2xl border border-rf-border-subtle bg-rf-surface p-5 sm:p-6 shadow-xs mb-6 relative overflow-hidden">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-start gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-rf-action-soft text-rf-action flex items-center justify-center shrink-0 shadow-2xs border border-rf-action/15">
-              <Icon name="file-text" size={22} />
-            </div>
-            <div>
-              <div className="flex items-center gap-2.5 flex-wrap">
-                <span className="px-2.5 py-0.5 rounded-md text-xs font-black text-rf-action bg-rf-action-soft border border-rf-action/20">
-                  {request.requestCode}
-                </span>
-                <h1 className="text-xl sm:text-2xl font-rf-heading font-black text-rf-ink m-0 tracking-tight">
-                  {positionTitle}
-                </h1>
-              </div>
-              <div className="flex items-center gap-4 mt-2 text-xs font-medium text-rf-ink-muted flex-wrap">
-                <span className="inline-flex items-center gap-1.5 text-rf-ink">
-                  <Icon name="building" size={13} className="text-rf-ink-muted" />
-                  {branchName}
-                </span>
-                <span>•</span>
-                <span className="inline-flex items-center gap-1.5">
-                  <Icon name="folder" size={13} className="text-rf-ink-muted" />
-                  {request.reason || 'New Position Demand'}
-                </span>
-                <span>•</span>
-                <span className="inline-flex items-center gap-1.5">
-                  <Icon name="clock" size={13} className="text-rf-ink-muted" />
-                  Created {new Date(request.createdAt).toLocaleDateString()}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            <div className="flex flex-col items-end">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-rf-ink-muted">Workflow State</span>
-              <div className="mt-1">
-                <StatusBadge status={request.status} />
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
 
       {/* 4 Premium 21st.dev Style Metric Cards (Enhanced user section) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">

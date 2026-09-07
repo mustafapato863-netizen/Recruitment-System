@@ -94,7 +94,7 @@ describe('InterviewCalendarPage', () => {
       expect(screen.getByRole('heading', { name: /Interview Calendar/i })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /Today/i })).toBeInTheDocument();
       expect(screen.getByText(/All \(2\)/i)).toBeInTheDocument();
-      expect(screen.getByText(/My Interviews \(1\)/i)).toBeInTheDocument();
+      expect(screen.getByText(/(?:Mine|My Interviews) \(1\)/i)).toBeInTheDocument();
     });
 
     // Verify side-by-side event cards are rendered

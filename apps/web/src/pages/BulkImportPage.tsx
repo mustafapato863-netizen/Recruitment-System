@@ -19,6 +19,7 @@ import { Pagination } from '../components/ui/Pagination';
 import { Select } from '../components/ui/Select';
 import { StatusBadge } from '../components/StatusBadge';
 import { Icon } from '../components/Icon';
+import { saveBlob } from '../utils/download';
 import './PageEnhancementsV2.css';
 
 const PAGE_SIZE = 50;
@@ -39,15 +40,6 @@ function datasetLabel(dataset: BulkImportDataset): string {
 
 function endpoint(dataset: BulkImportDataset): string {
   return dataset === 'candidates' ? 'candidates' : dataset === 'vacancy-requests' ? 'vacancy-requests' : `master-data/${dataset}`;
-}
-
-function saveBlob(blob: Blob, fileName: string): void {
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = fileName;
-  anchor.click();
-  URL.revokeObjectURL(url);
 }
 
 function safeValue(value: unknown): string {

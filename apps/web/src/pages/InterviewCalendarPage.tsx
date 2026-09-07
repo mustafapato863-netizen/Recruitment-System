@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { Interview } from '@recruitflow/contracts';
 import { getApi } from '../api/client';
@@ -14,14 +14,41 @@ import { FastScorecardModal } from '../components/interview/FastScorecardModal';
 import './PageEnhancementsV2.css';
 
 const CALENDAR_START_HOUR = 8;
-const CALENDAR_END_HOUR = 19; // 8 AM to 7 PM
+const CALENDAR_END_HOUR = 19;
+// Saudi/Middle-East week starts Sunday (0)
+const WEEK_START_DAY = 0;
 
-function startOfWeek(value: Date) {
+const MONTH_NAMES = [
+  'January','February','March','April','May','June',
+  'July','August','September','October','November','December',
+];
+const DAY_ABBREVS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+
+function startOfWeek(value: Date): Date {
   const date = new Date(value);
   date.setHours(0, 0, 0, 0);
-  const day = date.getDay(); // 0 = Sunday
-  date.setDate(date.getDate() - day);
+  const diff = (date.getDay() - WEEK_START_DAY + 7) % 7;
+  date.setDate(date.getDate() - diff);
   return date;
+}
+
+function addDays(base: Date, n: number): Date {
+  const d = new Date(base);
+  d.setDate(d.getDate() + n);
+  return d;
+}
+
+function addMonths(base: Date, n: number): Date {
+  const d = new Date(base);
+  d.setMonth(d.getMonth() + n);
+  return d;
+}
+
+function toDateInputValue(d: Date): string {
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 function sameDay(left: Date, right: Date) {
@@ -151,20 +178,173 @@ function formatDuration(startStr: string, endStr?: string): string {
   }
 }
 
+// ─── Mini Month Picker ────────────────────────────────────────────────────────
+
+interface MiniMonthPickerProps {
+  selected: Date;
+  onPickDate: (d: Date) => void;
+  onClose: () => void;
+}
+
+function MiniMonthPicker({ selected, onPickDate, onClose }: MiniMonthPickerProps) {
+  const ref = useRef<HTMLDivElement>(null);
+  const today = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }, []);
+
+  const [viewMonth, setViewMonth] = useState(() => {
+    const d = new Date(selected);
+    d.setDate(1);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  });
+
+  // Close on outside click or Escape
+  useEffect(() => {
+    const onMouseDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('mousedown', onMouseDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onMouseDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [onClose]);
+
+  // Build calendar grid cells
+  const calDays = useMemo(() => {
+    const year = viewMonth.getFullYear();
+    const month = viewMonth.getMonth();
+    const firstOfMonth = new Date(year, month, 1);
+    const startOffset = (firstOfMonth.getDay() - WEEK_START_DAY + 7) % 7;
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const cells: (Date | null)[] = [];
+    for (let i = 0; i < startOffset; i++) cells.push(null);
+    for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, month, d));
+    while (cells.length % 7 !== 0) cells.push(null);
+    return cells;
+  }, [viewMonth]);
+
+  const selectedWeekStart = startOfWeek(selected);
+
+  return (
+    <div
+      ref={ref}
+      className="absolute top-full left-1/2 -translate-x-1/2 mt-2 z-50 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl shadow-2xl p-4 w-72 select-none"
+      role="dialog"
+      aria-label="Jump to date"
+    >
+      {/* Month nav header */}
+      <div className="flex items-center justify-between mb-3">
+        <button
+          type="button"
+          onClick={() => setViewMonth(m => addMonths(m, -1))}
+          className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white transition cursor-pointer"
+          aria-label="Previous month"
+        >
+          <Icon name="chevron-left" size={14} />
+        </button>
+        <span className="text-sm font-extrabold text-slate-900 dark:text-white">
+          {MONTH_NAMES[viewMonth.getMonth()]} {viewMonth.getFullYear()}
+        </span>
+        <button
+          type="button"
+          onClick={() => setViewMonth(m => addMonths(m, 1))}
+          className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white transition cursor-pointer"
+          aria-label="Next month"
+        >
+          <Icon name="chevron-right" size={14} />
+        </button>
+      </div>
+
+      {/* Day-of-week headers */}
+      <div className="grid grid-cols-7 mb-1">
+        {Array.from({ length: 7 }, (_, i) => {
+          const dayIdx = (WEEK_START_DAY + i) % 7;
+          return (
+            <div key={i} className="text-center text-[10px] font-bold text-slate-400 dark:text-slate-500 py-1">
+              {DAY_ABBREVS[dayIdx]}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Calendar day grid */}
+      <div className="grid grid-cols-7 gap-y-0.5">
+        {calDays.map((day, idx) => {
+          if (!day) return <div key={`empty-${idx}`} />;
+          const isToday = sameDay(day, today);
+          const isInSelectedWeek = sameDay(startOfWeek(day), selectedWeekStart);
+          return (
+            <button
+              key={day.toISOString()}
+              type="button"
+              onClick={() => { onPickDate(day); onClose(); }}
+              className={`relative h-8 w-full rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                isInSelectedWeek
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : isToday
+                  ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400'
+                  : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+              aria-label={day.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}
+              aria-pressed={isInSelectedWeek}
+            >
+              {day.getDate()}
+              {isToday && !isInSelectedWeek && (
+                <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-blue-500" />
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Footer: Go to today + date input */}
+      <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 gap-2">
+        <button
+          type="button"
+          onClick={() => { onPickDate(today); onClose(); }}
+          className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+        >
+          Go to Today
+        </button>
+        <input
+          type="date"
+          defaultValue={toDateInputValue(selected)}
+          onChange={(e) => {
+            if (!e.target.value) return;
+            const [yyyy, mm, dd] = e.target.value.split('-').map(Number);
+            if (yyyy && mm && dd) { onPickDate(new Date(yyyy, mm - 1, dd)); onClose(); }
+          }}
+          className="text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-2 py-1 text-slate-700 dark:text-slate-200 cursor-pointer focus:ring-2 focus:ring-blue-500 focus:outline-none"
+          aria-label="Jump to specific date"
+        />
+      </div>
+    </div>
+  );
+}
+
+type ViewMode = 'week' | 'day';
+
 export function InterviewCalendarPage() {
+
   const { user } = useAuth();
   const canSchedule = Boolean(user?.permissions.includes('APPLICATION_MOVE_STAGE'));
 
   const [interviews, setInterviews] = useState<Interview[]>([]);
-  const [anchorDate, setAnchorDate] = useState(() => startOfWeek(new Date()));
+  const [anchorDate, setAnchorDate] = useState<Date>(() => startOfWeek(new Date()));
+  const [viewMode, setViewMode] = useState<ViewMode>('week');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [now, setNow] = useState(() => new Date());
+  const [now, setNow] = useState<Date>(() => new Date());
 
-  // Scope: All vs My Interviews
   const [scope, setScope] = useState<'all' | 'mine'>('all');
+  const [isPickerOpen, setIsPickerOpen] = useState(false);
 
-  // Interactive Modals & Actions
   const [selectedEvent, setSelectedEvent] = useState<Interview | null>(null);
   const [scorecardInterview, setScorecardInterview] = useState<Interview | null>(null);
   const [dayModalEvents, setDayModalEvents] = useState<{ day: Date; hour: number; events: Interview[] } | null>(null);
@@ -192,21 +372,7 @@ export function InterviewCalendarPage() {
     void load();
   }, [load]);
 
-  const days = useMemo(() => {
-    return Array.from({ length: 7 }, (_, index) => {
-      const day = new Date(anchorDate);
-      day.setDate(anchorDate.getDate() + index);
-      return day;
-    });
-  }, [anchorDate]);
-
-  const slots = useMemo(() => {
-    return Array.from(
-      { length: CALENDAR_END_HOUR - CALENDAR_START_HOUR + 1 },
-      (_, index) => CALENDAR_START_HOUR + index,
-    );
-  }, []);
-
+  // ── Derived counts & filtered list ──
   const myCount = useMemo(() => {
     if (!user?.id) return 0;
     return interviews.filter((i) =>
@@ -225,14 +391,73 @@ export function InterviewCalendarPage() {
     return interviews;
   }, [interviews, scope, user]);
 
-  const eventsFor = (day: Date, hour: number) =>
-    filteredInterviews.filter((interview) => {
-      const start = new Date(interview.scheduledStart);
-      return sameDay(start, day) && start.getHours() === hour;
-    });
+  const slots = useMemo<number[]>(() =>
+    Array.from({ length: CALENDAR_END_HOUR - CALENDAR_START_HOUR + 1 }, (_, i) => CALENDAR_START_HOUR + i),
+  []);
+
+  // ── Keyboard navigation (← prev, → next, T = today) ──
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      if (isPickerOpen || selectedEvent || dayModalEvents || scorecardInterview) return;
+      if ((e.target as HTMLElement)?.tagName === 'INPUT') return;
+      if (e.key === 'ArrowLeft') { e.preventDefault(); goBack(); }
+      else if (e.key === 'ArrowRight') { e.preventDefault(); goForward(); }
+      else if (e.key === 't' || e.key === 'T') goToday();
+    }
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  });
+
+  // ── Derived: visible days ──
+  const days = useMemo<Date[]>(() => {
+    if (viewMode === 'day') return [new Date(anchorDate)];
+    return Array.from({ length: 7 }, (_, i) => addDays(anchorDate, i));
+  }, [anchorDate, viewMode]);
+
+  // ── Stable event lookup map: key = "Y-M-D:H" ──
+  const eventMap = useMemo(() => {
+    const map = new Map<string, Interview[]>();
+    for (const iv of filteredInterviews) {
+      const s = new Date(iv.scheduledStart);
+      const key = `${s.getFullYear()}-${s.getMonth()}-${s.getDate()}:${s.getHours()}`;
+      const bucket = map.get(key) ?? [];
+      bucket.push(iv);
+      map.set(key, bucket);
+    }
+    return map;
+  }, [filteredInterviews]);
+
+  const eventsFor = useCallback((day: Date, hour: number): Interview[] => {
+    const key = `${day.getFullYear()}-${day.getMonth()}-${day.getDate()}:${hour}`;
+    return eventMap.get(key) ?? [];
+  }, [eventMap]);
 
   const currentHour = now.getHours();
   const currentMinute = now.getMinutes();
+
+  // ── Navigation callbacks ──
+  const goBack = useCallback(() =>
+    setAnchorDate(prev => viewMode === 'day' ? addDays(prev, -1) : addDays(prev, -7)),
+  [viewMode]);
+  const goForward = useCallback(() =>
+    setAnchorDate(prev => viewMode === 'day' ? addDays(prev, 1) : addDays(prev, 7)),
+  [viewMode]);
+  const goToday = useCallback(() => {
+    const t = new Date(); t.setHours(0, 0, 0, 0);
+    setAnchorDate(viewMode === 'day' ? t : startOfWeek(t));
+  }, [viewMode]);
+  const handlePickDate = useCallback((picked: Date) => {
+    const d = new Date(picked); d.setHours(0, 0, 0, 0);
+    setAnchorDate(viewMode === 'day' ? d : startOfWeek(d));
+  }, [viewMode]);
+
+  const isViewingCurrentPeriod = viewMode === 'day'
+    ? sameDay(anchorDate, now)
+    : days.some(d => sameDay(d, now));
+
+  const rangeLabel = viewMode === 'day'
+    ? anchorDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+    : formatCalendarRange(days);
 
   const handleDownloadIcs = async (interviewId: string, interviewTitle: string) => {
     try {
@@ -267,7 +492,7 @@ export function InterviewCalendarPage() {
     <PageFrame
       eyebrow="Recruitment Operations"
       title="Interview Calendar"
-      description={`Week view for scheduled interviews · ${formatCalendarRange(days)} · local timezone display.`}
+      description={`${viewMode === 'week' ? 'Week' : 'Day'} view · ${rangeLabel} · local timezone.`}
     >
       {error && (
         <Alert
@@ -287,19 +512,49 @@ export function InterviewCalendarPage() {
       <InterviewWorkspaceNav canSchedule={canSchedule} />
 
       <div className="rf-outlook-calendar">
-        {/* Calendar Toolbar */}
+        {/* ── Toolbar ── */}
         <div className="rf-outlook-calendar__toolbar flex flex-wrap items-center justify-between gap-3">
+
+          {/* Left group: Today + View Mode + Scope */}
           <div className="flex items-center gap-2">
             <button
               type="button"
-              className="rf-outlook-calendar__today-btn"
-              onClick={() => setAnchorDate(startOfWeek(new Date()))}
+              className={`rf-outlook-calendar__today-btn${isViewingCurrentPeriod ? ' ring-2 ring-blue-500/30' : ''}`}
+              onClick={goToday}
+              title="Go to current period (T)"
             >
               <Icon name="calendar" size={13} />
               <span>Today</span>
             </button>
 
-            {/* My Interviews scope toggle */}
+            {/* Day / Week toggle */}
+            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-xl text-xs">
+              {(['week', 'day'] as ViewMode[]).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => {
+                    if (mode === 'week' && viewMode === 'day') {
+                      setAnchorDate(startOfWeek(anchorDate));
+                    } else if (mode === 'day' && viewMode === 'week') {
+                      const todayInWeek = days.find(d => sameDay(d, now)) ?? days[0]!;
+                      const next = new Date(todayInWeek); next.setHours(0, 0, 0, 0);
+                      setAnchorDate(next);
+                    }
+                    setViewMode(mode);
+                  }}
+                  className={`px-2.5 py-1 rounded-lg font-bold transition cursor-pointer capitalize ${
+                    viewMode === mode
+                      ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-white shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+                  }`}
+                >
+                  {mode}
+                </button>
+              ))}
+            </div>
+
+            {/* All / Mine scope toggle */}
             <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-0.5 rounded-xl text-xs">
               <button
                 type="button"
@@ -322,45 +577,59 @@ export function InterviewCalendarPage() {
                 }`}
               >
                 <Icon name="user" size={11} />
-                <span>My Interviews ({myCount})</span>
+                <span>Mine ({myCount})</span>
               </button>
             </div>
           </div>
 
+          {/* Center: Prev / Next */}
           <div className="flex items-center gap-0.5">
             <button
               type="button"
               className="rf-outlook-calendar__nav-btn"
-              aria-label="Previous week"
-              onClick={() => {
-                const prev = new Date(anchorDate);
-                prev.setDate(prev.getDate() - 7);
-                setAnchorDate(prev);
-              }}
+              aria-label={`Previous ${viewMode}`}
+              onClick={goBack}
+              title={`Previous ${viewMode} (← key)`}
             >
               <Icon name="chevron-left" size={15} />
             </button>
             <button
               type="button"
               className="rf-outlook-calendar__nav-btn"
-              aria-label="Next week"
-              onClick={() => {
-                const next = new Date(anchorDate);
-                next.setDate(next.getDate() + 7);
-                setAnchorDate(next);
-              }}
+              aria-label={`Next ${viewMode}`}
+              onClick={goForward}
+              title={`Next ${viewMode} (→ key)`}
             >
               <Icon name="chevron-right" size={15} />
             </button>
           </div>
 
-          <div
-            className="rf-outlook-calendar__title"
-            onClick={() => setAnchorDate(startOfWeek(new Date()))}
-            title="Jump to current week"
-          >
-            <span>{formatCalendarRange(days)}</span>
-            <Icon name="chevron-down" size={14} className="text-rf-ink-muted" />
+          {/* Right: Date range title → opens mini month picker */}
+          <div className="relative">
+            <button
+              type="button"
+              className="rf-outlook-calendar__title inline-flex items-center gap-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 px-2 py-1.5 rounded-xl transition"
+              onClick={() => setIsPickerOpen(o => !o)}
+              aria-expanded={isPickerOpen}
+              aria-haspopup="dialog"
+              title="Click to jump to a specific date"
+            >
+              <Icon name="calendar" size={13} className="text-rf-ink-muted" />
+              <span>{rangeLabel}</span>
+              <Icon
+                name="chevron-down"
+                size={13}
+                className={`text-rf-ink-muted transition-transform duration-200 ${isPickerOpen ? 'rotate-180' : ''}`}
+              />
+            </button>
+
+            {isPickerOpen && (
+              <MiniMonthPicker
+                selected={anchorDate}
+                onPickDate={handlePickDate}
+                onClose={() => setIsPickerOpen(false)}
+              />
+            )}
           </div>
         </div>
 
@@ -379,7 +648,12 @@ export function InterviewCalendarPage() {
             aria-label="Interview calendar grid"
             tabIndex={0}
           >
-            <div className="rf-outlook-calendar__grid" role="grid" aria-label="Interview calendar week view">
+            <div
+              className="rf-outlook-calendar__grid"
+              role="grid"
+              aria-label={`Interview calendar ${viewMode} view`}
+              style={viewMode === 'day' ? { gridTemplateColumns: '64px 1fr' } : undefined}
+            >
               {/* Header Row: Corner + 7 Days */}
               <div className="rf-outlook-calendar__header-row" role="row">
                 <div className="rf-outlook-calendar__corner" role="columnheader" />
@@ -503,6 +777,22 @@ export function InterviewCalendarPage() {
             </div>
           </div>
         )}
+
+        {/* Keyboard shortcuts hint bar */}
+        <div className="px-4 py-2 border-t border-slate-100 dark:border-slate-800 flex items-center gap-4 text-[10.5px] text-slate-400 dark:text-slate-600 select-none">
+          <span className="flex items-center gap-1">
+            <kbd className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-mono text-[9px] text-slate-500 border border-slate-200 dark:border-slate-700">←</kbd>
+            <kbd className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-mono text-[9px] text-slate-500 border border-slate-200 dark:border-slate-700">→</kbd>
+            Navigate
+          </span>
+          <span className="flex items-center gap-1">
+            <kbd className="px-1 py-0.5 rounded bg-slate-100 dark:bg-slate-800 font-mono text-[9px] text-slate-500 border border-slate-200 dark:border-slate-700">T</kbd>
+            Today
+          </span>
+          <span className="ml-auto">
+            {filteredInterviews.length} interview{filteredInterviews.length !== 1 ? 's' : ''} in view
+          </span>
+        </div>
       </div>
 
       {/* Quick-View Event Modal */}

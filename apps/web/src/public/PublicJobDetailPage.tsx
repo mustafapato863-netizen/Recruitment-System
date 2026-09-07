@@ -56,6 +56,24 @@ export function PublicJobDetailPage() {
               <Card className="p-6 sm:p-7">
                 <h2 className="m-0 font-rf-heading text-base font-extrabold text-rf-ink">About the role</h2>
                 <p className="mt-4 whitespace-pre-line text-sm font-medium leading-7 text-rf-ink-muted">{job.description || 'The hiring team has not added a role description yet. Submit your profile and we will review your experience against this opening.'}</p>
+                {job.responsibilities && (
+                  <div className="mt-7 border-t border-rf-border-subtle pt-5">
+                    <h3 className="m-0 text-xs font-extrabold uppercase tracking-[0.1em] text-rf-ink-muted">Key responsibilities</h3>
+                    <p className="mt-3 whitespace-pre-line text-sm font-medium leading-7 text-rf-ink-muted">{job.responsibilities}</p>
+                  </div>
+                )}
+                {job.qualifications && (
+                  <div className="mt-7 border-t border-rf-border-subtle pt-5">
+                    <h3 className="m-0 text-xs font-extrabold uppercase tracking-[0.1em] text-rf-ink-muted">Required qualifications</h3>
+                    <p className="mt-3 whitespace-pre-line text-sm font-medium leading-7 text-rf-ink-muted">{job.qualifications}</p>
+                  </div>
+                )}
+                {job.benefits && (
+                  <div className="mt-7 border-t border-rf-border-subtle pt-5">
+                    <h3 className="m-0 text-xs font-extrabold uppercase tracking-[0.1em] text-rf-ink-muted">Benefits & highlights</h3>
+                    <p className="mt-3 whitespace-pre-line text-sm font-medium leading-7 text-rf-ink-muted">{job.benefits}</p>
+                  </div>
+                )}
                 {job.requiredSkills.length > 0 && (
                   <div className="mt-7 border-t border-rf-border-subtle pt-5">
                     <h3 className="m-0 text-xs font-extrabold uppercase tracking-[0.1em] text-rf-ink-muted">Skills we are looking for</h3>

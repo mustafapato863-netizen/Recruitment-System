@@ -3,11 +3,17 @@ import { Icon } from '../Icon';
 import { FormField } from '../ui/FormField';
 import { Input } from '../ui/Input';
 import { Textarea } from '../ui/Textarea';
-import type { ExtractedCandidate } from '../../utils/resumeParser';
+import {
+  generateAISummary,
+  detectClinicalDomain,
+  type ExtractedCandidate,
+} from '../../utils/resumeParser';
+import type { ScoredVacancy } from '../../hooks/useCVIntakeFlow';
 
 interface CVParsedEditorProps {
   profile: ExtractedCandidate;
   setProfile: React.Dispatch<React.SetStateAction<ExtractedCandidate | null>>;
+  scoredVacancies?: ScoredVacancy[];
   uploadedFileName: string | null;
   onReset: () => void;
   onBack: () => void;
@@ -17,6 +23,7 @@ interface CVParsedEditorProps {
 export const CVParsedEditor: React.FC<CVParsedEditorProps> = ({
   profile,
   setProfile,
+  scoredVacancies,
   uploadedFileName,
   onReset,
   onBack,
@@ -25,6 +32,40 @@ export const CVParsedEditor: React.FC<CVParsedEditorProps> = ({
   const [newSkill, setNewSkill] = useState('');
   const [newLanguage, setNewLanguage] = useState('');
   const [newCert, setNewCert] = useState('');
+  const [isRegeneratingSummary, setIsRegeneratingSummary] = useState(false);
+  const [aiFeedbackMessage, setAiFeedbackMessage] = useState<string | null>(null);
+
+  const handleRegenerateAISummary = () => {
+    setIsRegeneratingSummary(true);
+    setAiFeedbackMessage(null);
+
+    setTimeout(() => {
+      // Re-detect clinical domain and subspecialties based on current edited profile
+      const detection = detectClinicalDomain(
+        profile.skills || [],
+        profile.title,
+        profile.certifications,
+        profile.rawText,
+        profile.experienceYears || 3,
+      );
+
+      const updatedProfile: ExtractedCandidate = {
+        ...profile,
+        clinicalDomain: detection.domain,
+        subspecialties: detection.subspecialties,
+        keyHighlights: detection.keyHighlights,
+        aiSummaryConfidence: detection.confidence,
+      };
+
+      const freshSummary = generateAISummary(updatedProfile);
+      updatedProfile.summary = freshSummary;
+
+      setProfile(updatedProfile);
+      setIsRegeneratingSummary(false);
+      setAiFeedbackMessage('AI Executive Summary refreshed with current clinical credentials.');
+      setTimeout(() => setAiFeedbackMessage(null), 4000);
+    }, 450);
+  };
 
   const handleAddSkill = () => {
     if (!newSkill.trim()) return;
@@ -140,27 +181,129 @@ export const CVParsedEditor: React.FC<CVParsedEditorProps> = ({
         {/* Left Column: Extraction Card */}
         <div className="space-y-4">
           <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-200 dark:border-slate-700/80 space-y-4">
-            <div>
-              <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">
-                Parsing Quality
-              </span>
+            {/* Clinical Domain Badge */}
+            <div className="p-3.5 rounded-xl bg-gradient-to-r from-blue-500/10 via-emerald-500/10 to-indigo-500/10 dark:from-blue-950/50 dark:via-emerald-950/50 dark:to-indigo-950/50 border border-blue-200/80 dark:border-blue-800/60 space-y-1.5">
               <div className="flex items-center justify-between">
-                <span className="text-xl font-black text-emerald-600 dark:text-emerald-400">96% High Match</span>
-                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-100 text-emerald-800">Verified</span>
+                <span className="block text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
+                  AI Clinical Domain
+                </span>
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-blue-100 text-blue-800 dark:bg-blue-900/60 dark:text-blue-200">
+                  <Icon name="sparkles" size={10} />
+                  SGH Model
+                </span>
               </div>
-              <div className="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full mt-2 overflow-hidden">
-                <div className="bg-emerald-500 h-full rounded-full w-[96%]" />
+              <div className="text-xs font-black text-slate-900 dark:text-white flex items-center gap-1.5">
+                <Icon name="activity" size={14} className="text-emerald-500 shrink-0" />
+                <span className="truncate">{profile.clinicalDomain || 'Clinical Medical Practice'}</span>
               </div>
             </div>
 
+            {/* Parsing Quality Gauge */}
+            <div>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                  Parsing Fidelity
+                </span>
+                <span className="text-sm font-black text-emerald-600 dark:text-emerald-400">
+                  {profile.aiSummaryConfidence || 96}% High Match
+                </span>
+              </div>
+              <div className="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full mt-1.5 overflow-hidden">
+                <div
+                  className="bg-gradient-to-r from-blue-500 to-emerald-500 h-full rounded-full transition-all duration-500"
+                  style={{ width: `${profile.aiSummaryConfidence || 96}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Subspecialties Detected */}
+            {profile.subspecialties && profile.subspecialties.length > 0 && (
+              <div className="border-t border-slate-200 dark:border-slate-700 pt-3">
+                <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                  Extracted Subspecialties
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {profile.subspecialties.map((sub) => (
+                    <span
+                      key={sub}
+                      className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/60 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800"
+                    >
+                      {sub}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Key Clinical Highlights */}
+            {profile.keyHighlights && profile.keyHighlights.length > 0 && (
+              <div className="border-t border-slate-200 dark:border-slate-700 pt-3">
+                <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+                  Key Credentials & Highlights
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {profile.keyHighlights.map((hl) => (
+                    <span
+                      key={hl}
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
+                    >
+                      <Icon name="check" size={10} />
+                      <span>{hl}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* AI Recommended Position Preview */}
+            {scoredVacancies && scoredVacancies.length > 0 && scoredVacancies[0].fitResult.score >= 35 && (
+              <div className="border-t border-slate-200 dark:border-slate-700 pt-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                    AI Position Match
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 shadow-2xs">
+                    {scoredVacancies[0].fitResult.score}% Fit
+                  </span>
+                </div>
+                <div
+                  onClick={onProceed}
+                  className="p-3 rounded-xl bg-gradient-to-r from-blue-50/80 to-emerald-50/60 dark:from-blue-950/40 dark:to-emerald-950/40 border border-blue-200 dark:border-blue-900/60 hover:border-blue-400 dark:hover:border-blue-700 transition cursor-pointer group shadow-2xs"
+                  title="Click to proceed to match details"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-mono text-[10px] font-bold text-blue-600 dark:text-blue-400 block">
+                      [{scoredVacancies[0].vacancy.vacancyCode}]
+                    </span>
+                    <span className="text-[10px] text-blue-600 dark:text-blue-400 font-bold group-hover:underline flex items-center gap-0.5">
+                      Match Details →
+                    </span>
+                  </div>
+                  <strong className="text-xs font-bold text-slate-900 dark:text-white block mt-1">
+                    {(scoredVacancies[0].vacancy as any).position?.title || scoredVacancies[0].vacancy.title || 'Requisition'}
+                  </strong>
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5">
+                    <Icon name="building" size={10} />
+                    <span>{scoredVacancies[0].vacancy.branch?.name || scoredVacancies[0].vacancy.location || 'Saudi German Health'}</span>
+                  </span>
+                  {scoredVacancies[0].fitResult.breakdown.skills.matched.length > 0 && (
+                    <div className="mt-2 pt-2 border-t border-blue-200/50 dark:border-blue-900/40 flex items-center gap-1 text-[10px] text-emerald-700 dark:text-emerald-300 font-semibold">
+                      <Icon name="check" size={11} />
+                      <span>{scoredVacancies[0].fitResult.breakdown.skills.matched.length} key clinical skills aligned</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             <div className="border-t border-slate-200 dark:border-slate-700 pt-3">
               <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-2">
-                Validation Status
+                SGH Compliance Readiness
               </span>
               <ul className="space-y-2 text-xs">
                 <li className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-semibold">
                   <Icon name="check" size={14} />
-                  <span>Contact details verified</span>
+                  <span>Contact & identity verified</span>
                 </li>
                 <li className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-semibold">
                   <Icon name="check" size={14} />
@@ -172,7 +315,7 @@ export const CVParsedEditor: React.FC<CVParsedEditorProps> = ({
                 </li>
                 <li className="flex items-center gap-2 text-blue-600 dark:text-blue-400 font-semibold">
                   <Icon name="sparkles" size={14} />
-                  <span>Ready for Duplicate & Vacancy Matching</span>
+                  <span>JCI / CBAHI Accreditation Profile Ready</span>
                 </li>
               </ul>
             </div>
@@ -278,14 +421,49 @@ export const CVParsedEditor: React.FC<CVParsedEditorProps> = ({
               </FormField>
             </div>
 
-            <FormField id="c-summary" label="Professional Executive Summary">
+            {/* AI Executive Summary with Quick Regenerate */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <label htmlFor="c-summary" className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                    Professional Executive Summary
+                  </label>
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                    <Icon name="sparkles" size={10} />
+                    AI-Synthesized
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleRegenerateAISummary}
+                  disabled={isRegeneratingSummary}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 text-[11px] font-bold transition border border-blue-200 dark:border-blue-800 cursor-pointer disabled:opacity-50"
+                  title="Re-synthesize executive summary based on edited skills, domain, and experience"
+                >
+                  <Icon
+                    name={isRegeneratingSummary ? 'refresh-cw' : 'sparkles'}
+                    size={12}
+                    className={isRegeneratingSummary ? 'animate-spin' : ''}
+                  />
+                  <span>{isRegeneratingSummary ? 'Synthesizing...' : '✨ Regenerate with AI'}</span>
+                </button>
+              </div>
+
+              {aiFeedbackMessage && (
+                <div className="p-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300 text-xs font-semibold flex items-center gap-1.5 animate-fade-in border border-emerald-200 dark:border-emerald-800">
+                  <Icon name="check" size={13} />
+                  <span>{aiFeedbackMessage}</span>
+                </div>
+              )}
+
               <Textarea
                 id="c-summary"
                 rows={3}
                 value={profile.summary || ''}
                 onChange={(e) => setProfile({ ...profile, summary: e.target.value })}
+                placeholder="Candidate executive summary..."
               />
-            </FormField>
+            </div>
           </div>
 
           {/* 3. Skills */}

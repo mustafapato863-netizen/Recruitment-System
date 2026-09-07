@@ -668,7 +668,7 @@ body {
 
   .header {
     left: 0;
-    padding-inline: 14px;
+    padding: 0;
   }
 
   .main {
@@ -683,7 +683,7 @@ body {
 @media (max-width: 720px) {
   .header {
     gap: 7px;
-    padding-inline: 10px;
+    padding: 0;
   }
 
   .search {
@@ -1044,7 +1044,7 @@ html[data-reduced-motion='true'] *::after {
 }
 
 :where([data-theme='dark'], html.dark, body.dark, .dark) :where(.page, .sidebar, .header, .modal, [role='dialog'], [role='presentation'], .app) :where([class~='text-white']) {
-  color: var(--color-on-action) !important;
+  color: #ffffff !important;
 }
 
 /* ==========================================================================

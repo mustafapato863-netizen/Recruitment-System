@@ -6,10 +6,21 @@ import { Icon, type IconName } from '../Icon';
 import { Modal } from '../Modal';
 import { Spinner } from '../Spinner';
 import { Input } from './Input';
+import { useTheme } from '../../theme/ThemeContext';
 
 interface CommandPaletteProps {
   isOpen: boolean;
   onClose: () => void;
+}
+
+interface QuickActionItem {
+  id: string;
+  title: string;
+  subtitle: string;
+  icon: IconName;
+  keywords: string[];
+  badge?: string;
+  onSelect: (navigate: ReturnType<typeof useNavigate>, toggleTheme: () => void) => void;
 }
 
 const ENTITY_ICONS: Record<GlobalSearchItem['entityType'], IconName> = {
@@ -34,17 +45,120 @@ function itemRoute(item: GlobalSearchItem): string {
     case 'task': return `/tasks?focus=${encodeURIComponent(item.entityId)}`;
     case 'interview': return `/interviews/${item.entityId}`;
     case 'offer': return `/offers/${item.entityId}`;
-    case 'approval': return `/approval-inbox/${item.entityId}`;
+    case 'approval': return `/approval-inbox`;
     case 'notification': return `/notifications/${item.entityId}`;
     case 'cv': return `/cv-intake/${item.entityId}`;
-    case 'talent-pool': return `/talent-pool/${item.entityId}`;
+    case 'talent-pool': return `/sourcing-match`;
     case 'master-data': return `/master-data/${item.entityId}`;
     default: return '/';
   }
 }
 
+const STATIC_QUICK_ACTIONS: QuickActionItem[] = [
+  {
+    id: 'act-create-req',
+    title: 'Create Job Requisition',
+    subtitle: 'Initiate a new clinical or corporate vacancy request with approval workflow',
+    icon: 'briefcase',
+    keywords: ['create', 'job', 'requisition', 'vacancy', 'position', 'hire', 'new'],
+    badge: 'Requisition',
+    onSelect: (nav) => nav('/vacancy-requests/create'),
+  },
+  {
+    id: 'act-sourcing-match',
+    title: 'Smart Sourcing & Match Bench',
+    subtitle: 'Evaluate 22 SGH positions with real-time candidate benchmark scoring',
+    icon: 'sparkles',
+    keywords: ['sourcing', 'match', 'bench', 'score', 'benchmark', 'pool', 'talent'],
+    badge: 'SGH AI',
+    onSelect: (nav) => nav('/sourcing-match'),
+  },
+  {
+    id: 'act-pipeline',
+    title: 'Applications Pipeline & Kanban',
+    subtitle: 'Manage candidate stages from Applied through Screening, Interview, to Pre-Hire',
+    icon: 'pipeline',
+    keywords: ['pipeline', 'kanban', 'applications', 'stages', 'screening', 'board'],
+    badge: 'Pipeline',
+    onSelect: (nav) => nav('/applications'),
+  },
+  {
+    id: 'act-compare',
+    title: 'Candidate Comparison Matrix',
+    subtitle: 'Side-by-side criteria, skills, and qualifications comparison for candidates',
+    icon: 'filter',
+    keywords: ['compare', 'matrix', 'side by side', 'evaluation', 'criteria', 'candidates'],
+    badge: 'Tools',
+    onSelect: (nav) => nav('/candidates/compare'),
+  },
+  {
+    id: 'act-cv-intake',
+    title: 'Smart CV Intake & Parser',
+    subtitle: 'Upload and parse medical & engineering résumés into candidate records',
+    icon: 'upload',
+    keywords: ['cv', 'resume', 'intake', 'upload', 'parse', 'import', 'files'],
+    badge: 'Intake',
+    onSelect: (nav) => nav('/cv-intake'),
+  },
+  {
+    id: 'act-candidates',
+    title: 'Candidates Database',
+    subtitle: 'Search, filter, and inspect all active candidate profiles and credentials',
+    icon: 'user',
+    keywords: ['candidates', 'database', 'directory', 'people', 'profiles', 'talent'],
+    badge: 'Talent',
+    onSelect: (nav) => nav('/candidates'),
+  },
+  {
+    id: 'act-calendar',
+    title: 'Interview Calendar',
+    subtitle: 'View upcoming clinical panel interviews, scheduling slots, and room bookings',
+    icon: 'calendar-clock',
+    keywords: ['interview', 'calendar', 'schedule', 'meetings', 'panels', 'interviews'],
+    badge: 'Calendar',
+    onSelect: (nav) => nav('/interviews/calendar'),
+  },
+  {
+    id: 'act-approvals',
+    title: 'Approvals Inbox',
+    subtitle: 'Review pending requisition, offer, and final hiring sign-offs',
+    icon: 'inbox',
+    keywords: ['approvals', 'inbox', 'sign off', 'pending', 'requisitions', 'offers'],
+    badge: 'Approvals',
+    onSelect: (nav) => nav('/approval-inbox'),
+  },
+  {
+    id: 'act-targets',
+    title: 'Position Targets & SLA Hub',
+    subtitle: 'Configure time-to-hire, diversity, and SLA benchmarks by position level',
+    icon: 'settings',
+    keywords: ['targets', 'sla', 'settings', 'benchmarks', 'time to hire', 'kpi'],
+    badge: 'Settings',
+    onSelect: (nav) => nav('/settings/targets'),
+  },
+  {
+    id: 'act-reports',
+    title: 'Executive Reports & Analytics',
+    subtitle: 'Recruitment velocity, funnel conversion rates, and sourcing channel metrics',
+    icon: 'report',
+    keywords: ['reports', 'analytics', 'metrics', 'velocity', 'conversion', 'dashboard'],
+    badge: 'Analytics',
+    onSelect: (nav) => nav('/reports'),
+  },
+  {
+    id: 'act-theme',
+    title: 'Toggle Dark / Light Theme',
+    subtitle: 'Switch between Saudi German Health luminous day and deep slate night mode',
+    icon: 'moon',
+    keywords: ['theme', 'dark', 'light', 'mode', 'color', 'night', 'day', 'toggle'],
+    badge: 'Display',
+    onSelect: (_, toggle) => toggle(),
+  },
+];
+
 export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
   const navigate = useNavigate();
+  const { toggleTheme } = useTheme();
   const [query, setQuery] = useState('');
   const [result, setResult] = useState<GlobalSearchResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -60,6 +174,19 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
     }
   }, [isOpen]);
 
+  // Filter quick actions based on query
+  const matchingActions = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return STATIC_QUICK_ACTIONS;
+    return STATIC_QUICK_ACTIONS.filter(
+      (act) =>
+        act.title.toLowerCase().includes(q) ||
+        act.subtitle.toLowerCase().includes(q) ||
+        act.keywords.some((kw) => kw.toLowerCase().includes(q))
+    );
+  }, [query]);
+
+  // Backend search debounced
   useEffect(() => {
     const normalized = query.trim();
     if (!isOpen || normalized.length < 2) {
@@ -79,7 +206,6 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
       )
         .then((response) => {
           setResult(response);
-          setActiveIndex(0);
         })
         .catch((reason: unknown) => {
           if (reason instanceof DOMException && reason.name === 'AbortError') return;
@@ -96,15 +222,36 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
     };
   }, [isOpen, query]);
 
-  const flatItems = useMemo(() => result?.groups.flatMap((group) => group.items) ?? [], [result]);
+  // Combined flat items for keyboard navigation (Actions first, then Search items)
+  type UnifiedItem =
+    | { type: 'action'; data: QuickActionItem }
+    | { type: 'record'; data: GlobalSearchItem };
 
-  const openItem = (item: GlobalSearchItem) => {
+  const unifiedItems: UnifiedItem[] = useMemo(() => {
+    const items: UnifiedItem[] = [];
+    matchingActions.forEach((act) => items.push({ type: 'action', data: act }));
+    result?.groups.forEach((group) => {
+      group.items.forEach((item) => items.push({ type: 'record', data: item }));
+    });
+    return items;
+  }, [matchingActions, result]);
+
+  // Reset activeIndex when item count changes
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [unifiedItems.length]);
+
+  const executeItem = (item: UnifiedItem) => {
     onClose();
-    navigate(itemRoute(item));
+    if (item.type === 'action') {
+      item.data.onSelect(navigate, toggleTheme);
+    } else {
+      navigate(itemRoute(item.data));
+    }
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Search RecruitFlow" maxWidthClass="max-w-2xl">
+    <Modal isOpen={isOpen} onClose={onClose} title="Search & Quick Actions" maxWidthClass="max-w-2xl">
       <div className="command-palette">
         <div className="command-palette__input-wrap">
           <Icon name="search" size={18} />
@@ -113,73 +260,113 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={(event) => {
-              if (event.key === 'ArrowDown' && flatItems.length > 0) {
+              if (event.key === 'ArrowDown' && unifiedItems.length > 0) {
                 event.preventDefault();
-                setActiveIndex((current) => (current + 1) % flatItems.length);
-              } else if (event.key === 'ArrowUp' && flatItems.length > 0) {
+                setActiveIndex((current) => (current + 1) % unifiedItems.length);
+              } else if (event.key === 'ArrowUp' && unifiedItems.length > 0) {
                 event.preventDefault();
-                setActiveIndex((current) => (current - 1 + flatItems.length) % flatItems.length);
-              } else if (event.key === 'Enter' && flatItems[activeIndex]) {
+                setActiveIndex((current) => (current - 1 + unifiedItems.length) % unifiedItems.length);
+              } else if (event.key === 'Enter' && unifiedItems[activeIndex]) {
                 event.preventDefault();
-                openItem(flatItems[activeIndex]);
+                executeItem(unifiedItems[activeIndex]);
               }
             }}
-            aria-label="Search candidates, openings, applications, interviews, offers, approvals, tasks, notifications, CV records, talent pools, and master data"
-            aria-controls="command-search-results"
-            aria-activedescendant={flatItems[activeIndex] ? `command-result-${flatItems[activeIndex].entityType}-${flatItems[activeIndex].entityId}` : undefined}
+            aria-label="Search candidates, positions, applications, or run quick actions"
             autoComplete="off"
-            placeholder="Search candidates, openings, applications, interviews, offers, approvals, tasks, notifications, CV records, talent pools, master data..."
+            placeholder="Type a command or search candidates, positions, applications..."
+            autoFocus
           />
           {loading && <Spinner size={17} aria-label="Searching workspace" />}
         </div>
 
-        <div id="command-search-results" className="command-palette__results" role="listbox" aria-label="Workspace search results">
-          {query.trim().length < 2 && (
-            <div className="command-palette__state">
-              <Icon name="search" size={20} />
-              <span>Enter at least two characters to search your permitted workspace.</span>
-            </div>
-          )}
+        <div id="command-search-results" className="command-palette__results" role="listbox" aria-label="Command search results">
           {error && <div className="command-palette__state is-error" role="alert">{error}</div>}
-          {!loading && !error && query.trim().length >= 2 && result?.total === 0 && (
-            <div className="command-palette__state">No matching records were found.</div>
-          )}
-          {!error && result?.groups.map((group) => (
-            <section key={group.entityType} className="command-palette__group" aria-labelledby={`command-group-${group.entityType}`}>
-              <h3 id={`command-group-${group.entityType}`}>{group.label}</h3>
-              {group.items.map((item) => {
-                const index = flatItems.findIndex((candidate) => candidate.entityType === item.entityType && candidate.entityId === item.entityId);
+
+          {/* Quick Actions Group */}
+          {matchingActions.length > 0 && (
+            <section className="command-palette__group" aria-label="Quick Actions">
+              <h3>Quick Actions & Navigation</h3>
+              {matchingActions.map((act) => {
+                const itemIndex = unifiedItems.findIndex(
+                  (u) => u.type === 'action' && u.data.id === act.id
+                );
+                const isSelected = itemIndex === activeIndex;
                 return (
                   <button
-                    key={`${item.entityType}-${item.entityId}`}
-                    id={`command-result-${item.entityType}-${item.entityId}`}
+                    key={act.id}
                     type="button"
                     role="option"
-                    aria-selected={index === activeIndex}
-                    className={index === activeIndex ? 'is-active' : ''}
-                    onMouseEnter={() => setActiveIndex(index)}
-                    onClick={() => openItem(item)}
+                    aria-selected={isSelected}
+                    className={isSelected ? 'is-active' : ''}
+                    onMouseEnter={() => setActiveIndex(itemIndex)}
+                    onClick={() => executeItem({ type: 'action', data: act })}
                   >
-                    <span className="command-palette__item-icon"><Icon name={ENTITY_ICONS[item.entityType]} size={16} /></span>
-                    <span className="command-palette__item-copy">
-                      <strong>{item.title}</strong>
-                      {item.subtitle && <small>{item.subtitle}</small>}
+                    <span className="command-palette__item-icon">
+                      <Icon name={act.icon} size={16} />
                     </span>
-                    {item.status && <span className="command-palette__status">{item.status}</span>}
-                    <Icon name="chevron-right" size={15} />
+                    <span className="command-palette__item-copy">
+                      <strong>{act.title}</strong>
+                      <small>{act.subtitle}</small>
+                    </span>
+                    {act.badge && (
+                      <span className="command-palette__status text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-50 dark:bg-sky-950/60 text-[#0084ce] dark:text-sky-300 border border-sky-200/80 dark:border-sky-800/60">
+                        {act.badge}
+                      </span>
+                    )}
+                    <Icon name="chevron-right" size={14} className="opacity-40" />
                   </button>
                 );
               })}
             </section>
-          ))}
+          )}
+
+          {/* Backend Search Result Groups */}
+          {!error &&
+            result?.groups.map((group) => (
+              <section key={group.entityType} className="command-palette__group" aria-labelledby={`command-group-${group.entityType}`}>
+                <h3 id={`command-group-${group.entityType}`}>{group.label}</h3>
+                {group.items.map((item) => {
+                  const itemIndex = unifiedItems.findIndex(
+                    (u) => u.type === 'record' && u.data.entityType === item.entityType && u.data.entityId === item.entityId
+                  );
+                  const isSelected = itemIndex === activeIndex;
+                  return (
+                    <button
+                      key={`${item.entityType}-${item.entityId}`}
+                      id={`command-result-${item.entityType}-${item.entityId}`}
+                      type="button"
+                      role="option"
+                      aria-selected={isSelected}
+                      className={isSelected ? 'is-active' : ''}
+                      onMouseEnter={() => setActiveIndex(itemIndex)}
+                      onClick={() => executeItem({ type: 'record', data: item })}
+                    >
+                      <span className="command-palette__item-icon">
+                        <Icon name={ENTITY_ICONS[item.entityType]} size={16} />
+                      </span>
+                      <span className="command-palette__item-copy">
+                        <strong>{item.title}</strong>
+                        {item.subtitle && <small>{item.subtitle}</small>}
+                      </span>
+                      {item.status && <span className="command-palette__status">{item.status}</span>}
+                      <Icon name="chevron-right" size={15} />
+                    </button>
+                  );
+                })}
+              </section>
+            ))}
+
+          {!loading && !error && query.trim().length >= 2 && unifiedItems.length === 0 && (
+            <div className="command-palette__state">No matching records or actions found.</div>
+          )}
         </div>
 
         <footer className="command-palette__footer">
           <span><kbd>↑</kbd><kbd>↓</kbd> Navigate</span>
-          <span><kbd>Enter</kbd> Open</span>
+          <span><kbd>Enter</kbd> Open / Run</span>
           <span><kbd>Esc</kbd> Close</span>
         </footer>
       </div>
     </Modal>
   );
-}
+}

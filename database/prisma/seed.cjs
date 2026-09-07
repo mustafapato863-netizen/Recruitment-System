@@ -191,21 +191,11 @@ async function main() {
         email: 'omar.nasser@recruitflow.local',
         displayName: 'Omar Nasser',
       },
-      // Demo users for testing (3 roles)
+      // System Administrator
       {
-        id: '10000000-0000-4000-8000-000000000021',
-        email: 'a@test.com',
-        displayName: 'Admin User',
-      },
-      {
-        id: '10000000-0000-4000-8000-000000000022',
-        email: 'e@test.com',
-        displayName: 'Employee User',
-      },
-      {
-        id: '10000000-0000-4000-8000-000000000023',
-        email: 'm@test.com',
-        displayName: 'Manager User',
+        id: '10000000-0000-4000-8000-000000000000',
+        email: 'admin@sgh.com',
+        displayName: 'System Administrator',
       },
     ];
 
@@ -420,9 +410,7 @@ async function main() {
       'hassan.ali@recruitflow.local': 'HIRING_MANAGER',
       'aya.mostafa@recruitflow.local': 'FINAL_HIRING_APPROVER',
       'omar.nasser@recruitflow.local': 'LICENSE_SPECIALIST',
-      'a@test.com': 'ADMINISTRATOR',
-      'e@test.com': 'VIEWER',
-      'm@test.com': 'HIRING_MANAGER',
+      'admin@sgh.com': 'ADMINISTRATOR',
     };
 
     for (const [email, roleCode] of Object.entries(userRoleMap)) {

@@ -5,9 +5,34 @@ import type { ExtractedCandidate } from '../../utils/resumeParser';
 
 export const SAMPLE_CV_PRESETS: { name: string; title: string; filename: string; department: string; data: ExtractedCandidate }[] = [
   {
+    name: 'Dr. Tamer Radwan',
+    title: 'Consultant Cardiologist',
+    filename: 'dr_tamer_radwan_cv.pdf',
+    department: 'Cardiovascular Medicine',
+    data: {
+      firstName: 'Tamer',
+      lastName: 'Radwan',
+      email: 'tamer.radwan@sgh.med.sa',
+      phone: '+966 50 123 4567',
+      title: 'Consultant Cardiologist',
+      currentCompany: 'Saudi German Hospital Riyadh',
+      experienceYears: 12,
+      location: 'Riyadh, Saudi Arabia',
+      education: 'MBBS, MD Cardiology, Fellow of the Royal College of Surgeons (FRCS)',
+      summary: 'Dr. Tamer Radwan is an esteemed Consultant Cardiologist with 12+ years of clinical cardiology and interventional practice across tertiary healthcare centers. Demonstrates mastery in cardiac catheterization, transesophageal echocardiography, and complex coronary interventions, with full alignment to Saudi German Health clinical governance and JCI accreditation benchmarks.',
+      skills: ['Interventional Cardiology', 'Echocardiography', 'Cardiac Catheterization', 'Hemodynamics', 'ECG', 'Code Blue Response'],
+      certifications: ['SCFHS Consultant License', 'Fellow of the Royal College of Surgeons (FRCS)', 'ACLS Certified', 'BLS Certified'],
+      languages: ['Arabic (Native)', 'English (Fluent)'],
+      clinicalDomain: 'Cardiovascular Medicine',
+      subspecialties: ['Interventional Cardiology & Hemodynamics', 'Advanced Diagnostic Echocardiography'],
+      aiSummaryConfidence: 98,
+      keyHighlights: ['12+ Years Experience', 'SCFHS Consultant Licensed', 'Cardiac Catheterization Lead', 'Bilingual (AR / EN)'],
+    },
+  },
+  {
     name: 'Dr. Sarah Mansoor',
     title: 'Specialist Dermatologist',
-    filename: 'sarah_mansoor_cv.pdf',
+    filename: 'dr_sarah_mansoor_cv.pdf',
     department: 'Medical Specialties',
     data: {
       firstName: 'Sarah',
@@ -19,31 +44,14 @@ export const SAMPLE_CV_PRESETS: { name: string; title: string; filename: string;
       experienceYears: 9,
       location: 'Dubai, UAE',
       education: 'MBBS, Master of Clinical Dermatology',
-      summary: 'Board-certified Specialist Dermatologist with 9+ years of clinical and cosmetic dermatology experience. Specializes in laser therapies, diagnostics, and patient-centered skincare plans.',
+      summary: 'Board-certified Specialist Dermatologist with 9+ years of clinical and aesthetic dermatology practice. Specializes in advanced laser therapies, dermoscopy diagnostics, and patient-centered clinical dermatological care compliant with international patient safety standards.',
       skills: ['Clinical Dermatology', 'Cosmetic Injectables', 'Laser Therapy', 'Skin Biopsy', 'Patient Care'],
-      certifications: ['Specialist License', 'Board of Dermatology', 'BLS Certified'],
+      certifications: ['SCFHS Specialist License', 'Board of Dermatology', 'BLS Certified'],
       languages: ['Arabic (Native)', 'English (Fluent)'],
-    },
-  },
-  {
-    name: 'Tariq Al-Ghamdi',
-    title: 'Senior Frontend Engineer',
-    filename: 'tariq_alghamdi_cv.docx',
-    department: 'Information Technology',
-    data: {
-      firstName: 'Tariq',
-      lastName: 'Al-Ghamdi',
-      email: 'tariq.alghamdi@example.com',
-      phone: '+966 55 444 3322',
-      title: 'Senior Frontend Engineer',
-      currentCompany: 'Digital Healthcare Solutions',
-      experienceYears: 6,
-      location: 'Riyadh, Saudi Arabia',
-      education: 'B.Sc. in Computer Science',
-      summary: 'Senior Frontend Engineer specializing in high-performance web applications using React, TypeScript, and modern CSS architecture.',
-      skills: ['React 19', 'TypeScript', 'Next.js', 'Tailwind CSS', 'Vite', 'GraphQL'],
-      certifications: ['Cloud Practitioner', 'Frontend Professional Certificate'],
-      languages: ['Arabic (Native)', 'English (Professional)'],
+      clinicalDomain: 'Dermatology & Aesthetic Medicine',
+      subspecialties: ['Clinical & Procedural Dermatology', 'Aesthetic Laser Therapies'],
+      aiSummaryConfidence: 96,
+      keyHighlights: ['9+ Years Experience', 'SCFHS Specialist Licensed', 'Laser Therapy Expert', 'Bilingual (AR / EN)'],
     },
   },
   {
@@ -61,10 +69,39 @@ export const SAMPLE_CV_PRESETS: { name: string; title: string; filename: string;
       experienceYears: 5,
       location: 'Jeddah, Saudi Arabia',
       education: 'Bachelor of Science in Nursing (BSN)',
-      summary: 'Dedicated Critical Care Staff Nurse with 5 years in high-acuity ICUs and emergency cardiac units. Skilled in ventilator management and hemodynamic monitoring.',
+      summary: 'Mona El-Shenawy is a dedicated Staff Nurse (ICU) with 5+ years of specialized experience in Critical Care & Emergency Medicine. Skilled in mechanical ventilator management, invasive hemodynamic monitoring, and rapid code blue response with active SCFHS nursing credentials.',
       skills: ['Critical Care Nursing', 'ICU Protocol', 'Hemodynamic Monitoring', 'Ventilator Management', 'EMR'],
       certifications: ['SCFHS Registered Nurse', 'ACLS Certified', 'BLS Certified'],
       languages: ['Arabic (Native)', 'English (Fluent)'],
+      clinicalDomain: 'Critical Care & Emergency Medicine',
+      subspecialties: ['Intensive Care & Mechanical Ventilation', 'Inpatient & Acute Nursing Care'],
+      aiSummaryConfidence: 95,
+      keyHighlights: ['5+ Years Experience', 'SCFHS Registered Nurse', 'Ventilator Management', 'ACLS/BLS Active'],
+    },
+  },
+  {
+    name: 'Tariq Al-Ghamdi',
+    title: 'Senior Health Informatics Engineer',
+    filename: 'tariq_alghamdi_cv.docx',
+    department: 'Health Informatics & IT',
+    data: {
+      firstName: 'Tariq',
+      lastName: 'Al-Ghamdi',
+      email: 'tariq.alghamdi@example.com',
+      phone: '+966 55 444 3322',
+      title: 'Senior Health Informatics Engineer',
+      currentCompany: 'Digital Healthcare Solutions',
+      experienceYears: 6,
+      location: 'Riyadh, Saudi Arabia',
+      education: 'B.Sc. in Computer Science',
+      summary: 'Tariq Al-Ghamdi is an experienced Senior Health Informatics Engineer with 6+ years of expertise in Health Informatics & Software Engineering. Highly skilled in React 19, TypeScript, Next.js, and hospital EMR integration architectures.',
+      skills: ['React 19', 'TypeScript', 'Next.js', 'Tailwind CSS', 'Vite', 'GraphQL', 'EHR'],
+      certifications: ['Cloud Practitioner', 'Health IT Specialist Certificate'],
+      languages: ['Arabic (Native)', 'English (Professional)'],
+      clinicalDomain: 'Health Informatics & Software Engineering',
+      subspecialties: ['Modern Web & Healthcare Digital Systems', 'EHR / Clinical Systems Integration'],
+      aiSummaryConfidence: 94,
+      keyHighlights: ['6+ Years Experience', 'Digital Health Systems', 'Full Stack Architecture', 'Bilingual (AR / EN)'],
     },
   },
 ];
@@ -174,7 +211,7 @@ export function CVUploadDropzone({
           <span className="text-[11px] text-slate-400">1-click simulated upload</span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {SAMPLE_CV_PRESETS.map((preset) => (
             <div
               key={preset.name}

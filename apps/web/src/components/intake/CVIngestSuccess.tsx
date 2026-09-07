@@ -1,10 +1,12 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import type { Vacancy } from '@recruitflow/contracts';
 import { Icon } from '../Icon';
 import type { ExtractedCandidate } from '../../utils/resumeParser';
 
 interface CVIngestSuccessProps {
   profile: ExtractedCandidate;
+  vacancies?: Vacancy[];
   confirmedCandidateCode: string;
   confirmedCandidateId: string | null;
   confirmedAppId: string | null;
@@ -17,6 +19,7 @@ interface CVIngestSuccessProps {
 
 export const CVIngestSuccess: React.FC<CVIngestSuccessProps> = ({
   profile,
+  vacancies,
   confirmedCandidateCode,
   confirmedCandidateId,
   confirmedAppId,
@@ -27,6 +30,16 @@ export const CVIngestSuccess: React.FC<CVIngestSuccessProps> = ({
   onShowToast,
 }) => {
   const navigate = useNavigate();
+
+  const targetVacancyName = React.useMemo(() => {
+    if (!targetVacancy || targetVacancy === 'pool') return 'General Talent Pool';
+    const found = vacancies?.find((v) => v.id === targetVacancy);
+    if (found) {
+      const title = (found as any).position?.title || found.title || 'Requisition';
+      return `[${found.vacancyCode}] ${title}`;
+    }
+    return targetVacancy;
+  }, [targetVacancy, vacancies]);
 
   const copyConfirmedCode = async () => {
     try {
@@ -92,8 +105,8 @@ export const CVIngestSuccess: React.FC<CVIngestSuccessProps> = ({
           </div>
           <div>
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Target Opening</span>
-            <span className="font-bold text-blue-600 dark:text-blue-400 mt-0.5 block truncate max-w-[180px]">
-              {targetVacancy === 'pool' ? 'General Talent Pool' : targetVacancy}
+            <span className="font-bold text-blue-600 dark:text-blue-400 mt-0.5 block truncate max-w-[240px]" title={targetVacancyName}>
+              {targetVacancyName}
             </span>
           </div>
           <div>

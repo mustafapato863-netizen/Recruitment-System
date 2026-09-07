@@ -832,6 +832,43 @@
   background: #ffffff;
 }
 
+.dark .ui-drawer,
+.dark .drawer-demo,
+[data-theme='dark'] .ui-drawer,
+[data-theme='dark'] .drawer-demo {
+  background: #0f172a;
+  border-left-color: #1e293b;
+  color: #f8fafc;
+}
+
+.dark .drawer-header,
+[data-theme='dark'] .drawer-header {
+  border-bottom-color: #1e293b;
+  background: #0f172a;
+}
+
+.dark .drawer-header b,
+[data-theme='dark'] .drawer-header b {
+  color: #f8fafc;
+}
+
+.dark .drawer-header small,
+[data-theme='dark'] .drawer-header small {
+  color: #94a3b8;
+}
+
+.dark .drawer-body,
+[data-theme='dark'] .drawer-body {
+  background: #0f172a;
+  color: #f1f5f9;
+}
+
+.dark .drawer-footer,
+[data-theme='dark'] .drawer-footer {
+  border-top-color: #1e293b;
+  background: #0f172a;
+}
+
 /* --------------------------------------------------------------------------
    9. Pipeline Kanban Board
    -------------------------------------------------------------------------- */

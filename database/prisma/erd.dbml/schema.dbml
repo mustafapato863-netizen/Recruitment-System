@@ -244,6 +244,11 @@ Table vacancy_requests {
   criticality String
   targetStartDate DateTime
   justification String
+  jobSummary String
+  description String
+  responsibilities String
+  qualifications String
+  benefits String
   submittedAt DateTime
   approvalRevision Int [not null, default: 1]
   approvals vacancy_request_approvals [not null]
@@ -292,6 +297,12 @@ Table vacancies {
   requiredSkills String[] [not null]
   minExperienceYears Int
   location String
+  department String
+  jobSummary String
+  description String
+  responsibilities String
+  qualifications String
+  benefits String
   assignments vacancy_assignments [not null]
   applications applications [not null]
   createdAt DateTime [default: `now()`, not null]

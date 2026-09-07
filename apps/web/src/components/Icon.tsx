@@ -1,5 +1,6 @@
 import type { SVGProps } from 'react';
 import {
+  Activity,
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
@@ -150,9 +151,11 @@ export type IconName =
   | 'arrow-up'
   | 'alert-circle'
   | 'external-link'
+  | 'activity'
   | 'link';
 
 const icons: Record<IconName, LucideIcon> = {
+  activity: Activity,
   dashboard: LayoutDashboard,
   tasks: ClipboardCheck,
   bell: Bell,

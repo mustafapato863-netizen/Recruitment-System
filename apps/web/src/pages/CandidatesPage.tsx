@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import type { Candidate, PaginatedResult } from '@recruitflow/contracts';
-import { fetchApi, postApi } from '../api/client';
+import { downloadApi, fetchApi, postApi } from '../api/client';
 import { getInitials } from '../utils/format';
+import { saveBlob } from '../utils/download';
 import {
   Alert,
   Button,
@@ -61,6 +62,7 @@ export function CandidatesPage() {
   const pageSize = 20;
 
   const [isLoading, setIsLoading] = useState(true);
+  const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState('');
   const [selectedCandidateIds, setSelectedCandidateIds] = useState<string[]>([]);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -99,6 +101,24 @@ export function CandidatesPage() {
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3000);
+  };
+
+  const handleExportExcel = async () => {
+    setIsExporting(true);
+    try {
+      const params = new URLSearchParams();
+      if (statusFilter && statusFilter !== 'All') params.set('status', statusFilter);
+      if (sourceFilter && sourceFilter !== 'All') params.set('source', sourceFilter);
+      if (search.trim()) params.set('search', search.trim());
+      const query = params.toString() ? `?${params.toString()}` : '';
+      const blob = await downloadApi(`/candidates/export.xlsx${query}`);
+      saveBlob(blob, `candidates-export-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      showToast('Candidate export downloaded successfully.');
+    } catch {
+      setError('Failed to export candidates to Excel.');
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const copyCode = (e: React.MouseEvent, code: string) => {
@@ -245,6 +265,18 @@ export function CandidatesPage() {
             <span>Refresh</span>
           </button>
 
+          <button
+            type="button"
+            onClick={() => void handleExportExcel()}
+            disabled={isExporting}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-700 transition shadow-xs cursor-pointer disabled:opacity-50"
+            aria-label="Export candidates to Excel"
+            title="Export filtered candidate records as XLSX workbook"
+          >
+            <Icon name={isExporting ? 'refresh-cw' : 'download'} size={13} className={`text-emerald-600 dark:text-emerald-400 ${isExporting ? 'animate-spin' : ''}`} />
+            <span>{isExporting ? 'Exporting...' : 'Export XLSX'}</span>
+          </button>
+
           {canCreateCandidate && (
             <>
               <button
@@ -266,7 +298,7 @@ export function CandidatesPage() {
 
               <Link
                 to="/cv-intake"
-                className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-sm cursor-pointer shadow-blue-500/20"
+                className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-[#0084ce] via-[#00a3e0] to-[#00a859] hover:brightness-105 text-white rounded-xl text-xs font-bold transition shadow-md shadow-sky-500/20 cursor-pointer"
               >
                 <Icon name="upload" size={14} />
                 <span>Import CVs</span>
@@ -279,7 +311,7 @@ export function CandidatesPage() {
       {/* ── 4 KPI Metric Cards ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: Total Candidates */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 shadow-xs flex items-center justify-between">
+        <div className="relative overflow-hidden bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 shadow-xs flex items-center justify-between before:absolute before:inset-x-0 before:top-0 before:h-1 before:bg-gradient-to-r before:from-[#0084ce] before:to-[#00a3e0]">
           <div>
             <span className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider">
               Total Talent Base
@@ -296,13 +328,13 @@ export function CandidatesPage() {
               Verified identity records
             </span>
           </div>
-          <div className="w-11 h-11 rounded-2xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+          <div className="w-11 h-11 rounded-2xl bg-blue-50 dark:bg-blue-950/50 text-[#0084ce] dark:text-sky-400 flex items-center justify-center shrink-0">
             <Icon name="users" size={20} />
           </div>
         </div>
 
         {/* Card 2: Active in Pipeline */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 shadow-xs flex items-center justify-between">
+        <div className="relative overflow-hidden bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 shadow-xs flex items-center justify-between before:absolute before:inset-x-0 before:top-0 before:h-1 before:bg-gradient-to-r before:from-emerald-400 before:to-[#00a859]">
           <div>
             <span className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider">
               Active in Process
@@ -311,35 +343,35 @@ export function CandidatesPage() {
               <span className="text-2xl font-black text-slate-900 dark:text-white">
                 {activeInPipelineCount}
               </span>
-              <span className="text-[11px] font-bold text-blue-600 bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.5 rounded">
+              <span className="text-[11px] font-bold text-[#0084ce] bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.5 rounded">
                 Screening &bull; Interview
               </span>
             </div>
             <span className="block text-[10.5px] text-slate-500 dark:text-slate-400 mt-1">
-              Across 8 active vacancies
+              Across active vacancies
             </span>
           </div>
-          <div className="w-11 h-11 rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+          <div className="w-11 h-11 rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 text-[#00a859] dark:text-emerald-400 flex items-center justify-center shrink-0">
             <Icon name="pipeline" size={20} />
           </div>
         </div>
 
-        {/* Card 3: In Talent Pool */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 shadow-xs flex items-center justify-between">
+        {/* Card 3: In Sourcing Match Bench */}
+        <div className="relative overflow-hidden bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 shadow-xs flex items-center justify-between before:absolute before:inset-x-0 before:top-0 before:h-1 before:bg-gradient-to-r before:from-purple-500 before:to-indigo-500">
           <div>
             <span className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider">
-              Pre-Qualified Pool
+              Sourcing Bench
             </span>
             <div className="flex items-baseline gap-2 mt-1">
               <span className="text-2xl font-black text-slate-900 dark:text-white">
                 {talentPoolCount}
               </span>
               <span className="text-[11px] font-bold text-purple-600 bg-purple-50 dark:bg-purple-950/40 px-1.5 py-0.5 rounded">
-                Ready for Sourcing
+                Bench Qualified
               </span>
             </div>
             <span className="block text-[10.5px] text-slate-500 dark:text-slate-400 mt-1">
-              Tagged for future hiring
+              Ready for instant matching
             </span>
           </div>
           <div className="w-11 h-11 rounded-2xl bg-purple-50 dark:bg-purple-950/50 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
@@ -348,7 +380,7 @@ export function CandidatesPage() {
         </div>
 
         {/* Card 4: Direct & Referrals */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 shadow-xs flex items-center justify-between">
+        <div className="relative overflow-hidden bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 shadow-xs flex items-center justify-between before:absolute before:inset-x-0 before:top-0 before:h-1 before:bg-gradient-to-r before:from-amber-400 before:to-amber-500">
           <div>
             <span className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider">
               Direct & Referrals
@@ -416,11 +448,12 @@ export function CandidatesPage() {
 
           <button
             type="button"
-            onClick={() => navigate('/talent-pool')}
-            className="flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold text-slate-500 hover:text-slate-900 dark:hover:text-white transition cursor-pointer"
+            onClick={() => navigate('/sourcing-match')}
+            className="flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/40 hover:bg-teal-100 transition cursor-pointer"
           >
-            <span>Talent Pool</span>
-            <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 font-extrabold">
+            <Icon name="sparkles" size={13} />
+            <span>Smart Match Bench</span>
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-teal-200/60 dark:bg-teal-900/60 text-teal-800 dark:text-teal-200 font-extrabold">
               {talentPoolCount}
             </span>
           </button>

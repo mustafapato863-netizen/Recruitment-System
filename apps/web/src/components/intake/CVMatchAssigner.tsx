@@ -1,12 +1,15 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import type { Vacancy } from '@recruitflow/contracts';
+import { calculateCandidateFitScore } from '@recruitflow/validation';
 import { Icon } from '../Icon';
 import { Spinner } from '../Spinner';
 import type { ExtractedCandidate } from '../../utils/resumeParser';
+import type { ScoredVacancy } from '../../hooks/useCVIntakeFlow';
 
 interface CVMatchAssignerProps {
   profile: ExtractedCandidate;
   vacancies: Vacancy[];
+  scoredVacancies?: ScoredVacancy[];
   targetVacancy: string;
   setTargetVacancy: (v: string) => void;
   targetStage: string;
@@ -23,6 +26,7 @@ interface CVMatchAssignerProps {
 export const CVMatchAssigner: React.FC<CVMatchAssignerProps> = ({
   profile,
   vacancies,
+  scoredVacancies: propScoredVacancies,
   targetVacancy,
   setTargetVacancy,
   targetStage,
@@ -35,6 +39,49 @@ export const CVMatchAssigner: React.FC<CVMatchAssignerProps> = ({
   onBack,
   onConfirm,
 }) => {
+  // Compute scored vacancies if not provided via props
+  const scoredList = useMemo<ScoredVacancy[]>(() => {
+    if (propScoredVacancies && propScoredVacancies.length > 0) {
+      return propScoredVacancies;
+    }
+
+    if (!profile || vacancies.length === 0) return [];
+
+    const scored = vacancies.map((v) => {
+      const positionTitle = (v as any).position?.title || v.title || '';
+      const fitResult = calculateCandidateFitScore(
+        {
+          skills: profile.skills,
+          experienceYears: profile.experienceYears,
+          location: profile.location,
+          certifications: profile.certifications,
+          currentTitle: profile.title,
+        },
+        {
+          requiredSkills: v.requiredSkills || [],
+          minExperienceYears: v.minExperienceYears || 0,
+          location: v.location || v.branch?.name || '',
+          qualifications: [positionTitle, v.qualifications].filter(Boolean).join(' '),
+          department: v.department || '',
+        },
+      );
+      return { vacancy: v, fitResult };
+    });
+
+    scored.sort((a, b) => b.fitResult.score - a.fitResult.score);
+    return scored;
+  }, [propScoredVacancies, profile, vacancies]);
+
+  // Active vacancy fit calculation
+  const activeScored = useMemo(() => {
+    if (!targetVacancy || targetVacancy === 'pool') return null;
+    return scoredList.find((s) => s.vacancy.id === targetVacancy) || null;
+  }, [targetVacancy, scoredList]);
+
+  const topRecommendations = useMemo(() => {
+    return scoredList.slice(0, 3);
+  }, [scoredList]);
+
   return (
     <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs overflow-hidden animate-fade-in">
       {/* Header Bar */}
@@ -50,10 +97,10 @@ export const CVMatchAssigner: React.FC<CVMatchAssignerProps> = ({
             </span>
           </div>
           <h2 className="text-lg font-black text-slate-900 dark:text-white tracking-tight mt-1">
-            Duplicate Resolution & Vacancy Assignment
+            Duplicate Resolution & AI Vacancy Matching
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            Resolve any identity conflicts and assign this candidate to an active vacancy or the talent pool.
+            Resolve identity conflicts and select the best-fitting open position recommended by the clinical match engine.
           </p>
         </div>
 
@@ -208,41 +255,316 @@ export const CVMatchAssigner: React.FC<CVMatchAssignerProps> = ({
           </div>
         </div>
 
-        {/* Right Card: Vacancy Assignment & Source */}
+        {/* Right Card: AI Vacancy Assignment & Live Match Scorecard */}
         <div className="border border-slate-200 dark:border-slate-800 rounded-2xl p-5 space-y-4">
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-lg bg-blue-50 dark:bg-blue-950 text-blue-600 flex items-center justify-center">
-              <Icon name="briefcase" size={13} />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-6 h-6 rounded-lg bg-blue-50 dark:bg-blue-950 text-blue-600 flex items-center justify-center">
+                <Icon name="briefcase" size={13} />
+              </div>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">
+                Target Vacancy & Match Recommendations
+              </h3>
             </div>
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">
-              Target Vacancy & Pipeline Entry
-            </h3>
+            <span className="inline-flex items-center gap-1 text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300">
+              <Icon name="sparkles" size={10} />
+              AI-Matched
+            </span>
           </div>
 
           <div className="space-y-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                Assign to Active Opening
+            {/* 1. Interactive Recommended Position Cards */}
+            <div className="space-y-2.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                  <Icon name="sparkles" size={13} className="text-blue-500" />
+                  <span>Choose Best-Fit Open Position:</span>
+                </span>
+                <span className="text-[11px] font-medium text-slate-400">1-click select</span>
+              </div>
+
+              {topRecommendations.map(({ vacancy: v, fitResult }, index) => {
+                const isSelected = targetVacancy === v.id;
+                const isBestFit = index === 0 && fitResult.score >= 50;
+
+                return (
+                  <div
+                    key={v.id}
+                    onClick={() => setTargetVacancy(v.id)}
+                    className={`p-3.5 rounded-2xl border transition-all duration-200 cursor-pointer relative transform hover:-translate-y-0.5 hover:shadow-md ${
+                      isSelected
+                        ? 'border-blue-600 dark:border-blue-500 bg-blue-50/60 dark:bg-blue-950/40 ring-2 ring-blue-500/25 shadow-xs'
+                        : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 hover:border-blue-300 dark:hover:border-slate-700 hover:bg-slate-50/50'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0 flex-1 space-y-1.5">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <div
+                            className={`w-4 h-4 rounded-full flex items-center justify-center border shrink-0 transition-colors ${
+                              isSelected
+                                ? 'border-blue-600 bg-blue-600 text-white'
+                                : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800'
+                            }`}
+                          >
+                            {isSelected && <Icon name="check" size={10} className="stroke-[3]" />}
+                          </div>
+                          <span className="font-mono text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                            [{v.vacancyCode}]
+                          </span>
+                          <strong className="text-xs font-bold text-slate-900 dark:text-white">
+                            {(v as any).position?.title || v.title || 'Requisition'}
+                          </strong>
+                          {isBestFit && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                              <Icon name="sparkles" size={9} />
+                              Top Recommended
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 flex-wrap pl-6">
+                          <span className="flex items-center gap-1">
+                            <Icon name="building" size={11} />
+                            <span>{v.branch?.name || v.location || 'Saudi German Health'}</span>
+                          </span>
+                          {v.department && (
+                            <>
+                              <span>&bull;</span>
+                              <span>{v.department}</span>
+                            </>
+                          )}
+                        </div>
+
+                        {/* Matched & Missing Skills Chips */}
+                        <div className="pl-6 space-y-1">
+                          {fitResult.breakdown.skills.matched.length > 0 && (
+                            <div className="flex flex-wrap gap-1 pt-0.5">
+                              {fitResult.breakdown.skills.matched.slice(0, 3).map((skill) => (
+                                <span
+                                  key={skill}
+                                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800"
+                                >
+                                  <Icon name="check" size={9} />
+                                  <span>{skill}</span>
+                                </span>
+                              ))}
+                              {fitResult.breakdown.skills.matched.length > 3 && (
+                                <span className="text-[10px] text-slate-400 font-bold self-center">
+                                  +{fitResult.breakdown.skills.matched.length - 3} more
+                                </span>
+                              )}
+                            </div>
+                          )}
+
+                          {fitResult.breakdown.skills.missing.length > 0 && (
+                            <div className="flex flex-wrap gap-1">
+                              {fitResult.breakdown.skills.missing.slice(0, 2).map((skill) => (
+                                <span
+                                  key={skill}
+                                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50/80 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200/80 dark:border-amber-800/80"
+                                  title="Required skill not detected in candidate profile"
+                                >
+                                  <span className="text-amber-500 font-bold">−</span>
+                                  <span>{skill}</span>
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Score Badge */}
+                      <div className="flex flex-col items-end shrink-0 gap-1">
+                        <span
+                          className={`px-2.5 py-0.5 rounded-full text-xs font-black border shadow-2xs ${
+                            fitResult.score >= 85
+                              ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                              : fitResult.score >= 60
+                              ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border-blue-200 dark:border-blue-800'
+                              : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                          }`}
+                        >
+                          {fitResult.score}% Fit
+                        </span>
+                        {isSelected && (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-600 dark:text-blue-400">
+                            <Icon name="check" size={11} />
+                            Selected
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Talent Pool Option */}
+              <div
+                onClick={() => setTargetVacancy('pool')}
+                className={`p-3 rounded-2xl border transition-all duration-200 cursor-pointer flex items-center justify-between transform hover:-translate-y-0.5 hover:shadow-md ${
+                  targetVacancy === 'pool'
+                    ? 'border-purple-600 dark:border-purple-500 bg-purple-50/60 dark:bg-purple-950/40 ring-2 ring-purple-500/25 shadow-xs'
+                    : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/60 hover:border-slate-300'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-4 h-4 rounded-full flex items-center justify-center border shrink-0 transition-colors ${
+                      targetVacancy === 'pool'
+                        ? 'border-purple-600 bg-purple-600 text-white'
+                        : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800'
+                    }`}
+                  >
+                    {targetVacancy === 'pool' && <Icon name="check" size={10} className="stroke-[3]" />}
+                  </div>
+                  <div className="w-7 h-7 rounded-xl bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-300 flex items-center justify-center shrink-0 shadow-2xs">
+                    <Icon name="database" size={13} />
+                  </div>
+                  <div>
+                    <strong className="block text-xs font-bold text-slate-900 dark:text-white">
+                      General Talent Pool Bench
+                    </strong>
+                    <span className="text-[10.5px] text-slate-400 block">
+                      Ingest candidate without assigning to a specific opening; ready for future sourcing
+                    </span>
+                  </div>
+                </div>
+                {targetVacancy === 'pool' && (
+                  <span className="inline-flex items-center gap-1 text-xs font-bold text-purple-600 dark:text-purple-400">
+                    <Icon name="check" size={12} />
+                    Selected
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Alternative Dropdown for All Openings */}
+            <div className="pt-1">
+              <label className="block text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-1">
+                Or choose from all {scoredList.length} requisitions:
               </label>
               <select
                 value={targetVacancy}
                 onChange={(e) => setTargetVacancy(e.target.value)}
-                className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-blue-500 focus:outline-none transition shadow-2xs"
               >
-                {vacancies.length === 0 ? (
-                  <option value="">Loading active requisitions...</option>
-                ) : (
-                  vacancies.map((v) => (
-                    <option key={v.id} value={v.id}>
-                      [{v.vacancyCode}] {(v as any).position?.title || v.title || 'Requisition'} {v.branch?.name ? `(${v.branch.name})` : ''}
-                    </option>
-                  ))
-                )}
-                <option value="pool">General Talent Pool (No active vacancy)</option>
+                {scoredList.map(({ vacancy: v, fitResult }) => (
+                  <option key={v.id} value={v.id}>
+                    [{fitResult.score}% Fit] [{v.vacancyCode}] {(v as any).position?.title || v.title || 'Requisition'} {v.branch?.name ? `(${v.branch.name})` : ''}
+                  </option>
+                ))}
+                <option value="pool">📦 General Talent Pool (No active vacancy)</option>
               </select>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* 2. Live Dynamic Fit Scorecard for Selected Position */}
+            {activeScored && (
+              <div className="p-4 sm:p-5 rounded-2xl border border-emerald-200/80 dark:border-emerald-800/60 bg-gradient-to-br from-emerald-50/60 via-white to-blue-50/40 dark:from-emerald-950/30 dark:via-slate-900 dark:to-blue-950/20 space-y-3.5 shadow-xs">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                      <span className="text-xs font-black text-slate-900 dark:text-white block">
+                        {(activeScored.vacancy as any).position?.title || activeScored.vacancy.title}
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Live qualification & clinical requirement breakdown
+                    </span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400 leading-none">
+                      {activeScored.fitResult.score}%
+                    </span>
+                    <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                      Match Fit
+                    </span>
+                  </div>
+                </div>
+
+                {/* Progress Bar */}
+                <div className="w-full bg-slate-200 dark:bg-slate-700/60 h-2 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-500 ${
+                      activeScored.fitResult.score >= 80
+                        ? 'bg-gradient-to-r from-emerald-500 to-teal-500'
+                        : activeScored.fitResult.score >= 60
+                        ? 'bg-gradient-to-r from-blue-500 to-emerald-500'
+                        : 'bg-gradient-to-r from-amber-500 to-orange-500'
+                    }`}
+                    style={{ width: `${activeScored.fitResult.score}%` }}
+                  />
+                </div>
+
+                {/* 4-Criteria Scorecard Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 text-center">
+                  <div className="p-2.5 rounded-xl bg-white/80 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/60 shadow-2xs">
+                    <span className="block text-[10px] text-slate-400 uppercase font-bold">Skills Match</span>
+                    <strong className="text-xs font-bold text-slate-800 dark:text-slate-100 block mt-0.5">
+                      {activeScored.fitResult.breakdown.skills.percentage}%
+                    </strong>
+                    <span className="block text-[10px] text-emerald-600 dark:text-emerald-400 mt-0.5">
+                      {activeScored.fitResult.breakdown.skills.matched.length} Matched
+                    </span>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-white/80 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/60 shadow-2xs">
+                    <span className="block text-[10px] text-slate-400 uppercase font-bold">Experience</span>
+                    <strong className="text-xs font-bold text-slate-800 dark:text-slate-100 block mt-0.5">
+                      {profile.experienceYears || 0} Yrs
+                    </strong>
+                    <span
+                      className={`block text-[10px] font-bold mt-0.5 ${
+                        activeScored.fitResult.breakdown.experience.met
+                          ? 'text-emerald-600 dark:text-emerald-400'
+                          : 'text-amber-600 dark:text-amber-400'
+                      }`}
+                    >
+                      {activeScored.fitResult.breakdown.experience.met
+                        ? `✓ Req (${activeScored.vacancy.minExperienceYears || 0}y) Met`
+                        : `Gap (Req ${activeScored.vacancy.minExperienceYears || 0}y)`}
+                    </span>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-white/80 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/60 shadow-2xs">
+                    <span className="block text-[10px] text-slate-400 uppercase font-bold">Licensure</span>
+                    <strong className="text-xs font-bold text-slate-800 dark:text-slate-100 block mt-0.5">
+                      {profile.certifications?.length || 0} Listed
+                    </strong>
+                    <span className="block text-[10px] text-emerald-600 dark:text-emerald-400 mt-0.5">
+                      {activeScored.fitResult.breakdown.certifications.met ? '✓ Mandatory Met' : 'Needs Review'}
+                    </span>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-white/80 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/60 shadow-2xs">
+                    <span className="block text-[10px] text-slate-400 uppercase font-bold">Location</span>
+                    <strong className="text-xs font-bold text-slate-800 dark:text-slate-100 block mt-0.5 truncate">
+                      {activeScored.vacancy.branch?.name || activeScored.vacancy.location || 'SGH Main'}
+                    </strong>
+                    <span
+                      className={`block text-[10px] font-bold mt-0.5 ${
+                        activeScored.fitResult.breakdown.location.met
+                          ? 'text-emerald-600 dark:text-emerald-400'
+                          : 'text-blue-600 dark:text-blue-400'
+                      }`}
+                    >
+                      {activeScored.fitResult.breakdown.location.met ? '✓ Branch Matched' : 'Relocation Eligible'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="p-2.5 rounded-xl bg-slate-50/70 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-700/60 flex items-start gap-2">
+                  <Icon name="sparkles" size={13} className="text-emerald-500 shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-slate-600 dark:text-slate-300 italic leading-relaxed">
+                    "{activeScored.fitResult.summaryText}"
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Starting Stage & Source selectors */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
                   Starting Pipeline Stage
@@ -276,19 +598,6 @@ export const CVMatchAssigner: React.FC<CVMatchAssignerProps> = ({
                   <option value="Agency">Agency</option>
                 </select>
               </div>
-            </div>
-
-            {/* Match gauge */}
-            <div className="p-3.5 rounded-xl border border-emerald-200/80 dark:border-emerald-900/40 bg-emerald-50/50 dark:bg-emerald-950/20 flex items-center justify-between">
-              <div>
-                <span className="text-xs font-bold text-emerald-900 dark:text-emerald-200 block">
-                  Target Role Qualification Fit
-                </span>
-                <span className="text-[11px] text-emerald-700 dark:text-emerald-400">
-                  Based on required skills, licenses, and years of experience
-                </span>
-              </div>
-              <span className="text-lg font-black text-emerald-600 dark:text-emerald-400">94% Fit</span>
             </div>
           </div>
         </div>

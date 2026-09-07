@@ -23,7 +23,7 @@ type ImportRowsResponse = {
 };
 
 const PAGE_SIZE = 50;
-const IMPORT_STEPS = ['Upload File', 'Validate Data', 'Review Results', 'Confirm Import', 'Summary'];
+const IMPORT_STEPS = ['Upload File', 'Validate & Resolve', 'Confirm & Import'];
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'An unexpected error occurred.';
@@ -184,7 +184,7 @@ export function ImportPreviewPage() {
       }
     >
       <div className="bg-white dark:bg-slate-900 p-4 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-xs">
-        <PipelineStepper steps={IMPORT_STEPS} currentStep={isConfirmed ? 4 : 2} />
+        <PipelineStepper steps={IMPORT_STEPS} currentStep={isConfirmed ? 2 : 1} />
       </div>
 
       {error && !isConfirmed && (

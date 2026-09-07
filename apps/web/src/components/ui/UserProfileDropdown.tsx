@@ -169,9 +169,9 @@ export function UserProfileDropdown({ className = '' }: UserProfileDropdownProps
 
             <div className="grid grid-cols-3 gap-1 mb-1">
               {[
-                { email: 'a@test.com', label: 'Admin', icon: '👑', active: user?.email === 'a@test.com' },
-                { email: 'm@test.com', label: 'Manager', icon: '👔', active: user?.email === 'm@test.com' },
-                { email: 'e@test.com', label: 'Employee', icon: '👤', active: user?.email === 'e@test.com' },
+                { email: 'admin@sgh.com', label: 'Admin', icon: '👑', active: user?.email === 'admin@sgh.com' },
+                { email: 'hassan.ali@recruitflow.local', label: 'Manager', icon: '👔', active: user?.email === 'hassan.ali@recruitflow.local' },
+                { email: 'sarah.ahmed@recruitflow.local', label: 'Recruiter', icon: '💼', active: user?.email === 'sarah.ahmed@recruitflow.local' },
               ].map((role) => (
                 <button
                   key={role.email}

@@ -265,19 +265,13 @@ export function AppShellInner() {
             <div className="mark" style={{ background: 'transparent', boxShadow: 'none', width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <SghHeartSvg size={32} glow />
             </div>
-            <div className="brand-copy">
-              <b className="sgh-gradient-text">RecruitFlow</b>
-              <small>Saudi German Health</small>
-            </div>
+            {!isSidebarCollapsed && (
+              <div className="brand-copy min-w-0 overflow-hidden">
+                <b className="sgh-gradient-text truncate block">RecruitFlow</b>
+                <small className="truncate block">Saudi German Health</small>
+              </div>
+            )}
           </Link>
-          <IconButton
-            className="sidebar-collapse hidden lg:flex"
-            label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            onClick={() => setIsSidebarCollapsed((current) => !current)}
-            title={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          >
-            <Icon name={isSidebarCollapsed ? 'chevron-right' : 'chevron-left'} size={15} />
-          </IconButton>
           <IconButton
             className="sidebar-collapse lg:hidden"
             label="Close navigation"
@@ -312,7 +306,7 @@ export function AppShellInner() {
             )}
             <div className="space-y-0.5">
               <NavigationItem icon="users" label="Applications" to="/applications" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
-              <NavigationItem icon="check-circle" label="Approval Inboxes" to="/inbox" badge={inboxBadgeCount > 0 ? inboxBadgeCount : undefined} badgeTone="amber" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+              <NavigationItem icon="check-circle" label="Approval Inboxes" to="/approval-inbox" badge={inboxBadgeCount > 0 ? inboxBadgeCount : undefined} badgeTone="amber" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
               <NavigationItem icon="calendar" label="Interviews" to="/interviews" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
               <NavigationItem icon="offer" label="Offers" to="/offers" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
             </div>
@@ -328,7 +322,7 @@ export function AppShellInner() {
             <div className="space-y-0.5">
               <NavigationItem icon="database" label="Candidates DB" to="/candidates" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
               <NavigationItem icon="upload" label="CV Intake" to="/cv-intake" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
-              <NavigationItem icon="folder" label="Talent Pools" to="/talent-pool" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+              <NavigationItem icon="sparkles" label="Smart Sourcing & Match" to="/sourcing-match" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
             </div>
           </div>
 
@@ -340,7 +334,7 @@ export function AppShellInner() {
               </div>
             )}
             <div className="space-y-0.5">
-              <NavigationItem icon="user-check" label="Hires & Joining" to="/joining" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+              <NavigationItem icon="user-check" label="Hires & Joining" to="/joinings" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
               <NavigationItem icon="shield-check" label="Medical Licenses" to="/licenses" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
             </div>
           </div>
@@ -390,7 +384,7 @@ export function AppShellInner() {
       </aside>
 
       <header className="header">
-        <div className="flex items-center justify-between w-full gap-4 px-2">
+        <div className="flex items-center justify-between w-full max-w-[1720px] mx-auto gap-4 px-4 sm:px-6 lg:px-7 h-full">
           <div className="flex items-center gap-3">
             <IconButton
               ref={mobileMenuTriggerRef as unknown as React.Ref<HTMLButtonElement>}

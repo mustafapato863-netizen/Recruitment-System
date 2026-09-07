@@ -74,6 +74,11 @@ const DATASET_COLUMNS: Record<Dataset, ColumnDefinition[]> = {
     { key: 'location', header: 'Work Location', aliases: ['work location', 'city'] },
     { key: 'externalVacancyCode', header: 'External Vacancy Code', aliases: ['vacancy code', 'opening code', 'requisition code'] },
     { key: 'justification', header: 'Justification', aliases: ['description', 'notes', 'comments'] },
+    { key: 'jobSummary', header: 'Job Summary', aliases: ['job summary', 'summary', 'teaser', 'role summary'] },
+    { key: 'description', header: 'Role Description', aliases: ['role description', 'job description', 'about the role'] },
+    { key: 'responsibilities', header: 'Responsibilities', aliases: ['duties', 'key responsibilities', 'what you will do'] },
+    { key: 'qualifications', header: 'Qualifications', aliases: ['requirements', 'must have', 'required qualifications'] },
+    { key: 'benefits', header: 'Benefits', aliases: ['perks', 'compensation highlights', 'what we offer'] },
   ],
   'legal-entities': [
     { key: 'code', header: 'Code', aliases: ['legal entity code', 'entity code'] },
@@ -659,6 +664,11 @@ export class BulkImportService {
           justification: [raw.externalVacancyCode ? `External vacancy code: ${String(raw.externalVacancyCode)}` : '', raw.justification ? String(raw.justification) : '']
             .filter(Boolean)
             .join('\n') || null,
+          jobSummary: raw.jobSummary ? String(raw.jobSummary) : null,
+          description: raw.description ? String(raw.description) : null,
+          responsibilities: raw.responsibilities ? String(raw.responsibilities) : null,
+          qualifications: raw.qualifications ? String(raw.qualifications) : null,
+          benefits: raw.benefits ? String(raw.benefits) : null,
         };
         const created = await this.vacancyCoreService.createRequest(organizationId, userId, request);
         await this.prisma.candidateImportRow.update({ where: { id: row.id }, data: { details: `Draft vacancy request ${created.requestCode} created.` } });

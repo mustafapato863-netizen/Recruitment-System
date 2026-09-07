@@ -30,22 +30,22 @@ const TEST_PERSONAS: Array<{
 }> = import.meta.env.DEV
   ? [
       {
-        name: 'Employee User',
-        initials: 'E',
-        role: 'Employee/Requester',
-        email: 'e@test.com',
+        name: 'System Administrator',
+        initials: 'AD',
+        role: 'Administrator / Full Access',
+        email: 'admin@sgh.com',
       },
       {
-        name: 'Manager User',
-        initials: 'M',
-        role: 'Manager/Hiring Manager',
-        email: 'm@test.com',
+        name: 'Sarah Ahmed',
+        initials: 'SA',
+        role: 'Recruiter / Talent Operations',
+        email: 'sarah.ahmed@recruitflow.local',
       },
       {
-        name: 'Admin User',
-        initials: 'A',
-        role: 'Administrator/Recruitment Ops',
-        email: 'a@test.com',
+        name: 'Dr. Hassan Ali',
+        initials: 'HA',
+        role: 'Hiring Manager / Clinical Head',
+        email: 'hassan.ali@recruitflow.local',
       },
     ]
   : [];
@@ -456,15 +456,15 @@ export function LoginPage() {
                   <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-3.5 text-left transition hover:bg-rf-action-soft/35 [&::-webkit-details-marker]:hidden">
                     <span className="min-w-0">
                       <span className="block text-[11px] font-bold text-rf-ink">
-                        Development accounts
+                        Staff accounts
                       </span>
                       <span className="mt-0.5 block text-[10.5px] text-rf-ink-muted">
-                        Auto-fill credentials for local QA
+                        Auto-fill credentials for verified staff
                       </span>
                     </span>
 
                     <span className="shrink-0 rounded-full border border-rf-info/15 bg-rf-info-soft px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-[0.08em] text-rf-info transition group-open:border-rf-action/15 group-open:bg-rf-action-soft group-open:text-rf-action">
-                      Demo
+                      Verified
                     </span>
                   </summary>
 

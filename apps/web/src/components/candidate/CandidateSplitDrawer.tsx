@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { Application, ApplicationStage } from '@recruitflow/contracts';
+import type { PositionRequirements } from '@recruitflow/validation';
 import { Icon } from '../Icon';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
@@ -8,9 +9,11 @@ import { Select } from '../ui/Select';
 import { Input } from '../ui/Input';
 import { Modal } from '../Modal';
 import { useAuth } from '../../auth/AuthContext';
+import { CandidateFitScorecard } from './CandidateFitScorecard';
 
 interface CandidateSplitDrawerProps {
   application: Application | null;
+  requirements?: PositionRequirements | null;
   isOpen: boolean;
   onClose: () => void;
   onMoveStage?: (applicationId: string, nextStage: ApplicationStage) => Promise<void> | void;
@@ -63,6 +66,7 @@ interface ChatterNote {
 
 export function CandidateSplitDrawer({
   application,
+  requirements,
   isOpen,
   onClose,
   onMoveStage,
@@ -72,7 +76,7 @@ export function CandidateSplitDrawer({
   const { user } = useAuth();
   const [rating, setRating] = useState<number>(4);
   const [scoreNotes, setScoreNotes] = useState('');
-  const [activeTab, setActiveTab] = useState<'cv' | 'chatter' | 'activities'>('cv');
+  const [activeTab, setActiveTab] = useState<'cv' | 'chatter' | 'activities' | 'match'>('cv');
   const [isSubmittingScore, setIsSubmittingScore] = useState(false);
   const [scoreSubmitted, setScoreSubmitted] = useState(false);
 
@@ -111,9 +115,11 @@ export function CandidateSplitDrawer({
     },
   ]);
 
-  // Handle Escape key to close
+  // Handle Escape key to close and lock body scroll
   useEffect(() => {
     if (!isOpen) return undefined;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
 
     const handleKeyDown = (event: KeyboardEvent) => {
       // If a nested modal (e.g. activity modal) is open, let that modal handle Escape
@@ -125,6 +131,7 @@ export function CandidateSplitDrawer({
 
     document.addEventListener('keydown', handleKeyDown);
     return () => {
+      document.body.style.overflow = prevOverflow;
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [isOpen, isActivityModalOpen, onClose]);
@@ -132,8 +139,14 @@ export function CandidateSplitDrawer({
   if (!isOpen || !application) return null;
 
   const candidate = application.candidate;
-  const canMove = user?.permissions.includes('APPLICATION_MOVE_STAGE');
-  const viewPii = user?.permissions.includes('VIEW_CANDIDATE_PII');
+  const canMove = Boolean(user?.permissions?.includes('APPLICATION_MOVE_STAGE'));
+  const viewPii = Boolean(user?.permissions?.includes('VIEW_CANDIDATE_PII'));
+  const effectiveRequirements: PositionRequirements = requirements || {
+    requiredSkills: candidate?.skills?.length ? candidate.skills : ['Clinical Protocols', 'Patient Care', 'Emergency Procedures', 'EMR Systems'],
+    minExperienceYears: candidate?.experienceYears ?? 3,
+    location: candidate?.location || 'Riyadh',
+    department: application.positionTitle || 'Healthcare Department',
+  };
 
   const handleScorecard = () => {
     setIsSubmittingScore(true);
@@ -243,7 +256,7 @@ export function CandidateSplitDrawer({
   };
 
   const handlePassNext = () => {
-    const nextAllowed = application.allowedTransitions.find((s) => s !== 'Rejected' && s !== 'Withdrawn');
+    const nextAllowed = application.allowedTransitions?.find((s) => s !== 'Rejected' && s !== 'Withdrawn');
     if (nextAllowed && onMoveStage) {
       void onMoveStage(application.id, nextAllowed as ApplicationStage);
       setChatterNotes((prev) => [
@@ -276,27 +289,6 @@ export function CandidateSplitDrawer({
     }
   };
 
-  useEffect(() => {
-    if (!isOpen) return undefined;
-    const prevOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        onClose();
-      }
-    };
-    document.addEventListener('keydown', handleKeyDown);
-
-    return () => {
-      document.body.style.overflow = prevOverflow;
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [isOpen, onClose]);
-
-  if (!isOpen || !application) return null;
-
   const currentStageIndex = PIPELINE_STAGES.indexOf(application.stage as ApplicationStage);
 
   return (
@@ -321,16 +313,16 @@ export function CandidateSplitDrawer({
         onMouseDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header with Odoo-style Status Stepper */}
+        {/* Header with RecruitFlow Status Stepper */}
         <header className="flex flex-wrap items-center justify-between gap-3 border-b border-rf-border px-6 py-3.5 bg-rf-surface-subtle/60">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-rf-primary text-white font-bold shadow-xs">
-              {candidate ? `${candidate.firstName[0]}${candidate.lastName[0]}` : 'CP'}
+              {candidate ? `${candidate.firstName?.[0] || ''}${candidate.lastName?.[0] || ''}` || 'CP' : 'CP'}
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <h2 id="drawer-candidate-name" className="text-lg font-bold text-rf-ink dark:text-white">
-                  {candidate ? `${candidate.firstName} ${candidate.lastName}` : 'Candidate Profile'}
+                  {candidate ? `${candidate.firstName || ''} ${candidate.lastName || ''}`.trim() || 'Candidate Profile' : 'Candidate Profile'}
                 </h2>
                 <span className="text-xs font-mono px-2 py-0.5 rounded-md bg-rf-primary/10 text-rf-primary font-semibold">
                   {application.vacancyCode || 'VAC'}
@@ -342,7 +334,7 @@ export function CandidateSplitDrawer({
             </div>
           </div>
 
-          {/* Odoo-Style Interactive Stage Stepper */}
+          {/* RecruitFlow Interactive Stage Stepper */}
           <div className="flex items-center gap-2">
             <nav aria-label="Pipeline Stage Progress" className="hidden sm:flex items-center rounded-lg border border-rf-border bg-white dark:bg-rf-surface p-1 shadow-2xs">
               {PIPELINE_STAGES.map((stg, idx) => {
@@ -352,14 +344,14 @@ export function CandidateSplitDrawer({
                   <button
                     key={stg}
                     type="button"
-                    disabled={!canMove || !application.allowedTransitions.includes(stg)}
+                    disabled={!canMove || !application.allowedTransitions?.includes(stg)}
                     onClick={() => onMoveStage?.(application.id, stg)}
                     className={`flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-md transition-all ${
                       isCurrent
                         ? 'bg-rf-primary text-white shadow-xs'
                         : isPassed
                         ? 'text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30'
-                        : application.allowedTransitions.includes(stg)
+                        : application.allowedTransitions?.includes(stg)
                         ? 'text-rf-ink-muted hover:text-rf-ink hover:bg-rf-surface-subtle cursor-pointer'
                         : 'text-slate-300 dark:text-slate-600 cursor-not-allowed'
                     }`}
@@ -378,9 +370,21 @@ export function CandidateSplitDrawer({
           </div>
         </header>
 
-        {/* 4 Odoo Smart KPI Badges Bar */}
+        {/* 4 SGH Smart KPI Badges Bar + SGH Fit Match Badge */}
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-rf-border px-6 py-2.5 bg-white dark:bg-rf-surface text-xs">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => setActiveTab('match')}
+              className="cursor-pointer hover:scale-105 transition-transform"
+              title="Click to view detailed Position Requirements & Fit Breakdown"
+            >
+              <CandidateFitScorecard
+                candidate={candidate}
+                requirements={effectiveRequirements}
+                variant="badge"
+              />
+            </button>
             <button
               type="button"
               onClick={() => setIsActivityModalOpen(true)}
@@ -407,7 +411,7 @@ export function CandidateSplitDrawer({
           <div className="flex items-center rounded-lg border border-rf-border bg-rf-surface-subtle p-0.5">
             <button
               type="button"
-              className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
+              className={`px-3 py-1 text-xs font-semibold rounded-md transition-all cursor-pointer ${
                 activeTab === 'cv' ? 'bg-white dark:bg-rf-surface text-rf-primary shadow-xs font-bold' : 'text-rf-ink-muted'
               }`}
               onClick={() => setActiveTab('cv')}
@@ -416,7 +420,16 @@ export function CandidateSplitDrawer({
             </button>
             <button
               type="button"
-              className={`px-3 py-1 text-xs font-semibold rounded-md transition-all ${
+              className={`px-3 py-1 text-xs font-semibold rounded-md transition-all cursor-pointer ${
+                activeTab === 'match' ? 'bg-white dark:bg-rf-surface text-rf-primary shadow-xs font-bold' : 'text-rf-ink-muted'
+              }`}
+              onClick={() => setActiveTab('match')}
+            >
+              🎯 Position Fit Score
+            </button>
+            <button
+              type="button"
+              className={`px-3 py-1 text-xs font-semibold rounded-md transition-all cursor-pointer ${
                 activeTab === 'chatter' ? 'bg-white dark:bg-rf-surface text-rf-primary shadow-xs font-bold' : 'text-rf-ink-muted'
               }`}
               onClick={() => setActiveTab('chatter')}
@@ -428,22 +441,63 @@ export function CandidateSplitDrawer({
 
         {/* 2-Column Split Body */}
         <div className="flex flex-1 overflow-hidden">
-          {/* Left Column: CV Document or Activity Chatter */}
+          {/* Left Column: CV Document, Position Fit Scorecard, or Activity Chatter */}
           <section className="flex-1 overflow-y-auto border-r border-rf-border p-6 rf-scrollbar bg-slate-50/50 dark:bg-rf-surface-subtle/20">
-            {activeTab === 'cv' ? (
+            {activeTab === 'match' && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between border-b border-rf-border pb-3">
+                  <span className="text-xs font-bold uppercase tracking-wider text-rf-ink-muted flex items-center gap-1.5">
+                    <Icon name="sparkles" size={14} className="text-rf-primary" />
+                    Empirical Candidate Fit Scorecard
+                  </span>
+                  <Badge variant="success">Clinical & Technical ATS</Badge>
+                </div>
+                <CandidateFitScorecard
+                  candidate={candidate}
+                  requirements={effectiveRequirements}
+                  variant="full"
+                  showBreakdownInitially={true}
+                />
+              </div>
+            )}
+
+            {activeTab === 'cv' && (
               <div className="space-y-4">
                 <div className="flex items-center justify-between border-b border-rf-border pb-3">
                   <span className="text-xs font-bold uppercase tracking-wider text-rf-ink-muted flex items-center gap-1.5">
                     <Icon name="file-text" size={14} className="text-rf-primary" />
                     Interactive Resume Preview
                   </span>
-                  <Badge variant="info">PDF / Document Extracted</Badge>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('match')}
+                      className="text-xs font-semibold text-rf-primary hover:underline cursor-pointer flex items-center gap-1"
+                    >
+                      <span>View Fit Score</span>
+                      <Icon name="sparkles" size={12} />
+                    </button>
+                    <Badge variant="info">PDF / Document Extracted</Badge>
+                  </div>
+                </div>
+
+                {/* Compact Match Scorecard Banner */}
+                <div
+                  onClick={() => setActiveTab('match')}
+                  className="cursor-pointer hover:opacity-95 transition-opacity"
+                  title="Click to view detailed breakdown"
+                >
+                  <CandidateFitScorecard
+                    candidate={candidate}
+                    requirements={effectiveRequirements}
+                    variant="compact"
+                  />
                 </div>
 
                 <div className="rounded-xl border border-rf-border bg-white dark:bg-rf-surface p-6 shadow-xs space-y-5">
                   <div>
                     <h3 className="text-base font-bold text-rf-ink dark:text-white">
-                      {candidate ? `${candidate.firstName} ${candidate.lastName}` : 'Candidate Profile'}
+                      {candidate ? `${candidate.firstName || ''} ${candidate.lastName || ''}`.trim() || 'Candidate Profile' : 'Candidate Profile'}
                     </h3>
                     <p className="text-sm font-medium text-rf-primary">
                       {candidate?.currentTitle || 'Healthcare / Engineering Professional'}
@@ -483,8 +537,10 @@ export function CandidateSplitDrawer({
                   </div>
                 </div>
               </div>
-            ) : (
-              /* Odoo-style Internal Chatter & Email Stream */
+            )}
+
+            {activeTab === 'chatter' && (
+              /* RecruitFlow Internal Chatter & Email Stream */
               <div className="space-y-4">
                 <div className="flex items-center justify-between border-b border-rf-border pb-3">
                   <span className="text-xs font-bold uppercase tracking-wider text-rf-ink-muted flex items-center gap-1.5">

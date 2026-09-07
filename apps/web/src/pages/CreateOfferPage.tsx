@@ -25,7 +25,7 @@ type OfferComponentDraft = {
 
 type OfferComponentField = keyof OfferComponentDraft;
 
-const OFFER_STEPS = ['Application', 'Package Components', 'Terms & Dates', 'Approval Routing', 'Review'];
+const OFFER_STEPS = ['Candidate & Role', 'Compensation Package', 'Terms & Sign-Off'];
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : 'An unexpected error occurred.';

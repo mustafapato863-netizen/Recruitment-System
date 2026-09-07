@@ -34,6 +34,11 @@ export const createVacancyRequestSchema = z.object({
     .nullable()
     .optional(),
   justification: optionalText(5_000),
+  jobSummary: optionalText(500),
+  description: optionalText(5_000),
+  responsibilities: optionalText(5_000),
+  qualifications: optionalText(5_000),
+  benefits: optionalText(5_000),
 });
 
 export const updateVacancyRequestSchema = z.object({
@@ -51,6 +56,11 @@ export const updateVacancyRequestSchema = z.object({
     .nullable()
     .optional(),
   justification: optionalText(5_000),
+  jobSummary: optionalText(500),
+  description: optionalText(5_000),
+  responsibilities: optionalText(5_000),
+  qualifications: optionalText(5_000),
+  benefits: optionalText(5_000),
 });
 
 export const updateVacancyStatusSchema = z.object({
@@ -337,3 +347,7 @@ export const updateIntegrationConfigSchema = z.object({
   status: z.enum(['Available', 'Connected', 'Planned', 'Disconnected']).optional(),
   configJson: z.record(z.string(), z.unknown()).optional(),
 });
+
+// ─── Candidate Position Fit Matching ────────────────────────
+export * from './matching';
+

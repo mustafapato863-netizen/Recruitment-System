@@ -7,6 +7,7 @@ import {
   Patch,
   Post,
   Query,
+  StreamableFile,
   UseGuards,
 } from '@nestjs/common';
 import type { AuthUser } from '@recruitflow/contracts';
@@ -36,6 +37,17 @@ export class VacanciesController {
   @RequirePermissions('VACANCY_VIEW')
   getWorkQueue(@CurrentUser() user: AuthUser, @Query() query: VacancyWorkQueueQueryDto) {
     return this.vacancyCoreService.getWorkQueue(user.organizationId, query);
+  }
+
+  @Get('export.xlsx')
+  @RequirePermissions('VACANCY_VIEW')
+  @AuditAction('VACANCY_EXPORT_XLSX')
+  async exportExcel(@CurrentUser() user: AuthUser) {
+    const workbook = await this.vacancyCoreService.exportExcel(user.organizationId);
+    return new StreamableFile(workbook, {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      disposition: 'attachment; filename="recruitflow-vacancies.xlsx"',
+    });
   }
 
   @Get(':id')

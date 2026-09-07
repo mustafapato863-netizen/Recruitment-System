@@ -50,6 +50,9 @@ export function VacancyOverviewPage() {
     department: string;
     jobSummary: string;
     description: string;
+    responsibilities: string;
+    qualifications: string;
+    benefits: string;
   }>({
     title: '',
     approvedHeadcount: 1,
@@ -58,6 +61,9 @@ export function VacancyOverviewPage() {
     department: '',
     jobSummary: '',
     description: '',
+    responsibilities: '',
+    qualifications: '',
+    benefits: '',
   });
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [isActionsDropdownOpen, setIsActionsDropdownOpen] = useState(false);
@@ -113,9 +119,12 @@ export function VacancyOverviewPage() {
         approvedHeadcount: vacancy.approvedHeadcount ?? 1,
         status: (vacancy.status as VacancyStatus) || 'Open',
         location: vacancy.location || '',
-        department: (vacancy as unknown as { department?: string })?.department || '',
-        jobSummary: (vacancy as unknown as { jobSummary?: string })?.jobSummary || '',
-        description: (vacancy as unknown as { description?: string })?.description || '',
+        department: vacancy.department || '',
+        jobSummary: vacancy.jobSummary || '',
+        description: vacancy.description || '',
+        responsibilities: vacancy.responsibilities || '',
+        qualifications: vacancy.qualifications || '',
+        benefits: vacancy.benefits || '',
       });
     }
     setIsEditModalOpen(true);
@@ -134,6 +143,9 @@ export function VacancyOverviewPage() {
         department: editFormData.department.trim() || undefined,
         jobSummary: editFormData.jobSummary.trim() || undefined,
         description: editFormData.description.trim() || undefined,
+        responsibilities: editFormData.responsibilities.trim() || undefined,
+        qualifications: editFormData.qualifications.trim() || undefined,
+        benefits: editFormData.benefits.trim() || undefined,
       });
       if (updated) {
         setVacancy(updated);
@@ -185,7 +197,7 @@ export function VacancyOverviewPage() {
 
   const jobTitle = vacancy?.position?.title || vacancy?.title || 'No position';
   useSetBreadcrumbTitle(jobTitle && jobTitle !== 'No position' ? jobTitle : 'Job Requisition');
-  const departmentName = (vacancy as unknown as { department?: string } | null | undefined)?.department || vacancy?.branch?.name || '—';
+  const departmentName = vacancy?.department || vacancy?.branch?.name || '—';
   const locationText = vacancy?.location || vacancy?.branch?.name || '—';
   const statusLabel = vacancy?.status || '—';
 
@@ -429,7 +441,7 @@ export function VacancyOverviewPage() {
         </div>
       </div>
 
-      {/* ── Persistent Odoo Smart Stat Buttons (E9.2) ── */}
+      {/* ── Persistent RecruitFlow Smart Stat Buttons (E9.2) ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
         {/* Card 1: Applications */}
         <div
@@ -803,7 +815,9 @@ export function VacancyOverviewPage() {
             {/* Left Sub-Column: Description, Dept/Team */}
             <div className="md:col-span-7 space-y-4">
               <p className="text-xs leading-relaxed text-slate-600 dark:text-slate-300">
-                {vacancy?.vacancyRequest?.justification ||
+                {vacancy?.jobSummary ||
+                  vacancy?.vacancyRequest?.jobSummary ||
+                  vacancy?.vacancyRequest?.justification ||
                   vacancy?.vacancyRequest?.reason ||
                   'Requisition justification and job summary are defined per department approval.'}
               </p>
@@ -836,6 +850,58 @@ export function VacancyOverviewPage() {
                   {vacancy?.vacancyRequest?.justification ||
                     'Requisition justification details are managed in the vacancy request module.'}
                 </p>
+              </div>
+
+              <div className="pt-2 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-bold text-slate-900 dark:text-white">Role Requirements</h3>
+                  {!vacancy?.description && !vacancy?.responsibilities && !vacancy?.qualifications && !vacancy?.benefits && (
+                    <button
+                      type="button"
+                      onClick={() => setIsEditModalOpen(true)}
+                      className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                    >
+                      Add requirements
+                    </button>
+                  )}
+                </div>
+                {vacancy?.description && (
+                  <div>
+                    <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">About the role</h4>
+                    <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-line">
+                      {vacancy.description}
+                    </p>
+                  </div>
+                )}
+                {vacancy?.responsibilities && (
+                  <div>
+                    <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">Key responsibilities</h4>
+                    <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-line">
+                      {vacancy.responsibilities}
+                    </p>
+                  </div>
+                )}
+                {vacancy?.qualifications && (
+                  <div>
+                    <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">Required qualifications</h4>
+                    <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-line">
+                      {vacancy.qualifications}
+                    </p>
+                  </div>
+                )}
+                {vacancy?.benefits && (
+                  <div>
+                    <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">Benefits & highlights</h4>
+                    <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-line">
+                      {vacancy.benefits}
+                    </p>
+                  </div>
+                )}
+                {!vacancy?.description && !vacancy?.responsibilities && !vacancy?.qualifications && !vacancy?.benefits && (
+                  <p className="text-xs text-slate-400 dark:text-slate-500 leading-relaxed">
+                    No role requirements yet. They are drafted on the vacancy request and can be edited here at any time.
+                  </p>
+                )}
               </div>
             </div>
 
@@ -1411,12 +1477,43 @@ export function VacancyOverviewPage() {
           </div>
 
           <div>
-            <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">Detailed Description & Responsibilities</label>
+            <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">About the Role</label>
             <Textarea
               rows={4}
               value={editFormData.description}
               onChange={(e) => setEditFormData((prev) => ({ ...prev, description: e.target.value }))}
-              placeholder="Full role requirements, expectations, and benefits..."
+              placeholder="Unit, team, shift pattern, and what success looks like..."
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">Key Responsibilities</label>
+              <Textarea
+                rows={4}
+                value={editFormData.responsibilities}
+                onChange={(e) => setEditFormData((prev) => ({ ...prev, responsibilities: e.target.value }))}
+                placeholder="One per line..."
+              />
+            </div>
+            <div>
+              <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">Required Qualifications</label>
+              <Textarea
+                rows={4}
+                value={editFormData.qualifications}
+                onChange={(e) => setEditFormData((prev) => ({ ...prev, qualifications: e.target.value }))}
+                placeholder="Licenses, certifications, experience..."
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">Benefits & Highlights</label>
+            <Textarea
+              rows={3}
+              value={editFormData.benefits}
+              onChange={(e) => setEditFormData((prev) => ({ ...prev, benefits: e.target.value }))}
+              placeholder="Package, housing, flights, CME allowance..."
             />
           </div>
 
@@ -1446,7 +1543,7 @@ export function VacancyOverviewPage() {
         onClose={() => setIsAddApplicantModalOpen(false)}
         preselectedVacancyId={id}
         preselectedVacancyTitle={jobTitle}
-        onSuccess={(_newApp) => {
+        onSuccess={() => {
           showToast('Candidate added to requisition pipeline successfully');
           void loadAllData();
         }}

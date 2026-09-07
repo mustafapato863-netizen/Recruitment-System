@@ -7,6 +7,7 @@ import {
   Patch,
   Post,
   Query,
+  StreamableFile,
   UseGuards,
 } from '@nestjs/common';
 import { TenantScopedGuard } from '../common/guards/tenant-scoped.guard';
@@ -45,6 +46,22 @@ export class CandidatesController {
   ) {
     const viewPii = await this.userPermissions.hasPermission(user.userId, tenantId, 'VIEW_CANDIDATE_PII');
     return this.candidatesService.listCandidates(tenantId, query, { viewPii });
+  }
+
+  @Get('export.xlsx')
+  @RequirePermissions('CANDIDATE_VIEW')
+  @AuditAction('CANDIDATE_EXPORT_XLSX')
+  async exportExcel(
+    @CurrentUser() user: AuthUser,
+    @CurrentTenant() tenantId: string,
+    @Query() query: CandidateQueryDto,
+  ) {
+    const viewPii = await this.userPermissions.hasPermission(user.userId, tenantId, 'VIEW_CANDIDATE_PII');
+    const workbook = await this.candidatesService.exportExcel(tenantId, query, { viewPii });
+    return new StreamableFile(workbook, {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      disposition: 'attachment; filename="recruitflow-candidates.xlsx"',
+    });
   }
 
   @Get(':id')

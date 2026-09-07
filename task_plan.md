@@ -1,7 +1,7 @@
 # RecruitFlow — Candidate Journey Completion Plan
-Status: COMPLETED (All Phases 0–4 Delivered & Verified)
+Status: COMPLETED (All Phases 0–4 plus E1–E9 Delivered & Verified)
 Created: 2026-09-04
-Last Updated: 2026-09-05
+Last Updated: 2026-09-06
 Owner: AI Pair + Mustafa
 
 ## Goal
@@ -22,7 +22,7 @@ Deliver as incremental vertical slices, each independently shippable.
 | E6 | Per-Position Workflow & Odoo Alignment (E6.1–E6.4) | High | `completed` |
 | **E7** | **Per-Position Operational Parity Blueprint (E7.1–E7.4)** | **High** | `completed` |
 | **E8** | **Workspace Ergonomics, Breadcrumbs, Card Glow & Recruiter Restrictions** | **High** | `completed` |
-| **E9** | **Full Per-Position Workflow Logic & Odoo Parity Implementation (E9.1–E9.6)** | **High** | `in_progress` |
+| **E9** | **Full Per-Position Workflow Logic & Odoo Parity Implementation (E9.1–E9.6)** | **High** | `completed` |
 
 ## Per-Position Workflow Enhancements (E6) - COMPLETED
 - **E6.1:** Vacancy-Locked Pipeline Mode (`VacancyOverviewPage.tsx` & `ApplicationsPage.tsx`) [DONE]
@@ -44,19 +44,25 @@ Deliver as incremental vertical slices, each independently shippable.
 - **E8.5:** Restricted recruiters from assigning or reassigning tasks across UI & backend API (`TasksPage.tsx`, `ManagerDashboard.tsx`, and `apps/api/src/tasks/tasks.controller.ts` with `@RequirePermissions('VACANCY_MANAGE')` and role checks).
 - **E8.6:** Breadcrumb Context & Deduplication (`BreadcrumbContext.tsx`, `BreadcrumbsBar.tsx`, removal of in-page duplicate breadcrumb bars across detail pages, contextual route ID fallback resolution, dynamic entity titles).
 
-## Full Per-Position Workflow Logic & Odoo Parity (E9) - IN PROGRESS
-- **E9.1:** Pipeline Position Switcher Dropdown in `ApplicationsPage.tsx` [TODO]
-- **E9.2:** Persistent Odoo Smart Stat Buttons & Clean Sub-flows on `VacancyOverviewPage.tsx` [TODO]
-- **E9.3:** Headcount Synchronized Incrementing & Auto-Closure Handshake (API + UI) [TODO]
-- **E9.4:** Structured Refusal / Rejection Reason Taxonomy & Modal [TODO]
-- **E9.5:** 1-Click Recruiter "Claim Application" on Kanban Card [TODO]
-- **E9.6:** Real Vacancy Edit Persistence & Public Careers Preview [TODO]
+## Full Per-Position Workflow Logic & Odoo Parity (E9) - COMPLETED 2026-09-06
+- **E9.1:** Pipeline Position Switcher Dropdown in `ApplicationsPage.tsx` [DONE]
+- **E9.2:** Persistent Odoo Smart Stat Buttons & Clean Sub-flows on `VacancyOverviewPage.tsx` [DONE]
+- **E9.3:** Headcount Synchronized Incrementing & Auto-Closure Handshake (API + UI) [DONE]
+- **E9.4:** Structured Refusal / Rejection Reason Taxonomy & Modal [DONE]
+- **E9.5:** 1-Click Recruiter "Claim Application" on Kanban Card [DONE]
+- **E9.6:** Real Vacancy Edit Persistence & Public Careers Preview [DONE]
+- Evidence: landed across `6419977` + `d2d8521` (Milestone 1); markers verified in
+  `ApplicationsPage.tsx` (E9.1/E9.3/E9.4/E9.5) and `VacancyOverviewPage.tsx` (E9.2/E9.6).
 
-## Verification & Build Status
+## Verification & Build Status (re-verified 2026-09-06, commit `b01d115`)
 - **Web Typecheck (`tsc -p tsconfig.app.json --noEmit`):** Clean (0 errors).
-- **Web Build (`pnpm build`):** Clean (production build succeeded in 1.38s).
-- **Web Tests:** 23 test suites, 61/61 passing (100%).
-- **API Typecheck & Tests:** Clean (11/11 passing).
+- **API + Worker Typecheck:** Clean (0 errors).
+- **Web Build (`pnpm --dir apps/web build`):** Clean (~3s, clean chunk split).
+- **Web Tests:** 35 files, 121/121 passing (100%).
+- **API Tests:** 4 files, 26/26 passing (gate now covers all `apps/api/src` specs).
+- **Worker Tests:** 1 file, 4/4 passing (new `test` script).
+- **ESLint:** Clean on all new/changed files (44 errors fixed this session).
+- **DB:** `migrate status` up to date (incl. `20260906_phase_c_stage_automation_email_templates`).
 
 
 

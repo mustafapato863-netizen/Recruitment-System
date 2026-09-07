@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import type { VacancyCoreContext, VacancyRequest } from '@recruitflow/contracts';
 import { fetchApi, getApi, postApi } from '../api/client';
 import { StatusBadge } from '../components/StatusBadge';
@@ -90,11 +90,19 @@ type TabType = 'vacancy-requests' | 'offers' | 'final-hires';
 
 export function ApprovalInboxPage() {
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tabParam = searchParams.get('tab') as TabType | null;
+
   const canApproveVacancies = Boolean(user?.permissions.includes('VACANCY_REQUEST_APPROVE'));
   const canApproveOffers = Boolean(user?.permissions.includes('APPROVE_OFFERS'));
   const canApproveFinalHires = Boolean(user?.permissions.includes('FINAL_HIRING_APPROVAL'));
 
-  const [activeTab, setActiveTab] = useState<TabType>('vacancy-requests');
+  const [activeTab, setActiveTab] = useState<TabType>(() => {
+    if (tabParam && ['vacancy-requests', 'offers', 'final-hires'].includes(tabParam)) {
+      return tabParam;
+    }
+    return 'vacancy-requests';
+  });
   const [requests, setRequests] = useState<VacancyRequest[]>([]);
   const [vacancyContext, setVacancyContext] = useState<VacancyCoreContext | null>(null);
   const [offerApprovals, setOfferApprovals] = useState<OfferApprovalInboxItem[]>([]);
@@ -105,6 +113,16 @@ export function ApprovalInboxPage() {
   const [feedback, setFeedback] = useState('');
   const [busyId, setBusyId] = useState<string | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmState>(initialConfirmState);
+
+  const handleTabChange = useCallback((key: TabType) => {
+    setActiveTab(key);
+    setSearchQuery('');
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.set('tab', key);
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
 
   useEffect(() => {
     const currentIsAllowed = (activeTab === 'vacancy-requests' && canApproveVacancies)
@@ -125,9 +143,24 @@ export function ApprovalInboxPage() {
         canApproveOffers ? getApi<OfferApprovalInboxItem[]>('/offers/approvals/inbox') : Promise.resolve(null),
         canApproveFinalHires ? getApi<FinalHiringInboxItem[]>('/hiring/final-approvals') : Promise.resolve(null),
       ]);
-      setRequests(vrRes ?? []);
-      setOfferApprovals(offRes ?? []);
-      setFinalHires(hireRes ?? []);
+      const vrList = vrRes ?? [];
+      const offList = offRes ?? [];
+      const hireList = hireRes ?? [];
+      setRequests(vrList);
+      setOfferApprovals(offList);
+      setFinalHires(hireList);
+
+      // Auto-switch to tab with pending items if initial tab has 0
+      const currentUrlTab = new URLSearchParams(window.location.search).get('tab');
+      if (!currentUrlTab) {
+        if (canApproveVacancies && vrList.length > 0) {
+          setActiveTab('vacancy-requests');
+        } else if (canApproveOffers && offList.length > 0) {
+          setActiveTab('offers');
+        } else if (canApproveFinalHires && hireList.length > 0) {
+          setActiveTab('final-hires');
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to load the approval inbox');
     } finally {
@@ -340,27 +373,54 @@ export function ApprovalInboxPage() {
           tone="action"
           icon={<Icon name="inbox" size={15} />}
         />
-        <MetricCard
-          label="Vacancy Requests"
-          value={requests.length}
-          detail="Requisition signoffs"
-          tone="info"
-          icon={<Icon name="vacancy" size={15} />}
-        />
-        <MetricCard
-          label="Offer Signoffs"
-          value={offerApprovals.length}
-          detail="Compensation packages"
-          tone="success"
-          icon={<Icon name="offer" size={15} />}
-        />
-        <MetricCard
-          label="Executive Clearances"
-          value={finalHires.length}
-          detail="Final hiring gates"
-          tone="warning"
-          icon={<Icon name="hire" size={15} />}
-        />
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => handleTabChange('vacancy-requests')}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleTabChange('vacancy-requests'); }}
+          className={`cursor-pointer transition hover:scale-[1.01] rounded-2xl ${activeTab === 'vacancy-requests' ? 'ring-2 ring-blue-500' : ''}`}
+          title="Filter to Vacancy Requests"
+        >
+          <MetricCard
+            label="Vacancy Requests"
+            value={requests.length}
+            detail="Requisition signoffs"
+            tone="info"
+            icon={<Icon name="vacancy" size={15} />}
+          />
+        </div>
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => handleTabChange('offers')}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleTabChange('offers'); }}
+          className={`cursor-pointer transition hover:scale-[1.01] rounded-2xl ${activeTab === 'offers' ? 'ring-2 ring-emerald-500' : ''}`}
+          title="Filter to Offer Signoffs"
+        >
+          <MetricCard
+            label="Offer Signoffs"
+            value={offerApprovals.length}
+            detail="Compensation packages"
+            tone="success"
+            icon={<Icon name="offer" size={15} />}
+          />
+        </div>
+        <div
+          role="button"
+          tabIndex={0}
+          onClick={() => handleTabChange('final-hires')}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleTabChange('final-hires'); }}
+          className={`cursor-pointer transition hover:scale-[1.01] rounded-2xl ${activeTab === 'final-hires' ? 'ring-2 ring-amber-500' : ''}`}
+          title="Filter to Executive Clearances"
+        >
+          <MetricCard
+            label="Executive Clearances"
+            value={finalHires.length}
+            detail="Final hiring gates"
+            tone="warning"
+            icon={<Icon name="hire" size={15} />}
+          />
+        </div>
         </div>
       </section>
 
@@ -378,10 +438,7 @@ export function ApprovalInboxPage() {
         className="rf-approval-tabs"
         ariaLabel="Inbox Tabs"
         activeKey={activeTab}
-        onChange={(key) => {
-          setActiveTab(key as TabType);
-          setSearchQuery('');
-        }}
+        onChange={(key) => handleTabChange(key as TabType)}
         items={[
           ...(canApproveVacancies ? [{ key: 'vacancy-requests', label: `Vacancy Requests (${requests.length})` }] : []),
           ...(canApproveOffers ? [{ key: 'offers', label: `Offer Approvals (${offerApprovals.length})` }] : []),
@@ -522,9 +579,9 @@ export function ApprovalInboxPage() {
             />
           ) : (
             <div className="rf-approval-list grid grid-cols-1 gap-4">
-              {filteredOffers.map((oa) => (
+              {filteredOffers.map((oa, index) => (
                 <div
-                  key={oa.id}
+                  key={oa.id ? `${oa.id}-${oa.step ?? index}` : index}
                   className="rf-approval-card rf-approval-card--offer relative overflow-hidden rounded-2xl border border-rf-border-subtle bg-rf-surface p-5 shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-500/40 hover:shadow-md group"
                 >
                   {/* Left Accent Gradient Strip */}
@@ -635,9 +692,9 @@ export function ApprovalInboxPage() {
             />
           ) : (
             <div className="rf-approval-list grid grid-cols-1 gap-4">
-              {filteredHires.map((hc) => (
+              {filteredHires.map((hc, index) => (
                 <div
-                  key={hc.id}
+                  key={hc.id ? `${hc.id}-${index}` : index}
                   className="rf-approval-card rf-approval-card--hire relative overflow-hidden rounded-2xl border border-rf-border-subtle bg-rf-surface p-5 shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:border-amber-500/40 hover:shadow-md group"
                 >
                   {/* Left Accent Gradient Strip */}

@@ -101,7 +101,7 @@ function PublicJobCard({ job }: { job: PublicJob }) {
         {job.location && <span className="inline-flex items-center gap-1.5"><Icon name="globe" size={13} />{job.location}</span>}
         {job.employmentType && <span>{job.employmentType}</span>}
       </div>
-      {job.description && <p className="m-0 line-clamp-3 text-xs font-medium leading-6 text-rf-ink-muted">{job.description}</p>}
+      {(job.jobSummary || job.description) && <p className="m-0 line-clamp-3 text-xs font-medium leading-6 text-rf-ink-muted">{job.jobSummary || job.description}</p>}
       <div className="mt-auto flex items-center justify-between gap-3 border-t border-rf-border-subtle pt-3">
         <span className="text-[10px] font-semibold text-rf-ink-muted">Published {new Date(job.publishedAt).toLocaleDateString()}</span>
         <Button variant="secondary" size="sm" asChild><Link to={job.detailPath}>View role <Icon name="arrow-right" size={13} /></Link></Button>

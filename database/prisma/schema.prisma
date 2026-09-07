@@ -273,6 +273,11 @@ model VacancyRequest {
   criticality        String?                  @db.VarChar(40)
   targetStartDate    DateTime?                @db.Date
   justification      String?
+  jobSummary         String?
+  description        String?
+  responsibilities   String?
+  qualifications     String?
+  benefits           String?
   submittedAt        DateTime?                @db.Timestamptz(6)
   approvalRevision   Int                      @default(1)
   approvals          VacancyRequestApproval[]
@@ -325,6 +330,12 @@ model Vacancy {
   requiredSkills     String[]            @default([]) @db.VarChar(100)
   minExperienceYears Int?
   location           String?             @db.VarChar(120)
+  department         String?             @db.VarChar(120)
+  jobSummary         String?
+  description        String?
+  responsibilities   String?
+  qualifications     String?
+  benefits           String?
   assignments        VacancyAssignment[]
   applications       Application[]
   createdAt          DateTime            @default(now()) @db.Timestamptz(6)

@@ -10,7 +10,9 @@ import type {
   PaginatedResult,
   ScreeningLog,
   UpdateApplicationStageInput,
+  Vacancy,
 } from '@recruitflow/contracts';
+import { CandidateFitScorecard } from '../components/candidate/CandidateFitScorecard';
 import { Icon } from '../components/Icon';
 import { Modal } from '../components/Modal';
 import { Alert } from '../components/ui/Alert';
@@ -43,6 +45,7 @@ export function ApplicationDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [application, setApplication] = useState<Application | null>(null);
+  const [vacancy, setVacancy] = useState<Vacancy | null>(null);
   const [history, setHistory] = useState<ApplicationStatusHistoryItem[]>([]);
   const [notes, setNotes] = useState<ApplicationNote[]>([]);
   const [, setScreeningLogs] = useState<ScreeningLog[]>([]);
@@ -67,6 +70,9 @@ export function ApplicationDetailPage() {
   const [tags, setTags] = useState<string[]>([]);
   const [newTagInput, setNewTagInput] = useState('');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Sibling applications for fast sequential candidate review
+  const [siblingApplications, setSiblingApplications] = useState<Application[]>([]);
 
   // Scheduling modal state
   const [schedInterviewTitle, setSchedInterviewTitle] = useState('');
@@ -154,6 +160,27 @@ export function ApplicationDetailPage() {
               (a) => a.id !== id && a.stage !== 'Rejected' && a.stage !== 'Withdrawn'
             );
             setOtherActiveApplications(parallel);
+          } catch {
+            // Non-blocking query failure
+          }
+        }
+        if (appRes.value.vacancyId) {
+          try {
+            const [vacRes, sibsRes] = await Promise.allSettled([
+              getApi<Vacancy>(`/vacancies/${appRes.value.vacancyId}`),
+              getApi<PaginatedResult<Application>>(`/applications?vacancyId=${appRes.value.vacancyId}&pageSize=100`),
+            ]);
+            if (vacRes.status === 'fulfilled' && vacRes.value) setVacancy(vacRes.value);
+            if (sibsRes.status === 'fulfilled' && sibsRes.value?.data) {
+              setSiblingApplications(sibsRes.value.data);
+            }
+          } catch {
+            // Non-blocking query failure
+          }
+        } else {
+          try {
+            const generalRes = await getApi<PaginatedResult<Application>>('/applications?pageSize=50');
+            if (generalRes?.data) setSiblingApplications(generalRes.data);
           } catch {
             // Non-blocking query failure
           }
@@ -261,6 +288,36 @@ export function ApplicationDetailPage() {
       ? `${candidateName} (${appIdDisplay || 'Application'})`
       : 'Application Details'
   );
+
+  // Compute sibling indexes for fast candidate cycling
+  const siblingIndex = useMemo(() => {
+    return siblingApplications.findIndex((s) => s.id === id);
+  }, [siblingApplications, id]);
+
+  const prevApplication = siblingIndex > 0 ? siblingApplications[siblingIndex - 1] : null;
+  const nextApplication =
+    siblingIndex >= 0 && siblingIndex < siblingApplications.length - 1
+      ? siblingApplications[siblingIndex + 1]
+      : null;
+
+  // Keyboard navigation for fast candidate review ([ for previous, ] for next)
+  useEffect(() => {
+    const handleKeyNavigation = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return;
+      if (target?.isContentEditable) return;
+
+      if (e.key === '[' && prevApplication) {
+        e.preventDefault();
+        navigate(`/applications/${prevApplication.id}`);
+      } else if (e.key === ']' && nextApplication) {
+        e.preventDefault();
+        navigate(`/applications/${nextApplication.id}`);
+      }
+    };
+    window.addEventListener('keydown', handleKeyNavigation);
+    return () => window.removeEventListener('keydown', handleKeyNavigation);
+  }, [prevApplication, nextApplication, navigate]);
 
   const handleAddTag = async () => {
     if (!newTagInput.trim() || tags.includes(newTagInput.trim())) return;
@@ -475,24 +532,91 @@ export function ApplicationDetailPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Fast Applicant Sibling Switcher */}
+          {siblingApplications.length > 1 && (
+            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 text-xs shadow-2xs">
+              <button
+                type="button"
+                onClick={() => prevApplication && navigate(`/applications/${prevApplication.id}`)}
+                disabled={!prevApplication}
+                className="h-7 px-2 inline-flex items-center gap-1 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-700 disabled:opacity-35 disabled:hover:bg-transparent transition font-semibold cursor-pointer"
+                title="Previous candidate in this requisition (Shortcut: [)"
+              >
+                <Icon name="chevron-left" size={13} />
+                <span className="hidden sm:inline">Prev</span>
+              </button>
+              <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 px-1.5 whitespace-nowrap">
+                {siblingIndex >= 0 ? `${siblingIndex + 1} of ${siblingApplications.length}` : `${siblingApplications.length} total`}
+              </span>
+              <button
+                type="button"
+                onClick={() => nextApplication && navigate(`/applications/${nextApplication.id}`)}
+                disabled={!nextApplication}
+                className="h-7 px-2 inline-flex items-center gap-1 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-700 disabled:opacity-35 disabled:hover:bg-transparent transition font-semibold cursor-pointer"
+                title="Next candidate in this requisition (Shortcut: ])"
+              >
+                <span className="hidden sm:inline">Next</span>
+                <Icon name="chevron-right" size={13} />
+              </button>
+            </div>
+          )}
+
+          {/* Fast Stage Move Action */}
+          <button
+            type="button"
+            onClick={() => setIsMoveStageModalOpen(true)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/50 text-[#0084ce] dark:text-sky-300 hover:bg-sky-100 dark:hover:bg-sky-900/60 text-xs font-bold transition shadow-2xs cursor-pointer"
+            title="Fast advance stage"
+          >
+            <Icon name="pipeline" size={13} />
+            <span>Advance Stage</span>
+          </button>
+
+          {/* Quick Reject Button */}
+          {application?.stage !== 'Rejected' && application?.stage !== 'Withdrawn' && (
+            <button
+              type="button"
+              onClick={() => setIsRejectModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-rose-200 dark:border-rose-900/60 bg-rose-50/60 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 hover:bg-rose-100 dark:hover:bg-rose-900/60 text-xs font-bold transition shadow-2xs cursor-pointer"
+              title="Reject candidate"
+            >
+              <Icon name="close" size={13} />
+              <span className="hidden sm:inline">Reject</span>
+            </button>
+          )}
+
+          {/* Copy Profile Link Button */}
+          <button
+            type="button"
+            onClick={() => {
+              navigator.clipboard.writeText(window.location.href);
+              showToast('✓ Profile link copied to clipboard');
+            }}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-semibold transition shadow-2xs cursor-pointer"
+            title="Copy direct URL"
+          >
+            <Icon name="link" size={13} />
+            <span className="hidden md:inline">Share</span>
+          </button>
+
           {application?.candidateId && (
             <Link
               to={`/candidates/${application.candidateId}`}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-purple-200 dark:border-purple-800 bg-purple-50/80 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/60 text-xs font-bold transition shadow-xs no-underline"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-purple-200 dark:border-purple-800 bg-purple-50/80 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 hover:bg-purple-100 dark:hover:bg-purple-900/60 text-xs font-bold transition shadow-xs no-underline"
             >
               <Icon name="user" size={13} />
-              <span>Candidate 360 Profile ↗</span>
+              <span>360° Profile ↗</span>
             </Link>
           )}
           {application?.vacancyId && (
             <button
               type="button"
               onClick={() => navigate(`/vacancies/${application.vacancyId}`)}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50/60 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-xs font-bold transition shadow-xs cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50/60 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-xs font-bold transition shadow-xs cursor-pointer"
             >
               <Icon name="briefcase" size={13} />
-              <span>Requisition Overview ↗</span>
+              <span>Job Requisition ↗</span>
             </button>
           )}
         </div>
@@ -870,6 +994,15 @@ export function ApplicationDetailPage() {
 
           {activeTab === 'overview' && (
             <>
+              {/* SGH Empirical Fit Scorecard */}
+              <div className="mb-6">
+                <CandidateFitScorecard
+                  candidate={application?.candidate}
+                  requirements={vacancy}
+                  variant="full"
+                />
+              </div>
+
               {/* ── Middle Row: Timeline (Left ~60%) & Quick Actions / About (Right ~40%) ── */}
               <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
                 {/* Left: Timeline Card (7 cols) */}

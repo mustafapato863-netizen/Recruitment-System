@@ -3,8 +3,20 @@
  * static reference while keeping React data, routing, and permissions intact. */
 
 :root {
-  --rf-page-max: 1360px;
-  --rf-page-gutter: 24px;
+  --rf-page-max: 1720px;
+  --rf-page-gutter: 28px;
+}
+
+@media (max-width: 640px) {
+  :root {
+    --rf-page-gutter: 16px;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 1024px) {
+  :root {
+    --rf-page-gutter: 24px;
+  }
 }
 
 .sidebar {

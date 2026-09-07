@@ -1,6 +1,89 @@
 # Progress Log — RecruitFlow Candidate Journey
 
+## Session 2026-09-07
+
+### Completed — Full-App Workflow Simplification & Step Customizer Release
+- [x] **Applications Pipeline (`ApplicationsPage.tsx`)**:
+  - Implemented `PipelineStepMode`: `'streamlined'` (4 Steps), `'fast_track'` (3 Steps), and `'standard'` (6 Stages).
+  - Added Step Customizer dropdown in toolbar with persistent `localStorage` preference (`rf_pipeline_step_mode`).
+  - Added responsive Kanban layout container: in streamlined/fast-track mode, columns adapt without requiring horizontal scroll (`min-w-[1760px]`), fitting standard displays cleanly.
+  - Sub-stage badges on cards when in consolidated mode (`Applied`, `Screening`, `Offer`, `Pre-Hire`).
+  - Preserved exact drag-and-drop behavior, stage transitions, headcount check handshakes, and rejection modals.
+- [x] **Universal Stepper Component (`PipelineStepper.tsx`)**:
+  - Added icons for consolidated 3-4 step stages (`Review & Sourcing`, `Offer & Compliance`, `Role & Headcount`, etc.).
+  - Added dynamic minimum width support (`min-w-[380px]` or `min-w-[320px]` when compact/fewer steps, instead of rigid `min-w-[520px]`).
+  - Unit test passing: `PipelineStepper.test.tsx`.
+- [x] **Requisition Wizard (`CreateVacancyRequestPage.tsx`)**:
+  - Consolidated `WIZARD_STEPS` from 5 steps to 3: `['Requisition Basics', 'Specifications & Budget', 'Review & Submit']`.
+  - Added interactive active step state with "Next Step", "Previous Step", and "Show All Sections" toggles.
+- [x] **Offer Wizard (`CreateOfferPage.tsx`)**:
+  - Consolidated `OFFER_STEPS` from 5 steps to 3: `['Candidate & Role', 'Compensation Package', 'Terms & Sign-Off']`.
+- [x] **Bulk Import Wizard (`ImportPreviewPage.tsx`)**:
+  - Consolidated `IMPORT_STEPS` from 5 steps to 3: `['Upload File', 'Validate & Resolve', 'Confirm & Import']`.
+- [x] **Applicant-Facing Portal (`ApplicantPortalPage.tsx`)**:
+  - Added `isStreamlinedStepView` toggle in the applicant application drawer.
+  - Maps 5 internal HR stages to 3 clear candidate-facing milestones (`Application & Screening` → `Clinical Evaluation` → `Offer & Onboarding`).
+- [x] **Full-Stack Quality Gates & Tests**:
+  - Web Vitest Suite: 39 test files, 137 tests passing (0 failures).
+  - API Vitest Suite: 8 test files, 43 tests passing (0 failures).
+  - Worker Vitest Suite: 1 test file, 4 tests passing (0 failures).
+  - Monorepo Root: 48 test files, 184 tests passing green.
+  - TypeScript: Zero compiler errors across `apps/web`, `apps/api`, `apps/worker`.
+  - Production Builds: Clean Vite client build (6.61s), Nest build, and Worker tsc build.
+
 ## Session 2026-09-06
+
+### Completed — P10 gates, Phase C migration, E9 closure (evening session)
+- [x] **ESLint (44 errors fixed):** 12 in new Phase C/D + P10 files (structural mock
+      types, contract types, DI disable-wrappers per repo convention) + 32 more in
+      `InterviewsPage.tsx` (20 `any` → `InterviewListItem` view type), new calendar/
+      self-schedule tests, `applications.service.ts`, `ApplicationsPage.tsx`,
+      `InterviewCalendarPage.tsx`. All 47 touched files lint-clean. Pre-existing debt
+      noted (untouched pages: Offers/Reports/Settings/InterviewDetail) — not in scope.
+- [x] **Bonus type catch:** removing `any` exposed 4 real TS2322 errors in
+      `InterviewsPage.tsx` (`'Feedback Done'` into `InterviewStatus`) — fixed with
+      explicit `string` badge types. Web `tsc` clean.
+- [x] **Migration `20260906_phase_c_stage_automation_email_templates`:** hand-written
+      (shadow DB broken, see below), deployed, `migrate status` up to date. Also caught
+      dev DB up (applied pending `20260901`, `20260905`).
+- [x] **Test gates wired:** API `test` → all of `apps/api/src` (4 files/26 tests, was
+      1 file/11); worker `test` script added (1 file/4 tests); root `pnpm test` chains
+      web+api+worker (151 total, green).
+- [x] **Security:** self-schedule HMAC secret now fail-closed in production
+      (min 32 chars), matching outbox-crypto pattern.
+- [x] **E9 closed:** verified shipped in `6419977` + `d2d8521`; `task_plan.md` updated.
+- [x] **Committed `b01d115`** (59 files, +7022/−533). Worktree clean.
+- [x] **Shadow-DB diagnosis (read-only):** `20260824_bulk_import_center` ALTERs
+      `candidate_import_jobs`, created a day later in `20260825_schema_reconciliation`
+      → P1014 on any fresh replay (shadow/CI/new env). Dev survived via out-of-band
+      state. Workaround verified: `migrate diff --from-url <dev> --to-schema` needs no
+      shadow DB. Drift found: `applications_id_stage_version_idx` (from `20260901`)
+      not declared in schema — recommend follow-up `@@index` migration. Full history
+      repair + drift index migration pending owner go (no dev-DB writes made).
+
+### Completed — M5-G2: XLSX Import/Export and Master-Data Code Integrity
+- [x] **API Server-Side XLSX Product Exports:**
+  - `CandidatesService.exportExcel()` (`apps/api/src/candidates/candidates.service.ts`): Filter/scope-constrained, tenant-isolated candidate directory export to Excel workbook (`GET /api/v1/candidates/export.xlsx`), honoring PII masking based on `VIEW_CANDIDATE_PII` permission and UTC ISO date formatting.
+  - `CandidatesController` (`apps/api/src/candidates/candidates.controller.ts`): Wired route with `@RequirePermissions('CANDIDATE_VIEW')` and `@AuditAction('CANDIDATE_EXPORT_XLSX')`.
+  - `VacancyCoreService.exportExcel()` (`apps/api/src/vacancy-core/vacancy-core.service.ts`): Position, branch, legal entity, remaining headcount calculation, primary recruiter name, and UTC date export (`GET /api/v1/vacancies/export.xlsx`).
+  - `VacanciesController` (`apps/api/src/vacancy-core/vacancies.controller.ts`): Wired route with `@RequirePermissions('VACANCY_VIEW')` and `@AuditAction('VACANCY_EXPORT_XLSX')`.
+  - Unit tests: `candidates-export.spec.ts` (3 tests) & `vacancies-export.spec.ts` (1 test) — 100% passing.
+- [x] **Import Hardening & Consent Preservation:**
+  - Verified candidate consent status and timestamps are preserved on duplicate `Update` resolution in `import.service.ts`.
+  - Hardened formula rejection security check (`assertNoFormulas`) rejecting formula cells in Excel workbooks.
+  - Implemented Excel error report workbook generation with row numbers, failure reason details, and audit batch history.
+  - Unit tests: `bulk-import.service.spec.ts` (9 tests) covering templates across all 5 datasets, security formula cell rejection, inspection warnings, and error workbook download — 100% passing.
+- [x] **Frontend Export Triggers & UI Polish:**
+  - Added "Export XLSX" button with loading spinners and accessible tooltips to `CandidatesPage.tsx` preserving active directory search/filter query parameters.
+  - Added "Export XLSX" button with loading states and error alerts to `VacantListPage.tsx`.
+  - Extracted shared browser download utility `saveBlob` in `apps/web/src/utils/download.ts` and integrated across pages.
+  - Unit tests: Added `BulkImportPage.test.tsx` (6 tests) and `ExportButtons.test.tsx` (2 tests) — 100% passing.
+- [x] **Final Verification Gates:**
+  - `pnpm --dir apps/api test`: 7 test files, 39 tests passed (100% pass rate).
+  - `pnpm --dir apps/web test --run`: 37 test files, 129 tests passed (100% pass rate).
+  - `pnpm --dir apps/api exec tsc --noEmit`: 0 errors.
+  - `pnpm --dir apps/web exec tsc -p tsconfig.app.json --noEmit`: 0 errors.
+  - `pnpm --dir apps/web build`: Clean production build in 987ms.
 
 ### Completed — P10-RELEASE-02: Final Release Hardening & Commercial Readiness
 - [x] **Mutation Test Coverage (P10-R02.1):**

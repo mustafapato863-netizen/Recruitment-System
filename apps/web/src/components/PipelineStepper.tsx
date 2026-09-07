@@ -6,6 +6,7 @@ interface PipelineStepperProps {
   isRejectedOrWithdrawn?: boolean;
   steps?: string[];
   currentStep?: number;
+  compact?: boolean;
 }
 
 const DEFAULT_PIPELINE_STAGES = ['Applied', 'Screening', 'Interview', 'Offer', 'Pre-Hire', 'Joined'];
@@ -17,6 +18,7 @@ const STAGE_ICONS: Record<string, IconName> = {
   Offer: 'offer',
   'Pre-Hire': 'document',
   Joined: 'user-check',
+  Hired: 'user-check',
   Details: 'file-text',
   Compensation: 'offer',
   Review: 'check-circle',
@@ -24,6 +26,28 @@ const STAGE_ICONS: Record<string, IconName> = {
   Validate: 'check',
   Resolve: 'edit',
   Confirm: 'check-circle',
+  // Streamlined 3-4 Step stages
+  'Review & Sourcing': 'users',
+  'Review & Screening': 'users',
+  'Interview & Assessment': 'calendar',
+  'Evaluation & Interview': 'calendar',
+  'Offer & Compliance': 'offer',
+  'Offer & Pre-Hire': 'offer',
+  'Candidate & Role': 'users',
+  'Compensation Package': 'offer',
+  'Terms & Sign-Off': 'check-circle',
+  'Terms & Approval': 'check-circle',
+  'Role & Headcount': 'briefcase',
+  'Requisition Basics': 'briefcase',
+  'Parameters & Budget': 'file-text',
+  'Requirements & Budget': 'file-text',
+  'Review & Submit': 'check-circle',
+  'Upload File': 'upload',
+  'Upload Data': 'upload',
+  'Validate & Resolve': 'check',
+  'Confirm & Import': 'check-circle',
+  'Application Received': 'document',
+  'Final Decision & Joining': 'check-circle',
 };
 
 export function PipelineStepper({
@@ -31,6 +55,7 @@ export function PipelineStepper({
   isRejectedOrWithdrawn = false,
   steps,
   currentStep,
+  compact = false,
 }: PipelineStepperProps) {
   const stageList = steps && steps.length > 0 ? steps : DEFAULT_PIPELINE_STAGES;
   let currentIndex = 0;
@@ -61,14 +86,16 @@ export function PipelineStepper({
       role="region"
       tabIndex={0}
     >
-      <div className="relative min-w-[520px] px-4 py-2 rf-pipeline-stepper">
+      <div className={`relative px-4 py-2 rf-pipeline-stepper ${
+        compact ? 'min-w-[320px]' : stageList.length <= 4 ? 'min-w-0 sm:min-w-[380px]' : 'min-w-[520px]'
+      }`}>
         {/* Background track line */}
         <div className="absolute top-[26px] left-12 right-12 h-0.5 bg-slate-200 dark:bg-slate-800 rf-pipeline-stepper__track" aria-hidden="true" />
 
         {/* Active progress fill */}
         <div
           className="absolute top-[26px] left-12 h-0.5 bg-blue-600 dark:bg-blue-500 transition-all duration-300 rf-pipeline-stepper__progress"
-          style={{ width: `calc(${progressPct}% * 0.85)` }}
+          style={{ width: `calc((${progressPct} / 100) * (100% - 6rem))` }}
           aria-hidden="true"
         />
 

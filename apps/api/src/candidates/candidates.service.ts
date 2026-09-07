@@ -1,12 +1,15 @@
 import {
   ConflictException,
+  HttpException,
   Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import * as XLSX from 'xlsx';
 import type { Prisma } from '@recruitflow/database';
 import type { Candidate, PaginatedResult } from '@recruitflow/contracts';
 import { PrismaService } from '../database/prisma.service';
+import { exportFailed } from '../common/errors/api-error';
 import type {
   CandidateQueryDto,
   CreateCandidateDto,
@@ -18,6 +21,83 @@ export class CandidatesService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
   ) {}
+
+  async exportExcel(
+    organizationId: string,
+    query: CandidateQueryDto,
+    disclosure: { viewPii: boolean },
+  ): Promise<Buffer> {
+    try {
+      const where: Prisma.CandidateWhereInput = { organizationId };
+
+      if (query.status) {
+        where.status = query.status;
+      }
+      if (query.source) {
+        where.source = query.source;
+      }
+      if (query.search?.trim()) {
+        const term = query.search.trim();
+        where.OR = [
+          { firstName: { contains: term, mode: 'insensitive' } },
+          { lastName: { contains: term, mode: 'insensitive' } },
+          { email: { contains: term, mode: 'insensitive' } },
+          { candidateCode: { contains: term, mode: 'insensitive' } },
+          { currentCompany: { contains: term, mode: 'insensitive' } },
+        ];
+      }
+
+      const candidates = await this.prisma.candidate.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take: 10000,
+      });
+
+      const headers = [
+        'Candidate Code',
+        'First Name',
+        'Last Name',
+        'Email',
+        'Phone',
+        'Current Title',
+        'Current Company',
+        'Location',
+        'Experience (Years)',
+        'Skills',
+        'Source',
+        'Status',
+        'Consent Status',
+        'Consent Captured At (UTC)',
+        'Created At (UTC)',
+      ];
+
+      const rows = candidates.map((c) => [
+        c.candidateCode,
+        c.firstName,
+        c.lastName,
+        disclosure.viewPii ? c.email : maskEmail(c.email),
+        disclosure.viewPii ? (c.phone ?? '') : maskPhone(c.phone),
+        c.currentTitle ?? '',
+        c.currentCompany ?? '',
+        c.location ?? '',
+        c.experienceYears ?? '',
+        Array.isArray(c.skills) ? c.skills.join(', ') : '',
+        c.source ?? '',
+        c.status,
+        c.consentStatus,
+        c.consentCapturedAt ? c.consentCapturedAt.toISOString() : '',
+        c.createdAt.toISOString(),
+      ]);
+
+      const sheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, sheet, 'Candidates');
+      return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      throw exportFailed('Unable to export candidates workbook.');
+    }
+  }
 
   async listCandidates(
     organizationId: string,

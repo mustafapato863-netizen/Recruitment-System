@@ -2,11 +2,13 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  HttpException,
   Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
+import * as XLSX from 'xlsx';
 import type {
   ApplicationStage,
   CreateVacancyRequestInput,
@@ -35,6 +37,7 @@ import {
 import { PrismaService } from '../database/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
+import { exportFailed } from '../common/errors/api-error';
 
 @Injectable()
 export class VacancyCoreService {
@@ -44,6 +47,67 @@ export class VacancyCoreService {
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
   ) {}
+
+  async exportExcel(organizationId: string): Promise<Buffer> {
+    try {
+      const vacancies = await this.prisma.vacancy.findMany({
+        where: { organizationId },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          position: { select: { title: true, code: true } },
+          branch: { select: { name: true, code: true } },
+          legalEntity: { select: { name: true, code: true } },
+          assignments: {
+            where: { isActive: true },
+            include: { user: { select: { displayName: true } } },
+          },
+          _count: { select: { applications: true } },
+        },
+      });
+
+      const headers = [
+        'Vacancy Code',
+        'Position Title',
+        'Position Code',
+        'Branch Name',
+        'Branch Code',
+        'Legal Entity',
+        'Status',
+        'Approved Headcount',
+        'Joined Headcount',
+        'Remaining Headcount',
+        'Applications Count',
+        'Primary Recruiter',
+        'Target Start Date (UTC)',
+        'Created At (UTC)',
+      ];
+
+      const rows = vacancies.map((v) => [
+        v.vacancyCode,
+        v.position.title,
+        v.position.code,
+        v.branch.name,
+        v.branch.code,
+        v.legalEntity?.name ?? '',
+        v.status,
+        v.approvedHeadcount,
+        v.joinedHeadcount,
+        Math.max(0, v.approvedHeadcount - v.joinedHeadcount),
+        v._count.applications,
+        v.assignments[0]?.user.displayName ?? 'Unassigned',
+        v.targetStartDate ? v.targetStartDate.toISOString().slice(0, 10) : '',
+        v.createdAt.toISOString(),
+      ]);
+
+      const sheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, sheet, 'Vacancies');
+      return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      throw exportFailed('Unable to export vacancies workbook.');
+    }
+  }
 
   private notify(input: {
     organizationId: string;
@@ -205,6 +269,11 @@ export class VacancyCoreService {
       criticality: input.criticality ?? null,
       targetStartDate: input.targetStartDate ?? null,
       justification: input.justification ?? null,
+      jobSummary: input.jobSummary ?? null,
+      description: input.description ?? null,
+      responsibilities: input.responsibilities ?? null,
+      qualifications: input.qualifications ?? null,
+      benefits: input.benefits ?? null,
     };
 
     return this.repository.createRequest(payload);
@@ -230,6 +299,11 @@ export class VacancyCoreService {
     if (input.criticality !== undefined) request.criticality = input.criticality;
     if (input.targetStartDate !== undefined) request.targetStartDate = input.targetStartDate;
     if (input.justification !== undefined) request.justification = input.justification;
+    if (input.jobSummary !== undefined) request.jobSummary = input.jobSummary;
+    if (input.description !== undefined) request.description = input.description;
+    if (input.responsibilities !== undefined) request.responsibilities = input.responsibilities;
+    if (input.qualifications !== undefined) request.qualifications = input.qualifications;
+    if (input.benefits !== undefined) request.benefits = input.benefits;
     request.updatedAt = new Date().toISOString();
 
     return this.repository.saveRequest(request);
@@ -380,6 +454,11 @@ export class VacancyCoreService {
       joinedHeadcount: 0,
       openedAt: null,
       targetStartDate: request.targetStartDate,
+      jobSummary: request.jobSummary,
+      description: request.description,
+      responsibilities: request.responsibilities,
+      qualifications: request.qualifications,
+      benefits: request.benefits,
       assignments: [],
       createdAt: now,
       updatedAt: now,
@@ -553,6 +632,12 @@ export class VacancyCoreService {
       throw new NotFoundException(`Vacancy ${id} was not found.`);
     }
 
+    if (status === 'Open' && !vacancy.jobSummary?.trim()) {
+      throw new BadRequestException(
+        `Vacancy ${vacancy.vacancyCode} needs a job summary before it can be opened. Edit the vacancy and add the role requirements first.`,
+      );
+    }
+
     vacancy.status = status;
     if (status === 'Open' && !vacancy.openedAt) {
       vacancy.openedAt = new Date().toISOString();
@@ -609,13 +694,29 @@ export class VacancyCoreService {
       if (
         dto.approvedHeadcount !== undefined ||
         dto.location !== undefined ||
-        dto.targetStartDate !== undefined
+        dto.department !== undefined ||
+        dto.jobSummary !== undefined ||
+        dto.description !== undefined ||
+        dto.responsibilities !== undefined ||
+        dto.qualifications !== undefined ||
+        dto.benefits !== undefined ||
+        dto.targetStartDate !== undefined ||
+        dto.requiredSkills !== undefined ||
+        dto.minExperienceYears !== undefined
       ) {
         await tx.vacancy.update({
           where: { id },
           data: {
             ...(dto.approvedHeadcount !== undefined ? { approvedHeadcount: dto.approvedHeadcount } : {}),
             ...(dto.location !== undefined ? { location: dto.location } : {}),
+            ...(dto.department !== undefined ? { department: dto.department } : {}),
+            ...(dto.jobSummary !== undefined ? { jobSummary: dto.jobSummary } : {}),
+            ...(dto.description !== undefined ? { description: dto.description } : {}),
+            ...(dto.responsibilities !== undefined ? { responsibilities: dto.responsibilities } : {}),
+            ...(dto.qualifications !== undefined ? { qualifications: dto.qualifications } : {}),
+            ...(dto.benefits !== undefined ? { benefits: dto.benefits } : {}),
+            ...(dto.requiredSkills !== undefined ? { requiredSkills: dto.requiredSkills } : {}),
+            ...(dto.minExperienceYears !== undefined ? { minExperienceYears: dto.minExperienceYears } : {}),
             ...(dto.targetStartDate !== undefined
               ? { targetStartDate: dto.targetStartDate ? new Date(dto.targetStartDate) : null }
               : {}),
@@ -623,13 +724,10 @@ export class VacancyCoreService {
         });
       }
 
-      if (dto.title !== undefined || dto.description !== undefined) {
+      if (dto.title !== undefined) {
         await tx.position.update({
           where: { id: vacancy.positionId },
-          data: {
-            ...(dto.title !== undefined ? { title: dto.title } : {}),
-            ...(dto.description !== undefined ? { description: dto.description } : {}),
-          },
+          data: { title: dto.title },
         });
       }
     });

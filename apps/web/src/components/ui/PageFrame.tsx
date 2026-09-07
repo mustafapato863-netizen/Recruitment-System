@@ -16,7 +16,7 @@ interface PageFrameProps {
 
 export function PageFrame({ eyebrow, title, description, actions, children, className = '', showBack = false, backTo }: PageFrameProps) {
   return (
-    <div className={['page rf-page relative z-[1] mx-auto flex w-full max-w-[1560px] flex-col gap-4 px-4 py-5 sm:px-6 lg:px-7 lg:py-6', className].filter(Boolean).join(' ')}>
+    <div className={['page rf-page relative z-[1] mx-auto flex w-full max-w-[1720px] flex-col gap-4 px-4 py-5 sm:px-6 lg:px-7 lg:py-6', className].filter(Boolean).join(' ')}>
       <header className="rf-page-header flex flex-col items-stretch justify-between gap-3 border-b border-rf-border-subtle pb-4 md:flex-row md:items-start md:gap-6">
         <div className="min-w-0">
           {showBack && backTo && (

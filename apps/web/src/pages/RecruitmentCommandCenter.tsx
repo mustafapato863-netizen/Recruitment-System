@@ -250,7 +250,7 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
         </div>
       </div>
 
-      {/* ── Top Odoo Smart Stat Banner ── */}
+      {/* ── Top RecruitFlow Smart Stat Banner ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Metric 1: Open Positions */}
         <div
@@ -294,7 +294,7 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
 
         {/* Metric 3: Pending Approval Inboxes */}
         <div
-          onClick={() => navigate('/inbox')}
+          onClick={() => navigate('/approval-inbox')}
           className={`rounded-2xl border p-4 shadow-xs transition cursor-pointer flex items-center justify-between group ${
             pendingApprovalsCount > 0
               ? 'bg-amber-50/40 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/60 hover:border-amber-400'
@@ -427,7 +427,7 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
                   ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
                   : 'text-slate-500 hover:text-slate-900'
               }`}
-              title="Odoo Card Grid"
+              title="SGH Card Grid"
             >
               <Icon name="grid-squares" size={13} />
               <span className="hidden sm:inline">Cards</span>
@@ -466,7 +466,7 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
           }}
         />
       ) : viewMode === 'cards' ? (
-        /* Odoo 3-Column Position Card Grid */
+        /* RecruitFlow 3-Column Position Card Grid */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {filteredPositions.map((pos) => {
             const fillRate = Math.min(100, Math.round((pos.joinedHeadcount / Math.max(1, pos.approvedHeadcount)) * 100));

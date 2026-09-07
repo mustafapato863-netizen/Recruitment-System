@@ -1,9 +1,15 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import type { ImportJobSummary, PaginatedResult, Vacancy } from '@recruitflow/contracts';
+import { calculateCandidateFitScore, type CriteriaBreakdown } from '@recruitflow/validation';
 import { getApi, postApi, patchApi } from '../api/client';
 import { parseResumeFile, type ExtractedCandidate } from '../utils/resumeParser';
 
 export const INTAKE_STEPS = ['Upload', 'Validate & Edit', 'Resolve', 'Confirm'];
+
+export interface ScoredVacancy {
+  vacancy: Vacancy;
+  fitResult: CriteriaBreakdown;
+}
 
 const ALLOWED_EXTENSIONS = ['.pdf', '.doc', '.docx'];
 const ALLOWED_MIMES = [
@@ -103,7 +109,6 @@ export function useCVIntakeFlow() {
       const list = await getApi<Vacancy[]>('/vacancies');
       if (Array.isArray(list) && list.length > 0) {
         setVacancies(list);
-        setTargetVacancy((prev) => prev || list[0].id);
       }
     } catch {
       // Fallback
@@ -114,6 +119,47 @@ export function useCVIntakeFlow() {
     void loadJobs();
     void loadVacancies();
   }, [loadJobs, loadVacancies]);
+
+  // Compute real-time fit scores for all vacancies against the candidate profile
+  const scoredVacancies = useMemo<ScoredVacancy[]>(() => {
+    if (!profile || vacancies.length === 0) return [];
+
+    const scored = vacancies.map((v) => {
+      const positionTitle = (v as any).position?.title || v.title || '';
+      const fitResult = calculateCandidateFitScore(
+        {
+          skills: profile.skills,
+          experienceYears: profile.experienceYears,
+          location: profile.location,
+          certifications: profile.certifications,
+          currentTitle: profile.title,
+        },
+        {
+          requiredSkills: v.requiredSkills || [],
+          minExperienceYears: v.minExperienceYears || 0,
+          location: v.location || v.branch?.name || '',
+          qualifications: [positionTitle, v.qualifications].filter(Boolean).join(' '),
+          department: v.department || '',
+        },
+      );
+      return { vacancy: v, fitResult };
+    });
+
+    // Sort descending: highest match score first
+    scored.sort((a, b) => b.fitResult.score - a.fitResult.score);
+    return scored;
+  }, [profile, vacancies]);
+
+  // Auto-select the top recommended vacancy
+  useEffect(() => {
+    if (scoredVacancies.length > 0) {
+      if (!targetVacancy || !vacancies.some((v) => v.id === targetVacancy)) {
+        setTargetVacancy(scoredVacancies[0].vacancy.id);
+      }
+    } else if (vacancies.length > 0 && !targetVacancy) {
+      setTargetVacancy(vacancies[0].id);
+    }
+  }, [scoredVacancies, targetVacancy, vacancies]);
 
   const handleFile = async (file?: File) => {
     if (!file) return;
@@ -292,6 +338,7 @@ export function useCVIntakeFlow() {
     duplicateDecision,
     setDuplicateDecision,
     vacancies,
+    scoredVacancies,
     confirmedCandidateCode,
     confirmedCandidateId,
     confirmedAppId,
