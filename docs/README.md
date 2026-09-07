@@ -1,16 +1,14 @@
-# RecruitFlow documentation
+# RecruitFlow Documentation
 
-Use this directory as the human-readable entry point for the project.
+Entry point for RecruitFlow architecture, technical specifications, design system, and operational documentation.
 
-## Sections
+## Documentation Hub
 
-- [Canonical V1 execution plan](development/PROJECT_EXECUTION_PLAN.md) - end-to-end phases, scope boundaries, gates, and current status.
-- [Frontend simple system plan](development/FRONTEND_SIMPLE_SYSTEM_PLAN.md) - the only active frontend redesign plan.
-- [Milestone and sub-milestone schedule](development/PROJECT_MILESTONES.md) - English delivery estimates, dependencies, AI task cards, and acceptance gates.
-- [AI execution playbook](development/AI_EXECUTION_PLAYBOOK.md) - small-model task decomposition, safety rules, verification, and handoff format.
-- [Architecture](architecture/README.md) - repository boundaries and dependency direction.
-- [Development setup](development/setup.md) - local commands, environment variables, and quality checks.
-- [Design system](design-system/README.md) - UI tokens, ownership, and visual rules.
-- [Reference pack](reference/README.md) - approved business, workflow, data, and technical materials.
+- [Architecture](architecture/README.md) - Service boundaries, tenant isolation, and dependency direction.
+- [Development Setup](development/setup.md) - Local commands, environment variables, and quality verification gates.
+- [Design System](design-system/README.md) - UI design tokens, component standards, and visual rules.
+- [Operations & Runbooks](operations/release-playbook.md) - Operational playbooks and deployment guidelines.
+- [Reference Pack](reference/README.md) - Business, workflow, data, and technical specifications.
+- [Database & ERD](../database/README.md) - Prisma schema, database migrations, and entity relationship diagrams.
+- [Release Notes](../RELEASE_NOTES.md) - Changelog and release milestones.
 
-The reference pack describes the intended product rules. Source code under `apps/`, `packages/`, and `database/` is the implementation.
