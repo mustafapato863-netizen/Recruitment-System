@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getApi, patchApi, ApiError } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
@@ -420,8 +420,16 @@ export function ApplicationsPage() {
   const { user } = useAuth();
 
   const [currentVacancy, setCurrentVacancy] = useState<VacancyDetailView | null>(null);
+  const currentVacancyRef = useRef<VacancyDetailView | null>(currentVacancy);
+  currentVacancyRef.current = currentVacancy;
+
   const [allVacancies, setAllVacancies] = useState<Vacancy[]>([]);
+  const allVacanciesRef = useRef<Vacancy[]>(allVacancies);
+  allVacanciesRef.current = allVacancies;
+
   const vacancyMap = useMemo(() => new Map(allVacancies.map((v) => [v.id, v])), [allVacancies]);
+  const vacancyMapRef = useRef(vacancyMap);
+  vacancyMapRef.current = vacancyMap;
   const [quickNoteApp, setQuickNoteApp] = useState<{
     id: string;
     candidateName: string;
@@ -472,6 +480,8 @@ export function ApplicationsPage() {
     }
     return 'streamlined';
   });
+  const pipelineModeRef = useRef<PipelineStepMode>(pipelineMode);
+  pipelineModeRef.current = pipelineMode;
   const [isCustomizeStepsOpen, setIsCustomizeStepsOpen] = useState(false);
 
   // Mutable Kanban board state with live drag-and-drop
@@ -690,8 +700,15 @@ export function ApplicationsPage() {
   };
 
   const buildColumnsFromApplications = useCallback(
-    (apps: Application[], mode?: PipelineStepMode): KanbanColumn[] => {
-      const activeDefs = getActiveColumnDefs(mode || pipelineMode);
+    (
+      apps: Application[],
+      mode?: PipelineStepMode,
+      explicitVacancy?: VacancyDetailView | null,
+      explicitMap?: Map<string, Vacancy>,
+    ): KanbanColumn[] => {
+      const activeDefs = getActiveColumnDefs(mode || pipelineModeRef.current);
+      const vacMap = explicitMap || vacancyMapRef.current;
+      const curVac = explicitVacancy !== undefined ? explicitVacancy : currentVacancyRef.current;
       return activeDefs.map((col) => {
         const matchedApps = apps.filter((a) => {
           const cardStage = (a.stage || 'Applied') as ApplicationStage;
@@ -704,7 +721,7 @@ export function ApplicationsPage() {
         });
 
         const cards = matchedApps.map((a) => {
-          const targetVacancy = (a.vacancyId ? vacancyMap.get(a.vacancyId) : null) || currentVacancy;
+          const targetVacancy = (a.vacancyId ? vacMap.get(a.vacancyId) : null) || curVac;
           return mapApplicationToKanbanCard(a, col.stageKey, col.id, targetVacancy);
         });
         return {
@@ -717,17 +734,16 @@ export function ApplicationsPage() {
         };
       });
     },
-    [vacancyMap, currentVacancy, pipelineMode],
+    [],
   );
 
   const handlePipelineModeChange = (newMode: PipelineStepMode) => {
     setPipelineMode(newMode);
+    pipelineModeRef.current = newMode;
     try {
       localStorage.setItem('rf_pipeline_step_mode', newMode);
     } catch {}
-    if (apiApplications.length > 0) {
-      setBoardColumns(buildColumnsFromApplications(apiApplications, newMode));
-    }
+    setBoardColumns(buildColumnsFromApplications(apiApplications, newMode));
     const label =
       newMode === 'streamlined'
         ? 'Streamlined (4 Steps)'
@@ -740,28 +756,78 @@ export function ApplicationsPage() {
   const loadApplications = useCallback(async () => {
     setIsLoading(true);
     setLoadError(null);
-    const url = vacancyId
-      ? `/applications?vacancyId=${vacancyId}&page=1&pageSize=100`
-      : '/applications?page=1&pageSize=100';
 
     try {
       if (vacancyId) {
+        let resolvedVacancyId = vacancyId;
+        let matchedVacancy: Vacancy | null = null;
+
+        // Check if vacancyId is not a UUID (e.g. VAC-SGH-CSR-LEAD code or slug)
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(vacancyId);
+        if (!isUuid) {
+          let list = allVacanciesRef.current;
+          if (!list.length) {
+            try {
+              const res = await getApi<Vacancy[]>('/vacancies');
+              if (Array.isArray(res)) {
+                list = res;
+                setAllVacancies(res);
+                allVacanciesRef.current = res;
+              }
+            } catch {
+              // ignore
+            }
+          }
+          const found = list.find(
+            (v) =>
+              v.vacancyCode?.toLowerCase() === vacancyId.toLowerCase() ||
+              v.id.toLowerCase() === vacancyId.toLowerCase()
+          );
+          if (found) {
+            resolvedVacancyId = found.id;
+            matchedVacancy = found;
+          }
+        }
+
+        const url = `/applications?vacancyId=${encodeURIComponent(resolvedVacancyId)}&page=1&pageSize=100`;
+
         const [res, vacRes] = await Promise.allSettled([
           getApi<PaginatedResult<Application>>(url),
-          getApi<VacancyDetailView>(`/vacancies/${vacancyId}`),
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(resolvedVacancyId)
+            ? getApi<VacancyDetailView>(`/vacancies/${resolvedVacancyId}`)
+            : Promise.reject(new Error('Invalid vacancy identifier')),
         ]);
+
         const list = res.status === 'fulfilled' && res.value?.data ? res.value.data : [];
-        setApiApplications(list);
-        setBoardColumns(buildColumnsFromApplications(list));
+        let targetVac: VacancyDetailView | null = null;
+
         if (vacRes.status === 'fulfilled' && vacRes.value) {
-          setCurrentVacancy(vacRes.value);
+          targetVac = vacRes.value;
+        } else if (matchedVacancy) {
+          targetVac = {
+            id: matchedVacancy.id,
+            vacancyCode: matchedVacancy.vacancyCode,
+            title: matchedVacancy.title,
+            status: matchedVacancy.status,
+            approvedHeadcount: matchedVacancy.approvedHeadcount,
+            joinedHeadcount: matchedVacancy.joinedHeadcount,
+            department: matchedVacancy.department,
+            createdAt: matchedVacancy.createdAt,
+            updatedAt: matchedVacancy.updatedAt,
+          } as VacancyDetailView;
         }
+
+        setCurrentVacancy(targetVac);
+        currentVacancyRef.current = targetVac;
+        setApiApplications(list);
+        setBoardColumns(buildColumnsFromApplications(list, pipelineModeRef.current, targetVac));
       } else {
         setCurrentVacancy(null);
-        const res = await getApi<PaginatedResult<Application>>(url);
+        currentVacancyRef.current = null;
+        const res = await getApi<PaginatedResult<Application>>('/applications?page=1&pageSize=100');
         const list = res?.data || [];
         setApiApplications(list);
-        setBoardColumns(buildColumnsFromApplications(list));
+        setBoardColumns(buildColumnsFromApplications(list, pipelineModeRef.current, null));
       }
     } catch (err: unknown) {
       setLoadError(err instanceof Error ? err.message : 'Failed to load applications');
@@ -779,6 +845,7 @@ export function ApplicationsPage() {
       .then((res) => {
         if (Array.isArray(res)) {
           setAllVacancies(res);
+          allVacanciesRef.current = res;
         }
       })
       .catch(() => {});
