@@ -40,6 +40,16 @@ The supplied `Dockerfile` targets are `api`, `web`, and `worker`. The web
 container proxies `/api/` to the private API service and serves hashed assets
 with gzip and immutable caching. Do not publish port 3000 or `/data/documents`.
 
+### Dokploy settings
+
+For the Compose deployment shown in the Dokploy UI, select GitHub repository
+`Recruitment-System`, branch `main`, and Compose path
+`./compose.production.yml`. Choose Docker Compose mode, not Stack mode. The
+Environment tab writes the variables to `.env`, which this Compose file loads
+by default. Attach the public Hostinger domain to the `web` service on port 80.
+For the Vercel setup, attach a separate HTTPS API domain to the `api` service
+on port 3000 and use that URL in Vercel's `VITE_API_BASE_URL`.
+
 ## Vercel web frontend
 
 The root `vercel.json` builds `apps/web`, serves `apps/web/dist`, preserves

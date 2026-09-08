@@ -3,7 +3,9 @@ services:
     build:
       context: .
       target: api
-    env_file: ${RECRUITFLOW_ENV_FILE:-.env.production}
+    # Dokploy writes Environment-tab values to .env. Hostinger can override
+    # this with RECRUITFLOW_ENV_FILE=.env.production.
+    env_file: ${RECRUITFLOW_ENV_FILE:-.env}
     environment:
       NODE_ENV: production
       PORT: 3000
@@ -27,7 +29,8 @@ services:
     build:
       context: .
       target: worker
-    env_file: ${RECRUITFLOW_ENV_FILE:-.env.production}
+    # Keep API and worker configuration identical; both need the outbox key.
+    env_file: ${RECRUITFLOW_ENV_FILE:-.env}
     environment:
       NODE_ENV: production
     depends_on:

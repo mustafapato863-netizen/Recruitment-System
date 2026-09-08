@@ -8,7 +8,31 @@ Build from repository root (`.`), Dockerfile path `Dockerfile`. Do not use a
 compose filename as Dokploy's build directory. No hosting changes are made by
 these files.
 
-## Dokploy applications
+## Dokploy Compose deployment
+
+In the screenshot's Compose source settings use:
+
+| Dokploy field | Value |
+| --- | --- |
+| Provider | GitHub |
+| Repository | `Recruitment-System` |
+| Branch | `main` |
+| Compose path | `./compose.production.yml` |
+| Mode | Docker Compose (not Stack) |
+| Build context | repository root (`.`) |
+
+The repository has no `docker-compose.yml`; selecting that path is incorrect.
+Dokploy stores Environment-tab values in `.env`, which is the default used by
+the Compose file. Add the variables listed in `deploy/environment.example` to
+that tab. Attach a Hostinger domain to the `web` service on internal port 80;
+the web service proxies `/api/` to the private `api:3000` service. If Vercel
+hosts the frontend, attach an HTTPS API domain to the `api` service on port
+3000 and set `WEB_ORIGIN` to the exact Vercel origin.
+
+Use Docker Compose mode rather than Stack mode because the production file
+builds the API, web, and worker targets.
+
+## Dokploy services
 
 | Service | Docker target | Internal port | Health route |
 | --- | --- | --- | --- |
@@ -65,8 +89,10 @@ not certify that business reference data, an admin account or SMTP are configure
 After filling `.env.production`, run from the repository root:
 
 ```sh
-docker compose -f compose.production.yml config --quiet
-docker compose -f compose.production.yml up -d --build
+RECRUITFLOW_ENV_FILE=.env.production \
+  docker compose -f compose.production.yml config --quiet
+RECRUITFLOW_ENV_FILE=.env.production \
+  docker compose -f compose.production.yml up -d --build
 ```
 
 The compose web binding is port 8080; place an HTTPS proxy in front of it.
