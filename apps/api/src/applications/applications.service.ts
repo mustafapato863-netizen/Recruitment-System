@@ -120,8 +120,57 @@ export class ApplicationsService {
       }),
     ]);
 
+    const data = items.map((app) => this.toApplication(app, canViewPii));
+    if (items.length > 0) {
+      const applicationIds = items.map((app) => app.id);
+      const [histories, notes, followUps] = await Promise.all([
+        this.prisma.applicationStatusHistory.findMany({
+          where: { applicationId: { in: applicationIds } },
+          orderBy: { createdAt: 'desc' },
+          select: { applicationId: true, toStage: true, createdAt: true },
+        }),
+        this.prisma.applicationNote.findMany({
+          where: { organizationId, applicationId: { in: applicationIds } },
+          orderBy: { createdAt: 'desc' },
+          select: { applicationId: true, createdAt: true },
+        }),
+        this.prisma.task.findMany({
+          where: {
+            organizationId,
+            entityType: 'Candidate',
+            entityId: { in: items.map((app) => app.candidateId) },
+            type: { startsWith: 'CandidateActivity:' },
+            status: { in: ['Open', 'In Progress'] },
+            dueAt: { not: null },
+          },
+          orderBy: { dueAt: 'asc' },
+          select: { entityId: true, dueAt: true },
+        }),
+      ]);
+      const latest = new Map<string, { at: Date; label: string }>();
+      const nextFollowUpByCandidate = new Map<string, Date>();
+      for (const history of histories) {
+        if (!latest.has(history.applicationId)) latest.set(history.applicationId, { at: history.createdAt, label: `Moved to ${history.toStage}` });
+      }
+      for (const note of notes) {
+        const current = latest.get(note.applicationId);
+        if (!current || note.createdAt > current.at) latest.set(note.applicationId, { at: note.createdAt, label: 'Note added' });
+      }
+      for (const followUp of followUps) {
+        if (followUp.entityId && followUp.dueAt && !nextFollowUpByCandidate.has(followUp.entityId)) {
+          nextFollowUpByCandidate.set(followUp.entityId, followUp.dueAt);
+        }
+      }
+      for (const item of data) {
+        const event = latest.get(item.id);
+        item.lastActivityAt = event?.at.toISOString() ?? item.updatedAt;
+        item.lastActivityLabel = event?.label ?? 'Application updated';
+        item.nextFollowUpAt = nextFollowUpByCandidate.get(item.candidateId)?.toISOString() ?? null;
+      }
+    }
+
     return {
-      data: items.map((app) => this.toApplication(app, canViewPii)),
+      data,
       total,
       page,
       pageSize,

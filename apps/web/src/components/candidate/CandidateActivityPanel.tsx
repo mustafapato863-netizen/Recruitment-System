@@ -7,7 +7,14 @@ import { Button } from '../ui/Button';
 const kinds: CandidateActivityKind[] = ['Call', 'Note', 'Email', 'Meeting', 'Document Verification', 'Offer Follow-up'];
 const dateLabel = (value: string | null) => value ? new Date(value).toLocaleString() : 'None recorded';
 
-export function CandidateActivityPanel({ candidateId, refreshKey = 0 }: { candidateId: string; refreshKey?: number }) {
+interface CandidateActivityPanelProps {
+  candidateId: string;
+  refreshKey?: number;
+  initialKind?: CandidateActivityKind;
+  initialScheduled?: boolean;
+}
+
+export function CandidateActivityPanel({ candidateId, refreshKey = 0, initialKind, initialScheduled }: CandidateActivityPanelProps) {
   const { user } = useAuth();
   const canView = Boolean(user?.permissions.includes('CANDIDATE_VIEW'));
   const canEdit = Boolean(user?.permissions.includes('CANDIDATE_EDIT'));
@@ -17,13 +24,17 @@ export function CandidateActivityPanel({ candidateId, refreshKey = 0 }: { candid
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [kind, setKind] = useState<CandidateActivityKind>('Call');
+  const [kind, setKind] = useState<CandidateActivityKind>(initialKind ?? 'Call');
   const [summary, setSummary] = useState('');
-  const [scheduled, setScheduled] = useState(false);
+  const [scheduled, setScheduled] = useState(initialScheduled ?? false);
   const [dueAt, setDueAt] = useState('');
   const [rescheduleId, setRescheduleId] = useState<string | null>(null);
   const [rescheduleDueAt, setRescheduleDueAt] = useState('');
   const requestVersion = useRef(0);
+  useEffect(() => {
+    if (initialKind) setKind(initialKind);
+    if (initialScheduled !== undefined) setScheduled(initialScheduled);
+  }, [initialKind, initialScheduled]);
   const load = useCallback(async () => {
     if (!canView) return;
     const version = ++requestVersion.current;

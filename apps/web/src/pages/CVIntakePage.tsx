@@ -109,9 +109,9 @@ export const CVIntakePage: React.FC = () => {
           {/* Right Column: Batch Info & Accepted Formats */}
           <div className="space-y-6">
             <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white mb-3">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white mb-3">
                 Recent Intake Batches
-              </h3>
+              </h2>
               {loadingJobs ? (
                 <div className="py-6 flex justify-center">
                   <Spinner size={20} />
@@ -140,9 +140,9 @@ export const CVIntakePage: React.FC = () => {
             </div>
 
             <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-3">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">
                 Intake Guidelines
-              </h3>
+              </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 Accepted file formats and parsing capabilities:
               </p>

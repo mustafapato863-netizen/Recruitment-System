@@ -3,7 +3,7 @@
 
 /* Keep test-only and unused catalog primitives out of the production utility scan. */
 @source not "./**/*.test.*";
-@source not "./design-system/components";
+@source not "./design-system/**";
 
 @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *, .dark, .dark *));
 

@@ -109,4 +109,15 @@ describe('calculateCandidateFitScore', () => {
     expect(result.breakdown.certifications.matched).toContain('BLS');
     expect(result.breakdown.certifications.missing).toContain('SCFHS');
   });
+
+  it('does not claim licensure compliance when no certification evidence exists', () => {
+    const result = calculateCandidateFitScore(
+      { skills: ['SQL'], experienceYears: 3, certifications: [] },
+      { requiredSkills: ['SQL'], minExperienceYears: 2 },
+    );
+
+    expect(result.breakdown.certifications.evidenceStatus).toBe('not_applicable');
+    expect(result.breakdown.certifications.percentage).toBe(0);
+    expect(result.breakdown.certifications.met).toBe(false);
+  });
 });

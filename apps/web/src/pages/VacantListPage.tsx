@@ -358,7 +358,7 @@ export function VacantListPage() {
           <button
             type="button"
             onClick={() => navigate('/vacancy-requests/create')}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-[#0088cc] hover:bg-[#0077b5] text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-[#006ea8] hover:bg-[#005b8c] text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
             title="Submit a new budgeted headcount request for executive approval"
           >
             <Icon name="plus" size={14} />
@@ -417,6 +417,7 @@ export function VacantListPage() {
          ───────────────────────────────────────────────────────────── */}
       {activeSection === 'catalog' && (
         <div className="space-y-5">
+          <h2 className="sr-only">Positions directory</h2>
           {/* KPI Summary Cards */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
             <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xs relative overflow-hidden">
@@ -428,7 +429,7 @@ export function VacantListPage() {
                 <span className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
                   {uniqueCatalogPositions.length}
                 </span>
-                <span className="text-xs font-bold text-sky-600 dark:text-sky-400">
+                <span className="text-xs font-bold text-sky-700 dark:text-sky-400">
                   Configured
                 </span>
               </div>
@@ -440,7 +441,7 @@ export function VacantListPage() {
                 Clinical &amp; Tech Skills
               </span>
               <div className="flex items-baseline gap-2">
-                <span className="text-2xl sm:text-3xl font-black text-teal-600 dark:text-teal-400">
+                <span className="text-2xl sm:text-3xl font-black text-teal-700 dark:text-teal-400">
                   {totalCatalogSkills}
                 </span>
                 <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
@@ -499,6 +500,7 @@ export function VacantListPage() {
             {/* Department Dropdown */}
             <div className="flex items-center gap-2">
               <select
+                aria-label="Filter positions by department"
                 value={catalogDept}
                 onChange={(e) => setCatalogDept(e.target.value)}
                 className="px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-teal-500 cursor-pointer"
@@ -516,7 +518,7 @@ export function VacantListPage() {
                   onClick={() => setCatalogExpFilter('ALL')}
                   className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
                     catalogExpFilter === 'ALL'
-                      ? 'bg-white dark:bg-slate-900 text-teal-600 dark:text-teal-400 shadow-xs'
+                      ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-xs'
                       : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
@@ -527,7 +529,7 @@ export function VacantListPage() {
                   onClick={() => setCatalogExpFilter('junior')}
                   className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
                     catalogExpFilter === 'junior'
-                      ? 'bg-white dark:bg-slate-900 text-teal-600 dark:text-teal-400 shadow-xs'
+                      ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-xs'
                       : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
@@ -538,7 +540,7 @@ export function VacantListPage() {
                   onClick={() => setCatalogExpFilter('mid')}
                   className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
                     catalogExpFilter === 'mid'
-                      ? 'bg-white dark:bg-slate-900 text-teal-600 dark:text-teal-400 shadow-xs'
+                      ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-xs'
                       : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
@@ -549,7 +551,7 @@ export function VacantListPage() {
                   onClick={() => setCatalogExpFilter('senior')}
                   className={`px-2.5 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
                     catalogExpFilter === 'senior'
-                      ? 'bg-white dark:bg-slate-900 text-teal-600 dark:text-teal-400 shadow-xs'
+                      ? 'bg-white dark:bg-slate-900 text-teal-700 dark:text-teal-400 shadow-xs'
                       : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
@@ -565,9 +567,9 @@ export function VacantListPage() {
           ) : filteredCatalogPositions.length === 0 ? (
             <div className="text-center py-12 px-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
               <Icon name="search" size={24} className="mx-auto text-slate-400 mb-2" />
-              <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200">
+              <h2 className="text-sm font-bold text-slate-800 dark:text-slate-200">
                 No positions matched your filters
-              </h3>
+              </h2>
               <p className="text-xs text-slate-500 mt-1">
                 Try clearing search terms or selecting a different department.
               </p>
@@ -682,6 +684,7 @@ export function VacantListPage() {
             <div className="flex flex-wrap items-center gap-2.5">
               <div className="relative">
                 <select
+                  aria-label="Filter requisitions by department"
                   value={selectedDept}
                   onChange={(e) => {
                     setSelectedDept(e.target.value);
@@ -699,6 +702,7 @@ export function VacantListPage() {
 
               <div className="relative">
                 <select
+                  aria-label="Filter requisitions by location"
                   value={selectedLocation}
                   onChange={(e) => {
                     setSelectedLocation(e.target.value);
@@ -716,6 +720,7 @@ export function VacantListPage() {
 
               <div className="relative">
                 <select
+                  aria-label="Filter requisitions by owner"
                   value={selectedOwner}
                   onChange={(e) => {
                     setSelectedOwner(e.target.value);

@@ -294,7 +294,13 @@ export function CandidateFitScorecard({
                   </span>
                 ))}
                 {certifications.matched.length === 0 && certifications.missing.length === 0 && (
-                  <span className="text-[11px] text-slate-500 dark:text-slate-400">Standard licensure criteria met.</span>
+                  <span className="text-[11px] text-slate-600 dark:text-slate-300">
+                    {certifications.evidenceStatus === 'not_applicable'
+                      ? 'No certification requirement configured.'
+                      : certifications.evidenceStatus === 'provided'
+                        ? 'Certificate listed on CV; verification required.'
+                        : 'No certification evidence provided.'}
+                  </span>
                 )}
               </div>
             </div>

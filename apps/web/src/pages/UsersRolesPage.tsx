@@ -215,11 +215,11 @@ export function UsersRolesPage() {
               {count > 0 ? `${count} Selected` : 'Default'}
             </span>
             {config?.branches && config.branches.length > 0 && !config.branches.includes('ALL') ? (
-              <span className="text-[10.5px] text-slate-400 font-medium">
+              <span className="text-[10.5px] text-slate-500 font-medium">
                 ({config.branches.length} facilities)
               </span>
             ) : (
-              <span className="text-[10.5px] text-slate-400 font-medium">(All facilities)</span>
+              <span className="text-[10.5px] text-slate-500 font-medium">(All facilities)</span>
             )}
           </div>
         );

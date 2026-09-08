@@ -73,9 +73,9 @@ export function CVUploadDropzone({
             </div>
 
             <div className="space-y-1 max-w-md mx-auto">
-              <h3 className="text-base font-extrabold text-slate-900 dark:text-white">
+              <h2 className="text-base font-extrabold text-slate-900 dark:text-white">
                 Drag & drop candidate CV or click to browse
-              </h3>
+              </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 Supports Adobe PDF (.pdf) and Microsoft Word (.doc, .docx) up to 10 MB.
               </p>

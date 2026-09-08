@@ -21,6 +21,7 @@ export interface PositionRequirements {
 }
 
 export type MatchLevel = 'high' | 'moderate' | 'low';
+export type CertificationEvidenceStatus = 'verified' | 'provided' | 'missing' | 'not_applicable';
 
 export interface CriteriaBreakdown {
   score: number; // 0 - 100
@@ -48,6 +49,7 @@ export interface CriteriaBreakdown {
       percentage: number;
       weight: number;
       weightedScore: number;
+      evidenceStatus: CertificationEvidenceStatus;
     };
     location: {
       actual: string;
@@ -206,6 +208,7 @@ export function calculateCandidateFitScore(
   let missingCerts: string[] = [];
   let certPercentage: number;
   let certMet: boolean;
+  let certificationEvidenceStatus: CertificationEvidenceStatus;
 
   if (reqCerts.length > 0) {
     matchedCerts = reqCerts.filter((rc) =>
@@ -214,10 +217,15 @@ export function calculateCandidateFitScore(
     missingCerts = reqCerts.filter((rc) => !matchedCerts.includes(rc));
     certPercentage = Math.round((matchedCerts.length / reqCerts.length) * 100);
     certMet = missingCerts.length === 0;
+    // Extracted CV values are candidate-provided evidence. Verification is only
+    // possible after a recruiter records a license/document check.
+    certificationEvidenceStatus = certMet ? 'provided' : 'missing';
   } else {
-    // No certs strictly specified
-    certPercentage = candCerts.length > 0 ? 100 : 90;
-    certMet = true;
+    // Do not treat absent requirements or absent CV data as verified compliance.
+    // A provided certificate is useful evidence, but still needs verification.
+    certPercentage = candCerts.length > 0 ? 100 : 0;
+    certMet = false;
+    certificationEvidenceStatus = candCerts.length > 0 ? 'provided' : 'not_applicable';
   }
   const weightedScoreCerts = Math.round(certPercentage * WEIGHT_CERTS);
 
@@ -298,6 +306,7 @@ export function calculateCandidateFitScore(
         percentage: certPercentage,
         weight: WEIGHT_CERTS,
         weightedScore: weightedScoreCerts,
+        evidenceStatus: certificationEvidenceStatus,
       },
       location: {
         actual: candLoc || 'Not specified',

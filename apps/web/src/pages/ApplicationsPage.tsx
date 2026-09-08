@@ -305,6 +305,32 @@ function formatRelativeTime(dateStr?: string | null): string {
   return `${diffDays} days ago`;
 }
 
+const APPLICATION_PAGE_SIZE = 100;
+
+/**
+ * The pipeline needs a complete working set for Kanban columns, while the API
+ * remains safely paginated. Fetch pages until the server-reported total is
+ * covered instead of silently dropping records after the first 100.
+ */
+async function fetchAllApplicationPages(query: Record<string, string> = {}) {
+  const applications: Application[] = [];
+  let page = 1;
+  let total: number;
+
+  do {
+    const params = new URLSearchParams(query);
+    params.set('page', String(page));
+    params.set('pageSize', String(APPLICATION_PAGE_SIZE));
+    const response = await getApi<PaginatedResult<Application>>(`/applications?${params.toString()}`);
+    applications.push(...(response.data || []));
+    total = response.total ?? applications.length;
+    page += 1;
+    if ((response.data || []).length === 0) break;
+  } while (applications.length < total);
+
+  return { data: applications, total };
+}
+
 function getStageBadgeColor(stage: string): string {
   switch (stage) {
     case 'Applied':
@@ -387,10 +413,10 @@ function mapApplicationToKanbanCard(
       color: 'bg-teal-600',
     },
     nextAction,
-    nextDue: 'No follow-up scheduled',
-    nextDueTone: 'gray',
-    lastActivity: 'Stage updated',
-    lastActivityTime: a.updatedAt ? formatRelativeTime(a.updatedAt) : 'Recently',
+    nextDueTone: a.nextFollowUpAt ? 'amber' : 'gray',
+    lastActivity: a.lastActivityLabel || 'Application updated',
+    lastActivityTime: a.lastActivityAt ? formatRelativeTime(a.lastActivityAt) : 'Recently',
+    nextDue: a.nextFollowUpAt ? formatRelativeTime(a.nextFollowUpAt) : 'No follow-up scheduled',
     stage: a.stage || colStageKey,
     version: a.version ?? 1,
     rawApplication: a,
@@ -436,6 +462,7 @@ export function ApplicationsPage() {
   } | null>(null);
 
   const [apiApplications, setApiApplications] = useState<Application[]>([]);
+  const [applicationsTotal, setApplicationsTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -789,16 +816,15 @@ export function ApplicationsPage() {
           }
         }
 
-        const url = `/applications?vacancyId=${encodeURIComponent(resolvedVacancyId)}&page=1&pageSize=100`;
-
         const [res, vacRes] = await Promise.allSettled([
-          getApi<PaginatedResult<Application>>(url),
+          fetchAllApplicationPages({ vacancyId: resolvedVacancyId }),
           /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(resolvedVacancyId)
             ? getApi<VacancyDetailView>(`/vacancies/${resolvedVacancyId}`)
             : Promise.reject(new Error('Invalid vacancy identifier')),
         ]);
 
         const list = res.status === 'fulfilled' && res.value?.data ? res.value.data : [];
+        const total = res.status === 'fulfilled' ? res.value.total : list.length;
         let targetVac: VacancyDetailView | null = null;
 
         if (vacRes.status === 'fulfilled' && vacRes.value) {
@@ -820,13 +846,15 @@ export function ApplicationsPage() {
         setCurrentVacancy(targetVac);
         currentVacancyRef.current = targetVac;
         setApiApplications(list);
+        setApplicationsTotal(total);
         setBoardColumns(buildColumnsFromApplications(list, pipelineModeRef.current, targetVac));
       } else {
         setCurrentVacancy(null);
         currentVacancyRef.current = null;
-        const res = await getApi<PaginatedResult<Application>>('/applications?page=1&pageSize=100');
+        const res = await fetchAllApplicationPages();
         const list = res?.data || [];
         setApiApplications(list);
+        setApplicationsTotal(res.total ?? list.length);
         setBoardColumns(buildColumnsFromApplications(list, pipelineModeRef.current, null));
       }
     } catch (err: unknown) {
@@ -1054,13 +1082,13 @@ export function ApplicationsPage() {
         sla: 'Not measured',
         slaSub: 'No SLA data',
         slaTone: 'amber',
-        lastActivity: 'Stage updated',
-        lastActivityTime: app.updatedAt ? formatRelativeTime(app.updatedAt) : 'Recently',
+        lastActivity: app.lastActivityLabel || 'Application updated',
+        lastActivityTime: app.lastActivityAt ? formatRelativeTime(app.lastActivityAt) : 'Recently',
         source,
         fitScore: fitBreakdown.score,
         fitBreakdown,
         nextAction,
-        nextActionTime: 'No follow-up scheduled',
+        nextActionTime: app.nextFollowUpAt ? formatRelativeTime(app.nextFollowUpAt) : 'No follow-up scheduled',
         nextActionIcon: 'calendar',
         rawApplication: app,
       };
@@ -1354,12 +1382,12 @@ export function ApplicationsPage() {
   };
 
   const pipelineMetrics = useMemo(() => {
-    const total = apiApplications.length;
+    const total = applicationsTotal || apiApplications.length;
     const inReview = apiApplications.filter((a) => a.stage === 'Screening' || a.stage === 'Interview').length;
     const inOffer = apiApplications.filter((a) => a.stage === 'Offer' || a.stage === 'Pre-Hire').length;
     const readySignals = Object.values(cardSignals).filter((s) => s === 'ready').length;
     return { total, inReview, inOffer, readySignals };
-  }, [apiApplications, cardSignals]);
+  }, [apiApplications, applicationsTotal, cardSignals]);
 
   return (
     <div className="flex w-full flex-col lg:h-[calc(100vh-80px)] p-4 sm:px-6 lg:px-7 py-3 mx-auto gap-3 max-w-[1880px] lg:overflow-hidden">
@@ -1371,7 +1399,7 @@ export function ApplicationsPage() {
               Applications
             </h1>
             <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 shadow-2xs">
-              {apiApplications.length} Candidates
+              {applicationsTotal || apiApplications.length} Candidates
             </span>
             <QuickGuideTrigger />
           </div>

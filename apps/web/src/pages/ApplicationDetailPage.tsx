@@ -68,6 +68,7 @@ export function ApplicationDetailPage() {
   const [isFeedLoading, setIsFeedLoading] = useState(false);
   const [feedError, setFeedError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'resume' | 'interviews' | 'activity' | 'tasks'>('overview');
+  const [activityIntent, setActivityIntent] = useState<{ kind: 'Call' | 'Offer Follow-up'; scheduled: boolean } | null>(null);
 
   const interviewStats = useMemo(() => computeInterviewsStats(interviews), [interviews]);
 
@@ -1040,7 +1041,13 @@ export function ApplicationDetailPage() {
           {/* ── Tab Views ── */}
           {activeTab === 'activity' && (
             <div className="space-y-6">
-              {application.candidateId && <CandidateActivityPanel candidateId={application.candidateId} />}
+              {application.candidateId && (
+                <CandidateActivityPanel
+                  candidateId={application.candidateId}
+                  initialKind={activityIntent?.kind}
+                  initialScheduled={activityIntent?.scheduled}
+                />
+              )}
               <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-4">
               <div className="border-b border-slate-100 dark:border-slate-800 pb-3">
                 <h2 className="text-base font-extrabold text-slate-900 dark:text-white tracking-tight">
@@ -1091,7 +1098,7 @@ export function ApplicationDetailPage() {
               </div>
 
               {/* ── Middle Row: Timeline (Left ~60%) & Quick Actions / About (Right ~40%) ── */}
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-start">
                 {/* Left: Timeline Card (7 cols) */}
                 <div data-tour="timeline-section" className="md:col-span-7 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-4">
                   <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
@@ -1319,6 +1326,25 @@ export function ApplicationDetailPage() {
                         </div>
                       </div>
                       <Icon name="chevron-right" size={14} className="text-slate-300 group-hover:translate-x-0.5 transition" />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => { setActivityIntent({ kind: 'Call', scheduled: false }); setActiveTab('activity'); }}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-xs font-bold text-blue-700 transition hover:bg-blue-100 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-300 dark:hover:bg-blue-950/50"
+                      >
+                        <Icon name="phone" size={14} />
+                        Log call
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setActivityIntent({ kind: 'Offer Follow-up', scheduled: true }); setActiveTab('activity'); }}
+                        className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs font-bold text-amber-700 transition hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300 dark:hover:bg-amber-950/50"
+                      >
+                        <Icon name="clock" size={14} />
+                        Plan follow-up
+                      </button>
                     </div>
 
                     <div

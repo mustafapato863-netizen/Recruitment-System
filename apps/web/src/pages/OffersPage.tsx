@@ -356,7 +356,7 @@ export function OffersPage() {
   };
 
   return (
-    <div className="flex w-full flex-col p-4 sm:p-6 lg:p-7 max-w-[1720px] mx-auto space-y-6">
+    <div className="offers-page flex w-full flex-col p-4 sm:p-6 lg:p-7 max-w-[1720px] mx-auto space-y-6">
       {/* ── Page Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -536,7 +536,7 @@ export function OffersPage() {
               {kpiMetrics.accepted}
             </span>
             <div className="flex items-center gap-1.5 mt-1">
-              <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">Ready to hire</span>
+              <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400">Ready to hire</span>
             </div>
           </div>
         </div>
@@ -595,12 +595,12 @@ export function OffersPage() {
               }}
               className={`px-3 py-1.5 rounded-full whitespace-nowrap transition cursor-pointer ${
                 activePill === pill.key
-                  ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 font-bold border border-blue-200 dark:border-blue-800'
+                  ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-400 font-bold border border-blue-200 dark:border-blue-800'
                   : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
               }`}
             >
               <span>{pill.label}</span>
-              <span className="ml-1.5 opacity-70">&bull; {pill.count}</span>
+              <span className="ml-1.5">&bull; {pill.count}</span>
             </button>
           ))}
         </div>

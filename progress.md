@@ -921,3 +921,14 @@ Implemented the current version-one simplification slice across candidate entry,
 - Added HTTP/HTTPS meeting-link validation, a minimum of one interviewer for direct and self-scheduled interviews, terminal lifecycle protection for completed/cancelled interviews, and a cancelled-interview scorecard guard.
 - Rescheduling a meeting now resets all panel responses to `Pending`, so confirmations from the old time cannot be carried into the replacement slot.
 - Verification: API tests 61/61, web tests 154/154, worker tests 4/4, API typecheck, root lint, API build, full web build, API health/readiness, and the 1440px `/interviews` browser matrix all passed. The only build output is the existing Vite chunk-size warning.
+
+### Final performance and UI repair audit — 2026-09-08
+- Repaired applications pagination coverage by following the server-reported total across API pages. The isolated 101-application fixture now renders all 101 records and the authoritative total in the working list.
+- Repaired certification evidence semantics in the shared fit scorer and applicant profile. Empty evidence is now `not_applicable`/missing as appropriate and never described as verified compliance.
+- Added server-derived latest status/note activity labels to application list responses and direct profile quick actions for **Log call** and **Plan follow-up**.
+- Wired persisted open candidate follow-up tasks into `nextFollowUpAt`; the API smoke created a follow-up, observed the due date in the application list, completed it, and confirmed the value cleared.
+- Prevented the empty applicant Timeline from stretching to the height of the screening/action column by aligning the overview grid to content height.
+- Completed mobile/header, accessible filter naming, heading hierarchy and contrast fixes; made Quick Guide auto-open opt-in. Nginx now gzip-compresses text assets.
+- Fresh production Docker web/API/worker containers passed health/readiness checks. Chromium route matrix passed 33/33 at 1440/768/390px with zero JS errors, authenticated HTTP errors, overflow or axe violations. Applicant profile smoke confirmed both quick actions.
+- Final suites passed: web 155/155, API 66/66, worker 4/4, workspace typecheck, lint and diff check. `pnpm check:bundle` now passes transfer-size budgets (main CSS 50.70 KiB gzip; main JS 75.72 KiB gzip); the Nginx smoke downloaded 54,132 and 78,419 bytes respectively. Raw CSS is 396.33 KiB against the historical 225 KiB advisory target, so route-safe CSS reduction remains a separate optimization phase. Reporting-volume benchmarking and long-session refresh observability remain follow-ups.
+- Final local performance smoke (20 requests per endpoint, concurrency 5) returned HTTP 200 for readiness, candidates, vacancies, reports, Master Data and users; p95 latency ranged from 19.33ms to 86.84ms through Nginx.

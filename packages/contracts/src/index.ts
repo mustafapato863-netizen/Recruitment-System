@@ -739,6 +739,11 @@ export interface Application {
   candidate?: Candidate | undefined;
   vacancyCode?: string | undefined;
   positionTitle?: string | undefined;
+  /** Most recent persisted application event, used by pipeline summaries. */
+  lastActivityAt?: string | null | undefined;
+  lastActivityLabel?: string | null | undefined;
+  /** Earliest persisted follow-up due date, when one is visible to the caller. */
+  nextFollowUpAt?: string | null | undefined;
   appliedAt: string;
   createdAt: string;
   updatedAt: string;

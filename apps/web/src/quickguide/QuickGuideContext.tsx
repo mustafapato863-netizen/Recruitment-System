@@ -31,7 +31,7 @@ export const QuickGuideProvider: React.FC<QuickGuideProviderProps> = ({ children
   // Load auto-open preference (default to true)
   const [autoOpenEnabled, setAutoOpenEnabled] = useState<boolean>(() => {
     try {
-      return localStorage.getItem(AUTO_OPEN_STORAGE_KEY) !== 'false';
+      return localStorage.getItem(AUTO_OPEN_STORAGE_KEY) === 'true';
     } catch {
       return true;
     }

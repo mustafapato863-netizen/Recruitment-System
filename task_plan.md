@@ -343,3 +343,21 @@ Delivery rules:
 - [done] Require non-empty scorecard notes and gate manual completion; auto-complete after all panel scorecards are locked.
 - [done] Finish final verification and document any release limitations.
 - [done] Close remaining interview lifecycle gaps: explicit pending attendee confirmation, meeting-link validation, required interviewer assignment, terminal-status protection, and cancelled-scorecard rejection.
+
+## Full audit notes repair — 2026-09-08
+
+1. [done] Make application list totals and working-set coverage truthful across all API pages; retain server pagination and document server-side filter optimization as a follow-up.
+2. [done] Make certification scoring distinguish provided, missing and not-applicable evidence.
+3. [done] Fix mobile shell overlap and automated accessibility findings (labels, contrast, heading order).
+4. [done] Reduce applicant-profile repetition/blank timeline risk and add direct call/follow-up actions using persisted activity.
+5. [done] Replace placeholder activity labels with API-backed summaries and make page guidance opt-in after first use.
+6. [done] Re-run unit, type, lint, build, container-health and focused browser verification.
+7. [done] Make the bundle gate enforce compressed transfer budgets, keep raw CSS visible as an advisory, and exclude the unused design-system source tree from Tailwind scanning.
+
+## Full audit notes errors
+
+| Error | Attempt | Resolution |
+|---|---|---|
+| Playwright network-idle timeout | Existing audit matrix | Use bounded visible-page readiness; keep external font loading as a separate hosting check. |
+| Raw CSS budget remains above 225 KiB | Existing global Tailwind entrypoint exports a large shared stylesheet. | Keep the safe visual baseline, verify gzip at Nginx, and track route-safe CSS code-splitting as a separate performance phase. |
+| Application search/filtering still runs over the complete client working set | The Kanban/list surface needs all stage columns available at once. | Corrected the silent first-page truncation by fetching until the server total is covered; move to per-column/server-filtered queries when record volume requires it. |

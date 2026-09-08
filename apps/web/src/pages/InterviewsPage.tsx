@@ -707,7 +707,7 @@ export function InterviewsPage() {
 
             <div className="space-y-2.5 text-xs">
               {pendingFeedbackInterviews.length === 0 ? (
-                <p className="text-xs text-slate-400 italic py-2">No pending feedback.</p>
+                <p className="text-xs text-slate-500 italic py-2">No pending feedback.</p>
               ) : (
                 pendingFeedbackInterviews.slice(0, 4).map((int) => {
                   const name = int.candidateName || (int.application?.candidate ? `${int.application.candidate.firstName} ${int.application.candidate.lastName}` : 'Unknown candidate');
@@ -778,6 +778,7 @@ export function InterviewsPage() {
           <div>
             <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">Target Application / Candidate</label>
             <select
+              aria-label="Select application for interview"
               value={selectedAppId}
               onChange={(e) => setSelectedAppId(e.target.value)}
               className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
@@ -800,6 +801,7 @@ export function InterviewsPage() {
           <div>
             <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">Interview Type</label>
             <select
+              aria-label="Select interview type"
               value={interviewType}
                 onChange={(e) => setInterviewType(e.target.value as InterviewType)}
               className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"

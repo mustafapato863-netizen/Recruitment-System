@@ -52,6 +52,7 @@ export const InterviewFiltersBar: React.FC<InterviewFiltersBarProps> = ({
         {/* All interview types */}
         <div className="relative">
           <select
+            aria-label="Filter interviews by type"
             value={selectedType}
             onChange={(e) => setSelectedType(e.target.value)}
             className="appearance-none bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2 pr-8 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 cursor-pointer shadow-xs"
@@ -73,6 +74,7 @@ export const InterviewFiltersBar: React.FC<InterviewFiltersBarProps> = ({
         {/* All interviewers */}
         <div className="relative">
           <select
+            aria-label="Filter interviews by interviewer"
             value={selectedInterviewer}
             onChange={(e) => setSelectedInterviewer(e.target.value)}
             className="appearance-none bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2 pr-8 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 cursor-pointer shadow-xs"
@@ -94,6 +96,7 @@ export const InterviewFiltersBar: React.FC<InterviewFiltersBarProps> = ({
         {/* All statuses */}
         <div className="relative">
           <select
+            aria-label="Filter interviews by status"
             value={selectedStatus}
             onChange={(e) => setSelectedStatus(e.target.value)}
             className="appearance-none bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2 pr-8 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 cursor-pointer shadow-xs"

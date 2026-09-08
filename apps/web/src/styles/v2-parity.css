@@ -489,6 +489,23 @@
   box-shadow: var(--shadow-xs) !important;
 }
 
+/* Small supporting labels need normal body-text contrast on dense data pages. */
+.offers-page .text-slate-400,
+.offers-page .dark\:text-amber-400,
+.offers-page .dark\:text-slate-400 {
+  color: #475569 !important;
+}
+
+.dark .offers-page .dark\:text-amber-400,
+[data-theme='dark'] .offers-page .dark\:text-amber-400 {
+  color: #fbbf24 !important;
+}
+
+.dark .offers-page .dark\:text-slate-400,
+[data-theme='dark'] .offers-page .dark\:text-slate-400 {
+  color: #cbd5e1 !important;
+}
+
 @media (max-width: 1180px) {
   :root {
     --sidebar: 244px;
@@ -543,6 +560,29 @@
 }
 
 @media (max-width: 520px) {
+  /* Keep the global header on one row so its controls never cover the
+   * breadcrumb or push page content below the viewport. */
+  .header > div {
+    min-width: 0;
+    flex-wrap: nowrap;
+    gap: 8px;
+  }
+
+  .header > div > div:first-child {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  .header > div > div:first-child .search-bar-unified {
+    min-width: 0;
+    max-width: none;
+  }
+
+  .header .actions {
+    flex: 0 0 auto;
+    min-width: max-content;
+  }
+
   .rf-kpi-grid {
     grid-template-columns: 1fr !important;
   }

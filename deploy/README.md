@@ -1,5 +1,9 @@
 # RecruitFlow deployment
 
+Hostinger VPS and Vercel instructions are in
+[`deploy/hostinger-vercel.md`](./hostinger-vercel.md). Vercel hosts the web
+frontend only; the API and worker require the Docker targets described below.
+
 Build from repository root (`.`), Dockerfile path `Dockerfile`. Do not use a
 compose filename as Dokploy's build directory. No hosting changes are made by
 these files.
@@ -71,17 +75,15 @@ In Dokploy Compose mode select the actual compose file separately from build pat
 
 ## Verification and recovery
 
-Local evidence (2026-09-08): all 30 migrations replayed on isolated PostgreSQL 16;
-Prisma reported no schema difference; 66 API tests and 8 deployment validation tests
-passed; API TypeScript and changed-file lint passed; Compose configuration validated.
-A Linux API image including API, worker and web compilation built successfully.
-The final packaging adjustment excludes seed scripts; that final image still needs
-rebuilding. Docker Desktop subsequently failed with I/O/read-only-filesystem errors
-before container/volume startup, so web proxy, authenticated browser, worker and
-volume-persistence smoke checks are **not yet verified**. Resolve Docker storage
-health and rerun before approving hosting. Do not treat this as a deployment signoff.
+Local evidence (2026-09-08/09): all 30 migrations replayed on isolated PostgreSQL 16;
+Prisma reported no schema difference; 66 API tests, 4 worker tests and deployment
+validation tests passed; API/web TypeScript, lint and production builds passed.
+Fresh Linux API, web and worker images started healthy, the web proxy returned 200,
+and the authenticated Chromium matrix passed 33/33 checks at 1440/768/390px.
+These are local UAT results, not a production signoff; configure real secrets,
+SMTP, backups and HTTPS before go-live.
 
-Build all final targets after Docker recovery:
+Build all final targets:
 
 ```sh
 docker build --target api -t recruitflow-api:preflight .

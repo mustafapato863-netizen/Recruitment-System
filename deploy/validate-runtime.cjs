@@ -9,6 +9,12 @@ for (const key of ['JWT_ACCESS_SECRET', 'JWT_REFRESH_SECRET', 'SELF_SCHEDULE_SEC
 }
 if (env.JWT_ACCESS_SECRET === env.JWT_REFRESH_SECRET) errors.push('JWT secrets must be different');
 if (!/^[a-fA-F0-9]{64}$/.test(env.EMAIL_OUTBOX_ENCRYPTION_KEY ?? '')) errors.push('EMAIL_OUTBOX_ENCRYPTION_KEY must be 64 hexadecimal characters');
+if (env.AUTH_COOKIE_SAME_SITE && !['lax', 'strict', 'none'].includes(env.AUTH_COOKIE_SAME_SITE.trim().toLowerCase())) {
+  errors.push('AUTH_COOKIE_SAME_SITE must be lax, strict, or none');
+}
+if (env.AUTH_COOKIE_SAME_SITE?.trim().toLowerCase() === 'none' && env.NODE_ENV !== 'production') {
+  errors.push('AUTH_COOKIE_SAME_SITE=none requires NODE_ENV=production');
+}
 for (const value of [env.APP_WEB_URL, ...(env.WEB_ORIGIN ?? '').split(',')]) {
   try {
     const url = new URL(value?.trim());

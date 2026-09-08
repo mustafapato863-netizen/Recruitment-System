@@ -17,6 +17,30 @@ import { Public } from '../common/decorators/public.decorator';
 import type { AuthUser } from '@recruitflow/contracts';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 
+type AuthCookieSameSite = 'lax' | 'strict' | 'none';
+
+function authCookieSameSite(): AuthCookieSameSite {
+  const configured = process.env.AUTH_COOKIE_SAME_SITE?.trim().toLowerCase();
+  if (configured === 'strict' || configured === 'none' || configured === 'lax') return configured;
+  return 'lax';
+}
+
+function authCookieOptions(path: string): {
+  httpOnly: true;
+  secure: boolean;
+  sameSite: AuthCookieSameSite;
+  path: string;
+} {
+  const sameSite = authCookieSameSite();
+  return {
+    httpOnly: true,
+    // SameSite=None is rejected by browsers unless Secure is also enabled.
+    secure: process.env.NODE_ENV === 'production' || sameSite === 'none',
+    sameSite,
+    path,
+  };
+}
+
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
@@ -32,19 +56,8 @@ export class AuthController {
     const clientIp = request.ip || request.socket?.remoteAddress || 'unknown';
     const result = await this.authService.login(loginDto.email, loginDto.password, clientIp);
 
-    response.cookie('access_token', result.accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/api/v1',
-    });
-
-    response.cookie('refresh_token', result.refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/api/v1/auth/refresh',
-    });
+    response.cookie('access_token', result.accessToken, authCookieOptions('/api/v1'));
+    response.cookie('refresh_token', result.refreshToken, authCookieOptions('/api/v1/auth/refresh'));
 
     return { user: result.user };
   }
@@ -70,19 +83,8 @@ export class AuthController {
     const accessToken = await this.authService.generateAccessToken(user.userId, user.organizationId, tokenVersion);
     const refreshToken = await this.authService.generateRefreshToken(user.userId, user.organizationId, tokenVersion);
 
-    response.cookie('access_token', accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/api/v1',
-    });
-
-    response.cookie('refresh_token', refreshToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/api/v1/auth/refresh',
-    });
+    response.cookie('access_token', accessToken, authCookieOptions('/api/v1'));
+    response.cookie('refresh_token', refreshToken, authCookieOptions('/api/v1/auth/refresh'));
 
     return { message: 'Token refreshed' };
   }
