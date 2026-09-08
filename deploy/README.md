@@ -109,6 +109,11 @@ and the authenticated Chromium matrix passed 33/33 checks at 1440/768/390px.
 These are local UAT results, not a production signoff; configure real secrets,
 SMTP, backups and HTTPS before go-live.
 
+The API preflight rejects unresolved example values, wildcard origins, invalid
+PostgreSQL/Redis URLs, and incomplete production SMTP settings before migrations
+run. A rejected preflight is intentional: fix the value in Dokploy's Environment
+tab (or the Compose env file), redeploy, and then inspect `/api/v1/readiness`.
+
 Build all final targets:
 
 ```sh
