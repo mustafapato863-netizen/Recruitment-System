@@ -11,6 +11,7 @@ import {
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { ScreeningService } from './screening.service';
 import { CreateScreeningLogDto } from './screening.dto';
+import { UserPermissionsService } from '../common/user-permissions.service';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { TenantScopedGuard } from '../common/guards/tenant-scoped.guard';
@@ -23,23 +24,31 @@ import type { AuthUser } from '@recruitflow/contracts';
 @UseGuards(JwtAuthGuard)
 @Controller('screening')
 export class ScreeningController {
-  constructor(private readonly screeningService: ScreeningService) {}
+  constructor(
+    private readonly screeningService: ScreeningService,
+    private readonly userPermissions: UserPermissionsService,
+  ) {}
 
   @Get('application/:applicationId')
   @RequirePermissions('APPLICATION_VIEW')
   @UseGuards(TenantScopedGuard)
   @TenantResource({ resource: 'application', param: 'applicationId' })
-  listScreeningLogs(
+  async listScreeningLogs(
     @CurrentUser() user: AuthUser,
     @Param('applicationId', ParseUUIDPipe) applicationId: string,
   ) {
-    return this.screeningService.listScreeningLogs(user.organizationId, applicationId);
+    return this.screeningService.listScreeningLogs(
+      user.organizationId,
+      applicationId,
+      { viewSalary: await this.userPermissions.hasPermission(user.userId, user.organizationId, 'VIEW_CURRENT_SALARY') },
+      user,
+    );
   }
 
   @Post()
   @RequirePermissions('APPLICATION_MOVE_STAGE')
   @AuditAction('SCREENING_SUBMIT')
-  createScreeningLog(
+  async createScreeningLog(
     @CurrentUser() user: AuthUser,
     @Body() body: CreateScreeningLogDto,
   ) {
@@ -47,6 +56,8 @@ export class ScreeningController {
       user.organizationId,
       user.userId,
       body,
+      { viewSalary: await this.userPermissions.hasPermission(user.userId, user.organizationId, 'VIEW_CURRENT_SALARY') },
+      user,
     );
   }
 }

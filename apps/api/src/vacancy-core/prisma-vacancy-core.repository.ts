@@ -18,11 +18,23 @@ type RequestWithApprovals = Prisma.VacancyRequestGetPayload<{
 }>;
 
 type VacancyWithAssignments = Prisma.VacancyGetPayload<{
-  include: { assignments: true; position: true; branch: true };
+  include: {
+    assignments: {
+      include: { user: { select: { id: true, displayName: true } } };
+    };
+    position: true;
+    branch: true;
+  };
 }>;
 
 type ApprovalRecord = Prisma.VacancyRequestApprovalGetPayload<{}>;
-type AssignmentRecord = Prisma.VacancyAssignmentGetPayload<{}>;
+type AssignmentRecord = Prisma.VacancyAssignmentGetPayload<{
+  include: { user: { select: { id: true, displayName: true } } };
+}>;
+
+const assignmentInclude = {
+  user: { select: { id: true, displayName: true } },
+} as const;
 
 @Injectable()
 export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
@@ -184,7 +196,7 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
   async listVacancies(organizationId: string): Promise<Vacancy[]> {
     const vacancies = await this.prisma.vacancy.findMany({
       where: { organizationId },
-      include: { assignments: true, position: true, branch: true },
+      include: { assignments: { include: assignmentInclude }, position: true, branch: true },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -194,7 +206,7 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
   async getVacancyByRequestId(organizationId: string, requestId: string): Promise<Vacancy | null> {
     const vacancy = await this.prisma.vacancy.findUnique({
       where: { vacancyRequestId: requestId },
-      include: { assignments: true, position: true, branch: true },
+      include: { assignments: { include: assignmentInclude }, position: true, branch: true },
     });
 
     return vacancy && vacancy.organizationId === organizationId ? this.toVacancy(vacancy) : null;
@@ -203,7 +215,7 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
   async getVacancy(organizationId: string, id: string): Promise<Vacancy | null> {
     const vacancy = await this.prisma.vacancy.findUnique({
       where: { id },
-      include: { assignments: true, position: true, branch: true },
+      include: { assignments: { include: assignmentInclude }, position: true, branch: true },
     });
 
     return vacancy && vacancy.organizationId === organizationId ? this.toVacancy(vacancy) : null;
@@ -297,7 +309,7 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
     const vacancy = await this.prisma.vacancy.findUnique({
       where: { id },
       include: {
-        assignments: true,
+        assignments: { include: assignmentInclude },
         vacancyRequest: {
           include: { approvals: true },
         },
@@ -314,6 +326,7 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
       ...this.toVacancy(vacancy),
       vacancyRequest: vacancy.vacancyRequest ? this.toVacancyRequest(vacancy.vacancyRequest) : undefined,
       organizationName: vacancy.organization.name,
+      organizationCode: vacancy.organization.code,
       branchName: vacancy.branch.name,
       legalEntityName: vacancy.legalEntity?.name,
       positionTitle: vacancy.position.title,
@@ -403,7 +416,7 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
     transaction: Prisma.TransactionClient,
     vacancy: Vacancy,
   ): Promise<VacancyWithAssignments> {
-    return transaction.vacancy.upsert({
+    await transaction.vacancy.upsert({
       where: { id: vacancy.id },
       create: {
         id: vacancy.id,
@@ -447,8 +460,20 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
         benefits: vacancy.benefits ?? null,
         updatedAt: toDateTime(vacancy.updatedAt) ?? new Date(),
       },
-      include: { assignments: true, position: true, branch: true },
     });
+
+    // Team membership is maintained by the dedicated assignment transaction in
+    // VacancyCoreService. Never replay a stale vacancy snapshot here: doing so
+    // can silently revoke a concurrent assignment or create duplicate history.
+
+    const saved = await transaction.vacancy.findUnique({
+      where: { id: vacancy.id },
+      include: { assignments: { include: assignmentInclude }, position: true, branch: true },
+    });
+    if (!saved) {
+      throw new Error(`Vacancy ${vacancy.id} disappeared during save.`);
+    }
+    return saved;
   }
 
   private async nextBusinessCode(prefix: 'VR' | 'VAC'): Promise<string> {
@@ -540,9 +565,9 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
       targetStartDate: toDateOnlyString(vacancy.targetStartDate),
       requiredSkills: vacancy.requiredSkills ?? [],
       minExperienceYears: vacancy.minExperienceYears ?? null,
-      assignments: vacancy.assignments.map((assignment) =>
-        this.toAssignment(assignment),
-      ),
+      assignments: vacancy.assignments
+        .filter((assignment) => assignment.isActive)
+        .map((assignment) => this.toAssignment(assignment)),
       createdAt: vacancy.createdAt.toISOString(),
       updatedAt: vacancy.updatedAt.toISOString(),
     };
@@ -553,8 +578,12 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
       id: assignment.id,
       userId: assignment.userId,
       roleCode: assignment.roleCode,
+      assignmentKind: assignment.assignmentKind as 'PRIMARY' | 'SUPPORT',
       isActive: assignment.isActive,
       assignedAt: assignment.assignedAt.toISOString(),
+      ...(assignment.user
+        ? { user: { id: assignment.user.id, displayName: assignment.user.displayName } }
+        : {}),
     };
   }
 }

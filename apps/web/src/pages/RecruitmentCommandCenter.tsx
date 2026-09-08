@@ -235,14 +235,15 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
             onClick={() => navigate('/cv-intake')}
             className="inline-flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs cursor-pointer"
           >
-            <Icon name="upload" size={13} className="text-emerald-600 dark:text-emerald-400" />
+            <Icon name="upload" size={13} className="text-emerald-700 dark:text-emerald-400" />
             <span>Fast CV Intake</span>
           </button>
 
           <button
             type="button"
             onClick={() => navigate('/vacancy-requests/create')}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+              aria-label="Create new requisition"
           >
             <Icon name="plus" size={14} />
             <span>New Requisition</span>
@@ -262,7 +263,7 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
               <Icon name="briefcase" size={20} />
             </div>
             <div>
-              <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-400">Open Requisitions</span>
+              <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">Open Requisitions</span>
               <span className="block text-2xl font-black text-slate-900 dark:text-white mt-0.5">{totalOpen}</span>
               <span className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400">
                 {positions.length} total across hospitals
@@ -278,13 +279,13 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
           className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 shadow-xs hover:border-emerald-300 dark:hover:border-emerald-700 transition cursor-pointer flex items-center justify-between group"
         >
           <div className="flex items-center gap-3.5">
-            <div className="w-11 h-11 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+            <div className="w-11 h-11 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 flex items-center justify-center shrink-0">
               <Icon name="users" size={20} />
             </div>
             <div>
-              <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-400">Active Candidates</span>
+              <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">Active Candidates</span>
               <span className="block text-2xl font-black text-slate-900 dark:text-white mt-0.5">{totalInFlightCandidates}</span>
-              <span className="block text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+              <span className="block text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
                 In-flight pipeline &bull; Click to open
               </span>
             </div>
@@ -312,11 +313,11 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
               <Icon name="check-circle" size={20} />
             </div>
             <div>
-              <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-400">Approval Inbox</span>
+              <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">Approval Inbox</span>
               <span className="block text-2xl font-black text-slate-900 dark:text-white mt-0.5">
                 {pendingApprovalsCount}
               </span>
-              <span className={`block text-[11px] font-semibold ${pendingApprovalsCount > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-400'}`}>
+              <span className={`block text-[11px] font-semibold ${pendingApprovalsCount > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-600 dark:text-slate-400'}`}>
                 {pendingApprovalsCount > 0 ? 'Action required &bull; Review now' : 'All decisions cleared'}
               </span>
             </div>
@@ -338,15 +339,15 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
               className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
                 totalSlaAtRisk > 0
                   ? 'bg-rose-100 dark:bg-rose-900/50 text-rose-600 dark:text-rose-300'
-                  : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400'
+                  : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400'
               }`}
             >
               <Icon name="clock" size={20} />
             </div>
             <div>
-              <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-400">SLA At-Risk</span>
+              <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">SLA At-Risk</span>
               <span className="block text-2xl font-black text-slate-900 dark:text-white mt-0.5">{totalSlaAtRisk}</span>
-              <span className={`block text-[11px] font-semibold ${totalSlaAtRisk > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+              <span className={`block text-[11px] font-semibold ${totalSlaAtRisk > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-700 dark:text-emerald-400'}`}>
                 {totalSlaAtRisk > 0 ? 'Attention needed' : '100% On-Track'}
               </span>
             </div>
@@ -376,7 +377,7 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
 
           {/* Department Filter */}
           <div className="relative">
-            <select
+            <select aria-label="Department"
               value={selectedDept}
               onChange={(e) => setSelectedDept(e.target.value)}
               className="appearance-none bg-slate-100 dark:bg-slate-800 border-none rounded-xl px-3 py-1.5 pr-7 text-xs font-semibold text-slate-700 dark:text-slate-200 cursor-pointer focus:ring-1 focus:ring-blue-500"
@@ -387,7 +388,7 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
                 </option>
               ))}
             </select>
-            <Icon name="chevron-down" size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            <Icon name="chevron-down" size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-600 dark:text-slate-400 pointer-events-none" />
           </div>
 
           {/* My Positions Toggle */}
@@ -414,7 +415,7 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
               onChange={(e) => setSearch(e.target.value)}
               className="w-full h-8 pl-8 pr-3 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-xs placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
             />
-            <Icon name="search" size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Icon name="search" size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-600 dark:text-slate-400" />
           </div>
 
           {/* View Mode Toggle */}
@@ -425,7 +426,7 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
               className={`p-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
                 viewMode === 'cards'
                   ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
-                  : 'text-slate-500 hover:text-slate-900'
+                  : 'text-slate-700 hover:text-slate-900'
               }`}
               title="SGH Card Grid"
             >
@@ -438,9 +439,10 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
               className={`p-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1 ${
                 viewMode === 'list'
                   ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
-                  : 'text-slate-500 hover:text-slate-900'
+                  : 'text-slate-700 hover:text-slate-900'
               }`}
               title="Compact List"
+              aria-label="Compact list view"
             >
               <Icon name="list" size={13} />
               <span className="hidden sm:inline">List</span>
@@ -573,7 +575,7 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr className="border-b border-slate-100 dark:border-slate-800 text-slate-400 font-bold uppercase text-[10.5px] bg-slate-50/50 dark:bg-slate-800/20">
+                <tr className="border-b border-slate-100 dark:border-slate-800 text-slate-600 dark:text-slate-300 font-bold uppercase text-[10.5px] bg-slate-50/50 dark:bg-slate-800/20">
                   <th className="py-3 px-4 text-left">Code</th>
                   <th className="py-3 px-4 text-left">Position Title</th>
                   <th className="py-3 px-4 text-left">Department</th>

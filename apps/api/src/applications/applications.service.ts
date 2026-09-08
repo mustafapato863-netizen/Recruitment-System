@@ -1,7 +1,6 @@
 import {
   BadRequestException,
   ConflictException,
-  ForbiddenException,
   Inject,
   Injectable,
   Logger,
@@ -74,17 +73,11 @@ export class ApplicationsService {
       );
       canViewPii = policy.canViewPii;
 
-      if (policy.dataScope === 'ASSIGNED_ONLY') {
-        const assignedClause: Prisma.ApplicationWhereInput[] = [
-          { primaryRecruiterId: user.userId },
-          { taskOwnerId: user.userId },
-          { vacancy: { assignments: { some: { userId: user.userId } } } },
-        ];
-        where.AND = [
-          ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
-          { OR: assignedClause },
-        ];
-      }
+      const visibility = await this.accessControl.getApplicationVisibilityWhere(user);
+      where.AND = [
+        ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
+        visibility,
+      ];
     }
 
     if (query.vacancyId) where.vacancyId = query.vacancyId;
@@ -140,8 +133,14 @@ export class ApplicationsService {
     id: string,
     user?: AuthUser,
   ): Promise<Application> {
-    const application = await this.prisma.application.findUnique({
-      where: { id },
+    const policy = user
+      ? await this.accessControl.getUserEffectiveScope(organizationId, user.userId, user.roleCodes)
+      : null;
+    const visibility = user
+      ? await this.accessControl.getApplicationVisibilityWhere(user)
+      : { organizationId };
+    const application = await this.prisma.application.findFirst({
+      where: { id, ...visibility },
       include: {
         candidate: true,
         vacancy: {
@@ -159,39 +158,33 @@ export class ApplicationsService {
       throw new NotFoundException(`Application ${id} was not found.`);
     }
 
-    let canViewPii = true;
-    if (user) {
-      const policy = await this.accessControl.getUserEffectiveScope(
-        organizationId,
-        user.userId,
-        user.roleCodes,
-      );
-      canViewPii = policy.canViewPii;
-
-      if (policy.dataScope === 'ASSIGNED_ONLY') {
-        const isAssigned =
-          application.primaryRecruiterId === user.userId ||
-          application.taskOwnerId === user.userId ||
-          application.vacancy?.assignments?.some((a) => a.userId === user.userId);
-
-        if (!isAssigned) {
-          throw new ForbiddenException(
-            'Row-Level Security: You are not assigned to this application or requisition.',
-          );
-        }
-      }
-    }
-
-    return this.toApplication(application, canViewPii);
+    return this.toApplication(application, policy?.canViewPii ?? true);
   }
 
   async createApplication(
     organizationId: string,
     dto: CreateApplicationDto,
+    user?: AuthUser,
   ): Promise<Application> {
+    const vacancyVisibility = user
+      ? await this.accessControl.getVacancyVisibilityWhere(user)
+      : { organizationId };
+    const applicationVisibility = user
+      ? await this.accessControl.getApplicationVisibilityWhere(user)
+      : { organizationId };
+    const candidateVisibility: Prisma.CandidateWhereInput = user
+      ? {
+          organizationId,
+          OR: [
+            { createdById: user.userId },
+            { applications: { some: applicationVisibility } },
+          ],
+        }
+      : { organizationId };
+
     const [vacancy, candidate] = await Promise.all([
-      this.prisma.vacancy.findUnique({ where: { id: dto.vacancyId } }),
-      this.prisma.candidate.findUnique({ where: { id: dto.candidateId } }),
+      this.prisma.vacancy.findFirst({ where: { id: dto.vacancyId, ...vacancyVisibility } }),
+      this.prisma.candidate.findFirst({ where: { id: dto.candidateId, ...candidateVisibility } }),
     ]);
 
     if (!vacancy || vacancy.organizationId !== organizationId) {
@@ -276,8 +269,9 @@ export class ApplicationsService {
     id: string,
     actorUserId: string,
     dto: UpdateApplicationStageDto,
+    user?: AuthUser,
   ): Promise<Application> {
-    const application = await this.getApplication(organizationId, id);
+    const application = await this.getApplication(organizationId, id, user);
 
     if (application.stage !== dto.expectedStage || application.version !== dto.expectedVersion) {
       this.throwTransitionConflict(application);
@@ -356,7 +350,7 @@ export class ApplicationsService {
     });
 
     if (!updated) {
-      const current = await this.getApplication(organizationId, id);
+      const current = await this.getApplication(organizationId, id, user);
       this.throwTransitionConflict(current);
     }
 
@@ -373,8 +367,9 @@ export class ApplicationsService {
     id: string,
     _actorUserId: string,
     dto: UpdateApplicationDto,
+    user?: AuthUser,
   ): Promise<Application> {
-    await this.getApplication(organizationId, id);
+    await this.getApplication(organizationId, id, user);
 
     const updateData: Prisma.ApplicationUpdateInput = {};
 
@@ -423,8 +418,9 @@ export class ApplicationsService {
   async getApplicationHistory(
     organizationId: string,
     id: string,
+    user?: AuthUser,
   ): Promise<ApplicationStatusHistoryItem[]> {
-    await this.getApplication(organizationId, id);
+    await this.getApplication(organizationId, id, user);
 
     const history = await this.prisma.applicationStatusHistory.findMany({
       where: { applicationId: id },
@@ -447,8 +443,9 @@ export class ApplicationsService {
   async listNotes(
     organizationId: string,
     applicationId: string,
+    user?: AuthUser,
   ): Promise<ApplicationNote[]> {
-    await this.getApplication(organizationId, applicationId);
+    await this.getApplication(organizationId, applicationId, user);
 
     const notes = await this.prisma.applicationNote.findMany({
       where: {
@@ -469,8 +466,9 @@ export class ApplicationsService {
     applicationId: string,
     authorId: string,
     content: string,
+    user?: AuthUser,
   ): Promise<ApplicationNote> {
-    await this.getApplication(organizationId, applicationId);
+    await this.getApplication(organizationId, applicationId, user);
 
     const trimmed = content.trim();
     if (!trimmed) {
@@ -552,6 +550,13 @@ export class ApplicationsService {
             phone: canViewPii ? record.candidate.phone : this.maskPhone(record.candidate.phone),
             currentTitle: record.candidate.currentTitle,
             currentCompany: record.candidate.currentCompany,
+            summary: record.candidate.summary,
+            skills: record.candidate.skills,
+            experienceYears: record.candidate.experienceYears,
+            location: record.candidate.location,
+            certifications: record.candidate.certifications,
+            languages: record.candidate.languages,
+            availability: record.candidate.availability,
             source: record.candidate.source,
             status: record.candidate.status as Candidate['status'],
             consentStatus: record.candidate.consentStatus,

@@ -27,10 +27,22 @@ const HEADER_BLACKLIST = [
   'resume',
   'cv',
   'profile',
+  'profile summary',
   'biodata',
   'personal details',
   'contact information',
   'contact details',
+  'professional summary',
+  'career objective',
+  'objective',
+  'work experience',
+  'work history',
+  'experience',
+  'education',
+  'skills',
+  'technical skills',
+  'languages',
+  'certifications',
 ];
 
 const KNOWN_TITLES = [
@@ -70,6 +82,131 @@ const KNOWN_TITLES = [
   'Sales Executive', 'Account Manager', 'Customer Success Manager', 'System Administrator',
   'Network Engineer', 'Security Engineer', 'Cybersecurity Analyst', 'Database Administrator',
 ];
+
+const FILE_NAME_NOISE = /\b(?:cv|resume|curriculum vitae|profile|biodata|applicant|candidate|document|doc|pdf|final|draft|updated|copy|version|v\d+)\b/gi;
+const ROLE_WORDS = new Set([
+  'analyst', 'architect', 'assistant', 'accountant', 'coordinator', 'consultant', 'developer', 'director',
+  'engineer', 'executive', 'intern', 'manager', 'nurse', 'officer', 'physician', 'recruiter', 'scientist',
+  'specialist', 'supervisor', 'surgeon', 'technician', 'administrator', 'lead', 'senior', 'junior',
+]);
+const TITLE_LEAD_WORDS = new Set([
+  'data', 'software', 'project', 'business', 'financial', 'marketing', 'technical', 'clinical',
+  'quality', 'network', 'system', 'machine', 'registered', 'general', 'staff', 'full', 'front',
+  'back', 'chief', 'medical', 'seo', 'senior', 'junior', 'lead',
+]);
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function normalizeRoleWord(value: string): string {
+  return value.toLowerCase().replace(/[.’'()]/g, '');
+}
+
+function normalizeNameText(value: string): string {
+  return value
+    .replace(/[_|•]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function stripKnownTitleFromName(value: string): string {
+  let cleaned = normalizeNameText(value);
+  const titleList = [...KNOWN_TITLES].sort((a, b) => b.length - a.length);
+  for (const title of titleList) {
+    const titlePattern = new RegExp(
+      `(?:^|[\\s,:;()\\[\\]\\-])${escapeRegExp(title)}(?=$|[\\s,:;()\\[\\]\\-])`,
+      'giu',
+    );
+    cleaned = cleaned.replace(titlePattern, ' ');
+  }
+
+  // Catch titles outside the curated dictionary, such as "Senior SEO Specialist".
+  // Once a role word appears after at least two name tokens, treat the trailing phrase
+  // as a title and keep the preceding person name.
+  const words = cleaned.split(/\s+/).filter(Boolean);
+  const roleIndex = words.findIndex((word, index) => index >= 2 && ROLE_WORDS.has(normalizeRoleWord(word)));
+  if (roleIndex >= 2) {
+    const previousWord = normalizeRoleWord(words[roleIndex - 1]);
+    const suffixStart = TITLE_LEAD_WORDS.has(previousWord) ? roleIndex - 1 : roleIndex;
+    cleaned = words.slice(0, suffixStart).join(' ');
+  }
+  return normalizeNameText(cleaned);
+}
+
+function stripLeadingJobTitle(value: string): string {
+  let cleaned = normalizeNameText(value);
+  const titleList = [...KNOWN_TITLES].sort((a, b) => b.length - a.length);
+  for (const title of titleList) {
+    const titlePattern = new RegExp(`^${escapeRegExp(title)}(?:$|[\\s,:;()\\[\\]\\-|])`, 'iu');
+    if (titlePattern.test(cleaned)) {
+      cleaned = cleaned.replace(titlePattern, '').trim();
+      return cleaned;
+    }
+  }
+
+  const words = cleaned.split(/\s+/).filter(Boolean);
+  let index = 0;
+  let hasRole = false;
+  while (index < words.length) {
+    const normalized = normalizeRoleWord(words[index] || '');
+    if (ROLE_WORDS.has(normalized)) {
+      hasRole = true;
+      index += 1;
+      continue;
+    }
+    if (TITLE_LEAD_WORDS.has(normalized) && index < 3) {
+      index += 1;
+      continue;
+    }
+    break;
+  }
+  return hasRole && words.length - index >= 2 ? words.slice(index).join(' ') : cleaned;
+}
+
+function truncateNameAtKnownTitle(value: string): string {
+  const normalized = normalizeNameText(value);
+  const titleList = [...KNOWN_TITLES].sort((a, b) => b.length - a.length);
+  for (const title of titleList) {
+    const titlePattern = new RegExp(
+      `(?:^|[\\s,:;()\\[\\]\\-])${escapeRegExp(title)}(?=$|[\\s,:;()\\[\\]\\-])`,
+      'iu',
+    );
+    const match = normalized.match(titlePattern);
+    if (match?.index !== undefined) {
+      return normalized.slice(0, match.index).replace(/[\\s,;:()-]+$/g, '').trim();
+    }
+  }
+  return normalized;
+}
+
+function isLikelyPersonName(value: string): boolean {
+  const cleaned = normalizeNameText(value)
+    .replace(/^[\s,;:()-]+|[\s,;:()-]+$/g, '')
+    .trim();
+  if (!cleaned || cleaned.length < 4 || cleaned.length > 80) return false;
+  if (/[\d@]/.test(cleaned)) return false;
+  const lower = cleaned.toLowerCase();
+  if (HEADER_BLACKLIST.some((header) => lower === header || lower.startsWith(`${header}:`))) return false;
+
+  const words = cleaned.split(/\s+/).filter(Boolean);
+  if (words.length < 2 || words.length > 5) return false;
+  if (words.some((word) => !/^\p{L}[\p{L}\p{M}'’-]*$/u.test(word))) return false;
+  const roleWordCount = words.filter((word) => ROLE_WORDS.has(normalizeRoleWord(word))).length;
+  return roleWordCount === 0;
+}
+
+function extractNameCandidate(line: string): string | undefined {
+  const explicitMatch = line.match(/(?:name|candidate|full name)\s*[:|-]\s*(.+)$/iu);
+  const source = explicitMatch?.[1] || line;
+  const cleaned = stripKnownTitleFromName(truncateNameAtKnownTitle(stripLeadingJobTitle(source)))
+    .replace(FILE_NAME_NOISE, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/^(?:dr|doctor|prof|professor|eng|nurse|mr|mrs|ms)\b\.?\s*/iu, '')
+    .replace(/^[\s,;:()-]+|[\s,;:()-]+$/g, '')
+    .trim();
+  return isLikelyPersonName(cleaned) ? cleaned : undefined;
+}
 
 const KNOWN_SKILLS = [
   // 1. Healthcare & Clinical - Cardiology & Vascular
@@ -239,37 +376,33 @@ export function extractCandidateFromText(text: string, fallbackFileName: string)
 
   // 3. Extract Name from top lines
   const nameCandidates: string[] = [];
-  for (const line of lines.slice(0, 8)) {
+  for (const line of lines.slice(0, 20)) {
     const lower = line.toLowerCase();
-    if (HEADER_BLACKLIST.some((b) => lower === b || lower.startsWith(b + ':') || lower.startsWith(b + ' -'))) continue;
-    if (lower.includes('@') || lower.includes('phone:') || lower.includes('email:') || lower.includes('http')) {
-      const namePrefixMatch = line.match(/(?:name|candidate|full name)\s*[:|-]\s*([a-zA-Z\s]+)/i);
-      if (namePrefixMatch && namePrefixMatch[1].trim().length > 2) {
-        nameCandidates.push(namePrefixMatch[1].trim());
-      }
-      continue;
+    const isHeader = HEADER_BLACKLIST.some((b) => lower === b || lower.startsWith(`${b}:`) || lower.startsWith(`${b} -`));
+    if (isHeader) continue;
+
+    // A labelled name can share a contact line; inspect it before skipping email/phone lines.
+    const labelledName = extractNameCandidate(line);
+    if (labelledName && /(?:name|candidate|full name)\s*[:|-]/iu.test(line)) {
+      nameCandidates.push(labelledName);
+      break;
     }
-    const cleanLine = line.replace(/[^a-zA-Z\s'-]/g, ' ').trim();
-    const strippedHonorific = cleanLine.replace(/^(?:dr|doctor|prof|professor|eng|nurse|mr|mrs|ms)\b\.?\s*/i, '').trim();
-    const words = strippedHonorific.split(/\s+/).filter(Boolean);
-    if (words.length >= 2 && words.length <= 4 && strippedHonorific.length >= 4 && strippedHonorific.length <= 40) {
-      if (!KNOWN_TITLES.some(t => t.toLowerCase() === strippedHonorific.toLowerCase())) {
-        nameCandidates.push(strippedHonorific);
-        break;
-      }
+
+    if (lower.includes('@') || lower.includes('phone:') || lower.includes('email:') || lower.includes('http')) continue;
+
+    const candidate = extractNameCandidate(line);
+    if (candidate) {
+      nameCandidates.push(candidate);
+      break;
     }
   }
 
-  let fullName = nameCandidates[0];
-  if (!fullName) {
-    fullName = fallbackFileName
-      .replace(/\.[^/.]+$/, '')
-      .replace(/[-_]+/g, ' ')
-      .replace(/\b(cv|resume|doc|pdf|profile|applicant|v1|v2|final|draft)\b/gi, '')
-      .trim();
-  }
+  const fileNameCandidate = extractNameCandidate(
+    fallbackFileName.replace(/\.[^/.]+$/, '').replace(/[-_]+/g, ' '),
+  );
+  let fullName = nameCandidates[0] || fileNameCandidate || 'Candidate Profile';
 
-  fullName = (fullName || 'Candidate Profile').replace(/^(?:dr|doctor|prof|professor|eng|nurse|mr|mrs|ms)\b\.?\s*/i, '').trim();
+  fullName = fullName.replace(/^(?:dr|doctor|prof|professor|eng|nurse|mr|mrs|ms)\b\.?\s*/iu, '').trim();
 
   const nameParts = fullName.split(/\s+/).filter(Boolean);
   const firstName = nameParts[0] || 'Candidate';
@@ -312,8 +445,15 @@ export function extractCandidateFromText(text: string, fallbackFileName: string)
     if (line.includes('|')) {
       const parts = line.split('|').map(p => p.trim()).filter(Boolean);
       for (const part of parts) {
+        const normalizedPart = normalizeNameText(part).toLowerCase();
+        const normalizedName = normalizeNameText(fullName).toLowerCase();
+        const partWithoutTitle = normalizeNameText(
+          stripKnownTitleFromName(truncateNameAtKnownTitle(part)),
+        ).toLowerCase();
         if (
           !KNOWN_TITLES.some(t => t.toLowerCase() === part.toLowerCase()) &&
+          normalizedPart !== normalizedName &&
+          partWithoutTitle !== normalizedName &&
           !part.match(/\b(20\d\d|19\d\d|present|current|experience|education|work)\b/i) &&
           part.length >= 3 &&
           part.length <= 50
@@ -323,6 +463,19 @@ export function extractCandidateFromText(text: string, fallbackFileName: string)
         }
       }
       if (currentCompany) break;
+    }
+  }
+
+  // Some CV templates place the candidate name and title beside the employer field.
+  // Do not persist that repeated identity string as an organisation.
+  if (currentCompany) {
+    const normalizedCompany = normalizeNameText(currentCompany).toLowerCase();
+    const normalizedName = normalizeNameText(fullName).toLowerCase();
+    const companyWithoutTitle = normalizeNameText(
+      stripKnownTitleFromName(truncateNameAtKnownTitle(currentCompany)),
+    ).toLowerCase();
+    if (normalizedCompany === normalizedName || companyWithoutTitle === normalizedName) {
+      currentCompany = undefined;
     }
   }
 
@@ -491,36 +644,37 @@ export function extractCandidateFromText(text: string, fallbackFileName: string)
 
   // 13. Clinical Subspecialty & Domain Detection
   const { domain: clinicalDomain, subspecialties, confidence: aiSummaryConfidence, keyHighlights } =
-    detectClinicalDomain(skills, title, certifications, text, experienceYears ?? 3);
+    detectClinicalDomain(skills, title, certifications, text, experienceYears ?? 0);
 
   // 14. Auto-generate AI Summary if missing or too brief
-  const finalTitle = title || (clinicalDomain.includes('Engineering') || clinicalDomain.includes('Informatics') ? 'Technical Specialist' : 'Clinical Specialist');
+  const finalTitle = title || undefined;
   if (!summary || summary.trim().length < 40) {
     summary = generateAISummary({
       firstName,
       lastName,
       title: finalTitle,
-      experienceYears: experienceYears ?? 3,
+      experienceYears,
       clinicalDomain,
       subspecialties,
       skills,
       certifications,
       education,
+      currentCompany,
     });
   }
 
   return {
     firstName,
     lastName,
-    email: email || `${firstName.toLowerCase()}.${lastName.toLowerCase().replace(/\s+/g, '')}@example.com`,
-    phone: phone || '+20 100 000 0000',
+    email,
+    phone,
     title: finalTitle,
     currentCompany,
-    experienceYears: experienceYears ?? 3,
-    location: location || 'Cairo, Egypt',
+    experienceYears,
+    location,
     skills,
-    education: education || 'Bachelor Degree',
-    languages: languages.length > 0 ? languages : ['English', 'Arabic'],
+    education,
+    languages: languages.length > 0 ? languages : [],
     certifications,
     summary,
     clinicalDomain,
@@ -539,7 +693,7 @@ export function detectClinicalDomain(
   title?: string,
   certifications?: string[],
   rawText?: string,
-  years = 3,
+  years = 0,
 ): { domain: string; subspecialties: string[]; confidence: number; keyHighlights: string[] } {
   const textCombined = `${title || ''} ${(skills || []).join(' ')} ${(certifications || []).join(' ')} ${rawText || ''}`.toLowerCase();
 
@@ -610,18 +764,10 @@ export function detectClinicalDomain(
     }
   }
 
-  // If score is 0, default based on title
+  // A title alone is not enough evidence to assign a specialty.
   if (maxScore === 0) {
-    if (title?.toLowerCase().includes('engineer') || title?.toLowerCase().includes('analyst')) {
-      topDomain = 'Health Informatics & Software Engineering';
-      topSubs = ['Digital Health Systems'];
-    } else if (title?.toLowerCase().includes('nurse')) {
-      topDomain = 'Nursing & Patient Care';
-      topSubs = ['General Inpatient Nursing'];
-    } else {
-      topDomain = 'Clinical Medical Practice';
-      topSubs = ['Comprehensive Patient Care'];
-    }
+    topDomain = 'Unclassified';
+    topSubs = [];
   }
 
   // Build Key Highlights
@@ -633,8 +779,9 @@ export function detectClinicalDomain(
   if (topSubs.length > 0) keyHighlights.push(topSubs[0]);
   if (textCombined.includes('arabic') && textCombined.includes('english')) keyHighlights.push('Bilingual (AR / EN)');
 
-  // Compute confidence (85% - 98%)
-  const confidence = Math.min(98, Math.max(86, 85 + (maxScore > 0 ? 6 : 0) + (certifications?.length ? 4 : 0) + (years > 3 ? 3 : 0)));
+  // Confidence reflects evidence in the CV rather than a reassuring floor.
+  const evidence = Math.min(100, 35 + maxScore * 5 + (certifications?.length ? 10 : 0) + (years > 0 ? 10 : 0) + (skills.length ? 10 : 0));
+  const confidence = maxScore === 0 ? Math.min(55, evidence) : Math.min(98, evidence);
 
   return {
     domain: topDomain,
@@ -650,19 +797,23 @@ export function detectClinicalDomain(
  */
 export function generateAISummary(candidate: Partial<ExtractedCandidate>): string {
   const fullName = `${candidate.firstName || ''} ${candidate.lastName || ''}`.trim() || 'The candidate';
-  const title = candidate.title || 'Specialist';
-  const years = candidate.experienceYears || 3;
-  const domain = candidate.clinicalDomain || 'Healthcare Practice';
+  const title = candidate.title?.trim();
+  const years = candidate.experienceYears;
+  const domain = candidate.clinicalDomain && candidate.clinicalDomain !== 'Unclassified' ? candidate.clinicalDomain : undefined;
   const subspecialties = candidate.subspecialties?.length ? candidate.subspecialties.join(', ') : undefined;
   const topSkills = (candidate.skills || []).slice(0, 4).join(', ');
   const certs = (candidate.certifications || []).slice(0, 3).join(', ');
+  const company = candidate.currentCompany?.trim();
 
-  const hasClinicalFocus = !domain.includes('Software') && !domain.includes('Business');
+  const hasClinicalFocus = Boolean(domain && !domain.includes('Software') && !domain.includes('Business'));
+  const experience = years === undefined ? 'experience history not provided' : `${years} year${years === 1 ? '' : 's'} of experience`;
+  const identity = title ? `${title} with ${experience}` : experience;
+  const organization = company ? ` at ${company}` : '';
 
   if (hasClinicalFocus) {
-    let summaryText = `${fullName} is a dedicated ${title} with ${years}+ years of specialized experience in ${domain}`;
+    let summaryText = `${fullName} is a ${identity}${organization}${domain ? ` in ${domain}` : ''}`;
     if (subspecialties) {
-      summaryText += `, with verified focus in ${subspecialties}.`;
+      summaryText += `, with CV evidence of ${subspecialties}.`;
     } else {
       summaryText += '.';
     }
@@ -675,21 +826,17 @@ export function generateAISummary(candidate: Partial<ExtractedCandidate>): strin
       summaryText += ` Credentialed with ${certs}.`;
     }
 
-    summaryText += ` Fully committed to patient safety, clinical excellence, and high-quality care delivery compliant with Saudi German Health protocols and JCI/CBAHI accreditation standards.`;
-
     return summaryText;
   }
 
   // Technical / Administrative Track
-  let techSummary = `${fullName} is an experienced ${title} with ${years}+ years of expertise in ${domain}.`;
+  let techSummary = `${fullName} is a ${identity}${organization}${domain ? ` in ${domain}` : ''}.`;
   if (topSkills) {
     techSummary += ` Highly skilled in ${topSkills}.`;
   }
   if (certs) {
     techSummary += ` Holds professional credentials including ${certs}.`;
   }
-  techSummary += ` Proven track record delivering robust digital solutions, cross-functional stakeholder alignment, and scalable outcomes within modern healthcare environments.`;
-
   return techSummary;
 }
 

@@ -15,6 +15,7 @@ interface CVMatchAssignerProps {
   targetStage: string;
   setTargetStage: (s: string) => void;
   candidateSource: string;
+  candidateSourceOptions: string[];
   setCandidateSource: (s: string) => void;
   duplicateDecision: 'update' | 'new' | 'link';
   setDuplicateDecision: (d: 'update' | 'new' | 'link') => void;
@@ -32,6 +33,7 @@ export const CVMatchAssigner: React.FC<CVMatchAssignerProps> = ({
   targetStage,
   setTargetStage,
   candidateSource,
+  candidateSourceOptions,
   setCandidateSource,
   duplicateDecision,
   setDuplicateDecision,
@@ -48,7 +50,7 @@ export const CVMatchAssigner: React.FC<CVMatchAssignerProps> = ({
     if (!profile || vacancies.length === 0) return [];
 
     const scored = vacancies.map((v) => {
-      const positionTitle = (v as any).position?.title || v.title || '';
+      const positionTitle = v.position?.title || v.title || '';
       const fitResult = calculateCandidateFitScore(
         {
           skills: profile.skills,
@@ -140,43 +142,26 @@ export const CVMatchAssigner: React.FC<CVMatchAssignerProps> = ({
           <div className="p-3.5 rounded-xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-900/50 text-xs">
             <div className="flex items-center gap-2 font-bold text-amber-900 dark:text-amber-200">
               <Icon name="copy" size={14} />
-              <span>Email Match Detected in Hospital Database:</span>
+              <span>Duplicate check</span>
             </div>
-            <p className="text-amber-700 dark:text-amber-400 mt-1 font-mono text-[11px]">
-              {profile.email} &bull; Potential match with candidate record CMD-SGH-012
+            <p className="text-amber-700 dark:text-amber-400 mt-1">
+              Existing candidates in your organization are checked by email or phone when you confirm this record.
+              Choose how to handle a match below.
             </p>
 
-            {/* Side-by-Side Visual Diff Inspector */}
-            <div className="mt-3 pt-3 border-t border-amber-200/80 dark:border-amber-900/50 grid grid-cols-2 gap-2 text-[11px]">
-              <div className="p-2.5 rounded-lg bg-white/80 dark:bg-slate-900/80 border border-amber-200 dark:border-amber-800/60">
-                <span className="font-bold text-slate-500 dark:text-slate-400 block text-[10px] uppercase tracking-wider">
-                  Existing Record (CMD-SGH-012)
-                </span>
-                <strong className="text-slate-800 dark:text-slate-200 block mt-0.5">
-                  Dr. Tariq Al-Mansoor
-                </strong>
-                <span className="text-slate-500 dark:text-slate-400 block text-[10.5px]">
-                  Specialist Cardiologist (SGH Jeddah • 2023)
-                </span>
-                <span className="inline-block mt-1 px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 text-[10px] font-bold">
-                  Historical Rating: 4.5/5.0
-                </span>
-              </div>
-
-              <div className="p-2.5 rounded-lg bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800/60">
-                <span className="font-bold text-emerald-600 dark:text-emerald-400 block text-[10px] uppercase tracking-wider">
-                  Newly Parsed CV (2026)
-                </span>
-                <strong className="text-slate-800 dark:text-slate-200 block mt-0.5">
-                  {profile.firstName} {profile.lastName}
-                </strong>
-                <span className="text-emerald-700 dark:text-emerald-300 block text-[10.5px]">
-                  {profile.title || 'Consultant Interventional Cardiologist'}
-                </span>
-                <span className="inline-block mt-1 px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/80 text-emerald-800 dark:text-emerald-200 text-[10px] font-bold">
-                  +{profile.experienceYears || 3} Years Experience Added
-                </span>
-              </div>
+            <div className="mt-3 pt-3 border-t border-amber-200/80 dark:border-amber-900/50 p-2.5 rounded-lg bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800/60">
+              <span className="font-bold text-emerald-600 dark:text-emerald-400 block text-[10px] uppercase tracking-wider">
+                Parsed CV record
+              </span>
+              <strong className="text-slate-800 dark:text-slate-200 block mt-0.5">
+                {profile.firstName} {profile.lastName}
+              </strong>
+              <span className="text-emerald-700 dark:text-emerald-300 block text-[10.5px]">
+                {profile.title || 'Role not specified'}
+              </span>
+              <span className="inline-block mt-1 px-1.5 py-0.5 rounded bg-emerald-100 dark:bg-emerald-900/80 text-emerald-800 dark:text-emerald-200 text-[10px] font-bold">
+                {profile.experienceYears === undefined ? 'Experience not reported' : `${profile.experienceYears} Years Experience`}
+              </span>
             </div>
           </div>
 
@@ -224,7 +209,7 @@ export const CVMatchAssigner: React.FC<CVMatchAssignerProps> = ({
                   Create Fresh Independent Candidate Record
                 </strong>
                 <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                  Issues a new candidate identity code (CMD-SGH-XXX) if this is a different individual with a shared or corporate email.
+                  Issues a new candidate identity code if this is a different individual with a shared or corporate email.
                 </span>
               </div>
             </label>
@@ -313,7 +298,7 @@ export const CVMatchAssigner: React.FC<CVMatchAssignerProps> = ({
                             [{v.vacancyCode}]
                           </span>
                           <strong className="text-xs font-bold text-slate-900 dark:text-white">
-                            {(v as any).position?.title || v.title || 'Requisition'}
+                            {v.position?.title || v.title || 'Requisition'}
                           </strong>
                           {isBestFit && (
                             <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
@@ -326,7 +311,7 @@ export const CVMatchAssigner: React.FC<CVMatchAssignerProps> = ({
                         <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1.5 flex-wrap pl-6">
                           <span className="flex items-center gap-1">
                             <Icon name="building" size={11} />
-                            <span>{v.branch?.name || v.location || 'Saudi German Health'}</span>
+                            <span>{v.branch?.name || v.location || 'Location not set'}</span>
                           </span>
                           {v.department && (
                             <>
@@ -451,7 +436,7 @@ export const CVMatchAssigner: React.FC<CVMatchAssignerProps> = ({
               >
                 {scoredList.map(({ vacancy: v, fitResult }) => (
                   <option key={v.id} value={v.id}>
-                    [{fitResult.score}% Fit] [{v.vacancyCode}] {(v as any).position?.title || v.title || 'Requisition'} {v.branch?.name ? `(${v.branch.name})` : ''}
+                    [{fitResult.score}% Fit] [{v.vacancyCode}] {v.position?.title || v.title || 'Requisition'} {v.branch?.name ? `(${v.branch.name})` : ''}
                   </option>
                 ))}
                 <option value="pool">📦 General Talent Pool (No active vacancy)</option>
@@ -466,7 +451,7 @@ export const CVMatchAssigner: React.FC<CVMatchAssignerProps> = ({
                     <div className="flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                       <span className="text-xs font-black text-slate-900 dark:text-white block">
-                        {(activeScored.vacancy as any).position?.title || activeScored.vacancy.title}
+                        {activeScored.vacancy.position?.title || activeScored.vacancy.title}
                       </span>
                     </div>
                     <span className="text-[11px] text-slate-500 dark:text-slate-400">
@@ -512,7 +497,7 @@ export const CVMatchAssigner: React.FC<CVMatchAssignerProps> = ({
                   <div className="p-2.5 rounded-xl bg-white/80 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/60 shadow-2xs">
                     <span className="block text-[10px] text-slate-400 uppercase font-bold">Experience</span>
                     <strong className="text-xs font-bold text-slate-800 dark:text-slate-100 block mt-0.5">
-                      {profile.experienceYears || 0} Yrs
+                      {profile.experienceYears === undefined ? 'Not reported' : `${profile.experienceYears} Yrs`}
                     </strong>
                     <span
                       className={`block text-[10px] font-bold mt-0.5 ${
@@ -522,8 +507,8 @@ export const CVMatchAssigner: React.FC<CVMatchAssignerProps> = ({
                       }`}
                     >
                       {activeScored.fitResult.breakdown.experience.met
-                        ? `✓ Req (${activeScored.vacancy.minExperienceYears || 0}y) Met`
-                        : `Gap (Req ${activeScored.vacancy.minExperienceYears || 0}y)`}
+                        ? `✓ Req (${activeScored.vacancy.minExperienceYears ?? 0}y) Met`
+                        : `Gap (Req ${activeScored.vacancy.minExperienceYears ?? 0}y)`}
                     </span>
                   </div>
 
@@ -540,7 +525,7 @@ export const CVMatchAssigner: React.FC<CVMatchAssignerProps> = ({
                   <div className="p-2.5 rounded-xl bg-white/80 dark:bg-slate-800/80 border border-slate-200/80 dark:border-slate-700/60 shadow-2xs">
                     <span className="block text-[10px] text-slate-400 uppercase font-bold">Location</span>
                     <strong className="text-xs font-bold text-slate-800 dark:text-slate-100 block mt-0.5 truncate">
-                      {activeScored.vacancy.branch?.name || activeScored.vacancy.location || 'SGH Main'}
+                      {activeScored.vacancy.branch?.name || activeScored.vacancy.location || 'Location not set'}
                     </strong>
                     <span
                       className={`block text-[10px] font-bold mt-0.5 ${
@@ -590,12 +575,7 @@ export const CVMatchAssigner: React.FC<CVMatchAssignerProps> = ({
                   onChange={(e) => setCandidateSource(e.target.value)}
                   className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-semibold text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-blue-500 focus:outline-none"
                 >
-                  <option value="CV Intake Upload">CV Intake Upload</option>
-                  <option value="Direct Sourcing">Direct Sourcing</option>
-                  <option value="LinkedIn">LinkedIn</option>
-                  <option value="Employee Referral">Employee Referral</option>
-                  <option value="Career Site">Career Site</option>
-                  <option value="Agency">Agency</option>
+                  {candidateSourceOptions.map((source) => <option key={source} value={source}>{source}</option>)}
                 </select>
               </div>
             </div>

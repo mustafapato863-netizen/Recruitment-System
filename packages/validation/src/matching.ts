@@ -158,7 +158,7 @@ export function calculateCandidateFitScore(
 
   let matchedSkills: string[] = [];
   let missingSkills: string[] = [];
-  let skillsPercentage = 100;
+  let skillsPercentage: number;
 
   if (rawReqSkills.length > 0) {
     matchedSkills = rawReqSkills.filter((reqSkill) =>
@@ -204,8 +204,8 @@ export function calculateCandidateFitScore(
   const candCerts = (candidate.certifications || []).filter(Boolean);
   let matchedCerts: string[] = [];
   let missingCerts: string[] = [];
-  let certPercentage = 100;
-  let certMet = true;
+  let certPercentage: number;
+  let certMet: boolean;
 
   if (reqCerts.length > 0) {
     matchedCerts = reqCerts.filter((rc) =>
@@ -263,7 +263,7 @@ export function calculateCandidateFitScore(
   }
 
   // Generate dynamic clinical/ATS summary
-  let summaryText = '';
+  let summaryText: string;
   if (matchLevel === 'high') {
     summaryText = `Strong candidate match (${totalScore}%). Exceeds or meets primary skill and qualification benchmarks.`;
   } else if (matchLevel === 'moderate') {

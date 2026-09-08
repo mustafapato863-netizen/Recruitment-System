@@ -40,7 +40,7 @@ const DATASET_COLUMNS: Record<Dataset, ColumnDefinition[]> = {
   candidates: [
     { key: 'firstName', header: 'First Name', aliases: ['first name', 'firstname', 'given name'], required: true },
     { key: 'lastName', header: 'Last Name', aliases: ['last name', 'lastname', 'family name', 'surname'], required: true },
-    { key: 'email', header: 'Email', aliases: ['email address', 'candidate email'], required: true },
+    { key: 'email', header: 'Email', aliases: ['email address', 'candidate email'] },
     { key: 'phone', header: 'Phone', aliases: ['phone number', 'mobile', 'mobile number'] },
     { key: 'currentTitle', header: 'Current Title', aliases: ['title', 'job title', 'current role'] },
     { key: 'currentCompany', header: 'Current Company', aliases: ['company', 'employer', 'current employer'] },
@@ -122,6 +122,10 @@ function scalar(value: unknown): string | number | boolean | null {
 function text(value: unknown): string {
   const valueAsScalar = scalar(value);
   return valueAsScalar === null ? '' : String(valueAsScalar).trim();
+}
+
+function normalizePhone(value: unknown): string {
+  return text(value).replace(/\D/g, '');
 }
 
 function list(value: unknown): string[] {
@@ -278,29 +282,44 @@ export class BulkImportService {
 
   private async validateCandidateRows(organizationId: string, rows: RawRow[]): Promise<{ rows: RawRow[]; counts: { valid: number; invalid: number; duplicate: number } }> {
     const emails = rows.map((row) => text(row.email).toLowerCase()).filter(Boolean);
-    const existing = emails.length === 0 ? [] : await this.prisma.candidate.findMany({
-      where: { organizationId, email: { in: emails, mode: 'insensitive' } },
-      select: { email: true },
+    const phones = rows.map((row) => normalizePhone(row.phone)).filter((phone) => phone.length >= 7);
+    const existing = emails.length === 0 && phones.length === 0 ? [] : await this.prisma.candidate.findMany({
+      where: { organizationId, OR: [
+        ...(emails.length > 0 ? [{ email: { in: emails, mode: 'insensitive' as const } }] : []),
+        ...(phones.length > 0 ? [{ phone: { in: phones } }] : []),
+      ] },
+      select: { email: true, phone: true },
     });
-    const existingEmails = new Set(existing.map((candidate) => candidate.email.toLowerCase()));
+    const existingEmails = new Set(existing.map((candidate) => candidate.email?.toLowerCase()).filter((email): email is string => Boolean(email)));
+    const existingPhones = new Set(existing.map((candidate) => normalizePhone(candidate.phone)).filter((phone) => phone.length >= 7));
     const seen = new Set<string>();
+    const seenPhones = new Set<string>();
     const counts = { valid: 0, invalid: 0, duplicate: 0 };
 
     const mapped = rows.map((row, index) => {
       const email = text(row.email).toLowerCase();
+      const phone = normalizePhone(row.phone);
       let result: 'Valid' | 'Invalid' | 'Duplicate' = 'Valid';
       let details: string | null = null;
       if (!text(row.firstName) || !text(row.lastName)) {
         result = 'Invalid';
         details = 'First Name and Last Name are required.';
-      } else if (!/^\S+@\S+\.\S+$/.test(email)) {
+      } else if (email && !/^\S+@\S+\.\S+$/.test(email)) {
         result = 'Invalid';
-        details = 'A valid Email is required.';
-      } else if (existingEmails.has(email) || seen.has(email)) {
+        details = 'Email format is invalid.';
+      } else if (!email && phone.length < 7) {
+        result = 'Invalid';
+        details = 'A valid Email or Phone is required.';
+      } else if (existingEmails.has(email) || seen.has(email) || existingPhones.has(phone) || seenPhones.has(phone)) {
         result = 'Duplicate';
-        details = existingEmails.has(email) ? 'Email already exists in this organization.' : 'Email appears more than once in this workbook.';
+        details = existingEmails.has(email)
+          ? 'Email already exists in this organization.'
+          : existingPhones.has(phone)
+            ? 'Phone already exists in this organization.'
+            : 'Email or phone appears more than once in this workbook.';
       }
       if (email) seen.add(email);
+      if (phone) seenPhones.add(phone);
       if (result === 'Valid') counts.valid++;
       if (result === 'Invalid') counts.invalid++;
       if (result === 'Duplicate') counts.duplicate++;
@@ -633,7 +652,7 @@ export class BulkImportService {
   }
 
   async confirm(organizationId: string, userId: string, dataset: Dataset, jobId: string) {
-    if (dataset === 'candidates') return this.importService.confirmJob(organizationId, jobId);
+    if (dataset === 'candidates') return this.importService.confirmJob(organizationId, jobId, userId);
     if (dataset === 'legal-entities' || dataset === 'branches' || dataset === 'positions') {
       return this.confirmMasterData(organizationId, dataset, jobId);
     }

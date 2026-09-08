@@ -30,6 +30,7 @@ export function SelfScheduleModal({
   const [durationMinutes, setDurationMinutes] = useState<number>(45);
   const [expiresInHours, setExpiresInHours] = useState<number>(72);
   const [selectedInterviewerIds, setSelectedInterviewerIds] = useState<string[]>([]);
+  const [meetingLink, setMeetingLink] = useState('');
   const [availableUsers, setAvailableUsers] = useState<OrganizationUser[]>([]);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -47,6 +48,7 @@ export function SelfScheduleModal({
       setGeneratedLink(null);
       setError(null);
       setIsCopied(false);
+      setMeetingLink('');
 
       // Load active users for interviewer selection
       getApi<OrganizationUser[] | { data?: OrganizationUser[] }>('/users')
@@ -69,6 +71,10 @@ export function SelfScheduleModal({
       setError('Please select a target application.');
       return;
     }
+    if (selectedInterviewerIds.length === 0) {
+      setError('Please select at least one interviewer.');
+      return;
+    }
 
     setIsSubmitting(true);
     setError(null);
@@ -80,6 +86,7 @@ export function SelfScheduleModal({
         interviewType,
         durationMinutes,
         attendeeUserIds: selectedInterviewerIds,
+        locationUrl: meetingLink.trim() || undefined,
         expiresInHours,
       });
       setGeneratedLink(res);
@@ -242,6 +249,20 @@ export function SelfScheduleModal({
                 <option value={90}>90 Minutes</option>
               </select>
             </div>
+          </div>
+
+          <div>
+            <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300" htmlFor="self-schedule-meeting-link">Meeting link <span className="font-normal text-slate-400">(optional)</span></label>
+            <input
+              id="self-schedule-meeting-link"
+              type="url"
+              inputMode="url"
+              value={meetingLink}
+              onChange={(e) => setMeetingLink(e.target.value)}
+              placeholder="https://meet.google.com/..."
+              className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
+            />
+            <p className="mt-1 text-[10px] text-slate-500">This link is attached when the candidate books a slot.</p>
           </div>
 
           <div>

@@ -1,0 +1,26 @@
+# Copy to untracked .env.production for compose; use runtime settings in Dokploy.
+NODE_ENV=production
+PORT=3000
+VACANCY_CORE_ADAPTER=prisma
+DATABASE_URL=postgresql://USER:PASSWORD@DATABASE_HOST:5432/recruitflow?schema=public
+WEB_ORIGIN=https://YOUR_RECRUITFLOW_DOMAIN
+APP_WEB_URL=https://YOUR_RECRUITFLOW_DOMAIN
+# Number of trusted proxy hops. Adjust to your actual private proxy topology.
+TRUST_PROXY=1
+JWT_ACCESS_SECRET=
+JWT_REFRESH_SECRET=
+SELF_SCHEDULE_SECRET=
+# Exactly 64 random hexadecimal characters, identical in API and worker.
+EMAIL_OUTBOX_ENCRYPTION_KEY=
+RECRUITFLOW_DOCUMENT_STORAGE_PATH=/data/documents
+RECRUITFLOW_DOCUMENT_STORAGE_PROVIDER=local-private
+RECRUITFLOW_DOCUMENT_BACKUP_PROVIDER=not-configured
+MAIL_TRANSPORT=smtp
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_SECURE=false
+SMTP_USER=
+SMTP_PASS=
+MAIL_FROM=
+# Optional: without Redis the worker uses the persisted database polling queue.
+REDIS_URL=

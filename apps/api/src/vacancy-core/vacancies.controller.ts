@@ -30,20 +30,20 @@ export class VacanciesController {
   @Get()
   @RequirePermissions('VACANCY_VIEW')
   listVacancies(@CurrentUser() user: AuthUser) {
-    return this.vacancyCoreService.listVacancies(user.organizationId);
+    return this.vacancyCoreService.listVacancies(user.organizationId, user);
   }
 
   @Get('work-queue')
   @RequirePermissions('VACANCY_VIEW')
   getWorkQueue(@CurrentUser() user: AuthUser, @Query() query: VacancyWorkQueueQueryDto) {
-    return this.vacancyCoreService.getWorkQueue(user.organizationId, query);
+    return this.vacancyCoreService.getWorkQueue(user.organizationId, query, user);
   }
 
   @Get('export.xlsx')
   @RequirePermissions('VACANCY_VIEW')
   @AuditAction('VACANCY_EXPORT_XLSX')
   async exportExcel(@CurrentUser() user: AuthUser) {
-    const workbook = await this.vacancyCoreService.exportExcel(user.organizationId);
+    const workbook = await this.vacancyCoreService.exportExcel(user.organizationId, user);
     return new StreamableFile(workbook, {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       disposition: 'attachment; filename="recruitflow-vacancies.xlsx"',
@@ -55,7 +55,7 @@ export class VacanciesController {
   @UseGuards(TenantScopedGuard)
   @TenantResource({ resource: 'vacancy', param: 'id' })
   getVacancy(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
-    return this.vacancyCoreService.getVacancyDetail(user.organizationId, id);
+    return this.vacancyCoreService.getVacancyDetail(user.organizationId, id, user);
   }
 
   @Patch(':id/status')
@@ -72,6 +72,7 @@ export class VacanciesController {
       id,
       user.organizationId,
       body.status,
+      user,
     );
   }
 
@@ -85,7 +86,7 @@ export class VacanciesController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() body: UpdateVacancyDto,
   ) {
-    return this.vacancyCoreService.updateVacancy(id, user.organizationId, body);
+    return this.vacancyCoreService.updateVacancy(id, user.organizationId, body, user);
   }
 
   @Post(':id/assignments')
@@ -98,6 +99,6 @@ export class VacanciesController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() body: AssignTeamMemberDto,
   ) {
-    return this.vacancyCoreService.assignTeamMember(id, user.organizationId, body);
+    return this.vacancyCoreService.assignTeamMember(id, user.organizationId, body, user);
   }
 }

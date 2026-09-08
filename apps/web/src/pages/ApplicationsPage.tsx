@@ -13,7 +13,6 @@ import type {
 import { calculateCandidateFitScore, type CriteriaBreakdown } from '@recruitflow/validation';
 import { Icon } from '../components/Icon';
 import { Modal } from '../components/Modal';
-import { CandidateSplitDrawer } from '../components/candidate/CandidateSplitDrawer';
 import { CandidateFitScorecard } from '../components/candidate/CandidateFitScorecard';
 import { Drawer } from '../components/ui/Drawer';
 import { CommentsThread } from '../components/ui/CommentsThread';
@@ -347,8 +346,8 @@ function mapApplicationToKanbanCard(
   const appliedText = appliedDate ? `Applied ${formatRelativeTime(appliedDate)}` : 'Applied recently';
   const appCode = a.applicationCode || (a.id.startsWith('APP-') ? a.id : `APP-${a.id.slice(0, 8).toUpperCase()}`);
 
-  const positionTitle = a.positionTitle || a.candidate?.currentTitle || 'General Healthcare Applicant';
-  const source = a.source || a.candidate?.source || 'Direct';
+  const positionTitle = a.positionTitle || a.candidate?.currentTitle || 'Position not specified';
+  const source = a.source || a.candidate?.source || 'Source not recorded';
   const experienceYears = a.candidate?.experienceYears;
 
   const fitBreakdown = calculateCandidateFitScore(
@@ -388,8 +387,8 @@ function mapApplicationToKanbanCard(
       color: 'bg-teal-600',
     },
     nextAction,
-    nextDue: 'Scheduled',
-    nextDueTone: 'blue',
+    nextDue: 'No follow-up scheduled',
+    nextDueTone: 'gray',
     lastActivity: 'Stage updated',
     lastActivityTime: a.updatedAt ? formatRelativeTime(a.updatedAt) : 'Recently',
     stage: a.stage || colStageKey,
@@ -446,7 +445,6 @@ export function ApplicationsPage() {
   const [selectedStageFilter, setSelectedStageFilter] = useState<string>(initialStage);
   const [selectedOwnerFilter, setSelectedOwnerFilter] = useState('ALL');
   const [viewMode, setViewMode] = useState<'board' | 'list'>('board');
-  const [selectedDrawerApp, setSelectedDrawerApp] = useState<Application | null>(null);
   const [isAddCandidateOpen, setIsAddCandidateOpen] = useState(false);
 
   // Rejection & Refusal Reason Modal State (E9.4)
@@ -742,7 +740,9 @@ export function ApplicationsPage() {
     pipelineModeRef.current = newMode;
     try {
       localStorage.setItem('rf_pipeline_step_mode', newMode);
-    } catch {}
+    } catch {
+      // Browser storage can be disabled; the selected mode remains in memory.
+    }
     setBoardColumns(buildColumnsFromApplications(apiApplications, newMode));
     const label =
       newMode === 'streamlined'
@@ -1051,16 +1051,16 @@ export function ApplicationsPage() {
         stageColor: getStageBadgeColor(currentStage),
         ownerName,
         ownerAvatar,
-        sla: 'On track',
-        slaSub: 'Standard SLA',
-        slaTone: 'green',
+        sla: 'Not measured',
+        slaSub: 'No SLA data',
+        slaTone: 'amber',
         lastActivity: 'Stage updated',
         lastActivityTime: app.updatedAt ? formatRelativeTime(app.updatedAt) : 'Recently',
         source,
         fitScore: fitBreakdown.score,
         fitBreakdown,
         nextAction,
-        nextActionTime: 'Scheduled',
+        nextActionTime: 'No follow-up scheduled',
         nextActionIcon: 'calendar',
         rawApplication: app,
       };
@@ -1512,7 +1512,7 @@ export function ApplicationsPage() {
           <div className="flex flex-wrap items-center gap-2 shrink-0">
             {/* Quick Switcher inside banner */}
             <div className="relative">
-              <select
+              <select aria-label="Requisition"
                 value={currentVacancy.id}
                 onChange={(e) => handleVacancyChange(e.target.value)}
                 className="appearance-none bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-1.5 pr-7 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 cursor-pointer shadow-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
@@ -1569,7 +1569,7 @@ export function ApplicationsPage() {
       <div className="flex flex-wrap items-center gap-2.5 shrink-0">
         {/* Pipeline Position Switcher Dropdown (E9.1) */}
         <div className="relative">
-          <select
+          <select aria-label="Requisition"
             value={vacancyId || 'ALL'}
             onChange={(e) => handleVacancyChange(e.target.value)}
             className="appearance-none bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 pr-7 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 cursor-pointer shadow-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
@@ -1596,7 +1596,7 @@ export function ApplicationsPage() {
 
         {/* All Stages dropdown */}
         <div className="relative">
-          <select
+          <select aria-label="Application stage"
             value={selectedStageFilter}
             onChange={(e) => handleStageFilterChange(e.target.value)}
             className="appearance-none bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 pr-7 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 cursor-pointer shadow-xs"
@@ -1617,7 +1617,7 @@ export function ApplicationsPage() {
 
         {/* All Owners dropdown */}
         <div className="relative">
-          <select
+          <select aria-label="Application owner"
             value={selectedOwnerFilter}
             onChange={(e) => {
               setSelectedOwnerFilter(e.target.value);
@@ -2015,7 +2015,7 @@ export function ApplicationsPage() {
                 {paginatedList.map((row) => (
                   <tr
                     key={row.id}
-                    onClick={() => setSelectedDrawerApp(row.rawApplication)}
+                    onClick={() => navigate(`/applications/${row.id}`)}
                     className={`hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition cursor-pointer ${
                       selectedListIds.includes(row.id) ? 'bg-blue-50/40 dark:bg-blue-950/20' : ''
                     }`}
@@ -2394,7 +2394,7 @@ export function ApplicationsPage() {
                           key={card.id}
                           draggable
                           onDragStart={(e) => handleDragStart(e, card.id, column.id)}
-                          onClick={() => setSelectedDrawerApp(card.rawApplication)}
+                          onClick={() => navigate(`/applications/${card.id}`)}
                           className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200/85 dark:border-slate-800 p-3 shadow-2xs hover:shadow-md hover:border-blue-400/80 dark:hover:border-blue-600 transition-all duration-150 cursor-grab active:cursor-grabbing group flex flex-col gap-2.5 relative hover:-translate-y-0.5 select-none"
                         >
                           {/* Card Top: Candidate Avatar, Name, Code, Signal & Actions */}
@@ -2422,7 +2422,7 @@ export function ApplicationsPage() {
                                 >
                                   {card.name}
                                 </span>
-                                <div className="flex items-center gap-1.5 mt-0.5 text-[10.5px] text-slate-400 font-mono">
+                              <div className="flex items-center gap-1.5 mt-0.5 text-[10.5px] text-slate-600 dark:text-slate-400 font-mono">
                                   <span className="truncate max-w-[120px]">{card.applicationCode}</span>
                                   <span className="text-slate-300 dark:text-slate-700">&bull;</span>
                                   <span className="shrink-0">{formatRelativeTime(card.rawApplication.appliedAt || card.rawApplication.createdAt) || 'Recent'}</span>
@@ -2741,29 +2741,6 @@ export function ApplicationsPage() {
         )}
       </Modal>
 
-      {/* Quick-action split drawer on cards (Phase A6) */}
-      <CandidateSplitDrawer
-        isOpen={Boolean(selectedDrawerApp)}
-        application={selectedDrawerApp}
-        requirements={currentVacancy || (selectedDrawerApp?.vacancyId ? vacancyMap.get(selectedDrawerApp.vacancyId) : null)}
-        onClose={() => setSelectedDrawerApp(null)}
-        onMoveStage={async (appId, nextStage) => {
-          try {
-            const app = apiApplications.find((a) => a.id === appId) || selectedDrawerApp;
-            const expectedVersion = app?.version ?? 1;
-            await patchApi(`/applications/${appId}/stage`, {
-              stage: nextStage,
-              expectedVersion,
-            });
-            showToast(`Stage updated to ${nextStage}`, 'success');
-            setSelectedDrawerApp(null);
-            void loadApplications();
-          } catch {
-            showToast('Failed to update stage from drawer', 'error');
-          }
-        }}
-      />
-
       {/* ── Floating Bulk Actions Bar ── */}
       {selectedListIds.length > 0 && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2.5 px-4 py-2.5 rounded-2xl bg-slate-900/95 dark:bg-slate-800/95 text-white backdrop-blur-md shadow-2xl border border-slate-700/80 animate-fade-in text-xs font-medium">
@@ -2846,7 +2823,7 @@ export function ApplicationsPage() {
 
           <div className="space-y-2">
             <label className="font-bold block text-slate-700 dark:text-slate-300">Target Stage</label>
-            <select
+            <select aria-label="Target stage"
               value={bulkTargetStage}
               onChange={(e) => setBulkTargetStage(e.target.value as ApplicationStage)}
               disabled={isBulkStageMoving}

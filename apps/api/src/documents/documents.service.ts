@@ -2,6 +2,7 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
 import { stat } from 'node:fs/promises';
@@ -14,6 +15,8 @@ import { AuditService } from '../audit/audit.service';
 import { DocumentScannerService } from './document-scanner.service';
 import { DocumentStorageService } from './document-storage.service';
 import { fileInvalid, fileTooLarge } from '../common/errors/api-error';
+import { AccessControlService } from '../access-control/access-control.service';
+import type { AuthUser } from '@recruitflow/contracts';
 import type { ArchiveCandidateDocumentDto, UpdateDocumentRetentionDto, UploadCandidateDocumentDto, UploadCandidateFileDto } from './documents.dto';
 
 type UploadedCandidateFile = { buffer: Buffer; originalname: string; mimetype: string; size: number };
@@ -25,14 +28,28 @@ export class DocumentsService {
     @Inject(AuditService) private readonly auditService: AuditService,
     @Inject(DocumentScannerService) private readonly scanner: DocumentScannerService,
     @Inject(DocumentStorageService) private readonly storage: DocumentStorageService,
+    @Optional() @Inject(AccessControlService) private readonly accessControl?: AccessControlService,
   ) {}
+
+  private async candidateWhere(organizationId: string, candidateId: string, user?: AuthUser): Promise<Prisma.CandidateWhereInput> {
+    if (user && this.accessControl) return { id: candidateId, ...(await this.accessControl.getCandidateVisibilityWhere(user)) };
+    return { id: candidateId, organizationId };
+  }
+
+  private async documentWhere(organizationId: string, documentId: string, user?: AuthUser): Promise<Prisma.CandidateDocumentWhereInput> {
+    if (user && this.accessControl) {
+      return { id: documentId, organizationId, candidate: await this.accessControl.getCandidateVisibilityWhere(user) };
+    }
+    return { id: documentId, organizationId };
+  }
 
   async listCandidateDocuments(
     organizationId: string,
     candidateId: string,
+    user?: AuthUser,
   ): Promise<CandidateDocument[]> {
     const candidate = await this.prisma.candidate.findFirst({
-      where: { id: candidateId, organizationId },
+      where: await this.candidateWhere(organizationId, candidateId, user),
     });
 
     if (!candidate || candidate.organizationId !== organizationId) {
@@ -51,9 +68,10 @@ export class DocumentsService {
   async getDocument(
     organizationId: string,
     id: string,
+    user?: AuthUser,
   ): Promise<CandidateDocument> {
     const doc = await this.prisma.candidateDocument.findFirst({
-      where: { id, organizationId, deletedAt: null },
+      where: { ...(await this.documentWhere(organizationId, id, user)), deletedAt: null },
       include: { uploadedBy: true, candidate: true },
     });
 
@@ -68,9 +86,10 @@ export class DocumentsService {
     organizationId: string,
     uploadedById: string,
     dto: UploadCandidateDocumentDto,
+    user?: AuthUser,
   ): Promise<CandidateDocument> {
     const candidate = await this.prisma.candidate.findFirst({
-      where: { id: dto.candidateId, organizationId },
+      where: await this.candidateWhere(organizationId, dto.candidateId, user),
     });
 
     if (!candidate) {
@@ -120,7 +139,7 @@ export class DocumentsService {
     return this.toCandidateDocument(created);
   }
 
-  async listCvBank(organizationId: string, search = '', page = 1, pageSize = 25) {
+  async listCvBank(organizationId: string, search = '', page = 1, pageSize = 25, user?: AuthUser) {
     const safePage = Math.max(1, page);
     const safePageSize = Math.min(100, Math.max(1, pageSize));
     const term = search.trim();
@@ -128,6 +147,7 @@ export class DocumentsService {
       organizationId,
       documentType: { in: ['CV', 'Resume'] },
       deletedAt: null,
+      ...(user && this.accessControl ? { candidate: await this.accessControl.getCandidateVisibilityWhere(user) } : {}),
       ...(term ? {
         OR: [
           { fileName: { contains: term, mode: 'insensitive' } },
@@ -150,8 +170,8 @@ export class DocumentsService {
     return { data: records.map((record) => this.toCandidateDocument(record)), total, page: safePage, pageSize: safePageSize };
   }
 
-  async uploadFile(organizationId: string, uploadedById: string, dto: UploadCandidateFileDto, file: UploadedCandidateFile): Promise<CandidateDocument> {
-    const candidate = await this.prisma.candidate.findFirst({ where: { id: dto.candidateId, organizationId } });
+  async uploadFile(organizationId: string, uploadedById: string, dto: UploadCandidateFileDto, file: UploadedCandidateFile, user?: AuthUser): Promise<CandidateDocument> {
+    const candidate = await this.prisma.candidate.findFirst({ where: await this.candidateWhere(organizationId, dto.candidateId, user) });
     if (!candidate) throw new NotFoundException(`Candidate ${dto.candidateId} was not found.`);
     if (!file?.buffer?.length) throw fileInvalid('Attach a CV file.');
     if (file.size > 10 * 1024 * 1024) throw fileTooLarge('CV files must be 10 MB or smaller.');
@@ -208,8 +228,8 @@ export class DocumentsService {
     }
   }
 
-  async getFile(organizationId: string, id: string) {
-    const document = await this.prisma.candidateDocument.findFirst({ where: { id, organizationId, deletedAt: null } });
+  async getFile(organizationId: string, id: string, user?: AuthUser) {
+    const document = await this.prisma.candidateDocument.findFirst({ where: { ...(await this.documentWhere(organizationId, id, user)), deletedAt: null } });
     if (!document || document.storageProvider === 'metadata-only' || document.storageKey.startsWith('metadata-only/')) {
       throw new NotFoundException('This document has no stored file.');
     }
@@ -227,9 +247,10 @@ export class DocumentsService {
     return { path: absolutePath, fileName: document.fileName, mimeType: document.mimeType };
   }
 
-  async exportCvManifest(organizationId: string): Promise<Buffer> {
+  async exportCvManifest(organizationId: string, user?: AuthUser): Promise<Buffer> {
+    const candidateVisibility = user && this.accessControl ? await this.accessControl.getCandidateVisibilityWhere(user) : undefined;
     const records = await this.prisma.candidateDocument.findMany({
-      where: { organizationId, documentType: { in: ['CV', 'Resume'] }, deletedAt: null },
+      where: { organizationId, documentType: { in: ['CV', 'Resume'] }, deletedAt: null, ...(candidateVisibility ? { candidate: candidateVisibility } : {}) },
       include: { uploadedBy: true, candidate: true },
       orderBy: { createdAt: 'desc' },
       take: 50_000,
@@ -258,19 +279,20 @@ export class DocumentsService {
       });
     }
     XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(manifestRows), 'CV Bank Manifest');
-    const backup = await this.getBackupStatus(organizationId);
+    const backup = await this.getBackupStatus(organizationId, user);
     XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet([backup]), 'Backup Readiness');
     return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
   }
 
-  async getBackupStatus(organizationId: string): Promise<CvBankBackupStatus> {
+  async getBackupStatus(organizationId: string, user?: AuthUser): Promise<CvBankBackupStatus> {
+    const candidateVisibility = user && this.accessControl ? await this.accessControl.getCandidateVisibilityWhere(user) : undefined;
     const [activeRecords, archivedRecords] = await Promise.all([
       this.prisma.candidateDocument.findMany({
-        where: { organizationId, documentType: { in: ['CV', 'Resume'] }, deletedAt: null },
+        where: { organizationId, documentType: { in: ['CV', 'Resume'] }, deletedAt: null, ...(candidateVisibility ? { candidate: candidateVisibility } : {}) },
         select: { storageKey: true, storageProvider: true, scanStatus: true },
       }),
       this.prisma.candidateDocument.count({
-        where: { organizationId, documentType: { in: ['CV', 'Resume'] }, deletedAt: { not: null } },
+        where: { organizationId, documentType: { in: ['CV', 'Resume'] }, deletedAt: { not: null }, ...(candidateVisibility ? { candidate: candidateVisibility } : {}) },
       }),
     ]);
     const stored = activeRecords.filter((record) => record.storageProvider !== 'metadata-only' && !record.storageKey.startsWith('metadata-only/'));
@@ -296,8 +318,8 @@ export class DocumentsService {
     };
   }
 
-  async updateRetention(organizationId: string, userId: string, id: string, dto: UpdateDocumentRetentionDto): Promise<CandidateDocument> {
-    const existing = await this.prisma.candidateDocument.findFirst({ where: { id, organizationId, deletedAt: null } });
+  async updateRetention(organizationId: string, userId: string, id: string, dto: UpdateDocumentRetentionDto, user?: AuthUser): Promise<CandidateDocument> {
+    const existing = await this.prisma.candidateDocument.findFirst({ where: { ...(await this.documentWhere(organizationId, id, user)), deletedAt: null } });
     if (!existing) throw new NotFoundException(`Document ${id} was not found.`);
     const retentionExpiresAt = dto.retentionExpiresAt === null || dto.retentionExpiresAt === undefined
       ? dto.retentionExpiresAt
@@ -322,8 +344,8 @@ export class DocumentsService {
     return this.toCandidateDocument(updated);
   }
 
-  async archiveDocument(organizationId: string, userId: string, id: string, dto: ArchiveCandidateDocumentDto): Promise<CandidateDocument> {
-    const existing = await this.prisma.candidateDocument.findFirst({ where: { id, organizationId, deletedAt: null }, include: { uploadedBy: true, candidate: true } });
+  async archiveDocument(organizationId: string, userId: string, id: string, dto: ArchiveCandidateDocumentDto, user?: AuthUser): Promise<CandidateDocument> {
+    const existing = await this.prisma.candidateDocument.findFirst({ where: { ...(await this.documentWhere(organizationId, id, user)), deletedAt: null }, include: { uploadedBy: true, candidate: true } });
     if (!existing) throw new NotFoundException(`Document ${id} was not found.`);
     const updated = await this.prisma.candidateDocument.update({
       where: { id },
@@ -342,8 +364,8 @@ export class DocumentsService {
     return this.toCandidateDocument(updated);
   }
 
-  async restoreDocument(organizationId: string, userId: string, id: string): Promise<CandidateDocument> {
-    const existing = await this.prisma.candidateDocument.findFirst({ where: { id, organizationId, deletedAt: { not: null } }, include: { uploadedBy: true, candidate: true } });
+  async restoreDocument(organizationId: string, userId: string, id: string, user?: AuthUser): Promise<CandidateDocument> {
+    const existing = await this.prisma.candidateDocument.findFirst({ where: { ...(await this.documentWhere(organizationId, id, user)), deletedAt: { not: null } }, include: { uploadedBy: true, candidate: true } });
     if (!existing) throw new NotFoundException(`Archived document ${id} was not found.`);
     const updated = await this.prisma.candidateDocument.update({
       where: { id },

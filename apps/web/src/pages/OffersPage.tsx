@@ -1,12 +1,25 @@
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getApi } from '../api/client';
-import type { Offer, VacancyDetailView } from '@recruitflow/contracts';
+import type { Offer as BaseOffer, VacancyDetailView } from '@recruitflow/contracts';
 import { Icon } from '../components/Icon';
 import { Modal } from '../components/Modal';
 import { PageState } from '../components/ui/PageState';
 import { QuickGuideTrigger } from '../quickguide';
 import './PageEnhancementsV2.css';
+
+interface Offer extends BaseOffer {
+  createdByName?: string;
+  approverName?: string;
+  approverRole?: string;
+  department?: string;
+  location?: string;
+  application?: {
+    vacancyId?: string;
+    candidate?: { firstName: string; lastName: string };
+    vacancy?: { id?: string; position?: { title: string }; department?: { name: string } };
+  };
+}
 
 interface OfferRow {
   id: string;
@@ -54,7 +67,7 @@ export function OffersPage() {
 
   useEffect(() => {
     setIsLoading(true);
-    const offersPromise = getApi<Offer[]>('/offers');
+    const offersPromise = getApi<Offer[] | { data: Offer[] }>('/offers');
     const vacancyPromise = vacancyId ? getApi<VacancyDetailView>(`/vacancies/${vacancyId}`) : Promise.resolve(null);
 
     Promise.allSettled([offersPromise, vacancyPromise])
@@ -66,14 +79,14 @@ export function OffersPage() {
         }
 
         const res = offersRes.status === 'fulfilled' ? offersRes.value : [];
-        const list = Array.isArray(res) ? res : (res as any)?.data || [];
-        const filteredList = list.filter((o: any) => {
+        const list = Array.isArray(res) ? res : res?.data || [];
+        const filteredList = list.filter((o) => {
           if (!vacancyId) return true;
           const appVacId = o.vacancyId || o.application?.vacancyId || o.application?.vacancy?.id;
           return appVacId === vacancyId;
         });
 
-        const mapped: OfferRow[] = filteredList.map((o: any) => {
+        const mapped: OfferRow[] = filteredList.map((o) => {
           const candidateName =
             o.candidateName ||
             (o.application?.candidate
@@ -111,7 +124,7 @@ export function OffersPage() {
               monthlySalary = `SAR ${currentVer.monthlyPackage.toLocaleString()} / month`;
             } else if (Array.isArray(currentVer.components) && currentVer.components.length > 0) {
               const sum = currentVer.components.reduce(
-                (acc: number, c: any) => acc + (Number(c.amount) || 0),
+                (acc: number, c) => acc + (Number(c.amount) || 0),
                 0
               );
               if (sum > 0) {
@@ -121,7 +134,7 @@ export function OffersPage() {
             }
 
             if (Array.isArray(currentVer.components)) {
-              const bonusComp = currentVer.components.find((c: any) =>
+              const bonusComp = currentVer.components.find((c) =>
                 c.name?.toLowerCase().includes('bonus')
               );
               if (bonusComp && bonusComp.amount) {
@@ -630,7 +643,7 @@ export function OffersPage() {
               actionLabel={apiOffers.length === 0 ? 'Create Offer' : 'Reset Filters'}
               onAction={() => {
                 if (apiOffers.length === 0) {
-                  navigate('/offers/new');
+                  navigate('/offers/create');
                 } else {
                   setActivePill('ALL');
                   setSearchQuery('');

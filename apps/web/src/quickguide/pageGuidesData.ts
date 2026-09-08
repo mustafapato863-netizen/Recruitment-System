@@ -187,7 +187,7 @@ export const PAGE_GUIDES: PageGuide[] = [
         xpReward: 25,
         badgeIcon: '📄',
         targetSelector: '.cv-upload-card, [data-tour="cv-dropzone"], .border-dashed',
-        description: 'Drag and drop candidate CVs or select a preset demo profile to trigger automated entity parsing.',
+        description: 'Drag and drop a candidate CV to trigger automated entity parsing.',
         actionHint: 'Use the dropzone in Step 1.',
       },
       {

@@ -36,12 +36,14 @@ model Organization {
   candidateImportJobs CandidateImportJob[]
   pipelineTemplates   PipelineTemplate[]
   integrations        Integration[]
+  customPermissions   Permission[]
   notifications       Notification[]
   tasks               Task[]
   authTokens          AuthToken[]
   customRoles         Role[]
   emailOutbox         EmailOutbox[]
   emailTemplates      EmailTemplate[]
+  masterDataValues    MasterDataValue[]
   createdAt           DateTime             @default(now()) @db.Timestamptz(6)
   updatedAt           DateTime             @updatedAt @db.Timestamptz(6)
 
@@ -78,6 +80,7 @@ model Branch {
   name            String           @db.VarChar(200)
   city            String?          @db.VarChar(120)
   status          String           @default("Active") @db.VarChar(30)
+  version         Int              @default(1)
   vacancyRequests VacancyRequest[]
   vacancies       Vacancy[]
   createdAt       DateTime         @default(now()) @db.Timestamptz(6)
@@ -97,7 +100,9 @@ model Position {
   code            String           @db.VarChar(50)
   title           String           @db.VarChar(200)
   description     String?
+  metadata        Json?
   status          String           @default("Active") @db.VarChar(30)
+  version         Int              @default(1)
   vacancyRequests VacancyRequest[]
   vacancies       Vacancy[]
   createdAt       DateTime         @default(now()) @db.Timestamptz(6)
@@ -116,6 +121,7 @@ model User {
   emailNormalized         String                     @db.VarChar(320)
   passwordHash            String?                    @db.VarChar(128)
   displayName             String                     @db.VarChar(200)
+  jobTitle                String?                    @db.VarChar(120)
   status                  String                     @default("Active") @db.VarChar(30)
   emailVerifiedAt         DateTime?                  @db.Timestamptz(6)
   invitationAcceptedAt    DateTime?                  @db.Timestamptz(6)
@@ -155,6 +161,8 @@ model User {
   authTokens              AuthToken[]
   assignedTasks           Task[]                     @relation("TaskAssignee")
   createdTasks            Task[]                     @relation("TaskCreator")
+  completedTasks          Task[]                     @relation("TaskCompleter")
+  createdCandidates       Candidate[]                @relation("CandidateCreator")
 
   @@unique([organizationId, emailNormalized])
   @@index([status])
@@ -221,13 +229,17 @@ model Role {
 }
 
 model Permission {
-  id          String           @id @default(uuid()) @db.Uuid
-  code        String           @unique @db.VarChar(120)
-  description String?
-  roleLinks   RolePermission[]
-  createdAt   DateTime         @default(now()) @db.Timestamptz(6)
-  updatedAt   DateTime         @updatedAt @db.Timestamptz(6)
+  id             String           @id @default(uuid()) @db.Uuid
+  code           String           @unique @db.VarChar(120)
+  name           String?          @db.VarChar(160)
+  description    String?
+  organizationId String?          @db.Uuid
+  organization   Organization?    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  roleLinks      RolePermission[]
+  createdAt      DateTime         @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime         @updatedAt @db.Timestamptz(6)
 
+  @@index([organizationId])
   @@map("permissions")
 }
 
@@ -347,16 +359,17 @@ model Vacancy {
 }
 
 model VacancyAssignment {
-  id         String   @id @default(uuid()) @db.Uuid
-  vacancyId  String   @db.Uuid
-  vacancy    Vacancy  @relation(fields: [vacancyId], references: [id], onDelete: Restrict)
-  userId     String   @db.Uuid
-  user       User     @relation(fields: [userId], references: [id], onDelete: Restrict)
-  roleCode   String   @db.VarChar(60)
-  isActive   Boolean  @default(true)
-  assignedAt DateTime @default(now()) @db.Timestamptz(6)
+  id             String   @id @default(uuid()) @db.Uuid
+  vacancyId      String   @db.Uuid
+  vacancy        Vacancy  @relation(fields: [vacancyId], references: [id], onDelete: Restrict)
+  userId         String   @db.Uuid
+  user           User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  roleCode       String   @db.VarChar(60)
+  assignmentKind String   @default("PRIMARY") @db.VarChar(20)
+  isActive       Boolean  @default(true)
+  assignedAt     DateTime @default(now()) @db.Timestamptz(6)
 
-  @@unique([vacancyId, userId, roleCode, isActive])
+  @@unique([vacancyId, userId, roleCode, isActive, assignmentKind])
   @@index([vacancyId, roleCode, isActive])
   @@map("vacancy_assignments")
 }
@@ -412,10 +425,11 @@ model Candidate {
   candidateCode         String                @unique @db.VarChar(50)
   firstName             String                @db.VarChar(80)
   lastName              String                @db.VarChar(80)
-  email                 String                @db.VarChar(255)
+  email                 String?               @db.VarChar(255)
   phone                 String?               @db.VarChar(40)
   currentTitle          String?               @db.VarChar(120)
   currentCompany        String?               @db.VarChar(120)
+  summary               String?               @db.Text
   source                String?               @db.VarChar(80)
   status                String                @default("Active") @db.VarChar(40)
   consentStatus         String                @default("Unknown") @db.VarChar(30)
@@ -428,6 +442,8 @@ model Candidate {
   languages             String[]              @default([]) @db.VarChar(50)
   availability          String?               @db.VarChar(60)
   applications          Application[]
+  createdById           String?               @db.Uuid
+  createdBy             User?                 @relation("CandidateCreator", fields: [createdById], references: [id], onDelete: SetNull)
   documents             CandidateDocument[]
   talentPoolMemberships TalentPoolCandidate[]
   createdAt             DateTime              @default(now()) @db.Timestamptz(6)
@@ -436,6 +452,7 @@ model Candidate {
   @@unique([organizationId, email])
   @@index([organizationId, status])
   @@index([organizationId, consentStatus])
+  @@index([createdById])
   @@index([organizationId, email])
   @@map("candidates")
 }
@@ -468,6 +485,7 @@ model Application {
 
   @@unique([vacancyId, candidateId])
   @@index([organizationId, stage])
+  @@index([id, stage, version])
   @@index([vacancyId, stage])
   @@index([candidateId])
   @@map("applications")
@@ -489,7 +507,7 @@ model ApplicationStatusHistory {
 }
 
 model ApplicationNote {
-  id             String       @id @default(uuid()) @db.Uuid
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   organizationId String       @db.Uuid
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   applicationId  String       @db.Uuid
@@ -505,7 +523,6 @@ model ApplicationNote {
   @@index([organizationId, applicationId])
   @@map("application_notes")
 }
-
 
 model CandidateDocument {
   id                     String                  @id @default(uuid()) @db.Uuid
@@ -548,17 +565,21 @@ model CandidateDocument {
 }
 
 model ScreeningLog {
-  id             String       @id @default(uuid()) @db.Uuid
-  organizationId String       @db.Uuid
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  applicationId  String       @db.Uuid
-  application    Application  @relation(fields: [applicationId], references: [id], onDelete: Restrict)
-  screenerId     String       @db.Uuid
-  screener       User         @relation(fields: [screenerId], references: [id], onDelete: Restrict)
-  outcome        String       @db.VarChar(40)
-  notes          String?      @db.Text
-  screenedAt     DateTime     @default(now()) @db.Timestamptz(6)
-  createdAt      DateTime     @default(now()) @db.Timestamptz(6)
+  id               String       @id @default(uuid()) @db.Uuid
+  organizationId   String       @db.Uuid
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  applicationId    String       @db.Uuid
+  application      Application  @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  screenerId       String       @db.Uuid
+  screener         User         @relation(fields: [screenerId], references: [id], onDelete: Restrict)
+  outcome          String       @db.VarChar(40)
+  notes            String?      @db.Text
+  noticePeriodDays Int?
+  expectedSalary   Decimal?     @db.Decimal(12, 2)
+  currentSalary    Decimal?     @db.Decimal(12, 2)
+  salaryCurrency   String       @default("SAR") @db.VarChar(10)
+  screenedAt       DateTime     @default(now()) @db.Timestamptz(6)
+  createdAt        DateTime     @default(now()) @db.Timestamptz(6)
 
   @@index([organizationId, applicationId])
   @@map("screening_logs")
@@ -595,6 +616,7 @@ model InterviewAttendee {
   userId      String    @db.Uuid
   user        User      @relation(fields: [userId], references: [id], onDelete: Restrict)
   role        String    @default("Interviewer") @db.VarChar(60)
+  jobTitle    String?   @db.VarChar(120)
   response    String    @default("Accepted") @db.VarChar(40)
 
   @@unique([interviewId, userId])
@@ -856,7 +878,7 @@ model CandidateImportRow {
 // Tenant-scoped reusable email templates for stage-enter automation.
 // Variables supported: {{candidateName}} {{positionTitle}} {{stageName}} {{organizationName}}
 model EmailTemplate {
-  id             String          @id @default(uuid()) @db.Uuid
+  id             String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   organizationId String          @db.Uuid
   organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
   name           String          @db.VarChar(200)
@@ -890,26 +912,26 @@ model PipelineTemplate {
 }
 
 model PipelineStage {
-  id                 String           @id @default(uuid()) @db.Uuid
-  templateId         String           @db.Uuid
-  template           PipelineTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  name               String           @db.VarChar(100)
-  stageType          String           @db.VarChar(50)
-  sortOrder          Int              @default(0)
-  slaDays            Int?
-  defaultOwner       String?          @db.VarChar(100)
-  entryGate          String?          @db.VarChar(200)
-  exitGate           String?          @db.VarChar(200)
-  status             String           @default("Active") @db.VarChar(30)
+  id                String           @id @default(uuid()) @db.Uuid
+  templateId        String           @db.Uuid
+  template          PipelineTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  name              String           @db.VarChar(100)
+  stageType         String           @db.VarChar(50)
+  sortOrder         Int              @default(0)
+  slaDays           Int?
+  defaultOwner      String?          @db.VarChar(100)
+  entryGate         String?          @db.VarChar(200)
+  exitGate          String?          @db.VarChar(200)
+  status            String           @default("Active") @db.VarChar(30)
   // Stage automation fields (Phase C)
-  emailTemplateId    String?          @db.Uuid
-  emailTemplate      EmailTemplate?   @relation(fields: [emailTemplateId], references: [id], onDelete: SetNull)
-  autoMoveToStageId  String?          @db.Uuid   // reserved for future auto-advance
-  folded             Boolean          @default(false)
-  isHiredStage       Boolean          @default(false)
-  tooltip            String?          @db.VarChar(500)
-  createdAt          DateTime         @default(now()) @db.Timestamptz(6)
-  updatedAt          DateTime         @updatedAt @db.Timestamptz(6)
+  emailTemplateId   String?          @db.Uuid
+  emailTemplate     EmailTemplate?   @relation(fields: [emailTemplateId], references: [id], onDelete: SetNull)
+  autoMoveToStageId String?          @db.Uuid // reserved for future auto-advance
+  folded            Boolean          @default(false)
+  isHiredStage      Boolean          @default(false)
+  tooltip           String?          @db.VarChar(500)
+  createdAt         DateTime         @default(now()) @db.Timestamptz(6)
+  updatedAt         DateTime         @updatedAt @db.Timestamptz(6)
 
   @@index([templateId, sortOrder])
   @@map("pipeline_stages")
@@ -961,6 +983,8 @@ model Task {
   assignee       User         @relation("TaskAssignee", fields: [assigneeUserId], references: [id], onDelete: Restrict)
   createdById    String       @db.Uuid
   createdBy      User         @relation("TaskCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  completedById  String?      @db.Uuid
+  completedBy    User?        @relation("TaskCompleter", fields: [completedById], references: [id], onDelete: SetNull)
   type           String       @db.VarChar(80) // e.g. ApprovalReview, OfferReview, ComplianceCheck
   title          String       @db.VarChar(255)
   description    String?      @db.Text
@@ -974,7 +998,30 @@ model Task {
   updatedAt      DateTime     @updatedAt @db.Timestamptz(6)
 
   @@index([organizationId, assigneeUserId, status])
+  @@index([completedById])
   @@index([assigneeUserId, dueAt])
   @@index([organizationId, status])
   @@map("tasks")
+}
+
+// Version-one catalog values for categories that do not have a dedicated
+// legacy table. Branches and job titles continue to use Branch/Position so
+// their existing legal-entity foreign keys and history remain authoritative.
+model MasterDataValue {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  category       String       @db.VarChar(40)
+  code           String?      @db.VarChar(80)
+  name           String       @db.VarChar(200)
+  metadata       Json?
+  status         String       @default("Active") @db.VarChar(30)
+  version        Int          @default(1)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime     @default(now()) @updatedAt @db.Timestamptz(6)
+
+  @@unique([organizationId, category, code])
+  @@unique([organizationId, category, name])
+  @@index([organizationId, category, status])
+  @@map("master_data_values")
 }

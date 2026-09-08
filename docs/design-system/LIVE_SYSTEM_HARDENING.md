@@ -29,7 +29,7 @@ Scores are internal delivery signals. The gate is evidence-based: a route is not
 - `apps/web/src/styles/ui-primitives.css` — shared buttons, icon buttons, fields, alerts, cards, status badges, stepper, and legacy class aliases.
 - `apps/web/src/styles/shell.css` — shell layout, account context, notification badge, and top sidebar collapse behavior.
 - `apps/web/src/components/ui/` — React primitives: `Button`, `IconButton`, `FormField`, `Alert`, and `Card`.
-- `apps/web/src/pages/DesignSystemPage.tsx` — live laboratory and acceptance showcase.
+- `docs/design-system/README.md` — reusable design-system documentation and usage guidance.
 
 ### Interaction rules
 

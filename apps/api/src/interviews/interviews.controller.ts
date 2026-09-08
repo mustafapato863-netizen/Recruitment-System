@@ -21,6 +21,7 @@ import {
   InterviewQueryDto,
   CheckAvailabilityDto,
   GenerateSelfScheduleDto,
+  UpdateInterviewResponseDto,
 } from './interviews.dto';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -45,7 +46,7 @@ export class InterviewsController {
     @CurrentUser() user: AuthUser,
     @Query() query: InterviewQueryDto,
   ) {
-    return this.interviewsService.listInterviews(user.organizationId, query);
+    return this.interviewsService.listInterviews(user.organizationId, query, user);
   }
 
   @Post('availability')
@@ -78,7 +79,7 @@ export class InterviewsController {
   @UseGuards(TenantScopedGuard)
   @TenantResource({ resource: 'interview', param: 'id' })
   getInterview(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
-    return this.interviewsService.getInterview(user.organizationId, id);
+    return this.interviewsService.getInterview(user.organizationId, id, user);
   }
 
   @Get(':id/ics')
@@ -88,7 +89,7 @@ export class InterviewsController {
   @Header('Content-Type', 'text/calendar; charset=utf-8')
   @Header('Content-Disposition', 'attachment; filename="interview.ics"')
   getInterviewIcs(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
-    return this.interviewsService.getInterviewIcs(user.organizationId, id);
+    return this.interviewsService.getInterviewIcs(user.organizationId, id, user);
   }
 
   @Post()
@@ -98,7 +99,7 @@ export class InterviewsController {
     @CurrentUser() user: AuthUser,
     @Body() body: CreateInterviewDto,
   ) {
-    return this.interviewsService.createInterview(user.organizationId, body);
+    return this.interviewsService.createInterview(user.organizationId, body, user);
   }
 
   @Patch(':id')
@@ -111,7 +112,20 @@ export class InterviewsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() body: UpdateInterviewDto,
   ) {
-    return this.interviewsService.updateInterview(user.organizationId, id, body);
+    return this.interviewsService.updateInterview(user.organizationId, id, body, user);
+  }
+
+  @Post(':id/response')
+  @RequirePermissions('VACANCY_VIEW')
+  @AuditAction('INTERVIEW_RESPONSE')
+  @UseGuards(TenantScopedGuard)
+  @TenantResource({ resource: 'interview', param: 'id' })
+  respondToInterview(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: UpdateInterviewResponseDto,
+  ) {
+    return this.interviewsService.respondToInterview(user.organizationId, id, user.userId, body, user);
   }
 
   @Post(':id/scorecard')
@@ -129,6 +143,7 @@ export class InterviewsController {
       id,
       user.userId,
       body,
+      user,
     );
   }
 }

@@ -13,11 +13,15 @@ import type {
   OfferDecisionDto,
   UpdateOfferStatusDto,
 } from './offers.dto';
-import type { AuthUser } from '@recruitflow/contracts';
+import type { AuthUser, OfferApprovalInboxItem } from '@recruitflow/contracts';
 import type { Prisma } from '@recruitflow/database';
 // Runtime service imports must remain value imports for Nest DI metadata reflection.
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { NotificationsService } from '../notifications/notifications.service';
+/* eslint-enable @typescript-eslint/consistent-type-imports */
+// Runtime service import must remain a value import for Nest DI metadata reflection.
+/* eslint-disable @typescript-eslint/consistent-type-imports */
+import { AccessControlService } from '../access-control/access-control.service';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 
 type CompensationDisclosure = { viewSalary: boolean };
@@ -68,8 +72,9 @@ type OfferRecord = {
   createdAt: Date;
   updatedAt: Date;
   application?: {
+    vacancyId?: string;
     candidate?: { firstName: string; lastName: string } | null;
-    vacancy?: { position?: { title: string } | null } | null;
+    vacancy?: { id: string; position?: { title: string } | null } | null;
   } | null;
   versions?: OfferVersionRecord[];
 };
@@ -79,7 +84,12 @@ export class OffersService {
   constructor(
     private prisma: PrismaService,
     private readonly notifications: NotificationsService,
+    private readonly accessControl: AccessControlService,
   ) {}
+
+  private applicationVisibility(user: AuthUser) {
+    return this.accessControl.getApplicationVisibilityWhere(user);
+  }
 
   private notify(input: {
     organizationId: string;
@@ -133,9 +143,12 @@ export class OffersService {
     return { monthlyPackage: monthly, annualFixed: annual };
   }
 
-  async getOffers(user: AuthUser, query: { status?: string; search?: string }, disclosure: CompensationDisclosure) {
+  async getOffers(user: AuthUser, query: { status?: string; search?: string; candidateId?: string }, disclosure: CompensationDisclosure) {
+    const visibility = await this.applicationVisibility(user);
+    if (query.candidateId) visibility.candidateId = query.candidateId;
     const where: Prisma.OfferWhereInput = {
       organizationId: user.organizationId,
+      application: visibility,
     };
 
     if (query.status) {
@@ -171,8 +184,9 @@ export class OffersService {
   }
 
   async getOfferById(user: AuthUser, id: string, disclosure: CompensationDisclosure) {
-    const offer = await this.prisma.offer.findUnique({
-      where: { id, organizationId: user.organizationId },
+    const visibility = await this.applicationVisibility(user);
+    const offer = await this.prisma.offer.findFirst({
+      where: { id, organizationId: user.organizationId, application: visibility },
       include: {
         application: {
           include: {
@@ -195,8 +209,9 @@ export class OffersService {
   }
 
   async createOffer(user: AuthUser, dto: CreateOfferDto) {
-    const application = await this.prisma.application.findUnique({
-      where: { id: dto.applicationId, organizationId: user.organizationId },
+    const visibility = await this.applicationVisibility(user);
+    const application = await this.prisma.application.findFirst({
+      where: { id: dto.applicationId, ...visibility },
     });
 
     if (!application) throw new NotFoundException('Application not found');
@@ -272,8 +287,9 @@ export class OffersService {
   }
 
   async createOfferRevision(user: AuthUser, id: string, dto: CreateOfferRevisionDto) {
-    const offer = await this.prisma.offer.findUnique({
-      where: { id, organizationId: user.organizationId },
+    const visibility = await this.applicationVisibility(user);
+    const offer = await this.prisma.offer.findFirst({
+      where: { id, organizationId: user.organizationId, application: visibility },
       include: { versions: { orderBy: { versionNumber: 'desc' }, take: 1 } },
     });
 
@@ -340,15 +356,17 @@ export class OffersService {
     return versionId;
   }
 
-  async getApprovalInbox(user: AuthUser, disclosure: CompensationDisclosure) {
+  async getApprovalInbox(user: AuthUser, disclosure: CompensationDisclosure): Promise<OfferApprovalInboxItem[]> {
     const userRoleCodes = user.roleCodes;
     const isAdmin = userRoleCodes.includes('ADMINISTRATOR');
+    const visibility = await this.applicationVisibility(user);
 
     const where: Prisma.OfferApprovalWhereInput = {
       status: 'Pending',
       offerVersion: {
         offer: {
           organizationId: user.organizationId,
+          application: visibility,
         },
       },
     };
@@ -383,6 +401,7 @@ export class OffersService {
 
     return approvals.map((app) => ({
       id: app.id,
+      offerId: app.offerVersion.offer.id,
       offerVersionId: app.offerVersionId,
       offerCode: app.offerVersion.offer.offerCode,
       candidateName: app.offerVersion.offer.application.candidate
@@ -391,15 +410,22 @@ export class OffersService {
       positionTitle: app.offerVersion.offer.application.vacancy.position.title,
       branchName: app.offerVersion.offer.application.vacancy.branch?.name,
       versionNumber: app.offerVersion.versionNumber,
-      monthlyPackage: disclosure.viewSalary ? Number(app.offerVersion.monthlyPackage) : null,
+      monthlyPackage: disclosure.viewSalary && app.offerVersion.monthlyPackage !== null
+        ? Number(app.offerVersion.monthlyPackage)
+        : null,
       roleCode: app.roleCode,
       status: app.status,
+      step: 1,
     }));
   }
 
   async submitDecision(user: AuthUser, approvalId: string, dto: OfferDecisionDto) {
-    const approval = await this.prisma.offerApproval.findUnique({
-      where: { id: approvalId },
+    const visibility = await this.applicationVisibility(user);
+    const approval = await this.prisma.offerApproval.findFirst({
+      where: {
+        id: approvalId,
+        offerVersion: { offer: { organizationId: user.organizationId, application: visibility } },
+      },
       include: { offerVersion: { include: { offer: true } } },
     });
 
@@ -483,8 +509,9 @@ export class OffersService {
   }
 
   async updateOfferStatus(user: AuthUser, id: string, dto: UpdateOfferStatusDto) {
-    const offer = await this.prisma.offer.findUnique({
-      where: { id, organizationId: user.organizationId },
+    const visibility = await this.applicationVisibility(user);
+    const offer = await this.prisma.offer.findFirst({
+      where: { id, organizationId: user.organizationId, application: visibility },
       include: { versions: true },
     });
 
@@ -572,6 +599,7 @@ export class OffersService {
       id: offer.id,
       organizationId: offer.organizationId,
       applicationId: offer.applicationId,
+      vacancyId: offer.application?.vacancy?.id,
       offerCode: offer.offerCode,
       status: offer.status,
       candidateName: offer.application?.candidate
@@ -591,6 +619,7 @@ export class OffersService {
       id: offer.id,
       organizationId: offer.organizationId,
       applicationId: offer.applicationId,
+      vacancyId: offer.application?.vacancy?.id,
       offerCode: offer.offerCode,
       status: offer.status,
       candidateName: offer.application?.candidate

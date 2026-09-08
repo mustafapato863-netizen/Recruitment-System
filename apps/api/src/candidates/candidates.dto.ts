@@ -2,6 +2,7 @@ import {
   IsEmail,
   IsEnum,
   IsInt,
+  IsNotEmpty,
   IsOptional,
   IsString,
   Max,
@@ -12,16 +13,19 @@ import { Type } from 'class-transformer';
 
 export class CreateCandidateDto {
   @IsString()
+  @IsNotEmpty()
   @MaxLength(80)
   firstName!: string;
 
   @IsString()
+  @IsNotEmpty()
   @MaxLength(80)
   lastName!: string;
 
+  @IsOptional()
   @IsEmail()
   @MaxLength(255)
-  email!: string;
+  email?: string | null;
 
   @IsOptional()
   @IsString()
@@ -37,6 +41,11 @@ export class CreateCandidateDto {
   @IsString()
   @MaxLength(120)
   currentCompany?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(5000)
+  summary?: string | null;
 
   @IsOptional()
   @IsString()
@@ -84,7 +93,7 @@ export class UpdateCandidateDto {
   @IsOptional()
   @IsEmail()
   @MaxLength(255)
-  email?: string;
+  email?: string | null;
 
   @IsOptional()
   @IsString()
@@ -100,6 +109,11 @@ export class UpdateCandidateDto {
   @IsString()
   @MaxLength(120)
   currentCompany?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(5000)
+  summary?: string | null;
 
   @IsOptional()
   @IsString()

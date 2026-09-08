@@ -253,6 +253,10 @@ export class AssignTeamMemberDto {
   @IsString()
   @MaxLength(60)
   roleCode!: string;
+
+  @IsOptional()
+  @IsEnum(['PRIMARY', 'SUPPORT'])
+  assignmentKind?: 'PRIMARY' | 'SUPPORT';
 }
 
 export class VacancyWorkQueueQueryDto {

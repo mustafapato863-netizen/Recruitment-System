@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Icon } from '../Icon';
 import { FormField } from '../ui/FormField';
 import { Input } from '../ui/Input';
+import { Select } from '../ui/Select';
 import { Textarea } from '../ui/Textarea';
 import {
   generateAISummary,
@@ -15,6 +16,9 @@ interface CVParsedEditorProps {
   setProfile: React.Dispatch<React.SetStateAction<ExtractedCandidate | null>>;
   scoredVacancies?: ScoredVacancy[];
   uploadedFileName: string | null;
+  candidateSource: string;
+  candidateSourceOptions: string[];
+  setCandidateSource: (source: string) => void;
   onReset: () => void;
   onBack: () => void;
   onProceed: () => void;
@@ -25,6 +29,9 @@ export const CVParsedEditor: React.FC<CVParsedEditorProps> = ({
   setProfile,
   scoredVacancies,
   uploadedFileName,
+  candidateSource,
+  candidateSourceOptions,
+  setCandidateSource,
   onReset,
   onBack,
   onProceed,
@@ -46,7 +53,7 @@ export const CVParsedEditor: React.FC<CVParsedEditorProps> = ({
         profile.title,
         profile.certifications,
         profile.rawText,
-        profile.experienceYears || 3,
+        profile.experienceYears ?? 0,
       );
 
       const updatedProfile: ExtractedCandidate = {
@@ -62,7 +69,7 @@ export const CVParsedEditor: React.FC<CVParsedEditorProps> = ({
 
       setProfile(updatedProfile);
       setIsRegeneratingSummary(false);
-      setAiFeedbackMessage('AI Executive Summary refreshed with current clinical credentials.');
+      setAiFeedbackMessage('AI summary refreshed from the current CV fields.');
       setTimeout(() => setAiFeedbackMessage(null), 4000);
     }, 450);
   };
@@ -137,11 +144,6 @@ export const CVParsedEditor: React.FC<CVParsedEditorProps> = ({
                 <Icon name="check" size={12} />
                 Parsed from {uploadedFileName || 'Uploaded Document'}
               </span>
-              {uploadedFileName?.toLowerCase().includes('sample_candidate') && (
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
-                  Sample data
-                </span>
-              )}
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
               Stage 2 of 4: Validate and adjust extracted fields before duplicate resolution and vacancy matching.
@@ -194,7 +196,7 @@ export const CVParsedEditor: React.FC<CVParsedEditorProps> = ({
               </div>
               <div className="text-xs font-black text-slate-900 dark:text-white flex items-center gap-1.5">
                 <Icon name="activity" size={14} className="text-emerald-500 shrink-0" />
-                <span className="truncate">{profile.clinicalDomain || 'Clinical Medical Practice'}</span>
+                <span className="truncate">{profile.clinicalDomain || 'Unclassified'}</span>
               </div>
             </div>
 
@@ -205,13 +207,13 @@ export const CVParsedEditor: React.FC<CVParsedEditorProps> = ({
                   Parsing Fidelity
                 </span>
                 <span className="text-sm font-black text-emerald-600 dark:text-emerald-400">
-                  {profile.aiSummaryConfidence || 96}% High Match
+                  {profile.aiSummaryConfidence === undefined ? 'Not available' : `${profile.aiSummaryConfidence}% ${profile.aiSummaryConfidence >= 80 ? 'High Match' : 'Review evidence'}`}
                 </span>
               </div>
               <div className="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full mt-1.5 overflow-hidden">
                 <div
                   className="bg-gradient-to-r from-blue-500 to-emerald-500 h-full rounded-full transition-all duration-500"
-                  style={{ width: `${profile.aiSummaryConfidence || 96}%` }}
+                  style={{ width: `${profile.aiSummaryConfidence ?? 0}%` }}
                 />
               </div>
             </div>
@@ -280,11 +282,11 @@ export const CVParsedEditor: React.FC<CVParsedEditorProps> = ({
                     </span>
                   </div>
                   <strong className="text-xs font-bold text-slate-900 dark:text-white block mt-1">
-                    {(scoredVacancies[0].vacancy as any).position?.title || scoredVacancies[0].vacancy.title || 'Requisition'}
+                    {scoredVacancies[0].vacancy.position?.title || scoredVacancies[0].vacancy.title || 'Requisition'}
                   </strong>
                   <span className="text-[11px] text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-0.5">
                     <Icon name="building" size={10} />
-                    <span>{scoredVacancies[0].vacancy.branch?.name || scoredVacancies[0].vacancy.location || 'Saudi German Health'}</span>
+                    <span>{scoredVacancies[0].vacancy.branch?.name || scoredVacancies[0].vacancy.location || 'Location not set'}</span>
                   </span>
                   {scoredVacancies[0].fitResult.breakdown.skills.matched.length > 0 && (
                     <div className="mt-2 pt-2 border-t border-blue-200/50 dark:border-blue-900/40 flex items-center gap-1 text-[10px] text-emerald-700 dark:text-emerald-300 font-semibold">
@@ -352,7 +354,7 @@ export const CVParsedEditor: React.FC<CVParsedEditorProps> = ({
                 />
               </FormField>
 
-              <FormField id="c-email" label="Email Address" required>
+              <FormField id="c-email" label="Email Address" hint="Provide an email or phone number">
                 <Input
                   id="c-email"
                   type="email"
@@ -361,13 +363,32 @@ export const CVParsedEditor: React.FC<CVParsedEditorProps> = ({
                 />
               </FormField>
 
-              <FormField id="c-phone" label="Phone Number">
+              <FormField id="c-phone" label="Phone Number" hint="Provide an email or phone number">
                 <Input
                   id="c-phone"
                   value={profile.phone || ''}
                   onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
                 />
               </FormField>
+
+              <div className="sm:col-span-2">
+                <FormField id="c-source" label="Source of CV">
+                  <Select
+                    id="c-source"
+                    value={candidateSource}
+                    onChange={(e) => setCandidateSource(e.target.value)}
+                  >
+                    {!candidateSourceOptions.includes(candidateSource) && candidateSource && (
+                      <option value={candidateSource}>{candidateSource}</option>
+                    )}
+                    {candidateSourceOptions.map((source) => (
+                      <option key={source} value={source}>
+                        {source}
+                      </option>
+                    ))}
+                  </Select>
+                </FormField>
+              </div>
             </div>
           </div>
 
@@ -397,7 +418,7 @@ export const CVParsedEditor: React.FC<CVParsedEditorProps> = ({
                 <Input
                   id="c-exp"
                   type="number"
-                  value={profile.experienceYears || ''}
+                  value={profile.experienceYears ?? ''}
                   onChange={(e) => setProfile({ ...profile, experienceYears: Number(e.target.value) || 0 })}
                 />
               </FormField>

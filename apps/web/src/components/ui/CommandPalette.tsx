@@ -65,15 +65,6 @@ const STATIC_QUICK_ACTIONS: QuickActionItem[] = [
     onSelect: (nav) => nav('/vacancy-requests/create'),
   },
   {
-    id: 'act-sourcing-match',
-    title: 'Smart Sourcing & Match Bench',
-    subtitle: 'Evaluate 22 SGH positions with real-time candidate benchmark scoring',
-    icon: 'sparkles',
-    keywords: ['sourcing', 'match', 'bench', 'score', 'benchmark', 'pool', 'talent'],
-    badge: 'SGH AI',
-    onSelect: (nav) => nav('/sourcing-match'),
-  },
-  {
     id: 'act-pipeline',
     title: 'Applications Pipeline & Kanban',
     subtitle: 'Manage candidate stages from Applied through Screening, Interview, to Pre-Hire',
@@ -83,21 +74,12 @@ const STATIC_QUICK_ACTIONS: QuickActionItem[] = [
     onSelect: (nav) => nav('/applications'),
   },
   {
-    id: 'act-compare',
-    title: 'Candidate Comparison Matrix',
-    subtitle: 'Side-by-side criteria, skills, and qualifications comparison for candidates',
-    icon: 'filter',
-    keywords: ['compare', 'matrix', 'side by side', 'evaluation', 'criteria', 'candidates'],
-    badge: 'Tools',
-    onSelect: (nav) => nav('/candidates/compare'),
-  },
-  {
     id: 'act-cv-intake',
-    title: 'Smart CV Intake & Parser',
-    subtitle: 'Upload and parse medical & engineering résumés into candidate records',
+    title: 'Upload CV',
+    subtitle: 'Upload and parse a résumé into a candidate record',
     icon: 'upload',
     keywords: ['cv', 'resume', 'intake', 'upload', 'parse', 'import', 'files'],
-    badge: 'Intake',
+    badge: 'Candidate',
     onSelect: (nav) => nav('/cv-intake'),
   },
   {
@@ -135,15 +117,6 @@ const STATIC_QUICK_ACTIONS: QuickActionItem[] = [
     keywords: ['targets', 'sla', 'settings', 'benchmarks', 'time to hire', 'kpi'],
     badge: 'Settings',
     onSelect: (nav) => nav('/settings/targets'),
-  },
-  {
-    id: 'act-reports',
-    title: 'Executive Reports & Analytics',
-    subtitle: 'Recruitment velocity, funnel conversion rates, and sourcing channel metrics',
-    icon: 'report',
-    keywords: ['reports', 'analytics', 'metrics', 'velocity', 'conversion', 'dashboard'],
-    badge: 'Analytics',
-    onSelect: (nav) => nav('/reports'),
   },
   {
     id: 'act-theme',
@@ -369,4 +342,4 @@ export function CommandPalette({ isOpen, onClose }: CommandPaletteProps) {
       </div>
     </Modal>
   );
-}
+}

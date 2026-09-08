@@ -61,16 +61,9 @@ export function HiringCasePage() {
       : 'Hiring Case'
   );
 
-  const userRoleCodes = user?.roles?.map((r) => r.code) ?? [];
-  const canConfirmJoining = userRoleCodes.some((code) =>
-    [
-      'ADMIN',
-      'SYSADMIN',
-      'ADMINISTRATOR',
-      'HIRING_MANAGER',
-      'TALENT_MANAGER',
-      'HR_MANAGER',
-    ].includes(code.toUpperCase()),
+  const canConfirmJoining = Boolean(
+    user?.permissions?.includes('FINAL_HIRING_APPROVAL') ||
+    user?.permissions?.includes('HIRING_CASE_APPROVE'),
   );
 
   const loadCase = async () => {

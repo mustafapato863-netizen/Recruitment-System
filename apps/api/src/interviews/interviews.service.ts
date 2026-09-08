@@ -25,21 +25,34 @@ import type {
   InterviewQueryDto,
   SubmitScorecardDto,
   UpdateInterviewDto,
+  UpdateInterviewResponseDto,
 } from './interviews.dto';
 import { generateIcsCalendar } from './ics-generator';
+// Runtime service import must remain a value import for Nest DI metadata reflection.
+/* eslint-disable @typescript-eslint/consistent-type-imports */
+import { AccessControlService } from '../access-control/access-control.service';
+/* eslint-enable @typescript-eslint/consistent-type-imports */
+import type { AuthUser } from '@recruitflow/contracts';
 
 @Injectable()
 export class InterviewsService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
+    private readonly accessControl: AccessControlService,
   ) {}
 
   async listInterviews(
     organizationId: string,
     query: InterviewQueryDto,
+    user?: AuthUser,
   ): Promise<Interview[]> {
     const where: Prisma.InterviewWhereInput = { organizationId };
+    const applicationWhere: Prisma.ApplicationWhereInput = user
+      ? await this.accessControl.getApplicationVisibilityWhere(user)
+      : { organizationId };
+    if (query.candidateId) applicationWhere.candidateId = query.candidateId;
+    where.application = applicationWhere;
 
     if (query.applicationId) where.applicationId = query.applicationId;
     if (query.status) where.status = query.status;
@@ -71,9 +84,12 @@ export class InterviewsService {
     return items.map((item) => this.toInterview(item));
   }
 
-  async getInterview(organizationId: string, id: string): Promise<Interview> {
-    const interview = await this.prisma.interview.findUnique({
-      where: { id },
+  async getInterview(organizationId: string, id: string, user?: AuthUser): Promise<Interview> {
+    const visibility = user
+      ? await this.accessControl.getApplicationVisibilityWhere(user)
+      : { organizationId };
+    const interview = await this.prisma.interview.findFirst({
+      where: { id, organizationId, application: visibility },
       include: {
         application: {
           include: {
@@ -176,10 +192,14 @@ export class InterviewsService {
   async createInterview(
     organizationId: string,
     dto: CreateInterviewDto,
+    user?: AuthUser,
   ): Promise<Interview> {
-    const app = await this.prisma.application.findUnique({
-      where: { id: dto.applicationId },
-      include: { candidate: true },
+    const visibility = user
+      ? await this.accessControl.getApplicationVisibilityWhere(user)
+      : { organizationId };
+    const app = await this.prisma.application.findFirst({
+      where: { id: dto.applicationId, ...visibility },
+      include: { candidate: true, vacancy: { include: { position: true } } },
     });
 
     if (!app || app.organizationId !== organizationId) {
@@ -196,7 +216,7 @@ export class InterviewsService {
     if (attendeeUserIds.length > 0) {
       const attendees = await this.prisma.user.findMany({
         where: { id: { in: attendeeUserIds }, organizationId, status: 'Active' },
-        select: { id: true },
+        select: { id: true, jobTitle: true },
       });
       if (attendees.length !== attendeeUserIds.length) {
         throw new NotFoundException('One or more interview attendees were not found in this organization.');
@@ -217,6 +237,11 @@ export class InterviewsService {
     }
 
     const interviewCode = await this.nextInterviewCode();
+    const generatedTitle = dto.title?.trim() || `${app.candidate ? `${app.candidate.firstName} ${app.candidate.lastName}` : 'Candidate'} · ${app.vacancy?.position?.title || 'Position'} · ${dto.interviewType} Interview`;
+    const attendeeProfiles = attendeeUserIds.length > 0
+      ? await this.prisma.user.findMany({ where: { id: { in: attendeeUserIds }, organizationId }, select: { id: true, jobTitle: true } })
+      : [];
+    const attendeeTitles = new Map(attendeeProfiles.map((profile) => [profile.id, profile.jobTitle]));
 
     const created = await this.prisma.$transaction(async (tx) => {
       const item = await tx.interview.create({
@@ -224,7 +249,7 @@ export class InterviewsService {
           organizationId,
           interviewCode,
           applicationId: dto.applicationId,
-          title: dto.title.trim(),
+          title: generatedTitle,
           interviewType: dto.interviewType,
           scheduledStart: start,
           scheduledEnd: end,
@@ -240,7 +265,9 @@ export class InterviewsService {
             interviewId: item.id,
             userId,
             role: 'Interviewer',
-            response: 'Accepted',
+            jobTitle: dto.attendeeJobTitles?.[userId]?.trim() || (attendeeUserIds.length === 1 ? dto.interviewerJobTitle?.trim() : undefined) || attendeeTitles.get(userId) || null,
+            // A scheduled invite must be explicitly confirmed by each interviewer.
+            response: 'Pending',
           })),
         });
       }
@@ -251,7 +278,7 @@ export class InterviewsService {
           organizationId,
           applicationId: dto.applicationId,
           authorId: null,
-          content: `Scheduled ${dto.interviewType} Interview: "${dto.title}" for ${start.toLocaleString(
+          content: `Scheduled ${dto.interviewType} Interview: "${generatedTitle}" for ${start.toLocaleString(
             'en-US',
             { timeZone: dto.timezone || 'Asia/Riyadh' },
           )}.`,
@@ -298,9 +325,13 @@ export class InterviewsService {
     organizationId: string,
     id: string,
     dto: UpdateInterviewDto,
+    user?: AuthUser,
   ): Promise<Interview> {
-    const existing = await this.prisma.interview.findUnique({
-      where: { id },
+    const visibility = user
+      ? await this.accessControl.getApplicationVisibilityWhere(user)
+      : { organizationId };
+    const existing = await this.prisma.interview.findFirst({
+      where: { id, organizationId, application: visibility },
       include: {
         attendees: true,
         application: { include: { candidate: true } },
@@ -309,6 +340,15 @@ export class InterviewsService {
 
     if (!existing || existing.organizationId !== organizationId) {
       throw new NotFoundException(`Interview ${id} was not found.`);
+    }
+
+    const hasDateChange = dto.scheduledStart !== undefined || dto.scheduledEnd !== undefined;
+    const hasScheduleChange = hasDateChange || dto.status === 'Rescheduled';
+    if ((existing.status === 'Completed' || existing.status === 'Cancelled') && hasScheduleChange) {
+      throw new BadRequestException('Completed or cancelled interviews cannot be rescheduled. Create a new interview instead.');
+    }
+    if ((existing.status === 'Completed' || existing.status === 'Cancelled') && dto.status && dto.status !== existing.status) {
+      throw new BadRequestException(`A ${existing.status.toLowerCase()} interview cannot change status.`);
     }
 
     const dataToUpdate: Prisma.InterviewUpdateInput = {};
@@ -344,9 +384,21 @@ export class InterviewsService {
 
       dataToUpdate.scheduledStart = newStart;
       dataToUpdate.scheduledEnd = newEnd;
+      if (!dto.status) dataToUpdate.status = 'Rescheduled';
     }
 
     if (dto.locationUrl !== undefined) dataToUpdate.locationUrl = dto.locationUrl?.trim() ?? null;
+
+    if (dto.status === 'Completed') {
+      const [attendeeCount, submittedCount] = await Promise.all([
+        this.prisma.interviewAttendee.count({ where: { interviewId: id } }),
+        this.prisma.interviewScorecard.count({ where: { interviewId: id, isLocked: true } }),
+      ]);
+      if (attendeeCount === 0 || submittedCount < attendeeCount) {
+        throw new BadRequestException('All assigned interviewers must submit ratings and written notes before completing this interview.');
+      }
+    }
+
     if (dto.status) dataToUpdate.status = dto.status;
 
     const updated = await this.prisma.interview.update({
@@ -363,6 +415,18 @@ export class InterviewsService {
         scorecards: { include: { interviewer: true } },
       },
     });
+
+    // A new time invalidates previous confirmations. Every panelist must
+    // confirm the replacement slot before the interview goes ahead.
+    if (hasDateChange) {
+      await this.prisma.interviewAttendee.updateMany({
+        where: { interviewId: id },
+        data: { response: 'Pending' },
+      });
+      updated.attendees.forEach((attendee) => {
+        attendee.response = 'Pending';
+      });
+    }
 
     // Handle cancellation or rescheduling chatter notes and notifications
     if (dto.status === 'Cancelled') {
@@ -416,9 +480,12 @@ export class InterviewsService {
     return this.toInterview(updated);
   }
 
-  async getInterviewIcs(organizationId: string, id: string): Promise<string> {
-    const interview = await this.prisma.interview.findUnique({
-      where: { id },
+  async getInterviewIcs(organizationId: string, id: string, user?: AuthUser): Promise<string> {
+    const visibility = user
+      ? await this.accessControl.getApplicationVisibilityWhere(user)
+      : { organizationId };
+    const interview = await this.prisma.interview.findFirst({
+      where: { id, organizationId, application: visibility },
       include: {
         application: {
           include: {
@@ -466,13 +533,96 @@ export class InterviewsService {
     });
   }
 
+  async respondToInterview(
+    organizationId: string,
+    interviewId: string,
+    userId: string,
+    dto: UpdateInterviewResponseDto,
+    user?: AuthUser,
+  ): Promise<Interview> {
+    const visibility = user
+      ? await this.accessControl.getApplicationVisibilityWhere(user)
+      : { organizationId };
+    const interview = await this.prisma.interview.findFirst({
+      where: { id: interviewId, organizationId, application: visibility },
+      include: {
+        attendees: { include: { user: true } },
+        application: {
+          include: {
+            candidate: true,
+            primaryRecruiter: { select: { id: true } },
+          },
+        },
+      },
+    });
+
+    if (!interview || interview.organizationId !== organizationId) {
+      throw new NotFoundException(`Interview ${interviewId} was not found.`);
+    }
+
+    const attendee = interview.attendees.find((item) => item.userId === userId);
+    if (!attendee) {
+      throw new ForbiddenException('Only an assigned interviewer can respond to this interview.');
+    }
+    if (interview.status === 'Cancelled' || interview.status === 'Completed') {
+      throw new BadRequestException('This interview is no longer accepting attendance responses.');
+    }
+    const note = dto.note?.trim();
+    if (dto.response === 'Reschedule Requested' && !note) {
+      throw new BadRequestException('Please include a reason when requesting a reschedule.');
+    }
+
+    await this.prisma.interviewAttendee.update({
+      where: { interviewId_userId: { interviewId, userId } },
+      data: { response: dto.response },
+    });
+
+    const responseLabel = dto.response === 'Confirmed' ? 'confirmed attendance' : dto.response.toLowerCase();
+    await this.prisma.applicationNote.create({
+      data: {
+        organizationId,
+        applicationId: interview.applicationId,
+        authorId: userId,
+        content: `Interviewer ${responseLabel} for "${interview.title}".${note ? ` Note: ${note}` : ''}`,
+      },
+    });
+
+    const notificationRecipients = new Set(
+      interview.attendees.filter((item) => item.userId !== userId).map((item) => item.userId),
+    );
+    const primaryRecruiterId = interview.application?.primaryRecruiter?.id;
+    if (primaryRecruiterId && primaryRecruiterId !== userId) notificationRecipients.add(primaryRecruiterId);
+    for (const recipientUserId of notificationRecipients) {
+      await this.notifications.create({
+        organizationId,
+        recipientUserId,
+        type: 'InterviewResponseUpdated',
+        title: 'Interview response updated',
+        message: `${attendee.user?.displayName || 'An interviewer'} ${responseLabel} for "${interview.title}".${note ? ` Note: ${note}` : ''}`,
+        entityType: 'Interview',
+        entityId: interview.id,
+      });
+    }
+
+    return this.getInterview(organizationId, interviewId, user);
+  }
+
   async submitScorecard(
     organizationId: string,
     interviewId: string,
     interviewerId: string,
     dto: SubmitScorecardDto,
+    user?: AuthUser,
   ): Promise<InterviewScorecardItem> {
-    await this.getInterview(organizationId, interviewId);
+    const interview = await this.getInterview(organizationId, interviewId, user);
+
+    if (interview.status === 'Cancelled') {
+      throw new BadRequestException('Cancelled interviews cannot receive scorecards.');
+    }
+
+    if (!dto.notes?.trim()) {
+      throw new BadRequestException('Interview result notes are required before submitting the scorecard.');
+    }
 
     const attendee = await this.prisma.interviewAttendee.findUnique({
       where: {
@@ -525,6 +675,17 @@ export class InterviewsService {
       },
       include: { interviewer: true },
     });
+
+    const [attendeeCount, submittedCount] = await Promise.all([
+      this.prisma.interviewAttendee.count({ where: { interviewId } }),
+      this.prisma.interviewScorecard.count({ where: { interviewId, isLocked: true } }),
+    ]);
+    if (attendeeCount > 0 && submittedCount >= attendeeCount) {
+      await this.prisma.interview.updateMany({
+        where: { id: interviewId, organizationId, status: { not: 'Cancelled' } },
+        data: { status: 'Completed' },
+      });
+    }
 
     return {
       id: scorecard.id,
@@ -605,6 +766,7 @@ export class InterviewsService {
         userId: att.userId,
         userName: att.user?.displayName,
         role: att.role,
+        jobTitle: att.jobTitle,
         response: att.response,
       })),
       scorecards: record.scorecards.map((sc) => ({

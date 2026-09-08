@@ -22,6 +22,12 @@ interface SparklineProps {
   points: string;
 }
 
+type SourceDatum = { name: string; value: number; pct: string; color: string };
+type TimeToHireDatum = { period: string; days: number };
+type OfferDatum = { name: string; value: number; pct: string; color: string };
+type FunnelDatum = { stage: string; count: number; pct: string; color: string; width: string };
+type DepartmentDatum = { name: string; count: number; pct: number; color: string; activePositions: number; timeToHire: number | null };
+
 function Sparkline({ color, points }: SparklineProps) {
   return (
     <svg className="w-14 h-4 overflow-visible" viewBox="0 0 50 15">
@@ -37,26 +43,6 @@ function Sparkline({ color, points }: SparklineProps) {
 }
 
 // ── Department Breakdown Data ──
-interface DepartmentStat {
-  name: string;
-  count: number;
-  pct: number;
-  color: string;
-  activePositions: number;
-  timeToHire: number;
-}
-
-const ALL_DEPARTMENTS: DepartmentStat[] = [
-  { name: 'Engineering', count: 96, pct: 36, color: '#3b82f6', activePositions: 6, timeToHire: 24 },
-  { name: 'Clinical Operations', count: 64, pct: 24, color: '#10b981', activePositions: 8, timeToHire: 32 },
-  { name: 'Digital Health', count: 48, pct: 18, color: '#f97316', activePositions: 4, timeToHire: 21 },
-  { name: 'Strategy & Analytics', count: 32, pct: 12, color: '#a855f7', activePositions: 2, timeToHire: 28 },
-  { name: 'People & Culture', count: 24, pct: 9, color: '#06b6d4', activePositions: 3, timeToHire: 19 },
-  { name: 'Emergency & Critical Care', count: 18, pct: 7, color: '#ec4899', activePositions: 5, timeToHire: 35 },
-  { name: 'Pediatrics & Neonatology', count: 16, pct: 6, color: '#eab308', activePositions: 4, timeToHire: 30 },
-  { name: 'Radiology & Imaging', count: 12, pct: 5, color: '#6366f1', activePositions: 2, timeToHire: 22 },
-];
-
 export function ReportsPage() {
   const [dateRangePreset, setDateRangePreset] = useState<'7d' | '30d' | 'quarter' | 'ytd'>('7d');
   const [timeGranularity, setTimeGranularity] = useState<'Daily' | 'Weekly' | 'Monthly'>('Daily');
@@ -108,7 +94,7 @@ export function ReportsPage() {
           setReportOverview(data);
         }
       } catch (err) {
-        console.warn('Could not load live reports overview, using baseline metrics', err);
+        console.warn('Could not load live reports overview', err);
       } finally {
         if (isMounted) {
           setIsLoadingReport(false);
@@ -134,16 +120,8 @@ export function ReportsPage() {
       });
       return `${fromD} – ${toD}`;
     }
-    switch (dateRangePreset) {
-      case '7d':
-        return '31 Aug – 6 Sep 2026';
-      case '30d':
-        return 'August 2026 (Last 30 Days)';
-      case 'quarter':
-        return 'Q3 2026 (Quarter to Date)';
-      case 'ytd':
-        return 'Year to Date 2026';
-    }
+    const range = getRangeDates(dateRangePreset);
+    return `${new Date(range.from).toLocaleDateString('en-GB')} – ${new Date(range.to).toLocaleDateString('en-GB')}`;
   }, [dateRangePreset, reportOverview]);
 
   // Dynamic KPI Metrics based on Live Backend Telemetry with Graceful Fallbacks
@@ -156,7 +134,7 @@ export function ReportsPage() {
       const trendOffers = reportOverview.trend.reduce((sum, p) => sum + (p.offers || 0), 0);
       const offCount = trendOffers > 0 ? trendOffers : reportOverview.comparison.offers;
       const hireCount = reportOverview.kpis.totalJoined.count || reportOverview.comparison.joined;
-      const ttf = reportOverview.kpis.timeToFill.value || 28;
+      const ttf = reportOverview.kpis.timeToFill.value;
 
       const appDiff =
         reportOverview.comparison.applications > 0
@@ -165,7 +143,7 @@ export function ReportsPage() {
                 reportOverview.comparison.applications) *
                 100,
             )
-          : 18;
+          : 0;
       const intDiff =
         reportOverview.comparison.interviews > 0
           ? Math.round(
@@ -173,7 +151,7 @@ export function ReportsPage() {
                 reportOverview.comparison.interviews) *
                 100,
             )
-          : 12;
+          : 0;
       const offDiff =
         reportOverview.comparison.offers > 0
           ? Math.round(
@@ -181,7 +159,7 @@ export function ReportsPage() {
                 reportOverview.comparison.offers) *
                 100,
             )
-          : 25;
+          : 0;
 
       return {
         applications: appCount,
@@ -196,48 +174,20 @@ export function ReportsPage() {
         timeTrend:
           reportOverview.kpis.timeToOffer.value > 0
             ? `${reportOverview.kpis.timeToOffer.value}d time to offer`
-            : 'On track vs SLA',
-      };
-    }
-    if (dateRangePreset === '7d') {
-      return {
-        applications: 264,
-        appTrend: '+18% vs last 7 days',
-        interviews: 178,
-        intTrend: '+12% vs last 7 days',
-        offers: 15,
-        offTrend: '+25% vs last 7 days',
-        hires: 11,
-        hireTrend: '+22% vs last 7 days',
-        timeToHire: 28,
-        timeTrend: '-3 days vs last 7 days',
-      };
-    }
-    if (dateRangePreset === '30d') {
-      return {
-        applications: 1140,
-        appTrend: '+24% vs previous 30 days',
-        interviews: 742,
-        intTrend: '+19% vs previous 30 days',
-        offers: 64,
-        offTrend: '+21% vs previous 30 days',
-        hires: 48,
-        hireTrend: '+26% vs previous 30 days',
-        timeToHire: 26,
-        timeTrend: '-4 days vs benchmark',
+            : 'No comparison data',
       };
     }
     return {
-      applications: 3280,
-      appTrend: '+31% vs target pacing',
-      interviews: 1950,
-      intTrend: '+28% vs target pacing',
-      offers: 180,
-      offTrend: '+18% vs target pacing',
-      hires: 142,
-      hireTrend: '+20% vs target pacing',
-      timeToHire: 25,
-      timeTrend: '-5 days vs SLA',
+      applications: 0,
+      appTrend: 'No data',
+      interviews: 0,
+      intTrend: 'No data',
+      offers: 0,
+      offTrend: 'No data',
+      hires: 0,
+      hireTrend: 'No data',
+      timeToHire: 0,
+      timeTrend: 'No data',
     };
   }, [reportOverview, dateRangePreset]);
 
@@ -250,77 +200,29 @@ export function ReportsPage() {
         previousPeriod: Math.max(0, Math.round(pt.applications * 0.82)),
       }));
     }
-    if (timeGranularity === 'Daily') {
-      return [
-        { date: '31 Aug', applications: 32, previousPeriod: 26 },
-        { date: '1 Sep', applications: 45, previousPeriod: 34 },
-        { date: '2 Sep', applications: 28, previousPeriod: 30 },
-        { date: '3 Sep', applications: 55, previousPeriod: 42 },
-        { date: '4 Sep', applications: 62, previousPeriod: 48 },
-        { date: '5 Sep', applications: 48, previousPeriod: 40 },
-        { date: '6 Sep', applications: 64, previousPeriod: 52 },
-      ];
-    }
-    if (timeGranularity === 'Weekly') {
-      return [
-        { date: 'W1 Aug', applications: 210, previousPeriod: 180 },
-        { date: 'W2 Aug', applications: 245, previousPeriod: 215 },
-        { date: 'W3 Aug', applications: 280, previousPeriod: 250 },
-        { date: 'W4 Aug', applications: 264, previousPeriod: 220 },
-      ];
-    }
-    return [
-      { date: 'May', applications: 820, previousPeriod: 740 },
-      { date: 'Jun', applications: 940, previousPeriod: 810 },
-      { date: 'Jul', applications: 1050, previousPeriod: 920 },
-      { date: 'Aug', applications: 1140, previousPeriod: 980 },
-    ];
+    return [];
   }, [reportOverview, timeGranularity]);
 
   // Applications by Source Data
-  const sourcesData = useMemo(() => {
-    const defaultSources = [
-      { name: 'Careers Site', value: 96, pct: '36%', color: '#3b82f6' },
-      { name: 'Employee Referral', value: 72, pct: '27%', color: '#10b981' },
-      { name: 'Job Boards', value: 48, pct: '18%', color: '#f97316' },
-      { name: 'LinkedIn', value: 32, pct: '12%', color: '#a855f7' },
-      { name: 'Other', value: 16, pct: '6%', color: '#64748b' },
-    ];
-    if (reportOverview?.kpis?.topSource?.name && reportOverview.kpis.topSource.name !== 'No data') {
-      const topName = reportOverview.kpis.topSource.name;
-      const topConv = reportOverview.kpis.topSource.conversionRate;
-      return defaultSources.map((s) =>
-        s.name.toLowerCase().includes(topName.toLowerCase())
-          ? { ...s, pct: `${topConv}% (Top Source)` }
-          : s,
-      );
-    }
-    return defaultSources;
+  const sourcesData = useMemo<SourceDatum[]>(() => {
+    const sourceRows = reportOverview?.sourceBreakdown ?? [];
+    const colors = ['#3b82f6', '#10b981', '#f97316', '#a855f7', '#06b6d4', '#ec4899', '#eab308', '#6366f1'];
+    const total = sourceRows.reduce((sum, source) => sum + source.total, 0);
+    return sourceRows.map((source, index) => ({
+      name: source.name,
+      value: source.total,
+      pct: total > 0 ? `${Math.round((source.total / total) * 100)}%` : '—',
+      color: colors[index % colors.length],
+    }));
   }, [reportOverview]);
 
   // Time to Hire Trend Data
-  const timeToHireData = useMemo(() => {
-    if (timeToHireGranularity === 'Weekly') {
-      return [
-        { period: '3 Aug', days: 35 },
-        { period: '10 Aug', days: 32 },
-        { period: '17 Aug', days: 31 },
-        { period: '24 Aug', days: 29 },
-        { period: '31 Aug', days: 28 },
-        { period: '6 Sep', days: kpis.timeToHire },
-      ];
-    }
-    return [
-      { period: 'Apr', days: 38 },
-      { period: 'May', days: 34 },
-      { period: 'Jun', days: 31 },
-      { period: 'Jul', days: 29 },
-      { period: 'Aug', days: kpis.timeToHire },
-    ];
+  const timeToHireData = useMemo<TimeToHireDatum[]>(() => {
+    return [];
   }, [timeToHireGranularity, kpis.timeToHire]);
 
   // Offer Acceptance Rate Data
-  const offerAcceptanceData = useMemo(() => {
+  const offerAcceptanceData = useMemo<OfferDatum[]>(() => {
     if (reportOverview?.kpis?.offerAcceptanceRate) {
       const accepted = reportOverview.kpis.offerAcceptanceRate.accepted || 0;
       const total = reportOverview.kpis.offerAcceptanceRate.total || 0;
@@ -338,15 +240,11 @@ export function ReportsPage() {
         ];
       }
     }
-    return [
-      { name: 'Accepted', value: 11, pct: '73%', color: '#10b981' },
-      { name: 'Declined', value: 3, pct: '20%', color: '#ef4444' },
-      { name: 'Pending', value: 1, pct: '7%', color: '#64748b' },
-    ];
+    return [];
   }, [reportOverview]);
 
   // Funnel Conversion Stages
-  const funnelStagesData = useMemo(() => {
+  const funnelStagesData = useMemo<FunnelDatum[]>(() => {
     if (reportOverview && reportOverview.funnel.length > 0) {
       const colors = ['#3b82f6', '#10b981', '#f97316', '#a855f7', '#6366f1', '#06b6d4'];
       return reportOverview.funnel.map((f, i) => ({
@@ -357,17 +255,11 @@ export function ReportsPage() {
         width: `${Math.max(12, f.percent)}%`,
       }));
     }
-    return [
-      { stage: 'Applications', count: kpis.applications, pct: '100%', color: '#3b82f6', width: '100%' },
-      { stage: 'Screening', count: kpis.interviews, pct: '67%', color: '#10b981', width: '84%' },
-      { stage: 'Interview', count: 62, pct: '35%', color: '#f97316', width: '68%' },
-      { stage: 'Offer', count: kpis.offers, pct: '24%', color: '#a855f7', width: '52%' },
-      { stage: 'Hired', count: kpis.hires, pct: '73%', color: '#06b6d4', width: '38%' },
-    ];
+    return [];
   }, [reportOverview, kpis]);
 
   // Departments Breakdown Data
-  const departmentsData = useMemo(() => {
+  const departmentsData = useMemo<DepartmentDatum[]>(() => {
     if (reportOverview && reportOverview.hiringByPosition.length > 0) {
       const colors = ['#3b82f6', '#10b981', '#f97316', '#a855f7', '#06b6d4', '#ec4899', '#eab308', '#6366f1'];
       const total = reportOverview.hiringByPosition.reduce((s, p) => s + (p.target || 0), 0) || 1;
@@ -377,10 +269,10 @@ export function ReportsPage() {
         pct: Math.round((pos.target / total) * 100),
         color: colors[idx % colors.length],
         activePositions: pos.target,
-        timeToHire: 25,
+        timeToHire: null,
       }));
     }
-    return ALL_DEPARTMENTS;
+    return [];
   }, [reportOverview]);
 
   // ── Active Export Handlers ──
@@ -476,7 +368,7 @@ export function ReportsPage() {
             onClick={() => setIsExportModalOpen(true)}
             className="inline-flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs cursor-pointer"
           >
-            <Icon name="download" size={13} className="text-slate-400" />
+            <Icon name="download" size={13} className="text-slate-600 dark:text-slate-400" />
             <span>Export report</span>
           </button>
 
@@ -486,9 +378,9 @@ export function ReportsPage() {
             onClick={() => setIsDateModalOpen(true)}
             className="inline-flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs cursor-pointer"
           >
-            <Icon name={isLoadingReport ? 'refresh-cw' : 'calendar'} size={14} className={`text-slate-400 ${isLoadingReport ? 'animate-spin' : ''}`} />
+            <Icon name={isLoadingReport ? 'refresh-cw' : 'calendar'} size={14} className={`text-slate-600 dark:text-slate-400 ${isLoadingReport ? 'animate-spin' : ''}`} />
             <span>{isLoadingReport ? 'Syncing...' : dateLabel}</span>
-            <Icon name="chevron-down" size={12} className="text-slate-400" />
+            <Icon name="chevron-down" size={12} className="text-slate-600 dark:text-slate-400" />
           </button>
         </div>
       </div>
@@ -501,14 +393,14 @@ export function ReportsPage() {
             <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 flex items-center justify-center">
               <Icon name="file-text" size={18} />
             </div>
-            <span className="text-xs font-semibold text-slate-400">Applications</span>
+            <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">Applications</span>
           </div>
           <div>
             <span className="block text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
               {kpis.applications}
             </span>
             <div className="flex items-center justify-between mt-1">
-              <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">{kpis.appTrend}</span>
+              <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400">{kpis.appTrend}</span>
               <Sparkline color="#3b82f6" points="M0 12 Q 12 14, 20 6 T 35 8 T 50 2" />
             </div>
           </div>
@@ -517,17 +409,17 @@ export function ReportsPage() {
         {/* Card 2: Interviews */}
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs space-y-3">
           <div className="flex items-center justify-between">
-            <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 flex items-center justify-center">
               <Icon name="calendar" size={18} />
             </div>
-            <span className="text-xs font-semibold text-slate-400">Interviews</span>
+            <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">Interviews</span>
           </div>
           <div>
             <span className="block text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
               {kpis.interviews}
             </span>
             <div className="flex items-center justify-between mt-1">
-              <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">{kpis.intTrend}</span>
+              <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400">{kpis.intTrend}</span>
               <Sparkline color="#10b981" points="M0 10 Q 15 15, 25 7 T 40 9 T 50 3" />
             </div>
           </div>
@@ -539,14 +431,14 @@ export function ReportsPage() {
             <div className="w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-950/50 text-purple-600 dark:text-purple-400 flex items-center justify-center">
               <Icon name="offer" size={18} />
             </div>
-            <span className="text-xs font-semibold text-slate-400">Offers</span>
+            <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">Offers</span>
           </div>
           <div>
             <span className="block text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
               {kpis.offers}
             </span>
             <div className="flex items-center justify-between mt-1">
-              <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">{kpis.offTrend}</span>
+              <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400">{kpis.offTrend}</span>
               <Sparkline color="#a855f7" points="M0 13 Q 15 10, 25 12 T 40 4 T 50 2" />
             </div>
           </div>
@@ -558,14 +450,14 @@ export function ReportsPage() {
             <div className="w-10 h-10 rounded-xl bg-orange-50 dark:bg-orange-950/50 text-orange-600 dark:text-orange-400 flex items-center justify-center">
               <Icon name="user-check" size={18} />
             </div>
-            <span className="text-xs font-semibold text-slate-400">Hires</span>
+            <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">Hires</span>
           </div>
           <div>
             <span className="block text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
               {kpis.hires}
             </span>
             <div className="flex items-center justify-between mt-1">
-              <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">{kpis.hireTrend}</span>
+              <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400">{kpis.hireTrend}</span>
               <Sparkline color="#f97316" points="M0 12 Q 10 14, 25 8 T 40 6 T 50 1" />
             </div>
           </div>
@@ -577,17 +469,17 @@ export function ReportsPage() {
             <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 flex items-center justify-center">
               <Icon name="clock" size={18} />
             </div>
-            <span className="text-xs font-semibold text-slate-400">Time to Hire</span>
+            <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">Time to Hire</span>
           </div>
           <div>
             <div className="flex items-baseline gap-1">
               <span className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
-                {kpis.timeToHire}
+                {kpis.timeToHire > 0 ? kpis.timeToHire : '—'}
               </span>
-              <span className="text-xs font-bold text-slate-500">days</span>
+              {kpis.timeToHire > 0 && <span className="text-xs font-bold text-slate-500">days</span>}
             </div>
             <div className="flex items-center justify-between mt-1">
-              <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">{kpis.timeTrend}</span>
+              <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400">{kpis.timeTrend}</span>
               <Sparkline color="#06b6d4" points="M0 8 Q 12 10, 24 12 T 36 14 T 50 14" />
             </div>
           </div>
@@ -602,9 +494,9 @@ export function ReportsPage() {
             <h2 className="text-sm font-extrabold text-slate-900 dark:text-white">
               Applications Over Time
             </h2>
-            <select
+            <select aria-label="Recruitment trend interval"
               value={timeGranularity}
-              onChange={(e) => setTimeGranularity(e.target.value as any)}
+              onChange={(e) => setTimeGranularity(e.target.value as typeof timeGranularity)}
               className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1 text-[11px] font-bold text-slate-700 dark:text-slate-200 cursor-pointer"
             >
               <option value="Daily">Daily</option>
@@ -657,7 +549,7 @@ export function ReportsPage() {
             </ResponsiveContainer>
           </div>
 
-          <div className="flex items-center gap-4 text-[11px] text-slate-400 pt-2 border-t border-slate-100 dark:border-slate-800">
+          <div className="flex items-center gap-4 text-[11px] text-slate-600 dark:text-slate-400 pt-2 border-t border-slate-100 dark:border-slate-800">
             <span className="flex items-center gap-1.5">
               <span className="w-2.5 h-1 bg-blue-500 rounded" /> Applications
             </span>
@@ -705,7 +597,7 @@ export function ReportsPage() {
               {/* Centered Total */}
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                 <span className="text-lg font-black text-slate-900 dark:text-white">{kpis.applications}</span>
-                <span className="text-[10px] font-semibold text-slate-400">Total</span>
+                <span className="text-[10px] font-semibold text-slate-600 dark:text-slate-400">Total</span>
               </div>
             </div>
 
@@ -720,15 +612,15 @@ export function ReportsPage() {
                     </span>
                   </div>
                   <span className="font-bold text-slate-800 dark:text-slate-200 text-[11.5px] shrink-0">
-                    {item.value} <span className="text-slate-400 font-normal">({item.pct})</span>
+                    {item.value} <span className="text-slate-600 dark:text-slate-400 font-normal">({item.pct})</span>
                   </span>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="text-[11px] text-slate-400 border-t border-slate-100 dark:border-slate-800 pt-2">
-            Highest conversion channel: <span className="font-bold text-emerald-600">Employee Referral (38% to offer)</span>
+          <div className="text-[11px] text-slate-600 dark:text-slate-400 border-t border-slate-100 dark:border-slate-800 pt-2">
+            Highest conversion channel: <span className="font-bold text-emerald-700">{reportOverview?.kpis?.topSource?.name || 'No source data'} ({reportOverview?.kpis?.topSource?.conversionRate ?? 0}% to offer)</span>
           </div>
         </div>
 
@@ -744,7 +636,7 @@ export function ReportsPage() {
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-semibold text-slate-600 dark:text-slate-300">{f.stage}</span>
                   <span className="font-bold text-slate-900 dark:text-white">
-                    {f.count} <span className="text-slate-400 font-normal">({f.pct})</span>
+                    {f.count} <span className="text-slate-600 dark:text-slate-400 font-normal">({f.pct})</span>
                   </span>
                 </div>
                 <div className="w-full bg-slate-100 dark:bg-slate-800 h-2.5 rounded-full overflow-hidden">
@@ -757,8 +649,8 @@ export function ReportsPage() {
             ))}
           </div>
 
-          <div className="text-[11px] text-slate-400 border-t border-slate-100 dark:border-slate-800 pt-2">
-            Overall application-to-hire conversion: <span className="font-bold text-slate-900 dark:text-white">{kpis.applications > 0 ? ((kpis.hires / kpis.applications) * 100).toFixed(1) : '4.2'}%</span>
+          <div className="text-[11px] text-slate-600 dark:text-slate-400 border-t border-slate-100 dark:border-slate-800 pt-2">
+            Overall application-to-hire conversion: <span className="font-bold text-slate-900 dark:text-white">{kpis.applications > 0 ? ((kpis.hires / kpis.applications) * 100).toFixed(1) : '0'}%</span>
           </div>
         </div>
       </div>
@@ -786,7 +678,7 @@ export function ReportsPage() {
                 <div className="flex items-center justify-between text-xs">
                   <span className="font-semibold text-slate-700 dark:text-slate-200">{dept.name}</span>
                   <span className="font-bold text-slate-900 dark:text-white">
-                    {dept.count} <span className="text-slate-400 font-normal">({dept.pct}%)</span>
+                    {dept.count} <span className="text-slate-600 dark:text-slate-400 font-normal">({dept.pct}%)</span>
                   </span>
                 </div>
                 <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
@@ -799,7 +691,7 @@ export function ReportsPage() {
             ))}
           </div>
 
-          <div className="text-[11px] text-slate-400 border-t border-slate-100 dark:border-slate-800 pt-2 flex items-center justify-between">
+          <div className="text-[11px] text-slate-600 dark:text-slate-400 border-t border-slate-100 dark:border-slate-800 pt-2 flex items-center justify-between">
             <span>{Math.min(5, departmentsData.length)} departments displayed</span>
             <span className="font-bold text-blue-600 dark:text-blue-400">{departmentsData.length} total departments</span>
           </div>
@@ -811,9 +703,9 @@ export function ReportsPage() {
             <h2 className="text-sm font-extrabold text-slate-900 dark:text-white">
               Time to Hire Trend
             </h2>
-            <select
+            <select aria-label="Time to hire interval"
               value={timeToHireGranularity}
-              onChange={(e) => setTimeToHireGranularity(e.target.value as any)}
+              onChange={(e) => setTimeToHireGranularity(e.target.value as typeof timeToHireGranularity)}
               className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1 text-[11px] font-bold text-slate-700 dark:text-slate-200 cursor-pointer"
             >
               <option value="Weekly">Weekly</option>
@@ -854,9 +746,9 @@ export function ReportsPage() {
             </ResponsiveContainer>
           </div>
 
-          <div className="flex items-center justify-between text-[11px] text-slate-400 border-t border-slate-100 dark:border-slate-800 pt-2">
+          <div className="flex items-center justify-between text-[11px] text-slate-600 dark:text-slate-400 border-t border-slate-100 dark:border-slate-800 pt-2">
             <span>SLA Target: &le; 30 days</span>
-            <span className="font-bold text-emerald-600">Pacing: {kpis.timeToHire} days ({kpis.timeToHire <= 30 ? 'On track' : 'Action needed'})</span>
+            <span className="font-bold text-emerald-700">Pacing: {kpis.timeToHire} days ({kpis.timeToHire <= 30 ? 'On track' : 'Action needed'})</span>
           </div>
         </div>
 
@@ -897,8 +789,8 @@ export function ReportsPage() {
               </ResponsiveContainer>
               {/* Centered Total */}
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                <span className="text-lg font-black text-slate-900 dark:text-white">{offerAcceptanceData[0]?.pct || '73%'}</span>
-                <span className="text-[10px] font-semibold text-slate-400">Accepted</span>
+                <span className="text-lg font-black text-slate-900 dark:text-white">{offerAcceptanceData[0]?.pct || 'No data'}</span>
+                <span className="text-[10px] font-semibold text-slate-600 dark:text-slate-400">Accepted</span>
               </div>
             </div>
 
@@ -913,16 +805,16 @@ export function ReportsPage() {
                     </span>
                   </div>
                   <span className="font-bold text-slate-800 dark:text-slate-200 text-[11.5px] shrink-0">
-                    {item.value} <span className="text-slate-400 font-normal">({item.pct})</span>
+                    {item.value} <span className="text-slate-600 dark:text-slate-400 font-normal">({item.pct})</span>
                   </span>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="flex items-center justify-between text-[11px] text-slate-400 border-t border-slate-100 dark:border-slate-800 pt-2">
-            <span>vs last 7 days</span>
-            <span className="font-bold text-emerald-600 dark:text-emerald-400">{reportOverview?.kpis?.offerAcceptanceRate ? `${reportOverview.kpis.offerAcceptanceRate.value}% acceptance` : '+8% improvement'}</span>
+          <div className="flex items-center justify-between text-[11px] text-slate-600 dark:text-slate-400 border-t border-slate-100 dark:border-slate-800 pt-2">
+            <span>vs comparison period</span>
+            <span className="font-bold text-emerald-700 dark:text-emerald-400">{reportOverview?.kpis?.offerAcceptanceRate ? `${reportOverview.kpis.offerAcceptanceRate.value}% acceptance` : 'No data'}</span>
           </div>
         </div>
       </div>
@@ -941,7 +833,7 @@ export function ReportsPage() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Insight 1 */}
           <div className="p-4 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 flex items-start gap-3.5">
-            <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+            <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 flex items-center justify-center shrink-0">
               <Icon name="arrow-up" size={15} />
             </div>
             <div>
@@ -949,7 +841,7 @@ export function ReportsPage() {
                 {kpis.applications} total applications tracked ({kpis.appTrend}).
               </span>
               <span className="block text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                Top source: {reportOverview?.kpis?.topSource?.name || 'Careers Site'} ({reportOverview?.kpis?.topSource?.conversionRate ?? 38}% conversion).
+                Top source: {reportOverview?.kpis?.topSource?.name || 'No source data'} ({reportOverview?.kpis?.topSource?.conversionRate ?? 0}% conversion).
               </span>
             </div>
           </div>
@@ -961,10 +853,10 @@ export function ReportsPage() {
             </div>
             <div>
               <span className="block font-bold text-slate-900 dark:text-white text-xs">
-                Time to Hire is averaging {kpis.timeToHire} days.
+                Time to Hire is averaging {kpis.timeToHire > 0 ? `${kpis.timeToHire} days` : 'unavailable'}.
               </span>
               <span className="block text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                {kpis.timeTrend}. Target SLA is &le; 30 days.
+                {kpis.timeTrend}.
               </span>
             </div>
           </div>
@@ -976,7 +868,7 @@ export function ReportsPage() {
             </div>
             <div>
               <span className="block font-bold text-slate-900 dark:text-white text-xs">
-                Offer acceptance rate is {offerAcceptanceData[0]?.pct || '73%'}.
+                Offer acceptance rate is {offerAcceptanceData[0]?.pct || 'unavailable'}.
               </span>
               <span className="block text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                 {kpis.offers} offers extended with {kpis.hires} hires finalized.
@@ -1005,11 +897,11 @@ export function ReportsPage() {
               disabled={isExporting}
               className="p-3.5 border border-slate-200 dark:border-slate-700 rounded-xl hover:bg-emerald-50/50 dark:hover:bg-emerald-950/30 font-bold flex flex-col items-center gap-2 cursor-pointer transition shadow-2xs group"
             >
-              <div className="w-9 h-9 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 flex items-center justify-center group-hover:scale-110 transition">
+              <div className="w-9 h-9 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 flex items-center justify-center group-hover:scale-110 transition">
                 <Icon name="file-text" size={20} />
               </div>
               <span className="text-slate-900 dark:text-white text-[11.5px]">Excel (.xlsx)</span>
-              <span className="text-[10px] text-slate-400 font-normal">Full Data</span>
+              <span className="text-[10px] text-slate-600 dark:text-slate-400 font-normal">Full Data</span>
             </button>
 
             <button
@@ -1021,7 +913,7 @@ export function ReportsPage() {
                 <Icon name="download" size={20} />
               </div>
               <span className="text-slate-900 dark:text-white text-[11.5px]">CSV Table</span>
-              <span className="text-[10px] text-slate-400 font-normal">Raw Export</span>
+              <span className="text-[10px] text-slate-600 dark:text-slate-400 font-normal">Raw Export</span>
             </button>
 
             <button
@@ -1033,7 +925,7 @@ export function ReportsPage() {
                 <Icon name="file-text" size={20} />
               </div>
               <span className="text-slate-900 dark:text-white text-[11.5px]">PDF / Print</span>
-              <span className="text-[10px] text-slate-400 font-normal">Executive</span>
+              <span className="text-[10px] text-slate-600 dark:text-slate-400 font-normal">Executive</span>
             </button>
           </div>
         </div>
@@ -1048,7 +940,7 @@ export function ReportsPage() {
       >
         <div className="space-y-2 text-xs">
           {[
-            { id: '7d', label: 'Last 7 Days', sub: '31 Aug – 6 Sep 2026 (Active Reference Period)' },
+            { id: '7d', label: 'Last 7 Days', sub: 'Rolling seven-day window' },
             { id: '30d', label: 'Last 30 Days', sub: 'Full Month of August 2026' },
             { id: 'quarter', label: 'Quarter to Date', sub: 'Q3 2026 (July – September)' },
             { id: 'ytd', label: 'Year to Date', sub: 'Calendar Year 2026 Pacing' },
@@ -1057,7 +949,7 @@ export function ReportsPage() {
               key={preset.id}
               type="button"
               onClick={() => {
-                setDateRangePreset(preset.id as any);
+                setDateRangePreset(preset.id as typeof dateRangePreset);
                 setIsDateModalOpen(false);
                 showToast(`Reporting period updated to ${preset.label}`);
               }}
@@ -1069,7 +961,7 @@ export function ReportsPage() {
             >
               <div>
                 <span className="block text-xs font-bold">{preset.label}</span>
-                <span className="block text-[11px] text-slate-400 mt-0.5">{preset.sub}</span>
+                <span className="block text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">{preset.sub}</span>
               </div>
               {dateRangePreset === preset.id && <Icon name="check" size={14} className="text-blue-600" />}
             </button>
@@ -1092,7 +984,7 @@ export function ReportsPage() {
           <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
             <table className="w-full text-left">
               <thead>
-                <tr className="bg-slate-50 dark:bg-slate-800/60 text-slate-400 border-b border-slate-200 dark:border-slate-800 text-[11px] font-bold">
+                <tr className="bg-slate-50 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800 text-[11px] font-bold">
                   <th className="p-3">Department</th>
                   <th className="p-3">Applications</th>
                   <th className="p-3">Share</th>
@@ -1114,7 +1006,7 @@ export function ReportsPage() {
                       </span>
                     </td>
                     <td className="p-3 font-semibold text-blue-600 dark:text-blue-400">{dept.activePositions} positions</td>
-                    <td className="p-3 font-semibold text-slate-700 dark:text-slate-300">{dept.timeToHire} days</td>
+                    <td className="p-3 font-semibold text-slate-700 dark:text-slate-300">{dept.timeToHire === null ? 'No data' : `${dept.timeToHire} days`}</td>
                   </tr>
                 ))}
               </tbody>

@@ -15,10 +15,9 @@ export interface UserProfileDropdownProps {
 }
 
 export function UserProfileDropdown({ className = '' }: UserProfileDropdownProps) {
-  const { user, login, logout } = useAuth();
+  const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
-  const [isSwitching, setIsSwitching] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const firstItemRef = useRef<HTMLAnchorElement>(null);
@@ -70,20 +69,6 @@ export function UserProfileDropdown({ className = '' }: UserProfileDropdownProps
     setIsOpen(false);
     await logout();
     navigate('/login');
-  };
-
-  const handleSwitchPersona = async (email: string) => {
-    if (isSwitching || user?.email === email) return;
-    setIsSwitching(true);
-    try {
-      await login({ email, password: 'Password123!' });
-      setIsOpen(false);
-      navigate('/');
-    } catch {
-      // Ignore network errors
-    } finally {
-      setIsSwitching(false);
-    }
   };
 
   const displayName = user?.displayName || user?.email || 'User';
@@ -151,50 +136,6 @@ export function UserProfileDropdown({ className = '' }: UserProfileDropdownProps
               <ShieldCheck className={`h-4 w-4 shrink-0 ${isAdmin ? 'text-rf-success' : 'text-rf-ink-muted'}`} aria-hidden="true" />
               <span>{isAdmin ? 'Administrative Access' : 'Standard User Access'}</span>
             </div>
-          </div>
-
-          {/* Divider */}
-          <div className="my-2 border-t border-rf-border-subtle" aria-hidden="true" />
-
-          {/* Quick Role & RLS Testing Switcher */}
-          <div className="px-2 py-1">
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-[10.5px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                Switch Role / Test RLS
-              </span>
-              <span className="text-[9.5px] font-bold px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
-                RLS Active
-              </span>
-            </div>
-
-            <div className="grid grid-cols-3 gap-1 mb-1">
-              {[
-                { email: 'admin@sgh.com', label: 'Admin', icon: '👑', active: user?.email === 'admin@sgh.com' },
-                { email: 'hassan.ali@recruitflow.local', label: 'Manager', icon: '👔', active: user?.email === 'hassan.ali@recruitflow.local' },
-                { email: 'sarah.ahmed@recruitflow.local', label: 'Recruiter', icon: '💼', active: user?.email === 'sarah.ahmed@recruitflow.local' },
-              ].map((role) => (
-                <button
-                  key={role.email}
-                  type="button"
-                  disabled={isSwitching}
-                  onClick={() => handleSwitchPersona(role.email)}
-                  className={`flex flex-col items-center py-1.5 px-1 rounded-xl text-center transition cursor-pointer border ${
-                    role.active
-                      ? 'bg-blue-50 dark:bg-blue-950/50 border-blue-400 dark:border-blue-700 text-blue-700 dark:text-blue-300 font-bold ring-2 ring-blue-500/20'
-                      : 'bg-slate-50 dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-blue-300'
-                  }`}
-                  title={`Switch persona to ${role.label} (${role.email})`}
-                >
-                  <span className="text-xs mb-0.5">{role.icon}</span>
-                  <span className="text-[10.5px] font-bold leading-tight">{role.label}</span>
-                </button>
-              ))}
-            </div>
-            {isSwitching && (
-              <p className="text-[10px] text-blue-600 dark:text-blue-400 text-center font-medium animate-pulse mt-1">
-                Switching session &amp; applying RLS rules...
-              </p>
-            )}
           </div>
 
           {/* Divider */}

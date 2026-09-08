@@ -6,13 +6,17 @@ import { Select } from '../ui/Select';
 interface ScheduleInterviewModalProps {
   isOpen: boolean;
   onClose: () => void;
-  candidateName: string;
-  interviewTitle: string;
-  setInterviewTitle: (v: string) => void;
+  interviewerUserId: string;
+  setInterviewerUserId: (v: string) => void;
+  interviewers: Array<{ id: string; displayName: string; jobTitle?: string | null }>;
+  interviewerJobTitle: string;
+  setInterviewerJobTitle: (v: string) => void;
   interviewType: 'Screening' | 'Technical' | 'Behavioral' | 'Managerial' | 'Executive';
   setInterviewType: (v: 'Screening' | 'Technical' | 'Behavioral' | 'Managerial' | 'Executive') => void;
   scheduledDateTime: string;
   setScheduledDateTime: (v: string) => void;
+  meetingLink: string;
+  setMeetingLink: (v: string) => void;
   isSubmitting: boolean;
   onSubmit: (e: React.FormEvent) => void;
 }
@@ -20,13 +24,17 @@ interface ScheduleInterviewModalProps {
 export const ScheduleInterviewModal: React.FC<ScheduleInterviewModalProps> = ({
   isOpen,
   onClose,
-  candidateName,
-  interviewTitle,
-  setInterviewTitle,
+  interviewerUserId,
+  setInterviewerUserId,
+  interviewers,
+  interviewerJobTitle,
+  setInterviewerJobTitle,
   interviewType,
   setInterviewType,
   scheduledDateTime,
   setScheduledDateTime,
+  meetingLink,
+  setMeetingLink,
   isSubmitting,
   onSubmit,
 }) => {
@@ -41,13 +49,22 @@ export const ScheduleInterviewModal: React.FC<ScheduleInterviewModalProps> = ({
     >
       <form onSubmit={onSubmit} className="space-y-3 text-xs">
         <div>
-          <label className="font-bold block mb-1">Interview Title</label>
+          <label className="font-bold block mb-1">Interviewer Job Title</label>
           <Input
-            placeholder={`e.g. ${candidateName} - Technical Round`}
-            value={interviewTitle}
-            onChange={(e) => setInterviewTitle(e.target.value)}
+            placeholder="e.g. Head of Cardiology"
+            value={interviewerJobTitle}
+            onChange={(e) => setInterviewerJobTitle(e.target.value)}
             disabled={isSubmitting}
           />
+          <p className="mt-1 text-[10px] text-slate-500">This is the interviewer’s professional title and is saved with the attendee record.</p>
+        </div>
+        <div>
+          <label className="font-bold block mb-1">Interviewer</label>
+          <Select value={interviewerUserId} onChange={(e) => setInterviewerUserId(e.target.value)} disabled={isSubmitting} required>
+            <option value="">Select an interviewer</option>
+            {interviewers.map((interviewer) => <option key={interviewer.id} value={interviewer.id}>{interviewer.displayName}{interviewer.jobTitle ? ` · ${interviewer.jobTitle}` : ''}</option>)}
+          </Select>
+          {interviewers.length === 0 && <p className="mt-1 text-[10px] text-slate-500">No active interviewers are available for this organization.</p>}
         </div>
         <div>
           <label className="font-bold block mb-1">Interview Type</label>
@@ -84,23 +101,17 @@ export const ScheduleInterviewModal: React.FC<ScheduleInterviewModalProps> = ({
         </div>
 
         <div>
-          <label className="font-bold block mb-1">Lead Interviewer / Clinical Panelist</label>
-          <Select defaultValue="dr-hisham" disabled={isSubmitting}>
-            <option value="dr-hisham">Dr. Hisham (Head of Cardiology) • Available</option>
-            <option value="dr-fatima">Dr. Fatima (Medical Director) • Available</option>
-            <option value="dr-mounir">Dr. Mounir (ICU Clinical Director) • Available</option>
-            <option value="hr-lead">Talent Acquisition Specialist • SGH HR</option>
-          </Select>
-        </div>
-
-        <div>
-          <label className="font-bold block mb-1">Meeting Mode &amp; Location</label>
-          <Select defaultValue="teams" disabled={isSubmitting}>
-            <option value="teams">Microsoft Teams Video Meeting (Auto-generate link)</option>
-            <option value="in-person">In-Person • SGH Executive Boardroom 302</option>
-            <option value="clinic">In-Person • Clinical Department Office</option>
-            <option value="phone">Telephone Screening Call</option>
-          </Select>
+          <label className="font-bold block mb-1" htmlFor="schedule-meeting-link">Meeting link <span className="font-normal text-slate-400">(optional)</span></label>
+          <Input
+            id="schedule-meeting-link"
+            type="url"
+            inputMode="url"
+            placeholder="https://meet.google.com/..."
+            value={meetingLink}
+            onChange={(e) => setMeetingLink(e.target.value)}
+            disabled={isSubmitting}
+          />
+          <p className="mt-1 text-[10px] text-slate-500">Add a Teams, Zoom, Meet or other HTTPS link. Leave blank for an on-site interview.</p>
         </div>
 
         <div className="p-2.5 rounded-xl bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200/60 dark:border-blue-900/40 text-[11px] text-blue-800 dark:text-blue-300">

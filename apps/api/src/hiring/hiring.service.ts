@@ -3,6 +3,8 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Inject,
+  Optional,
 } from '@nestjs/common';
 import type { Prisma } from '@recruitflow/database';
 /* eslint-disable @typescript-eslint/consistent-type-imports */
@@ -16,17 +18,26 @@ import type {
   JoiningUpdateDto,
   UpdateComplianceDto,
 } from './hiring.dto';
+import { AccessControlService } from '../access-control/access-control.service';
 
 @Injectable()
 export class HiringService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
+    @Optional() @Inject(AccessControlService) private readonly accessControl?: AccessControlService,
   ) {}
 
+  private async applicationVisibility(user?: AuthUser) {
+    return user && this.accessControl
+      ? this.accessControl.getApplicationVisibilityWhere(user)
+      : undefined;
+  }
+
   async createHiringCase(organizationId: string, dto: CreateHiringCaseDto, user: AuthUser) {
+    const visibility = await this.applicationVisibility(user);
     const offer = await this.prisma.offer.findFirst({
-      where: { id: dto.offerId, organizationId },
+      where: { id: dto.offerId, organizationId, ...(visibility ? { application: visibility } : {}) },
       include: { application: true },
     });
 
@@ -96,10 +107,11 @@ export class HiringService {
     return hiringCase;
   }
 
-  async getMetrics(organizationId: string) {
+  async getMetrics(organizationId: string, user?: AuthUser) {
+    const visibility = await this.applicationVisibility(user);
     const counts = await this.prisma.hiringCase.groupBy({
       by: ['status'],
-      where: { organizationId },
+      where: { organizationId, ...(visibility ? { application: visibility } : {}) },
       _count: { _all: true },
     });
 
@@ -109,9 +121,10 @@ export class HiringService {
     }, {} as Record<string, number>);
   }
 
-  async listHiringCases(organizationId: string, status?: string) {
+  async listHiringCases(organizationId: string, status?: string, user?: AuthUser) {
+    const visibility = await this.applicationVisibility(user);
     const cases = await this.prisma.hiringCase.findMany({
-      where: { organizationId, ...(status ? { status } : {}) },
+      where: { organizationId, ...(status ? { status } : {}), ...(visibility ? { application: visibility } : {}) },
       include: {
         application: {
           include: { candidate: true, vacancy: { include: { position: true, branch: true } } }
@@ -157,9 +170,10 @@ export class HiringService {
     });
   }
 
-  async getHiringCase(organizationId: string, id: string) {
+  async getHiringCase(organizationId: string, id: string, user?: AuthUser) {
+    const visibility = await this.applicationVisibility(user);
     const hiringCase = await this.prisma.hiringCase.findFirst({
-      where: { id, organizationId },
+      where: { id, organizationId, ...(visibility ? { application: visibility } : {}) },
       include: {
         complianceRequirements: true,
         approvals: { include: { approver: true } },
@@ -194,8 +208,9 @@ export class HiringService {
   }
 
   async updateCompliance(organizationId: string, caseId: string, reqId: string, dto: UpdateComplianceDto, user: AuthUser) {
+    const visibility = await this.applicationVisibility(user);
     const requirement = await this.prisma.complianceRequirement.findFirst({
-      where: { id: reqId, hiringCaseId: caseId, hiringCase: { organizationId } }
+      where: { id: reqId, hiringCaseId: caseId, hiringCase: { organizationId, ...(visibility ? { application: visibility } : {}) } }
     });
 
     if (!requirement) {
@@ -230,8 +245,9 @@ export class HiringService {
   }
 
   async submitForFinalApproval(organizationId: string, caseId: string, user: AuthUser) {
+    const visibility = await this.applicationVisibility(user);
     const hiringCase = await this.prisma.hiringCase.findFirst({
-      where: { id: caseId, organizationId },
+      where: { id: caseId, organizationId, ...(visibility ? { application: visibility } : {}) },
       include: { complianceRequirements: true }
     });
 
@@ -266,9 +282,10 @@ export class HiringService {
     return { success: true, status: updated.status };
   }
 
-  async getFinalApprovalInbox(organizationId: string) {
+  async getFinalApprovalInbox(organizationId: string, user?: AuthUser) {
+    const visibility = await this.applicationVisibility(user);
     const cases = await this.prisma.hiringCase.findMany({
-      where: { organizationId, status: 'Pending Final Approval' },
+      where: { organizationId, status: 'Pending Final Approval', ...(visibility ? { application: visibility } : {}) },
       include: {
         application: { include: { candidate: true, vacancy: { include: { position: true, branch: true } } } }
       }
@@ -284,8 +301,9 @@ export class HiringService {
   }
 
   async decideFinalApproval(organizationId: string, caseId: string, dto: FinalApprovalDto, user: AuthUser) {
+    const visibility = await this.applicationVisibility(user);
     const hiringCase = await this.prisma.hiringCase.findFirst({
-      where: { id: caseId, organizationId },
+      where: { id: caseId, organizationId, ...(visibility ? { application: visibility } : {}) },
       include: { approvals: true }
     });
 
@@ -345,8 +363,9 @@ export class HiringService {
     dto: JoiningUpdateDto,
     user: AuthUser,
   ) {
+    const visibility = await this.applicationVisibility(user);
     const hiringCase = await this.prisma.hiringCase.findFirst({
-      where: { id: caseId, organizationId },
+      where: { id: caseId, organizationId, ...(visibility ? { application: visibility } : {}) },
       include: { application: { include: { vacancy: true } } }
     });
 

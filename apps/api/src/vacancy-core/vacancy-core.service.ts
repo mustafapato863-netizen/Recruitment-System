@@ -6,6 +6,7 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import * as XLSX from 'xlsx';
@@ -38,6 +39,8 @@ import { PrismaService } from '../database/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import { exportFailed } from '../common/errors/api-error';
+import { AccessControlService } from '../access-control/access-control.service';
+import type { AuthUser } from '@recruitflow/contracts';
 
 @Injectable()
 export class VacancyCoreService {
@@ -46,12 +49,19 @@ export class VacancyCoreService {
     private readonly repository: VacancyCoreRepository,
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
+    @Optional() @Inject(AccessControlService) private readonly accessControl?: AccessControlService,
   ) {}
 
-  async exportExcel(organizationId: string): Promise<Buffer> {
+  async exportExcel(organizationId: string, user?: AuthUser): Promise<Buffer> {
     try {
+      const visibility = user && this.accessControl
+        ? await this.accessControl.getVacancyVisibilityWhere(user)
+        : { organizationId };
+      const applicationVisibility = user && this.accessControl
+        ? await this.accessControl.getApplicationVisibilityWhere(user)
+        : { organizationId };
       const vacancies = await this.prisma.vacancy.findMany({
-        where: { organizationId },
+        where: visibility,
         orderBy: { createdAt: 'desc' },
         include: {
           position: { select: { title: true, code: true } },
@@ -61,7 +71,7 @@ export class VacancyCoreService {
             where: { isActive: true },
             include: { user: { select: { displayName: true } } },
           },
-          _count: { select: { applications: true } },
+          applications: { where: applicationVisibility, select: { id: true } },
         },
       });
 
@@ -82,22 +92,29 @@ export class VacancyCoreService {
         'Created At (UTC)',
       ];
 
-      const rows = vacancies.map((v) => [
-        v.vacancyCode,
-        v.position.title,
-        v.position.code,
-        v.branch.name,
-        v.branch.code,
-        v.legalEntity?.name ?? '',
-        v.status,
-        v.approvedHeadcount,
-        v.joinedHeadcount,
-        Math.max(0, v.approvedHeadcount - v.joinedHeadcount),
-        v._count.applications,
-        v.assignments[0]?.user.displayName ?? 'Unassigned',
-        v.targetStartDate ? v.targetStartDate.toISOString().slice(0, 10) : '',
-        v.createdAt.toISOString(),
-      ]);
+      const rows = vacancies.map((v) => {
+        // Older repository mocks expose _count; production includes the scoped
+        // application ids so export totals follow the caller's visibility.
+        const applicationCount = Array.isArray(v.applications)
+          ? v.applications.length
+          : (v as unknown as { _count?: { applications?: number } })._count?.applications ?? 0;
+        return [
+          v.vacancyCode,
+          v.position.title,
+          v.position.code,
+          v.branch.name,
+          v.branch.code,
+          v.legalEntity?.name ?? '',
+          v.status,
+          v.approvedHeadcount,
+          v.joinedHeadcount,
+          Math.max(0, v.approvedHeadcount - v.joinedHeadcount),
+          applicationCount,
+          v.assignments[0]?.user.displayName ?? 'Unassigned',
+          v.targetStartDate ? v.targetStartDate.toISOString().slice(0, 10) : '',
+          v.createdAt.toISOString(),
+        ];
+      });
 
       const sheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
       const workbook = XLSX.utils.book_new();
@@ -145,17 +162,28 @@ export class VacancyCoreService {
     return request;
   }
 
-  listVacancies(organizationId: string): Promise<Vacancy[]> {
-    return this.repository.listVacancies(organizationId);
+  async listVacancies(organizationId: string, user?: AuthUser): Promise<Vacancy[]> {
+    const vacancies = await this.repository.listVacancies(organizationId);
+    if (!user || !this.accessControl || vacancies.length === 0) return vacancies;
+    const visibility = await this.accessControl.getVacancyVisibilityWhere(user);
+    const visible = await this.prisma.vacancy.findMany({
+      where: { ...visibility, id: { in: vacancies.map((vacancy) => vacancy.id) } },
+      select: { id: true },
+    });
+    const ids = new Set(visible.map((vacancy) => vacancy.id));
+    return vacancies.filter((vacancy) => ids.has(vacancy.id));
   }
 
   async getWorkQueue(
     organizationId: string,
     query: VacancyWorkQueueQueryDto,
+    user?: AuthUser,
   ): Promise<PaginatedResult<JobWorkQueueItem>> {
     const page = query.page ?? 1;
     const pageSize = query.pageSize ?? 20;
-    const where: Prisma.VacancyWhereInput = { organizationId };
+    const where: Prisma.VacancyWhereInput = user && this.accessControl
+      ? await this.accessControl.getVacancyVisibilityWhere(user)
+      : { organizationId };
     if (query.status) where.status = query.status;
     if (query.search?.trim()) {
       const term = query.search.trim();
@@ -239,7 +267,8 @@ export class VacancyCoreService {
     return { data, total, page, pageSize };
   }
 
-  async getVacancy(organizationId: string, id: string): Promise<Vacancy> {
+  async getVacancy(organizationId: string, id: string, user?: AuthUser): Promise<Vacancy> {
+    await this.assertVacancyVisible(organizationId, id, user);
     const vacancy = await this.repository.getVacancy(organizationId, id);
     if (!vacancy) {
       throw new NotFoundException(`Vacancy ${id} was not found.`);
@@ -614,7 +643,8 @@ export class VacancyCoreService {
     return this.repository.getApproverInbox(organizationId, userRoleCodes);
   }
 
-  async getVacancyDetail(organizationId: string, id: string): Promise<VacancyDetailView | null> {
+  async getVacancyDetail(organizationId: string, id: string, user?: AuthUser): Promise<VacancyDetailView | null> {
+    await this.assertVacancyVisible(organizationId, id, user);
     const detail = await this.repository.getVacancyDetail(organizationId, id);
     if (!detail) {
       throw new NotFoundException(`Vacancy ${id} was not found.`);
@@ -626,7 +656,9 @@ export class VacancyCoreService {
     id: string,
     organizationId: string,
     status: Vacancy['status'],
+    user?: AuthUser,
   ): Promise<Vacancy> {
+    await this.assertVacancyVisible(organizationId, id, user);
     const vacancy = await this.repository.getVacancy(organizationId, id);
     if (!vacancy) {
       throw new NotFoundException(`Vacancy ${id} was not found.`);
@@ -650,7 +682,9 @@ export class VacancyCoreService {
     id: string,
     organizationId: string,
     dto: AssignTeamMemberDto,
+    user?: AuthUser,
   ): Promise<Vacancy> {
+    await this.assertVacancyVisible(organizationId, id, user);
     const vacancy = await this.repository.getVacancy(organizationId, id);
     if (!vacancy) {
       throw new NotFoundException(`Vacancy ${id} was not found.`);
@@ -658,24 +692,59 @@ export class VacancyCoreService {
 
     await this.repository.ensureUserInOrganization(organizationId, dto.userId);
 
-    vacancy.assignments = vacancy.assignments.filter((a) => a.roleCode !== dto.roleCode);
-    vacancy.assignments.push({
-      id: randomUUID(),
-      userId: dto.userId,
-      roleCode: dto.roleCode,
-      isActive: true,
-      assignedAt: new Date().toISOString(),
+    const assignmentKind = dto.assignmentKind ?? 'PRIMARY';
+    await this.prisma.$transaction(async (transaction) => {
+      const activeAssignment = await transaction.vacancyAssignment.findFirst({
+        where: { vacancyId: id, roleCode: dto.roleCode, assignmentKind, userId: dto.userId, isActive: true },
+        select: { userId: true },
+      });
+      if (activeAssignment) return;
+
+      // Assignment changes are dedicated writes. They never save a stale
+      // vacancy snapshot and they retain inactive rows as assignment history.
+      if (assignmentKind === 'PRIMARY') {
+        await transaction.vacancyAssignment.updateMany({
+          where: { vacancyId: id, roleCode: dto.roleCode, assignmentKind, isActive: true },
+          data: { isActive: false },
+        });
+      }
+      const historicalAssignment = await transaction.vacancyAssignment.findFirst({
+        where: { vacancyId: id, userId: dto.userId, roleCode: dto.roleCode, assignmentKind, isActive: false },
+        orderBy: { assignedAt: 'desc' },
+        select: { id: true },
+      });
+      if (historicalAssignment) {
+        await transaction.vacancyAssignment.update({
+          where: { id: historicalAssignment.id },
+          data: { isActive: true, assignedAt: new Date() },
+        });
+      } else {
+        await transaction.vacancyAssignment.create({
+          data: {
+            id: randomUUID(),
+            vacancyId: id,
+            userId: dto.userId,
+            roleCode: dto.roleCode,
+            assignmentKind,
+            isActive: true,
+            assignedAt: new Date(),
+          },
+        });
+      }
     });
 
-    vacancy.updatedAt = new Date().toISOString();
-    return this.repository.saveVacancy(vacancy);
+    const updated = await this.repository.getVacancy(organizationId, id);
+    if (!updated) throw new NotFoundException(`Vacancy ${id} was not found.`);
+    return updated;
   }
 
   async updateVacancy(
     id: string,
     organizationId: string,
     dto: UpdateVacancyDto,
+    user?: AuthUser,
   ): Promise<VacancyDetailView> {
+    await this.assertVacancyVisible(organizationId, id, user);
     const vacancy = await this.prisma.vacancy.findUnique({
       where: { id },
       include: { position: true },
@@ -732,8 +801,15 @@ export class VacancyCoreService {
       }
     });
 
-    const detail = await this.getVacancyDetail(organizationId, id);
+    const detail = await this.getVacancyDetail(organizationId, id, user);
     return detail!;
+  }
+
+  private async assertVacancyVisible(organizationId: string, id: string, user?: AuthUser): Promise<void> {
+    if (!user || !this.accessControl) return;
+    const visibility = await this.accessControl.getVacancyVisibilityWhere(user);
+    const vacancy = await this.prisma.vacancy.findFirst({ where: { id, ...visibility }, select: { id: true } });
+    if (!vacancy) throw new NotFoundException(`Vacancy ${id} was not found.`);
   }
 }
 

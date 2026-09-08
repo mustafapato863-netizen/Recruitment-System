@@ -84,7 +84,7 @@ export class ImportController {
     @CurrentUser() user: AuthUser,
     @Param('jobId', ParseUUIDPipe) jobId: string,
   ) {
-    return this.importService.confirmJob(user.organizationId, jobId);
+    return this.importService.confirmJob(user.organizationId, jobId, user.userId);
   }
 
   @Get(':jobId/error-report')

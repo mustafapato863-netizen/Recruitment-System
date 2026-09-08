@@ -19,6 +19,7 @@ async function bootstrap(): Promise<void> {
     'JWT_ACCESS_SECRET',
     'JWT_REFRESH_SECRET',
     'EMAIL_OUTBOX_ENCRYPTION_KEY',
+    'SELF_SCHEDULE_SECRET',
   ];
   for (const envVar of requiredEnvVars) {
     if (!(process.env[envVar] ?? config.get<string>(envVar))) {

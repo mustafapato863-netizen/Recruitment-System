@@ -1,13 +1,18 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException, Optional, ForbiddenException } from '@nestjs/common';
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { PrismaService } from '../database/prisma.service';
 import { CreateTaskDto } from './tasks.dto';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import type { TaskRecord, PaginatedResult } from '@recruitflow/contracts';
+import type { AuthUser } from '@recruitflow/contracts';
+import { AccessControlService } from '../access-control/access-control.service';
 
 @Injectable()
 export class TasksService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() @Inject(AccessControlService) private readonly accessControl?: AccessControlService,
+  ) {}
 
   async list(
     organizationId: string,
@@ -88,42 +93,108 @@ export class TasksService {
 
     const updated = await this.prisma.task.update({
       where: { id },
-      data: { status, completedAt, updatedAt: now },
+      data: { status, completedAt, completedById: status === 'Completed' ? assigneeUserId : null, updatedAt: now },
     });
     return this.toRecord(updated, now);
   }
 
-  async create(organizationId: string, createdById: string, dto: CreateTaskDto): Promise<TaskRecord> {
+  async create(organizationId: string, createdById: string, dto: CreateTaskDto, user?: AuthUser): Promise<TaskRecord> {
+    const [assignee, reference] = await Promise.all([
+      this.prisma.user.findFirst({ where: { id: dto.assigneeUserId, organizationId, status: 'Active' }, select: { id: true } }),
+      this.resolveReference(organizationId, dto.entityType, dto.entityId, user),
+    ]);
+    if (!assignee) throw new NotFoundException('Task assignee is not an active user in this organization.');
+    if (dto.entityType && !dto.entityId) throw new NotFoundException('A linked task entity must include an identifier.');
+    if (dto.entityId && !reference) throw new NotFoundException('The linked task entity was not found in this organization.');
+
     const now = new Date();
-    const task = await this.prisma.task.create({
-      data: {
-        organizationId,
-        createdById,
-        assigneeUserId: dto.assigneeUserId,
-        type: dto.type,
-        title: dto.title,
-        description: dto.description ?? null,
-        priority: dto.priority ?? 'Normal',
-        status: 'Open',
-        dueAt: dto.dueAt ? new Date(dto.dueAt) : null,
-        entityType: dto.entityType ?? null,
-        entityId: dto.entityId ?? null,
-      },
+    const task = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.task.create({
+        data: {
+          organizationId,
+          createdById,
+          assigneeUserId: dto.assigneeUserId,
+          type: dto.type,
+          title: dto.title,
+          description: dto.description ?? null,
+          priority: dto.priority ?? 'Normal',
+          status: 'Open',
+          dueAt: dto.dueAt ? new Date(dto.dueAt) : null,
+          entityType: dto.entityType ?? null,
+          entityId: dto.entityId ?? null,
+        },
+      });
+      await tx.notification.create({
+        data: {
+          organizationId,
+          recipientUserId: dto.assigneeUserId,
+          type: 'TaskAssigned',
+          title: 'New task assigned: ' + dto.title,
+          message: dto.description || `You have been assigned a new task: ${dto.title}`,
+          entityType: 'Task',
+          entityId: created.id,
+        },
+      });
+      return created;
     });
 
-    await this.prisma.notification.create({
-      data: {
-        organizationId,
-        recipientUserId: dto.assigneeUserId,
-        type: 'TaskAssigned',
-        title: 'New task assigned: ' + dto.title,
-        message: dto.description || `You have been assigned a new task: ${dto.title}`,
-        entityType: 'Task',
-        entityId: task.id,
-      },
-    }).catch(() => {});
-
     return this.toRecord(task, now);
+  }
+
+  private async resolveReference(organizationId: string, entityType?: string, entityId?: string, user?: AuthUser) {
+    if (!entityType && !entityId) return true;
+    if (!entityType || !entityId) return false;
+    switch (entityType) {
+      case 'Candidate':
+        return this.prisma.candidate.findFirst({
+          where: user && this.accessControl
+            ? { id: entityId, ...(await this.accessControl.getCandidateVisibilityWhere(user)) }
+            : { id: entityId, organizationId },
+          select: { id: true },
+        });
+      case 'Application':
+        return this.prisma.application.findFirst({
+          where: user && this.accessControl
+            ? { id: entityId, ...(await this.accessControl.getApplicationVisibilityWhere(user)) }
+            : { id: entityId, organizationId },
+          select: { id: true },
+        });
+      case 'Vacancy':
+        return this.prisma.vacancy.findFirst({
+          where: user && this.accessControl
+            ? { id: entityId, ...(await this.accessControl.getVacancyVisibilityWhere(user)) }
+            : { id: entityId, organizationId },
+          select: { id: true },
+        });
+      case 'Interview':
+        return this.prisma.interview.findFirst({
+          where: user && this.accessControl
+            ? { id: entityId, organizationId, application: await this.accessControl.getApplicationVisibilityWhere(user) }
+            : { id: entityId, organizationId },
+          select: { id: true },
+        });
+      case 'Offer':
+        return this.prisma.offer.findFirst({
+          where: user && this.accessControl
+            ? { id: entityId, organizationId, application: await this.accessControl.getApplicationVisibilityWhere(user) }
+            : { id: entityId, organizationId },
+          select: { id: true },
+        });
+      case 'HiringCase':
+        return this.prisma.hiringCase.findFirst({ where: { id: entityId, organizationId }, select: { id: true } });
+      case 'VacancyRequest':
+        return this.prisma.vacancyRequest.findFirst({ where: { id: entityId, organizationId }, select: { id: true } });
+      case 'CandidateDocument':
+        return this.prisma.candidateDocument.findFirst({ where: { id: entityId, organizationId }, select: { id: true } });
+      case 'ComplianceRequirement':
+        return this.prisma.complianceRequirement.findFirst({ where: { id: entityId, hiringCase: { organizationId } }, select: { id: true } });
+      case 'HiringCaseApproval':
+        return this.prisma.hiringCaseApproval.findFirst({ where: { id: entityId, hiringCase: { organizationId } }, select: { id: true } });
+      case 'Task':
+        return this.prisma.task.findFirst({ where: { id: entityId, organizationId }, select: { id: true } });
+      default:
+        throw new NotFoundException(`Unsupported task entity type: ${entityType}`);
+    }
   }
 
   private toRecord(t: {
@@ -131,6 +202,7 @@ export class TasksService {
     organizationId: string;
     assigneeUserId: string;
     createdById: string;
+    completedById: string | null;
     type: string;
     title: string;
     description: string | null;
@@ -153,6 +225,7 @@ export class TasksService {
       organizationId: t.organizationId,
       assigneeUserId: t.assigneeUserId,
       createdById: t.createdById,
+      completedById: t.completedById,
       type: t.type,
       title: t.title,
       description: t.description,

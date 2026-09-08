@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '@recruitflow/database';
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { PrismaService } from '../database/prisma.service';
@@ -12,7 +12,22 @@ import type {
   UserResponsibilitiesResponse,
   UserResponsibilityConfig,
   ResponsibilityItem,
+  UpdateNavigationSettingsDto,
+  UpdateRoleNavigationVisibilityDto,
 } from './access-control.dto';
+import type { AuthUser } from '@recruitflow/contracts';
+import { NAVIGATION_CATALOG } from './navigation.catalog';
+import type { NavigationItemRecord } from '@recruitflow/contracts';
+
+type RoleCatalogConfig = {
+  visibleRoleCodes?: string[];
+  roleNameOverrides?: Record<string, string>;
+};
+
+type NavigationSettingsConfig = {
+  items?: Record<string, Partial<NavigationItemRecord>>;
+  roleVisibility?: Record<string, Record<string, boolean>>;
+};
 
 const STANDARD_RESPONSIBILITIES: ResponsibilityItem[] = [
   {
@@ -203,8 +218,234 @@ export class AccessControlService {
 
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * Build the canonical application visibility predicate for a user. Every
+   * application-backed feature should use this predicate so row-level scope
+   * does not drift between lists, details, notes, screening and reports.
+   * Administrators are handled by their effective ALL scope.
+   */
+  async getApplicationVisibilityWhere(user: AuthUser): Promise<Prisma.ApplicationWhereInput> {
+    const { scopes, responsibility } = await this.resolveScopes(user);
+
+    if (scopes.includes('ALL')) return { organizationId: user.organizationId };
+
+    const predicates: Prisma.ApplicationWhereInput[] = [];
+    if (scopes.includes('ASSIGNED_ONLY')) {
+      predicates.push({
+        OR: [
+          { primaryRecruiterId: user.userId },
+          { taskOwnerId: user.userId },
+          { vacancy: { assignments: { some: { userId: user.userId, isActive: true } } } },
+        ],
+      });
+    }
+
+    if (scopes.includes('BRANCH')) {
+      const branches = responsibility?.branches ?? [];
+      if (branches.includes('ALL')) return { organizationId: user.organizationId };
+      const ids = branches.filter((value) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value));
+      if (ids.length > 0 || branches.length > 0) {
+        predicates.push({ vacancy: { branch: { OR: [{ id: { in: ids } }, { code: { in: branches } }] } } });
+      }
+    }
+
+    if (scopes.includes('DEPARTMENT')) {
+      const departments = responsibility?.departments ?? [];
+      if (departments.includes('All Departments')) return { organizationId: user.organizationId };
+      if (departments.length > 0) predicates.push({ vacancy: { department: { in: departments } } });
+    }
+
+    return predicates.length > 0
+      ? { organizationId: user.organizationId, OR: predicates }
+      : { organizationId: user.organizationId, id: { in: [] } };
+  }
+
+  /** Build the matching vacancy predicate for list/detail/export endpoints. */
+  async getVacancyVisibilityWhere(user: AuthUser): Promise<Prisma.VacancyWhereInput> {
+    const { scopes, responsibility } = await this.resolveScopes(user);
+    if (scopes.includes('ALL')) return { organizationId: user.organizationId };
+
+    const predicates: Prisma.VacancyWhereInput[] = [];
+    if (scopes.includes('ASSIGNED_ONLY')) {
+      predicates.push({ assignments: { some: { userId: user.userId, isActive: true } } });
+      predicates.push({ applications: { some: { organizationId: user.organizationId, primaryRecruiterId: user.userId } } });
+      predicates.push({ applications: { some: { organizationId: user.organizationId, taskOwnerId: user.userId } } });
+    }
+    if (scopes.includes('BRANCH')) {
+      const branches = responsibility?.branches ?? [];
+      if (branches.includes('ALL')) return { organizationId: user.organizationId };
+      const ids = branches.filter((value) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value));
+      if (ids.length > 0 || branches.length > 0) {
+        predicates.push({ branch: { OR: [{ id: { in: ids } }, { code: { in: branches } }] } });
+      }
+    }
+    if (scopes.includes('DEPARTMENT')) {
+      const departments = responsibility?.departments ?? [];
+      if (departments.includes('All Departments')) return { organizationId: user.organizationId };
+      if (departments.length > 0) predicates.push({ department: { in: departments } });
+    }
+    return predicates.length > 0
+      ? { organizationId: user.organizationId, OR: predicates }
+      : { organizationId: user.organizationId, id: { in: [] } };
+  }
+
+  async getCandidateVisibilityWhere(user: AuthUser): Promise<Prisma.CandidateWhereInput> {
+    if (user.roleCodes.includes('ADMINISTRATOR')) return { organizationId: user.organizationId };
+    return {
+      organizationId: user.organizationId,
+      OR: [
+        { createdById: user.userId },
+        { applications: { some: await this.getApplicationVisibilityWhere(user) } },
+      ],
+    };
+  }
+
+  private async resolveScopes(user: AuthUser): Promise<{
+    scopes: DataVisibilityScope[];
+    responsibility: { branches?: string[]; departments?: string[] } | undefined;
+  }> {
+    const [integration, policies] = await Promise.all([
+      this.prisma.integration.findFirst({
+        where: { organizationId: user.organizationId, name: 'RLS_ACCESS_POLICY' },
+        select: { configJson: true },
+      }),
+      this.getRlsPolicies(user.organizationId),
+    ]);
+    const config = integration?.configJson as {
+      userResponsibilities?: Record<string, { branches?: string[]; departments?: string[] }>;
+    } | null;
+    const responsibility = config?.userResponsibilities?.[user.userId];
+    const overrideScope = policies.userOverrides[user.userId]?.dataScope;
+    const roleScopes = user.roleCodes
+      .map((code) => policies.roles[code]?.dataScope ?? DEFAULT_ROLE_POLICIES[code]?.dataScope)
+      .filter((scope): scope is DataVisibilityScope => Boolean(scope));
+    return {
+      scopes: overrideScope ? [overrideScope] : roleScopes.length > 0 ? roleScopes : ['ASSIGNED_ONLY'],
+      responsibility,
+    };
+  }
+
+  async getNavigationSettings(organizationId: string, roleCodes: string[] = []): Promise<NavigationItemRecord[]> {
+    const integration = await this.prisma.integration.findFirst({
+      where: { organizationId, name: 'NAVIGATION_SETTINGS' },
+      select: { configJson: true },
+    });
+    const config = integration?.configJson as NavigationSettingsConfig | null | undefined;
+
+    return NAVIGATION_CATALOG.map((item) => {
+      const override = config?.items?.[item.key] || {};
+      const roleVisibility = roleCodes
+        .map((code) => config?.roleVisibility?.[code]?.[item.key])
+        .filter((value): value is boolean => typeof value === 'boolean');
+      const visible = roleVisibility.length > 0 ? roleVisibility.some(Boolean) : (override.visible ?? item.visible);
+      return {
+        ...item,
+        ...override,
+        visible,
+        key: item.key,
+        route: item.route,
+        icon: item.icon,
+        group: item.group,
+        ...(item.requiredPermission ? { requiredPermission: item.requiredPermission } : {}),
+        ...(item.requiredAnyPermissions ? { requiredAnyPermissions: item.requiredAnyPermissions } : {}),
+      };
+    });
+  }
+
+  async updateNavigationSettings(
+    organizationId: string,
+    dto: UpdateNavigationSettingsDto,
+  ): Promise<NavigationItemRecord[]> {
+    const catalog = new Map(NAVIGATION_CATALOG.map((item) => [item.key, item]));
+    const items: Record<string, { label: string; visible: boolean; sortOrder: number }> = {};
+
+    for (const item of dto.items) {
+      const base = catalog.get(item.key);
+      if (!base || base.route !== item.route) {
+        throw new BadRequestException(`Unknown navigation item: ${item.key}`);
+      }
+      items[item.key] = {
+        label: item.label.trim() || base.label,
+        visible: item.visible,
+        sortOrder: item.sortOrder ?? base.sortOrder,
+      };
+    }
+
+    const existing = await this.prisma.integration.findFirst({
+      where: { organizationId, name: 'NAVIGATION_SETTINGS' },
+      select: { id: true, configJson: true },
+    });
+    const existingConfig = (existing?.configJson as NavigationSettingsConfig | null | undefined) ?? {};
+    const data = {
+      provider: 'INTERNAL_ACCESS_CONTROL',
+      category: 'SECURITY',
+      status: 'Active',
+      configJson: { ...existingConfig, items } as unknown as Prisma.InputJsonValue,
+      lastSyncAt: new Date(),
+    };
+    if (existing) {
+      await this.prisma.integration.update({ where: { id: existing.id }, data });
+    } else {
+      await this.prisma.integration.create({
+        data: { organizationId, name: 'NAVIGATION_SETTINGS', ...data },
+      });
+    }
+
+    return this.getNavigationSettings(organizationId);
+  }
+
+  async updateRoleNavigationVisibility(
+    organizationId: string,
+    roleCode: string,
+    dto: UpdateRoleNavigationVisibilityDto,
+  ): Promise<NavigationItemRecord[]> {
+    const normalizedCode = roleCode.trim().toUpperCase();
+    const role = await this.prisma.role.findFirst({
+      where: {
+        code: normalizedCode,
+        status: 'Active',
+        OR: [{ organizationId: null }, { organizationId }],
+      },
+      select: { code: true },
+    });
+    if (!role) throw new NotFoundException('Role not found.');
+
+    const catalog = new Map(NAVIGATION_CATALOG.map((item) => [item.key, item]));
+    const visibility: Record<string, boolean> = {};
+    for (const item of dto.items) {
+      if (!catalog.has(item.key)) throw new BadRequestException(`Unknown navigation item: ${item.key}`);
+      visibility[item.key] = item.visible;
+    }
+
+    const existing = await this.prisma.integration.findFirst({
+      where: { organizationId, name: 'NAVIGATION_SETTINGS' },
+      select: { id: true, configJson: true },
+    });
+    const config = (existing?.configJson as NavigationSettingsConfig | null | undefined) ?? {};
+    const configJson: NavigationSettingsConfig = {
+      ...config,
+      roleVisibility: {
+        ...(config.roleVisibility ?? {}),
+        [role.code]: visibility,
+      },
+    };
+    const data = {
+      provider: 'INTERNAL_ACCESS_CONTROL',
+      category: 'SECURITY',
+      status: 'Active',
+      configJson: configJson as unknown as Prisma.InputJsonValue,
+      lastSyncAt: new Date(),
+    };
+    if (existing) {
+      await this.prisma.integration.update({ where: { id: existing.id }, data });
+    } else {
+      await this.prisma.integration.create({ data: { organizationId, name: 'NAVIGATION_SETTINGS', ...data } });
+    }
+    return this.getNavigationSettings(organizationId, [role.code]);
+  }
+
   async getRlsPolicies(organizationId: string): Promise<RlsGovernanceResponse> {
-    const [roles, integrationRecord] = await Promise.all([
+    const [roles, integrationRecord, catalogRecord] = await Promise.all([
       this.prisma.role.findMany({
         where: {
           OR: [{ organizationId: null }, { organizationId }],
@@ -217,7 +458,17 @@ export class AccessControlService {
           name: 'RLS_ACCESS_POLICY',
         },
       }),
+      this.prisma.integration.findFirst({
+        where: { organizationId, name: 'ACCESS_CONTROL_CATALOG' },
+        select: { configJson: true },
+      }),
     ]);
+
+    const roleCatalog = catalogRecord?.configJson as RoleCatalogConfig | null | undefined;
+    const visibleRoleCodes = Array.isArray(roleCatalog?.visibleRoleCodes) ? roleCatalog.visibleRoleCodes : undefined;
+    const visibleRoles = visibleRoleCodes
+      ? roles.filter((role) => visibleRoleCodes.includes(role.code) || role.code === 'ADMINISTRATOR')
+      : roles;
 
     const savedConfig = (integrationRecord?.configJson as {
       roles?: Record<string, RoleRlsPolicy>;
@@ -225,7 +476,7 @@ export class AccessControlService {
     } | null) || {};
 
     const mergedRoles: Record<string, RoleRlsPolicy> = {};
-    for (const r of roles) {
+    for (const r of visibleRoles) {
       mergedRoles[r.code] = savedConfig.roles?.[r.code] || DEFAULT_ROLE_POLICIES[r.code] || {
         dataScope: 'ALL',
         canViewPii: false,
@@ -240,7 +491,7 @@ export class AccessControlService {
       roles: mergedRoles,
       userOverrides: savedConfig.userOverrides || {},
       availableScopes: DEFAULT_SCOPES,
-      availableRoles: roles.map((r) => ({ code: r.code, name: r.name })),
+      availableRoles: visibleRoles.map((r) => ({ code: r.code, name: roleCatalog?.roleNameOverrides?.[r.code]?.trim() || r.name })),
     };
   }
 
@@ -388,9 +639,9 @@ export class AccessControlService {
   }
 
   async getUserResponsibilities(organizationId: string): Promise<UserResponsibilitiesResponse> {
-    const [users, branches, roles, integrationRecord] = await Promise.all([
+    const [users, branches, roles, integrationRecord, catalogRecord] = await Promise.all([
       this.prisma.user.findMany({
-        where: { organizationId },
+        where: { organizationId, status: 'Active' },
         include: {
           userRoles: {
             include: { role: true },
@@ -413,7 +664,17 @@ export class AccessControlService {
       this.prisma.integration.findFirst({
         where: { organizationId, name: 'RLS_ACCESS_POLICY' },
       }),
+      this.prisma.integration.findFirst({
+        where: { organizationId, name: 'ACCESS_CONTROL_CATALOG' },
+        select: { configJson: true },
+      }),
     ]);
+
+    const roleCatalog = catalogRecord?.configJson as RoleCatalogConfig | null | undefined;
+    const visibleRoleCodes = Array.isArray(roleCatalog?.visibleRoleCodes) ? roleCatalog.visibleRoleCodes : undefined;
+    const visibleRoles = visibleRoleCodes
+      ? roles.filter((role) => visibleRoleCodes.includes(role.code) || role.code === 'ADMINISTRATOR')
+      : roles;
 
     const savedConfig = (integrationRecord?.configJson as {
       roles?: Record<string, RoleRlsPolicy>;
@@ -464,7 +725,7 @@ export class AccessControlService {
       branches,
       departments: STANDARD_DEPARTMENTS,
       availableResponsibilities: STANDARD_RESPONSIBILITIES,
-      availableRoles: roles,
+      availableRoles: visibleRoles,
       availableScopes: DEFAULT_SCOPES,
     };
   }

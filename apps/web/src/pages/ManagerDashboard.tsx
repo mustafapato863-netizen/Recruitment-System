@@ -60,6 +60,7 @@ export function ManagerDashboard() {
   const [isAssignTaskModalOpen, setIsAssignTaskModalOpen] = useState(false);
   const [selectedVacancyId, setSelectedVacancyId] = useState<string>('');
   const [selectedRecruiterId, setSelectedRecruiterId] = useState<string>('');
+  const [assignmentKind, setAssignmentKind] = useState<'PRIMARY' | 'SUPPORT'>('PRIMARY');
   const [targetType, setTargetType] = useState<'Hires' | 'Screenings' | 'Interviews'>('Hires');
   const [targetQuota, setTargetQuota] = useState<number>(3);
   const [targetDeadline, setTargetDeadline] = useState<string>('7 Days (Standard SLA)');
@@ -68,17 +69,9 @@ export function ManagerDashboard() {
   const [isAssigning, setIsAssigning] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
-  const userRoleCodes = useMemo(() => {
-    return (user?.roles || []).map((r) => ((r.code || r.name || '').toUpperCase()));
-  }, [user]);
-
   const isManagerOrAdmin = useMemo(() => {
-    const managerRoles = ['ADMIN', 'SYSADMIN', 'ADMINISTRATOR', 'HIRING_MANAGER', 'TALENT_MANAGER', 'HR_MANAGER'];
-    return (
-      userRoleCodes.some((code) => managerRoles.includes(code)) ||
-      Boolean(user?.permissions?.includes('VACANCY_MANAGE'))
-    );
-  }, [userRoleCodes, user?.permissions]);
+    return Boolean(user?.permissions?.includes('VACANCY_MANAGE'));
+  }, [user?.permissions]);
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
@@ -115,6 +108,12 @@ export function ManagerDashboard() {
     try {
       const generatedTitle = `${targetType === 'Hires' ? 'Hire Target' : 'Screening Target'}: ${targetQuota} ${targetType} for ${vacancy.title}`;
 
+      await postApi(`/vacancies/${vacancy.id}/assignments`, {
+        userId: recruiter.id,
+        roleCode: 'RECRUITER',
+        assignmentKind,
+      });
+
       await postApi('/tasks', {
         title: generatedTitle,
         type: targetType === 'Hires' ? 'Hiring' : 'Screening',
@@ -123,7 +122,7 @@ export function ManagerDashboard() {
         assigneeUserId: recruiter.id,
         entityType: 'Vacancy',
         entityId: vacancy.id,
-      }).catch(() => {});
+      });
 
       // Update current recruiter in local state for the vacancy
       setOpenVacanciesList((prev) =>
@@ -224,7 +223,7 @@ export function ManagerDashboard() {
         if (!selectedRecruiterId) setSelectedRecruiterId(user.id);
       }
 
-      const mappedVacancies: OpenVacancyOption[] = loadedVacancies.map((v) => {
+      const mappedVacancies: OpenVacancyOption[] = loadedVacancies.filter((v) => v.status === 'Open').map((v) => {
         const title = v.title || v.position?.title || 'No position';
         const department = (v as unknown as { department?: string }).department || v.branch?.name || 'Operations';
         const location = v.location || v.branch?.name || '—';
@@ -575,11 +574,11 @@ export function ManagerDashboard() {
                 </span>
               </div>
               <div className="w-full bg-slate-200 dark:bg-slate-700 h-2 rounded-full overflow-hidden">
-                <div className="bg-teal-500 h-full rounded-full transition-all duration-500" style={{ width: '85%' }} />
+                <div className="bg-teal-500 h-full rounded-full transition-all duration-500" style={{ width: overview?.kpis?.timeToFill?.value ? `${Math.min(100, Math.round((overview.kpis.timeToFill.value / 30) * 100))}%` : '0%' }} />
               </div>
               <div className="flex items-center justify-between text-[11px]">
                 <span className="text-slate-400">Target: &lt; 30d</span>
-                <span className="font-bold text-emerald-600 dark:text-emerald-400">On Track</span>
+                <span className="font-bold text-emerald-600 dark:text-emerald-400">{overview?.kpis?.timeToFill?.value ? (overview.kpis.timeToFill.value <= 30 ? 'On Track' : 'At Risk') : 'No data'}</span>
               </div>
             </div>
           </div>
@@ -1206,6 +1205,16 @@ export function ManagerDashboard() {
                               {rec.name} — {rec.role}
                             </option>
                           ))}
+                        </select>
+                      </div>
+                    )}
+
+                    {recruiterOptions.length > 0 && (
+                      <div>
+                        <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">Assignment responsibility</label>
+                        <select value={assignmentKind} onChange={(e) => setAssignmentKind(e.target.value as 'PRIMARY' | 'SUPPORT')} className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-semibold cursor-pointer">
+                          <option value="PRIMARY">Primary recruiter</option>
+                          <option value="SUPPORT">Supporting recruiter</option>
                         </select>
                       </div>
                     )}

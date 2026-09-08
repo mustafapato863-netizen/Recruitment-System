@@ -7,6 +7,7 @@ import { Modal } from '../components/Modal';
 import { Spinner } from '../components/Spinner';
 import { ComparisonMatrixCard, type ComparisonCandidate } from '../components/candidate/ComparisonMatrixCard';
 import { QuickGuideTrigger } from '../quickguide';
+import { calculateCandidateFitScore } from '@recruitflow/validation';
 import './PageEnhancementsV2.css';
 
 const AVATAR_COLORS = [
@@ -57,6 +58,7 @@ export function CandidateComparisonPage() {
   const loadComparisonData = useCallback(async () => {
     setIsLoading(true);
     try {
+      const selectedVacancy = vacancies.find((vacancy) => vacancy.id === selectedVacancyId);
       if (selectedVacancyId) {
         // Load applicants for selected position
         const appRes = await getApi<PaginatedResult<Application>>(
@@ -68,11 +70,13 @@ export function CandidateComparisonPage() {
           const mapped: ComparisonCandidate[] = apps.slice(0, 4).map((app, idx) => {
             const cand = app.candidate;
             const name = cand ? `${cand.firstName} ${cand.lastName}` : 'Candidate';
-            const skills = cand?.skills && cand.skills.length > 0
-              ? cand.skills
-              : ['Clinical Care', 'Patient Safety', 'BLS', 'EMR'];
-            const expYears = cand?.experienceYears || (3 + idx);
-            const score = Math.max(72, Math.min(96, 95 - idx * 6));
+            const skills = cand?.skills || [];
+            const expYears = cand?.experienceYears ?? 0;
+            const fitResult = calculateCandidateFitScore(
+              { skills, experienceYears: expYears, location: cand?.location, certifications: cand?.certifications, currentTitle: cand?.currentTitle },
+              { requiredSkills: selectedVacancy?.requiredSkills || [], minExperienceYears: selectedVacancy?.minExperienceYears || 0, location: selectedVacancy?.location || selectedVacancy?.branch?.name || '', qualifications: selectedVacancy?.qualifications || '', department: selectedVacancy?.department || '' },
+            );
+            const score = fitResult.score;
             
             return {
               id: cand?.id || app.candidateId || `app-${app.id}`,
@@ -85,18 +89,14 @@ export function CandidateComparisonPage() {
               matchGrade: score >= 90 ? 'High Match' : score >= 80 ? 'Good Match' : 'Fair Match',
               skills,
               experience: `${expYears} years in ${cand?.currentTitle || 'Healthcare'}, Clinical Unit`,
-              education: (cand as any)?.education || 'Bachelor Degree / Clinical Certification',
+              education: (cand as (Candidate & { education?: string | null }) | undefined)?.education || '',
               stage: app.stage,
               ratings: {
-                technical: Math.min(5, Math.max(3, 5 - (idx > 1 ? 1 : 0))),
-                communication: Math.min(5, Math.max(3, 4 + (idx % 2))),
-                teamwork: 5 - (idx % 2),
+                technical: 0,
+                communication: 0,
+                teamwork: 0,
               },
-              recommendation: app.stage === 'Offer'
-                ? 'Offer in Progress'
-                : app.stage === 'Interview'
-                ? 'Proceed to Offer'
-                : 'Keep in Pipeline',
+              recommendation: app.stage,
             };
           });
           setCandidates(mapped);
@@ -119,29 +119,23 @@ export function CandidateComparisonPage() {
           if (loadedCands.length > 0) {
             const mapped: ComparisonCandidate[] = loadedCands.map((cand, idx) => {
               const name = `${cand.firstName} ${cand.lastName}`;
-              const skills = cand.skills && cand.skills.length > 0
-                ? cand.skills
-                : ['Clinical Care', 'BLS / ACLS', 'Patient Care'];
-              const expYears = cand.experienceYears || (4 + idx);
-              const score = Math.max(70, Math.min(95, 93 - idx * 5));
+              const skills = cand.skills || [];
+              const expYears = cand.experienceYears ?? 0;
+              const score = 0;
 
               return {
                 id: cand.id,
                 candidateCode: cand.candidateCode,
                 name,
-                role: cand.currentTitle || 'Healthcare Specialist',
+                role: cand.currentTitle || '',
                 avatarColor: AVATAR_COLORS[idx % AVATAR_COLORS.length],
                 matchScore: score,
                 matchGrade: score >= 90 ? 'High Match' : score >= 80 ? 'Good Match' : 'Fair Match',
                 skills,
-                experience: `${expYears} years in ${cand.currentCompany || 'Healthcare'}`,
-                education: (cand as any).education || 'Bachelor of Science / Certified',
-                ratings: {
-                  technical: Math.min(5, 5 - (idx % 2)),
-                  communication: 4,
-                  teamwork: 5,
-                },
-                recommendation: idx === 0 ? 'Proceed to Offer' : 'Keep in Shortlist',
+                experience: expYears > 0 ? `${expYears} years in ${cand.currentCompany || ''}` : '',
+                education: (cand as Candidate & { education?: string | null }).education || '',
+                ratings: { technical: 0, communication: 0, teamwork: 0 },
+                recommendation: 'No recommendation',
               };
             });
             setCandidates(mapped);
@@ -157,20 +151,20 @@ export function CandidateComparisonPage() {
       if (cList.length > 0) {
         const mapped: ComparisonCandidate[] = cList.slice(0, 3).map((cand, idx) => {
           const name = `${cand.firstName} ${cand.lastName}`;
-          const score = 92 - idx * 7;
+            const score = 0;
           return {
             id: cand.id,
             candidateCode: cand.candidateCode,
             name,
-            role: cand.currentTitle || 'Specialist',
+            role: cand.currentTitle || '',
             avatarColor: AVATAR_COLORS[idx % AVATAR_COLORS.length],
             matchScore: score,
             matchGrade: score >= 90 ? 'High Match' : 'Good Match',
-            skills: cand.skills && cand.skills.length > 0 ? cand.skills : ['Clinical Protocol', 'BLS', 'Patient Safety'],
-            experience: `${cand.experienceYears || 4} years experience`,
-            education: 'Bachelor Degree',
-            ratings: { technical: 5 - (idx % 2), communication: 4, teamwork: 5 },
-            recommendation: idx === 0 ? 'Proceed to Offer' : 'Keep in Shortlist',
+            skills: cand.skills || [],
+            experience: cand.experienceYears != null ? `${cand.experienceYears} years experience` : '',
+            education: '',
+            ratings: { technical: 0, communication: 0, teamwork: 0 },
+            recommendation: 'No recommendation',
           };
         });
         setCandidates(mapped);
@@ -180,7 +174,7 @@ export function CandidateComparisonPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [queryIds, selectedVacancyId]);
+  }, [queryIds, selectedVacancyId, vacancies]);
 
   useEffect(() => {
     void loadComparisonData();
@@ -205,15 +199,15 @@ export function CandidateComparisonPage() {
       id: cand.id,
       candidateCode: cand.candidateCode,
       name,
-      role: cand.currentTitle || 'Specialist',
+      role: cand.currentTitle || '',
       avatarColor: AVATAR_COLORS[nextIdx % AVATAR_COLORS.length],
-      matchScore: 82,
-      matchGrade: 'Good Match',
-      skills: cand.skills && cand.skills.length > 0 ? cand.skills : ['Healthcare Protocol', 'Patient Care'],
-      experience: `${cand.experienceYears || 3} years professional experience`,
-      education: 'Bachelor Degree',
-      ratings: { technical: 4, communication: 4, teamwork: 4 },
-      recommendation: 'Under Review',
+      matchScore: 0,
+      matchGrade: 'No score',
+      skills: cand.skills || [],
+      experience: cand.experienceYears != null ? `${cand.experienceYears} years professional experience` : '',
+      education: '',
+      ratings: { technical: 0, communication: 0, teamwork: 0 },
+      recommendation: 'No recommendation',
     };
     setCandidates((prev) => [...prev, newEntry]);
     setIsAddModalOpen(false);
@@ -336,7 +330,7 @@ export function CandidateComparisonPage() {
             <span className="block text-[10.5px] font-bold text-slate-400 uppercase tracking-wider">Active Position Filter</span>
             <span className="text-sm font-black text-slate-900 dark:text-white">
               {activeVacancy
-                ? `${(activeVacancy as any).position?.title || activeVacancy.title} (${activeVacancy.vacancyCode})`
+                ? `${activeVacancy.position?.title || activeVacancy.title} (${activeVacancy.vacancyCode})`
                 : 'Custom Comparison Matrix'}
             </span>
           </div>
@@ -354,7 +348,7 @@ export function CandidateComparisonPage() {
             <option value="">-- All Candidates / Custom Set --</option>
             {vacancies.map((v) => (
               <option key={v.id} value={v.id}>
-                [{v.vacancyCode}] {(v as any).position?.title || v.title}
+                [{v.vacancyCode}] {v.position?.title || v.title}
               </option>
             ))}
           </select>

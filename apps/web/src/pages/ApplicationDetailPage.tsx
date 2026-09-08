@@ -9,6 +9,7 @@ import type {
   Interview,
   PaginatedResult,
   ScreeningLog,
+  ScreeningOutcome,
   UpdateApplicationStageInput,
   Vacancy,
 } from '@recruitflow/contracts';
@@ -24,7 +25,9 @@ import { PageState } from '../components/ui/PageState';
 import { ListSkeleton } from '../components/ui/Skeleton';
 import { StatusBadge } from '../components/StatusBadge';
 import { ActivityFeed, type FeedEntry } from '../components/candidate/ActivityFeed';
+import { CandidateActivityPanel } from '../components/candidate/CandidateActivityPanel';
 import { SmartActionBar, getDefaultActions } from '../components/candidate/SmartActionBar';
+import { useAuth } from '../auth/AuthContext';
 import { QuickGuideTrigger } from '../quickguide';
 import { computeInterviewsStats } from '../components/candidate/ScorecardSummary';
 import { ScheduleInterviewModal } from '../components/candidate/ScheduleInterviewModal';
@@ -44,12 +47,22 @@ function getInitials(name?: string | null): string {
 export function ApplicationDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [application, setApplication] = useState<Application | null>(null);
   const [vacancy, setVacancy] = useState<Vacancy | null>(null);
   const [history, setHistory] = useState<ApplicationStatusHistoryItem[]>([]);
   const [notes, setNotes] = useState<ApplicationNote[]>([]);
-  const [, setScreeningLogs] = useState<ScreeningLog[]>([]);
+  const [screeningLogs, setScreeningLogs] = useState<ScreeningLog[]>([]);
+  const [screeningOutcome, setScreeningOutcome] = useState<ScreeningOutcome>('On Hold');
+  const [screeningNotes, setScreeningNotes] = useState('');
+  const [noticePeriodDays, setNoticePeriodDays] = useState('');
+  const [expectedSalary, setExpectedSalary] = useState('');
+  const [currentSalary, setCurrentSalary] = useState('');
+  const [salaryCurrency, setSalaryCurrency] = useState('SAR');
+  const [isSavingScreening, setIsSavingScreening] = useState(false);
+  const [screeningError, setScreeningError] = useState<string | null>(null);
   const [interviews, setInterviews] = useState<Interview[]>([]);
+  const [interviewers, setInterviewers] = useState<Array<{ id: string; displayName: string; jobTitle?: string | null }>>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [otherActiveApplications, setOtherActiveApplications] = useState<Application[]>([]);
   const [isFeedLoading, setIsFeedLoading] = useState(false);
@@ -75,7 +88,8 @@ export function ApplicationDetailPage() {
   const [siblingApplications, setSiblingApplications] = useState<Application[]>([]);
 
   // Scheduling modal state
-  const [schedInterviewTitle, setSchedInterviewTitle] = useState('');
+  const [schedInterviewerJobTitle, setSchedInterviewerJobTitle] = useState('');
+  const [schedInterviewerId, setSchedInterviewerId] = useState('');
   const [schedInterviewType, setSchedInterviewType] = useState<
     'Screening' | 'Technical' | 'Behavioral' | 'Managerial' | 'Executive'
   >('Technical');
@@ -85,7 +99,25 @@ export function ApplicationDetailPage() {
     d.setHours(10, 0, 0, 0);
     return d.toISOString().slice(0, 16);
   });
+  const [schedMeetingLink, setSchedMeetingLink] = useState('');
   const [isSchedulingInterview, setIsSchedulingInterview] = useState(false);
+
+  useEffect(() => {
+    void getApi<Array<{ id: string; displayName: string; jobTitle?: string | null }>>('/users/interviewers')
+      .then((users) => {
+        setInterviewers(users);
+        if (users[0]) {
+          setSchedInterviewerId(users[0].id);
+          setSchedInterviewerJobTitle(users[0].jobTitle ?? '');
+        }
+      })
+      .catch(() => setInterviewers([]));
+  }, []);
+
+  useEffect(() => {
+    const selected = interviewers.find((interviewer) => interviewer.id === schedInterviewerId);
+    if (selected && !schedInterviewerJobTitle.trim()) setSchedInterviewerJobTitle(selected.jobTitle ?? '');
+  }, [interviewers, schedInterviewerId, schedInterviewerJobTitle]);
 
   // Rejection modal state
   const [selectedRejectReason, setSelectedRejectReason] = useState('Skills mismatch');
@@ -112,6 +144,17 @@ export function ApplicationDetailPage() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    setScreeningLogs([]);
+    setScreeningOutcome('On Hold');
+    setScreeningNotes('');
+    setNoticePeriodDays('');
+    setExpectedSalary('');
+    setCurrentSalary('');
+    setSalaryCurrency('SAR');
+    setScreeningError(null);
+  }, [id]);
 
   useEffect(() => {
     if (application?.allowedTransitions && application.allowedTransitions.length > 0) {
@@ -190,7 +233,17 @@ export function ApplicationDetailPage() {
         setHistory(Array.isArray(histRes.value) ? histRes.value : []);
       }
       if (scrRes.status === 'fulfilled' && scrRes.value) {
-        setScreeningLogs(scrRes.value);
+        const logs = Array.isArray(scrRes.value) ? scrRes.value : [];
+        const latest = logs[0];
+        setScreeningLogs(logs);
+        if (latest) {
+          setScreeningOutcome(latest.outcome);
+          setScreeningNotes(latest.notes || '');
+          setNoticePeriodDays(latest.noticePeriodDays == null ? '' : String(latest.noticePeriodDays));
+          setExpectedSalary(latest.expectedSalary == null ? '' : String(latest.expectedSalary));
+          setCurrentSalary(latest.currentSalary == null ? '' : String(latest.currentSalary));
+          setSalaryCurrency(latest.salaryCurrency || 'SAR');
+        }
       }
       if (notesRes.status === 'fulfilled' && notesRes.value) {
         setNotes(Array.isArray(notesRes.value) ? notesRes.value : []);
@@ -282,6 +335,32 @@ export function ApplicationDetailPage() {
   const rawAppId = application?.id || id || '';
   const cleanAppId = rawAppId.replace(/^app[-_]?/i, '');
   const appIdDisplay = rawAppId ? `APP-${(cleanAppId || rawAppId).slice(0, 8).toUpperCase()}` : '';
+  const latestScreening = screeningLogs[0] ?? null;
+  const canSubmitScreening = Boolean(user?.permissions.includes('APPLICATION_MOVE_STAGE'));
+  const canViewSalary = Boolean(user?.permissions.includes('VIEW_CURRENT_SALARY'));
+
+  const handleSaveScreening = async () => {
+    if (!id || !canSubmitScreening || isSavingScreening) return;
+    setIsSavingScreening(true);
+    setScreeningError(null);
+    try {
+      await postApi<ScreeningLog>('/screening', {
+        applicationId: id,
+        outcome: screeningOutcome,
+        notes: screeningNotes.trim() || undefined,
+        noticePeriodDays: noticePeriodDays === '' ? undefined : Number(noticePeriodDays),
+        expectedSalary: canViewSalary && expectedSalary !== '' ? Number(expectedSalary) : undefined,
+        currentSalary: canViewSalary && currentSalary !== '' ? Number(currentSalary) : undefined,
+        salaryCurrency: canViewSalary ? salaryCurrency.trim().toUpperCase() || 'SAR' : undefined,
+      });
+      showToast('Screening details saved');
+      await refetchApplication();
+    } catch (err) {
+      setScreeningError(err instanceof Error ? err.message : 'Unable to save screening details.');
+    } finally {
+      setIsSavingScreening(false);
+    }
+  };
 
   useSetBreadcrumbTitle(
     candidateName && candidateName !== 'Unknown candidate'
@@ -337,25 +416,30 @@ export function ApplicationDetailPage() {
 
   const handleScheduleInterviewSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!id || !schedDateTime) return;
+    if (!id || !schedDateTime || !schedInterviewerId) {
+      showToast('Select an interviewer before scheduling.');
+      return;
+    }
     setIsSchedulingInterview(true);
     try {
       const startDate = new Date(schedDateTime);
       const endDate = new Date(startDate.getTime() + 45 * 60000);
-      const resolvedTitle = schedInterviewTitle.trim() || `${candidateName} - ${schedInterviewType} Interview`;
       const created = await postApi<Interview>('/interviews', {
         applicationId: id,
-        title: resolvedTitle,
+        attendeeUserIds: [schedInterviewerId],
+        interviewerJobTitle: schedInterviewerJobTitle.trim() || null,
         interviewType: schedInterviewType,
         scheduledStart: startDate.toISOString(),
         scheduledEnd: endDate.toISOString(),
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+        locationUrl: schedMeetingLink.trim() || null,
       });
       if (created) {
         setInterviews((prev) => [created, ...prev]);
       }
-      showToast(`✓ Interview "${resolvedTitle}" scheduled successfully!`);
+      showToast(`✓ ${schedInterviewType} interview scheduled successfully.`);
       setIsScheduleModalOpen(false);
+      setSchedMeetingLink('');
       void refetchAll();
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : 'Failed to schedule interview');
@@ -955,7 +1039,9 @@ export function ApplicationDetailPage() {
 
           {/* ── Tab Views ── */}
           {activeTab === 'activity' && (
-            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-4">
+            <div className="space-y-6">
+              {application.candidateId && <CandidateActivityPanel candidateId={application.candidateId} />}
+              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-4">
               <div className="border-b border-slate-100 dark:border-slate-800 pb-3">
                 <h2 className="text-base font-extrabold text-slate-900 dark:text-white tracking-tight">
                   Activity &amp; Notes
@@ -989,6 +1075,7 @@ export function ApplicationDetailPage() {
                   onRefresh={refetchAll}
                 />
               )}
+              </div>
             </div>
           )}
 
@@ -1061,6 +1148,130 @@ export function ApplicationDetailPage() {
 
                 {/* Right: Quick Actions & About this application (5 cols) */}
                 <div className="md:col-span-5 space-y-6">
+                  {/* Recruiter screening details */}
+                  <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-4">
+                    <div className="flex items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
+                      <div>
+                        <h2 className="text-base font-extrabold text-slate-900 dark:text-white tracking-tight">
+                          Screening details
+                        </h2>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                          Recruiter assessment and compensation context for this application.
+                        </p>
+                      </div>
+                      {latestScreening && (
+                        <span className="text-[10px] text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                          {new Date(latestScreening.screenedAt).toLocaleDateString('en-GB')}
+                        </span>
+                      )}
+                    </div>
+
+                    {screeningError && (
+                      <Alert tone="danger" role="alert">
+                        {screeningError}
+                      </Alert>
+                    )}
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                      <label className="font-semibold text-slate-700 dark:text-slate-300">
+                        Outcome
+                        <Select
+                          aria-label="Screening outcome"
+                          value={screeningOutcome}
+                          onChange={(event) => setScreeningOutcome(event.target.value as ScreeningOutcome)}
+                          disabled={!canSubmitScreening || isSavingScreening}
+                          className="mt-1"
+                        >
+                          <option value="On Hold">On Hold</option>
+                          <option value="Passed">Passed</option>
+                          <option value="Failed">Failed</option>
+                        </Select>
+                      </label>
+                      <label className="font-semibold text-slate-700 dark:text-slate-300">
+                        Notice period (days)
+                        <Input
+                          aria-label="Notice period in days"
+                          type="number"
+                          min="0"
+                          max="3650"
+                          value={noticePeriodDays}
+                          onChange={(event) => setNoticePeriodDays(event.target.value)}
+                          disabled={!canSubmitScreening || isSavingScreening}
+                          className="mt-1"
+                        />
+                      </label>
+                      <label className="font-semibold text-slate-700 dark:text-slate-300">
+                        Expected salary
+                        <Input
+                          aria-label="Expected salary"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={expectedSalary}
+                          onChange={(event) => setExpectedSalary(event.target.value)}
+                          disabled={!canSubmitScreening || !canViewSalary || isSavingScreening}
+                          className="mt-1"
+                        />
+                      </label>
+                      <label className="font-semibold text-slate-700 dark:text-slate-300">
+                        Current salary
+                        <Input
+                          aria-label="Current salary"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={currentSalary}
+                          onChange={(event) => setCurrentSalary(event.target.value)}
+                          disabled={!canSubmitScreening || !canViewSalary || isSavingScreening}
+                          className="mt-1"
+                        />
+                      </label>
+                      <label className="font-semibold text-slate-700 dark:text-slate-300">
+                        Currency
+                        <Input
+                          aria-label="Salary currency"
+                          value={salaryCurrency}
+                          maxLength={10}
+                          onChange={(event) => setSalaryCurrency(event.target.value.toUpperCase())}
+                          disabled={!canSubmitScreening || !canViewSalary || isSavingScreening}
+                          className="mt-1"
+                        />
+                      </label>
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-end">
+                        {canViewSalary ? 'Salary values are visible to your role.' : 'Salary values are restricted by your role.'}
+                      </div>
+                    </div>
+
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                      Recruiter notes
+                      <textarea
+                        aria-label="Recruiter screening notes"
+                        rows={4}
+                        maxLength={5000}
+                        value={screeningNotes}
+                        onChange={(event) => setScreeningNotes(event.target.value)}
+                        disabled={!canSubmitScreening || isSavingScreening}
+                        placeholder="Availability, compensation context, or screening notes..."
+                        className="mt-1 block w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-2.5 text-xs text-slate-900 dark:text-white placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                      />
+                    </label>
+
+                    {canSubmitScreening && (
+                      <Button
+                        type="button"
+                        variant="primary"
+                        size="sm"
+                        onClick={() => void handleSaveScreening()}
+                        loading={isSavingScreening}
+                        disabled={isSavingScreening}
+                        className="w-full"
+                      >
+                        <Icon name="check" size={13} />
+                        Save screening details
+                      </Button>
+                    )}
+                  </div>
+
                   {/* Quick Actions Card */}
                   <div data-tour="quick-actions" className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-3">
                     <h2 className="text-base font-extrabold text-slate-900 dark:text-white tracking-tight mb-2">
@@ -1588,13 +1799,21 @@ export function ApplicationDetailPage() {
       <ScheduleInterviewModal
         isOpen={isScheduleModalOpen}
         onClose={() => setIsScheduleModalOpen(false)}
-        candidateName={candidateName}
-        interviewTitle={schedInterviewTitle}
-        setInterviewTitle={setSchedInterviewTitle}
+        interviewerUserId={schedInterviewerId}
+        setInterviewerUserId={(value) => {
+          setSchedInterviewerId(value);
+          const selected = interviewers.find((interviewer) => interviewer.id === value);
+          setSchedInterviewerJobTitle(selected?.jobTitle ?? '');
+        }}
+        interviewers={interviewers}
+        interviewerJobTitle={schedInterviewerJobTitle}
+        setInterviewerJobTitle={setSchedInterviewerJobTitle}
         interviewType={schedInterviewType}
         setInterviewType={setSchedInterviewType}
         scheduledDateTime={schedDateTime}
         setScheduledDateTime={setSchedDateTime}
+        meetingLink={schedMeetingLink}
+        setMeetingLink={setSchedMeetingLink}
         isSubmitting={isSchedulingInterview}
         onSubmit={(e) => void handleScheduleInterviewSubmit(e)}
       />

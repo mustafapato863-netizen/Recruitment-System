@@ -14,7 +14,22 @@ import type {
   BranchRecord,
   PositionRecord
 } from '@recruitflow/contracts';
-import type { Prisma } from '@recruitflow/database';
+import { Prisma } from '@recruitflow/database';
+import type { MasterDataCategory, MasterDataValueRecord } from '@recruitflow/contracts';
+
+const CATALOG_CATEGORIES = new Set<MasterDataCategory>(['departments', 'skills', 'candidate-sources', 'interview-types']);
+const SUPPORTED_CATALOGS = new Set(['branches', 'job-titles', ...CATALOG_CATEGORIES]);
+
+type MasterDataBatchRow = {
+  id?: string;
+  code?: string | null;
+  name: string;
+  city?: string | null;
+  legalEntityId?: string | null;
+  metadata?: Record<string, unknown> | null;
+  status?: string;
+  expectedVersion?: number;
+};
 
 @Injectable()
 export class MasterDataService {
@@ -117,6 +132,166 @@ export class MasterDataService {
     return records.map(r => ({ ...r, createdAt: r.createdAt.toISOString(), updatedAt: r.updatedAt.toISOString() }));
   }
 
+  async listCatalog(organizationId: string, category: string) {
+    this.assertCatalog(category);
+    if (category === 'branches') {
+      const branches = await this.prisma.branch.findMany({ where: { organizationId }, orderBy: { code: 'asc' } });
+      return branches.map((branch) => ({
+        id: branch.id,
+        organizationId: branch.organizationId,
+        category,
+        code: branch.code,
+        name: branch.name,
+        city: branch.city,
+        legalEntityId: branch.legalEntityId,
+        metadata: { legalEntityId: branch.legalEntityId },
+        status: branch.status,
+        version: branch.version,
+        createdAt: branch.createdAt.toISOString(),
+        updatedAt: branch.updatedAt.toISOString(),
+      }));
+    }
+    if (category === 'job-titles') {
+      const positions = await this.prisma.position.findMany({ where: { organizationId }, orderBy: { code: 'asc' } });
+      return positions.map((position) => ({
+        id: position.id,
+        organizationId,
+        category,
+        code: position.code,
+        name: position.title,
+        metadata: {
+          ...((position.metadata as Record<string, unknown> | null) ?? {}),
+          legalEntityId: position.legalEntityId,
+          description: position.description,
+        },
+        legalEntityId: position.legalEntityId,
+        status: position.status,
+        version: position.version,
+        createdAt: position.createdAt.toISOString(),
+        updatedAt: position.updatedAt.toISOString(),
+      }));
+    }
+    const records = await this.prisma.masterDataValue.findMany({ where: { organizationId, category }, orderBy: [{ status: 'asc' }, { name: 'asc' }] });
+    return records.map((record): MasterDataValueRecord => ({
+      id: record.id,
+      organizationId: record.organizationId,
+      category: record.category as MasterDataCategory,
+      code: record.code,
+      name: record.name,
+      metadata: record.metadata as Record<string, unknown> | null,
+      status: record.status,
+      version: record.version,
+      createdAt: record.createdAt.toISOString(),
+      updatedAt: record.updatedAt.toISOString(),
+    }));
+  }
+
+  async saveCatalogBatch(organizationId: string, category: string, rows: MasterDataBatchRow[]) {
+    this.assertCatalog(category);
+    if (rows.length > 250) throw new BadRequestException('Master Data saves are limited to 250 rows per batch.');
+    const saved = await this.prisma.$transaction(async (tx) => {
+      const results: unknown[] = [];
+      for (const row of rows) {
+        const name = row.name.trim();
+        if (!name) throw new BadRequestException('Every Master Data row needs a name.');
+        const status = row.status?.trim() || 'Active';
+        if (!['Active', 'Inactive', 'Archived'].includes(status)) throw new BadRequestException(`Invalid status for ${name}.`);
+        if (category === 'branches') {
+          if (!row.legalEntityId) throw new BadRequestException(`Branch ${name} must have a legal entity.`);
+          const entity = await tx.legalEntity.findFirst({ where: { id: row.legalEntityId, organizationId } });
+          if (!entity) throw new BadRequestException(`Legal entity for branch ${name} is not in this organization.`);
+          const duplicate = await tx.branch.findFirst({ where: { organizationId, legalEntityId: row.legalEntityId, OR: [
+            ...(row.code?.trim() ? [{ code: row.code.trim() }] : []),
+            { name },
+          ], ...(row.id ? { id: { not: row.id } } : {}) } });
+          if (duplicate) throw new ConflictException(`Branch code or name already exists for ${entity.name}.`);
+          if (row.id) {
+            const result = await tx.branch.updateMany({ where: { id: row.id, organizationId, ...(row.expectedVersion === undefined ? {} : { version: row.expectedVersion }) }, data: {
+              ...(row.code?.trim() ? { code: row.code.trim() } : {}),
+              name,
+              city: row.city?.trim() || null,
+              legalEntityId: row.legalEntityId,
+              status,
+              version: { increment: 1 },
+            } });
+            if (result.count !== 1) throw new ConflictException(`Branch ${name} changed since it was loaded. Reload before saving.`);
+            results.push(await tx.branch.findUniqueOrThrow({ where: { id: row.id } }));
+          } else {
+            results.push(await this.createBranchInTransaction(tx, organizationId, {
+              ...(row.code?.trim() ? { code: row.code.trim() } : {}),
+              name,
+              ...(row.city?.trim() ? { city: row.city.trim() } : {}),
+              legalEntityId: row.legalEntityId,
+            }));
+          }
+        } else if (category === 'job-titles') {
+          const legalEntityId = row.legalEntityId || (row.metadata?.legalEntityId as string | undefined);
+          const duplicate = await tx.position.findFirst({ where: { organizationId, OR: [
+            ...(row.code?.trim() ? [{ code: row.code.trim() }] : []),
+            { title: name },
+          ], ...(row.id ? { id: { not: row.id } } : {}) } });
+          if (duplicate) throw new ConflictException(`Job title code or name already exists in this organization.`);
+          if (row.id) {
+            const result = await tx.position.updateMany({ where: { id: row.id, organizationId, ...(row.expectedVersion === undefined ? {} : { version: row.expectedVersion }) }, data: {
+              ...(row.code?.trim() ? { code: row.code.trim() } : {}),
+              title: name,
+              ...(typeof row.metadata?.description === 'string' ? { description: row.metadata.description.trim() || null } : {}),
+              ...(row.metadata ? { metadata: row.metadata as Prisma.InputJsonValue } : {}),
+              legalEntityId: legalEntityId || null,
+              status,
+              version: { increment: 1 },
+            } });
+            if (result.count !== 1) throw new ConflictException(`Job title ${name} changed since it was loaded. Reload before saving.`);
+            results.push(await tx.position.findUniqueOrThrow({ where: { id: row.id } }));
+          } else {
+            results.push(await this.createPositionInTransaction(tx, organizationId, {
+              ...(row.code?.trim() ? { code: row.code.trim() } : {}),
+              title: name,
+              ...(typeof row.metadata?.description === 'string' ? { description: row.metadata.description } : {}),
+              ...(row.metadata ? { metadata: row.metadata } : {}),
+              ...(legalEntityId ? { legalEntityId } : {}),
+            }));
+          }
+        } else {
+          const existing = row.id ? await tx.masterDataValue.findFirst({ where: { id: row.id, organizationId, category } }) : null;
+          const duplicate = await tx.masterDataValue.findFirst({ where: { organizationId, category, OR: [
+            ...(row.code?.trim() ? [{ code: row.code.trim() }] : []),
+            { name },
+          ], ...(row.id ? { id: { not: row.id } } : {}) } });
+          if (duplicate) throw new ConflictException(`${category} code or name already exists in this organization.`);
+          if (row.id) {
+            if (!existing || (row.expectedVersion !== undefined && existing.version !== row.expectedVersion)) throw new ConflictException(`${name} changed since it was loaded. Reload before saving.`);
+            results.push(await tx.masterDataValue.update({ where: { id: row.id }, data: {
+              code: row.code?.trim() || null,
+              name,
+              metadata: row.metadata == null ? Prisma.JsonNull : row.metadata as Prisma.InputJsonValue,
+              status,
+              version: { increment: 1 },
+            } }));
+          } else {
+            results.push(await tx.masterDataValue.create({ data: {
+              organizationId,
+              category,
+              code: row.code?.trim() || null,
+              name,
+              metadata: row.metadata == null ? Prisma.JsonNull : row.metadata as Prisma.InputJsonValue,
+              status,
+            } }));
+          }
+        }
+      }
+      return results;
+    }).catch((error: unknown) => {
+      if (error instanceof ConflictException || error instanceof BadRequestException) throw error;
+      throw new ConflictException('Master Data could not be saved because one or more rows conflict with existing values.');
+    });
+    return { saved: saved.length, data: await this.listCatalog(organizationId, category) };
+  }
+
+  private assertCatalog(category: string): asserts category is 'branches' | 'job-titles' | MasterDataCategory {
+    if (!SUPPORTED_CATALOGS.has(category)) throw new BadRequestException(`Unsupported Master Data category: ${category}.`);
+  }
+
   async getBranch(organizationId: string, id: string): Promise<BranchRecord> {
     const r = await this.prisma.branch.findFirst({ where: { id, organizationId } });
     if (!r) throw new NotFoundException('Branch not found.');
@@ -132,7 +307,7 @@ export class MasterDataService {
     const r = await this.prisma.branch.findFirst({ where: { id, organizationId } });
     if (!r) throw new NotFoundException('Branch not found.');
     if (r.status === 'Archived') throw new BadRequestException('Branch is already archived.');
-    const updated = await this.prisma.branch.update({ where: { id }, data: { status: 'Archived' } });
+    const updated = await this.prisma.branch.update({ where: { id }, data: { status: 'Archived', version: { increment: 1 } } });
     return { ...updated, createdAt: updated.createdAt.toISOString(), updatedAt: updated.updatedAt.toISOString() };
   }
 
@@ -140,7 +315,7 @@ export class MasterDataService {
     const r = await this.prisma.branch.findFirst({ where: { id, organizationId } });
     if (!r) throw new NotFoundException('Branch not found.');
     if (r.status === 'Active') throw new BadRequestException('Branch is already active.');
-    const updated = await this.prisma.branch.update({ where: { id }, data: { status: 'Active' } });
+    const updated = await this.prisma.branch.update({ where: { id }, data: { status: 'Active', version: { increment: 1 } } });
     return { ...updated, createdAt: updated.createdAt.toISOString(), updatedAt: updated.updatedAt.toISOString() };
   }
 
@@ -182,7 +357,9 @@ export class MasterDataService {
       code: r.code,
       title: r.title,
       description: r.description,
+      metadata: (r.metadata as Record<string, unknown> | null) ?? null,
       status: r.status,
+      version: r.version,
       createdAt: r.createdAt.toISOString(),
       updatedAt: r.updatedAt.toISOString(),
     }));
@@ -197,7 +374,9 @@ export class MasterDataService {
       code: r.code,
       title: r.title,
       description: r.description,
+      metadata: (r.metadata as Record<string, unknown> | null) ?? null,
       status: r.status,
+      version: r.version,
       createdAt: r.createdAt.toISOString(),
       updatedAt: r.updatedAt.toISOString(),
     };
@@ -211,7 +390,9 @@ export class MasterDataService {
       code: r.code,
       title: r.title,
       description: r.description,
+      metadata: (r.metadata as Record<string, unknown> | null) ?? null,
       status: r.status,
+      version: r.version,
       createdAt: r.createdAt.toISOString(),
       updatedAt: r.updatedAt.toISOString(),
     };
@@ -221,14 +402,16 @@ export class MasterDataService {
     const r = await this.prisma.position.findFirst({ where: { id, organizationId } });
     if (!r) throw new NotFoundException('Position not found.');
     if (r.status === 'Archived') throw new BadRequestException('Position is already archived.');
-    const updated = await this.prisma.position.update({ where: { id }, data: { status: 'Archived' } });
+    const updated = await this.prisma.position.update({ where: { id }, data: { status: 'Archived', version: { increment: 1 } } });
     return {
       id: updated.id,
       organizationId: updated.organizationId,
       code: updated.code,
       title: updated.title,
       description: updated.description,
+      metadata: (updated.metadata as Record<string, unknown> | null) ?? null,
       status: updated.status,
+      version: updated.version,
       createdAt: updated.createdAt.toISOString(),
       updatedAt: updated.updatedAt.toISOString(),
     };
@@ -238,14 +421,16 @@ export class MasterDataService {
     const r = await this.prisma.position.findFirst({ where: { id, organizationId } });
     if (!r) throw new NotFoundException('Position not found.');
     if (r.status === 'Active') throw new BadRequestException('Position is already active.');
-    const updated = await this.prisma.position.update({ where: { id }, data: { status: 'Active' } });
+    const updated = await this.prisma.position.update({ where: { id }, data: { status: 'Active', version: { increment: 1 } } });
     return {
       id: updated.id,
       organizationId: updated.organizationId,
       code: updated.code,
       title: updated.title,
       description: updated.description,
+      metadata: (updated.metadata as Record<string, unknown> | null) ?? null,
       status: updated.status,
+      version: updated.version,
       createdAt: updated.createdAt.toISOString(),
       updatedAt: updated.updatedAt.toISOString(),
     };
@@ -330,6 +515,7 @@ export class MasterDataService {
         code,
         title,
         description: data.description?.trim() || null,
+        ...(data.metadata ? { metadata: data.metadata as Prisma.InputJsonValue } : {}),
         status: 'Active',
       },
     });

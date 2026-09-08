@@ -44,13 +44,13 @@ export class HiringController {
   @Get('metrics')
   @RequirePermissions('APPLICATION_VIEW')
   getMetrics(@CurrentUser() user: AuthUser) {
-    return this.hiringService.getMetrics(user.organizationId);
+    return this.hiringService.getMetrics(user.organizationId, user);
   }
 
   @Get('final-approvals')
   @RequirePermissions('FINAL_HIRING_APPROVAL')
   getFinalApprovalInbox(@CurrentUser() user: AuthUser) {
-    return this.hiringService.getFinalApprovalInbox(user.organizationId);
+    return this.hiringService.getFinalApprovalInbox(user.organizationId, user);
   }
 
   @Get()
@@ -59,7 +59,7 @@ export class HiringController {
     @CurrentUser() user: AuthUser,
     @Query('status') status?: string,
   ) {
-    return this.hiringService.listHiringCases(user.organizationId, status);
+    return this.hiringService.listHiringCases(user.organizationId, status, user);
   }
 
   @Get(':id')
@@ -70,7 +70,7 @@ export class HiringController {
     @CurrentUser() user: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    return this.hiringService.getHiringCase(user.organizationId, id);
+    return this.hiringService.getHiringCase(user.organizationId, id, user);
   }
 
   @Patch(':id/compliance/:reqId')

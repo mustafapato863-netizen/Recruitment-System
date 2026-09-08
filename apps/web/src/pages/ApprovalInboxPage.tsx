@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import type { VacancyCoreContext, VacancyRequest } from '@recruitflow/contracts';
+import type { OfferApprovalInboxItem, VacancyCoreContext, VacancyRequest } from '@recruitflow/contracts';
 import { fetchApi, getApi, postApi } from '../api/client';
 import { StatusBadge } from '../components/StatusBadge';
 import { Alert } from '../components/ui/Alert';
@@ -16,25 +16,6 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { Tabs } from '../components/ui/Tabs';
 import { useAuth } from '../auth/AuthContext';
 import './PageEnhancementsV2.css';
-
-interface OfferApprovalInboxItem {
-  id: string;
-  roleCode: string;
-  status: string;
-  step: number;
-  offerVersion?: {
-    id: string;
-    offerId: string;
-    versionNumber: number;
-    offer?: {
-      offerCode: string;
-      candidateName?: string;
-      positionTitle?: string;
-      annualBaseSalary?: number;
-      currency?: string;
-    };
-  };
-}
 
 interface FinalHiringInboxItem {
   id: string;
@@ -209,7 +190,9 @@ export function ApprovalInboxPage() {
     const q = searchQuery.toLowerCase();
     return offerApprovals.filter(
       (o) =>
-        o.offerVersion?.offer?.offerCode?.toLowerCase().includes(q) ||
+        o.offerCode?.toLowerCase().includes(q) ||
+        o.candidateName?.toLowerCase().includes(q) ||
+        o.positionTitle?.toLowerCase().includes(q) ||
         o.roleCode?.toLowerCase().includes(q),
     );
   }, [offerApprovals, searchQuery]);
@@ -257,9 +240,9 @@ export function ApprovalInboxPage() {
     const isApproval = decision === 'Approved';
     setConfirmDialog({
       isOpen: true,
-      title: isApproval ? `Approve Offer Package ${oa.offerVersion?.offer?.offerCode || ''}` : `Reject Offer Package ${oa.offerVersion?.offer?.offerCode || ''}`,
+      title: isApproval ? `Approve Offer Package ${oa.offerCode}` : `Reject Offer Package ${oa.offerCode}`,
       description: isApproval
-        ? `Granting compensation signoff for Version ${oa.offerVersion?.versionNumber || 1}. The package will advance to candidate delivery upon final signoff.`
+        ? `Granting compensation signoff for Version ${oa.versionNumber}. The package will advance to candidate delivery upon final signoff.`
         : `Rejecting this compensation package. The talent team will receive your rejection feedback to draft a revision.`,
       confirmLabel: isApproval ? 'Approve Offer' : 'Reject Offer',
       tone: isApproval ? 'success' : 'danger',
@@ -597,15 +580,15 @@ export function ApprovalInboxPage() {
                         <div className="rf-approval-card__copy">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-mono text-xs font-bold text-rf-ink">
-                              {oa.offerVersion?.offer?.offerCode || 'Offer Code'}
+                              {oa.offerCode || 'Offer Code'}
                             </span>
                             <StatusBadge status={oa.status} />
                             <Badge variant="info">
-                              Version {oa.offerVersion?.versionNumber ?? 1}
+                              Version {oa.versionNumber}
                             </Badge>
                           </div>
                           <h3 className="text-sm font-bold text-rf-ink m-0 mt-1">
-                            {oa.offerVersion?.offer?.candidateName ? `Offer Package for ${oa.offerVersion.offer.candidateName}` : 'Compensation Signoff'}
+                            {oa.candidateName ? `Offer Package for ${oa.candidateName}` : 'Compensation Signoff'}
                           </h3>
                         </div>
                       </div>
@@ -625,7 +608,7 @@ export function ApprovalInboxPage() {
                       </div>
                       <div className="flex flex-col">
                         <span className="text-[10.5px] font-semibold text-rf-ink-muted">Package Version</span>
-                        <span className="font-bold text-rf-ink mt-0.5">Rev {oa.offerVersion?.versionNumber || 1}</span>
+                        <span className="font-bold text-rf-ink mt-0.5">Rev {oa.versionNumber}</span>
                       </div>
                       <div className="flex flex-col">
                         <span className="text-[10.5px] font-semibold text-rf-ink-muted">Workflow Status</span>
@@ -641,9 +624,9 @@ export function ApprovalInboxPage() {
                       </div>
 
                       <div className="rf-approval-card__decision flex items-center gap-2 shrink-0">
-                        {oa.offerVersion?.offerId && (
+                        {oa.offerId && (
                           <Button variant="secondary" size="sm" asChild>
-                            <Link to={`/offers/${oa.offerVersion.offerId}`}>
+                            <Link to={`/offers/${oa.offerId}`}>
                               <Icon name="eye" size={13} />
                               Review Offer
                             </Link>

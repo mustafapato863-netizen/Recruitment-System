@@ -5,9 +5,10 @@ import { InterviewsService } from './interviews.service';
 import { SelfScheduleService } from './self-schedule.service';
 import { DatabaseModule } from '../database/database.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { AccessControlModule } from '../access-control/access-control.module';
 
 @Module({
-  imports: [DatabaseModule, NotificationsModule],
+  imports: [DatabaseModule, NotificationsModule, AccessControlModule],
   controllers: [InterviewsController, PublicInterviewsController],
   providers: [InterviewsService, SelfScheduleService],
   exports: [InterviewsService, SelfScheduleService],

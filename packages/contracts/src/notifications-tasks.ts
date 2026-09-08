@@ -32,6 +32,7 @@ export interface TaskRecord {
   organizationId: string;
   assigneeUserId: string;
   createdById: string;
+  completedById?: string | null;
   type: string;
   title: string;
   description: string | null;

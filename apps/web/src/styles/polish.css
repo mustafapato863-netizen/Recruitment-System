@@ -993,6 +993,22 @@ html[data-reduced-motion='true'] *::after {
 
 :where([data-theme='dark'], html.dark, body.dark, .dark) :where(.page, .sidebar, .header, .modal, [role='dialog'], [role='presentation'], .app) :where([class~='bg-blue-500'], [class~='bg-blue-600'], [class~='bg-blue-700'], [class~='bg-indigo-500'], [class~='bg-indigo-600']) {
   background-color: var(--color-action) !important;
+  color: var(--color-on-action) !important;
+}
+
+/* Tailwind's text-white utility is intentionally strong. Keep dark-theme
+   action controls readable against the brighter dark-theme action surface. */
+[data-theme='dark'] .bg-blue-500.text-white,
+[data-theme='dark'] .bg-blue-600.text-white,
+[data-theme='dark'] .bg-blue-700.text-white,
+[data-theme='dark'] .bg-indigo-500.text-white,
+[data-theme='dark'] .bg-indigo-600.text-white,
+[data-theme='dark'] .bg-blue-500.text-white > *,
+[data-theme='dark'] .bg-blue-600.text-white > *,
+[data-theme='dark'] .bg-blue-700.text-white > *,
+[data-theme='dark'] .bg-indigo-500.text-white > *,
+[data-theme='dark'] .bg-indigo-600.text-white > * {
+  color: var(--color-on-action) !important;
 }
 
 :where([data-theme='dark'], html.dark, body.dark, .dark) :where(.page, .sidebar, .header, .modal, [role='dialog'], [role='presentation'], .app) :where([class~='text-blue-500'], [class~='text-blue-600'], [class~='text-blue-700'], [class~='text-indigo-500'], [class~='text-indigo-600'], [class~='text-indigo-700']) {

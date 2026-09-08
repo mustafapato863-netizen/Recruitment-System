@@ -70,6 +70,7 @@ export function JobAnalyticsPage() {
     : '—';
 
   const recruiterAssignment =
+    vacancy?.assignments?.find((a) => a.assignmentKind === 'PRIMARY') ||
     vacancy?.assignments?.find((a) => a.roleCode === 'RECRUITER' || a.roleCode === 'LEAD_RECRUITER') ||
     vacancy?.assignments?.[0];
   const recruiterUser = recruiterAssignment

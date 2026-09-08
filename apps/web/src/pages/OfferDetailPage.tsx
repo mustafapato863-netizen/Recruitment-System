@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { getApi, postApi, patchApi } from '../api/client';
-import type { Offer } from '@recruitflow/contracts';
+import type { Offer as BaseOffer } from '@recruitflow/contracts';
 import { Icon } from '../components/Icon';
 import { Modal } from '../components/Modal';
 import { Button } from '../components/ui/Button';
@@ -11,6 +11,13 @@ import { useAuth } from '../auth/AuthContext';
 import { useSetBreadcrumbTitle } from '../context/BreadcrumbContext';
 import { QuickGuideTrigger } from '../quickguide';
 import './PageEnhancementsV2.css';
+
+interface Offer extends BaseOffer {
+  candidateEmail?: string;
+  candidatePhone?: string;
+  createdByName?: string;
+  application?: { candidate?: { email?: string; phone?: string } };
+}
 
 interface HiringCaseLookup {
   id: string;
@@ -284,10 +291,10 @@ export function OfferDetailPage() {
       .toUpperCase() || 'UC';
 
   const positionDisplayName = offer.positionTitle ?? 'No position';
-  const candidateEmail = (offer as any).application?.candidate?.email || (offer as any).candidateEmail;
-  const candidatePhone = (offer as any).application?.candidate?.phone || (offer as any).candidatePhone;
+  const candidateEmail = offer.application?.candidate?.email || offer.candidateEmail;
+  const candidatePhone = offer.application?.candidate?.phone || offer.candidatePhone;
   const workLocation = offer.currentVersion?.workLocation || '—';
-  const ownerDisplayName = (offer as any).createdByName || 'Unassigned';
+  const ownerDisplayName = offer.createdByName || 'Unassigned';
   const ownerInitials =
     ownerDisplayName === 'Unassigned'
       ? 'UN'

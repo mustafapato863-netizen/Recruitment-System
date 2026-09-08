@@ -44,9 +44,10 @@ export class PublicApplicationDto {
   @MaxLength(80)
   lastName!: string;
 
+  @IsOptional()
   @IsEmail()
   @MaxLength(255)
-  email!: string;
+  email?: string | null;
 
   @IsOptional()
   @IsString()

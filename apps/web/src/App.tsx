@@ -20,6 +20,7 @@ import './styles/v2-parity.css';
 
 // Lazy loaded page components for optimal bundle splitting
 const DashboardPage = lazy(() => import('./pages/DashboardPage').then((m) => ({ default: m.DashboardPage })));
+const MyWorkPage = lazy(() => import('./pages/MyWorkPage').then((m) => ({ default: m.MyWorkPage })));
 const UsersRolesPage = lazy(() => import('./pages/UsersRolesPage').then((m) => ({ default: m.UsersRolesPage })));
 const MasterDataPage = lazy(() => import('./pages/MasterDataPage').then((m) => ({ default: m.MasterDataPage })));
 const AuditLogPage = lazy(() => import('./pages/AuditLogPage').then((m) => ({ default: m.AuditLogPage })));
@@ -33,7 +34,6 @@ const JobAnalyticsPage = lazy(() => import('./pages/JobAnalyticsPage').then((m) 
 const CandidatesPage = lazy(() => import('./pages/CandidatesPage').then((m) => ({ default: m.CandidatesPage })));
 const CandidateDetailPage = lazy(() => import('./pages/CandidateDetailPage').then((m) => ({ default: m.CandidateDetailPage })));
 const CandidateDocumentsPage = lazy(() => import('./pages/CandidateDocumentsPage').then((m) => ({ default: m.CandidateDocumentsPage })));
-const CVBankPage = lazy(() => import('./pages/CVBankPage').then((m) => ({ default: m.CVBankPage })));
 const ApplicationsPage = lazy(() => import('./pages/ApplicationsPage').then((m) => ({ default: m.ApplicationsPage })));
 const ApplicationDetailPage = lazy(() => import('./pages/ApplicationDetailPage').then((m) => ({ default: m.ApplicationDetailPage })));
 const StageTransitionPage = lazy(() => import('./pages/StageTransitionPage').then((m) => ({ default: m.StageTransitionPage })));
@@ -59,11 +59,9 @@ const EmailTemplatesPage = lazy(() => import('./pages/EmailTemplatesPage').then(
 const PositionLevelTargetSettingsPage = lazy(() => import('./pages/PositionLevelTargetSettingsPage').then((m) => ({ default: m.PositionLevelTargetSettingsPage })));
 const IntegrationsPage = lazy(() => import('./pages/IntegrationsPage').then((m) => ({ default: m.IntegrationsPage })));
 const NotificationsPage = lazy(() => import('./pages/NotificationsPage').then((m) => ({ default: m.NotificationsPage })));
-const TasksPage = lazy(() => import('./pages/TasksPage').then((m) => ({ default: m.TasksPage })));
 const ProfilePage = lazy(() => import('./pages/ProfilePage').then((m) => ({ default: m.ProfilePage })));
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage').then((m) => ({ default: m.NotFoundPage })));
-const DesignSystemPage = lazy(() => import('./pages/DesignSystemPage').then((m) => ({ default: m.DesignSystemPage })));
 const CandidateComparisonPage = lazy(() => import('./pages/CandidateComparisonPage').then((m) => ({ default: m.CandidateComparisonPage })));
 const ApplicantPortalPage = lazy(() => import('./pages/ApplicantPortalPage').then((m) => ({ default: m.ApplicantPortalPage })));
 const AppShell = lazy(() => import('./layout/AppShell').then((m) => ({ default: m.AppShell })));
@@ -99,6 +97,7 @@ function App() {
                   <Route element={<AppShell />}>
 
                   <Route path="/" element={<DashboardPage />} />
+                  <Route path="/my-work" element={<MyWorkPage />} />
                   <Route
                     path="/users"
                     element={
@@ -139,7 +138,7 @@ function App() {
                   <Route path="/candidates/compare" element={<PermissionGate requiredPermission="CANDIDATE_VIEW"><CandidateComparisonPage /></PermissionGate>} />
                   <Route path="/candidates/:id" element={<PermissionGate requiredPermission="CANDIDATE_VIEW"><CandidateDetailPage /></PermissionGate>} />
                   <Route path="/candidates/:id/documents" element={<PermissionGate requiredPermission="CANDIDATE_VIEW"><CandidateDocumentsPage /></PermissionGate>} />
-                  <Route path="/cv-bank" element={<PermissionGate requiredPermission="CANDIDATE_VIEW"><CVBankPage /></PermissionGate>} />
+                  <Route path="/cv-bank" element={<Navigate to="/candidates" replace />} />
                   <Route path="/sourcing-match" element={<PermissionGate requiredPermission="CANDIDATE_VIEW"><TalentPoolPage /></PermissionGate>} />
                   <Route path="/talent-pool" element={<Navigate to="/sourcing-match" replace />} />
                   <Route path="/talent-pools" element={<Navigate to="/sourcing-match" replace />} />
@@ -226,25 +225,7 @@ function App() {
                   <Route path="/portal" element={<ApplicantPortalPage />} />
                   <Route path="/my-applications" element={<ApplicantPortalPage />} />
                   <Route path="/notifications" element={<PermissionGate requiredPermission="NOTIFICATION_VIEW"><NotificationsPage /></PermissionGate>} />
-                  <Route path="/tasks" element={<PermissionGate requiredPermission="TASK_VIEW"><TasksPage /></PermissionGate>} />
-
-                  {/* Component Showcase & Design System (Admin Only) */}
-                  <Route
-                    path="/components"
-                    element={
-                      <PermissionGate requiredPermission="USERS_VIEW">
-                        <DesignSystemPage />
-                      </PermissionGate>
-                    }
-                  />
-                  <Route
-                    path="/design-system"
-                    element={
-                      <PermissionGate requiredPermission="USERS_VIEW">
-                        <DesignSystemPage />
-                      </PermissionGate>
-                    }
-                  />
+                  <Route path="/tasks" element={<Navigate to="/my-work" replace />} />
 
                   {/* 404 Catch All */}
                   <Route path="*" element={<NotFoundPage />} />

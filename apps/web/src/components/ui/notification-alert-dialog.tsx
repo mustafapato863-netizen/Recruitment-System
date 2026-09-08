@@ -13,57 +13,6 @@ export interface NotificationAlertDialogProps {
   className?: string;
 }
 
-const DEFAULT_RECRUITMENT_NOTIFICATIONS: NotificationRecord[] = [
-  {
-    id: 'notif-1',
-    organizationId: 'org-1',
-    recipientUserId: 'u-1',
-    entityType: 'Interview',
-    entityId: 'int-1',
-    title: 'Interview Scheduled',
-    message: 'Technical interview with Ali Hassan for Senior Frontend Engineer scheduled today at 2:00 PM.',
-    type: 'Interview',
-    readAt: null,
-    createdAt: new Date(Date.now() - 1000 * 60 * 35).toISOString(),
-  },
-  {
-    id: 'notif-2',
-    organizationId: 'org-1',
-    recipientUserId: 'u-1',
-    entityType: 'Offer',
-    entityId: 'off-1',
-    title: 'Offer Approved',
-    message: 'Offer package for Mona Saleh (Registered Nurse – ICU) approved by Hospital Director.',
-    type: 'Offer',
-    readAt: null,
-    createdAt: new Date(Date.now() - 1000 * 60 * 160).toISOString(),
-  },
-  {
-    id: 'notif-3',
-    organizationId: 'org-1',
-    recipientUserId: 'u-1',
-    entityType: 'Alert',
-    entityId: 'app-3',
-    title: 'SLA Alert: Feedback Pending',
-    message: 'Technical interview feedback for Khaled Mostafa is overdue by 1 day.',
-    type: 'Alert',
-    readAt: null,
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 14).toISOString(),
-  },
-  {
-    id: 'notif-4',
-    organizationId: 'org-1',
-    recipientUserId: 'u-1',
-    entityType: 'Application',
-    entityId: 'app-4',
-    title: 'New Application',
-    message: 'Yousef Ahmed applied for DevOps Engineer position.',
-    type: 'Application',
-    readAt: new Date(Date.now() - 1000 * 60 * 60 * 26).toISOString(),
-    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 28).toISOString(),
-  },
-];
-
 export function NotificationAlertDialog({
   triggerVariant = 'button',
   className = '',
@@ -73,8 +22,8 @@ export function NotificationAlertDialog({
   // Allow all logged in users to view notifications
   const canViewNotifications = Boolean(user);
 
-  const [notifications, setNotifications] = useState<NotificationRecord[]>(DEFAULT_RECRUITMENT_NOTIFICATIONS);
-  const [unreadCount, setUnreadCount] = useState<number>(3);
+  const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
+  const [unreadCount, setUnreadCount] = useState<number>(0);
   const [isOpen, setIsOpen] = useState(false);
   const [filterTab, setFilterTab] = useState<'all' | 'unread'>('all');
   const [isLoading, setIsLoading] = useState(false);
@@ -95,7 +44,7 @@ export function NotificationAlertDialog({
         setUnreadCount(res.unreadCount);
       }
     } catch {
-      // Non-blocking fallback for unread count
+      setUnreadCount(0);
     }
   }, [canViewNotifications]);
 
@@ -107,18 +56,14 @@ export function NotificationAlertDialog({
       const params = new URLSearchParams({ page: '1', pageSize: '10' });
       if (filterTab === 'unread') params.set('unreadOnly', 'true');
       const res = await getApi<PaginatedResult<NotificationRecord>>(`/notifications?${params}`);
-      if (res?.data && res.data.length > 0) {
-        setNotifications(res.data);
-      }
+      setNotifications(res?.data || []);
     } catch (err: unknown) {
-      // If API fails or is not found, keep default recruitment notifications for demo
-      if (notifications.length === 0) {
-        setError((err as Error).message ?? 'Failed to load notifications');
-      }
+      setNotifications([]);
+      setError((err as Error).message ?? 'Failed to load notifications');
     } finally {
       setIsLoading(false);
     }
-  }, [canViewNotifications, filterTab, notifications.length]);
+  }, [canViewNotifications, filterTab]);
 
   useEffect(() => {
     void fetchUnreadCount();
@@ -139,7 +84,7 @@ export function NotificationAlertDialog({
     setMutatingIds((prev) => new Set(prev).add(id));
     setMutationError(null);
     try {
-      await patchApi<NotificationRecord>(`/notifications/${id}/read`).catch(() => {});
+      await patchApi<NotificationRecord>(`/notifications/${id}/read`);
       setNotifications((curr) =>
         curr.map((n) => (n.id === id ? { ...n, readAt: new Date().toISOString() } : n))
       );
@@ -160,7 +105,7 @@ export function NotificationAlertDialog({
     setMarkingAll(true);
     setMutationError(null);
     try {
-      await postApi('/notifications/read-all').catch(() => {});
+      await postApi('/notifications/read-all');
       setNotifications((curr) => curr.map((n) => ({ ...n, readAt: new Date().toISOString() })));
       setUnreadCount(0);
     } catch (err: unknown) {

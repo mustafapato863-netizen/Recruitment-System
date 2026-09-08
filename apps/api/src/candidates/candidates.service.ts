@@ -1,14 +1,17 @@
 import {
   ConflictException,
+  BadRequestException,
   HttpException,
   Inject,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import * as XLSX from 'xlsx';
 import type { Prisma } from '@recruitflow/database';
-import type { Candidate, PaginatedResult } from '@recruitflow/contracts';
+import type { AuthUser, Candidate, CandidateMetrics, PaginatedResult } from '@recruitflow/contracts';
 import { PrismaService } from '../database/prisma.service';
+import { AccessControlService } from '../access-control/access-control.service';
 import { exportFailed } from '../common/errors/api-error';
 import type {
   CandidateQueryDto,
@@ -20,15 +23,31 @@ import type {
 export class CandidatesService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Optional() @Inject(AccessControlService) private readonly accessControl?: AccessControlService,
   ) {}
+
+  private async visibilityWhere(organizationId: string, user?: AuthUser): Promise<Prisma.CandidateWhereInput> {
+    if (!user || !this.accessControl || user.roleCodes.includes('ADMINISTRATOR')) {
+      return { organizationId };
+    }
+    const applicationVisibility = await this.accessControl.getApplicationVisibilityWhere(user);
+    return {
+      organizationId: user.organizationId,
+      OR: [
+        { createdById: user.userId },
+        { applications: { some: applicationVisibility } },
+      ],
+    };
+  }
 
   async exportExcel(
     organizationId: string,
     query: CandidateQueryDto,
     disclosure: { viewPii: boolean },
+    user?: AuthUser,
   ): Promise<Buffer> {
     try {
-      const where: Prisma.CandidateWhereInput = { organizationId };
+      const where: Prisma.CandidateWhereInput = await this.visibilityWhere(organizationId, user);
 
       if (query.status) {
         where.status = query.status;
@@ -38,13 +57,22 @@ export class CandidatesService {
       }
       if (query.search?.trim()) {
         const term = query.search.trim();
-        where.OR = [
-          { firstName: { contains: term, mode: 'insensitive' } },
-          { lastName: { contains: term, mode: 'insensitive' } },
-          { email: { contains: term, mode: 'insensitive' } },
-          { candidateCode: { contains: term, mode: 'insensitive' } },
-          { currentCompany: { contains: term, mode: 'insensitive' } },
-        ];
+        const searchOr: Prisma.CandidateWhereInput[] = [
+            { firstName: { contains: term, mode: 'insensitive' } },
+            { lastName: { contains: term, mode: 'insensitive' } },
+            { email: { contains: term, mode: 'insensitive' } },
+            { candidateCode: { contains: term, mode: 'insensitive' } },
+            { currentCompany: { contains: term, mode: 'insensitive' } },
+          ];
+        const searchClause: Prisma.CandidateWhereInput = { OR: searchOr };
+        if (where.OR) {
+          where.AND = [
+            ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
+            searchClause,
+          ];
+        } else {
+          where.OR = searchOr;
+        }
       }
 
       const candidates = await this.prisma.candidate.findMany({
@@ -103,12 +131,13 @@ export class CandidatesService {
     organizationId: string,
     query: CandidateQueryDto,
     disclosure: { viewPii: boolean },
+    user?: AuthUser,
   ): Promise<PaginatedResult<Candidate>> {
     const page = query.page && query.page > 0 ? query.page : 1;
     const pageSize = query.pageSize && query.pageSize > 0 ? query.pageSize : 20;
     const skip = (page - 1) * pageSize;
 
-    const where: Prisma.CandidateWhereInput = { organizationId };
+    const where: Prisma.CandidateWhereInput = await this.visibilityWhere(organizationId, user);
 
     if (query.status) {
       where.status = query.status;
@@ -118,13 +147,22 @@ export class CandidatesService {
     }
     if (query.search?.trim()) {
       const term = query.search.trim();
-      where.OR = [
-        { firstName: { contains: term, mode: 'insensitive' } },
-        { lastName: { contains: term, mode: 'insensitive' } },
-        { email: { contains: term, mode: 'insensitive' } },
-        { candidateCode: { contains: term, mode: 'insensitive' } },
-        { currentCompany: { contains: term, mode: 'insensitive' } },
-      ];
+      const searchOr: Prisma.CandidateWhereInput[] = [
+          { firstName: { contains: term, mode: 'insensitive' } },
+          { lastName: { contains: term, mode: 'insensitive' } },
+          { email: { contains: term, mode: 'insensitive' } },
+          { candidateCode: { contains: term, mode: 'insensitive' } },
+          { currentCompany: { contains: term, mode: 'insensitive' } },
+        ];
+      const searchClause: Prisma.CandidateWhereInput = { OR: searchOr };
+      if (where.OR) {
+        where.AND = [
+          ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
+          searchClause,
+        ];
+      } else {
+        where.OR = searchOr;
+      }
     }
 
     const [total, items] = await Promise.all([
@@ -145,13 +183,66 @@ export class CandidatesService {
     };
   }
 
+  async getMetrics(organizationId: string, user?: AuthUser): Promise<CandidateMetrics> {
+    const visibility = await this.visibilityWhere(organizationId, user);
+    const directOrReferral: Prisma.CandidateWhereInput = {
+      OR: [
+        { source: { contains: 'direct', mode: 'insensitive' } },
+        { source: { contains: 'referral', mode: 'insensitive' } },
+        { source: { contains: 'career', mode: 'insensitive' } },
+      ],
+    };
+    const [totalCandidates, activeInPipeline, talentPool, disqualified, directReferral] = await Promise.all([
+      this.prisma.candidate.count({ where: visibility }),
+      this.prisma.candidate.count({
+        where: {
+          AND: [visibility, {
+            applications: {
+              some: {
+                organizationId,
+                stage: { in: ['Applied', 'Screening', 'Interview', 'Offer', 'Pre-Hire'] },
+              },
+            },
+          }],
+        },
+      }),
+      this.prisma.candidate.count({
+        where: {
+          AND: [visibility, {
+            talentPoolMemberships: {
+              some: {
+                talentPool: { organizationId, status: 'Active' },
+                consentStatus: 'Active',
+                eligibility: 'Eligible',
+              },
+            },
+          }],
+        },
+      }),
+      this.prisma.candidate.count({ where: { AND: [visibility, { status: 'Blacklisted' }] } }),
+      this.prisma.candidate.count({ where: { AND: [visibility, directOrReferral] } }),
+    ]);
+
+    return {
+      totalCandidates,
+      activeInPipeline,
+      talentPool,
+      disqualified,
+      directReferralPercentage: totalCandidates > 0
+        ? Math.round((directReferral / totalCandidates) * 1000) / 10
+        : null,
+    };
+  }
+
   async getCandidate(
     organizationId: string,
     id: string,
     disclosure: { viewPii: boolean },
+    user?: AuthUser,
   ): Promise<Candidate> {
-    const candidate = await this.prisma.candidate.findUnique({
-      where: { id },
+    const visibility = await this.visibilityWhere(organizationId, user);
+    const candidate = await this.prisma.candidate.findFirst({
+      where: { id, ...visibility },
     });
 
     if (!candidate || candidate.organizationId !== organizationId) {
@@ -161,44 +252,72 @@ export class CandidatesService {
     return this.toCandidate(candidate, disclosure);
   }
 
+  /** Return visible duplicate suggestions without merging or mutating identities. */
+  async findDuplicateSuggestions(
+    organizationId: string,
+    query: { email?: string; phone?: string },
+    user?: AuthUser,
+    disclosure: { viewPii: boolean } = { viewPii: false },
+  ): Promise<Candidate[]> {
+    const email = query.email?.trim().toLowerCase();
+    const phone = normalizePhone(query.phone);
+    if (!email && !phone) return [];
+    const visibility = await this.visibilityWhere(organizationId, user);
+    const candidates = await this.prisma.candidate.findMany({
+      where: {
+        AND: [visibility, {
+          OR: [
+            ...(email ? [{ email: email }] : []),
+            ...(phone ? [{ phone: { not: null } }] : []),
+          ],
+        }],
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: 20,
+    });
+    return candidates
+      .filter((candidate) => (email && candidate.email?.toLowerCase() === email) || (phone && normalizePhone(candidate.phone) === phone))
+      .map((candidate) => this.toCandidate(candidate, disclosure));
+  }
+
   async createCandidate(
     organizationId: string,
     dto: CreateCandidateDto,
+    createdById?: string,
   ): Promise<Candidate> {
-    const created = await this.createCandidateRecord(organizationId, dto);
+    const created = await this.createCandidateRecord(organizationId, dto, createdById);
     return this.toCandidate(created, { viewPii: true });
   }
 
   private async createCandidateRecord(
     organizationId: string,
     dto: CreateCandidateDto,
+    createdById?: string,
   ): Promise<Prisma.CandidateGetPayload<{}>> {
-    const existing = await this.prisma.candidate.findUnique({
-      where: {
-        organizationId_email: {
-          organizationId,
-          email: dto.email.trim().toLowerCase(),
-        },
-      },
-    });
+    const email = dto.email?.trim().toLowerCase() || null;
+    const phone = normalizePhone(dto.phone);
+    if (!email && !phone) {
+      throw new BadRequestException('Provide at least one valid contact method: email or phone.');
+    }
+    const existing = await this.findExistingByContact(organizationId, email, phone);
 
     if (existing) {
-      throw new ConflictException(
-        `Candidate with email ${dto.email} already exists in your organization.`,
-      );
+      throw new ConflictException('A candidate with the same email or phone already exists in your organization.');
     }
 
     const candidateCode = await this.nextCandidateCode();
     const created = await this.prisma.candidate.create({
       data: {
         organizationId,
+        createdById: createdById ?? null,
         candidateCode,
         firstName: dto.firstName.trim(),
         lastName: dto.lastName.trim(),
-        email: dto.email.trim().toLowerCase(),
-        phone: dto.phone?.trim() ?? null,
+        email,
+        phone,
         currentTitle: dto.currentTitle?.trim() ?? null,
         currentCompany: dto.currentCompany?.trim() ?? null,
+        summary: dto.summary?.trim() ?? null,
         source: dto.source?.trim() ?? null,
         status: 'Active',
         skills: dto.skills ?? [],
@@ -217,36 +336,34 @@ export class CandidatesService {
     organizationId: string,
     id: string,
     dto: UpdateCandidateDto,
+    user?: AuthUser,
   ): Promise<Candidate> {
-    const candidate = await this.prisma.candidate.findUnique({ where: { id } });
+    const visibility = await this.visibilityWhere(organizationId, user);
+    const candidate = await this.prisma.candidate.findFirst({ where: { id, ...visibility } });
     if (!candidate || candidate.organizationId !== organizationId) {
       throw new NotFoundException(`Candidate ${id} was not found.`);
     }
 
-    if (dto.email && dto.email.trim().toLowerCase() !== candidate.email) {
-      const existing = await this.prisma.candidate.findUnique({
-        where: {
-          organizationId_email: {
-            organizationId,
-            email: dto.email.trim().toLowerCase(),
-          },
-        },
-      });
-
-      if (existing && existing.id !== id) {
-        throw new ConflictException(
-          `Candidate with email ${dto.email} already exists in your organization.`,
-        );
+    const nextEmail = dto.email === undefined ? candidate.email : dto.email?.trim().toLowerCase() || null;
+    const nextPhone = dto.phone === undefined ? normalizePhone(candidate.phone) : normalizePhone(dto.phone);
+    if (!nextEmail && !nextPhone) {
+      throw new BadRequestException('Provide at least one valid contact method: email or phone.');
+    }
+    if (dto.email !== undefined || dto.phone !== undefined) {
+      const existing = await this.findExistingByContact(organizationId, nextEmail, nextPhone, id);
+      if (existing) {
+        throw new ConflictException('A candidate with the same email or phone already exists in your organization.');
       }
     }
 
     const dataToUpdate: Prisma.CandidateUpdateInput = {};
     if (dto.firstName) dataToUpdate.firstName = dto.firstName.trim();
     if (dto.lastName) dataToUpdate.lastName = dto.lastName.trim();
-    if (dto.email) dataToUpdate.email = dto.email.trim().toLowerCase();
-    if (dto.phone !== undefined) dataToUpdate.phone = dto.phone?.trim() ?? null;
+    if (dto.email !== undefined) dataToUpdate.email = nextEmail;
+    if (dto.phone !== undefined) dataToUpdate.phone = nextPhone;
     if (dto.currentTitle !== undefined) dataToUpdate.currentTitle = dto.currentTitle?.trim() ?? null;
     if (dto.currentCompany !== undefined) dataToUpdate.currentCompany = dto.currentCompany?.trim() ?? null;
+    if (dto.summary !== undefined) dataToUpdate.summary = dto.summary?.trim() ?? null;
     if (dto.source !== undefined) dataToUpdate.source = dto.source?.trim() ?? null;
     if (dto.status) dataToUpdate.status = dto.status;
     if (dto.skills !== undefined) dataToUpdate.skills = dto.skills;
@@ -274,6 +391,28 @@ export class CandidatesService {
     return `CND-${year}-${String(seq.lastIssued).padStart(3, '0')}`;
   }
 
+  private async findExistingByContact(
+    organizationId: string,
+    email: string | null,
+    phone: string | null,
+    excludeId?: string,
+  ): Promise<Prisma.CandidateGetPayload<{}> | null> {
+    const baseWhere: Prisma.CandidateWhereInput = {
+      organizationId,
+      ...(excludeId ? { id: { not: excludeId } } : {}),
+    };
+    if (email) {
+      const emailMatch = await this.prisma.candidate.findFirst({ where: { ...baseWhere, email } });
+      if (emailMatch) return emailMatch;
+    }
+    if (!phone) return null;
+    const phoneCandidates = await this.prisma.candidate.findMany({
+      where: { ...baseWhere, phone: { not: null } },
+      take: 1000,
+    });
+    return phoneCandidates.find((item) => normalizePhone(item.phone) === phone) ?? null;
+  }
+
   private toCandidate(
     record: Prisma.CandidateGetPayload<{}>,
     disclosure: { viewPii: boolean },
@@ -288,6 +427,7 @@ export class CandidatesService {
       phone: disclosure.viewPii ? record.phone : maskPhone(record.phone),
       currentTitle: record.currentTitle,
       currentCompany: record.currentCompany,
+      summary: record.summary,
       source: record.source,
       status: record.status as Candidate['status'],
       consentStatus: record.consentStatus,
@@ -305,11 +445,18 @@ export class CandidatesService {
   }
 }
 
-function maskEmail(email: string): string {
+function maskEmail(email: string | null): string {
+  if (!email) return 'Not provided';
   const [localPart, domain] = email.split('@');
   if (!localPart || !domain) return 'restricted';
   const visible = localPart.slice(0, 1);
   return `${visible}${'•'.repeat(Math.max(1, localPart.length - 1))}@${domain}`;
+}
+
+function normalizePhone(phone: string | null | undefined): string | null {
+  if (!phone) return null;
+  const digits = phone.replace(/\D/g, '');
+  return digits.length >= 7 ? digits : null;
 }
 
 function maskPhone(phone: string | null): string | null {

@@ -46,6 +46,7 @@ interface OrgUser {
   id: string;
   displayName: string;
   email: string;
+  jobTitle?: string | null;
 }
 
 interface InterviewApplicationView {
@@ -69,7 +70,7 @@ export function InterviewsPage() {
 
   const [apiInterviews, setApiInterviews] = useState<InterviewListItem[]>([]);
   const [applications, setApplications] = useState<Application[]>([]);
-  const [orgUsers, setOrgUsers] = useState<Array<{ id: string; displayName: string }>>([]);
+  const [orgUsers, setOrgUsers] = useState<Array<{ id: string; displayName: string; jobTitle?: string | null }>>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [interviewsScope, setInterviewsScope] = useState<'all' | 'mine'>('all');
   const [dateRange, setDateRange] = useState('All Dates');
@@ -84,7 +85,6 @@ export function InterviewsPage() {
 
   // Scheduling Form State
   const [selectedAppId, setSelectedAppId] = useState('');
-  const [interviewTitle, setInterviewTitle] = useState('');
   const [interviewType, setInterviewType] = useState<'Screening' | 'Technical' | 'Behavioral' | 'Managerial' | 'Executive'>('Technical');
   const [scheduledDateTime, setScheduledDateTime] = useState(() => {
     const d = new Date();
@@ -92,7 +92,9 @@ export function InterviewsPage() {
     d.setHours(10, 0, 0, 0);
     return d.toISOString().slice(0, 16);
   });
+  const [meetingLink, setMeetingLink] = useState('');
   const [selectedAttendees, setSelectedAttendees] = useState<string[]>([]);
+  const [attendeeJobTitles, setAttendeeJobTitles] = useState<Record<string, string>>({});
   const [allowConflict, setAllowConflict] = useState(false);
   const [conflictWarning, setConflictWarning] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -110,7 +112,7 @@ export function InterviewsPage() {
       ]);
       if (usersRes.status === 'fulfilled') {
         const uList = Array.isArray(usersRes.value) ? usersRes.value : usersRes.value?.data || [];
-        setOrgUsers(uList.map((u) => ({ id: u.id, displayName: u.displayName || u.email })));
+        setOrgUsers(uList.map((u) => ({ id: u.id, displayName: u.displayName || u.email, jobTitle: u.jobTitle })));
       }
 
       if (vacancyId) {
@@ -430,24 +432,25 @@ export function InterviewsPage() {
       const startDate = new Date(scheduledDateTime);
       const endDate = new Date(startDate.getTime() + 45 * 60000);
 
-      const resolvedTitle = interviewTitle.trim() || `${interviewType} Interview Round`;
       const attendeeIds = selectedAttendees.length > 0 ? selectedAttendees : (user?.id ? [user.id] : []);
 
       await postApi('/interviews', {
         applicationId: selectedAppId,
-        title: resolvedTitle,
+        attendeeJobTitles,
         interviewType,
         scheduledStart: startDate.toISOString(),
         scheduledEnd: endDate.toISOString(),
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Riyadh',
         attendeeUserIds: attendeeIds,
         allowConflict,
+        locationUrl: meetingLink.trim() || null,
       });
 
-      showToast(`✓ Interview "${resolvedTitle}" scheduled successfully!`);
+      showToast(`✓ ${interviewType} interview scheduled successfully.`);
       setIsScheduleModalOpen(false);
       setAllowConflict(false);
       setConflictWarning(null);
+      setMeetingLink('');
       await loadData();
     } catch (err: unknown) {
       if (err instanceof ApiError && err.statusCode === 409) {
@@ -795,17 +798,6 @@ export function InterviewsPage() {
           </div>
 
           <div>
-            <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">Interview Title</label>
-            <input
-              type="text"
-              value={interviewTitle}
-              onChange={(e) => setInterviewTitle(e.target.value)}
-              placeholder="e.g. Clinical Assessment Panel"
-              className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
-            />
-          </div>
-
-          <div>
             <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">Interview Type</label>
             <select
               value={interviewType}
@@ -833,6 +825,20 @@ export function InterviewsPage() {
             />
           </div>
 
+          <div>
+            <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300" htmlFor="interview-meeting-link">Meeting link <span className="font-normal text-slate-400">(optional)</span></label>
+            <input
+              id="interview-meeting-link"
+              type="url"
+              inputMode="url"
+              value={meetingLink}
+              onChange={(e) => setMeetingLink(e.target.value)}
+              placeholder="https://meet.google.com/..."
+              className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
+            />
+            <p className="mt-1 text-[10px] text-slate-500">Add the online meeting URL or leave blank for an on-site interview.</p>
+          </div>
+
           {orgUsers.length > 0 && (
             <div>
               <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">Assigned Interviewer Panel</label>
@@ -851,6 +857,15 @@ export function InterviewsPage() {
                         className="rounded text-blue-600 focus:ring-0"
                       />
                       <span className="text-slate-700 dark:text-slate-200 font-medium">{u.displayName}</span>
+                      {isChecked && (
+                        <input
+                          aria-label={`${u.displayName} job title`}
+                          value={attendeeJobTitles[u.id] ?? u.jobTitle ?? ''}
+                          onChange={(event) => setAttendeeJobTitles((current) => ({ ...current, [u.id]: event.target.value }))}
+                          placeholder="Job title"
+                          className="ml-auto min-w-0 w-36 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] dark:border-slate-700 dark:bg-slate-900"
+                        />
+                      )}
                     </label>
                   );
                 })}

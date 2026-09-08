@@ -1,6 +1,44 @@
 # Progress Log — RecruitFlow Candidate Journey
 
+## Deployment preparation 2026-09-08
+
+Read supplied incident report and relevant skills; inspected runtime, package scripts and schema. Beginning production packaging and isolated checks.
+
 ## Session 2026-09-07
+
+### Full enhancement plan prepared
+
+- Rechecked access-policy persistence, role/navigation configuration, recruiter assignment implementation, candidate ownership gaps, task schema and report authorization.
+- User chose multi-user UAT, improvements to current UI, operational metrics, primary recruiter plus support, uploader/admin-only unassigned candidates, and isolated integration tests.
+- Created docs/uat-enhancement-plan.md with ordered stages, API/schema compatibility, measurement definitions, migrations/recovery, and acceptance gates. No application code or database modified for this planning request.
+
+### Candidate activity and system review completed
+
+- Added persisted candidate activity API and profile/drawer panel: totals, personal contribution, type/recruiter breakdown, timeline, planned follow-ups, overdue count and idempotent completion.
+- Removed simulated drawer chatter/email/scorecard actions; linked real interview/hiring workflows and candidate tasks. Responsive drawer stacks on mobile.
+- New API tests 12 (55 API total); panel tests 4 (in addition to 141 existing web tests); worker 4. Lint, types and production build pass. Database has 25 applied migrations, health/readiness 200.
+- Real local integration/browser regression passed including notes from two applications, screening aggregation, activity/follow-up persistence, repeated completion, invalid requests, reload and 375/1440 px overflow. Disposable records cleaned up.
+- Whole-system matrix: 382/396 passed; 14 accessibility failures represent unnamed candidate action buttons/contrast and application contrast. CSS budget fails at 406.24 KiB versus 225 KiB. These are not declared fixed.
+- Review: docs/system-review-2026-09-07.md. P1 application scope, inactive assignments, repeated assignment uniqueness and generic task tenant-reference gaps recorded for follow-up. No production readiness claim.
+
+### Completed — Resolution of CV Intake Candidate Ingest 400 Bad Request
+- [x] **Candidate DTO & Prisma Schema Synchronization**:
+  - Added `summary` field (`@MaxLength(5000)`) to `CreateCandidateDto` and `UpdateCandidateDto`.
+  - Added `summary TEXT` to `Candidate` table in `schema.prisma` and applied migration `20260907_candidate_summary`.
+  - Service now maps `summary` directly during creation and update operations.
+- [x] **Frontend Ingest Hardening & Validation Protection (`useCVIntakeFlow.ts`)**:
+  - Added RFC-compliant email format regex validation in `proceedToResolve()` to fail fast before submission.
+  - Implemented safe integer rounding for `experienceYears` (`Math.max(0, Math.round(Number(profile.experienceYears)))`), avoiding `@IsInt()` decimal rejections.
+  - Added defensive string truncation aligning with backend `@MaxLength` limits (`firstName`/`lastName` <= 80, `email` <= 255, `phone` <= 40, `currentTitle`/`currentCompany`/`location` <= 120, `summary` <= 5000).
+  - Wired duplicate decision handling: `'update'` calls `PATCH /candidates/:id` to enrich existing candidate, `'link'` registers application without mutating identity, and `'new'` provides clear guidance if an identical email exists.
+- [x] **API Client Validation Error Transparency (`client.ts`)**:
+  - Implemented `normalizeFieldErrors` and updated `handleResponseError` to append field-level validation failure reasons directly into `ApiError.message`.
+  - Added unit test in `client.test.ts` verifying 400 Bad Request field error formatting.
+- [x] **Test Verification**:
+  - Web Vitest Suite: 40 test files, 141 tests passing (0 failures).
+  - API Vitest Suite: 8 test files, 43 tests passing (0 failures).
+  - Monorepo Typecheck: Clean compilation across `apps/web` and `apps/api`.
+  - Live End-to-End Verification: Tested `POST /candidates` and `PATCH /candidates/:id` through Vite proxy (port 5173), returning 201 Created and 200 OK.
 
 ### Completed — Full-App Workflow Simplification & Step Customizer Release
 - [x] **Applications Pipeline (`ApplicationsPage.tsx`)**:
@@ -710,3 +748,172 @@
 
 
 
+### Testing readiness audit 2026-09-07
+- Started fresh verification; preserved existing controller edit.
+- Completed readiness audit: typecheck, lint, build, 187 unit tests, 22-migration status, isolated integration/security suites, and 324/324 browser matrix checks pass. Local launcher remains available at http://localhost:5173 with API health at http://localhost:3000/api/v1/health.
+
+### Dynamic VL sample 2026-09-07
+- Read `D:\Manpower\VL.xlsx` at runtime and imported six distinct open positions from `Rowdata` through the existing review/confirm import APIs.
+- Approved and converted six vacancy requests, enriched them with source-derived requirements, and opened them for CV matching.
+- Removed hardcoded CV demo presets, notification records, applicant portal records, and fabricated report fallbacks.
+- Web typecheck/build and root lint pass after the changes. API verification confirms six open VL vacancies with non-empty requirements; browser matrix passes 348/348.
+
+### Admin-only RBAC and sidebar governance 2026-09-07
+- Added tenant-local permission metadata and CRUD endpoints, custom role naming/renaming, permission assignment, and safe custom-role deletion behind `ROLES_MANAGE`.
+- Added persisted organization controls for visible roles and role-name overrides, plus a dynamic navigation catalog with admin-managed labels and visibility.
+- Cleaned `RECRUITFLOW-DEMO`: retained the administrator, removed 10 organization-local custom roles, preserved the shared 27-permission catalog and all business/VL records.
+- Added the Permissions & Sidebar tab to Users & Roles and connected AppShell to the navigation API while keeping route/API permission guards authoritative.
+- Verification: API/web typecheck and builds pass, lint passes, unit tests pass (187 total), live role/permission/navigation smoke passes, and browser matrix passes 348/348.
+
+### CV intake candidate summary and recruiter screening 2026-09-07
+- Fixed the reported `POST /api/v1/candidates` 400 by accepting and persisting the CV parser's optional `summary` field through the API, Prisma model, and shared contracts.
+- Added dynamic recruiter Screening Details fields: outcome, notice period in days, expected salary, current salary, salary currency, and notes.
+- Salary values are permission-aware: `VIEW_CURRENT_SALARY` is checked server-side for screening reads and writes, and the drawer disables salary inputs when the permission is absent.
+- Added and applied `20260907_candidate_summary` and `20260907_screening_compensation` migrations; database is current at 25 migrations.
+- Verification: API smoke passed for candidate summary and screening values; web 141/141, API 43/43, worker 4/4 tests; typecheck, lint, builds, `db:validate`, and `db:migrate:status` pass. Local services are running on ports 5173 and 3000.
+- Service-level negative smoke confirms salary values are neither persisted nor returned when `VIEW_CURRENT_SALARY` is absent; the browser drawer smoke saved the fields successfully as administrator.
+
+### Vacancy assignment persistence and display fix 2026-09-07
+- Fixed `ManagerDashboard` to call `POST /vacancies/:id/assignments` with the selected recruiter (`RECRUITER`) before creating the optional target task.
+- Updated `PrismaVacancyCoreRepository` to synchronize assignment rows transactionally, preserve inactive history, and return active assignment users with `id` and `displayName`.
+- Added the optional nested assignment user to the shared `VacancyAssignment` contract so Command Center and vacancy list recruiter labels are dynamic after reload.
+- Limited the manager assignment selector to open vacancies.
+- Verification: API 201 + database/list/detail round-trip passed; browser modal smoke passed; web 141/141, API 43/43, worker 4/4, workspace typecheck, and lint passed. Temporary smoke assignments were cleaned up.
+
+### Full scope and dynamic-data hardening 2026-09-07
+- Applied the canonical authenticated visibility predicate across candidate, vacancy, application, screening, interview, offer, hiring, documents, tasks, exports, and reports. Search filters are composed with the visibility predicate so scoped lists and counts cannot be widened by a search term.
+- Candidate detail now requests candidate-filtered resources and up to 100 applications, removing the implicit default first-page truncation for normal UAT-sized histories.
+- Removed fixed demo persona switching from the user menu and replaced role-name checks in dashboard/task/joining UI with granted permissions. The development launcher now starts the API, web, and worker without printing deleted demo credentials.
+- Reports now use live application source counts and explicit unavailable states for empty time-to-hire/coverage data; default reporting period is the last 30 calendar days.
+- Fixed candidate list accessibility findings: all 12 candidate route checks (six widths × two themes) pass with labelled row actions and contrast-safe initials.
+
+### Final verification 2026-09-07
+- Passed API typecheck and 56/56 API tests.
+- Passed web typecheck and 145/145 web tests.
+- Passed root lint and `git diff --check`.
+- Focused browser accessibility matrix passed 12/12 for `/candidates` across light/dark and 375–1440px widths.
+- Local API health/readiness and web/worker processes remain available for UAT.
+- Known gates remain documented: legacy auth scripts reference intentionally deleted demo accounts, CSS budget is above the existing 225 KiB threshold, and global activity/report metrics plus worker heartbeat telemetry are future enhancements.
+
+### Dynamic candidate metrics and final browser gate 2026-09-07
+- Added live candidate metrics for total talent, active pipeline, eligible talent-pool membership, direct/referral source percentage, and disqualified records. The endpoint is tenant-scoped and permission-protected.
+- Restarted the API from the current build after detecting that the previously running process was stale and returned 500 for `/candidates/metrics`.
+- Final focused candidate matrix passed 12/12 and the full dual-mode browser matrix passed 396/396 after the current API build was verified.
+
+### Full application detail flow 2026-09-08
+- Removed the applications-list split drawer flow. Clicking a table row or board card now opens the full applicant profile route.
+- Merged candidate activity into the profile Activity tab and moved recruiter screening details into the profile Overview sidebar so activity, screening, and stage actions are available in one page.
+- Focused application route matrix passed 12/12 across both themes and 375/768/1440px widths. Web typecheck, 145/145 tests, lint, and build passed.
+- Direct browser smoke clicked the first board card and confirmed navigation to its full application profile route.
+- A later full-matrix attempt encountered session 401 responses after several minutes; the fresh-login focused application checks remained clean (12/12).
+
+### Simplified CV entry flow 2026-09-08
+- Added a clear Upload CV action beside Existing Candidate and Full details in the pipeline modal.
+- Upload CV opens the full CV intake/matching page with the selected vacancy preserved, avoiding duplicated parser logic in the modal.
+- CV intake now stores the uploaded binary as a candidate document after candidate resolution and keeps the extracted text attached to that record.
+- Browser smoke confirmed the modal route handoff; the applications and vacancy-aware CV intake routes passed 8/8 focused checks. Web typecheck, 145/145 tests, and build passed.
+
+### Smarter CV identity and source capture 2026-09-08
+- Improved CV parsing to strip known and generic role phrases from names and filename fallbacks, including titles that are not in the curated title list.
+- Added a Stage 2 Source of CV field and passed it through the existing candidate and application persistence payloads.
+- Added regression coverage for title/name collisions, filename-only fallback, and generic titles. Focused parser tests passed 5/5 and the applications plus vacancy-aware CV intake browser matrix passed 8/8.
+- Web typecheck and lint passed; the production web build completed successfully.
+
+### Employee one-workspace navigation audit 2026-09-08
+- Confirmed `EmployeeDashboard` already provides a suitable single workspace for personal requests and active tasks.
+- Found that the dashboard mode currently treats any `VACANCY_VIEW` user as a manager, which makes read-only/requester roles see a larger workspace than needed.
+- Found the sidebar has multiple groups and the header task shortcut is not conditional on `TASK_VIEW`; implementation will reduce employee navigation without changing route permissions.
+
+### Employee one-workspace navigation implementation 2026-09-08
+- Added a shared employee/requester workspace persona check and routed those users to the existing My Work dashboard.
+- Reduced employee sidebar navigation to My Work plus permission-appropriate requisitions; operational roles keep the full recruitment and governance navigation.
+- Made task shortcuts, request loading, and dashboard actions permission-aware and removed the unrelated referral/help card from the employee workspace.
+- Verification passed: web tests 149/149, web typecheck, root lint, production build, browser matrix 8/8, API health/readiness 200, and web root 200.
+
+### CSS payload repair 2026-09-08
+- Traced the CSS budget failure to the full Tailwind entrypoint exporting the unused default theme palette.
+- Tested replacing the full entrypoint with preflight plus utilities imports. Browser screenshots showed missing spacing, typography, and surfaces; the experiment was reverted immediately.
+- A second subset-palette experiment restored some color utilities but produced a 327.52 KiB CSS bundle, so it was also reverted.
+- Functional visual baseline is preserved. CSS optimization remains a separate design task requiring route-safe code splitting or utility consolidation.
+
+### Full application audit and focused repair 2026-09-08
+- Audited API contracts, role presentation, offer approval links, CV extraction defaults, empty-state navigation, task pagination, sidebar permissions, public vacancy links, and employee panel errors.
+- Fixed all ten source findings: paginated task normalization, mixed-role precedence, shared flat offer-approval DTO with `offerId`, evidence-based CV values/confidence, `/offers/create`, bounded pagination, matching Email Templates permission, dynamic organization-code links, and visible panel failures.
+- Added task response and pagination parser regression tests; refreshed the audit report with the remaining CSS budget and browser coverage limits.
+- Verification: web 153/153, API 58/58, worker 4/4, typecheck, lint, `git diff --check`, and web build pass. Fresh API verification on port 3001 returns HTTP 400 for invalid task pagination; fresh full route checks pass 132/132 through the current-API proxy at 375px and 1440px in both themes, with focused repair checks 32/32. CSS budget remains over threshold and should be handled as a separate performance phase.
+
+### Duplicate and deferred page cleanup 2026-09-08
+- Audited all registered page entry points and workflow links.
+- Removed the unreferenced TalentPoolDetailPage redirect component.
+- Removed the admin-only DesignSystemPage showcase and its duplicate /components and /design-system routes; design-system primitives and documentation remain.
+- Kept active CV Bank, import preview, candidate comparison, applicant portal, and recruitment workflow pages. Legacy redirect aliases remain for existing bookmarks.
+- Verification passed: web tests 149/149, web typecheck, root lint, production build, browser matrix 8/8, API health/readiness 200, and web root 200.
+
+### Design-token checker repair 2026-09-08
+- The design-token checker still referenced the deleted `DesignSystemPage.tsx`, causing an `ENOENT` failure after duplicate-page cleanup.
+- Removed the stale explicit input. The command now reaches its intended checks and reports the existing legacy palette baseline (9,338 occurrences versus the 850 budget), which remains a planned migration rather than a threshold increase.
+- Verification after the repair: web tests 153/153, API tests 58/58, worker tests 4/4, workspace typecheck, root lint, and production web build passed. The bundle gate still reports the known CSS budget overage.
+
+### Long-running session verification 2026-09-08
+
+### Final Luna review and local UAT gate - 2026-09-08
+
+- Luna's delegated implementation was independently reviewed and repaired where needed. The review covered candidate activity, interview title/job-title persistence, My Work/navigation cleanup, nullable email and normalized phone paths, CV identity/source capture, and the tabbed Master Data grid.
+- Fixed the public phone duplicate lookup to compare normalized contacts across candidate rows, and fixed Master Data paste staging so pasted edits are saved correctly.
+- Full local suite passed: web 153/153, API 58/58, worker 4/4; workspace typecheck, root lint, API/web production builds, migration status and read-only audit checks all passed.
+- Browser verification passed 28/28 across `/cv-intake`, `/offers/create`, `/applications`, `/interviews`, `/master-data`, `/my-work` and `/candidates` at 375px/1440px in light and dark themes. Candidate activity, public phone dedupe, Master Data concurrency and interview-title persistence regression smokes passed.
+- Local UAT is ready at `http://127.0.0.1:5176` with API `http://127.0.0.1:3002`; the existing 5173/3000 processes were left untouched. CSS/design-token budget warnings and the prior long-session 401 observation remain documented follow-ups.
+
+### Version-one simplification plan
+- Created `docs/version-one-simplification-plan.md` from the agreed product decisions, with ordered phases, navigation disposition, data dependencies and acceptance criteria.
+- Recorded phone-only entry's existing required-email schema/API dependency and preserved audit/security requirements.
+- Planning only: no application code, database records or running services changed for this request.
+- A 396-check browser run stayed green for 156 checks, then began logging 401 responses across later routes. The failure is session-wide rather than route-specific.
+- A fresh current-build two-width matrix passed 132/132 (375px and 1440px, light and dark). A direct API cookie round-trip also passed login 200, refresh 200, and `/auth/me` 200.
+- Keep session-lifetime/refresh observability as a P2 reliability follow-up; do not treat the long-run result as a page regression.
+
+## Luna version-one implementation handoff — 2026-09-08
+
+Implemented the current version-one simplification slice across candidate entry, interviews, activity, My Work routing, navigation, Master Data and persistence. Baseline is recorded in `docs/luna-v1-baseline-20260908.md`; independent review evidence is appended to `docs/version-one-independent-review.md`. API/web/worker typechecks, API 58/58 tests, web 153/153 tests, activity panel 4/4 tests, worker 4/4 tests, lint, production build, Prisma validation, local migration deploy/status, disposable migration reverse/reapply and diff check passed. CSS/design-token budgets and long-session 401 follow-up remain explicit release limitations; full browser UAT after this final delta is still pending.
+### Users & Roles full build — 2026-09-08
+
+- Started the full Users & Roles implementation from the agreed three-area scope: complete Users workspace, complete Roles/permission workspace, and configuration/preview/audit tools.
+- Baseline audit and access-model decisions recorded in `findings.md`; implementation is now moving through durable API/data changes before the UI expansion.
+
+### Master Data delegated repair — 2026-09-08
+
+- Delegated Master Data route/load/save repair to Luna and reviewed the resulting diff independently.
+- Rebuilt the API and restarted the user-facing port-3000 process; `GET /api/v1/master-data/catalog/branches` now reaches the registered controller instead of the stale-process 404.
+- Fixed the audited Job Titles legal-entity payload omission after delegation.
+- Verification: API/web typecheck, API/root lint, web tests 153/153, API/web production builds, Master Data smoke on port 3000, migration status (29 current), and `git diff --check` passed. The full web test run is stable when run sequentially; a parallel invocation produced unrelated shared-environment failures.
+
+### Role creation access setup — 2026-09-08
+
+- Expanded `UsersRolesPage` so Create role loads live permissions and sidebar pages, supports multi-select with select-all/clear-all, and submits the selected access as part of the guided role setup.
+- Added role-scoped navigation visibility DTO/controller/service support. The authenticated navigation endpoint resolves visibility for the user’s role codes and global navigation updates retain role-specific configuration.
+- Added `tests/role-access-local.cjs`; the role creation, permission assignment and sidebar visibility smoke passed against the rebuilt port-3000 API.
+- Final verification for this delta passed: workspace typecheck, root lint, API/web builds, API tests 58/58, web tests 153/153, Master Data smoke, role-access smoke, migration status (29 current), API health 200 and `git diff --check`.
+
+### Role access form UX refinement — 2026-09-08
+
+- Expanded the Create role and access dialog to `max-w-6xl` with a structured identity card, numbered access steps, responsive panels and a sticky footer.
+- Added searchable permission and sidebar-page lists, shared 44px checkbox targets, selected-count badges, no-match states and horizontal-overflow protection for long codes/routes.
+- Verification passed: web typecheck, web lint, web tests 153/153, production web build and `git diff --check`.
+- Browser smoke passed at 1440px and 375px: the dialog renders the new title, both search fields and the full checkbox catalog, with no horizontal page overflow.
+
+### Modal input focus regression — 2026-09-08
+
+- Added a focused `Modal.test.tsx` regression that types into a controlled input while the parent rerenders; it failed before the fix with focus on the close button and passed after the fix.
+- Updated `Modal.tsx` to keep the latest close callback in a ref and run initial/return focus only on dialog open/close, preventing input focus loss from inline callback identity changes.
+- Verification passed: focused Modal tests 2/2, full web tests 154/154, web typecheck, lint, production build and `git diff --check`.
+- A Playwright smoke typed into the live role-code field at 1440px and confirmed the input retained focus while the close button remained unfocused.
+- Interview scheduling workflow (2026-09-08): audit complete. `locationUrl` and attendee response fields already exist in the data model; schedule forms omit the link, attendee response actions are missing, and scorecard notes are currently optional.
+- Implementation: added link inputs to direct, application-detail and self-schedule flows; removed the hardcoded Teams fallback; added `/interviews/:id/response` with confirmation/reschedule-request/decline validation and notifications; required interviewer notes; and enforced automatic/manual completion rules around panel scorecards.
+- Verification: API/web typechecks, targeted lint, full web 154/154, full API 60/60 (including interview DTO coverage), worker 4/4, API/web builds, Prisma validation, health/readiness, and a 1440px authenticated browser smoke for `/interviews` all passed. The live schedule modal exposed one meeting-link input with no horizontal overflow.
+
+### Interview scheduling verification follow-up — 2026-09-08
+
+- Changed newly created interviewer attendee responses from implicit `Accepted` to explicit `Pending`, so every invitee must confirm, request a reschedule with a reason, or decline.
+- Added HTTP/HTTPS meeting-link validation, a minimum of one interviewer for direct and self-scheduled interviews, terminal lifecycle protection for completed/cancelled interviews, and a cancelled-interview scorecard guard.
+- Rescheduling a meeting now resets all panel responses to `Pending`, so confirmations from the old time cannot be carried into the replacement slot.
+- Verification: API tests 61/61, web tests 154/154, worker tests 4/4, API typecheck, root lint, API build, full web build, API health/readiness, and the 1440px `/interviews` browser matrix all passed. The only build output is the existing Vite chunk-size warning.

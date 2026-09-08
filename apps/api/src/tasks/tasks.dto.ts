@@ -1,4 +1,4 @@
-import { IsIn, IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import { IsDateString, IsIn, IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
 
 const TASK_STATUSES = ['Open', 'In Progress', 'Completed', 'Dismissed'] as const;
 const TASK_PRIORITIES = ['Low', 'Normal', 'High', 'Critical'] as const;
@@ -33,6 +33,7 @@ export class CreateTaskDto {
 
   @IsOptional()
   @IsString()
+  @IsDateString()
   dueAt?: string;
 
   @IsOptional()
@@ -40,6 +41,6 @@ export class CreateTaskDto {
   entityType?: string;
 
   @IsOptional()
-  @IsString()
+  @IsUUID()
   entityId?: string;
 }

@@ -60,13 +60,19 @@ interface ErrorEnvelopeBody {
   retryAfterSeconds?: number | null;
 }
 
-function isFieldErrors(value: unknown): value is ErrorFieldErrors {
+function normalizeFieldErrors(value: unknown): ErrorFieldErrors | undefined {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
-    return false;
+    return undefined;
   }
-  return Object.values(value).every(
-    (item) => Array.isArray(item) && item.every((entry) => typeof entry === 'string'),
-  );
+  const result: ErrorFieldErrors = {};
+  for (const [key, item] of Object.entries(value)) {
+    if (Array.isArray(item) && item.every((entry) => typeof entry === 'string')) {
+      result[key] = item;
+    } else if (typeof item === 'string') {
+      result[key] = [item];
+    }
+  }
+  return Object.keys(result).length > 0 ? result : undefined;
 }
 
 let refreshPromise: Promise<boolean> | null = null;
@@ -95,7 +101,7 @@ async function refreshAccessToken(): Promise<boolean> {
 async function handleResponseError(response: Response, path: string): Promise<never> {
   const problem = (await response.json().catch(() => null)) as ErrorEnvelopeBody | null;
   const code = typeof problem?.code === 'string' && problem.code ? problem.code : undefined;
-  const fields = isFieldErrors(problem?.fields) ? problem.fields : undefined;
+  const fields = normalizeFieldErrors(problem?.fields);
   const requestId =
     response.headers.get('X-Request-Id') ??
     (typeof problem?.requestId === 'string' && problem.requestId ? problem.requestId : undefined);
@@ -128,6 +134,17 @@ async function handleResponseError(response: Response, path: string): Promise<ne
     message = 'The requested resource was not found.';
   } else {
     message = `Request failed with status ${response.status}`;
+  }
+
+  if (fields && Object.keys(fields).length > 0) {
+    const fieldDetails = Object.entries(fields)
+      .map(([field, fieldMsg]) => `${field}: ${Array.isArray(fieldMsg) ? fieldMsg.join(', ') : fieldMsg}`)
+      .join(', ');
+    if (message.endsWith('.')) {
+      message = `${message.slice(0, -1)} (${fieldDetails}).`;
+    } else {
+      message = `${message} (${fieldDetails})`;
+    }
   }
 
   throw new ApiError(response.status, message, problem, {

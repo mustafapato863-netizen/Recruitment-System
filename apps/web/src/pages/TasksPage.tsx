@@ -100,6 +100,7 @@ export function TasksPage() {
   const [apiRecruiters, setApiRecruiters] = useState<RecruiterOption[]>([]);
   const [selectedVacancyId, setSelectedVacancyId] = useState<string>('');
   const [selectedRecruiterId, setSelectedRecruiterId] = useState<string>('');
+  const [assignmentKind, setAssignmentKind] = useState<'PRIMARY' | 'SUPPORT'>('PRIMARY');
   const [targetType, setTargetType] = useState<'Hires' | 'Screenings' | 'Interviews'>('Hires');
   const [targetQuota, setTargetQuota] = useState<number>(3);
   const [targetDeadline, setTargetDeadline] = useState<string>('7 Days (Standard SLA)');
@@ -107,17 +108,9 @@ export function TasksPage() {
   const [instructions, setInstructions] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const userRoleCodes = useMemo(() => {
-    return (user?.roles || []).map((r) => ((r.code || r.name || '').toUpperCase()));
-  }, [user]);
-
   const isManagerOrAdmin = useMemo(() => {
-    const managerRoles = ['ADMIN', 'SYSADMIN', 'ADMINISTRATOR', 'HIRING_MANAGER', 'TALENT_MANAGER', 'HR_MANAGER'];
-    return (
-      userRoleCodes.some((code) => managerRoles.includes(code)) ||
-      Boolean(user?.permissions?.includes('VACANCY_MANAGE'))
-    );
-  }, [userRoleCodes, user?.permissions]);
+    return Boolean(user?.permissions?.includes('VACANCY_MANAGE'));
+  }, [user?.permissions]);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -171,7 +164,10 @@ export function TasksPage() {
 
     let nextActionRoute = '/tasks';
     let nextActionLabel = 'View details';
-    if (task.entityType === 'Application' && task.entityId) {
+    if (task.entityType === 'Candidate' && task.entityId) {
+      nextActionRoute = `/candidates/${task.entityId}`;
+      nextActionLabel = 'Open candidate activities';
+    } else if (task.entityType === 'Application' && task.entityId) {
       nextActionRoute = `/applications/${task.entityId}`;
       nextActionLabel = task.type === 'Screening' ? 'Review CV' : 'View application';
     } else if (task.entityType === 'Interview' && task.entityId) {
@@ -189,7 +185,7 @@ export function TasksPage() {
       id: task.id,
       priority: priorityMapped,
       taskTitle: task.title,
-      taskType: task.type || 'General',
+      taskType: task.type?.replace('CandidateActivity:', '') || 'General',
       candidateName,
       candidateAppId,
       positionTitle,
@@ -275,6 +271,13 @@ export function TasksPage() {
     const taskTitle = `${targetType === 'Hires' ? 'Hire Target' : 'Screening Target'}: ${targetQuota} ${targetType} for ${vacancyTitle}`;
 
     try {
+      if (vacancy?.id && recruiter?.id) {
+        await postApi(`/vacancies/${vacancy.id}/assignments`, {
+          userId: recruiter.id,
+          roleCode: 'RECRUITER',
+          assignmentKind,
+        });
+      }
       await postApi('/tasks', {
         title: taskTitle,
         type: targetType === 'Hires' ? 'Hiring' : 'Screening',
@@ -283,7 +286,7 @@ export function TasksPage() {
         assigneeUserId: recruiter?.id || user?.id,
         entityType: 'Vacancy',
         entityId: vacancy?.id || null,
-      }).catch(() => {});
+      });
 
       showToast(
         `✓ Assigned "${vacancyTitle}" target to ${recruiter?.name || 'recruiter'} (${targetQuota} ${targetType})!`
@@ -291,6 +294,8 @@ export function TasksPage() {
       setIsAssignModalOpen(false);
       setInstructions('');
       await loadData();
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : 'Unable to assign task. Nothing was marked successful.');
     } finally {
       setIsSubmitting(false);
     }
@@ -972,6 +977,15 @@ export function TasksPage() {
                       {rec.name} — {rec.role}
                     </option>
                   ))}
+                </select>
+              </div>
+
+              {/* Target Configuration Section */}
+              <div>
+                <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">Assignment responsibility</label>
+                <select value={assignmentKind} onChange={(e) => setAssignmentKind(e.target.value as 'PRIMARY' | 'SUPPORT')} className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-semibold cursor-pointer">
+                  <option value="PRIMARY">Primary recruiter</option>
+                  <option value="SUPPORT">Supporting recruiter</option>
                 </select>
               </div>
 

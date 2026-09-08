@@ -71,6 +71,12 @@ export function PublicApplyPage() {
       setFieldError('Please accept the privacy and application consent before submitting.');
       return;
     }
+    const email = form.email.trim();
+    const phoneDigits = form.phone.replace(/\D/g, '');
+    if (!email && phoneDigits.length < 7) {
+      setFieldError('Provide a valid email address or phone number so the hiring team can contact you.');
+      return;
+    }
     setStatus('submitting');
     setError('');
     try {
@@ -79,7 +85,7 @@ export function PublicApplyPage() {
         const formData = new FormData();
         formData.append('firstName', form.firstName);
         formData.append('lastName', form.lastName);
-        formData.append('email', form.email);
+        if (email) formData.append('email', email);
         if (form.phone) formData.append('phone', form.phone);
         if (form.currentTitle) formData.append('currentTitle', form.currentTitle);
         if (form.currentCompany) formData.append('currentCompany', form.currentCompany);
@@ -92,6 +98,7 @@ export function PublicApplyPage() {
       } else {
         response = await postApi<PublicApplicationResponse>(`/public/organizations/${encodeURIComponent(organizationCode)}/jobs/${encodeURIComponent(vacancyCode)}/apply`, {
           ...form,
+          email: email || null,
           skills: form.skills.split(',').map((skill) => skill.trim()).filter(Boolean),
         });
       }
@@ -134,8 +141,8 @@ export function PublicApplyPage() {
                   <div className="mt-5 grid gap-4 sm:grid-cols-2">
                     <FormField id="public-first-name" label="First name" required><Input value={form.firstName} onChange={(event) => update('firstName', event.target.value)} autoComplete="given-name" /></FormField>
                     <FormField id="public-last-name" label="Last name" required><Input value={form.lastName} onChange={(event) => update('lastName', event.target.value)} autoComplete="family-name" /></FormField>
-                    <FormField id="public-email" label="Email address" required><Input type="email" value={form.email} onChange={(event) => update('email', event.target.value)} autoComplete="email" /></FormField>
-                    <FormField id="public-phone" label="Phone number"><Input type="tel" value={form.phone} onChange={(event) => update('phone', event.target.value)} autoComplete="tel" /></FormField>
+                    <FormField id="public-email" label="Email address" hint="Provide an email or phone number"><Input type="email" value={form.email} onChange={(event) => update('email', event.target.value)} autoComplete="email" /></FormField>
+                    <FormField id="public-phone" label="Phone number" hint="Provide an email or phone number"><Input type="tel" value={form.phone} onChange={(event) => update('phone', event.target.value)} autoComplete="tel" /></FormField>
                     <FormField id="public-title" label="Current title"><Input value={form.currentTitle} onChange={(event) => update('currentTitle', event.target.value)} autoComplete="organization-title" /></FormField>
                     <FormField id="public-company" label="Current company"><Input value={form.currentCompany} onChange={(event) => update('currentCompany', event.target.value)} autoComplete="organization" /></FormField>
                     <FormField id="public-location" label="Location"><Input value={form.location} onChange={(event) => update('location', event.target.value)} autoComplete="address-level2" /></FormField>

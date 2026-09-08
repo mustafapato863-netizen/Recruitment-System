@@ -65,6 +65,10 @@ export function FastScorecardModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!notes.trim()) {
+      setError('Please add interviewer results and notes before submitting.');
+      return;
+    }
     setIsSubmitting(true);
     setError(null);
 
@@ -179,7 +183,7 @@ export function FastScorecardModal({
 
         {/* Concerns */}
         <div>
-          <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">
+          <label htmlFor="fast-scorecard-notes" className="font-bold block mb-1 text-slate-700 dark:text-slate-300">
             Identified Concerns or Areas for Growth
           </label>
           <textarea
@@ -191,15 +195,17 @@ export function FastScorecardModal({
           />
         </div>
 
-        {/* Private Notes */}
+        {/* Interviewer Results & Notes */}
         <div>
-          <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">
-            Panel Evaluation Notes
+          <label htmlFor="fast-scorecard-notes" className="font-bold block mb-1 text-slate-700 dark:text-slate-300">
+            Interviewer Results &amp; Notes <span className="text-rose-500">*</span>
           </label>
           <textarea
+            id="fast-scorecard-notes"
             rows={2}
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
+            required
             placeholder="Detailed assessment notes, interview questions asked..."
             className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-blue-500"
           />

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
-import type { RoleRecord, UserRecord } from '@recruitflow/contracts';
+import type { NavigationItemRecord, PermissionRecord, RoleRecord, UserRecord } from '@recruitflow/contracts';
 import { fetchApi } from '../api/client';
 import { Modal } from '../components/Modal';
 import { StatusBadge } from '../components/StatusBadge';
@@ -9,6 +9,7 @@ import { Alert } from '../components/ui/Alert';
 import { Avatar } from '../components/ui/Avatar';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
+import { CheckboxField } from '../components/ui/CheckboxField';
 import { DataToolbar } from '../components/ui/DataToolbar';
 import { FilterChip } from '../components/ui/FilterChips';
 import { FormField } from '../components/ui/FormField';
@@ -22,6 +23,7 @@ import { Tabs } from '../components/ui/Tabs';
 import { TableSkeleton } from '../components/ui/Skeleton';
 import { Icon } from '../components/Icon';
 import { UserResponsibilityModal } from '../components/UserResponsibilityModal';
+import { AccessPolicyManager } from '../components/access/AccessPolicyManager';
 import type {
   UserResponsibilitiesResponse,
   UserResponsibilityConfig,
@@ -53,49 +55,16 @@ export interface RlsGovernanceResponse {
 }
 
 const emptyUserForm = { email: '', displayName: '', password: '', roles: [] as string[] };
-const emptyRoleForm = { code: '', name: '' };
+const emptyRoleForm = { name: '', permissionIds: [] as string[], pageKeys: [] as string[] };
 const USER_STATUS_FILTERS = ['', 'Active', 'Suspended'] as const;
 
-const userColumns: ResponsiveDataColumn<UserRecord>[] = [
-  {
-    key: 'user',
-    header: 'User',
-    priority: 'primary',
-    render: (user) => (
-      <div className="flex items-center gap-2.5">
-        <Avatar initials={user.displayName.slice(0, 2).toUpperCase() || 'US'} size="sm" />
-        <span className="min-w-0 truncate font-bold text-rf-ink">{user.displayName}</span>
-      </div>
-    ),
-  },
-  {
-    key: 'email',
-    header: 'Email',
-    priority: 'secondary',
-    render: (user) => <span className="font-medium text-rf-ink-muted">{user.email}</span>,
-  },
-  {
-    key: 'roles',
-    header: 'Assigned roles',
-    priority: 'secondary',
-    render: (user) => (
-      <div className="flex flex-wrap gap-1.5">
-        {user.roles.length > 0 ? user.roles.map((role) => (
-          <Badge key={role.code} variant="neutral" className="font-mono">{role.name}</Badge>
-        )) : <span className="font-medium text-rf-ink-muted">No roles assigned</span>}
-      </div>
-    ),
-  },
-  {
-    key: 'status',
-    header: 'Status',
-    priority: 'secondary',
-    render: (user) => <StatusBadge status={user.status} />,
-  },
-];
+function responseList<T>(response: T[] | { data?: T[] }): T[] {
+  return Array.isArray(response) ? response : response.data || [];
+}
+
 
 export function UsersRolesPage() {
-  const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'rls'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'access' | 'rls'>('users');
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [roles, setRoles] = useState<RoleRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -109,9 +78,14 @@ export function UsersRolesPage() {
   const [formError, setFormError] = useState('');
   const [userForm, setUserForm] = useState(emptyUserForm);
   const [roleForm, setRoleForm] = useState(emptyRoleForm);
+  const [rolePermissions, setRolePermissions] = useState<PermissionRecord[]>([]);
+  const [roleNavigation, setRoleNavigation] = useState<NavigationItemRecord[]>([]);
+  const [isRoleAccessLoading, setIsRoleAccessLoading] = useState(false);
+  const [permissionSearch, setPermissionSearch] = useState('');
+  const [pageSearch, setPageSearch] = useState('');
 
   // RLS Governance State
-  const [rlsScopes, setRlsScopes] = useState<RlsScopeOption[]>([]);
+  const [, setRlsScopes] = useState<RlsScopeOption[]>([]);
   const [rlsPolicies, setRlsPolicies] = useState<Record<string, RoleRlsPolicy>>({});
   const [isRlsSaving, setIsRlsSaving] = useState(false);
   const [hasRlsChanges, setHasRlsChanges] = useState(false);
@@ -120,7 +94,7 @@ export function UsersRolesPage() {
   const [simulationModal, setSimulationModal] = useState<{
     isOpen: boolean;
     roleCode: string;
-    data: any;
+    data: { policy?: RoleRlsPolicy; sampleWhereClause?: unknown; error?: string } | null;
     isLoading: boolean;
   }>({
     isOpen: false,
@@ -144,8 +118,8 @@ export function UsersRolesPage() {
         fetchApi<RlsGovernanceResponse>('/access-control/rls-policies').catch(() => null),
         fetchApi<UserResponsibilitiesResponse>('/access-control/user-responsibilities').catch(() => null),
       ]);
-      setUsers(Array.isArray(usersRes) ? usersRes : usersRes.data || []);
-      setRoles(Array.isArray(rolesRes) ? rolesRes : rolesRes.data || []);
+      setUsers(responseList(usersRes));
+      setRoles(responseList(rolesRes));
 
       if (rlsRes) {
         setRlsScopes(rlsRes.availableScopes || []);
@@ -158,6 +132,34 @@ export function UsersRolesPage() {
       setError(err instanceof Error ? err.message : 'Failed to load users and roles');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const openRoleModal = async () => {
+    setFormError('');
+    setPermissionSearch('');
+    setPageSearch('');
+    setRoleForm({ ...emptyRoleForm, pageKeys: roleNavigation.filter((item) => item.visible).map((item) => item.key) });
+    setIsRoleOpen(true);
+    setIsRoleAccessLoading(true);
+    try {
+      const [permissionResponse, navigationResponse] = await Promise.all([
+        fetchApi<PermissionRecord[] | { data?: PermissionRecord[] }>('/roles/permissions'),
+        fetchApi<NavigationItemRecord[]>('/access-control/navigation'),
+      ]);
+      const permissions = responseList(permissionResponse);
+      const navigation = Array.isArray(navigationResponse) ? navigationResponse : [];
+      setRolePermissions(permissions);
+      setRoleNavigation(navigation);
+      setRoleForm((current) => ({
+        ...current,
+        permissionIds: [],
+        pageKeys: navigation.filter((item) => item.visible).map((item) => item.key),
+      }));
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Unable to load permissions and page visibility options.');
+    } finally {
+      setIsRoleAccessLoading(false);
     }
   };
 
@@ -278,6 +280,18 @@ export function UsersRolesPage() {
     return matchesSearch && matchesRole && matchesStatus;
   }), [roleFilter, search, statusFilter, users]);
 
+  const filteredRolePermissions = useMemo(() => {
+    const query = permissionSearch.trim().toLowerCase();
+    if (!query) return rolePermissions;
+    return rolePermissions.filter((permission) => `${permission.name} ${permission.code} ${permission.description ?? ''}`.toLowerCase().includes(query));
+  }, [permissionSearch, rolePermissions]);
+
+  const filteredRoleNavigation = useMemo(() => {
+    const query = pageSearch.trim().toLowerCase();
+    if (!query) return roleNavigation;
+    return roleNavigation.filter((item) => `${item.label} ${item.group} ${item.route}`.toLowerCase().includes(query));
+  }, [pageSearch, roleNavigation]);
+
   const submitUser = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setFormError('');
@@ -296,14 +310,26 @@ export function UsersRolesPage() {
 
   const submitRole = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (isRoleAccessLoading) return;
     setFormError('');
     setIsSubmitting(true);
+    let createdRole: RoleRecord | null = null;
     try {
-      await fetchApi('/roles', { method: 'POST', body: JSON.stringify({ ...roleForm, code: roleForm.code.toUpperCase() }) });
+      createdRole = await fetchApi<RoleRecord>('/roles', { method: 'POST', body: JSON.stringify({ name: roleForm.name }) });
+      await Promise.all(roleForm.permissionIds.map((permissionId) => fetchApi(`/roles/${createdRole?.id}/permissions/${permissionId}`, { method: 'POST' })));
+      await fetchApi(`/access-control/navigation/roles/${encodeURIComponent(createdRole.code)}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          items: roleNavigation.map((item) => ({ key: item.key, visible: roleForm.pageKeys.includes(item.key) })),
+        }),
+      });
       setRoleForm(emptyRoleForm);
       setIsRoleOpen(false);
       await load();
     } catch (err) {
+      if (createdRole) {
+        await fetchApi(`/roles/${createdRole.id}`, { method: 'DELETE' }).catch(() => undefined);
+      }
       setFormError(err instanceof Error ? err.message : 'Unable to create role');
     } finally {
       setIsSubmitting(false);
@@ -311,7 +337,7 @@ export function UsersRolesPage() {
   };
 
   // RLS update handlers
-  const updateRolePolicy = (roleCode: string, field: keyof RoleRlsPolicy, value: any) => {
+  const updateRolePolicy = (roleCode: string, field: keyof RoleRlsPolicy, value: RoleRlsPolicy[keyof RoleRlsPolicy]) => {
     setRlsPolicies((prev) => {
       const current = prev[roleCode] || {
         dataScope: 'ALL',
@@ -363,7 +389,7 @@ export function UsersRolesPage() {
       isLoading: true,
     });
     try {
-      const res = await fetchApi(`/access-control/audit-simulation/${roleCode}`);
+      const res = await fetchApi<{ policy?: RoleRlsPolicy; sampleWhereClause?: unknown; error?: string }>(`/access-control/audit-simulation/${roleCode}`);
       setSimulationModal((prev) => ({ ...prev, data: res, isLoading: false }));
     } catch (err) {
       setSimulationModal((prev) => ({
@@ -431,7 +457,7 @@ export function UsersRolesPage() {
             </Button>
           ) : (
             <>
-              <Button variant="secondary" size="sm" onClick={() => { setFormError(''); setIsRoleOpen(true); }}>
+              <Button variant="secondary" size="sm" onClick={() => void openRoleModal()}>
                 <Icon name="plus" size={13} />
                 Create role
               </Button>
@@ -472,7 +498,7 @@ export function UsersRolesPage() {
         <MetricCard label="Authorized Users" value={users.length} detail="Enterprise accounts" tone="action" icon={<Icon name="users" size={14} />} />
         <MetricCard label="Active Logins" value={activeUserCount} detail="Enabled sessions" tone="success" icon={<Icon name="check-circle" size={14} />} />
         <MetricCard label="Configured Roles" value={roles.length} detail="RBAC permission sets" tone="info" icon={<Icon name="grid-squares" size={14} />} />
-        <MetricCard label="RLS Governance" value={configuredRlsRolesCount ? `${configuredRlsRolesCount} Roles` : 'Active'} detail="Dynamic row-scoping" tone="accent" icon={<Icon name="shield" size={14} />} />
+        <MetricCard label="RLS Governance" value={configuredRlsRolesCount ? `${configuredRlsRolesCount} Roles` : 'Active'} detail="Dynamic row-scoping" tone="action" icon={<Icon name="shield" size={14} />} />
       </div>
 
       {/* Primary Navigation Tabs */}
@@ -480,7 +506,7 @@ export function UsersRolesPage() {
         <Tabs
           ariaLabel="Access Control Sections"
           activeKey={activeTab}
-          onChange={(key) => setActiveTab(key as any)}
+          onChange={(key) => setActiveTab(key as typeof activeTab)}
           items={[
             {
               key: 'users',
@@ -499,6 +525,16 @@ export function UsersRolesPage() {
                   <Icon name="grid-squares" size={14} />
                   System Roles
                   <Badge variant="neutral" className="ml-1">{roles.length}</Badge>
+                </span>
+              ),
+            },
+            {
+              key: 'access',
+              label: (
+                <span className="flex items-center gap-2 font-bold text-rf-action">
+                  <Icon name="lock" size={14} />
+                  Permissions &amp; Sidebar
+                  <Badge variant="success" className="ml-1">Admin Controlled</Badge>
                 </span>
               ),
             },
@@ -576,10 +612,10 @@ export function UsersRolesPage() {
           <SectionHeader
             title={`Configured System Roles (${roles.length})`}
             description="Role definitions and base permissions. Row-level data visibility can be governed in the RLS Governance tab."
-            density="comfortable"
+            density="default"
             className="border-b border-rf-border-subtle p-5"
             actions={(
-              <Button variant="secondary" size="sm" onClick={() => { setFormError(''); setIsRoleOpen(true); }}>
+              <Button variant="secondary" size="sm" onClick={() => void openRoleModal()}>
                 <Icon name="plus" size={13} />
                 Create Role
               </Button>
@@ -618,7 +654,12 @@ export function UsersRolesPage() {
         </section>
       )}
 
-      {/* TAB 3: RLS & DATA VISIBILITY GOVERNANCE */}
+      {/* TAB 3: PERMISSIONS & SIDEBAR */}
+      {activeTab === 'access' && (
+        <AccessPolicyManager roles={roles} onRolesChanged={load} />
+      )}
+
+      {/* TAB 4: RLS & DATA VISIBILITY GOVERNANCE */}
       {activeTab === 'rls' && (
         <div className="space-y-6">
           {/* RLS Overview Banner */}
@@ -709,7 +750,7 @@ export function UsersRolesPage() {
                         <div className="flex items-center gap-2">
                           <h4 className="text-base font-bold text-rf-ink">{role.name}</h4>
                           {isAdminRole && (
-                            <Badge variant="accent" className="font-semibold text-[11px]">Unrestricted Admin</Badge>
+                            <Badge variant="info" className="font-semibold text-[11px]">Unrestricted Admin</Badge>
                           )}
                         </div>
                         <div className="mt-0.5 font-mono text-xs text-rf-ink-muted">{role.code}</div>
@@ -743,7 +784,7 @@ export function UsersRolesPage() {
                         aria-label={`Scope for ${role.name}`}
                         disabled={isAdminRole}
                         value={policy.dataScope}
-                        onChange={(e) => updateRolePolicy(role.code, 'dataScope', e.target.value)}
+                        onChange={(e) => updateRolePolicy(role.code, 'dataScope', e.target.value as DataVisibilityScope)}
                       >
                         <option value="ALL">All Organization — Full cross-facility visibility</option>
                         <option value="ASSIGNED_ONLY">Assigned Only — Scoped strictly to assigned requisitions</option>
@@ -953,8 +994,33 @@ export function UsersRolesPage() {
       </Modal>
 
       {/* Create Role Modal */}
-      <Modal isOpen={isRoleOpen} onClose={() => setIsRoleOpen(false)} title="Define System Role">
-        <form onSubmit={(e) => void submitRole(e)}>
+      <Modal
+        isOpen={isRoleOpen}
+        onClose={() => setIsRoleOpen(false)}
+        title="Create role and access"
+        maxWidthClass="max-w-6xl"
+        footer={(
+          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-[10.5px] leading-relaxed text-rf-ink-muted">{roleForm.permissionIds.length} permissions · {roleForm.pageKeys.length} sidebar pages selected</p>
+            <div className="flex justify-end gap-2">
+              <Button variant="quiet" type="button" onClick={() => setIsRoleOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                loading={isSubmitting || isRoleAccessLoading}
+                loadingLabel="Saving"
+                disabled={isRoleAccessLoading}
+                type="submit"
+                form="role-create-form"
+              >
+                Create role
+              </Button>
+            </div>
+          </div>
+        )}
+      >
+        <form id="role-create-form" className="min-w-0" onSubmit={(e) => void submitRole(e)}>
           {formError && (
             <div className="mb-4">
               <Alert tone="danger" title="Error">
@@ -962,34 +1028,151 @@ export function UsersRolesPage() {
               </Alert>
             </div>
           )}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <FormField id="r-code" label="Role Code" required hint="Uppercase identifier like RECRUITER or HR_MANAGER">
-              <Input
-                id="r-code"
-                required
-                placeholder="e.g. AUDITOR"
-                value={roleForm.code}
-                onChange={(e) => setRoleForm({ ...roleForm, code: e.target.value })}
-              />
-            </FormField>
-            <FormField id="r-name" label="Role Name" required>
-              <Input
-                id="r-name"
-                required
-                placeholder="e.g. Compliance Auditor"
-                value={roleForm.name}
-                onChange={(e) => setRoleForm({ ...roleForm, name: e.target.value })}
-              />
-            </FormField>
+          <section className="rounded-2xl border border-rf-border-subtle bg-rf-surface-subtle/45 p-5">
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-rf-action">Step 1 · Role identity</p>
+                <h3 className="mt-1 text-base font-bold text-rf-ink">Name this access profile</h3>
+                <p className="mt-1 text-xs text-rf-ink-muted">Choose a clear name; the system assigns the integration code for you.</p>
+              </div>
+              <Badge variant="info" className="self-start">Organization role</Badge>
+            </div>
+            <div className="mt-5 grid grid-cols-1 gap-5 md:grid-cols-2">
+              <div className="rounded-xl border border-rf-border-subtle bg-rf-surface px-4 py-3.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs font-bold text-rf-ink">Role code</span>
+                  <Badge variant="info">Auto-generated</Badge>
+                </div>
+                <p className="mt-1.5 text-xs leading-relaxed text-rf-ink-muted">
+                  A unique <span className="font-mono font-semibold text-rf-ink">ROLE_###</span> code is assigned when you save.
+                </p>
+              </div>
+              <FormField id="r-name" label="Role Name" required hint="Shown in user and role selectors">
+                <Input
+                  id="r-name"
+                  required
+                  placeholder="e.g. Compliance Auditor"
+                  value={roleForm.name}
+                  onChange={(e) => setRoleForm({ ...roleForm, name: e.target.value })}
+                />
+              </FormField>
+            </div>
+          </section>
+
+          <div className="mt-5 grid min-w-0 grid-cols-1 gap-5 xl:grid-cols-2">
+            <section className="min-w-0 overflow-hidden rounded-2xl border border-rf-border-subtle bg-rf-surface-subtle/45 p-5">
+              <div className="flex flex-col gap-3 border-b border-rf-border-subtle pb-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-base font-bold text-rf-ink">Step 2 · Permissions</h3>
+                    <Badge variant="info">{roleForm.permissionIds.length} selected</Badge>
+                  </div>
+                  <p className="mt-1 text-xs leading-relaxed text-rf-ink-muted">Choose the actions this role can perform. These permissions control real route and API access.</p>
+                </div>
+                <button
+                  type="button"
+                  className="shrink-0 text-left text-xs font-semibold text-rf-accent hover:underline sm:text-right"
+                  onClick={() => setRoleForm((current) => ({
+                    ...current,
+                    permissionIds: current.permissionIds.length === rolePermissions.length ? [] : rolePermissions.map((permission) => permission.id),
+                  }))}
+                  disabled={isRoleAccessLoading || rolePermissions.length === 0}
+                >
+                  {roleForm.permissionIds.length === rolePermissions.length && rolePermissions.length > 0 ? 'Clear all' : 'Select all'}
+                </button>
+              </div>
+              <div className="mt-4">
+                <Input
+                  aria-label="Search permissions"
+                  placeholder="Search permissions or codes…"
+                  value={permissionSearch}
+                  onChange={(event) => setPermissionSearch(event.target.value)}
+                />
+              </div>
+              {isRoleAccessLoading ? (
+                <p className="py-8 text-center text-xs text-rf-ink-muted">Loading permissions…</p>
+              ) : rolePermissions.length === 0 ? (
+                <p className="py-8 text-center text-xs text-rf-ink-muted">No permissions are available.</p>
+              ) : filteredRolePermissions.length === 0 ? (
+                <p className="py-8 text-center text-xs text-rf-ink-muted">No permissions match your search.</p>
+              ) : (
+                <div className="mt-3 grid max-h-[26rem] min-w-0 grid-cols-1 gap-1 overflow-x-hidden overflow-y-auto pr-1 sm:grid-cols-2">
+                  {filteredRolePermissions.map((permission) => (
+                    <CheckboxField
+                      key={permission.id}
+                      className="min-w-0"
+                      checked={roleForm.permissionIds.includes(permission.id)}
+                      label={<span className="block truncate text-[11.5px]">{permission.name}</span>}
+                      description={<span className="block break-all font-mono text-[10px]">{permission.code}</span>}
+                      onChange={(event) => setRoleForm((current) => ({
+                        ...current,
+                        permissionIds: event.target.checked
+                          ? [...current.permissionIds, permission.id]
+                          : current.permissionIds.filter((id) => id !== permission.id),
+                      }))}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
+
+            <section className="min-w-0 overflow-hidden rounded-2xl border border-rf-border-subtle bg-rf-surface-subtle/45 p-5">
+              <div className="flex flex-col gap-3 border-b border-rf-border-subtle pb-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h3 className="text-base font-bold text-rf-ink">Step 3 · Sidebar pages</h3>
+                    <Badge variant="success">{roleForm.pageKeys.length} selected</Badge>
+                  </div>
+                  <p className="mt-1 text-xs leading-relaxed text-rf-ink-muted">Choose pages shown in the sidebar. Visibility is separate from permissions and never grants access by itself.</p>
+                </div>
+                <button
+                  type="button"
+                  className="shrink-0 text-left text-xs font-semibold text-rf-accent hover:underline sm:text-right"
+                  onClick={() => setRoleForm((current) => ({
+                    ...current,
+                    pageKeys: current.pageKeys.length === roleNavigation.length ? [] : roleNavigation.map((item) => item.key),
+                  }))}
+                  disabled={isRoleAccessLoading || roleNavigation.length === 0}
+                >
+                  {roleForm.pageKeys.length === roleNavigation.length && roleNavigation.length > 0 ? 'Clear all' : 'Select all'}
+                </button>
+              </div>
+              <div className="mt-4">
+                <Input
+                  aria-label="Search sidebar pages"
+                  placeholder="Search pages, groups, or routes…"
+                  value={pageSearch}
+                  onChange={(event) => setPageSearch(event.target.value)}
+                />
+              </div>
+              {isRoleAccessLoading ? (
+                <p className="py-8 text-center text-xs text-rf-ink-muted">Loading pages…</p>
+              ) : roleNavigation.length === 0 ? (
+                <p className="py-8 text-center text-xs text-rf-ink-muted">No pages are available.</p>
+              ) : filteredRoleNavigation.length === 0 ? (
+                <p className="py-8 text-center text-xs text-rf-ink-muted">No pages match your search.</p>
+              ) : (
+                <div className="mt-3 grid max-h-[26rem] min-w-0 grid-cols-1 gap-1 overflow-x-hidden overflow-y-auto pr-1 sm:grid-cols-2">
+                  {filteredRoleNavigation.map((item) => (
+                    <CheckboxField
+                      key={item.key}
+                      className="min-w-0"
+                      checked={roleForm.pageKeys.includes(item.key)}
+                      label={<span className="block truncate text-[11.5px]">{item.label}</span>}
+                      description={<span className="block truncate text-[10px]">{item.group} · {item.route}</span>}
+                      onChange={(event) => setRoleForm((current) => ({
+                        ...current,
+                        pageKeys: event.target.checked
+                          ? [...current.pageKeys, item.key]
+                          : current.pageKeys.filter((key) => key !== item.key),
+                      }))}
+                    />
+                  ))}
+                </div>
+              )}
+            </section>
           </div>
-          <div className="flex gap-2 mt-6 justify-end">
-            <Button variant="quiet" type="button" onClick={() => setIsRoleOpen(false)}>
-              Cancel
-            </Button>
-            <Button variant="primary" loading={isSubmitting} loadingLabel="Saving" type="submit">
-              Save role
-            </Button>
-          </div>
+
         </form>
       </Modal>
 

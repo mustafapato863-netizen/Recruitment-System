@@ -114,10 +114,15 @@ export class PublicJobsService {
     if (!dto.firstName.trim() || !dto.lastName.trim()) {
       throw new BadRequestException('First name and last name are required.');
     }
-    const email = dto.email.trim().toLowerCase();
+    const email = cleanOptional(dto.email)?.toLowerCase() ?? null;
+    const normalizedPhone = normalizePhone(cleanOptional(dto.phone));
+    const phone = normalizedPhone;
+    if (!email && !normalizedPhone) {
+      throw new BadRequestException('Provide a valid email address or phone number.');
+    }
     const source = normalizeSource(dto.source);
     await this.rateLimiter.enforcePublicRequestLimit(
-      email,
+      email ?? `phone:${normalizedPhone}`,
       ip,
       'Maximum public application requests exceeded',
     );
@@ -201,10 +206,21 @@ export class PublicJobsService {
         });
         if (!vacancy || vacancy.status !== 'Open') throw this.publicNotFound();
 
-        const existingCandidate = await tx.candidate.findUnique({
-          where: { organizationId_email: { organizationId: organization.id, email } },
-          select: { id: true, status: true, candidateCode: true },
+        const candidateMatches = await tx.candidate.findMany({
+          where: {
+            organizationId: organization.id,
+            OR: [
+              ...(email ? [{ email }] : []),
+              ...(normalizedPhone ? [{ phone: { not: null } }] : []),
+            ],
+          },
+          select: { id: true, status: true, candidateCode: true, email: true, phone: true },
+          take: 1000,
         });
+        const existingCandidate = candidateMatches.find((candidate) =>
+          (email && candidate.email?.toLowerCase() === email)
+          || (normalizedPhone && normalizePhone(candidate.phone) === normalizedPhone),
+        );
         const candidateId = existingCandidate?.id ?? (await this.nextCode(tx, 'CND'));
 
         if (existingCandidate?.status === 'Blacklisted') {
@@ -237,7 +253,7 @@ export class PublicJobsService {
                 firstName: dto.firstName.trim(),
                 lastName: dto.lastName.trim(),
                 email,
-                phone: cleanOptional(dto.phone),
+                phone,
                 currentTitle: cleanOptional(dto.currentTitle),
                 currentCompany: cleanOptional(dto.currentCompany),
                 location: cleanOptional(dto.location),
@@ -425,6 +441,11 @@ function normalizeSource(value: string | undefined): string {
 function cleanOptional(value: string | null | undefined): string | null {
   const cleaned = value?.trim();
   return cleaned || null;
+}
+
+function normalizePhone(value: string | null): string | null {
+  const digits = value?.replace(/\D/g, '') ?? '';
+  return digits.length >= 7 ? digits : null;
 }
 
 function isUniqueViolation(error: unknown): boolean {

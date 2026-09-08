@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import type { OfferApprovalInboxItem } from '@recruitflow/contracts';
 import { getApi, postApi } from '../api/client';
 import { Icon } from '../components/Icon';
 import { Alert } from '../components/ui/Alert';
@@ -12,15 +13,7 @@ import { SectionHeader } from '../components/ui/SectionHeader';
 import { TableSkeleton } from '../components/ui/Skeleton';
 import './PageEnhancementsV2.css';
 
-type OfferApprovalRow = {
-  id: string;
-  offerCode: string;
-  candidateName: string;
-  positionTitle: string;
-  branchName?: string | null;
-  monthlyPackage: number;
-  versionNumber: number;
-};
+type OfferApprovalRow = OfferApprovalInboxItem;
 
 const offerApprovalColumns: ResponsiveDataColumn<OfferApprovalRow>[] = [
   {
@@ -52,8 +45,8 @@ const offerApprovalColumns: ResponsiveDataColumn<OfferApprovalRow>[] = [
     priority: 'secondary',
     render: (row) => (
       <div className="grid gap-0.5">
-        <span className="font-bold text-rf-ink">SAR {row.monthlyPackage.toLocaleString()}</span>
-        <span className="font-medium text-rf-ink-muted">Monthly gross</span>
+        <span className="font-bold text-rf-ink">{row.monthlyPackage === null ? 'Restricted' : `SAR ${row.monthlyPackage.toLocaleString()}`}</span>
+        <span className="font-medium text-rf-ink-muted">{row.monthlyPackage === null ? 'Salary hidden by policy' : 'Monthly gross'}</span>
       </div>
     ),
   },
@@ -141,7 +134,7 @@ export function OfferApprovalInboxPage() {
             renderActions={(approval) => (
               <>
                 <Button variant="secondary" size="sm" asChild>
-                  <Link to={`/offers/${approval.id}`}>Review</Link>
+                  <Link to={`/offers/${approval.offerId}`}>Review</Link>
                 </Button>
                 <Button variant="danger" size="sm" disabled={busyId === approval.id} onClick={() => void handleDecision(approval.id, 'Reject')}>
                   Reject

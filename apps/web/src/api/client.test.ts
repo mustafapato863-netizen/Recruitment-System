@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { downloadApi, ApiError } from './client';
+import { downloadApi, postApi, ApiError } from './client';
 
 describe('API Client Error Handling', () => {
   const fetchSpy = vi.fn<typeof fetch>();
@@ -131,6 +131,34 @@ describe('API Client Error Handling', () => {
         expect(err.message).toBe('Your session has expired. Please sign in again to continue.');
         expect(windowDispatchSpy).toHaveBeenCalled();
         expect(windowDispatchSpy.mock.calls[0][0].type).toBe('auth:unauthorized');
+      }
+    });
+
+    it('formats validation fields into message on 400 Bad Request', async () => {
+      mockResponse(400, {
+        code: 'VALIDATION_ERROR',
+        message: 'Please correct the highlighted fields.',
+        fields: {
+          experienceYears: ['experienceYears must be an integer number'],
+          summary: ['property summary should not exist'],
+        },
+      });
+
+      try {
+        await postApi('/candidates', { experienceYears: 2.5 });
+        expect.fail('Should have thrown');
+      } catch (err: unknown) {
+        expect(err).toBeInstanceOf(ApiError);
+        if (!(err instanceof ApiError)) return;
+        expect(err.statusCode).toBe(400);
+        expect(err.code).toBe('VALIDATION_ERROR');
+        expect(err.message).toBe(
+          'Please correct the highlighted fields (experienceYears: experienceYears must be an integer number, summary: property summary should not exist).'
+        );
+        expect(err.fields).toEqual({
+          experienceYears: ['experienceYears must be an integer number'],
+          summary: ['property summary should not exist'],
+        });
       }
     });
   });

@@ -1,123 +1,17 @@
 import { useState, useRef } from 'react';
 import { Icon } from '../Icon';
 import { Spinner } from '../Spinner';
-import type { ExtractedCandidate } from '../../utils/resumeParser';
-
-export const SAMPLE_CV_PRESETS: { name: string; title: string; filename: string; department: string; data: ExtractedCandidate }[] = [
-  {
-    name: 'Dr. Tamer Radwan',
-    title: 'Consultant Cardiologist',
-    filename: 'dr_tamer_radwan_cv.pdf',
-    department: 'Cardiovascular Medicine',
-    data: {
-      firstName: 'Tamer',
-      lastName: 'Radwan',
-      email: 'tamer.radwan@sgh.med.sa',
-      phone: '+966 50 123 4567',
-      title: 'Consultant Cardiologist',
-      currentCompany: 'Saudi German Hospital Riyadh',
-      experienceYears: 12,
-      location: 'Riyadh, Saudi Arabia',
-      education: 'MBBS, MD Cardiology, Fellow of the Royal College of Surgeons (FRCS)',
-      summary: 'Dr. Tamer Radwan is an esteemed Consultant Cardiologist with 12+ years of clinical cardiology and interventional practice across tertiary healthcare centers. Demonstrates mastery in cardiac catheterization, transesophageal echocardiography, and complex coronary interventions, with full alignment to Saudi German Health clinical governance and JCI accreditation benchmarks.',
-      skills: ['Interventional Cardiology', 'Echocardiography', 'Cardiac Catheterization', 'Hemodynamics', 'ECG', 'Code Blue Response'],
-      certifications: ['SCFHS Consultant License', 'Fellow of the Royal College of Surgeons (FRCS)', 'ACLS Certified', 'BLS Certified'],
-      languages: ['Arabic (Native)', 'English (Fluent)'],
-      clinicalDomain: 'Cardiovascular Medicine',
-      subspecialties: ['Interventional Cardiology & Hemodynamics', 'Advanced Diagnostic Echocardiography'],
-      aiSummaryConfidence: 98,
-      keyHighlights: ['12+ Years Experience', 'SCFHS Consultant Licensed', 'Cardiac Catheterization Lead', 'Bilingual (AR / EN)'],
-    },
-  },
-  {
-    name: 'Dr. Sarah Mansoor',
-    title: 'Specialist Dermatologist',
-    filename: 'dr_sarah_mansoor_cv.pdf',
-    department: 'Medical Specialties',
-    data: {
-      firstName: 'Sarah',
-      lastName: 'Mansoor',
-      email: 'sarah.mansoor@example.com',
-      phone: '+971 50 999 0011',
-      title: 'Specialist Dermatologist',
-      currentCompany: 'DermaCare Specialties',
-      experienceYears: 9,
-      location: 'Dubai, UAE',
-      education: 'MBBS, Master of Clinical Dermatology',
-      summary: 'Board-certified Specialist Dermatologist with 9+ years of clinical and aesthetic dermatology practice. Specializes in advanced laser therapies, dermoscopy diagnostics, and patient-centered clinical dermatological care compliant with international patient safety standards.',
-      skills: ['Clinical Dermatology', 'Cosmetic Injectables', 'Laser Therapy', 'Skin Biopsy', 'Patient Care'],
-      certifications: ['SCFHS Specialist License', 'Board of Dermatology', 'BLS Certified'],
-      languages: ['Arabic (Native)', 'English (Fluent)'],
-      clinicalDomain: 'Dermatology & Aesthetic Medicine',
-      subspecialties: ['Clinical & Procedural Dermatology', 'Aesthetic Laser Therapies'],
-      aiSummaryConfidence: 96,
-      keyHighlights: ['9+ Years Experience', 'SCFHS Specialist Licensed', 'Laser Therapy Expert', 'Bilingual (AR / EN)'],
-    },
-  },
-  {
-    name: 'Mona El-Shenawy',
-    title: 'Staff Nurse (ICU)',
-    filename: 'mona_shenawy_cv.pdf',
-    department: 'Critical Care & Nursing',
-    data: {
-      firstName: 'Mona',
-      lastName: 'El-Shenawy',
-      email: 'mona.shenawy@example.com',
-      phone: '+966 54 111 3355',
-      title: 'Staff Nurse (ICU)',
-      currentCompany: 'Al-Noor Specialist Hospital',
-      experienceYears: 5,
-      location: 'Jeddah, Saudi Arabia',
-      education: 'Bachelor of Science in Nursing (BSN)',
-      summary: 'Mona El-Shenawy is a dedicated Staff Nurse (ICU) with 5+ years of specialized experience in Critical Care & Emergency Medicine. Skilled in mechanical ventilator management, invasive hemodynamic monitoring, and rapid code blue response with active SCFHS nursing credentials.',
-      skills: ['Critical Care Nursing', 'ICU Protocol', 'Hemodynamic Monitoring', 'Ventilator Management', 'EMR'],
-      certifications: ['SCFHS Registered Nurse', 'ACLS Certified', 'BLS Certified'],
-      languages: ['Arabic (Native)', 'English (Fluent)'],
-      clinicalDomain: 'Critical Care & Emergency Medicine',
-      subspecialties: ['Intensive Care & Mechanical Ventilation', 'Inpatient & Acute Nursing Care'],
-      aiSummaryConfidence: 95,
-      keyHighlights: ['5+ Years Experience', 'SCFHS Registered Nurse', 'Ventilator Management', 'ACLS/BLS Active'],
-    },
-  },
-  {
-    name: 'Tariq Al-Ghamdi',
-    title: 'Senior Health Informatics Engineer',
-    filename: 'tariq_alghamdi_cv.docx',
-    department: 'Health Informatics & IT',
-    data: {
-      firstName: 'Tariq',
-      lastName: 'Al-Ghamdi',
-      email: 'tariq.alghamdi@example.com',
-      phone: '+966 55 444 3322',
-      title: 'Senior Health Informatics Engineer',
-      currentCompany: 'Digital Healthcare Solutions',
-      experienceYears: 6,
-      location: 'Riyadh, Saudi Arabia',
-      education: 'B.Sc. in Computer Science',
-      summary: 'Tariq Al-Ghamdi is an experienced Senior Health Informatics Engineer with 6+ years of expertise in Health Informatics & Software Engineering. Highly skilled in React 19, TypeScript, Next.js, and hospital EMR integration architectures.',
-      skills: ['React 19', 'TypeScript', 'Next.js', 'Tailwind CSS', 'Vite', 'GraphQL', 'EHR'],
-      certifications: ['Cloud Practitioner', 'Health IT Specialist Certificate'],
-      languages: ['Arabic (Native)', 'English (Professional)'],
-      clinicalDomain: 'Health Informatics & Software Engineering',
-      subspecialties: ['Modern Web & Healthcare Digital Systems', 'EHR / Clinical Systems Integration'],
-      aiSummaryConfidence: 94,
-      keyHighlights: ['6+ Years Experience', 'Digital Health Systems', 'Full Stack Architecture', 'Bilingual (AR / EN)'],
-    },
-  },
-];
 
 interface CVUploadDropzoneProps {
   parsingFile: boolean;
   parsingStep: string;
   onFileSelect: (file?: File) => void;
-  onPresetSelect: (preset: (typeof SAMPLE_CV_PRESETS)[0]) => void;
 }
 
 export function CVUploadDropzone({
   parsingFile,
   parsingStep,
   onFileSelect,
-  onPresetSelect,
 }: CVUploadDropzoneProps) {
   const [isDragging, setIsDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -202,38 +96,6 @@ export function CVUploadDropzone({
         )}
       </div>
 
-      {/* Preset demo candidates */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-            Or test with verified sample CVs:
-          </h3>
-          <span className="text-[11px] text-slate-400">1-click simulated upload</span>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          {SAMPLE_CV_PRESETS.map((preset) => (
-            <div
-              key={preset.name}
-              onClick={() => onPresetSelect(preset)}
-              className="p-3.5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 hover:border-blue-300 hover:shadow-xs transition cursor-pointer flex items-center gap-3 group"
-            >
-              <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center font-bold text-xs group-hover:bg-blue-600 group-hover:text-white transition">
-                {preset.name.slice(0, 2).toUpperCase()}
-              </div>
-              <div className="min-w-0 flex-1">
-                <span className="block text-xs font-bold text-slate-900 dark:text-white truncate group-hover:text-blue-600">
-                  {preset.name}
-                </span>
-                <span className="block text-[11px] text-slate-400 truncate">
-                  {preset.title}
-                </span>
-              </div>
-              <Icon name="chevron-right" size={14} className="text-slate-300 group-hover:text-blue-600 shrink-0" />
-            </div>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }

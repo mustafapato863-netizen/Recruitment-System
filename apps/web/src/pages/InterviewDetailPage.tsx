@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { getApi, postApi, patchApi, ApiError } from '../api/client';
-import type { Application, Interview, InterviewScorecardItem } from '@recruitflow/contracts';
+import { getApi, postApi, patchApi, type ApiError } from '../api/client';
+import type { Application, Interview as BaseInterview, InterviewScorecardItem } from '@recruitflow/contracts';
 import { useAuth } from '../auth/AuthContext';
 import { Scorecard, type ScorecardCategory, type Recommendation } from '../components/ui/Scorecard';
 import { Badge } from '../components/ui/Badge';
@@ -15,7 +15,28 @@ import { useSetBreadcrumbTitle } from '../context/BreadcrumbContext';
 import { QuickGuideTrigger } from '../quickguide';
 import './PageEnhancementsV2.css';
 
+interface Interview extends BaseInterview {
+  candidateEmail?: string;
+  candidatePhone?: string;
+  application?: { candidate?: { email?: string; phone?: string } };
+  documents?: { name: string; size?: string; url?: string }[];
+  attachments?: { name: string; size?: string; url?: string }[];
+}
+
 type BackendRecommendation = 'Strong Hire' | 'Hire' | 'Neutral' | 'No Hire' | 'Strong No Hire';
+
+function attendeeResponseTone(response?: string): string {
+  if (response === 'Declined') return 'text-rose-600';
+  if (response === 'Reschedule Requested') return 'text-amber-600';
+  if (response === 'Pending') return 'text-slate-500';
+  return 'text-emerald-600';
+}
+
+function attendeeResponseLabel(response?: string): string {
+  if (response === 'Accepted' || response === 'Confirmed') return 'Attendance confirmed';
+  if (response === 'Pending') return 'Awaiting confirmation';
+  return response || 'Response pending';
+}
 
 function buildRoleCompetencyCategory(positionTitle?: string | null, skills?: string[]): ScorecardCategory {
   const title = positionTitle?.trim() || 'Role';
@@ -160,6 +181,9 @@ export function InterviewDetailPage() {
   const [rescheduleDateTime, setRescheduleDateTime] = useState('');
   const [isSubmittingReschedule, setIsSubmittingReschedule] = useState(false);
   const [isActionsDropdownOpen, setIsActionsDropdownOpen] = useState(false);
+  const [isResponseModalOpen, setIsResponseModalOpen] = useState(false);
+  const [responseNote, setResponseNote] = useState('');
+  const [isSubmittingResponse, setIsSubmittingResponse] = useState(false);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -188,6 +212,7 @@ export function InterviewDetailPage() {
       const updated = await patchApi<Interview>(`/interviews/${id}`, {
         scheduledStart: start.toISOString(),
         scheduledEnd: end.toISOString(),
+        status: 'Rescheduled',
       });
       if (updated) {
         setInterview(updated);
@@ -203,13 +228,33 @@ export function InterviewDetailPage() {
 
   const handleCancelInterview = async () => {
     if (!id) return;
+    if (!window.confirm('Cancel this interview and notify all attendees?')) return;
     try {
       await patchApi(`/interviews/${id}`, { status: 'Cancelled' });
-      setInterview((prev) => (prev ? { ...prev, status: 'Cancelled' as unknown as any } : prev));
+      setInterview((prev) => (prev ? { ...prev, status: 'Cancelled' } : prev));
       showToast('✓ Interview status set to Cancelled');
       setIsActionsDropdownOpen(false);
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : 'Failed to cancel interview');
+    }
+  };
+
+  const submitInterviewResponse = async (response: 'Confirmed' | 'Reschedule Requested' | 'Declined', note?: string) => {
+    if (!id) return;
+    setIsSubmittingResponse(true);
+    try {
+      const updated = await postApi<Interview>(`/interviews/${id}/response`, {
+        response,
+        ...(note?.trim() ? { note: note.trim() } : {}),
+      });
+      if (updated) setInterview(updated);
+      setResponseNote('');
+      setIsResponseModalOpen(false);
+      showToast(response === 'Confirmed' ? '✓ Attendance confirmed' : response === 'Declined' ? 'Interview declined' : 'Reschedule request sent');
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : 'Unable to update interview response');
+    } finally {
+      setIsSubmittingResponse(false);
     }
   };
 
@@ -275,6 +320,11 @@ export function InterviewDetailPage() {
     return interview.attendees.some((att) => att.userId === user.id);
   }, [interview?.attendees, user?.id]);
 
+  const myAttendee = useMemo(
+    () => interview?.attendees?.find((attendee) => attendee.userId === user?.id) ?? null,
+    [interview?.attendees, user?.id],
+  );
+
   // Handle criterion rating changes in editable mode
   const handleRatingChange = (categoryId: string, criterionId: string, rating: number) => {
     setCategories((prev) =>
@@ -328,6 +378,14 @@ export function InterviewDetailPage() {
       setSubmitError({
         type: 'validation',
         message: 'Please select an overall recommendation.',
+      });
+      return;
+    }
+
+    if (!notes.trim()) {
+      setSubmitError({
+        type: 'validation',
+        message: 'Please add interviewer results and notes before submitting.',
       });
       return;
     }
@@ -481,8 +539,8 @@ export function InterviewDetailPage() {
     ? `${interview?.timezone ? `${interview.timezone} • ` : ''}Scheduled ${scheduledDateStr}${scheduledTimeStr ? ` at ${scheduledTimeStr}` : ''}`
     : (createdDateStr ? `Created ${createdDateStr}` : '—');
 
-  const candidateEmail = (interview as any)?.candidateEmail || (interview as any)?.application?.candidate?.email || null;
-  const candidatePhone = (interview as any)?.candidatePhone || (interview as any)?.application?.candidate?.phone || null;
+  const candidateEmail = interview?.candidateEmail || interview?.application?.candidate?.email || null;
+  const candidatePhone = interview?.candidatePhone || interview?.application?.candidate?.phone || null;
 
   const rawAppId = interview?.applicationId;
   const appIdDisplay = interview?.applicationCode || (rawAppId ? (rawAppId.startsWith('APP-') ? rawAppId : `APP-${rawAppId.slice(0, 8).toUpperCase()}`) : '—');
@@ -496,7 +554,7 @@ export function InterviewDetailPage() {
   const ownerInitials = ownerName === 'Unassigned' ? '—' : ownerName.split(' ').filter(Boolean).map((n) => n[0]).join('').slice(0, 2).toUpperCase() || 'IN';
 
   const attachments: { name: string; size?: string; url?: string }[] =
-    (interview as any)?.documents || (interview as any)?.attachments || [];
+    interview?.documents || interview?.attachments || [];
 
   const avgScore = useMemo(() => {
     if (scorecards.length === 0) return null;
@@ -684,6 +742,7 @@ export function InterviewDetailPage() {
                 </button>
               </div>
             </div>
+
           </div>
 
           {/* Application Metadata (3 cols) */}
@@ -720,34 +779,8 @@ export function InterviewDetailPage() {
               </button>
             </div>
 
-            <div>
-              <div className="flex justify-between text-[11px] mb-0.5">
-                <span className="text-slate-500">Skills match</span>
-                <span className="font-bold text-slate-800 dark:text-slate-200">85%</span>
-              </div>
-              <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                <div className="bg-blue-600 h-full rounded-full" style={{ width: '85%' }} />
-              </div>
-            </div>
-
-            <div>
-              <div className="flex justify-between text-[11px] mb-0.5">
-                <span className="text-slate-500">Experience match</span>
-                <span className="font-bold text-slate-800 dark:text-slate-200">80%</span>
-              </div>
-              <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                <div className="bg-emerald-500 h-full rounded-full" style={{ width: '80%' }} />
-              </div>
-            </div>
-
-            <div>
-              <div className="flex justify-between text-[11px] mb-0.5">
-                <span className="text-slate-500">Culture fit</span>
-                <span className="font-bold text-slate-800 dark:text-slate-200">75%</span>
-              </div>
-              <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                <div className="bg-orange-500 h-full rounded-full" style={{ width: '75%' }} />
-              </div>
+            <div className="rounded-lg border border-dashed border-slate-200 dark:border-slate-700 p-3 text-[11px] text-slate-500 dark:text-slate-400">
+              Match percentages are unavailable until a configured, persisted job-matching assessment is completed. Use the structured scorecard below for interview evidence.
             </div>
           </div>
         </div>
@@ -860,6 +893,9 @@ export function InterviewDetailPage() {
                         <div>
                           <span className="block font-bold text-slate-900 dark:text-white leading-tight">{name}</span>
                           <span className="block text-[10.5px] text-slate-400">{attendee.role || 'Panelist'}</span>
+                          <span className={`block text-[10px] font-semibold ${attendeeResponseTone(attendee.response)}`}>
+                            {attendeeResponseLabel(attendee.response)}
+                          </span>
                         </div>
                       </div>
                       <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
@@ -875,6 +911,43 @@ export function InterviewDetailPage() {
               )}
             </div>
           </div>
+
+          {myAttendee && interview?.status !== 'Cancelled' && interview?.status !== 'Completed' && (
+            <div className="pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-semibold text-slate-500">Your attendance</span>
+                <span className={`text-[10px] font-bold ${attendeeResponseTone(myAttendee.response)}`}>
+                  {myAttendee.response === 'Accepted' ? 'Confirmed' : myAttendee.response === 'Pending' ? 'Awaiting confirmation' : myAttendee.response || 'Pending'}
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => void submitInterviewResponse('Confirmed')}
+                  disabled={isSubmittingResponse || myAttendee.response === 'Confirmed' || myAttendee.response === 'Accepted'}
+                  className="px-2.5 py-1.5 rounded-lg bg-emerald-600 text-white text-[10px] font-bold hover:bg-emerald-700 disabled:opacity-50 cursor-pointer"
+                >
+                  Confirm attendance
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsResponseModalOpen(true)}
+                  disabled={isSubmittingResponse}
+                  className="px-2.5 py-1.5 rounded-lg border border-amber-200 text-amber-700 bg-amber-50 text-[10px] font-bold hover:bg-amber-100 disabled:opacity-50 cursor-pointer"
+                >
+                  Request reschedule
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void submitInterviewResponse('Declined')}
+                  disabled={isSubmittingResponse || myAttendee.response === 'Declined'}
+                  className="px-2.5 py-1.5 rounded-lg border border-rose-200 text-rose-700 bg-rose-50 text-[10px] font-bold hover:bg-rose-100 disabled:opacity-50 cursor-pointer"
+                >
+                  Decline
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Pending Alert Banner */}
           {(() => {
@@ -922,7 +995,7 @@ export function InterviewDetailPage() {
               </div>
             ) : (
               <div className="space-y-2 text-xs">
-                {attachments.map((doc: any) => (
+                {attachments.map((doc) => (
                   <div
                     key={doc.name}
                     className="p-2 rounded-xl border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 transition flex items-center justify-between group cursor-pointer"
@@ -1223,13 +1296,14 @@ export function InterviewDetailPage() {
                       htmlFor="scorecard-notes"
                       className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1"
                     >
-                      Additional Notes &amp; Summary
+                      Interviewer Results &amp; Notes <span className="text-rose-500">*</span>
                     </label>
                     <Textarea
                       id="scorecard-notes"
                       placeholder="General interview notes, question responses, follow-up recommendations, or panel observations..."
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
+                      required
                       maxLength={5000}
                       rows={3}
                     />
@@ -1534,6 +1608,57 @@ export function InterviewDetailPage() {
           <div className="p-2 border rounded-lg"><b>2.0 - Below standard:</b> Noticeable gaps.</div>
           <div className="p-2 border rounded-lg"><b>1.0 - Unacceptable:</b> Major deficiencies.</div>
         </div>
+      </Modal>
+
+      {/* Interviewer response modal */}
+      <Modal
+        isOpen={isResponseModalOpen}
+        onClose={() => {
+          if (!isSubmittingResponse) setIsResponseModalOpen(false);
+        }}
+        title="Request interview reschedule"
+        maxWidthClass="max-w-md"
+      >
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void submitInterviewResponse('Reschedule Requested', responseNote);
+          }}
+          className="space-y-4 text-xs"
+        >
+          <p className="text-slate-500 dark:text-slate-400">
+            Tell the recruiter why you cannot attend. The recruiter will choose a new time and notify the panel.
+          </p>
+          <div>
+            <label htmlFor="response-note" className="font-bold block mb-1 text-slate-700 dark:text-slate-300">Reason <span className="text-rose-500">*</span></label>
+            <Textarea
+              id="response-note"
+              value={responseNote}
+              onChange={(event) => setResponseNote(event.target.value)}
+              required
+              maxLength={1000}
+              rows={4}
+              placeholder="Add your availability or reason for the change..."
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
+            <button
+              type="button"
+              onClick={() => setIsResponseModalOpen(false)}
+              disabled={isSubmittingResponse}
+              className="px-3 py-1.5 text-slate-500 hover:text-slate-900 font-semibold cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSubmittingResponse || !responseNote.trim()}
+              className="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold cursor-pointer disabled:opacity-50"
+            >
+              {isSubmittingResponse ? 'Sending...' : 'Send request'}
+            </button>
+          </div>
+        </form>
       </Modal>
 
       {/* Reschedule Interview Modal */}

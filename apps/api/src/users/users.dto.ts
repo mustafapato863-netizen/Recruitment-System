@@ -11,10 +11,20 @@ export class CreateUserDto implements CreateUserInput {
   displayName!: string;
 
   @IsString()
+  @IsOptional()
+  @MaxLength(120)
+  jobTitle?: string | null;
+
+  @IsString()
   @IsNotEmpty()
   @MinLength(8)
   @MaxLength(128)
   password!: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  roles?: string[];
 }
 
 export class UpdateUserDto implements UpdateUserInput {
@@ -22,6 +32,11 @@ export class UpdateUserDto implements UpdateUserInput {
   @IsOptional()
   @IsNotEmpty()
   displayName?: string;
+
+  @IsString()
+  @IsOptional()
+  @MaxLength(120)
+  jobTitle?: string | null;
 
   @IsString()
   @IsOptional()

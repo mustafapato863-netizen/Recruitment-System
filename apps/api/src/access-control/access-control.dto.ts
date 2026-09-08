@@ -1,4 +1,6 @@
-import { IsArray, IsBoolean, IsEnum, IsObject, IsOptional, IsString } from 'class-validator';
+import { IsArray, IsBoolean, IsEnum, IsInt, IsNotEmpty, IsObject, IsOptional, IsString, MaxLength, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
+import type { NavigationItemRecord } from '@recruitflow/contracts';
 
 export type DataVisibilityScope = 'ALL' | 'ASSIGNED_ONLY' | 'BRANCH' | 'DEPARTMENT';
 
@@ -32,6 +34,55 @@ export interface RlsGovernanceResponse {
     code: string;
     name: string;
   }>;
+}
+
+export class NavigationItemDto implements Partial<NavigationItemRecord> {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(80)
+  key!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(200)
+  route!: string;
+
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(120)
+  label!: string;
+
+  @IsBoolean()
+  visible!: boolean;
+
+  @IsOptional()
+  @IsInt()
+  sortOrder?: number;
+}
+
+export class UpdateNavigationSettingsDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => NavigationItemDto)
+  items!: NavigationItemDto[];
+}
+
+/** Per-role sidebar visibility. This never replaces route/API authorization. */
+export class RoleNavigationVisibilityItemDto {
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(80)
+  key!: string;
+
+  @IsBoolean()
+  visible!: boolean;
+}
+
+export class UpdateRoleNavigationVisibilityDto {
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => RoleNavigationVisibilityItemDto)
+  items!: RoleNavigationVisibilityItemDto[];
 }
 
 export interface UserResponsibilityConfig {

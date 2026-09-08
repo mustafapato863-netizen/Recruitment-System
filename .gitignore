@@ -32,3 +32,5 @@ apps/api/storage/
 *.dump
 *.sql.gz
 graphify-out/
+tests/artifacts/*
+!tests/artifacts/browser/

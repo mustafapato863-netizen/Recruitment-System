@@ -68,6 +68,8 @@ describe('FastScorecardModal', () => {
     // Select Strong Hire
     await userEvent.click(screen.getByRole('button', { name: /^Strong Hire$/i }));
 
+    await userEvent.type(screen.getByLabelText(/Interviewer Results & Notes/i), 'Strong technical evidence and clear communication.');
+
     // Submit
     await userEvent.click(screen.getByRole('button', { name: /Submit & Lock Scorecard/i }));
 
@@ -77,7 +79,7 @@ describe('FastScorecardModal', () => {
         recommendation: 'Strong Hire',
         strengths: undefined,
         concerns: undefined,
-        notes: undefined,
+        notes: 'Strong technical evidence and clear communication.',
       });
       expect(onSuccess).toHaveBeenCalled();
       expect(onClose).toHaveBeenCalled();

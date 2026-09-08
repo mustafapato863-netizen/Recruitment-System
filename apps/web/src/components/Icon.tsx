@@ -54,6 +54,9 @@ import {
   Send,
   Settings,
   ShieldCheck,
+  Shield,
+  Clipboard,
+  SlidersHorizontal,
   Sparkles,
   Star,
   Sun,
@@ -70,6 +73,9 @@ import {
 } from 'lucide-react';
 
 export type IconName =
+  | 'shield'
+  | 'clipboard'
+  | 'sliders'
   | 'dashboard'
   | 'tasks'
   | 'bell'
@@ -155,6 +161,9 @@ export type IconName =
   | 'link';
 
 const icons: Record<IconName, LucideIcon> = {
+  shield: Shield,
+  clipboard: Clipboard,
+  sliders: SlidersHorizontal,
   activity: Activity,
   dashboard: LayoutDashboard,
   tasks: ClipboardCheck,

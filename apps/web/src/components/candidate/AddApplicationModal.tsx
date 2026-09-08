@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { Candidate, PaginatedResult, Vacancy, Application } from '@recruitflow/contracts';
 import { getApi, postApi } from '../../api/client';
 import { Modal } from '../Modal';
@@ -34,6 +35,7 @@ export function AddApplicationModal({
   preselectedVacancyTitle,
   onSuccess,
 }: AddApplicationModalProps) {
+  const navigate = useNavigate();
   // Mode: existing candidate vs create new candidate
   const [mode, setMode] = useState<'existing' | 'new'>('existing');
 
@@ -124,7 +126,7 @@ export function AddApplicationModal({
     return candidates.filter(
       (c) =>
         `${c.firstName} ${c.lastName}`.toLowerCase().includes(q) ||
-        c.email.toLowerCase().includes(q) ||
+        (c.email || '').toLowerCase().includes(q) ||
         (c.phone && c.phone.includes(q))
     );
   }, [candidates, candidateSearch]);
@@ -132,8 +134,14 @@ export function AddApplicationModal({
   const matchingCandidate = useMemo(() => {
     if (!newEmail.trim() || mode !== 'new') return null;
     const target = newEmail.trim().toLowerCase();
-    return candidates.find((c) => c.email.toLowerCase() === target) || null;
+    return candidates.find((c) => c.email?.toLowerCase() === target) || null;
   }, [newEmail, mode, candidates]);
+
+  const handleUploadCv = () => {
+    const targetVacancyId = preselectedVacancyId || selectedVacancyId;
+    onClose();
+    navigate(targetVacancyId ? `/cv-intake?vacancyId=${encodeURIComponent(targetVacancyId)}` : '/cv-intake');
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -151,8 +159,10 @@ export function AddApplicationModal({
 
       // 1. Create candidate if in 'new' mode
       if (mode === 'new') {
-        if (!newFirstName.trim() || !newLastName.trim() || !newEmail.trim()) {
-          setErrorMessage('First name, last name, and email are required for a new candidate.');
+        const validEmail = /^\S+@\S+\.\S+$/.test(newEmail.trim());
+        const validPhone = newPhone.replace(/\D/g, '').length >= 7;
+        if (!newFirstName.trim() || !newLastName.trim() || (!validEmail && !validPhone)) {
+          setErrorMessage('First name, last name, and a valid email or phone number are required for a new candidate.');
           setIsSubmitting(false);
           return;
         }
@@ -160,7 +170,7 @@ export function AddApplicationModal({
         const createdCandidate = await postApi<Candidate>('/candidates', {
           firstName: newFirstName.trim(),
           lastName: newLastName.trim(),
-          email: newEmail.trim().toLowerCase(),
+          email: validEmail ? newEmail.trim().toLowerCase() : null,
           ...(newPhone.trim() ? { phone: newPhone.trim() } : {}),
           ...(newCurrentTitle.trim() ? { currentTitle: newCurrentTitle.trim() } : {}),
           source,
@@ -263,9 +273,9 @@ export function AddApplicationModal({
         {/* ── Candidate Mode Selector ── */}
         <div>
           <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-2">
-            Candidate Selection Mode
+            Add candidate
           </label>
-          <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl">
             <button
               type="button"
               onClick={() => setMode('existing')}
@@ -288,9 +298,20 @@ export function AddApplicationModal({
               }`}
             >
               <Icon name="user" size={14} />
-              <span>Create New Candidate</span>
+              <span>Full details</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleUploadCv}
+              className="py-2 px-3 text-xs font-bold rounded-lg transition cursor-pointer flex items-center justify-center gap-2 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+            >
+              <Icon name="upload" size={14} />
+              <span>Upload CV</span>
             </button>
           </div>
+          <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
+            Upload CV opens the full extraction and matching flow, while Full details keeps manual entry in this form.
+          </p>
         </div>
 
         {/* ── Tab: Existing Candidate ── */}
@@ -343,7 +364,7 @@ export function AddApplicationModal({
                         </div>
                         <div className="truncate">
                           <span className="block text-xs font-bold truncate">{fullName}</span>
-                          <span className="block text-[11px] text-slate-400 truncate">{c.email}</span>
+                          <span className="block text-[11px] text-slate-400 truncate">{c.email || c.phone || 'No contact provided'}</span>
                         </div>
                       </div>
                       <div className="shrink-0 flex items-center">

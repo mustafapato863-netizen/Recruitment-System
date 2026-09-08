@@ -35,7 +35,7 @@ export const CVIngestSuccess: React.FC<CVIngestSuccessProps> = ({
     if (!targetVacancy || targetVacancy === 'pool') return 'General Talent Pool';
     const found = vacancies?.find((v) => v.id === targetVacancy);
     if (found) {
-      const title = (found as any).position?.title || found.title || 'Requisition';
+      const title = found.position?.title || found.title || 'Requisition';
       return `[${found.vacancyCode}] ${title}`;
     }
     return targetVacancy;
@@ -61,7 +61,7 @@ export const CVIngestSuccess: React.FC<CVIngestSuccessProps> = ({
           Candidate Confirmed into Talent Database!
         </h2>
         <p className="text-xs text-slate-500 dark:text-slate-400">
-          The candidate record has been verified, normalized, and synced with Saudi German Health recruitment systems.
+          The candidate record has been normalized and synced with the recruitment system.
         </p>
       </div>
 
@@ -77,7 +77,7 @@ export const CVIngestSuccess: React.FC<CVIngestSuccessProps> = ({
                 {profile.firstName} {profile.lastName}
               </h3>
               <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-                {profile.title || 'Role not specified'} &bull; {profile.currentCompany || 'Hospital Clinic'}
+                {profile.title || 'Role not specified'} &bull; {profile.currentCompany || 'Organization not reported'}
               </span>
             </div>
           </div>
@@ -115,7 +115,7 @@ export const CVIngestSuccess: React.FC<CVIngestSuccessProps> = ({
           </div>
           <div>
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Email</span>
-            <span className="font-medium text-slate-700 dark:text-slate-300 mt-0.5 block truncate">{profile.email}</span>
+            <span className="font-medium text-slate-700 dark:text-slate-300 mt-0.5 block truncate">{profile.email || 'Not reported'}</span>
           </div>
           <div>
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Phone</span>
@@ -123,7 +123,7 @@ export const CVIngestSuccess: React.FC<CVIngestSuccessProps> = ({
           </div>
           <div>
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Experience</span>
-            <span className="font-medium text-slate-700 dark:text-slate-300 mt-0.5 block">{profile.experienceYears || 0} Years</span>
+            <span className="font-medium text-slate-700 dark:text-slate-300 mt-0.5 block">{profile.experienceYears === undefined ? 'Not reported' : `${profile.experienceYears} Years`}</span>
           </div>
         </div>
 
@@ -145,7 +145,7 @@ export const CVIngestSuccess: React.FC<CVIngestSuccessProps> = ({
       <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
         <button
           type="button"
-          onClick={() => navigate(confirmedCandidateId && confirmedCandidateId !== 'c-demo-confirmed' ? `/candidates/${confirmedCandidateId}` : '/candidates')}
+          onClick={() => navigate(confirmedCandidateId ? `/candidates/${confirmedCandidateId}` : '/candidates')}
           className="w-full sm:w-auto px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition shadow-sm cursor-pointer shadow-purple-500/20 flex items-center justify-center gap-2"
         >
           <Icon name="user" size={14} />

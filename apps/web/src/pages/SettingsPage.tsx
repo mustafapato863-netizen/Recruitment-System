@@ -1,7 +1,8 @@
+import type { PipelineStageItem } from '@recruitflow/contracts';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { getApi, postApi, patchApi } from '../api/client';
-import { Icon } from '../components/Icon';
+import { Icon, type IconName } from '../components/Icon';
 import { Modal } from '../components/Modal';
 import { UserResponsibilityModal } from '../components/UserResponsibilityModal';
 import type {
@@ -288,9 +289,9 @@ export function SettingsPage() {
         setSelectedTemplateId(defaultTpl.id);
 
         // Fetch stages of the selected template
-        const detail = await getApi<any>(`/pipeline-templates/${defaultTpl.id}`);
+        const detail = await getApi<{ stages: PipelineStageItem[] }>(`/pipeline-templates/${defaultTpl.id}`);
         if (detail?.stages && Array.isArray(detail.stages) && detail.stages.length > 0) {
-          const mapped = detail.stages.map((st: any, idx: number) => ({
+          const mapped = detail.stages.map((st, idx: number) => ({
             id: st.id,
             order: st.sortOrder ?? idx + 1,
             name: st.name,
@@ -299,7 +300,7 @@ export function SettingsPage() {
             iconTone: 'text-blue-600 bg-blue-50 dark:bg-blue-950/40 dark:text-blue-300',
             category: st.stageType || 'Interview',
             categoryTone: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300',
-            requiredAction: st.requiredAction || 'Progress to next pipeline milestone',
+            requiredAction: st.exitGate || 'Progress to next pipeline milestone',
             slaDays: st.slaDays ? `${st.slaDays} days` : '2 days',
             enabled: st.status !== 'Archived',
           }));
@@ -429,7 +430,7 @@ export function SettingsPage() {
     setIsSubmitting(true);
     try {
       if (selectedTemplateId) {
-        const res = await postApi<any>(`/pipeline-templates/${selectedTemplateId}/stages`, {
+        const res = await postApi<PipelineStageItem>(`/pipeline-templates/${selectedTemplateId}/stages`, {
           name: newStageName.trim(),
           stageType: newStageCategory === 'Interview' ? 'Interview' : 'Screening',
           sortOrder: stages.length + 1,
@@ -528,7 +529,7 @@ export function SettingsPage() {
           >
             <div className="flex items-center justify-between mb-2">
               <span className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 group-hover:bg-blue-50 group-hover:text-blue-600 transition">
-                <Icon name={item.icon as any} size={16} />
+                <Icon name={item.icon as IconName} size={16} />
               </span>
               <Icon name="arrow-left" size={12} className="rotate-180 text-slate-300 group-hover:text-blue-500 transition" />
             </div>
@@ -570,7 +571,7 @@ export function SettingsPage() {
                 : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
-            <Icon name={tab.icon as any} size={14} />
+            <Icon name={tab.icon as IconName} size={14} />
             <span>{tab.label}</span>
           </button>
         ))}
@@ -620,7 +621,7 @@ export function SettingsPage() {
                     <div className="flex items-center gap-3.5">
                       <span className="text-xs font-bold text-slate-400 w-4 text-center">{stage.order}</span>
                       <span className={`p-2 rounded-xl ${stage.iconTone}`}>
-                        <Icon name={stage.icon as any} size={15} />
+                        <Icon name={stage.icon as IconName} size={15} />
                       </span>
                       <div>
                         <div className="flex items-center gap-2">
@@ -1289,7 +1290,7 @@ export function SettingsPage() {
                                   title={info.desc}
                                   className={`inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[10.5px] font-bold ${info.badgeTone}`}
                                 >
-                                  <Icon name={info.icon as any} size={11} />
+                                  <Icon name={info.icon as IconName} size={11} />
                                   <span>{info.label}</span>
                                 </span>
                               );
@@ -1376,7 +1377,7 @@ export function SettingsPage() {
                 >
                   <div className="flex items-center gap-2">
                     <span className="p-1.5 rounded-lg bg-white dark:bg-slate-800 text-blue-600 shadow-xs border border-slate-200/50 dark:border-slate-700">
-                      <Icon name={item.icon as any} size={13} />
+                      <Icon name={item.icon as IconName} size={13} />
                     </span>
                     <span className="text-xs font-extrabold text-slate-900 dark:text-white leading-tight">
                       {item.label}

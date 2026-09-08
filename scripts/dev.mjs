@@ -19,13 +19,10 @@ ${cyan}${bold}╔═════════════════════
 ║  📡 API Server:    ${green}http://localhost:3000/api/v1/health${cyan}                    ║
 ║  💻 Web Client:    ${green}http://localhost:5173${cyan}                                  ║
 ║                                                                           ║
-║  ${yellow}Tip: Log in with demo users (password: Password123!)${cyan}                    ║
-║  • Recruiter:         sarah.ahmed@recruitflow.local                       ║
-║  • Talent Manager:    mona.manager@recruitflow.local                      ║
-║  • Performance Admin: tarek.audit@recruitflow.local                       ║
-║  • Administrator:     ahmed.mahmoud@recruitflow.local                     ║
+║  ${yellow}UAT mode: use the administrator account configured in your local .env${cyan}  ║
+║  Roles, users, permissions, and sidebar visibility are admin-managed.     ║
 ║                                                                           ║
-║  Press Ctrl+C to stop all services cleanly.                               ║
+║  Press Ctrl+C to stop all RecruitFlow services cleanly.                  ║
 ╚═══════════════════════════════════════════════════════════════════════════╝${reset}
 `);
 
@@ -72,6 +69,9 @@ startProcess('API', cyan, pnpmCmd, ['--dir', 'apps/api', 'start:dev'], process.c
 
 // 2. Start Vite Web Client
 startProcess('WEB', green, pnpmCmd, ['--dir', 'apps/web', 'dev'], process.cwd());
+
+// 3. Start the outbox and sweeper worker for local UAT.
+startProcess('WORKER', yellow, pnpmCmd, ['--dir', 'apps/worker', 'dev'], process.cwd());
 
 function cleanup() {
   console.log(`\n${yellow}Shutting down all RecruitFlow services...${reset}`);

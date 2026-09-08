@@ -29,6 +29,7 @@ export interface SelfScheduleTokenPayload {
   interviewType: InterviewType;
   durationMinutes: number;
   attendeeUserIds: string[];
+  locationUrl?: string | null;
   expiresAt: number; // timestamp in ms
   nonce: string;
 }
@@ -133,6 +134,7 @@ export class SelfScheduleService {
       interviewType: input.interviewType,
       durationMinutes,
       attendeeUserIds,
+      locationUrl: input.locationUrl?.trim() || null,
       expiresAt,
       nonce,
     };
@@ -280,7 +282,7 @@ export class SelfScheduleService {
           scheduledStart: proposedStart,
           scheduledEnd: proposedEnd,
           timezone: input.timezone || 'Asia/Riyadh',
-          locationUrl: 'https://teams.microsoft.com/l/meetup-join/sgh-telehealth',
+          locationUrl: payload.locationUrl || null,
           status: 'Scheduled',
         },
       });
@@ -291,7 +293,7 @@ export class SelfScheduleService {
             interviewId: item.id,
             userId,
             role: 'Interviewer',
-            response: 'Accepted',
+            response: 'Pending',
           })),
         });
       }

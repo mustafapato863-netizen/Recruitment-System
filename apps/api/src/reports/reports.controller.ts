@@ -21,7 +21,7 @@ export class ReportsController {
     @CurrentUser() user: AuthUser,
     @Query() query: ReportOverviewQueryDto,
   ) {
-    return this.reportsService.getOverview(user.organizationId, query);
+    return this.reportsService.getOverview(user.organizationId, query, user);
   }
 
   @Get('export.xlsx')
@@ -30,7 +30,7 @@ export class ReportsController {
     @CurrentUser() user: AuthUser,
     @Query() query: ReportOverviewQueryDto,
   ) {
-    const workbook = await this.reportsService.exportExcel(user.organizationId, query);
+    const workbook = await this.reportsService.exportExcel(user.organizationId, query, user);
     return new StreamableFile(workbook, {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       disposition: 'attachment; filename="recruitflow-report.xlsx"',
@@ -40,24 +40,24 @@ export class ReportsController {
   @Get('kpis')
   @RequirePermissions('APPLICATION_VIEW')
   async getKpis(@CurrentUser() user: AuthUser) {
-    return this.reportsService.getKpis(user.organizationId);
+    return this.reportsService.getKpis(user.organizationId, user);
   }
 
   @Get('funnel')
   @RequirePermissions('APPLICATION_VIEW')
   async getFunnel(@CurrentUser() user: AuthUser) {
-    return this.reportsService.getFunnel(user.organizationId);
+    return this.reportsService.getFunnel(user.organizationId, user);
   }
 
   @Get('hiring-by-department')
   @RequirePermissions('APPLICATION_VIEW')
   async getHiringByDepartment(@CurrentUser() user: AuthUser) {
-    return this.reportsService.getHiringByDepartment(user.organizationId);
+    return this.reportsService.getHiringByDepartment(user.organizationId, user);
   }
 
   @Get('recruiter-workload')
   @RequirePermissions('APPLICATION_VIEW')
   async getRecruiterWorkload(@CurrentUser() user: AuthUser) {
-    return this.reportsService.getRecruiterWorkload(user.organizationId);
+    return this.reportsService.getRecruiterWorkload(user.organizationId, user);
   }
 }

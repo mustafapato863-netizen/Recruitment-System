@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import type { NavigationItemRecord } from '@recruitflow/contracts';
 import { useAuth } from '../auth/AuthContext';
+import { isEmployeeWorkspaceUser } from '../auth/workspacePersona';
 import { Icon, type IconName } from '../components/Icon';
 import { IconButton } from '../components/ui/IconButton';
 import { CommandPalette } from '../components/ui/CommandPalette';
@@ -17,9 +19,13 @@ import { getApi } from '../api/client';
 
 type NavigationItemProps = {
   label: string;
+  labelWhenEmployee?: string;
   icon: IconName;
   to?: string;
   end?: boolean;
+  navigationKey?: string;
+  requiredPermission?: string;
+  requiredAnyPermissions?: readonly string[];
   allowedRoles?: ('ADMIN' | 'MANAGER' | 'EMPLOYEE')[];
   isCollapsed?: boolean;
   onNavigate?: () => void;
@@ -27,11 +33,17 @@ type NavigationItemProps = {
   badgeTone?: 'blue' | 'amber' | 'emerald' | 'red';
 };
 
+const NavigationSettingsContext = createContext<Record<string, NavigationItemRecord>>({});
+
 export function NavigationItem({
   label,
+  labelWhenEmployee,
   icon,
   to,
   end = false,
+  navigationKey,
+  requiredPermission,
+  requiredAnyPermissions,
   allowedRoles,
   isCollapsed = false,
   onNavigate,
@@ -39,13 +51,22 @@ export function NavigationItem({
   badgeTone = 'blue',
 }: NavigationItemProps) {
   const { user } = useAuth();
+  const navigationSettings = useContext(NavigationSettingsContext);
+  const navigationSetting = navigationKey ? navigationSettings[navigationKey] : undefined;
+  const displayLabel = (isEmployeeWorkspaceUser(user) && labelWhenEmployee?.trim())
+    || navigationSetting?.label?.trim()
+    || label;
   
-  const userRoleCodes = user?.roles?.map((r) => ((r.code || r.name || '').toUpperCase())) || [];
-  const isAdmin = userRoleCodes.some((c) => ['ADMIN', 'SYSADMIN'].includes(c));
-  const isManager = userRoleCodes.some((c) => ['HIRING_MANAGER', 'RECRUITER', 'MANAGER'].includes(c));
-  const effectiveRole = isAdmin ? 'ADMIN' : (isManager ? 'MANAGER' : 'EMPLOYEE');
-
-  const hasAccess = allowedRoles ? allowedRoles.includes(effectiveRole) : true;
+  // Navigation visibility is configured by the administrator and checked by
+  // permissions. Keep the legacy prop for callers, but never infer access
+  // from mutable role names on the client.
+  const hasRoleAccess = allowedRoles ? allowedRoles.length > 0 : true;
+  const hasNaturalAccess = requiredPermission
+    ? Boolean(user?.permissions?.includes(requiredPermission))
+    : requiredAnyPermissions && requiredAnyPermissions.length > 0
+      ? requiredAnyPermissions.some((permission) => Boolean(user?.permissions?.includes(permission)))
+      : true;
+  const hasAccess = hasRoleAccess && hasNaturalAccess && navigationSetting?.visible !== false;
 
   if (!hasAccess) return null;
 
@@ -54,9 +75,9 @@ export function NavigationItem({
       <span className="nav-item-disabled relative nav-item" aria-disabled="true">
         <span className="ico"><Icon name={icon} size={18} /></span>
         {!isCollapsed ? (
-          <span className="nav-label">{label}</span>
+          <span className="nav-label">{displayLabel}</span>
         ) : (
-          <span className="sr-only">{label}</span>
+          <span className="sr-only">{displayLabel}</span>
         )}
       </span>
     );
@@ -67,14 +88,14 @@ export function NavigationItem({
       className={({ isActive }) => (isActive ? 'active relative nav-item' : 'relative nav-item')}
       end={end}
       to={to}
-      aria-label={label}
-      title={isCollapsed ? label : undefined}
+      aria-label={displayLabel}
+      title={isCollapsed ? displayLabel : undefined}
       onClick={onNavigate}
     >
       <span className="ico"><Icon name={icon} size={17} /></span>
       {!isCollapsed && (
         <span className="nav-label font-semibold text-[13.5px] leading-tight normal-case tracking-normal flex-1 flex items-center justify-between">
-          <span>{label}</span>
+          <span>{displayLabel}</span>
           {badge !== undefined && Number(badge) > 0 && (
             <span
               className={`ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
@@ -97,7 +118,7 @@ export function NavigationItem({
           role="tooltip"
           className="nav-tooltip absolute left-full ml-3 top-1/2 -translate-y-1/2 px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-semibold whitespace-nowrap opacity-0 pointer-events-none transition-all duration-150 z-50 shadow-xl border border-slate-700/60"
         >
-          {label}
+          {displayLabel}
         </span>
       )}
     </NavLink>
@@ -115,6 +136,24 @@ export function AppShellInner() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileDrawerOpen, setIsMobileDrawerOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [navigationSettings, setNavigationSettings] = useState<Record<string, NavigationItemRecord>>({});
+  const isEmployeeWorkspace = isEmployeeWorkspaceUser(user);
+  const canViewTasks = Boolean(user?.permissions?.includes('TASK_VIEW'));
+
+  useEffect(() => {
+    let isMounted = true;
+    void getApi<NavigationItemRecord[]>('/access-control/navigation')
+      .then((items) => {
+        if (!isMounted || !Array.isArray(items)) return;
+        setNavigationSettings(Object.fromEntries(items.map((item) => [item.key, item])));
+      })
+      .catch(() => {
+        // Navigation metadata is an enhancement; route permissions remain authoritative.
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.id]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -282,78 +321,94 @@ export function AppShellInner() {
           </IconButton>
         </div>
 
+        <NavigationSettingsContext.Provider value={navigationSettings}>
         <nav className="nav rf-scrollbar space-y-3" aria-label="Primary navigation">
           {/* Workspace */}
           <div>
             {!isSidebarCollapsed && (
-              <div className="px-3 pt-1 pb-0.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500 select-none">
+              <div className="px-3 pt-1 pb-0.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-600 dark:text-slate-500 select-none">
                 Workspace
               </div>
             )}
             <div className="space-y-0.5">
-              <NavigationItem end icon="dashboard" label="Command Center" to="/" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
-              <NavigationItem icon="file-text" label="Requisitions" to="/vacancy-requests" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
-              <NavigationItem icon="briefcase" label="Job Positions" to="/vacancies" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+              {isEmployeeWorkspace ? (
+                <NavigationItem end icon="dashboard" label="Command Center" labelWhenEmployee="My Work" to="/" navigationKey="dashboard" isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+              ) : (
+                <NavigationItem end icon="dashboard" label="Command Center" to="/" navigationKey="dashboard" requiredAnyPermissions={['VACANCY_REQUEST_APPROVE', 'USERS_MANAGE', 'VACANCY_MANAGE', 'MASTER_DATA_VIEW']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+              )}
+              <NavigationItem icon="file-text" label="Requisitions" to="/vacancy-requests" navigationKey="vacancy-requests" requiredPermission="VACANCY_REQUEST_VIEW" isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+              {!isEmployeeWorkspace && (
+                <NavigationItem icon="briefcase" label="Job Positions" to="/vacancies" navigationKey="vacancies" requiredPermission="VACANCY_VIEW" isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+              )}
             </div>
           </div>
 
           {/* Recruitment Pipeline */}
+          {!isEmployeeWorkspace && (
           <div>
             {!isSidebarCollapsed && (
-              <div className="px-3 pt-1 pb-0.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500 select-none">
+              <div className="px-3 pt-1 pb-0.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-600 dark:text-slate-500 select-none">
                 Recruitment
               </div>
             )}
             <div className="space-y-0.5">
-              <NavigationItem icon="users" label="Applications" to="/applications" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
-              <NavigationItem icon="check-circle" label="Approval Inboxes" to="/approval-inbox" badge={inboxBadgeCount > 0 ? inboxBadgeCount : undefined} badgeTone="amber" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
-              <NavigationItem icon="calendar" label="Interviews" to="/interviews" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
-              <NavigationItem icon="offer" label="Offers" to="/offers" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+              <NavigationItem icon="users" label="Applications" to="/applications" navigationKey="applications" requiredPermission="APPLICATION_VIEW" isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+              <NavigationItem icon="check-circle" label="Approval Inboxes" to="/approval-inbox" navigationKey="approval-inbox" requiredAnyPermissions={['VACANCY_REQUEST_APPROVE', 'APPROVE_OFFERS', 'FINAL_HIRING_APPROVAL']} badge={inboxBadgeCount > 0 ? inboxBadgeCount : undefined} badgeTone="amber" isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+              <NavigationItem icon="calendar" label="Interviews" to="/interviews" navigationKey="interviews" requiredPermission="VACANCY_VIEW" isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+              <NavigationItem icon="offer" label="Offers" to="/offers" navigationKey="offers" requiredPermission="APPLICATION_VIEW" isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
             </div>
           </div>
+          )}
 
           {/* Sourcing & Talent */}
+          {!isEmployeeWorkspace && (
           <div>
             {!isSidebarCollapsed && (
-              <div className="px-3 pt-1 pb-0.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500 select-none">
+              <div className="px-3 pt-1 pb-0.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-600 dark:text-slate-500 select-none">
                 Sourcing &amp; Talent
               </div>
             )}
             <div className="space-y-0.5">
-              <NavigationItem icon="database" label="Candidates DB" to="/candidates" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
-              <NavigationItem icon="upload" label="CV Intake" to="/cv-intake" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
-              <NavigationItem icon="sparkles" label="Smart Sourcing & Match" to="/sourcing-match" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+              <NavigationItem icon="database" label="Candidates / CV Bank" to="/candidates" navigationKey="candidates" requiredPermission="CANDIDATE_VIEW" isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
             </div>
           </div>
+          )}
 
           {/* Compliance & Onboarding */}
+          {!isEmployeeWorkspace && (
           <div>
             {!isSidebarCollapsed && (
-              <div className="px-3 pt-1 pb-0.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500 select-none">
+              <div className="px-3 pt-1 pb-0.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-600 dark:text-slate-500 select-none">
                 Compliance &amp; Hires
               </div>
             )}
             <div className="space-y-0.5">
-              <NavigationItem icon="user-check" label="Hires & Joining" to="/joinings" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
-              <NavigationItem icon="shield-check" label="Medical Licenses" to="/licenses" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+              <NavigationItem icon="user-check" label="Hires & Joining" to="/joinings" navigationKey="joinings" requiredPermission="APPLICATION_VIEW" isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+              <NavigationItem icon="shield-check" label="Medical Licenses" to="/licenses" navigationKey="licenses" requiredPermission="APPLICATION_VIEW" isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
             </div>
           </div>
+          )}
 
           {/* Governance */}
+          {!isEmployeeWorkspace && (
           <div>
             {!isSidebarCollapsed && (
-              <div className="px-3 pt-1 pb-0.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500 select-none">
+              <div className="px-3 pt-1 pb-0.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-600 dark:text-slate-500 select-none">
                 Governance
               </div>
             )}
             <div className="space-y-0.5">
-              <NavigationItem icon="report" label="Reports" to="/reports" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
-              <NavigationItem icon="mail" label="Email Templates" to="/email-templates" allowedRoles={['ADMIN']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
-              <NavigationItem icon="settings" label="Settings" to="/settings" allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+              <NavigationItem icon="mail" label="Email Templates" to="/email-templates" navigationKey="email-templates" requiredPermission="MASTER_DATA_MANAGE" isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+              <NavigationItem icon="settings" label="Settings" to="/settings" navigationKey="settings" requiredAnyPermissions={['USERS_VIEW', 'MASTER_DATA_VIEW', 'OVERRIDE_WORKFLOW', 'AUDIT_VIEW']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+              <NavigationItem icon="user-cog" label="Users & Roles" to="/users" navigationKey="users" requiredPermission="USERS_VIEW" isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+              <NavigationItem icon="list" label="Master Data" to="/master-data" navigationKey="master-data" requiredPermission="MASTER_DATA_VIEW" isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+              <NavigationItem icon="history" label="Audit Log" to="/audit-log" navigationKey="audit-log" requiredPermission="AUDIT_VIEW" isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
             </div>
           </div>
+          )}
 
         </nav>
+        </NavigationSettingsContext.Provider>
 
         {/* User Account / Footer Section */}
         <div className="user" aria-label="Account">
@@ -408,13 +463,13 @@ export function AppShellInner() {
             <button
               ref={searchTriggerRef}
               type="button"
-              className="search-bar-unified flex items-center gap-2 px-3 sm:px-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-400 hover:border-slate-300 dark:hover:border-slate-700 transition flex-1 min-w-[120px] max-w-[460px] shadow-2xs cursor-text"
+              className="search-bar-unified flex items-center gap-2 px-3 sm:px-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700 transition flex-1 min-w-[120px] max-w-[460px] shadow-2xs cursor-text"
               onClick={() => setIsCommandPaletteOpen(true)}
               aria-haspopup="dialog"
               aria-expanded={isCommandPaletteOpen}
               aria-label="Search job positions, applicants, activities, notes..."
             >
-              <Icon name="search" size={14} className="text-slate-400 shrink-0" />
+              <Icon name="search" size={14} className="text-slate-600 dark:text-slate-400 shrink-0" />
               <span className="truncate flex-1 text-left">Search job positions, applicants, activities...</span>
               <kbd className="hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-mono bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-slate-500">
                 ⌘ K
@@ -436,9 +491,10 @@ export function AppShellInner() {
             {/* History / Clock button */}
             <button
               type="button"
-              onClick={() => navigate('/tasks')}
+              onClick={() => navigate('/my-work')}
               className="hidden md:flex w-9 h-9 items-center justify-center rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs cursor-pointer"
-              title="Recent Activity & Task Queue"
+              title={canViewTasks ? 'Recent Activity & Task Queue' : 'Open My Work'}
+              aria-label={canViewTasks ? 'Recent Activity and Task Queue' : 'Open My Work'}
             >
               <Icon name="clock" size={16} />
             </button>

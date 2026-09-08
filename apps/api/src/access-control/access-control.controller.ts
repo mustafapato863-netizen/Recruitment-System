@@ -8,7 +8,12 @@ import {
 } from '@nestjs/common';
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { AccessControlService } from './access-control.service';
-import { UpdateRlsPoliciesDto } from './access-control.dto';
+import {
+  UpdateNavigationSettingsDto,
+  UpdateRoleNavigationVisibilityDto,
+  UpdateRlsPoliciesDto,
+  UpdateUserResponsibilityDto,
+} from './access-control.dto';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { RequirePermissions } from '../common/decorators/require-permissions.decorator';
@@ -20,6 +25,33 @@ import type { AuthUser } from '@recruitflow/contracts';
 @Controller('access-control')
 export class AccessControlController {
   constructor(private readonly accessControlService: AccessControlService) {}
+
+  /** Navigation metadata is safe for every authenticated user; visibility is not access control. */
+  @Get('navigation')
+  getNavigation(@CurrentUser() user: AuthUser) {
+    return this.accessControlService.getNavigationSettings(user.organizationId, user.roleCodes);
+  }
+
+  @Put('navigation')
+  @RequirePermissions('ROLES_MANAGE')
+  @AuditAction('NAVIGATION_SETTINGS_UPDATE')
+  updateNavigation(
+    @CurrentUser() user: AuthUser,
+    @Body() body: UpdateNavigationSettingsDto,
+  ) {
+    return this.accessControlService.updateNavigationSettings(user.organizationId, body);
+  }
+
+  @Put('navigation/roles/:roleCode')
+  @RequirePermissions('ROLES_MANAGE')
+  @AuditAction('ROLE_NAVIGATION_VISIBILITY_UPDATE')
+  updateRoleNavigation(
+    @CurrentUser() user: AuthUser,
+    @Param('roleCode') roleCode: string,
+    @Body() body: UpdateRoleNavigationVisibilityDto,
+  ) {
+    return this.accessControlService.updateRoleNavigationVisibility(user.organizationId, roleCode, body);
+  }
 
   @Get('rls-policies')
   @RequirePermissions('ROLES_VIEW')
@@ -58,7 +90,7 @@ export class AccessControlController {
   updateUserResponsibility(
     @CurrentUser() user: AuthUser,
     @Param('userId') userId: string,
-    @Body() body: any,
+    @Body() body: UpdateUserResponsibilityDto,
   ) {
     return this.accessControlService.updateUserResponsibility(user.organizationId, userId, body);
   }

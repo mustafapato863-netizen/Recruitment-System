@@ -122,7 +122,7 @@ export function BreadcrumbsBar() {
 
           {/* Home Root */}
           <Link
-            to="/"
+            to="/" aria-label="Home"
             className="h-7 inline-flex items-center gap-1.5 px-2 rounded-lg text-slate-500 dark:text-slate-400 hover:text-[#0084ce] dark:hover:text-sky-400 hover:bg-slate-100/70 dark:hover:bg-slate-800/60 text-xs font-medium transition-all no-underline shrink-0 leading-none"
           >
             <Icon name="dashboard" size={13} className="text-slate-400 dark:text-slate-500" />

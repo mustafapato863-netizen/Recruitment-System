@@ -341,7 +341,7 @@ export function VacancyOverviewPage() {
 
         <div className="flex items-center gap-2.5">
           <a
-            href={`/careers/sgh/jobs/${encodeURIComponent(vacancy?.vacancyCode || id || '')}`}
+            href={`/careers/${encodeURIComponent(vacancy?.organizationCode || '')}/jobs/${encodeURIComponent(vacancy?.vacancyCode || id || '')}`}
             target="_blank"
             rel="noreferrer"
             className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 rounded-xl text-xs font-bold hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition shadow-xs cursor-pointer"
@@ -1376,13 +1376,13 @@ export function VacancyOverviewPage() {
           <div className="flex items-center gap-2">
             <Input
               readOnly
-              value={`${typeof window !== 'undefined' ? window.location.origin : ''}/careers/sgh/jobs/${encodeURIComponent(vacancy?.vacancyCode || id || '')}`}
+              value={`${typeof window !== 'undefined' ? window.location.origin : ''}/careers/${encodeURIComponent(vacancy?.organizationCode || '')}/jobs/${encodeURIComponent(vacancy?.vacancyCode || id || '')}`}
               className="text-xs font-mono select-all"
             />
             <button
               type="button"
               onClick={() => {
-                const url = `${window.location.origin}/careers/sgh/jobs/${encodeURIComponent(vacancy?.vacancyCode || id || '')}`;
+                const url = `${window.location.origin}/careers/${encodeURIComponent(vacancy?.organizationCode || '')}/jobs/${encodeURIComponent(vacancy?.vacancyCode || id || '')}`;
                 void navigator.clipboard?.writeText(url);
                 showToast('Link copied to clipboard!');
                 setIsShareModalOpen(false);
@@ -1394,7 +1394,7 @@ export function VacancyOverviewPage() {
           </div>
           <div className="pt-2 flex justify-end">
             <a
-              href={`/careers/sgh/jobs/${encodeURIComponent(vacancy?.vacancyCode || id || '')}`}
+              href={`/careers/${encodeURIComponent(vacancy?.organizationCode || '')}/jobs/${encodeURIComponent(vacancy?.vacancyCode || id || '')}`}
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline"

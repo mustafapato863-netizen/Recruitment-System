@@ -54,7 +54,7 @@ export class DocumentsController {
     @CurrentUser() user: AuthUser,
     @Param('candidateId', ParseUUIDPipe) candidateId: string,
   ) {
-    return this.documentsService.listCandidateDocuments(user.organizationId, candidateId);
+    return this.documentsService.listCandidateDocuments(user.organizationId, candidateId, user);
   }
 
   @Get('cv-bank')
@@ -65,7 +65,7 @@ export class DocumentsController {
     @Query('page') page = '1',
     @Query('pageSize') pageSize = '25',
   ) {
-    return this.documentsService.listCvBank(user.organizationId, search, Number(page), Number(pageSize));
+    return this.documentsService.listCvBank(user.organizationId, search, Number(page), Number(pageSize), user);
   }
 
   @Get('cv-bank/manifest.xlsx')
@@ -73,7 +73,7 @@ export class DocumentsController {
   @Header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
   @Header('Content-Disposition', 'attachment; filename="recruitflow-cv-bank-manifest.xlsx"')
   exportCvManifest(@CurrentUser() user: AuthUser) {
-    return this.documentsService.exportCvManifest(user.organizationId);
+    return this.documentsService.exportCvManifest(user.organizationId, user);
   }
 
   @Get('cv-bank/backup-manifest.xlsx')
@@ -81,13 +81,13 @@ export class DocumentsController {
   @Header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
   @Header('Content-Disposition', 'attachment; filename="recruitflow-cv-bank-backup-manifest.xlsx"')
   exportCvBackupManifest(@CurrentUser() user: AuthUser) {
-    return this.documentsService.exportCvManifest(user.organizationId);
+    return this.documentsService.exportCvManifest(user.organizationId, user);
   }
 
   @Get('cv-bank/backup-status')
   @RequirePermissions('CANDIDATE_VIEW')
   getBackupStatus(@CurrentUser() user: AuthUser) {
-    return this.documentsService.getBackupStatus(user.organizationId);
+    return this.documentsService.getBackupStatus(user.organizationId, user);
   }
 
   @Get(':id')
@@ -95,7 +95,7 @@ export class DocumentsController {
   @UseGuards(TenantScopedGuard)
   @TenantResource({ resource: 'candidateDocument', param: 'id' })
   getDocument(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
-    return this.documentsService.getDocument(user.organizationId, id);
+    return this.documentsService.getDocument(user.organizationId, id, user);
   }
 
   @Post()
@@ -109,6 +109,7 @@ export class DocumentsController {
       user.organizationId,
       user.userId,
       body,
+      user,
     );
   }
 
@@ -121,7 +122,7 @@ export class DocumentsController {
     @Body() body: UploadCandidateFileDto,
     @UploadedFile() uploadedFile: UploadedCandidateFile | undefined,
   ) {
-    return this.documentsService.uploadFile(user.organizationId, user.userId, body, requireCandidateFile(uploadedFile));
+    return this.documentsService.uploadFile(user.organizationId, user.userId, body, requireCandidateFile(uploadedFile), user);
   }
 
   @Patch(':id/retention')
@@ -134,7 +135,7 @@ export class DocumentsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() body: UpdateDocumentRetentionDto,
   ) {
-    return this.documentsService.updateRetention(user.organizationId, user.userId, id, body);
+    return this.documentsService.updateRetention(user.organizationId, user.userId, id, body, user);
   }
 
   @Post(':id/archive')
@@ -147,7 +148,7 @@ export class DocumentsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() body: ArchiveCandidateDocumentDto,
   ) {
-    return this.documentsService.archiveDocument(user.organizationId, user.userId, id, body);
+    return this.documentsService.archiveDocument(user.organizationId, user.userId, id, body, user);
   }
 
   @Post(':id/restore')
@@ -156,7 +157,7 @@ export class DocumentsController {
   @UseGuards(TenantScopedGuard)
   @TenantResource({ resource: 'candidateDocument', param: 'id' })
   restoreDocument(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
-    return this.documentsService.restoreDocument(user.organizationId, user.userId, id);
+    return this.documentsService.restoreDocument(user.organizationId, user.userId, id, user);
   }
 
   @Get(':id/download')
@@ -164,7 +165,7 @@ export class DocumentsController {
   @UseGuards(TenantScopedGuard)
   @TenantResource({ resource: 'candidateDocument', param: 'id' })
   async downloadFile(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
-    const file = await this.documentsService.getFile(user.organizationId, id);
+    const file = await this.documentsService.getFile(user.organizationId, id, user);
     return new StreamableFile(createReadStream(file.path), {
       type: file.mimeType,
       disposition: `attachment; filename="${file.fileName.replace(/"/g, '')}"`,

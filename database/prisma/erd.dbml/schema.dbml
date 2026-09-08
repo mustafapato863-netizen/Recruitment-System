@@ -25,12 +25,14 @@ Table organizations {
   candidateImportJobs candidate_import_jobs [not null]
   pipelineTemplates pipeline_templates [not null]
   integrations integrations [not null]
+  customPermissions permissions [not null]
   notifications notifications [not null]
   tasks tasks [not null]
   authTokens auth_tokens [not null]
   customRoles roles [not null]
   emailOutbox email_outbox [not null]
   emailTemplates email_templates [not null]
+  masterDataValues master_data_values [not null]
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [not null]
 }
@@ -64,6 +66,7 @@ Table branches {
   name String [not null]
   city String
   status String [not null, default: 'Active']
+  version Int [not null, default: 1]
   vacancyRequests vacancy_requests [not null]
   vacancies vacancies [not null]
   createdAt DateTime [default: `now()`, not null]
@@ -83,7 +86,9 @@ Table positions {
   code String [not null]
   title String [not null]
   description String
+  metadata Json
   status String [not null, default: 'Active']
+  version Int [not null, default: 1]
   vacancyRequests vacancy_requests [not null]
   vacancies vacancies [not null]
   createdAt DateTime [default: `now()`, not null]
@@ -102,6 +107,7 @@ Table users {
   emailNormalized String [not null]
   passwordHash String
   displayName String [not null]
+  jobTitle String
   status String [not null, default: 'Active']
   emailVerifiedAt DateTime
   invitationAcceptedAt DateTime
@@ -141,6 +147,8 @@ Table users {
   authTokens auth_tokens [not null]
   assignedTasks tasks [not null]
   createdTasks tasks [not null]
+  completedTasks tasks [not null]
+  createdCandidates candidates [not null]
 
   indexes {
     (organizationId, emailNormalized) [unique]
@@ -194,7 +202,10 @@ Table roles {
 Table permissions {
   id String [pk]
   code String [unique, not null]
+  name String
   description String
+  organizationId String
+  organization organizations
   roleLinks role_permissions [not null]
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [not null]
@@ -316,11 +327,12 @@ Table vacancy_assignments {
   userId String [not null]
   user users [not null]
   roleCode String [not null]
+  assignmentKind String [not null, default: 'PRIMARY']
   isActive Boolean [not null, default: true]
   assignedAt DateTime [default: `now()`, not null]
 
   indexes {
-    (vacancyId, userId, roleCode, isActive) [unique]
+    (vacancyId, userId, roleCode, isActive, assignmentKind) [unique]
   }
 }
 
@@ -369,10 +381,11 @@ Table candidates {
   candidateCode String [unique, not null]
   firstName String [not null]
   lastName String [not null]
-  email String [not null]
+  email String
   phone String
   currentTitle String
   currentCompany String
+  summary String
   source String
   status String [not null, default: 'Active']
   consentStatus String [not null, default: 'Unknown']
@@ -385,6 +398,8 @@ Table candidates {
   languages String[] [not null]
   availability String
   applications applications [not null]
+  createdById String
+  createdBy users
   documents candidate_documents [not null]
   talentPoolMemberships talent_pool_candidates [not null]
   createdAt DateTime [default: `now()`, not null]
@@ -494,6 +509,10 @@ Table screening_logs {
   screener users [not null]
   outcome String [not null]
   notes String
+  noticePeriodDays Int
+  expectedSalary Decimal
+  currentSalary Decimal
+  salaryCurrency String [not null, default: 'SAR']
   screenedAt DateTime [default: `now()`, not null]
   createdAt DateTime [default: `now()`, not null]
 }
@@ -525,6 +544,7 @@ Table interview_attendees {
   userId String [not null]
   user users [not null]
   role String [not null, default: 'Interviewer']
+  jobTitle String
   response String [not null, default: 'Accepted']
 
   indexes {
@@ -827,6 +847,8 @@ Table tasks {
   assignee users [not null]
   createdById String [not null]
   createdBy users [not null]
+  completedById String
+  completedBy users
   type String [not null]
   title String [not null]
   description String
@@ -838,6 +860,25 @@ Table tasks {
   completedAt DateTime
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [not null]
+}
+
+Table master_data_values {
+  id String [pk]
+  organizationId String [not null]
+  organization organizations [not null]
+  category String [not null]
+  code String
+  name String [not null]
+  metadata Json
+  status String [not null, default: 'Active']
+  version Int [not null, default: 1]
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+
+  indexes {
+    (organizationId, category, code) [unique]
+    (organizationId, category, name) [unique]
+  }
 }
 
 Ref: legal_entities.organizationId > organizations.id [delete: Restrict]
@@ -859,6 +900,8 @@ Ref: auth_tokens.userId > users.id [delete: Cascade]
 Ref: email_outbox.organizationId > organizations.id [delete: Set Null]
 
 Ref: roles.organizationId > organizations.id [delete: Restrict]
+
+Ref: permissions.organizationId > organizations.id [delete: Restrict]
 
 Ref: user_roles.userId > users.id [delete: Restrict]
 
@@ -897,6 +940,8 @@ Ref: vacancy_assignments.vacancyId > vacancies.id [delete: Restrict]
 Ref: vacancy_assignments.userId > users.id [delete: Restrict]
 
 Ref: candidates.organizationId > organizations.id [delete: Restrict]
+
+Ref: candidates.createdById > users.id [delete: Set Null]
 
 Ref: applications.organizationId > organizations.id [delete: Restrict]
 
@@ -1005,3 +1050,7 @@ Ref: tasks.organizationId > organizations.id [delete: Restrict]
 Ref: tasks.assigneeUserId > users.id [delete: Restrict]
 
 Ref: tasks.createdById > users.id [delete: Restrict]
+
+Ref: tasks.completedById > users.id [delete: Restrict]
+
+Ref: master_data_values.organizationId > organizations.id [delete: Restrict]

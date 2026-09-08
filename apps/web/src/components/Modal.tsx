@@ -8,15 +8,22 @@ interface ModalProps {
   onClose: () => void;
   title: string;
   children: ReactNode;
+  footer?: ReactNode;
   maxWidthClass?: string;
 }
 
 const FOCUSABLE_SELECTOR = 'button, input, select, textarea, [href], [tabindex]:not([tabindex="-1"])';
 
-export function Modal({ isOpen, onClose, title, children, maxWidthClass = 'max-w-xl' }: ModalProps) {
+export function Modal({ isOpen, onClose, title, children, footer, maxWidthClass = 'max-w-xl' }: ModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
   const titleId = useId();
+
+  // Callers commonly pass an inline close handler. Keep the latest callback
+  // available without making the focus-trap lifecycle restart on every parent
+  // render (for example, while typing in a form field).
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!isOpen) return undefined;
@@ -33,7 +40,7 @@ export function Modal({ isOpen, onClose, title, children, maxWidthClass = 'max-w
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
-        onClose();
+        onCloseRef.current();
         return;
       }
 
@@ -59,7 +66,7 @@ export function Modal({ isOpen, onClose, title, children, maxWidthClass = 'max-w
       document.body.style.overflow = previousOverflow;
       returnFocusRef.current?.focus();
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -87,9 +94,14 @@ export function Modal({ isOpen, onClose, title, children, maxWidthClass = 'max-w
             <Icon name="close" size={16} />
           </IconButton>
         </div>
-        <div className="rf-scrollbar overflow-y-auto p-5 text-rf-ink sm:p-6">
+        <div className="rf-scrollbar min-h-0 flex-1 overflow-y-auto p-5 text-rf-ink sm:p-6">
           {children}
         </div>
+        {footer ? (
+          <div className="shrink-0 border-t border-rf-border-subtle bg-rf-surface px-5 py-4 sm:px-6">
+            {footer}
+          </div>
+        ) : null}
       </div>
     </div>,
     document.body,

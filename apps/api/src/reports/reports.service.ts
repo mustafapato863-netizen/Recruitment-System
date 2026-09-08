@@ -1,7 +1,8 @@
-import { BadRequestException, HttpException, Injectable } from '@nestjs/common';
+import { BadRequestException, HttpException, Inject, Injectable, Optional } from '@nestjs/common';
 import * as XLSX from 'xlsx';
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { PrismaService } from '../database/prisma.service';
+import { AccessControlService } from '../access-control/access-control.service';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import { exportFailed } from '../common/errors/api-error';
 import type { Prisma } from '@recruitflow/database';
@@ -13,6 +14,7 @@ import type {
   ReportOverview,
   ReportTrendPoint,
 } from '@recruitflow/contracts';
+import type { AuthUser } from '@recruitflow/contracts';
 import type { ReportOverviewQueryDto } from './reports.dto';
 
 const DAY_MS = 86_400_000;
@@ -26,19 +28,27 @@ interface ResolvedReportRange {
 
 @Injectable()
 export class ReportsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() @Inject(AccessControlService) private readonly accessControl?: AccessControlService,
+  ) {}
 
   async getOverview(
     organizationId: string,
     query: ReportOverviewQueryDto,
+    user?: AuthUser,
   ): Promise<ReportOverview> {
     const range = this.resolveRange(query);
-    const applicationWhere = this.applicationWhere(organizationId, range.from, range.to, query);
+    const visibility = user && this.accessControl
+      ? await this.accessControl.getApplicationVisibilityWhere(user)
+      : { organizationId };
+    const applicationWhere = this.applicationWhere(organizationId, range.from, range.to, query, visibility);
     const comparisonApplicationWhere = this.applicationWhere(
       organizationId,
       range.comparisonFrom,
       range.comparisonTo,
       query,
+      visibility,
     );
 
     const [
@@ -68,7 +78,7 @@ export class ReportsService {
         where: {
           organizationId,
           createdAt: { gte: range.from, lte: range.to },
-          application: this.applicationRelationFilter(query),
+          application: this.applicationRelationFilter(query, visibility),
         },
         select: {
           status: true,
@@ -80,14 +90,14 @@ export class ReportsService {
         where: {
           organizationId,
           createdAt: { gte: range.comparisonFrom, lte: range.comparisonTo },
-          application: this.applicationRelationFilter(query),
+          application: this.applicationRelationFilter(query, visibility),
         },
       }),
       this.prisma.interview.findMany({
         where: {
           organizationId,
           scheduledStart: { gte: range.from, lte: range.to },
-          application: this.applicationRelationFilter(query),
+          application: this.applicationRelationFilter(query, visibility),
         },
         select: { status: true, scheduledStart: true },
       }),
@@ -95,7 +105,7 @@ export class ReportsService {
         where: {
           organizationId,
           scheduledStart: { gte: range.comparisonFrom, lte: range.comparisonTo },
-          application: this.applicationRelationFilter(query),
+          application: this.applicationRelationFilter(query, visibility),
         },
       }),
       this.prisma.hiringCase.findMany({
@@ -103,7 +113,7 @@ export class ReportsService {
           organizationId,
           status: 'Joined',
           actualJoiningDate: { gte: range.from, lte: range.to },
-          application: this.applicationRelationFilter(query),
+          application: this.applicationRelationFilter(query, visibility),
         },
         select: {
           actualJoiningDate: true,
@@ -119,7 +129,7 @@ export class ReportsService {
           organizationId,
           status: 'Joined',
           actualJoiningDate: { gte: range.comparisonFrom, lte: range.comparisonTo },
-          application: this.applicationRelationFilter(query),
+          application: this.applicationRelationFilter(query, visibility),
         },
       }),
       this.prisma.vacancy.findMany({
@@ -127,6 +137,7 @@ export class ReportsService {
           organizationId,
           ...(query.branchId ? { branchId: query.branchId } : {}),
           ...(query.positionId ? { positionId: query.positionId } : {}),
+          ...(user ? { applications: { some: visibility } } : {}),
         },
         select: {
           approvedHeadcount: true,
@@ -268,6 +279,14 @@ export class ReportsService {
         joined: comparisonJoinedCases,
       },
       trend: this.buildTrend(range.from, range.to, applications, interviews, offers, joinedCases),
+      sourceBreakdown: [...sourceCounts.entries()]
+        .map(([name, values]) => ({
+          name,
+          total: values.total,
+          joined: values.joined,
+          conversionRate: values.total > 0 ? Math.round((values.joined / values.total) * 100) : 0,
+        }))
+        .sort((left, right) => right.total - left.total),
       funnel: funnelStages.map((name, index) => {
         const count = stageCounts.get(name) ?? 0;
         const previousName = index > 0 ? funnelStages[index - 1] : undefined;
@@ -298,9 +317,9 @@ export class ReportsService {
     };
   }
 
-  async exportExcel(organizationId: string, query: ReportOverviewQueryDto): Promise<Buffer> {
+  async exportExcel(organizationId: string, query: ReportOverviewQueryDto, user?: AuthUser): Promise<Buffer> {
     try {
-      const overview = await this.getOverview(organizationId, query);
+      const overview = await this.getOverview(organizationId, query, user);
       const workbook = XLSX.utils.book_new();
       const currentTotals = overview.trend.reduce(
         (totals, point) => ({
@@ -347,7 +366,7 @@ export class ReportsService {
 
   private resolveRange(query: ReportOverviewQueryDto): ResolvedReportRange {
     const to = query.to ? new Date(query.to) : new Date();
-    const from = query.from ? new Date(query.from) : new Date(to.getTime() - (89 * DAY_MS));
+    const from = query.from ? new Date(query.from) : new Date(to.getTime() - (29 * DAY_MS));
     if (from > to) throw new BadRequestException('Report start date must be before the end date.');
 
     const duration = Math.max(DAY_MS, to.getTime() - from.getTime());
@@ -362,16 +381,21 @@ export class ReportsService {
     return { from, to, comparisonFrom, comparisonTo };
   }
 
-  private applicationRelationFilter(query: ReportOverviewQueryDto): Prisma.ApplicationWhereInput {
-    return {
-      ...(query.recruiterId ? { primaryRecruiterId: query.recruiterId } : {}),
-      ...((query.branchId || query.positionId) ? {
-        vacancy: {
-          ...(query.branchId ? { branchId: query.branchId } : {}),
-          ...(query.positionId ? { positionId: query.positionId } : {}),
-        },
-      } : {}),
-    };
+  private applicationRelationFilter(
+    query: ReportOverviewQueryDto,
+    visibility?: Prisma.ApplicationWhereInput,
+  ): Prisma.ApplicationWhereInput {
+    const result: Prisma.ApplicationWhereInput = { ...(visibility ?? {}) };
+    if (query.recruiterId) result.primaryRecruiterId = query.recruiterId;
+    if (query.branchId || query.positionId) {
+      const existingVacancy = (visibility?.vacancy ?? {}) as Prisma.VacancyWhereInput;
+      result.vacancy = {
+        ...existingVacancy,
+        ...(query.branchId ? { branchId: query.branchId } : {}),
+        ...(query.positionId ? { positionId: query.positionId } : {}),
+      };
+    }
+    return result;
   }
 
   private applicationWhere(
@@ -379,11 +403,13 @@ export class ReportsService {
     from: Date,
     to: Date,
     query: ReportOverviewQueryDto,
+    visibility?: Prisma.ApplicationWhereInput,
   ): Prisma.ApplicationWhereInput {
     return {
+      ...(visibility ?? {}),
       organizationId,
       createdAt: { gte: from, lte: to },
-      ...this.applicationRelationFilter(query),
+      ...this.applicationRelationFilter(query, visibility),
     };
   }
 
@@ -417,14 +443,17 @@ export class ReportsService {
     return points;
   }
 
-  async getKpis(organizationId: string): Promise<ReportKpis> {
+  async getKpis(organizationId: string, user?: AuthUser): Promise<ReportKpis> {
+    const visibility = user && this.accessControl
+      ? await this.accessControl.getApplicationVisibilityWhere(user)
+      : { organizationId };
     const [applications, offers, interviews, joinedCases] = await Promise.all([
       this.prisma.application.findMany({
-        where: { organizationId },
+        where: visibility,
         select: { source: true, stage: true, createdAt: true },
       }),
       this.prisma.offer.findMany({
-        where: { organizationId },
+        where: { organizationId, application: visibility },
         select: {
           status: true,
           createdAt: true,
@@ -432,11 +461,11 @@ export class ReportsService {
         },
       }),
       this.prisma.interview.findMany({
-        where: { organizationId },
+        where: { organizationId, application: visibility },
         select: { status: true },
       }),
       this.prisma.hiringCase.findMany({
-        where: { organizationId, status: 'Joined' },
+        where: { organizationId, status: 'Joined', application: visibility },
         select: {
           actualJoiningDate: true,
           createdAt: true,
@@ -505,10 +534,13 @@ export class ReportsService {
     };
   }
 
-  async getFunnel(organizationId: string): Promise<FunnelStage[]> {
+  async getFunnel(organizationId: string, user?: AuthUser): Promise<FunnelStage[]> {
+    const visibility = user && this.accessControl
+      ? await this.accessControl.getApplicationVisibilityWhere(user)
+      : { organizationId };
     const grouped = await this.prisma.application.groupBy({
       by: ['stage'],
-      where: { organizationId },
+      where: visibility,
       _count: { _all: true },
     });
     const counts = new Map(grouped.map((item) => [item.stage, item._count._all]));
@@ -521,9 +553,12 @@ export class ReportsService {
     }));
   }
 
-  async getHiringByDepartment(organizationId: string): Promise<DepartmentHiring[]> {
+  async getHiringByDepartment(organizationId: string, user?: AuthUser): Promise<DepartmentHiring[]> {
+    const visibility = user && this.accessControl
+      ? await this.accessControl.getApplicationVisibilityWhere(user)
+      : { organizationId };
     const vacancies = await this.prisma.vacancy.findMany({
-      where: { organizationId },
+      where: { organizationId, applications: { some: visibility } },
       select: {
         approvedHeadcount: true,
         position: { select: { title: true } },
@@ -541,13 +576,16 @@ export class ReportsService {
     return [...grouped.entries()].map(([department, values]) => ({ department, ...values }));
   }
 
-  async getRecruiterWorkload(organizationId: string): Promise<RecruiterWorkload[]> {
+  async getRecruiterWorkload(organizationId: string, user?: AuthUser): Promise<RecruiterWorkload[]> {
+    const visibility = user && this.accessControl
+      ? await this.accessControl.getApplicationVisibilityWhere(user)
+      : { organizationId };
     const users = await this.prisma.user.findMany({
       where: { organizationId, status: 'Active' },
       select: {
         id: true,
         displayName: true,
-        _count: { select: { primaryApplications: true, assignments: true } },
+        _count: { select: { primaryApplications: { where: visibility }, assignments: { where: { isActive: true } } } },
       },
     });
     return users.map((user) => ({

@@ -115,8 +115,8 @@ def axe_violations(page: Page) -> list[dict]:
 
 def login(page: Page) -> None:
     page.goto(f"{BASE_URL}/login", wait_until="domcontentloaded")
-    page.get_by_label("Email address").fill("ahmed.mahmoud@recruitflow.local")
-    page.locator("#login-password").fill("Password123!")
+    page.get_by_label("Email address").fill(os.environ.get("RECRUITFLOW_TEST_EMAIL", "admin@me.com"))
+    page.locator("#login-password").fill(os.environ.get("RECRUITFLOW_TEST_PASSWORD", "Admin@123456"))
     page.get_by_role("button", name="Sign in").click()
     try:
         page.wait_for_function("window.location.pathname === '/'", timeout=15_000)

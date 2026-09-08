@@ -117,7 +117,7 @@ export const QuickGuideModal: React.FC = () => {
               <button
                 type="button"
                 onClick={handleDismiss}
-                className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-slate-200 dark:hover:bg-slate-800 rounded-lg transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                className="p-2 text-slate-600 dark:text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:text-slate-200 dark:hover:bg-slate-800 rounded-lg transition cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                 aria-label="Close Quick Guide"
               >
                 <Icon name="close" size={16} />
@@ -242,13 +242,13 @@ export const QuickGuideModal: React.FC = () => {
               {currentGuide.proTips && currentGuide.proTips.length > 0 && (
                 <div className="p-4 rounded-xl bg-emerald-50/60 border border-emerald-100 dark:bg-emerald-500/[0.07] dark:border-emerald-500/20">
                   <h4 className="font-bold text-emerald-950 flex items-center gap-1.5 text-xs dark:text-emerald-100">
-                    <Icon name="sparkles" size={14} className="text-emerald-600 dark:text-emerald-400" />
+                    <Icon name="sparkles" size={14} className="text-emerald-700 dark:text-emerald-400" />
                     <span>Recruiter Pro-Tips</span>
                   </h4>
                   <ul className="mt-2.5 space-y-2 text-[13px] text-slate-600 dark:text-slate-300 leading-relaxed">
                     {currentGuide.proTips.map((tip, idx) => (
                       <li key={idx} className="flex items-start gap-2">
-                        <span className="text-emerald-600 dark:text-emerald-400 font-bold mt-px">•</span>
+                        <span className="text-emerald-700 dark:text-emerald-400 font-bold mt-px">•</span>
                         <span>{tip}</span>
                       </li>
                     ))}
@@ -307,7 +307,7 @@ export const QuickGuideModal: React.FC = () => {
                     </p>
                     {step.actionHint && (
                       <div className="mt-2.5 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-slate-100 border border-slate-200 text-[11px] font-medium text-slate-700 dark:bg-slate-700/50 dark:border-slate-600/50 dark:text-slate-200">
-                        <Icon name="check-circle" size={12} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+                        <Icon name="check-circle" size={12} className="text-emerald-700 dark:text-emerald-400 shrink-0" />
                         <span>Action: {step.actionHint}</span>
                       </div>
                     )}
@@ -401,7 +401,7 @@ export const QuickGuideModal: React.FC = () => {
             <button
               type="button"
               onClick={resetAllGuides}
-              className="text-[11px] font-medium text-slate-400 hover:text-slate-700 underline underline-offset-2 cursor-pointer dark:hover:text-slate-200 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              className="text-[11px] font-medium text-slate-600 dark:text-slate-400 hover:text-slate-700 underline underline-offset-2 cursor-pointer dark:hover:text-slate-200 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
               title="Reset all guide flags so you can learn every page again"
             >
               Reset all

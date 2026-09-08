@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import type { ImportJobSummary, PaginatedResult, Vacancy } from '@recruitflow/contracts';
+import type { ImportJobSummary, MasterDataValueRecord, PaginatedResult, Vacancy } from '@recruitflow/contracts';
 import { calculateCandidateFitScore, type CriteriaBreakdown } from '@recruitflow/validation';
-import { getApi, postApi, patchApi } from '../api/client';
+import { getApi, postApi, postFormDataApi, patchApi, ApiError } from '../api/client';
 import { parseResumeFile, type ExtractedCandidate } from '../utils/resumeParser';
 
 export const INTAKE_STEPS = ['Upload', 'Validate & Edit', 'Resolve', 'Confirm'];
@@ -18,62 +18,25 @@ const ALLOWED_MIMES = [
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ];
 
-const DEFAULT_RECENT_BATCHES: ImportJobSummary[] = [
-  {
-    id: 'batch-089',
-    fileName: 'Clinical_Nursing_Batch_Jeddah_Q3.pdf',
-    status: 'COMPLETED',
-    totalRows: 12,
-    validRows: 11,
-    invalidRows: 0,
-    duplicateRows: 1,
-    newRows: 11,
-    updateRows: 0,
-    createdAt: new Date(Date.now() - 3600 * 1000 * 4).toISOString(),
-  },
-  {
-    id: 'batch-088',
-    fileName: 'Consultant_Physicians_Intake_2026.docx',
-    status: 'COMPLETED',
-    totalRows: 8,
-    validRows: 8,
-    invalidRows: 0,
-    duplicateRows: 0,
-    newRows: 8,
-    updateRows: 0,
-    createdAt: new Date(Date.now() - 86400 * 1000 * 2).toISOString(),
-  },
-  {
-    id: 'batch-085',
-    fileName: 'Allied_Health_Technicians_Intake.pdf',
-    status: 'COMPLETED',
-    totalRows: 24,
-    validRows: 23,
-    invalidRows: 1,
-    duplicateRows: 0,
-    newRows: 23,
-    updateRows: 0,
-    createdAt: new Date(Date.now() - 86400 * 1000 * 5).toISOString(),
-  },
-];
-
-export function useCVIntakeFlow() {
+export function useCVIntakeFlow(initialTargetVacancy?: string | null) {
   const [currentStep, setCurrentStep] = useState<number>(0);
   const [jobs, setJobs] = useState<ImportJobSummary[]>([]);
   const [loadingJobs, setLoadingJobs] = useState(true);
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [profile, setProfile] = useState<ExtractedCandidate | null>(null);
   const [initialProfile, setInitialProfile] = useState<ExtractedCandidate | null>(null);
 
   // Step 3: Resolve & Assignment state
   const [duplicateDecision, setDuplicateDecision] = useState<'update' | 'new' | 'link'>('update');
-  const [targetVacancy, setTargetVacancy] = useState<string>('');
+  const [targetVacancy, setTargetVacancy] = useState<string>(initialTargetVacancy || '');
   const [targetStage, setTargetStage] = useState<string>('Screening');
   const [candidateSource, setCandidateSource] = useState<string>('CV Intake Upload');
+  const [candidateSourceOptions, setCandidateSourceOptions] = useState<string[]>(['CV Intake Upload']);
   const [vacancies, setVacancies] = useState<Vacancy[]>([]);
 
   // Step 4: Confirmed candidate state
-  const [confirmedCandidateCode, setConfirmedCandidateCode] = useState<string>('CMD-SGH-035');
+  const [confirmedCandidateCode, setConfirmedCandidateCode] = useState<string>('');
   const [confirmedCandidateId, setConfirmedCandidateId] = useState<string | null>(null);
   const [confirmedAppId, setConfirmedAppId] = useState<string | null>(null);
 
@@ -92,13 +55,9 @@ export function useCVIntakeFlow() {
     setLoadingJobs(true);
     try {
       const response = await getApi<PaginatedResult<ImportJobSummary>>('/candidates/import/jobs?page=1&pageSize=50');
-      if (response.data && response.data.length > 0) {
-        setJobs(response.data);
-      } else {
-        setJobs(DEFAULT_RECENT_BATCHES);
-      }
+      setJobs(response.data || []);
     } catch {
-      setJobs(DEFAULT_RECENT_BATCHES);
+      setJobs([]);
     } finally {
       setLoadingJobs(false);
     }
@@ -115,17 +74,32 @@ export function useCVIntakeFlow() {
     }
   }, []);
 
+  const loadCandidateSources = useCallback(async () => {
+    try {
+      const records = await getApi<MasterDataValueRecord[]>('/master-data/catalog/candidate-sources');
+      const names = records
+        .filter((record) => record.status === 'Active')
+        .map((record) => record.name.trim())
+        .filter(Boolean);
+      setCandidateSourceOptions(Array.from(new Set(['CV Intake Upload', ...names])));
+    } catch {
+      // The built-in upload source remains available when catalog access is unavailable.
+      setCandidateSourceOptions(['CV Intake Upload']);
+    }
+  }, []);
+
   useEffect(() => {
     void loadJobs();
     void loadVacancies();
-  }, [loadJobs, loadVacancies]);
+    void loadCandidateSources();
+  }, [loadJobs, loadVacancies, loadCandidateSources]);
 
   // Compute real-time fit scores for all vacancies against the candidate profile
   const scoredVacancies = useMemo<ScoredVacancy[]>(() => {
     if (!profile || vacancies.length === 0) return [];
 
     const scored = vacancies.map((v) => {
-      const positionTitle = (v as any).position?.title || v.title || '';
+      const positionTitle = v.position?.title || v.title || '';
       const fitResult = calculateCandidateFitScore(
         {
           skills: profile.skills,
@@ -167,6 +141,7 @@ export function useCVIntakeFlow() {
     setProfile(null);
     setInitialProfile(null);
     setUploadedFileName(null);
+    setUploadedFile(null);
 
     const fileNameLower = file.name.toLowerCase();
     const isWordOrPdf = ALLOWED_EXTENSIONS.some((ext) => fileNameLower.endsWith(ext)) || ALLOWED_MIMES.includes(file.type);
@@ -182,6 +157,7 @@ export function useCVIntakeFlow() {
     }
 
     setUploadedFileName(file.name);
+    setUploadedFile(file);
     setParsingFile(true);
     setParsingStep('Reading document binary structure...');
 
@@ -204,28 +180,16 @@ export function useCVIntakeFlow() {
     }
   };
 
-  const selectPreset = async (preset: { filename: string; data: ExtractedCandidate }) => {
-    setError(null);
-    setUploadedFileName(preset.filename);
-    setParsingFile(true);
-    setParsingStep('Extracting preset data...');
-
-    await new Promise((r) => setTimeout(r, 500));
-    setProfile({ ...preset.data });
-    setInitialProfile(JSON.parse(JSON.stringify(preset.data)));
-    setParsingFile(false);
-    setParsingStep('');
-    setCurrentStep(1);
-    showToast(`✓ Loaded preset CV for ${preset.data.firstName} ${preset.data.lastName}`);
-  };
-
   const proceedToResolve = (): boolean => {
-    if (!profile?.firstName || !profile?.lastName) {
+    if (!profile?.firstName?.trim() || !profile?.lastName?.trim()) {
       setError('Please provide at least a First Name and Last Name.');
       return false;
     }
-    if (!profile?.email) {
-      setError('Please provide a valid email address.');
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const hasEmail = Boolean(profile?.email && emailRegex.test(profile.email.trim()));
+    const hasPhone = (profile?.phone?.replace(/\D/g, '').length ?? 0) >= 7;
+    if (!hasEmail && !hasPhone) {
+      setError('Please provide a valid email address or phone number.');
       return false;
     }
     setError(null);
@@ -238,29 +202,138 @@ export function useCVIntakeFlow() {
     setSubmitting(true);
     setError(null);
 
-    const generatedCode = `CMD-SGH-${Math.floor(100 + Math.random() * 900)}`;
-    setConfirmedCandidateCode(generatedCode);
-
     try {
-      // 1. Create candidate record in DB
-      const createdCandidate = await postApi<{ id: string; candidateCode?: string }>('/candidates', {
-        firstName: profile.firstName?.trim() || 'Candidate',
-        lastName: profile.lastName?.trim() || 'Profile',
-        email: profile.email?.trim().toLowerCase() || `cand-${Date.now()}@sample.com`,
-        phone: profile.phone?.trim() || undefined,
-        currentTitle: profile.title?.trim() || undefined,
-        currentCompany: profile.currentCompany?.trim() || undefined,
-        experienceYears: profile.experienceYears != null ? Number(profile.experienceYears) : undefined,
-        location: profile.location?.trim() || undefined,
-        skills: profile.skills || [],
-        summary: profile.summary?.trim() || undefined,
-        source: candidateSource,
-      });
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      const normalizedEmail = profile.email?.trim().toLowerCase();
+      const normalizedPhone = profile.phone?.replace(/\D/g, '') || '';
+      if ((!normalizedEmail || !emailRegex.test(normalizedEmail)) && normalizedPhone.length < 7) {
+        throw new Error('Please provide a valid email address or phone number.');
+      }
 
-      const candId = createdCandidate?.id;
+      // Safe integer conversion for experienceYears to strictly satisfy NestJS @IsInt()
+      const experienceYearsInt =
+        profile.experienceYears != null && !isNaN(Number(profile.experienceYears))
+          ? Math.max(0, Math.round(Number(profile.experienceYears)))
+          : undefined;
+
+      // Defensive length bounds and sanitization matching CreateCandidateDto constraints
+      const candidatePayload = {
+        firstName: profile.firstName?.trim().slice(0, 80) || '',
+        lastName: profile.lastName?.trim().slice(0, 80) || '',
+        email: normalizedEmail && emailRegex.test(normalizedEmail) ? normalizedEmail.slice(0, 255) : null,
+        phone: normalizedPhone.length >= 7 ? normalizedPhone.slice(0, 40) : undefined,
+        currentTitle: profile.title?.trim() ? profile.title.trim().slice(0, 120) : undefined,
+        currentCompany: profile.currentCompany?.trim() ? profile.currentCompany.trim().slice(0, 120) : undefined,
+        experienceYears: experienceYearsInt,
+        location: profile.location?.trim() ? profile.location.trim().slice(0, 120) : undefined,
+        skills: Array.isArray(profile.skills)
+          ? profile.skills.map((s) => String(s).trim().slice(0, 100)).filter(Boolean)
+          : [],
+        summary: profile.summary?.trim() ? profile.summary.trim().slice(0, 5000) : undefined,
+        source: candidateSource ? candidateSource.slice(0, 80) : undefined,
+      };
+
+      let candId: string | null = null;
+      let candCode: string | undefined;
+
+      // Duplicate resolution strategy:
+      // If user chose 'update' or 'link', check if candidate exists first.
+      if (duplicateDecision === 'update' || duplicateDecision === 'link') {
+        try {
+          const lookupParams = new URLSearchParams();
+          if (candidatePayload.email) lookupParams.set('email', candidatePayload.email);
+          if (candidatePayload.phone) lookupParams.set('phone', candidatePayload.phone);
+          const searchRes = await getApi<Array<{ id: string; candidateCode?: string; email?: string | null; phone?: string | null }>>(
+            `/candidates/duplicates?${lookupParams.toString()}`
+          );
+          const match = searchRes.find(
+            (c) => (candidatePayload.email && c.email?.trim().toLowerCase() === candidatePayload.email)
+              || (candidatePayload.phone && c.phone?.replace(/\D/g, '') === candidatePayload.phone),
+          ) ?? searchRes[0];
+          if (match) {
+            candId = match.id;
+            candCode = match.candidateCode;
+
+            if (duplicateDecision === 'update') {
+              const updated = await patchApi<{ id: string; candidateCode?: string }>(
+                `/candidates/${candId}`,
+                candidatePayload
+              );
+              candCode = updated?.candidateCode || candCode;
+            }
+          }
+        } catch {
+          // Non-blocking lookup; fallback to standard creation
+        }
+      }
+
+      // If candidate was not already resolved or user explicitly requested a fresh record ('new')
+      if (!candId) {
+        try {
+          const createdCandidate = await postApi<{ id: string; candidateCode?: string }>(
+            '/candidates',
+            candidatePayload
+          );
+          candId = createdCandidate?.id ?? null;
+          candCode = createdCandidate?.candidateCode;
+        } catch (postErr: unknown) {
+          if (postErr instanceof ApiError && postErr.statusCode === 409) {
+            // Email already exists in this organization
+            const lookupParams = new URLSearchParams();
+            if (candidatePayload.email) lookupParams.set('email', candidatePayload.email);
+            if (candidatePayload.phone) lookupParams.set('phone', candidatePayload.phone);
+            const searchRes = await getApi<Array<{ id: string; candidateCode?: string; email?: string | null; phone?: string | null }>>(
+              `/candidates/duplicates?${lookupParams.toString()}`
+            ).catch(() => null);
+            const match = searchRes?.find(
+              (c) => (candidatePayload.email && c.email?.trim().toLowerCase() === candidatePayload.email)
+                || (candidatePayload.phone && c.phone?.replace(/\D/g, '') === candidatePayload.phone),
+            ) ?? searchRes?.[0];
+
+            if (match) {
+              candId = match.id;
+              candCode = match.candidateCode;
+
+              if (duplicateDecision === 'update') {
+                const updated = await patchApi<{ id: string; candidateCode?: string }>(
+                  `/candidates/${candId}`,
+                  candidatePayload
+                );
+                candCode = updated?.candidateCode || candCode;
+              } else if (duplicateDecision === 'new') {
+                throw new Error(
+                  `A candidate with the same contact details already exists (${candCode || candId}). To update their record or link to an opening, select "Update Existing Candidate Profile" or "Attach as New Vacancy Application Only".`,
+                  { cause: postErr },
+                );
+              }
+              // If 'link', candId is resolved; keep existing candidate profile intact
+            } else {
+              throw postErr;
+            }
+          } else {
+            throw postErr;
+          }
+        }
+      }
+
+      if (!candId) {
+        throw new Error('Unable to create or resolve candidate record.');
+      }
+
+      if (uploadedFile) {
+        const documentForm = new FormData();
+        documentForm.append('candidateId', candId);
+        documentForm.append('documentType', 'CV');
+        documentForm.append('file', uploadedFile);
+        if (profile.rawText?.trim()) {
+          documentForm.append('extractionText', profile.rawText.trim().slice(0, 50000));
+        }
+        await postFormDataApi('/documents/upload', documentForm);
+      }
+
       setConfirmedCandidateId(candId);
-      if (createdCandidate?.candidateCode) {
-        setConfirmedCandidateCode(createdCandidate.candidateCode);
+      if (candCode) {
+        setConfirmedCandidateCode(candCode);
       }
 
       // 2. Ingest into application pipeline if target vacancy is active
@@ -287,20 +360,21 @@ export function useCVIntakeFlow() {
               }
             }
           }
-        } catch {
-          // Non-blocking application failure
+        } catch (appErr: unknown) {
+          if (appErr instanceof ApiError && appErr.statusCode === 409) {
+            showToast('Candidate is already assigned to this vacancy.');
+          } else {
+            // Non-blocking application failure
+          }
         }
       }
 
       setCurrentStep(3);
       showToast('✓ Candidate & application confirmed and ingested into talent database!');
       return true;
-    } catch {
-      // Fallback
-      setConfirmedCandidateId('c-demo-confirmed');
-      setCurrentStep(3);
-      showToast(`✓ Candidate confirmed with identity code ${generatedCode}`);
-      return true;
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Unable to save candidate and application.');
+      return false;
     } finally {
       setSubmitting(false);
     }
@@ -310,6 +384,7 @@ export function useCVIntakeFlow() {
     setProfile(null);
     setInitialProfile(null);
     setUploadedFileName(null);
+    setUploadedFile(null);
     setError(null);
     setCurrentStep(0);
   };
@@ -334,6 +409,7 @@ export function useCVIntakeFlow() {
     targetStage,
     setTargetStage,
     candidateSource,
+    candidateSourceOptions,
     setCandidateSource,
     duplicateDecision,
     setDuplicateDecision,
@@ -350,7 +426,6 @@ export function useCVIntakeFlow() {
     successToast,
     showToast,
     handleFile,
-    selectPreset,
     proceedToResolve,
     executeFinalIngest,
     clearUpload,

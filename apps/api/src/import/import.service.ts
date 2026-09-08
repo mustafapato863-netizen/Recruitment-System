@@ -50,8 +50,12 @@ export class ImportService {
     };
   }
 
-  private normalizeEmail(email: string): string {
-    return email.trim().toLowerCase();
+  private normalizeEmail(email: string | null | undefined): string {
+    return email?.trim().toLowerCase() ?? '';
+  }
+
+  private normalizePhone(phone: string | null | undefined): string {
+    return phone?.replace(/\D/g, '') ?? '';
   }
 
   private isEmail(email: string): boolean {
@@ -101,10 +105,18 @@ export class ImportService {
 
     const existingCandidates = emails.length === 0 ? [] : await this.prisma.candidate.findMany({
       where: { organizationId, email: { in: emails, mode: 'insensitive' } },
-      select: { email: true },
+      select: { email: true, phone: true },
     });
-    const existingEmails = new Set(existingCandidates.map(c => this.normalizeEmail(c.email)));
+    const existingEmails = new Set(existingCandidates.map(c => this.normalizeEmail(c.email)).filter(Boolean));
+    const phoneNumbers = dto.rows.map((row) => this.normalizePhone(row.phone)).filter(Boolean);
+    const existingPhones = phoneNumbers.length === 0 ? new Set<string>() : new Set(
+      (await this.prisma.candidate.findMany({
+        where: { organizationId, phone: { in: phoneNumbers } },
+        select: { phone: true },
+      })).map((candidate) => this.normalizePhone(candidate.phone)).filter(Boolean),
+    );
     const seenEmails = new Set<string>();
+    const seenPhones = new Set<string>();
 
     const totalRows = dto.rows.length;
     let validRows = 0;
@@ -115,12 +127,13 @@ export class ImportService {
       let result: ImportRowResult;
       let details: string | null = null;
       const normalizedEmail = row.email ? this.normalizeEmail(row.email) : null;
+      const normalizedPhone = this.normalizePhone(row.phone);
 
-      if (!row.email) {
+      if (!row.email && !normalizedPhone) {
         result = 'Invalid';
-        details = 'Email is required';
+        details = 'A valid email or phone number is required';
         invalidRows++;
-      } else if (!this.isEmail(normalizedEmail!)) {
+      } else if (normalizedEmail && !this.isEmail(normalizedEmail)) {
         result = 'Invalid';
         details = 'Email format is invalid';
         invalidRows++;
@@ -128,11 +141,16 @@ export class ImportService {
         result = 'Invalid';
         details = 'First and last name are required';
         invalidRows++;
-      } else if (existingEmails.has(normalizedEmail!) || seenEmails.has(normalizedEmail!)) {
+      } else if (
+        (normalizedEmail && (existingEmails.has(normalizedEmail) || seenEmails.has(normalizedEmail))) ||
+        (normalizedPhone && (existingPhones.has(normalizedPhone) || seenPhones.has(normalizedPhone)))
+      ) {
         result = 'Duplicate';
-        details = existingEmails.has(normalizedEmail!)
+        details = normalizedEmail && existingEmails.has(normalizedEmail)
           ? 'Email already exists in candidates'
-          : 'Email is duplicated in this import file';
+          : normalizedPhone && existingPhones.has(normalizedPhone)
+            ? 'Phone already exists in candidates'
+            : 'Email or phone is duplicated in this import file';
         duplicateRows++;
       } else {
         result = 'Valid';
@@ -140,6 +158,7 @@ export class ImportService {
       }
 
       if (normalizedEmail) seenEmails.add(normalizedEmail);
+      if (normalizedPhone) seenPhones.add(normalizedPhone);
 
       return {
         rowNumber: index + 1,
@@ -295,7 +314,7 @@ export class ImportService {
     return { success: true };
   }
 
-  async confirmJob(organizationId: string, jobId: string) {
+  async confirmJob(organizationId: string, jobId: string, createdById?: string) {
     const job = await this.prisma.candidateImportJob.findFirst({
       where: { id: jobId, organizationId, dataset: 'candidates' },
       include: { rows: true },
@@ -329,9 +348,11 @@ export class ImportService {
       let updateRowsCount = 0;
 
       for (const row of job.rows) {
-        if (row.result === 'Invalid' || !row.email) continue;
+        if (row.result === 'Invalid') continue;
 
-        const email = this.normalizeEmail(row.email);
+        const email = row.email ? this.normalizeEmail(row.email) : null;
+        const phone = this.normalizePhone(row.phone) || null;
+        if (!email && !phone) continue;
         const raw = (row.rawData && typeof row.rawData === 'object') ? (row.rawData as Record<string, unknown>) : {};
         const currentTitle = typeof raw.currentTitle === 'string' ? raw.currentTitle : null;
         const currentCompany = typeof raw.currentCompany === 'string' ? raw.currentCompany : null;
@@ -347,19 +368,18 @@ export class ImportService {
           : 'Active';
 
         if (row.result === 'Valid') {
-          const existing = await tx.candidate.findFirst({
-            where: { organizationId, email: { equals: email, mode: 'insensitive' } },
-          });
+          const existing = await this.findExistingByContact(tx, organizationId, email, phone);
           if (existing) continue;
 
           await tx.candidate.create({
             data: {
               organizationId,
+              createdById: createdById ?? null,
               candidateCode: await this.nextCandidateCode(tx),
               firstName: row.firstName!,
               lastName: row.lastName!,
               email,
-              phone: row.phone,
+              phone,
               currentTitle,
               currentCompany,
               skills,
@@ -374,9 +394,7 @@ export class ImportService {
           });
           newRowsCount++;
         } else if (row.result === 'Duplicate' && row.decision === 'Update') {
-          const existing = await tx.candidate.findFirst({
-            where: { organizationId, email: { equals: email, mode: 'insensitive' } },
-          });
+          const existing = await this.findExistingByContact(tx, organizationId, email, phone);
 
           if (existing) {
             await tx.candidate.update({
@@ -384,7 +402,7 @@ export class ImportService {
               data: {
                 firstName: row.firstName || existing.firstName,
                 lastName: row.lastName || existing.lastName,
-                phone: row.phone || existing.phone,
+                phone: phone || existing.phone,
                 currentTitle: currentTitle ?? existing.currentTitle,
                 currentCompany: currentCompany ?? existing.currentCompany,
                 skills: skills.length > 0 ? skills : existing.skills,
@@ -433,5 +451,25 @@ export class ImportService {
       details: r.details,
       decision: r.decision as ImportRowDecision | null,
     }));
+  }
+
+  private async findExistingByContact(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    email: string | null,
+    phone: string | null,
+  ) {
+    if (email) {
+      const emailMatch = await tx.candidate.findFirst({
+        where: { organizationId, email: { equals: email, mode: 'insensitive' } },
+      });
+      if (emailMatch) return emailMatch;
+    }
+    if (!phone) return null;
+    const candidates = await tx.candidate.findMany({
+      where: { organizationId, phone: { not: null } },
+      take: 1000,
+    });
+    return candidates.find((candidate) => this.normalizePhone(candidate.phone) === phone) ?? null;
   }
 }

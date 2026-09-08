@@ -61,10 +61,62 @@ describe('extractCandidateFromText', () => {
     expect(extracted.lastName).toBe('Doe');
     expect(extracted.email).toBe('johndoe@example.com');
     expect(extracted.phone).toBe('+1 555-0199');
-    expect(extracted.title).toBeDefined();
+    expect(extracted.title).toBeUndefined();
     expect(extracted.skills).toBeDefined();
     expect(extracted.summary).toBeDefined();
-    expect(extracted.aiSummaryConfidence).toBeGreaterThanOrEqual(85);
+    expect(extracted.aiSummaryConfidence).toBeLessThan(85);
+    expect(extracted.summary).not.toContain('3+ years');
+    expect(extracted.email).toBe('johndoe@example.com');
+  });
+
+  it('keeps job titles out of names and filename fallbacks', () => {
+    const resumeWithTitleInHeader = `
+      Data Analyst
+      Mustafa Zain Mahmoud Data Analyst
+      Email: mustafa@example.com
+      Phone: +20 1111680029
+      Professional Summary
+      Data Analyst with 1 year of experience.
+    `;
+
+    const extracted = extractCandidateFromText(
+      resumeWithTitleInHeader,
+      'Mustafa_Zain_Data_Analyst_CV.pdf',
+    );
+
+    expect(extracted.firstName).toBe('Mustafa');
+    expect(extracted.lastName).toBe('Zain Mahmoud');
+    expect(extracted.title).toBe('Data Analyst');
+    expect(extracted.currentCompany).not.toBe('Mustafa Zain Mahmoud Data Analyst');
+
+    const filenameOnly = extractCandidateFromText(
+      'Data Analyst\nEmail: mustafa@example.com',
+      'Mustafa_Zain_Data_Analyst_CV.pdf',
+    );
+    expect(filenameOnly.firstName).toBe('Mustafa');
+    expect(filenameOnly.lastName).toBe('Zain');
+
+    const genericTitle = extractCandidateFromText(
+      'Senior SEO Specialist\nAli Hassan Senior SEO Specialist\nali@example.com',
+      'Ali_Hassan_Senior_SEO_Specialist_CV.pdf',
+    );
+    expect(genericTitle.firstName).toBe('Ali');
+    expect(genericTitle.lastName).toBe('Hassan');
+
+    const combinedHeader = extractCandidateFromText(
+      'Mustafa Zain Mahmoud Data Analyst | Saudi German Health | 2021 - Present\nEmail: mustafa@example.com',
+      'Mustafa_Zain_Data_Analyst_CV.pdf',
+    );
+    expect(combinedHeader.firstName).toBe('Mustafa');
+    expect(combinedHeader.lastName).toBe('Zain Mahmoud');
+    expect(combinedHeader.currentCompany).toBe('Saudi German Health');
+
+    const titleBeforeName = extractCandidateFromText(
+      'Senior SEO Specialist - Ali Hassan\nali@example.com',
+      'candidate.pdf',
+    );
+    expect(titleBeforeName.firstName).toBe('Ali');
+    expect(titleBeforeName.lastName).toBe('Hassan');
   });
 
   it('extracts clinical subspecialties, medical licenses, and synthesizes executive summary for healthcare professionals', () => {
@@ -106,7 +158,7 @@ describe('extractCandidateFromText', () => {
     expect(extracted.subspecialties?.length).toBeGreaterThan(0);
     expect(extracted.keyHighlights).toEqual(expect.arrayContaining(['12+ Years Experience', 'SCFHS Licensed / Registered', 'BLS/ACLS Certified']));
     expect(extracted.summary).toContain('Tamer Radwan');
-    expect(extracted.summary).toContain('Saudi German Health');
+    expect(extracted.summary).toContain('Saudi German Hospital Riyadh');
     expect(extracted.aiSummaryConfidence).toBeGreaterThanOrEqual(90);
   });
 
@@ -134,7 +186,6 @@ describe('extractCandidateFromText', () => {
     expect(extracted.subspecialties).toContain('Intensive Care & Mechanical Ventilation');
     expect(extracted.skills).toEqual(expect.arrayContaining(['Critical Care', 'Icu', 'Ventilator Management']));
     expect(extracted.summary).toContain('Mona El-Shenawy');
-    expect(extracted.summary).toContain('Saudi German Health');
+    expect(extracted.summary).not.toContain('Saudi German Health');
   });
 });
-

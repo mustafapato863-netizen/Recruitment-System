@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import type { Candidate, PaginatedResult } from '@recruitflow/contracts';
+import type { Candidate, CandidateMetrics, PaginatedResult } from '@recruitflow/contracts';
 import { downloadApi, fetchApi, postApi } from '../api/client';
 import { getInitials } from '../utils/format';
 import { saveBlob } from '../utils/download';
@@ -40,10 +40,10 @@ const initialForm: CandidateForm = {
 
 const AVATAR_COLORS = [
   'bg-blue-600 text-white',
-  'bg-emerald-600 text-white',
+  'bg-emerald-800 text-white',
   'bg-purple-600 text-white',
-  'bg-amber-600 text-white',
-  'bg-teal-600 text-white',
+  'bg-amber-800 text-white',
+  'bg-teal-800 text-white',
   'bg-indigo-600 text-white',
   'bg-rose-600 text-white',
 ];
@@ -55,9 +55,11 @@ export function CandidatesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [totalCount, setTotalCount] = useState(0);
+  const [metrics, setMetrics] = useState<CandidateMetrics | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
   const [sourceFilter, setSourceFilter] = useState<string>('All');
+  const [masterDataSources, setMasterDataSources] = useState<string[]>([]);
   const [page, setPage] = useState(1);
   const pageSize = 20;
 
@@ -81,6 +83,12 @@ export function CandidatesPage() {
     nextParams.delete('create');
     setSearchParams(nextParams, { replace: true });
   }, [canCreateCandidate, searchParams, setSearchParams]);
+
+  useEffect(() => {
+    void fetchApi<Array<{ name?: string; status?: string }>>('/master-data/catalog/candidate-sources')
+      .then((records) => setMasterDataSources(records.filter((record) => record.status !== 'Inactive' && record.status !== 'Archived').map((record) => record.name).filter((name): name is string => Boolean(name))))
+      .catch(() => setMasterDataSources([]));
+  }, []);
 
   const isFormDirty = form.firstName !== initialForm.firstName
     || form.lastName !== initialForm.lastName
@@ -144,6 +152,11 @@ export function CandidatesPage() {
       const response = await fetchApi<PaginatedResult<Candidate>>(queryUrl);
       setCandidates(response.data);
       setTotalCount(response.total);
+      try {
+        setMetrics(await fetchApi<CandidateMetrics>('/candidates/metrics'));
+      } catch {
+        setMetrics(null);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to load candidates');
     } finally {
@@ -169,8 +182,10 @@ export function CandidatesPage() {
       setFormError('First name and last name are required.');
       return;
     }
-    if (!form.email.trim() || !form.email.includes('@')) {
-      setFormError('A valid email address is required.');
+    const hasEmail = /^\S+@\S+\.\S+$/.test(form.email.trim());
+    const hasPhone = form.phone.replace(/\D/g, '').length >= 7;
+    if (!hasEmail && !hasPhone) {
+      setFormError('Enter a valid email address or a phone number with at least 7 digits.');
       return;
     }
 
@@ -179,7 +194,7 @@ export function CandidatesPage() {
       const newCandidate = await postApi<Candidate>('/candidates', {
         firstName: form.firstName.trim(),
         lastName: form.lastName.trim(),
-        email: form.email.trim().toLowerCase(),
+        email: hasEmail ? form.email.trim().toLowerCase() : null,
         phone: form.phone.trim() || undefined,
         currentTitle: form.currentTitle.trim() || undefined,
         currentCompany: form.currentCompany.trim() || undefined,
@@ -222,10 +237,12 @@ export function CandidatesPage() {
     );
   };
 
-  const totalDisplayCount = totalCount || candidates.length || 29;
-  const activeInPipelineCount = 18;
-  const talentPoolCount = 8;
-  const organicSourcePct = '64%';
+  const totalDisplayCount = metrics?.totalCandidates ?? totalCount;
+  const activeInPipelineCount = metrics?.activeInPipeline ?? 0;
+  const talentPoolCount = metrics?.talentPool ?? 0;
+  const organicSourcePct = metrics?.directReferralPercentage === null || metrics === null
+    ? '—'
+    : `${metrics.directReferralPercentage}%`;
 
   return (
     <div className="flex w-full flex-col p-4 sm:p-6 lg:p-7 max-w-[1720px] mx-auto space-y-6">
@@ -239,7 +256,7 @@ export function CandidatesPage() {
       {/* ── Page Header matching Enterprise System ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 text-xs font-bold tracking-wider text-slate-400 uppercase">
+          <div className="flex items-center gap-2 text-xs font-bold tracking-wider text-slate-600 dark:text-slate-400 uppercase">
             <span>Talent Operations</span>
             <span>&bull;</span>
             <span className="text-blue-600 dark:text-blue-400">Global Talent Directory</span>
@@ -273,7 +290,7 @@ export function CandidatesPage() {
             aria-label="Export candidates to Excel"
             title="Export filtered candidate records as XLSX workbook"
           >
-            <Icon name={isExporting ? 'refresh-cw' : 'download'} size={13} className={`text-emerald-600 dark:text-emerald-400 ${isExporting ? 'animate-spin' : ''}`} />
+            <Icon name={isExporting ? 'refresh-cw' : 'download'} size={13} className={`text-emerald-700 dark:text-emerald-400 ${isExporting ? 'animate-spin' : ''}`} />
             <span>{isExporting ? 'Exporting...' : 'Export XLSX'}</span>
           </button>
 
@@ -313,15 +330,15 @@ export function CandidatesPage() {
         {/* Card 1: Total Candidates */}
         <div className="relative overflow-hidden bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 shadow-xs flex items-center justify-between before:absolute before:inset-x-0 before:top-0 before:h-1 before:bg-gradient-to-r before:from-[#0084ce] before:to-[#00a3e0]">
           <div>
-            <span className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+            <span className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
               Total Talent Base
             </span>
             <div className="flex items-baseline gap-2 mt-1">
               <span className="text-2xl font-black text-slate-900 dark:text-white">
                 {totalDisplayCount}
               </span>
-              <span className="text-[11px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded">
-                +12% MoM
+              <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded">
+                {metrics ? 'Live count' : 'Unavailable'}
               </span>
             </div>
             <span className="block text-[10.5px] text-slate-500 dark:text-slate-400 mt-1">
@@ -336,14 +353,14 @@ export function CandidatesPage() {
         {/* Card 2: Active in Pipeline */}
         <div className="relative overflow-hidden bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 shadow-xs flex items-center justify-between before:absolute before:inset-x-0 before:top-0 before:h-1 before:bg-gradient-to-r before:from-emerald-400 before:to-[#00a859]">
           <div>
-            <span className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+            <span className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
               Active in Process
             </span>
             <div className="flex items-baseline gap-2 mt-1">
               <span className="text-2xl font-black text-slate-900 dark:text-white">
                 {activeInPipelineCount}
               </span>
-              <span className="text-[11px] font-bold text-[#0084ce] bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.5 rounded">
+                <span className="text-[11px] font-bold text-blue-700 dark:text-sky-300 bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.5 rounded">
                 Screening &bull; Interview
               </span>
             </div>
@@ -359,14 +376,14 @@ export function CandidatesPage() {
         {/* Card 3: In Sourcing Match Bench */}
         <div className="relative overflow-hidden bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 shadow-xs flex items-center justify-between before:absolute before:inset-x-0 before:top-0 before:h-1 before:bg-gradient-to-r before:from-purple-500 before:to-indigo-500">
           <div>
-            <span className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+            <span className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
               Sourcing Bench
             </span>
             <div className="flex items-baseline gap-2 mt-1">
               <span className="text-2xl font-black text-slate-900 dark:text-white">
                 {talentPoolCount}
               </span>
-              <span className="text-[11px] font-bold text-purple-600 bg-purple-50 dark:bg-purple-950/40 px-1.5 py-0.5 rounded">
+                <span className="text-[11px] font-bold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40 px-1.5 py-0.5 rounded">
                 Bench Qualified
               </span>
             </div>
@@ -382,14 +399,14 @@ export function CandidatesPage() {
         {/* Card 4: Direct & Referrals */}
         <div className="relative overflow-hidden bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 shadow-xs flex items-center justify-between before:absolute before:inset-x-0 before:top-0 before:h-1 before:bg-gradient-to-r before:from-amber-400 before:to-amber-500">
           <div>
-            <span className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider">
+            <span className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
               Direct & Referrals
             </span>
             <div className="flex items-baseline gap-2 mt-1">
               <span className="text-2xl font-black text-slate-900 dark:text-white">
                 {organicSourcePct}
               </span>
-              <span className="text-[11px] font-bold text-amber-600 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded">
+                <span className="text-[11px] font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded">
                 Zero Agency Fee
               </span>
             </div>
@@ -449,7 +466,7 @@ export function CandidatesPage() {
           <button
             type="button"
             onClick={() => navigate('/sourcing-match')}
-            className="flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold text-teal-600 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/40 hover:bg-teal-100 transition cursor-pointer"
+            className="flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs font-bold text-teal-700 dark:text-teal-400 bg-teal-50 dark:bg-teal-950/40 hover:bg-teal-100 transition cursor-pointer"
           >
             <Icon name="sparkles" size={13} />
             <span>Smart Match Bench</span>
@@ -472,7 +489,7 @@ export function CandidatesPage() {
           >
             <span>Disqualified</span>
             <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-extrabold">
-              2
+              {metrics?.disqualified ?? 0}
             </span>
           </button>
         </div>
@@ -513,7 +530,7 @@ export function CandidatesPage() {
         <form onSubmit={handleSearchSubmit} className="flex flex-col sm:flex-row items-center gap-3">
           {/* Search bar */}
           <div className="relative flex-1 w-full">
-            <Icon name="search" size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+            <Icon name="search" size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-600 dark:text-slate-400 pointer-events-none" />
             <input
               type="text"
               aria-label="Search candidates"
@@ -529,7 +546,7 @@ export function CandidatesPage() {
                   setSearch('');
                   void load(1);
                 }}
-                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs cursor-pointer"
+                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-600 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 text-xs cursor-pointer"
               >
                 ✕
               </button>
@@ -584,10 +601,10 @@ export function CandidatesPage() {
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
-              <tr className="border-b border-slate-200 dark:border-slate-800 text-[11px] font-semibold text-slate-400 bg-slate-50/60 dark:bg-slate-800/40 text-left">
+              <tr className="border-b border-slate-200 dark:border-slate-800 text-[11px] font-semibold text-slate-600 dark:text-slate-300 bg-slate-50/60 dark:bg-slate-800/40 text-left">
                 <th className="p-3.5 pl-4 w-10">
                   <input
-                    type="checkbox"
+                    type="checkbox" aria-label="Select all candidates"
                     checked={selectedCandidateIds.length === candidates.length && candidates.length > 0}
                     onChange={toggleSelectAll}
                     className="rounded border-slate-300 text-blue-600 cursor-pointer"
@@ -605,23 +622,23 @@ export function CandidatesPage() {
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {isLoading ? (
                 <tr>
-                  <td colSpan={8} className="p-8 text-center text-slate-400">
+                  <td colSpan={8} className="p-8 text-center text-slate-600 dark:text-slate-300">
                     <Icon name="refresh-cw" size={20} className="animate-spin mx-auto mb-2 text-blue-600" />
                     <span>Loading verified candidates...</span>
                   </td>
                 </tr>
               ) : candidates.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="p-12 text-center text-slate-400">
+                  <td colSpan={8} className="p-12 text-center text-slate-600 dark:text-slate-300">
                     <Icon name="users" size={28} className="mx-auto mb-2 text-slate-300 dark:text-slate-600" />
                     <p className="font-bold text-slate-700 dark:text-slate-300 text-sm">No matching candidates found</p>
-                    <p className="text-xs text-slate-400 mt-1">Try adjusting your search keywords or active filters.</p>
+                    <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">Try adjusting your search keywords or active filters.</p>
                   </td>
                 </tr>
               ) : (
                 candidates.map((c, idx) => {
                   const avatarColor = AVATAR_COLORS[idx % AVATAR_COLORS.length];
-                  const code = c.candidateCode || `CMD-SGH-${String(idx + 1).padStart(3, '0')}`;
+                  const code = c.candidateCode || 'Code unavailable';
                   const isSelected = selectedCandidateIds.includes(c.id);
 
                   return (
@@ -635,7 +652,7 @@ export function CandidatesPage() {
                       {/* Checkbox */}
                       <td className="p-3.5 pl-4" onClick={(e) => e.stopPropagation()}>
                         <input
-                          type="checkbox"
+                          type="checkbox" aria-label="Select candidate"
                           checked={isSelected}
                           onChange={() => toggleSelectOne(c.id)}
                           className="rounded border-slate-300 text-blue-600 cursor-pointer"
@@ -652,7 +669,7 @@ export function CandidatesPage() {
                             <span className="block font-bold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition truncate">
                               {c.firstName} {c.lastName}
                             </span>
-                            <span className="block text-[11px] text-slate-400 truncate mt-0.5">
+                            <span className="block text-[11px] text-slate-600 dark:text-slate-400 truncate mt-0.5">
                               {c.email} {c.phone ? `&bull; ${c.phone}` : ''}
                             </span>
                           </div>
@@ -667,7 +684,7 @@ export function CandidatesPage() {
                             type="button"
                             onClick={(e) => copyCode(e, code)}
                             title="Copy code"
-                            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                            className="text-slate-600 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 cursor-pointer"
                           >
                             <Icon name="copy" size={11} />
                           </button>
@@ -678,10 +695,10 @@ export function CandidatesPage() {
                       <td className="py-3.5 px-3">
                         <div className="min-w-0">
                           <strong className="block text-xs font-bold text-slate-800 dark:text-slate-200 truncate">
-                            {c.currentTitle || (c.firstName.includes('Tenant') ? 'Physician & Surgeon' : 'Role not specified')}
+                            {c.currentTitle || 'Role not specified'}
                           </strong>
-                          <span className="block text-[11px] text-slate-400 truncate mt-0.5">
-                            {c.currentCompany || 'Saudi German Hospital'}
+                          <span className="block text-[11px] text-slate-600 dark:text-slate-400 truncate mt-0.5">
+                            {c.currentCompany || 'Company not recorded'}
                           </span>
                         </div>
                       </td>
@@ -690,7 +707,7 @@ export function CandidatesPage() {
                       <td className="py-3.5 px-3">
                         <span className="inline-flex items-center gap-1.5 text-xs text-slate-700 dark:text-slate-300 font-medium">
                           <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                          <span>{c.source || 'Career Site'}</span>
+                          <span>{c.source || 'Source not recorded'}</span>
                         </span>
                       </td>
 
@@ -727,7 +744,8 @@ export function CandidatesPage() {
                           <button
                             type="button"
                             onClick={() => showToast(`Options for ${c.firstName} ${c.lastName}`)}
-                            className="p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+                            aria-label={`More options for ${c.firstName} ${c.lastName}`}
+                            className="p-1 rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
                           >
                             <Icon name="more-horizontal" size={14} />
                           </button>
@@ -825,18 +843,17 @@ export function CandidatesPage() {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <FormField id="cand-email" label="Email Address" required hint="Used for duplicate checking across the organization.">
+                <FormField id="cand-email" label="Email Address" hint="Optional when a valid phone number is provided; populated emails remain unique.">
                   <Input
                     id="cand-email"
                     type="email"
-                    required
                     placeholder="e.g. sara.ahmed@example.com"
                     value={form.email}
                     onChange={(e) => setForm({ ...form, email: e.target.value })}
                   />
                 </FormField>
 
-                <FormField id="cand-phone" label="Phone Number">
+                <FormField id="cand-phone" label="Phone Number" hint="At least one valid contact method is required.">
                   <Input
                     id="cand-phone"
                     placeholder="e.g. +966 50 000 0000"
@@ -872,13 +889,7 @@ export function CandidatesPage() {
                   value={form.source}
                   onChange={(e) => setForm({ ...form, source: e.target.value })}
                 >
-                  <option value="Direct Sourcing">Direct Sourcing</option>
-                  <option value="LinkedIn">LinkedIn</option>
-                  <option value="Employee Referral">Employee Referral</option>
-                  <option value="Career Portal">Career Portal</option>
-                  <option value="Agency">Agency</option>
-                  <option value="Walk-in">Walk-in</option>
-                  <option value="Campus Recruitment">Campus Recruitment</option>
+                  {Array.from(new Set(['Direct Sourcing', 'LinkedIn', 'Employee Referral', 'Career Portal', 'Agency', 'Walk-in', 'Campus Recruitment', ...masterDataSources])).map((source) => <option key={source} value={source}>{source}</option>)}
                 </Select>
               </FormField>
 

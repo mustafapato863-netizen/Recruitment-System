@@ -1,14 +1,18 @@
 import {
   IsArray,
+  ArrayMinSize,
   IsBoolean,
   IsEnum,
   IsInt,
   IsISO8601,
   IsOptional,
+  IsObject,
   IsString,
   IsUUID,
+  IsUrl,
   Max,
   MaxLength,
+  MinLength,
   Min,
 } from 'class-validator';
 import type { InterviewStatus, InterviewType } from '@recruitflow/contracts';
@@ -17,9 +21,19 @@ export class CreateInterviewDto {
   @IsUUID()
   applicationId!: string;
 
+  @IsOptional()
   @IsString()
   @MaxLength(200)
-  title!: string;
+  title?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(120)
+  interviewerJobTitle?: string | null;
+
+  @IsOptional()
+  @IsObject()
+  attendeeJobTitles?: Record<string, string>;
 
   @IsEnum(['Screening', 'Technical', 'Behavioral', 'Managerial', 'Executive'])
   interviewType!: InterviewType;
@@ -37,10 +51,12 @@ export class CreateInterviewDto {
 
   @IsOptional()
   @IsString()
+  @IsUrl({ protocols: ['http', 'https'], require_protocol: true }, { message: 'Meeting link must be a valid HTTP or HTTPS URL.' })
   @MaxLength(500)
   locationUrl?: string | null;
 
   @IsArray()
+  @ArrayMinSize(1)
   @IsUUID('4', { each: true })
   attendeeUserIds!: string[];
 
@@ -65,6 +81,7 @@ export class UpdateInterviewDto {
 
   @IsOptional()
   @IsString()
+  @IsUrl({ protocols: ['http', 'https'], require_protocol: true }, { message: 'Meeting link must be a valid HTTP or HTTPS URL.' })
   @MaxLength(500)
   locationUrl?: string | null;
 
@@ -106,16 +123,30 @@ export class SubmitScorecardDto {
   @MaxLength(5000)
   concerns?: string;
 
+  @IsString()
+  @MinLength(1)
+  @MaxLength(5000)
+  notes!: string;
+}
+
+export class UpdateInterviewResponseDto {
+  @IsEnum(['Confirmed', 'Reschedule Requested', 'Declined'])
+  response!: 'Confirmed' | 'Reschedule Requested' | 'Declined';
+
   @IsOptional()
   @IsString()
-  @MaxLength(5000)
-  notes?: string;
+  @MaxLength(1000)
+  note?: string;
 }
 
 export class InterviewQueryDto {
   @IsOptional()
   @IsUUID()
   applicationId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  candidateId?: string;
 
   @IsOptional()
   @IsString()
@@ -160,8 +191,15 @@ export class GenerateSelfScheduleDto {
   durationMinutes?: number;
 
   @IsArray()
+  @ArrayMinSize(1)
   @IsUUID('4', { each: true })
   attendeeUserIds!: string[];
+
+  @IsOptional()
+  @IsString()
+  @IsUrl({ protocols: ['http', 'https'], require_protocol: true }, { message: 'Meeting link must be a valid HTTP or HTTPS URL.' })
+  @MaxLength(500)
+  locationUrl?: string;
 
   @IsOptional()
   @IsInt()

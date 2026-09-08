@@ -8,6 +8,7 @@ import { StatusBadge } from '../components/StatusBadge';
 import { Icon } from '../components/Icon';
 import { Alert } from '../components/ui/Alert';
 import { QuickGuideTrigger } from '../quickguide';
+import { getTaskRows, type TaskListResponse } from '../utils/taskResponses';
 
 export function EmployeeDashboard() {
   const { user } = useAuth();
@@ -18,35 +19,41 @@ export function EmployeeDashboard() {
   const [error, setError] = useState('');
 
   const greetingName = user?.displayName?.trim().split(/\s+/)[0] ?? 'there';
+  const canViewRequests = Boolean(user?.permissions?.includes('VACANCY_REQUEST_VIEW'));
+  const canCreateRequests = Boolean(user?.permissions?.includes('VACANCY_REQUEST_CREATE'));
+  const canViewTasks = Boolean(user?.permissions?.includes('TASK_VIEW'));
 
   useEffect(() => {
     async function loadEmployeeData() {
       setIsLoading(true);
       setError('');
-      try {
-        const [requestsRes, tasksRes] = await Promise.allSettled([
-          getApi<VacancyRequest[]>('/vacancy-requests'),
-          getApi<TaskRecord[]>('/tasks'),
-        ]);
+      const [requestsRes, tasksRes] = await Promise.allSettled([
+        canViewRequests ? getApi<VacancyRequest[]>('/vacancy-requests') : Promise.resolve([] as VacancyRequest[]),
+        canViewTasks ? getApi<TaskListResponse>('/tasks') : Promise.resolve([] as TaskRecord[]),
+      ]);
 
-        if (requestsRes.status === 'fulfilled' && requestsRes.value) {
-          const myRequests = requestsRes.value.filter(
-            (r) => !r.requesterId || r.requesterId === user?.id || requestsRes.value.length <= 5
-          );
-          setRequests(myRequests);
-        }
-        if (tasksRes.status === 'fulfilled' && tasksRes.value) {
-          setTasks(tasksRes.value.filter((t) => t.status !== 'Completed'));
-        }
-      } catch {
-        setError('Unable to load your requests. Please refresh.');
-      } finally {
-        setIsLoading(false);
+      const errors: string[] = [];
+      if (requestsRes.status === 'fulfilled') {
+        const myRequests = requestsRes.value.filter((r) => r.requesterId === user?.id);
+        setRequests(myRequests);
+      } else {
+        setRequests([]);
+        errors.push('requests');
       }
+      if (tasksRes.status === 'fulfilled') {
+        setTasks(getTaskRows(tasksRes.value).filter((t) => t.status !== 'Completed'));
+      } else {
+        setTasks([]);
+        errors.push('tasks');
+      }
+      if (errors.length > 0) {
+        setError(`Unable to load your ${errors.join(' and ')}. Please refresh.`);
+      }
+      setIsLoading(false);
     }
 
     void loadEmployeeData();
-  }, [user?.id]);
+  }, [canViewRequests, canViewTasks, user?.id]);
 
   const pendingRequestsCount = requests.filter((r) => r.status === 'Pending Approval' || r.status === 'Draft').length;
   const approvedRequestsCount = requests.filter((r) => r.status === 'Approved').length;
@@ -62,7 +69,7 @@ export function EmployeeDashboard() {
           </div>
           <div className="flex items-center gap-2.5 flex-wrap">
             <h1 className="text-2xl font-rf-heading font-black tracking-tight text-rf-ink m-0">
-              Welcome back, {greetingName} 👋
+              Welcome back, {greetingName}
             </h1>
             <QuickGuideTrigger />
           </div>
@@ -72,15 +79,17 @@ export function EmployeeDashboard() {
         </div>
 
         <div className="flex items-center gap-3">
-          <Button
-            variant="primary"
-            size="md"
-            className="shadow-sm font-bold"
-            onClick={() => navigate('/vacancy-requests/create')}
-          >
-            <Icon name="plus" size={16} />
-            New Vacancy Request
-          </Button>
+          {canCreateRequests && (
+            <Button
+              variant="primary"
+              size="md"
+              className="shadow-sm font-bold"
+              onClick={() => navigate('/vacancy-requests/create')}
+            >
+              <Icon name="plus" size={16} />
+              New Vacancy Request
+            </Button>
+          )}
         </div>
       </header>
 
@@ -131,9 +140,11 @@ export function EmployeeDashboard() {
               <h2 className="text-base font-black text-rf-ink m-0">My Headcount &amp; Vacancy Requests</h2>
               <p className="text-xs text-rf-ink-muted m-0 mt-0.5">Track requisition progress and management approvals</p>
             </div>
-            <Button variant="secondary" size="sm" onClick={() => navigate('/vacancy-requests')}>
-              View all
-            </Button>
+              {canViewRequests && (
+                <Button variant="secondary" size="sm" onClick={() => navigate('/vacancy-requests')}>
+                  View all
+                </Button>
+              )}
           </div>
 
           {isLoading ? (
@@ -146,19 +157,25 @@ export function EmployeeDashboard() {
               <div className="w-14 h-14 rounded-full bg-rf-surface-subtle flex items-center justify-center mb-3">
                 <Icon name="file-text" size={26} className="text-rf-ink-muted" />
               </div>
-              <p className="text-sm font-bold text-rf-ink m-0">No vacancy requests submitted yet</p>
-              <p className="text-xs text-rf-ink-muted mt-1 max-w-sm">
-                Need to hire for your team? Submit a requisition to start the hiring and approval process.
+              <p className="text-sm font-bold text-rf-ink m-0">
+                {canViewRequests ? 'No vacancy requests submitted yet' : 'No request workspace assigned'}
               </p>
-              <Button
-                variant="primary"
-                size="sm"
-                className="mt-4"
-                onClick={() => navigate('/vacancy-requests/create')}
-              >
-                <Icon name="plus" size={14} />
-                Create First Request
-              </Button>
+              <p className="text-xs text-rf-ink-muted mt-1 max-w-sm">
+                {canViewRequests
+                  ? 'Need to hire for your team? Submit a requisition to start the hiring and approval process.'
+                  : 'Your current access is focused on tasks and personal work.'}
+              </p>
+              {canCreateRequests && (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  className="mt-4"
+                  onClick={() => navigate('/vacancy-requests/create')}
+                >
+                  <Icon name="plus" size={14} />
+                  Create First Request
+                </Button>
+              )}
             </div>
           ) : (
             <div className="flex flex-col gap-3">
@@ -173,7 +190,7 @@ export function EmployeeDashboard() {
                       <StatusBadge status={req.status} />
                     </div>
                     <div className="text-sm font-bold text-rf-ink mt-1 truncate">
-                      {(req as any).position?.title ?? req.positionId ?? 'Position Requisition'}
+                      {req.position?.title ?? req.positionId ?? 'Position Requisition'}
                     </div>
                     <div className="text-xs text-rf-ink-muted mt-0.5 flex items-center gap-3">
                       <span>Headcount: <strong>{req.requestedHeadcount}</strong></span>
@@ -204,12 +221,18 @@ export function EmployeeDashboard() {
           <section className="flex flex-col rounded-2xl border border-rf-border-subtle bg-rf-surface p-5 shadow-xs">
             <div className="flex items-center justify-between pb-3 border-b border-rf-border-subtle mb-3">
               <h2 className="text-sm font-bold text-rf-ink m-0">My Tasks</h2>
-              <Link to="/tasks" className="text-xs font-bold text-rf-action hover:underline">
-                View all
-              </Link>
+              {canViewTasks && (
+                <Link to="/tasks" className="text-xs font-bold text-rf-action hover:underline">
+                  View all
+                </Link>
+              )}
             </div>
 
-            {tasks.length === 0 ? (
+            {!canViewTasks ? (
+              <div className="py-6 text-center text-xs text-rf-ink-muted">
+                Task access is not enabled for this workspace.
+              </div>
+            ) : tasks.length === 0 ? (
               <div className="py-6 text-center text-xs text-rf-ink-muted">
                 <Icon name="check" size={20} className="mx-auto text-emerald-500 mb-1" />
                 No pending tasks right now. You are all caught up!
@@ -234,22 +257,6 @@ export function EmployeeDashboard() {
             )}
           </section>
 
-          {/* Quick Help / Employee Referral Card */}
-          <section className="flex flex-col rounded-2xl border border-rf-border-subtle bg-gradient-to-br from-rf-surface to-rf-surface-subtle p-5 shadow-xs">
-            <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-300 flex items-center justify-center mb-3">
-              <Icon name="users" size={16} />
-            </div>
-            <h3 className="text-sm font-bold text-rf-ink m-0">Know great talent?</h3>
-            <p className="text-xs text-rf-ink-muted mt-1.5 leading-relaxed">
-              Refer colleagues or friends to join Saudi German Health and track their application progress directly.
-            </p>
-            <div className="mt-4 pt-3 border-t border-rf-border-subtle flex justify-between items-center text-xs">
-              <span className="text-rf-ink-muted font-medium">Internal Referral Policy</span>
-              <Link to="/notifications" className="font-bold text-rf-action hover:underline">
-                Learn more
-              </Link>
-            </div>
-          </section>
         </div>
       </div>
     </div>

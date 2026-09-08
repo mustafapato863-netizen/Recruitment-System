@@ -107,6 +107,7 @@ export interface VacancyRequestApproval {
 }
 
 export interface VacancyRequest {
+  position?: { title: string } | null;
   id: string;
   organizationId: string;
   legalEntityId: string | null;
@@ -164,12 +165,19 @@ export interface Vacancy {
   updatedAt: string;
 }
 
+export * from './candidate-activity';
+
 export interface VacancyAssignment {
   id: string;
   userId: string;
   roleCode: string;
+  assignmentKind?: 'PRIMARY' | 'SUPPORT';
   isActive: boolean;
   assignedAt: string;
+  user?: {
+    id: string;
+    displayName: string;
+  };
 }
 
 export type WorkHealthState = 'healthy' | 'attention' | 'blocked';
@@ -286,6 +294,7 @@ export interface ApprovalInboxItem {
 export interface VacancyDetailView extends Vacancy {
   vacancyRequest?: VacancyRequest | undefined;
   organizationName?: string | undefined;
+  organizationCode?: string | undefined;
   branchName?: string | undefined;
   legalEntityName?: string | undefined;
   positionTitle?: string | undefined;
@@ -432,6 +441,7 @@ export interface UserRecord {
   id: string;
   email: string;
   displayName: string;
+  jobTitle?: string | null;
   status: string;
   organizationId: string;
   roles: RoleSummary[];
@@ -444,10 +454,13 @@ export interface CreateUserInput {
   email: string;
   displayName: string;
   password: string;
+  roles?: string[];
+  jobTitle?: string | null;
 }
 
 export interface UpdateUserInput {
   displayName?: string;
+  jobTitle?: string | null;
   status?: string;
 }
 
@@ -468,11 +481,41 @@ export interface RoleRecord {
 export interface PermissionRecord {
   id: string;
   code: string;
+  name: string;
   description: string | null;
+  /** 'system' permissions are shared catalog entries; organization permissions are tenant-local. */
+  scope?: 'system' | 'organization';
+}
+
+export interface CreatePermissionInput {
+  code: string;
+  name: string;
+  description?: string;
+}
+
+export interface UpdatePermissionInput {
+  name?: string;
+  description?: string;
+}
+
+export interface NavigationItemRecord {
+  key: string;
+  route: string;
+  label: string;
+  icon: string;
+  group: string;
+  sortOrder: number;
+  visible: boolean;
+  requiredPermission?: string;
+  requiredAnyPermissions?: string[];
 }
 
 export interface CreateRoleInput {
-  code: string;
+  /**
+   * Deprecated input retained for older clients. Role codes are now assigned
+   * by the API so they remain unique under concurrent creation.
+   */
+  code?: string;
   name: string;
 }
 
@@ -508,6 +551,7 @@ export interface BranchRecord {
   name: string;
   city: string | null;
   status: string;
+  version?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -518,7 +562,9 @@ export interface PositionRecord {
   code: string;
   title: string;
   description: string | null;
+  metadata?: Record<string, unknown> | null;
   status: string;
+  version?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -557,10 +603,11 @@ export interface Candidate {
   candidateCode: string;
   firstName: string;
   lastName: string;
-  email: string;
+  email: string | null;
   phone?: string | null;
   currentTitle?: string | null;
   currentCompany?: string | null;
+  summary?: string | null;
   source?: string | null;
   status: 'Active' | 'Blacklisted' | 'Archived';
   consentStatus?: string;
@@ -576,14 +623,23 @@ export interface Candidate {
   updatedAt: string;
 }
 
+export interface CandidateMetrics {
+  totalCandidates: number;
+  activeInPipeline: number;
+  talentPool: number;
+  disqualified: number;
+  directReferralPercentage: number | null;
+}
+
 export interface CreateCandidateInput {
   organizationId?: string;
   firstName: string;
   lastName: string;
-  email: string;
+  email?: string | null;
   phone?: string | null;
   currentTitle?: string | null;
   currentCompany?: string | null;
+  summary?: string | null;
   source?: string | null;
   skills?: string[];
   experienceYears?: number | null;
@@ -600,6 +656,7 @@ export interface UpdateCandidateInput {
   phone?: string | null;
   currentTitle?: string | null;
   currentCompany?: string | null;
+  summary?: string | null;
   source?: string | null;
   status?: 'Active' | 'Blacklisted' | 'Archived';
   skills?: string[];
@@ -800,6 +857,10 @@ export interface ScreeningLog {
   screenerName?: string | undefined;
   outcome: ScreeningOutcome;
   notes?: string | null | undefined;
+  noticePeriodDays?: number | null | undefined;
+  expectedSalary?: number | null | undefined;
+  currentSalary?: number | null | undefined;
+  salaryCurrency?: string | undefined;
   screenedAt: string;
   createdAt: string;
 }
@@ -808,6 +869,10 @@ export interface CreateScreeningLogInput {
   applicationId: string;
   outcome: ScreeningOutcome;
   notes?: string | undefined;
+  noticePeriodDays?: number | undefined;
+  expectedSalary?: number | undefined;
+  currentSalary?: number | undefined;
+  salaryCurrency?: string | undefined;
 }
 
 export type InterviewType = 'Screening' | 'Technical' | 'Behavioral' | 'Managerial' | 'Executive';
@@ -819,7 +884,25 @@ export interface InterviewAttendeeItem {
   userId: string;
   userName?: string | undefined;
   role: string;
+  jobTitle?: string | null | undefined;
   response: string;
+}
+
+export type InterviewAttendeeResponse = 'Pending' | 'Accepted' | 'Confirmed' | 'Reschedule Requested' | 'Declined';
+
+export type MasterDataCategory = 'departments' | 'skills' | 'candidate-sources' | 'interview-types';
+
+export interface MasterDataValueRecord {
+  id: string;
+  organizationId: string;
+  category: MasterDataCategory;
+  code: string | null;
+  name: string;
+  metadata?: Record<string, unknown> | null;
+  status: string;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface InterviewScorecardItem {
@@ -908,7 +991,7 @@ export interface SubmitScorecardInput {
   recommendation: 'Strong Hire' | 'Hire' | 'Neutral' | 'No Hire' | 'Strong No Hire';
   strengths?: string | undefined;
   concerns?: string | undefined;
-  notes?: string | undefined;
+  notes: string;
 }
 
 export interface GenerateSelfScheduleInput {
@@ -917,6 +1000,7 @@ export interface GenerateSelfScheduleInput {
   interviewType: InterviewType;
   durationMinutes?: number | undefined;
   attendeeUserIds: string[];
+  locationUrl?: string | undefined;
   expiresInHours?: number | undefined;
 }
 
@@ -986,6 +1070,22 @@ export interface OfferApprovalItem {
   decidedAt?: string | null;
 }
 
+/** Flat, shared shape returned by both offer approval inbox endpoints. */
+export interface OfferApprovalInboxItem {
+  id: string;
+  offerId: string;
+  offerVersionId: string;
+  offerCode: string;
+  candidateName: string;
+  positionTitle: string;
+  branchName?: string | null;
+  versionNumber: number;
+  monthlyPackage: number | null;
+  roleCode: string;
+  status: string;
+  step: number;
+}
+
 export interface OfferVersionItem {
   id: string;
   offerId: string;
@@ -1006,6 +1106,7 @@ export interface OfferVersionItem {
 }
 
 export interface Offer {
+  vacancyId?: string;
   id: string;
   organizationId: string;
   applicationId: string;
@@ -1278,6 +1379,13 @@ export interface ReportTrendPoint {
   joined: number;
 }
 
+export interface ReportSourceBreakdown {
+  name: string;
+  total: number;
+  joined: number;
+  conversionRate: number;
+}
+
 export interface HiringByPosition {
   positionId: string;
   position: string;
@@ -1301,6 +1409,7 @@ export interface ReportOverview {
     joined: number;
   };
   trend: ReportTrendPoint[];
+  sourceBreakdown: ReportSourceBreakdown[];
   funnel: FunnelStage[];
   hiringByPosition: HiringByPosition[];
   recruiterWorkload: RecruiterWorkload[];

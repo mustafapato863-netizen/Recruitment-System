@@ -24,6 +24,7 @@ import {
 } from '../components/ui';
 import { Icon } from '../components/Icon';
 import { CandidateWorkspace } from '../components/candidate/CandidateWorkspace';
+import { CandidateActivityPanel } from '../components/candidate/CandidateActivityPanel';
 import {
   ScorecardSummary,
   aggregateInterviewScorecards,
@@ -102,9 +103,8 @@ export function CandidateDetailPage() {
     setInterviewsError(null);
     setOffersError(null);
 
-    let candidateObj: Candidate | null = null;
     try {
-      candidateObj = await getApi<Candidate>(`/candidates/${id}`);
+      const candidateObj = await getApi<Candidate>(`/candidates/${id}`);
       setCandidate(candidateObj);
     } catch (err: unknown) {
       setCandidateError((err as Error).message || 'Failed to load candidate details.');
@@ -117,21 +117,17 @@ export function CandidateDetailPage() {
       setCandidateLoading(false);
     }
 
-    // Concurrently fetch applications, interviews, offers, and vacancy options.
-    // Note: Backend /applications accepts ?candidateId=:id and returns PaginatedResult<Application>.
-    // Backend /interviews and /offers do not accept candidateId query parameter; we fetch and filter
-    // client-side by matching against the candidate's application IDs.
+    // Fetch candidate-specific linked records server-side so private or later-page
+    // records are not exposed through whole-collection client filtering.
     const [appsRes, interviewsRes, offersRes, vacsRes] = await Promise.allSettled([
-      getApi<PaginatedResult<Application>>(`/applications?candidateId=${id}`),
-      getApi<Interview[]>('/interviews'),
-      getApi<Offer[]>('/offers'),
+      getApi<PaginatedResult<Application>>(`/applications?candidateId=${id}&page=1&pageSize=100`),
+      getApi<Interview[]>(`/interviews?candidateId=${id}`),
+      getApi<Offer[]>(`/offers?candidateId=${id}`),
       getApi<Vacancy[]>('/vacancies'),
     ]);
 
-    let appsData: Application[] = [];
     if (appsRes.status === 'fulfilled') {
-      appsData = appsRes.value.data ?? [];
-      setApplications(appsData);
+      setApplications(appsRes.value.data ?? []);
       setApplicationsLoading(false);
     } else {
       setApplications([]);
@@ -139,12 +135,8 @@ export function CandidateDetailPage() {
       setApplicationsLoading(false);
     }
 
-    const appIds = new Set(appsData.map((a) => a.id));
-
     if (interviewsRes.status === 'fulfilled') {
-      const allInts = Array.isArray(interviewsRes.value) ? interviewsRes.value : [];
-      const matched = allInts.filter((item) => appIds.has(item.applicationId));
-      setInterviews(matched);
+      setInterviews(Array.isArray(interviewsRes.value) ? interviewsRes.value : []);
       setInterviewsLoading(false);
     } else {
       setInterviews([]);
@@ -153,9 +145,7 @@ export function CandidateDetailPage() {
     }
 
     if (offersRes.status === 'fulfilled') {
-      const allOffers = Array.isArray(offersRes.value) ? offersRes.value : [];
-      const matched = allOffers.filter((item) => appIds.has(item.applicationId));
-      setOffers(matched);
+      setOffers(Array.isArray(offersRes.value) ? offersRes.value : []);
       setOffersLoading(false);
     } else {
       setOffers([]);
@@ -183,13 +173,11 @@ export function CandidateDetailPage() {
     setApplicationsLoading(true);
     setApplicationsError(null);
     try {
-      const res = await getApi<PaginatedResult<Application>>(`/applications?candidateId=${id}`);
+      const res = await getApi<PaginatedResult<Application>>(`/applications?candidateId=${id}&page=1&pageSize=100`);
       const apps = res.data ?? [];
       setApplications(apps);
-      // Re-filter interviews and offers with updated application IDs
-      const appIds = new Set(apps.map((a) => a.id));
-      void retryInterviewsWithAppIds(appIds);
-      void retryOffersWithAppIds(appIds);
+      void retryInterviews();
+      void retryOffers();
     } catch (err: unknown) {
       setApplicationsError((err as Error).message || 'Failed to load applications.');
     } finally {
@@ -197,13 +185,12 @@ export function CandidateDetailPage() {
     }
   };
 
-  const retryInterviewsWithAppIds = async (appIds: Set<string>) => {
+  const retryInterviewsWithAppIds = async () => {
     setInterviewsLoading(true);
     setInterviewsError(null);
     try {
-      const allInts = await getApi<Interview[]>('/interviews');
-      const matched = Array.isArray(allInts) ? allInts.filter((i) => appIds.has(i.applicationId)) : [];
-      setInterviews(matched);
+      const allInts = await getApi<Interview[]>(`/interviews?candidateId=${id}`);
+      setInterviews(Array.isArray(allInts) ? allInts : []);
     } catch (err: unknown) {
       setInterviewsError((err as Error).message || 'Failed to load interviews.');
     } finally {
@@ -212,17 +199,15 @@ export function CandidateDetailPage() {
   };
 
   const retryInterviews = async () => {
-    const appIds = new Set(applications.map((a) => a.id));
-    await retryInterviewsWithAppIds(appIds);
+    await retryInterviewsWithAppIds();
   };
 
-  const retryOffersWithAppIds = async (appIds: Set<string>) => {
+  const retryOffersWithAppIds = async () => {
     setOffersLoading(true);
     setOffersError(null);
     try {
-      const allOffers = await getApi<Offer[]>('/offers');
-      const matched = Array.isArray(allOffers) ? allOffers.filter((o) => appIds.has(o.applicationId)) : [];
-      setOffers(matched);
+      const allOffers = await getApi<Offer[]>(`/offers?candidateId=${id}`);
+      setOffers(Array.isArray(allOffers) ? allOffers : []);
     } catch (err: unknown) {
       setOffersError((err as Error).message || 'Failed to load offers.');
     } finally {
@@ -231,8 +216,7 @@ export function CandidateDetailPage() {
   };
 
   const retryOffers = async () => {
-    const appIds = new Set(applications.map((a) => a.id));
-    await retryOffersWithAppIds(appIds);
+    await retryOffersWithAppIds();
   };
 
   // ─── Actions: Apply & Tags ────────────────────────────────────
@@ -483,6 +467,8 @@ export function CandidateDetailPage() {
       />
 
       {/* Tabs Navigation */}
+      <CandidateActivityPanel key={candidate.id} candidateId={candidate.id} />
+
       <Tabs
         ariaLabel="Candidate 360 view sections"
         items={tabItems}

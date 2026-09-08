@@ -47,10 +47,12 @@ export class OffersController {
     @CurrentUser() user: AuthUser,
     @Query('status') status?: string,
     @Query('search') search?: string,
+    @Query('candidateId') candidateId?: string,
   ) {
-    const query: { status?: string; search?: string } = {};
+    const query: { status?: string; search?: string; candidateId?: string } = {};
     if (status !== undefined) query.status = status;
     if (search !== undefined) query.search = search;
+    if (candidateId !== undefined) query.candidateId = candidateId;
     return this.offersService.getOffers(user, query, await this.compensationDisclosure(user));
   }
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { PageFrame } from '../components/ui/PageFrame';
 import { PipelineStepper } from '../components/PipelineStepper';
 import { Alert } from '../components/ui/Alert';
@@ -15,6 +15,8 @@ import { CVIngestSuccess } from '../components/intake/CVIngestSuccess';
 
 export const CVIntakePage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const initialVacancyId = searchParams.get('vacancyId');
 
   const {
     currentStep,
@@ -29,6 +31,7 @@ export const CVIntakePage: React.FC = () => {
     targetStage,
     setTargetStage,
     candidateSource,
+    candidateSourceOptions,
     setCandidateSource,
     duplicateDecision,
     setDuplicateDecision,
@@ -44,12 +47,14 @@ export const CVIntakePage: React.FC = () => {
     successToast,
     showToast,
     handleFile,
-    selectPreset,
     proceedToResolve,
     executeFinalIngest,
     clearUpload,
     resetToParsed,
-  } = useCVIntakeFlow();
+  } = useCVIntakeFlow(initialVacancyId);
+
+  const selectedVacancyLabel = vacancies.find((vacancy) => vacancy.id === targetVacancy)?.position?.title
+    || vacancies.find((vacancy) => vacancy.id === targetVacancy)?.title;
 
   return (
     <PageFrame
@@ -84,7 +89,13 @@ export const CVIntakePage: React.FC = () => {
         </Alert>
       )}
 
-      {/* ── STAGE 0: UPLOAD & DEMO PRESETS ── */}
+      {initialVacancyId && (
+        <Alert tone="info" title="Target position selected">
+          This CV will be matched to {selectedVacancyLabel || 'the selected vacancy'} after extraction and duplicate review.
+        </Alert>
+      )}
+
+      {/* ── STAGE 0: UPLOAD ── */}
       {currentStep === 0 && (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3 animate-fade-in">
           <div className="lg:col-span-2">
@@ -92,7 +103,6 @@ export const CVIntakePage: React.FC = () => {
               parsingFile={parsingFile}
               parsingStep={parsingStep}
               onFileSelect={(file) => void handleFile(file)}
-              onPresetSelect={(preset) => void selectPreset(preset)}
             />
           </div>
 
@@ -158,6 +168,9 @@ export const CVIntakePage: React.FC = () => {
           setProfile={setProfile}
           scoredVacancies={scoredVacancies}
           uploadedFileName={uploadedFileName}
+          candidateSource={candidateSource}
+          candidateSourceOptions={candidateSourceOptions}
+          setCandidateSource={setCandidateSource}
           onReset={resetToParsed}
           onBack={clearUpload}
           onProceed={proceedToResolve}
@@ -175,6 +188,7 @@ export const CVIntakePage: React.FC = () => {
           targetStage={targetStage}
           setTargetStage={setTargetStage}
           candidateSource={candidateSource}
+          candidateSourceOptions={candidateSourceOptions}
           setCandidateSource={setCandidateSource}
           duplicateDecision={duplicateDecision}
           setDuplicateDecision={setDuplicateDecision}

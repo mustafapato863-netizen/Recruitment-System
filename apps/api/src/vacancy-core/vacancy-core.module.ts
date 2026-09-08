@@ -9,9 +9,10 @@ import { VacancyRequestsController } from './vacancy-requests.controller';
 import { VacanciesController } from './vacancies.controller';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { DatabaseModule } from '../database/database.module';
+import { AccessControlModule } from '../access-control/access-control.module';
 
 @Module({
-  imports: [DatabaseModule, NotificationsModule],
+  imports: [DatabaseModule, NotificationsModule, AccessControlModule],
   controllers: [VacancyRequestsController, VacanciesController],
   providers: [
     VacancyCoreService,

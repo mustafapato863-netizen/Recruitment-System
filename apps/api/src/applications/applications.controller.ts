@@ -57,7 +57,7 @@ export class ApplicationsController {
     @CurrentUser() user: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    return this.applicationsService.getApplicationHistory(user.organizationId, id);
+    return this.applicationsService.getApplicationHistory(user.organizationId, id, user);
   }
 
   @Get(':id/notes')
@@ -68,7 +68,7 @@ export class ApplicationsController {
     @CurrentUser() user: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    return this.applicationsService.listNotes(user.organizationId, id);
+    return this.applicationsService.listNotes(user.organizationId, id, user);
   }
 
   @Post(':id/notes')
@@ -86,6 +86,7 @@ export class ApplicationsController {
       id,
       user.userId,
       body.content,
+      user,
     );
   }
 
@@ -96,12 +97,12 @@ export class ApplicationsController {
     @CurrentUser() user: AuthUser,
     @Body() body: CreateApplicationDto,
   ) {
-    return this.applicationsService.createApplication(user.organizationId, body);
+    return this.applicationsService.createApplication(user.organizationId, body, user);
   }
 
   @Patch(':id/stage')
   @RequirePermissions('APPLICATION_MOVE_STAGE')
-  @AuditAction('APPLICATION_STAGE_CHANGE')
+  @AuditAction('APPLICATION_MOVE_STAGE')
   @UseGuards(TenantScopedGuard)
   @TenantResource({ resource: 'application', param: 'id' })
   updateStage(
@@ -114,6 +115,7 @@ export class ApplicationsController {
       id,
       user.userId,
       body,
+      user,
     );
   }
 
@@ -132,6 +134,7 @@ export class ApplicationsController {
       id,
       user.userId,
       body,
+      user,
     );
   }
 }

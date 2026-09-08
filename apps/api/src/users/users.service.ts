@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { PrismaService } from '../database/prisma.service';
 import { RolesService } from '../roles/roles.service';
@@ -21,7 +21,7 @@ export class UsersService {
 
   async list(organizationId: string): Promise<UserRecord[]> {
     const users = await this.prisma.user.findMany({
-      where: { organizationId },
+      where: { organizationId, status: 'Active' },
       include: {
         userRoles: {
           include: { role: true },
@@ -53,12 +53,27 @@ export class UsersService {
   async create(organizationId: string, data: CreateUserDto): Promise<UserRecord> {
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(data.password, salt);
+    const requestedRoles = Array.from(new Set((data.roles || []).map((role) => role.trim().toUpperCase()).filter(Boolean)));
+    const roles = requestedRoles.length > 0
+      ? await this.prisma.role.findMany({
+          where: {
+            code: { in: requestedRoles },
+            status: 'Active',
+            OR: [{ organizationId: null }, { organizationId }],
+          },
+          select: { id: true, code: true },
+        })
+      : [];
+    if (roles.length !== requestedRoles.length) {
+      throw new BadRequestException('One or more selected roles are unavailable for this organization.');
+    }
 
     const user = await this.prisma.user.create({
       data: {
         email: data.email,
         emailNormalized: data.email.toLowerCase(),
         displayName: data.displayName,
+        jobTitle: data.jobTitle?.trim() || null,
         passwordHash,
         organizationId,
         status: 'Active',
@@ -70,12 +85,20 @@ export class UsersService {
       },
     });
 
-    return this.toUserRecord(user);
+    if (requestedRoles.length > 0) {
+      await this.prisma.userRole.createMany({
+        data: roles.map((role) => ({ userId: user.id, roleId: role.id })),
+        skipDuplicates: true,
+      });
+    }
+
+    return this.getById(organizationId, user.id);
   }
 
   async update(organizationId: string, id: string, data: UpdateUserDto): Promise<UserRecord> {
-    const updateData: { displayName?: string; status?: string } = {};
+    const updateData: { displayName?: string; jobTitle?: string | null; status?: string } = {};
     if (data.displayName !== undefined) updateData.displayName = data.displayName;
+    if (data.jobTitle !== undefined) updateData.jobTitle = data.jobTitle?.trim() || null;
     if (data.status !== undefined) updateData.status = data.status;
 
     const result = await this.prisma.user.updateMany({
@@ -118,6 +141,7 @@ export class UsersService {
       id: user.id,
       email: user.email,
       displayName: user.displayName,
+      jobTitle: user.jobTitle,
       status: user.status,
       organizationId: user.organizationId,
       roles: (user.userRoles || []).map((ur) => ({

@@ -23,6 +23,7 @@ import {
 import { Icon } from '../components/Icon';
 import { useAuth } from '../auth/AuthContext';
 import './PageEnhancementsV2.css';
+import { MasterDataGridPage } from './MasterDataGridPage';
 
 type Category = 'legal-entities' | 'branches' | 'positions';
 type RecordItem = Record<string, string | null | undefined>;
@@ -41,6 +42,10 @@ async function loadRecords(category: Category): Promise<RecordItem[]> {
 }
 
 export function MasterDataPage() {
+  return <MasterDataGridPage />;
+}
+
+export function LegacyMasterDataPage() {
   const { user } = useAuth();
   const canManage = user?.permissions?.includes('MASTER_DATA_MANAGE');
   const [category, setCategory] = useState<Category>('legal-entities');
