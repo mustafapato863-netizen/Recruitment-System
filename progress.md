@@ -2,6 +2,10 @@
 
 ## Deployment preparation 2026-09-08
 
+- Passed: clean database replay (30 migrations), no schema diff, API production image build, 66 API tests, 8 deployment environment validation tests.
+- Docker engine then failed on named-volume creation (I/O), image build (read-only filesystem) and container listing (Desktop unable to start). No live hosting or existing application database was changed.
+- Temporary isolated resources: recruitflow-preflight-db, recruitflow-preflight network, recruitflow-preflight-api image (and possible documents volume). Remove only these named test resources after Docker recovery; do not prune unrelated images/volumes.
+
 Read supplied incident report and relevant skills; inspected runtime, package scripts and schema. Beginning production packaging and isolated checks.
 
 ## Session 2026-09-07

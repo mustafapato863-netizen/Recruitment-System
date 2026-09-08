@@ -2,9 +2,9 @@
 
 ## Deployment preparation — 2026-09-08
 
-- [in progress] Compare supplied AssessFlow incident report to RecruitFlow configuration.
-- [pending] Add reproducible production containers, routing, persistence and migration startup.
-- [pending] Verify isolated clean database/container startup and record deployment instructions.
+- [done] Compare supplied AssessFlow incident report to RecruitFlow configuration.
+- [done] Add production containers, routing, persistence and validated migration startup.
+- [partial] Clean database replay, schema diff, Linux API image build, tests and compose validation passed. Full container smoke is blocked by Docker Desktop storage failure; deployment instructions record remaining checks.
 - Preserve existing data and work; never run destructive schema push or seed demo records on boot.
 
 ## Current scope: version-one simplification planning

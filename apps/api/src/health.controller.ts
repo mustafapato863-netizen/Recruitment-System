@@ -23,6 +23,8 @@ export class HealthController {
   async getReadiness() {
     try {
       await this.prisma.$queryRaw`SELECT 1`;
+      // A reachable server with no migrated tables is not ready to serve requests.
+      await this.prisma.organization.findFirst({ select: { id: true } });
       return {
         status: 'up',
         timestamp: new Date().toISOString(),

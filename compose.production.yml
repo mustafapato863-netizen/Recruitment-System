@@ -3,7 +3,7 @@ services:
     build:
       context: .
       target: api
-    env_file: .env.production
+    env_file: ${RECRUITFLOW_ENV_FILE:-.env.production}
     environment:
       NODE_ENV: production
       PORT: 3000
@@ -27,7 +27,7 @@ services:
     build:
       context: .
       target: worker
-    env_file: .env.production
+    env_file: ${RECRUITFLOW_ENV_FILE:-.env.production}
     environment:
       NODE_ENV: production
     depends_on:

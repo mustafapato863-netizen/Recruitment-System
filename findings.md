@@ -2,6 +2,10 @@
 
 ## Deployment preparation findings
 
+- Clean PostgreSQL replay found an obsolete unique assignment index: DROP CONSTRAINT in a prior migration never removed the actual index. Added an additive migration; aligned declared defaults/indexes to existing history. All 30 migrations apply, with no Prisma schema drift.
+- Production image built successfully on Linux. Subsequent container creation failed with Docker engine I/O errors, followed by a read-only metadata filesystem and Docker Desktop unavailable. Runtime/proxy/volume smoke verification remains blocked by that local engine failure, not a passing result.
+- An external commit incorporated earlier workspace changes during this task; preserve it and all subsequent edits.
+
 - No Dockerfiles, compose or production reverse proxy configuration exist in the repository.
 - Web already defaults to /api/v1; Vite dev proxy does not provide production routing.
 - API reads PORT but defaults to 3000. Health routes are /api/v1/health and /api/v1/readiness.
