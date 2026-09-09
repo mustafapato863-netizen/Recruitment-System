@@ -1,0 +1,6 @@
+# Optional Hostinger VPS override. Dokploy should use compose.production.yml
+# alone and route its domain to the web service's internal port 80.
+services:
+  web:
+    ports:
+      - "127.0.0.1:${RECRUITFLOW_WEB_PORT:-8080}:80"

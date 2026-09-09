@@ -24,12 +24,14 @@ does not provide the Docker/network/volume features required by this stack.
    docker compose -f compose.production.yml config --quiet
    ```
 
-5. Start the API, web and worker. Put Hostinger's TLS reverse proxy or a
-   managed HTTPS proxy in front of the web service on port 8080:
+5. Start the API, web and worker. The shared Compose file deliberately does
+   not publish a host port. For a standalone VPS, use the Hostinger override
+   and put Hostinger's TLS reverse proxy or a managed HTTPS proxy in front of
+   the loopback binding (choose an unused host port):
 
    ```sh
-   RECRUITFLOW_ENV_FILE=.env.production \
-     docker compose -f compose.production.yml up -d --build
+   RECRUITFLOW_WEB_PORT=8081 RECRUITFLOW_ENV_FILE=.env.production \
+     docker compose -f compose.production.yml -f compose.hostinger.yml up -d --build
    ```
 
 6. Verify `/healthz`, `/api/v1/health`, `/api/v1/readiness`, login, private CV
@@ -46,7 +48,8 @@ For the Compose deployment shown in the Dokploy UI, select GitHub repository
 `Recruitment-System`, branch `main`, and Compose path
 `./compose.production.yml`. Choose Docker Compose mode, not Stack mode. The
 Environment tab writes the variables to `.env`, which this Compose file loads
-by default. Attach the public Hostinger domain to the `web` service on port 80.
+by default. Do not add `compose.hostinger.yml` in Dokploy; attach the public
+Hostinger domain to the `web` service on internal port 80.
 For the Vercel setup, attach a separate HTTPS API domain to the `api` service
 on port 3000 and use that URL in Vercel's `VITE_API_BASE_URL`.
 

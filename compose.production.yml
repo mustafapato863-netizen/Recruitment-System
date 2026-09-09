@@ -19,8 +19,11 @@ services:
       target: web
     environment:
       API_UPSTREAM: http://api:3000
-    ports:
-      - "8080:80"
+    # Dokploy routes the public domain to this service's internal port 80.
+    # Keep host ports out of the shared stack so another project cannot cause
+    # deployment failure by already using 8080 (or any other host port).
+    expose:
+      - "80"
     depends_on:
       api:
         condition: service_healthy

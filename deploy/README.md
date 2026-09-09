@@ -99,8 +99,18 @@ RECRUITFLOW_ENV_FILE=.env.production \
   docker compose -f compose.production.yml up -d --build
 ```
 
-The compose web binding is port 8080; place an HTTPS proxy in front of it.
-Production auth cookies are Secure, so normal public HTTP login is unsupported.
+The shared production Compose file does not publish a host port for `web`;
+Dokploy routes the service on its internal port 80. For a standalone
+Hostinger VPS, add the optional override and place an HTTPS proxy in front of
+the loopback binding:
+
+```sh
+RECRUITFLOW_WEB_PORT=8081 RECRUITFLOW_ENV_FILE=.env.production \
+  docker compose -f compose.production.yml -f compose.hostinger.yml up -d --build
+```
+
+Choose any unused host port (8081 is an example). Production auth cookies are
+Secure, so normal public HTTP login is unsupported.
 In Dokploy Compose mode select the actual compose file separately from build path.
 
 ## Verification and recovery
