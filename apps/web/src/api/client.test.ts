@@ -34,6 +34,16 @@ describe('API Client Error Handling', () => {
   }
 
   describe('downloadApi', () => {
+    it('explains login lockout and retains the retry time', async () => {
+      mockResponse(403, { code: 'ACCOUNT_LOCKED', retryAfterSeconds: 125 });
+      await expect(postApi('/auth/login', {})).rejects.toMatchObject({
+        statusCode: 403,
+        code: 'ACCOUNT_LOCKED',
+        retryAfterSeconds: 125,
+        message: 'Sign-in is temporarily locked after too many failed attempts. Try again in 3 minutes.',
+      });
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+    });
     it('throws ApiError with envelope on 403 Forbidden', async () => {
       mockResponse(403, {
         code: 'FORBIDDEN',

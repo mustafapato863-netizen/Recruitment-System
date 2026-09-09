@@ -125,7 +125,17 @@ async function handleResponseError(response: Response, path: string): Promise<ne
       window.dispatchEvent(new CustomEvent('auth:unauthorized', { detail: { path } }));
     }
   } else if (response.status === 403) {
-    message = 'Access denied: you do not have permission to perform this action.';
+    if (code === 'ACCOUNT_LOCKED') {
+      const minutes = typeof retryAfterSeconds === 'number' && Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0
+        ? Math.ceil(retryAfterSeconds / 60)
+        : null;
+      message = 'Sign-in is temporarily locked after too many failed attempts.';
+      message += minutes !== null
+        ? ` Try again in ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}.`
+        : ' Please try again later.';
+    } else {
+      message = 'Access denied: you do not have permission to perform this action.';
+    }
   } else if (Array.isArray(problem?.message)) {
     message = problem.message.join(', ');
   } else if (typeof problem?.message === 'string' && problem.message.trim() && problem.message !== 'Unauthorized') {
