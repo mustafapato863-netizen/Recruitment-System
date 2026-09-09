@@ -14,6 +14,15 @@ export interface EmailTransport {
   send(input: SendEmailInput): Promise<void>;
 }
 
+/** Transport marker used while production email delivery is intentionally paused. */
+export class DisabledTransport implements EmailTransport {
+  readonly name = 'disabled';
+
+  async send(): Promise<void> {
+    // The worker does not drain while disabled; this is a defensive no-op.
+  }
+}
+
 /** Dev/default transport — renders the email and writes it to stdout so
  *  flows can be verified end-to-end without an SMTP server. */
 export class ConsoleTransport implements EmailTransport {
@@ -77,6 +86,9 @@ export class SmtpTransport implements EmailTransport {
 export function createTransportFromEnv(env: NodeJS.ProcessEnv): EmailTransport {
   const kind = (env.MAIL_TRANSPORT ?? 'console').toLowerCase();
   const baseUrl = normalizeWebUrl(env.APP_WEB_URL ?? 'http://localhost:5173');
+  if (['false', '0'].includes(env.MAIL_DELIVERY_ENABLED?.trim().toLowerCase() ?? 'true')) {
+    return new DisabledTransport();
+  }
   if (kind !== 'console' && kind !== 'smtp') {
     throw new Error(`Unsupported MAIL_TRANSPORT: ${kind}`);
   }

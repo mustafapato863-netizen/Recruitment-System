@@ -18,7 +18,9 @@ EMAIL_OUTBOX_ENCRYPTION_KEY=
 RECRUITFLOW_DOCUMENT_STORAGE_PATH=/data/documents
 RECRUITFLOW_DOCUMENT_STORAGE_PROVIDER=local-private
 RECRUITFLOW_DOCUMENT_BACKUP_PROVIDER=not-configured
-MAIL_TRANSPORT=smtp
+# Set false while email delivery is frozen. Use true with real SMTP settings to enable it.
+MAIL_DELIVERY_ENABLED=false
+MAIL_TRANSPORT=console
 SMTP_HOST=
 SMTP_PORT=587
 SMTP_SECURE=false

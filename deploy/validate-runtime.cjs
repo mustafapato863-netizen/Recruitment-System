@@ -2,6 +2,7 @@
 const env = process.env;
 const errors = [];
 const placeholderPattern = /CHANGE_ME|YOUR[_-]|GENERATE_|REAL_|REPLACE_|DATABASE_HOST|USER:PASSWORD|<|>|\*{3,}/i;
+const mailDeliveryEnabled = env.MAIL_DELIVERY_ENABLED?.trim().toLowerCase();
 if (env.NODE_ENV !== 'production') errors.push('NODE_ENV must be production');
 for (const key of ['DATABASE_URL', 'JWT_ACCESS_SECRET', 'JWT_REFRESH_SECRET', 'SELF_SCHEDULE_SECRET', 'EMAIL_OUTBOX_ENCRYPTION_KEY', 'WEB_ORIGIN', 'APP_WEB_URL']) {
   if (!env[key]?.trim() || placeholderPattern.test(env[key])) errors.push(`${key} must be configured`);
@@ -32,10 +33,12 @@ for (const value of [env.APP_WEB_URL, ...(env.WEB_ORIGIN ?? '').split(',')]) {
 const port = Number(env.PORT ?? 3000);
 if (!Number.isInteger(port) || port < 1 || port > 65535) errors.push('PORT must be between 1 and 65535');
 if (env.RECRUITFLOW_API_PORT || env.VACANCY_CORE_ADAPTER === 'in-memory') errors.push('Remove development port and in-memory adapter overrides');
+if (mailDeliveryEnabled && !['true', 'false', '1', '0'].includes(mailDeliveryEnabled)) errors.push('MAIL_DELIVERY_ENABLED must be true, false, 1, or 0');
 const mailTransport = env.MAIL_TRANSPORT?.trim().toLowerCase();
 if (mailTransport && !['smtp', 'console'].includes(mailTransport)) errors.push('MAIL_TRANSPORT must be smtp or console');
-if (env.NODE_ENV === 'production' && mailTransport !== 'smtp') errors.push('Production workers require MAIL_TRANSPORT=smtp');
-if (mailTransport === 'smtp') {
+const deliveryEnabled = !['false', '0'].includes(mailDeliveryEnabled ?? 'true');
+if (env.NODE_ENV === 'production' && deliveryEnabled && mailTransport !== 'smtp') errors.push('Production workers require MAIL_TRANSPORT=smtp when mail delivery is enabled');
+if (mailTransport === 'smtp' && deliveryEnabled) {
   if (!env.SMTP_HOST?.trim() || placeholderPattern.test(env.SMTP_HOST)) errors.push('SMTP_HOST must be configured when MAIL_TRANSPORT=smtp');
   const smtpPort = Number(env.SMTP_PORT ?? 587);
   if (!Number.isInteger(smtpPort) || smtpPort < 1 || smtpPort > 65535) errors.push('SMTP_PORT must be between 1 and 65535');

@@ -11,6 +11,7 @@ const POLL_INTERVAL_MS = positiveInt(process.env.WORKER_POLL_INTERVAL_MS, 2_000,
 const SWEEPER_INTERVAL_MS = positiveInt(process.env.SWEEPER_INTERVAL_MS, 5 * 60_000, 60 * 60_000);
 const IDLE_DELAY_MS = 250;
 const QUEUE_NAME = 'recruitflow-email-outbox';
+const MAIL_DELIVERY_ENABLED = !['false', '0'].includes(process.env.MAIL_DELIVERY_ENABLED?.trim().toLowerCase() ?? 'true');
 
 const prisma = new PrismaClient();
 const transport = createTransportFromEnv(process.env);
@@ -26,15 +27,15 @@ interface BullRuntime {
 
 async function main(): Promise<void> {
   assertOutboxEncryptionKey();
-  const bullRuntime = await startBullRuntime();
+  const bullRuntime = MAIL_DELIVERY_ENABLED ? await startBullRuntime() : null;
   console.log(
-    `[worker] email outbox drain started — transport=${transport.name}, batch=${BATCH_SIZE}, poll=${POLL_INTERVAL_MS}ms, scheduler=${bullRuntime ? 'bullmq' : 'db-poll-fallback'}`,
+    `[worker] email outbox ${MAIL_DELIVERY_ENABLED ? 'drain started' : 'paused'} — transport=${transport.name}, batch=${BATCH_SIZE}, poll=${POLL_INTERVAL_MS}ms, scheduler=${MAIL_DELIVERY_ENABLED ? (bullRuntime ? 'bullmq' : 'db-poll-fallback') : 'paused'}`,
   );
   console.log(`[worker] sweeper loop started — interval=${SWEEPER_INTERVAL_MS}ms`);
 
   // Run outbox drain and sweeper loops concurrently
   await Promise.all([
-    runPollingFallback(),
+    ...(MAIL_DELIVERY_ENABLED ? [runPollingFallback()] : []),
     runSweeperLoop(),
   ]);
 
@@ -165,4 +166,3 @@ function positiveInt(raw: string | undefined, fallback: number, max: number): nu
   const parsed = Number(raw ?? fallback);
   return Number.isInteger(parsed) ? Math.max(1, Math.min(max, parsed)) : fallback;
 }
-

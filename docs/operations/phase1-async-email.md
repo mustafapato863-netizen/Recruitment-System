@@ -18,10 +18,12 @@ pnpm dev:worker
 
 Development defaults to `MAIL_TRANSPORT=console`, which renders the final
 plain-text message to the worker log. Production must set
-`MAIL_TRANSPORT=smtp`, `SMTP_HOST`, `MAIL_FROM`, `APP_WEB_URL`, and a 32-byte
+`MAIL_DELIVERY_ENABLED=true` together with `MAIL_TRANSPORT=smtp`, `SMTP_HOST`, `MAIL_FROM`, `APP_WEB_URL`, and a 32-byte
 `EMAIL_OUTBOX_ENCRYPTION_KEY`; the API and worker fail fast when the key is
-missing or production is configured with the console sink or invalid SMTP
-settings.
+missing or enabled production delivery has invalid SMTP settings.
+
+Set `MAIL_DELIVERY_ENABLED=false` with `MAIL_TRANSPORT=console` to pause
+outbound delivery during testing; queued rows are retained as Pending.
 
 `WORKER_PROCESSING_LEASE_MS` controls crash recovery. A row left in
 `Processing` beyond this lease is reclaimed as `Pending` until its retry limit

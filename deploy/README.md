@@ -57,7 +57,11 @@ Match `PORT` to the reverse proxy's internal target if overriding 3000.
 Remove local `RECRUITFLOW_API_PORT` overrides. Configure `TRUST_PROXY` for your
 actual private proxy hops; do not expose the backend directly with broad trust.
 
-Worker requires real SMTP settings in production. It can use database polling
+Email delivery is enabled only when `MAIL_DELIVERY_ENABLED=true`; enabled
+production workers require real SMTP settings. Set it to `false` with
+`MAIL_TRANSPORT=console` to freeze outbound mail while keeping in-app
+notifications and recruitment workflows available. Existing outbox rows remain
+pending until delivery is enabled again. The worker can use database polling
 without Redis. Successful process startup does not prove external SMTP delivery;
 verify a controlled invitation after hosting credentials are configured.
 

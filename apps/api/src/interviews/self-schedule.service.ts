@@ -333,7 +333,7 @@ export class SelfScheduleService {
     }
 
     // Enqueue confirmation email with .ics calendar attachment to candidate
-    if (app.candidate?.email) {
+    if (app.candidate?.email && mailDeliveryEnabled()) {
       const icsData = generateIcsCalendar({
         uid: `${created.interviewCode}@recruitflow.sghgroup.sa`,
         title: created.title,
@@ -372,7 +372,9 @@ export class SelfScheduleService {
       interviewCode: created.interviewCode,
       scheduledStart: created.scheduledStart.toISOString(),
       scheduledEnd: created.scheduledEnd.toISOString(),
-      message: 'Interview booked successfully! A calendar invitation has been sent to your email.',
+      message: mailDeliveryEnabled()
+        ? 'Interview booked successfully! A calendar invitation has been sent to your email.'
+        : 'Interview booked successfully. Email delivery is currently paused.',
     };
   }
 
@@ -484,4 +486,8 @@ export class SelfScheduleService {
     });
     return `INT-${year}-${String(seq.lastIssued).padStart(3, '0')}`;
   }
+}
+
+function mailDeliveryEnabled(): boolean {
+  return !['false', '0'].includes(process.env.MAIL_DELIVERY_ENABLED?.trim().toLowerCase() ?? 'true');
 }

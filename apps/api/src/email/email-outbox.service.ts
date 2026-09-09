@@ -35,6 +35,7 @@ export class EmailOutboxService {
   }
 
   async enqueue(input: EnqueueEmailInput): Promise<void> {
+    if (!mailDeliveryEnabled()) return;
     await this.prisma.emailOutbox.create({
       data: {
         organizationId: input.organizationId ?? null,
@@ -53,6 +54,7 @@ export class EmailOutboxService {
     tx: Prisma.TransactionClient,
     input: EnqueueEmailInput,
   ): Promise<void> {
+    if (!mailDeliveryEnabled()) return;
     await tx.emailOutbox.create({
       data: {
         organizationId: input.organizationId ?? null,
@@ -68,6 +70,10 @@ export class EmailOutboxService {
   async countPending(): Promise<number> {
     return this.prisma.emailOutbox.count({ where: { status: 'Pending' } });
   }
+}
+
+function mailDeliveryEnabled(): boolean {
+  return !['false', '0'].includes(process.env.MAIL_DELIVERY_ENABLED?.trim().toLowerCase() ?? 'true');
 }
 
 function maskEmailForLog(email: string): string {
