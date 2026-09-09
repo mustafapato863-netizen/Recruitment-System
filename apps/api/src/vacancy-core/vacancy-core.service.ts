@@ -693,6 +693,7 @@ export class VacancyCoreService {
     await this.repository.ensureUserInOrganization(organizationId, dto.userId);
 
     const assignmentKind = dto.assignmentKind ?? 'PRIMARY';
+    await this.assertAssignmentPermission(id, organizationId, dto, assignmentKind, user);
     await this.prisma.$transaction(async (transaction) => {
       const activeAssignment = await transaction.vacancyAssignment.findFirst({
         where: { vacancyId: id, roleCode: dto.roleCode, assignmentKind, userId: dto.userId, isActive: true },
@@ -736,6 +737,67 @@ export class VacancyCoreService {
     const updated = await this.repository.getVacancy(organizationId, id);
     if (!updated) throw new NotFoundException(`Vacancy ${id} was not found.`);
     return updated;
+  }
+
+  /**
+   * VACANCY_MANAGE remains a backwards-compatible super-capability. Focused
+   * roles must explicitly receive VACANCY_ASSIGN for a first assignment and
+   * VACANCY_REASSIGN for replacing an existing primary owner.
+   */
+  private async assertAssignmentPermission(
+    vacancyId: string,
+    organizationId: string,
+    dto: AssignTeamMemberDto,
+    assignmentKind: string,
+    user?: AuthUser,
+  ): Promise<void> {
+    // Internal callers and the in-memory unit tests do not carry an auth
+    // context. HTTP calls are protected by the global JWT/permission guards.
+    if (!user) return;
+
+    const actor = await this.prisma.user.findUnique({
+      where: { id: user.userId, organizationId, status: 'Active' },
+      select: {
+        userRoles: {
+          where: { role: { status: 'Active' } },
+          select: { role: { select: { permissions: { select: { permission: { select: { code: true } } } } } } },
+        },
+      },
+    });
+    const permissionCodes = new Set(
+      actor?.userRoles.flatMap((userRole) =>
+        userRole.role.permissions.map((rolePermission) => rolePermission.permission.code),
+      ) ?? [],
+    );
+    const canManage = permissionCodes.has('VACANCY_MANAGE');
+    const canAssign = permissionCodes.has('VACANCY_ASSIGN');
+    const canReassign = permissionCodes.has('VACANCY_REASSIGN');
+
+    if (canManage) return;
+
+    if (assignmentKind !== 'PRIMARY') {
+      if (!canAssign) {
+        throw new ForbiddenException('Assigning supporting vacancy members requires VACANCY_ASSIGN permission.');
+      }
+      return;
+    }
+
+    const currentPrimary = await this.prisma.vacancyAssignment.findFirst({
+      where: {
+        vacancyId,
+        roleCode: dto.roleCode,
+        assignmentKind: 'PRIMARY',
+        isActive: true,
+      },
+      select: { userId: true },
+    });
+    const isReassignment = Boolean(currentPrimary && currentPrimary.userId !== dto.userId);
+    if (isReassignment && !canReassign) {
+      throw new ForbiddenException('Reassigning a primary vacancy owner requires VACANCY_REASSIGN permission.');
+    }
+    if (!isReassignment && !canAssign) {
+      throw new ForbiddenException('Assigning a vacancy owner requires VACANCY_ASSIGN permission.');
+    }
   }
 
   async updateVacancy(

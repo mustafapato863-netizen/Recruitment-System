@@ -26,6 +26,7 @@ type MasterDataBatchRow = {
   name: string;
   city?: string | null;
   legalEntityId?: string | null;
+  country?: string | null;
   metadata?: Record<string, unknown> | null;
   status?: string;
   expectedVersion?: number;
@@ -142,9 +143,10 @@ export class MasterDataService {
         category,
         code: branch.code,
         name: branch.name,
+        country: branch.country,
         city: branch.city,
         legalEntityId: branch.legalEntityId,
-        metadata: { legalEntityId: branch.legalEntityId },
+        metadata: { country: branch.country, legalEntityId: branch.legalEntityId },
         status: branch.status,
         version: branch.version,
         createdAt: branch.createdAt.toISOString(),
@@ -197,20 +199,23 @@ export class MasterDataService {
         const status = row.status?.trim() || 'Active';
         if (!['Active', 'Inactive', 'Archived'].includes(status)) throw new BadRequestException(`Invalid status for ${name}.`);
         if (category === 'branches') {
-          if (!row.legalEntityId) throw new BadRequestException(`Branch ${name} must have a legal entity.`);
-          const entity = await tx.legalEntity.findFirst({ where: { id: row.legalEntityId, organizationId } });
-          if (!entity) throw new BadRequestException(`Legal entity for branch ${name} is not in this organization.`);
-          const duplicate = await tx.branch.findFirst({ where: { organizationId, legalEntityId: row.legalEntityId, OR: [
+          const country = this.normalizeBranchCountry(row.country);
+          if (row.legalEntityId) {
+            const entity = await tx.legalEntity.findFirst({ where: { id: row.legalEntityId, organizationId } });
+            if (!entity) throw new BadRequestException(`Legal entity for branch ${name} is not in this organization.`);
+          }
+          const duplicate = await tx.branch.findFirst({ where: { organizationId, OR: [
             ...(row.code?.trim() ? [{ code: row.code.trim() }] : []),
             { name },
           ], ...(row.id ? { id: { not: row.id } } : {}) } });
-          if (duplicate) throw new ConflictException(`Branch code or name already exists for ${entity.name}.`);
+          if (duplicate) throw new ConflictException(`Branch code or name already exists in this organization.`);
           if (row.id) {
             const result = await tx.branch.updateMany({ where: { id: row.id, organizationId, ...(row.expectedVersion === undefined ? {} : { version: row.expectedVersion }) }, data: {
               ...(row.code?.trim() ? { code: row.code.trim() } : {}),
               name,
+              country,
               city: row.city?.trim() || null,
-              legalEntityId: row.legalEntityId,
+              legalEntityId: row.legalEntityId || null,
               status,
               version: { increment: 1 },
             } });
@@ -220,8 +225,9 @@ export class MasterDataService {
             results.push(await this.createBranchInTransaction(tx, organizationId, {
               ...(row.code?.trim() ? { code: row.code.trim() } : {}),
               name,
+              country,
               ...(row.city?.trim() ? { city: row.city.trim() } : {}),
-              legalEntityId: row.legalEntityId,
+              ...(row.legalEntityId ? { legalEntityId: row.legalEntityId } : {}),
             }));
           }
         } else if (category === 'job-titles') {
@@ -479,21 +485,33 @@ export class MasterDataService {
     organizationId: string,
     data: CreateBranchDto,
   ) {
-    const legalEntity = await tx.legalEntity.findFirst({ where: { id: data.legalEntityId, organizationId } });
-    if (!legalEntity) throw new BadRequestException('Legal entity does not belong to this organization.');
+    if (data.legalEntityId) {
+      const legalEntity = await tx.legalEntity.findFirst({ where: { id: data.legalEntityId, organizationId } });
+      if (!legalEntity) throw new BadRequestException('Legal entity does not belong to this organization.');
+    }
     const name = data.name.trim();
     if (!name) throw new BadRequestException('Branch name is required.');
+    const country = this.normalizeBranchCountry(data.country);
     const code = await this.resolveCode(tx, organizationId, 'branch', 'BR', data.code);
     return tx.branch.create({
       data: {
         organizationId,
-        legalEntityId: data.legalEntityId,
+        legalEntityId: data.legalEntityId || null,
         code,
         name,
+        country,
         city: data.city?.trim() || null,
         status: 'Active',
       },
     });
+  }
+
+  private normalizeBranchCountry(country?: string | null): 'EGY' | 'UAE' {
+    const normalized = country?.trim().toUpperCase() || 'EGY';
+    if (normalized !== 'EGY' && normalized !== 'UAE') {
+      throw new BadRequestException('Branch country must be EGY or UAE.');
+    }
+    return normalized;
   }
 
   async createPositionInTransaction(

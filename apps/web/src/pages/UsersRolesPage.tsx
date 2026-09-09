@@ -57,6 +57,11 @@ export interface RlsGovernanceResponse {
 const emptyUserForm = { email: '', displayName: '', password: '', roles: [] as string[] };
 const emptyRoleForm = { name: '', permissionIds: [] as string[], pageKeys: [] as string[] };
 const USER_STATUS_FILTERS = ['', 'Active', 'Suspended'] as const;
+const RECRUITER_HIDDEN_PERMISSION_CODES = new Set(['VACANCY_ASSIGN', 'VACANCY_REASSIGN']);
+
+function isRecruiterRoleName(name: string): boolean {
+  return /\brecruiter\b/i.test(name.trim());
+}
 
 function responseList<T>(response: T[] | { data?: T[] }): T[] {
   return Array.isArray(response) ? response : response.data || [];
@@ -280,11 +285,37 @@ export function UsersRolesPage() {
     return matchesSearch && matchesRole && matchesStatus;
   }), [roleFilter, search, statusFilter, users]);
 
+  const recruiterRoleName = isRecruiterRoleName(roleForm.name);
+  const availableRolePermissions = useMemo(
+    () => rolePermissions.filter((permission) => !(
+      recruiterRoleName && RECRUITER_HIDDEN_PERMISSION_CODES.has(permission.code)
+    )),
+    [recruiterRoleName, rolePermissions],
+  );
+  const availableRolePermissionIds = useMemo(
+    () => new Set(availableRolePermissions.map((permission) => permission.id)),
+    [availableRolePermissions],
+  );
+  const selectedRolePermissionIds = useMemo(
+    () => roleForm.permissionIds.filter((id) => availableRolePermissionIds.has(id)),
+    [availableRolePermissionIds, roleForm.permissionIds],
+  );
+
+  useEffect(() => {
+    if (!recruiterRoleName) return;
+    setRoleForm((current) => {
+      const nextPermissionIds = current.permissionIds.filter((id) => availableRolePermissionIds.has(id));
+      return nextPermissionIds.length === current.permissionIds.length
+        ? current
+        : { ...current, permissionIds: nextPermissionIds };
+    });
+  }, [availableRolePermissionIds, recruiterRoleName]);
+
   const filteredRolePermissions = useMemo(() => {
     const query = permissionSearch.trim().toLowerCase();
-    if (!query) return rolePermissions;
-    return rolePermissions.filter((permission) => `${permission.name} ${permission.code} ${permission.description ?? ''}`.toLowerCase().includes(query));
-  }, [permissionSearch, rolePermissions]);
+    if (!query) return availableRolePermissions;
+    return availableRolePermissions.filter((permission) => `${permission.name} ${permission.code} ${permission.description ?? ''}`.toLowerCase().includes(query));
+  }, [availableRolePermissions, permissionSearch]);
 
   const filteredRoleNavigation = useMemo(() => {
     const query = pageSearch.trim().toLowerCase();
@@ -316,7 +347,7 @@ export function UsersRolesPage() {
     let createdRole: RoleRecord | null = null;
     try {
       createdRole = await fetchApi<RoleRecord>('/roles', { method: 'POST', body: JSON.stringify({ name: roleForm.name }) });
-      await Promise.all(roleForm.permissionIds.map((permissionId) => fetchApi(`/roles/${createdRole?.id}/permissions/${permissionId}`, { method: 'POST' })));
+      await Promise.all(selectedRolePermissionIds.map((permissionId) => fetchApi(`/roles/${createdRole?.id}/permissions/${permissionId}`, { method: 'POST' })));
       await fetchApi(`/access-control/navigation/roles/${encodeURIComponent(createdRole.code)}`, {
         method: 'PUT',
         body: JSON.stringify({
@@ -1001,7 +1032,7 @@ export function UsersRolesPage() {
         maxWidthClass="max-w-6xl"
         footer={(
           <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-[10.5px] leading-relaxed text-rf-ink-muted">{roleForm.permissionIds.length} permissions · {roleForm.pageKeys.length} sidebar pages selected</p>
+            <p className="text-[10.5px] leading-relaxed text-rf-ink-muted">{selectedRolePermissionIds.length} permissions · {roleForm.pageKeys.length} sidebar pages selected</p>
             <div className="flex justify-end gap-2">
               <Button variant="quiet" type="button" onClick={() => setIsRoleOpen(false)}>
                 Cancel
@@ -1065,7 +1096,7 @@ export function UsersRolesPage() {
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="text-base font-bold text-rf-ink">Step 2 · Permissions</h3>
-                    <Badge variant="info">{roleForm.permissionIds.length} selected</Badge>
+                    <Badge variant="info">{selectedRolePermissionIds.length} selected</Badge>
                   </div>
                   <p className="mt-1 text-xs leading-relaxed text-rf-ink-muted">Choose the actions this role can perform. These permissions control real route and API access.</p>
                 </div>
@@ -1074,13 +1105,20 @@ export function UsersRolesPage() {
                   className="shrink-0 text-left text-xs font-semibold text-rf-accent hover:underline sm:text-right"
                   onClick={() => setRoleForm((current) => ({
                     ...current,
-                    permissionIds: current.permissionIds.length === rolePermissions.length ? [] : rolePermissions.map((permission) => permission.id),
+                    permissionIds: selectedRolePermissionIds.length === availableRolePermissions.length
+                      ? []
+                      : availableRolePermissions.map((permission) => permission.id),
                   }))}
-                  disabled={isRoleAccessLoading || rolePermissions.length === 0}
+                  disabled={isRoleAccessLoading || availableRolePermissions.length === 0}
                 >
-                  {roleForm.permissionIds.length === rolePermissions.length && rolePermissions.length > 0 ? 'Clear all' : 'Select all'}
+                  {selectedRolePermissionIds.length === availableRolePermissions.length && availableRolePermissions.length > 0 ? 'Clear all' : 'Select all'}
                 </button>
               </div>
+              {recruiterRoleName && (
+                <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+                  Vacancy assignment and reassignment are hidden for recruiter roles. Use a manager role when the user must own or reassign vacancies.
+                </div>
+              )}
               <div className="mt-4">
                 <Input
                   aria-label="Search permissions"
@@ -1091,7 +1129,7 @@ export function UsersRolesPage() {
               </div>
               {isRoleAccessLoading ? (
                 <p className="py-8 text-center text-xs text-rf-ink-muted">Loading permissions…</p>
-              ) : rolePermissions.length === 0 ? (
+              ) : availableRolePermissions.length === 0 ? (
                 <p className="py-8 text-center text-xs text-rf-ink-muted">No permissions are available.</p>
               ) : filteredRolePermissions.length === 0 ? (
                 <p className="py-8 text-center text-xs text-rf-ink-muted">No permissions match your search.</p>

@@ -32,11 +32,12 @@ async function upsertPosition(tx, orgId, id, code, title, description) {
 }
 
 async function upsertBranch(tx, orgId, legalEntityId, id, code, name, city) {
+  const country = 'UAE';
   const existingById = await tx.branch.findUnique({ where: { id } });
   if (existingById) {
     return tx.branch.update({
       where: { id },
-      data: { code, name, city, status: 'Active' },
+      data: { code, name, city, country, status: 'Active' },
     });
   }
   const existingByCode = await tx.branch.findUnique({
@@ -45,11 +46,11 @@ async function upsertBranch(tx, orgId, legalEntityId, id, code, name, city) {
   if (existingByCode) {
     return tx.branch.update({
       where: { id: existingByCode.id },
-      data: { name, city, status: 'Active' },
+      data: { name, city, country, status: 'Active' },
     });
   }
   return tx.branch.create({
-    data: { id, organizationId: orgId, legalEntityId, code, name, city, status: 'Active' },
+    data: { id, organizationId: orgId, legalEntityId, code, name, city, country, status: 'Active' },
   });
 }
 

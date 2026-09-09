@@ -12,6 +12,7 @@ type CatalogRow = {
   category: CatalogKey;
   code: string | null;
   name: string;
+  country?: string | null;
   city?: string | null;
   legalEntityId?: string | null;
   metadata?: Record<string, unknown> | null;
@@ -27,7 +28,19 @@ type MetadataField = {
   label: string;
   type?: 'text' | 'select';
 };
-type GridField = 'code' | 'name' | 'city' | 'legalEntityId' | 'status' | MetadataField['key'];
+type GridField = 'code' | 'name' | 'country' | 'city' | 'legalEntityId' | 'status' | MetadataField['key'];
+
+const COUNTRY_OPTIONS = [
+  { code: 'EGY', label: 'EGY · Egypt' },
+  { code: 'UAE', label: 'UAE · United Arab Emirates' },
+] as const;
+const CITY_OPTIONS = ['Offshore', 'Dubai', 'Ajman', 'Sharjah', 'Clinics'] as const;
+
+function cityOptions(currentCity: string): string[] {
+  const options = new Set<string>(CITY_OPTIONS);
+  if (currentCity.trim()) options.add(currentCity);
+  return Array.from(options);
+}
 
 const METADATA_FIELDS: Record<CatalogKey, MetadataField[]> = {
   branches: [],
@@ -55,7 +68,7 @@ const TABS: Array<{ key: CatalogKey; label: string }> = [
   { key: 'interview-types', label: 'Interview Types' },
 ];
 
-function displayValue(row: CatalogRow, field: 'code' | 'name' | 'city') {
+function displayValue(row: CatalogRow, field: 'code' | 'name' | 'country' | 'city') {
   return field === 'city' ? row.city || '' : row[field] || '';
 }
 
@@ -75,6 +88,7 @@ function normalizeLegacyCatalogRow(category: CatalogKey, value: Record<string, u
     category,
     code: typeof value.code === 'string' ? value.code : null,
     name: typeof value.name === 'string' ? value.name : title ?? '',
+    country: typeof value.country === 'string' ? value.country : 'EGY',
     city: typeof value.city === 'string' ? value.city : null,
     legalEntityId: typeof value.legalEntityId === 'string' ? value.legalEntityId : null,
     metadata: category === 'job-titles'
@@ -131,7 +145,7 @@ export function MasterDataGridPage() {
     try {
       const requests: [Promise<CatalogRow[]>, Promise<LegalEntityRecord[] | unknown[]>, Promise<Array<{ id: string; name: string; code?: string }> | unknown[]>, Promise<Array<{ id: string; name: string; code?: string }> | unknown[]>] = [
         loadCatalog(selectedCategory),
-        selectedCategory === 'branches' || selectedCategory === 'job-titles' ? fetchApi<LegalEntityRecord[]>('/legal-entities') : Promise.resolve([]),
+        selectedCategory === 'job-titles' ? fetchApi<LegalEntityRecord[]>('/legal-entities') : Promise.resolve([]),
         selectedCategory === 'departments' ? fetchApi<Array<{ id: string; name: string; code?: string }>>('/branches') : Promise.resolve([]),
         selectedCategory === 'job-titles' ? fetchApi<Array<{ id: string; name: string; code?: string }>>('/master-data/catalog/departments') : Promise.resolve([]),
       ];
@@ -140,7 +154,7 @@ export function MasterDataGridPage() {
       const catalog = catalogResult.value;
       setRows(Array.isArray(catalog) ? catalog : []);
       setDirtyIds(new Set());
-      if (selectedCategory === 'branches' || selectedCategory === 'job-titles') {
+      if (selectedCategory === 'job-titles') {
         if (entitiesResult.status === 'fulfilled' && Array.isArray(entitiesResult.value)) setLegalEntities(entitiesResult.value as LegalEntityRecord[]);
         else { setNoticeKind('warning'); setNotice('Reference options could not be loaded. Retry before adding a linked record.'); }
       }
@@ -165,7 +179,7 @@ export function MasterDataGridPage() {
   const visibleRows = useMemo(() => {
     const term = search.trim().toLowerCase();
     if (!term) return rows;
-    return rows.filter((row) => [row.code, row.name, row.city, row.status].some((value) => value?.toLowerCase().includes(term)));
+    return rows.filter((row) => [row.code, row.name, row.country, row.city, row.status].some((value) => value?.toLowerCase().includes(term)));
   }, [rows, search]);
   const pendingRows = rows.filter((row) => row.isNew || dirtyIds.has(row.id));
 
@@ -189,15 +203,15 @@ export function MasterDataGridPage() {
       setError('A maximum of 250 pending rows can be saved at once.');
       return;
     }
-    const entity = legalEntities.find((item) => item.status === 'Active');
     setRows((current) => [...current, {
       id: `new-${Date.now()}-${current.length}`,
       organizationId: user?.organizationId || '',
       category,
       code: null,
       name: '',
+      country: category === 'branches' ? 'EGY' : undefined,
       city: category === 'branches' ? '' : undefined,
-      legalEntityId: category === 'branches' ? entity?.id || null : null,
+      legalEntityId: category === 'job-titles' ? null : undefined,
       metadata: null,
       status: 'Active',
       version: 1,
@@ -214,10 +228,10 @@ export function MasterDataGridPage() {
 
   const save = async () => {
     const pending = rows.filter((row) => row.isNew || dirtyIds.has(row.id));
-    const invalid = pending.find((row) => !row.name.trim() || (category === 'branches' && !row.legalEntityId));
+    const invalid = pending.find((row) => !row.name.trim() || (category === 'branches' && !row.country));
     if (invalid) {
       setErrorKind('save');
-      setError(category === 'branches' ? 'Every branch needs a name and legal entity.' : 'Every pending row needs a name.');
+      setError(category === 'branches' ? 'Every branch needs a name and country.' : 'Every pending row needs a name.');
       return;
     }
     setIsSaving(true);
@@ -230,7 +244,7 @@ export function MasterDataGridPage() {
           ...(row.isNew ? {} : { id: row.id, expectedVersion: row.version }),
           code: row.code?.trim() || null,
           name: row.name.trim(),
-          ...(category === 'branches' ? { city: row.city?.trim() || null, legalEntityId: row.legalEntityId } : {}),
+          ...(category === 'branches' ? { country: row.country?.trim().toUpperCase() || 'EGY', city: row.city?.trim() || null } : {}),
           ...(category === 'job-titles' ? { legalEntityId: row.legalEntityId || null } : {}),
           ...(row.metadata ? { metadata: row.metadata } : {}),
           status: row.status,
@@ -253,7 +267,7 @@ export function MasterDataGridPage() {
     event.preventDefault();
     const values = text.split(/\r?\n/).filter((line) => line.length > 0).map((line) => line.split('\t'));
     const fields: GridField[] = category === 'branches'
-      ? ['code', 'name', 'legalEntityId', 'city', 'status']
+      ? ['code', 'name', 'country', 'city', 'status']
       : ['code', 'name', ...(category === 'job-titles' ? ['legalEntityId' as const] : []), ...METADATA_FIELDS[category].map((field) => field.key as GridField), 'status'];
     const changedIds = new Set<string>();
     const next = [...rows];
@@ -268,8 +282,9 @@ export function MasterDataGridPage() {
           category,
           code: null,
           name: '',
+          country: category === 'branches' ? 'EGY' : undefined,
           city: category === 'branches' ? '' : undefined,
-          legalEntityId: category === 'branches' || category === 'job-titles' ? legalEntities.find((item) => item.status === 'Active')?.id || null : null,
+          legalEntityId: category === 'job-titles' ? legalEntities.find((item) => item.status === 'Active')?.id || null : undefined,
           metadata: null,
           status: 'Active',
           version: 1,
@@ -281,7 +296,7 @@ export function MasterDataGridPage() {
       cells.forEach((value, colOffset) => {
         const field = fields[fields.indexOf(activeCell.field) + colOffset];
         if (!field) return;
-        if (field === 'code' || field === 'name' || field === 'city' || field === 'legalEntityId' || field === 'status') {
+        if (field === 'code' || field === 'name' || field === 'country' || field === 'city' || field === 'legalEntityId' || field === 'status') {
           next[targetIndex] = { ...next[targetIndex], [field]: value.trim() };
         } else {
           next[targetIndex] = {
@@ -316,12 +331,14 @@ export function MasterDataGridPage() {
       {isLoading ? <div className="py-12 text-center text-sm text-rf-ink-muted">Loading Master Data…</div> : visibleRows.length === 0 ? <PageState kind="empty" title="No values configured" description="Add a row to start this category." /> : (
         <div className="mt-3 overflow-x-auto rounded-2xl border border-rf-border-subtle bg-rf-surface">
           <table ref={pasteRef} onPaste={onPaste} className="min-w-[720px] w-full text-left text-xs">
-            <thead className="border-b border-rf-border-subtle bg-rf-surface-subtle text-[10px] font-extrabold uppercase tracking-wider text-rf-ink-muted"><tr><th className="px-3 py-3">Code</th><th className="px-3 py-3">{category === 'job-titles' ? 'Title' : 'Name'}</th>{(category === 'branches' || category === 'job-titles') && <th className="px-3 py-3">Legal Entity</th>}{category === 'branches' && <th className="px-3 py-3">City</th>}{metadataFields.map((field) => <th key={field.key} className="px-3 py-3">{field.label}</th>)}<th className="px-3 py-3">Status</th></tr></thead>
+            <thead className="border-b border-rf-border-subtle bg-rf-surface-subtle text-[10px] font-extrabold uppercase tracking-wider text-rf-ink-muted"><tr><th className="px-3 py-3">Code</th><th className="px-3 py-3">{category === 'job-titles' ? 'Title' : 'Name'}</th>{category === 'job-titles' && <th className="px-3 py-3">Legal Entity</th>}{category === 'branches' && <><th className="px-3 py-3">Country</th><th className="px-3 py-3">City</th></>}{metadataFields.map((field) => <th key={field.key} className="px-3 py-3">{field.label}</th>)}<th className="px-3 py-3">Status</th></tr></thead>
             <tbody className="divide-y divide-rf-border-subtle">
               {visibleRows.map((row) => { const actualIndex = rows.findIndex((item) => item.id === row.id); return <tr key={row.id} className={row.isNew ? 'bg-amber-50/40 dark:bg-amber-950/10' : undefined}>
-                {(['code', 'name'] as const).map((field) => <td key={field} className="px-3 py-2"><Input aria-label={`${field} for ${row.name || 'new row'}`} value={displayValue(row, field)} disabled={!canManage} onFocus={() => setActiveCell({ row: actualIndex, field })} onChange={(event) => updateRow(row.id, { [field]: event.target.value })} placeholder={field === 'code' ? 'Auto' : 'Required'} /></td>)}
-                {(category === 'branches' || category === 'job-titles') && <td className="px-3 py-2"><Select aria-label={`legal entity for ${row.name || 'new row'}`} value={row.legalEntityId || ''} disabled={!canManage} onFocus={() => setActiveCell({ row: actualIndex, field: 'legalEntityId' })} onChange={(event) => updateRow(row.id, { legalEntityId: event.target.value || null })}><option value="">{category === 'branches' ? 'Select legal entity' : 'Any legal entity'}</option>{legalEntities.map((entity) => <option key={entity.id} value={entity.id}>{entity.name} ({entity.code})</option>)}</Select></td>}
-                {category === 'branches' && <td className="px-3 py-2"><Input aria-label={`city for ${row.name || 'new row'}`} value={displayValue(row, 'city')} disabled={!canManage} onFocus={() => setActiveCell({ row: actualIndex, field: 'city' })} onChange={(event) => updateRow(row.id, { city: event.target.value })} /></td>}
+                {(['code'] as const).map((field) => <td key={field} className="px-3 py-2"><Input aria-label={`${field} for ${row.name || 'new row'}`} value={displayValue(row, field)} disabled={!canManage} onFocus={() => setActiveCell({ row: actualIndex, field })} onChange={(event) => updateRow(row.id, { [field]: event.target.value })} placeholder="Auto" /></td>)}
+                <td className="px-3 py-2"><Input aria-label={`name for ${row.name || 'new row'}`} value={displayValue(row, 'name')} disabled={!canManage} onFocus={() => setActiveCell({ row: actualIndex, field: 'name' })} onChange={(event) => updateRow(row.id, { name: event.target.value })} placeholder="Required" /></td>
+                {category === 'job-titles' && <td className="px-3 py-2"><Select aria-label={`legal entity for ${row.name || 'new row'}`} value={row.legalEntityId || ''} disabled={!canManage} onFocus={() => setActiveCell({ row: actualIndex, field: 'legalEntityId' })} onChange={(event) => updateRow(row.id, { legalEntityId: event.target.value || null })}><option value="">Any legal entity</option>{legalEntities.map((entity) => <option key={entity.id} value={entity.id}>{entity.name} ({entity.code})</option>)}</Select></td>}
+                {category === 'branches' && <td className="px-3 py-2"><Select aria-label={`country for ${row.name || 'new row'}`} value={row.country || 'EGY'} disabled={!canManage} onFocus={() => setActiveCell({ row: actualIndex, field: 'country' })} onChange={(event) => updateRow(row.id, { country: event.target.value })}>{COUNTRY_OPTIONS.map((country) => <option key={country.code} value={country.code}>{country.label}</option>)}</Select></td>}
+                {category === 'branches' && <td className="px-3 py-2"><Select aria-label={`city for ${row.name || 'new row'}`} value={row.city || ''} disabled={!canManage} onFocus={() => setActiveCell({ row: actualIndex, field: 'city' })} onChange={(event) => updateRow(row.id, { city: event.target.value || null })}><option value="">Select city</option>{cityOptions(row.city || '').map((city) => <option key={city} value={city}>{city}</option>)}</Select></td>}
                 {metadataFields.map((field) => <td key={field.key} className="px-3 py-2">{field.type === 'select' && field.key === 'branchId' ? <Select aria-label={`${field.label} for ${row.name || 'new row'}`} value={metadataValue(row, field.key)} disabled={!canManage} onChange={(event) => updateMetadata(row.id, field.key, event.target.value)}><option value="">Any branch</option>{branchOptions.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}{branch.code ? ` (${branch.code})` : ''}</option>)}</Select> : field.type === 'select' && field.key === 'departmentId' ? <Select aria-label={`${field.label} for ${row.name || 'new row'}`} value={metadataValue(row, field.key)} disabled={!canManage} onChange={(event) => updateMetadata(row.id, field.key, event.target.value)}><option value="">Any department</option>{departmentOptions.map((department) => <option key={department.id} value={department.id}>{department.name}{department.code ? ` (${department.code})` : ''}</option>)}</Select> : <Input aria-label={`${field.label} for ${row.name || 'new row'}`} value={metadataValue(row, field.key)} disabled={!canManage} onFocus={() => setActiveCell({ row: actualIndex, field: field.key })} onChange={(event) => updateMetadata(row.id, field.key, event.target.value)} placeholder={field.key === 'defaultDuration' ? 'Minutes' : ''} />}</td>)}
                 <td className="px-3 py-2"><Select aria-label={`status for ${row.name || 'new row'}`} value={row.status} disabled={!canManage} onChange={(event) => updateRow(row.id, { status: event.target.value })}><option>Active</option><option>Inactive</option><option>Archived</option></Select></td>
               </tr>; })}

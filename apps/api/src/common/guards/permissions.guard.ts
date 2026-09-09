@@ -4,7 +4,7 @@ import type { CanActivate, ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { PrismaService } from '../../database/prisma.service';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
-import { PERMISSIONS_KEY } from '../decorators/require-permissions.decorator';
+import { ANY_PERMISSIONS_KEY, PERMISSIONS_KEY } from '../decorators/require-permissions.decorator';
 
 /**
  * Guard that checks required permissions and ensures the request tenant matches the
@@ -19,8 +19,12 @@ export class PermissionsGuard implements CanActivate {
       context.getHandler(),
       context.getClass(),
     ]);
+    const anyPermissions = this.reflector.getAllAndOverride<string[]>(ANY_PERMISSIONS_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
 
-    if (!requiredPermissions || requiredPermissions.length === 0) {
+    if ((!requiredPermissions || requiredPermissions.length === 0) && (!anyPermissions || anyPermissions.length === 0)) {
       return true;
     }
 
@@ -62,8 +66,11 @@ export class PermissionsGuard implements CanActivate {
       ur.role.permissions.map((rp) => rp.permission.code),
     );
 
-    const hasAllPermissions = requiredPermissions.every((p) => userPermissions.includes(p));
-    if (!hasAllPermissions) {
+    const hasAllPermissions = (requiredPermissions ?? []).every((p) => userPermissions.includes(p));
+    const hasAnyPermission = !anyPermissions || anyPermissions.length === 0
+      ? true
+      : anyPermissions.some((p) => userPermissions.includes(p));
+    if (!hasAllPermissions || !hasAnyPermission) {
       throw new ForbiddenException('Access denied: insufficient permissions to perform this action');
     }
 

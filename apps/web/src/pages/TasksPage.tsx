@@ -109,7 +109,9 @@ export function TasksPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const isManagerOrAdmin = useMemo(() => {
-    return Boolean(user?.permissions?.includes('VACANCY_MANAGE'));
+    return Boolean(user?.permissions?.some((permission) =>
+      ['VACANCY_MANAGE', 'VACANCY_ASSIGN', 'VACANCY_REASSIGN'].includes(permission),
+    ));
   }, [user?.permissions]);
 
   const showToast = (msg: string) => {

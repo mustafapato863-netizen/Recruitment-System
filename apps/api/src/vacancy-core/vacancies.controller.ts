@@ -19,7 +19,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { TenantScopedGuard } from '../common/guards/tenant-scoped.guard';
 import { TenantResource } from '../common/decorators/tenant-resource.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { RequirePermissions } from '../common/decorators/require-permissions.decorator';
+import { RequireAnyPermissions, RequirePermissions } from '../common/decorators/require-permissions.decorator';
 import { AuditAction } from '../common/decorators/audit-action.decorator';
 
 @UseGuards(JwtAuthGuard)
@@ -90,7 +90,7 @@ export class VacanciesController {
   }
 
   @Post(':id/assignments')
-  @RequirePermissions('VACANCY_MANAGE')
+  @RequireAnyPermissions('VACANCY_MANAGE', 'VACANCY_ASSIGN', 'VACANCY_REASSIGN')
   @AuditAction('VACANCY_ASSIGN_TEAM')
   @UseGuards(TenantScopedGuard)
   @TenantResource({ resource: 'vacancy', param: 'id' })

@@ -199,7 +199,7 @@ function App() {
                   <Route
                     path="/settings/targets"
                     element={
-                      <PermissionGate requiredAnyPermission={['VACANCY_REQUEST_APPROVE', 'USERS_MANAGE', 'VACANCY_MANAGE', 'MASTER_DATA_VIEW']}>
+                      <PermissionGate requiredAnyPermission={['VACANCY_REQUEST_APPROVE', 'USERS_MANAGE', 'VACANCY_MANAGE', 'VACANCY_ASSIGN', 'VACANCY_REASSIGN', 'MASTER_DATA_VIEW']}>
                         <PositionLevelTargetSettingsPage />
                       </PermissionGate>
                     }

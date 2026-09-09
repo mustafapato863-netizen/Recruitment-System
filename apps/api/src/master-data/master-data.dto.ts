@@ -1,4 +1,4 @@
-import { ArrayMaxSize, IsArray, IsInt, IsNotEmpty, IsObject, IsString, IsOptional, IsUUID, MaxLength, ValidateNested } from 'class-validator';
+import { ArrayMaxSize, IsArray, IsIn, IsInt, IsNotEmpty, IsObject, IsString, IsOptional, IsUUID, MaxLength, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CreateOrganizationDto {
@@ -23,8 +23,14 @@ export class CreateLegalEntityDto {
 
 export class CreateBranchDto {
   @IsString()
+  @IsOptional()
   @IsNotEmpty()
-  legalEntityId!: string;
+  legalEntityId?: string;
+
+  @IsString()
+  @IsIn(['EGY', 'UAE'])
+  @IsOptional()
+  country?: string;
 
   @IsString()
   @IsOptional()
@@ -84,6 +90,11 @@ export class MasterDataBatchRowDto {
   @IsOptional()
   @IsUUID()
   legalEntityId?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['EGY', 'UAE'])
+  country?: string | null;
 
   @IsOptional()
   @IsObject()

@@ -334,7 +334,7 @@ export function AppShellInner() {
               {isEmployeeWorkspace ? (
                 <NavigationItem end icon="dashboard" label="Command Center" labelWhenEmployee="My Work" to="/" navigationKey="dashboard" isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
               ) : (
-                <NavigationItem end icon="dashboard" label="Command Center" to="/" navigationKey="dashboard" requiredAnyPermissions={['VACANCY_REQUEST_APPROVE', 'USERS_MANAGE', 'VACANCY_MANAGE', 'MASTER_DATA_VIEW']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+                <NavigationItem end icon="dashboard" label="Command Center" to="/" navigationKey="dashboard" requiredAnyPermissions={['VACANCY_REQUEST_APPROVE', 'USERS_MANAGE', 'VACANCY_MANAGE', 'VACANCY_ASSIGN', 'VACANCY_REASSIGN', 'MASTER_DATA_VIEW']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
               )}
               <NavigationItem icon="file-text" label="Requisitions" to="/vacancy-requests" navigationKey="vacancy-requests" requiredPermission="VACANCY_REQUEST_VIEW" isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
               {!isEmployeeWorkspace && (

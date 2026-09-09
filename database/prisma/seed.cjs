@@ -84,6 +84,7 @@ async function main() {
         legalEntityId: legalEntity.id,
         code: 'HEAD-OFFICE',
         name: 'Head Office',
+        country: 'EGY',
         city: 'Cairo',
       },
     });
@@ -263,6 +264,8 @@ async function main() {
       { code: 'VACANCY_REQUEST_APPROVE', description: 'Approve vacancy requests in the workflow.' },
       { code: 'VACANCY_VIEW', description: 'View vacancies.' },
       { code: 'VACANCY_MANAGE', description: 'Manage vacancies (activate, assign, hold, cancel).' },
+      { code: 'VACANCY_ASSIGN', name: 'Assign vacancy team', description: 'Assign a vacancy to a primary or supporting recruiter.' },
+      { code: 'VACANCY_REASSIGN', name: 'Reassign vacancy team', description: 'Replace the active primary recruiter assigned to a vacancy.' },
       // Users & Roles
       { code: 'USERS_VIEW', description: 'View user list and details.' },
       { code: 'USERS_MANAGE', description: 'Create, edit, and deactivate users.' },
@@ -296,8 +299,8 @@ async function main() {
     for (const p of permSeed) {
       permissions[p.code] = await tx.permission.upsert({
         where: { code: p.code },
-        update: { description: p.description },
-        create: { code: p.code, description: p.description },
+        update: { ...(p.name ? { name: p.name } : {}), description: p.description },
+        create: { code: p.code, ...(p.name ? { name: p.name } : {}), description: p.description },
       });
     }
 
@@ -316,6 +319,7 @@ async function main() {
       TALENT_MANAGER: [
         'VACANCY_REQUEST_VIEW', 'VACANCY_REQUEST_CREATE', 'VACANCY_REQUEST_APPROVE',
         'VACANCY_VIEW', 'VACANCY_MANAGE',
+        'VACANCY_ASSIGN', 'VACANCY_REASSIGN',
         'MASTER_DATA_VIEW',
         'CANDIDATE_VIEW', 'CANDIDATE_CREATE', 'CANDIDATE_EDIT',
         'APPLICATION_VIEW', 'APPLICATION_CREATE', 'APPLICATION_MOVE_STAGE',
@@ -335,6 +339,7 @@ async function main() {
       HR_MANAGER: [
         'VACANCY_REQUEST_VIEW', 'VACANCY_REQUEST_CREATE', 'VACANCY_REQUEST_APPROVE',
         'VACANCY_VIEW', 'VACANCY_MANAGE',
+        'VACANCY_ASSIGN', 'VACANCY_REASSIGN',
         'USERS_VIEW', 'USERS_MANAGE', 'ROLES_VIEW',
         'MASTER_DATA_VIEW', 'MASTER_DATA_MANAGE',
         'AUDIT_VIEW',
@@ -510,6 +515,7 @@ async function main() {
         legalEntityId: legalEntityB.id,
         code: 'ACME-ALEX',
         name: 'Alexandria Medical Branch',
+        country: 'EGY',
         city: 'Alexandria',
       },
     });

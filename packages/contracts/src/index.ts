@@ -546,9 +546,10 @@ export interface LegalEntityRecord {
 export interface BranchRecord {
   id: string;
   organizationId: string;
-  legalEntityId: string;
+  legalEntityId: string | null;
   code: string;
   name: string;
+  country: string;
   city: string | null;
   status: string;
   version?: number;

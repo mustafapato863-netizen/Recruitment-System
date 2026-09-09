@@ -8,7 +8,12 @@ vi.mock('../components/ui/PageFrame', () => ({ PageFrame: ({ children, actions }
 vi.mock('../components/access/AccessPolicyManager', () => ({ AccessPolicyManager: () => null }));
 vi.mock('../components/UserResponsibilityModal', () => ({ UserResponsibilityModal: () => null }));
 vi.mock('../api/client', () => ({ fetchApi: async (path: string) => {
-  if (path === '/roles/permissions') return [{ id: 'p1', code: 'USERS_VIEW', name: 'View users' }, { id: 'p2', code: 'USERS_MANAGE', name: 'Manage users' }];
+  if (path === '/roles/permissions') return [
+    { id: 'p1', code: 'USERS_VIEW', name: 'View users' },
+    { id: 'p2', code: 'USERS_MANAGE', name: 'Manage users' },
+    { id: 'p3', code: 'VACANCY_ASSIGN', name: 'Assign vacancy team' },
+    { id: 'p4', code: 'VACANCY_REASSIGN', name: 'Reassign vacancy team' },
+  ];
   if (path === '/access-control/navigation') return [{ key: 'users', label: 'Users', route: '/users', group: 'Admin', visible: false }, { key: 'roles', label: 'Roles', route: '/roles', group: 'Admin', visible: false }];
   return [];
 } }));
@@ -33,5 +38,19 @@ describe('role selection', () => {
     }
     expect(permission).toBeChecked();
     expect(dialog.getByRole('button', { name: 'Create role' })).toBeVisible();
+  });
+
+  it('hides vacancy assignment permissions when the role is named Recruiter', async () => {
+    const user = userEvent.setup();
+    render(<UsersRolesPage />);
+    await user.click(await screen.findByRole('button', { name: /create role/i }));
+    const dialog = within(screen.getByRole('dialog', { name: 'Create role and access' }));
+
+    expect(dialog.getByRole('checkbox', { name: /Assign vacancy team/ })).toBeVisible();
+    await user.type(dialog.getByRole('textbox', { name: /Role Name/ }), 'Recruiter');
+
+    expect(dialog.queryByRole('checkbox', { name: /Assign vacancy team/ })).not.toBeInTheDocument();
+    expect(dialog.queryByRole('checkbox', { name: /Reassign vacancy team/ })).not.toBeInTheDocument();
+    expect(dialog.getByText(/assignment and reassignment are hidden/i)).toBeVisible();
   });
 });

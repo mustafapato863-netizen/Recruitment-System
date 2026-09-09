@@ -118,12 +118,12 @@ async function main() {
   const duplicateConfirm = await request(`/imports/master-data/legal-entities/jobs/${duplicate.body.jobId}/confirm`, { method: 'POST' });
   assert(duplicateConfirm.response.status === 201 && duplicateConfirm.body.skippedRows === 1, 'Skipped duplicate is not imported or used to overwrite data');
 
-  const branchWorkbook = workbookBuffer('Branches', [{ 'Legal Entity Code': entity.code, Name: `Bulk Branch ${unique}`, City: 'Cairo', Status: 'Active' }]);
+  const branchWorkbook = workbookBuffer('Branches', [{ Name: `Bulk Branch ${unique}`, Country: 'EGY', City: 'Offshore', Status: 'Active' }]);
   const branchUpload = await upload('/imports/master-data/branches/upload', `master-data-branches-${unique}.xlsx`, branchWorkbook);
   assert(branchUpload.response.status === 201, 'Branch workbook staging succeeds');
   cleanup.jobIds.push(branchUpload.body.jobId);
   const branchSummary = await request(`/imports/master-data/branches/jobs/${branchUpload.body.jobId}`);
-  assert(branchSummary.body.validRows === 1 && branchSummary.body.invalidRows === 0, 'Branch workbook resolves its legal-entity foreign key');
+  assert(branchSummary.body.validRows === 1 && branchSummary.body.invalidRows === 0, 'Branch workbook validates country and city without a legal-entity link');
   const branchConfirm = await request(`/imports/master-data/branches/jobs/${branchUpload.body.jobId}/confirm`, { method: 'POST' });
   assert(branchConfirm.response.status === 201 && branchConfirm.body.newRows === 1, 'Branch confirmation creates the staged branch');
   const branch = await prisma.branch.findFirst({ where: { name: `Bulk Branch ${unique}` }, select: { id: true, code: true } });

@@ -87,6 +87,8 @@ describe('BulkImportService', () => {
       const brBuffer = service.template('branches');
       const brWb = XLSX.read(brBuffer, { type: 'buffer' });
       expect(brWb.SheetNames).toContain('Branches');
+      const brRows = XLSX.utils.sheet_to_json<string[]>(brWb.Sheets['Branches'], { header: 1 });
+      expect(brRows[0]).toEqual(['Code', 'Name', 'Country', 'City', 'Status']);
 
       const posBuffer = service.template('positions');
       const posWb = XLSX.read(posBuffer, { type: 'buffer' });

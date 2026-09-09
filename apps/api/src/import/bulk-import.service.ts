@@ -86,10 +86,9 @@ const DATASET_COLUMNS: Record<Dataset, ColumnDefinition[]> = {
     { key: 'status', header: 'Status', aliases: ['entity status'] },
   ],
   branches: [
-    { key: 'legalEntityCode', header: 'Legal Entity Code', aliases: ['entity code', 'legal entity'] , requiredGroup: 'legalEntity' },
-    { key: 'legalEntityName', header: 'Legal Entity Name', aliases: ['entity name'], requiredGroup: 'legalEntity' },
     { key: 'code', header: 'Code', aliases: ['branch code', 'location code'] },
     { key: 'name', header: 'Name', aliases: ['branch name', 'location name'], required: true },
+    { key: 'country', header: 'Country', aliases: ['country code', 'location country'] },
     { key: 'city', header: 'City', aliases: ['location', 'town'] },
     { key: 'status', header: 'Status', aliases: ['branch status'] },
   ],
@@ -400,8 +399,8 @@ export class BulkImportService {
     const allowedStatuses = new Set(['active', 'inactive', 'archived']);
     const entityByCode = new Map(legalEntities.map((item) => [key(item.code), item]));
     const entityByName = new Map(legalEntities.map((item) => [key(item.name), item]));
-    const branchByKey = new Map(branches.map((item) => [`${item.legalEntityId}:${key(item.code)}`, item]));
-    const branchByNameKey = new Map(branches.map((item) => [`${item.legalEntityId}:${key(item.name)}`, item]));
+    const branchByCode = new Map(branches.map((item) => [key(item.code), item]));
+    const branchByName = new Map(branches.map((item) => [key(item.name), item]));
     const positionByCode = new Map(positions.map((item) => [key(item.code), item]));
     const positionByTitle = new Map(positions.map((item) => [`${item.legalEntityId ?? ''}:${key(item.title)}`, item]));
     const seen = new Set<string>();
@@ -437,30 +436,22 @@ export class BulkImportService {
         }
         if (result !== 'Invalid') seen.add(duplicateKey);
       } else {
-        const inputEntityCode = key(row.legalEntityCode);
-        const inputEntityName = key(row.legalEntityName);
-        const entityByInputCode = inputEntityCode ? entityByCode.get(inputEntityCode) : undefined;
-        const entityByInputName = inputEntityName ? entityByName.get(inputEntityName) : undefined;
-        if (dataset === 'branches' && !inputEntityCode && !inputEntityName) setInvalid('Legal Entity Code or Legal Entity Name is required.');
-        if (entityByInputCode && entityByInputName && entityByInputCode.id !== entityByInputName.id) setInvalid('Legal Entity Code and Legal Entity Name refer to different legal entities.');
-        const entity = entityByInputCode ?? entityByInputName;
-        if (result !== 'Invalid' && (inputEntityCode || inputEntityName) && !entity) setInvalid('The legal entity could not be resolved in this organization.');
-        resolvedLegalEntityId = entity?.id ?? null;
-
         if (dataset === 'branches') {
           const name = key(row.name);
           const code = key(row.code);
+          const country = key(row.country).toUpperCase() || 'EGY';
           if (result !== 'Invalid' && !name) setInvalid('Name is required.');
-          if (result !== 'Invalid' && entity) {
-            const existing = (code ? branchByKey.get(`${entity.id}:${code}`) : undefined) ?? branchByNameKey.get(`${entity.id}:${name}`);
-            const duplicateKey = `${entity.id}:${code ? `code:${code}` : `name:${name}`}`;
+          if (result !== 'Invalid' && !['EGY', 'UAE'].includes(country)) setInvalid('Country must be EGY or UAE.');
+          if (result !== 'Invalid') {
+            const existing = (code ? branchByCode.get(code) : undefined) ?? branchByName.get(name);
+            const duplicateKey = code ? `code:${code}` : `name:${name}`;
             if (existing) {
               result = 'Duplicate';
               existingId = existing.id;
-              details = 'A branch with this code or name already exists for the selected legal entity.';
+              details = 'A branch with this code or name already exists in this organization.';
             } else if (seen.has(duplicateKey)) {
               result = 'Duplicate';
-              details = 'This branch appears more than once in the workbook for the selected legal entity.';
+              details = 'This branch appears more than once in the workbook.';
             } else if (!code) {
               result = 'Warning';
               details = 'Code will be generated automatically when this row is imported.';
@@ -468,6 +459,14 @@ export class BulkImportService {
             seen.add(duplicateKey);
           }
         } else {
+          const inputEntityCode = key(row.legalEntityCode);
+          const inputEntityName = key(row.legalEntityName);
+          const entityByInputCode = inputEntityCode ? entityByCode.get(inputEntityCode) : undefined;
+          const entityByInputName = inputEntityName ? entityByName.get(inputEntityName) : undefined;
+          if (entityByInputCode && entityByInputName && entityByInputCode.id !== entityByInputName.id) setInvalid('Legal Entity Code and Legal Entity Name refer to different legal entities.');
+          const entity = entityByInputCode ?? entityByInputName;
+          if (result !== 'Invalid' && (inputEntityCode || inputEntityName) && !entity) setInvalid('The legal entity could not be resolved in this organization.');
+          resolvedLegalEntityId = entity?.id ?? null;
           const title = key(row.title);
           const code = key(row.code);
           if (result !== 'Invalid' && !title) setInvalid('Title is required.');
@@ -742,13 +741,13 @@ export class BulkImportService {
             await tx.candidateImportRow.update({ where: { id: row.id }, data: { details: `Legal entity ${entity.code} created.` } });
           }
         } else if (dataset === 'branches') {
-          const legalEntityId = raw.masterLegalEntityId ? String(raw.masterLegalEntityId) : '';
+          const country = text(raw.country).trim().toUpperCase() || 'EGY';
           if (existingId && row.result === 'Duplicate' && row.decision === 'Update') {
-            await tx.branch.update({ where: { id: existingId }, data: { name: String(raw.name), city: raw.city ? String(raw.city) : null, status } });
+            await tx.branch.update({ where: { id: existingId }, data: { name: String(raw.name), country, city: raw.city ? String(raw.city) : null, status } });
             updated++;
             await tx.candidateImportRow.update({ where: { id: row.id }, data: { details: `Branch ${existingId} updated by recruiter.` } });
           } else {
-            const data: CreateBranchDto = { legalEntityId, name: String(raw.name) };
+            const data: CreateBranchDto = { name: String(raw.name), country };
             if (raw.code) data.code = String(raw.code);
             if (raw.city) data.city = String(raw.city);
             const branch = await this.masterDataService.createBranchInTransaction(tx, organizationId, data);

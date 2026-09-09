@@ -326,7 +326,7 @@ function BulkImportReviewPage({ dataset, jobId }: { dataset: BulkImportDataset; 
     if (dataset === 'candidates') return ['firstName', 'lastName', 'email', 'currentTitle', 'location'];
     if (dataset === 'vacancy-requests') return ['externalVacancyCode', 'positionCode', 'positionTitle', 'branchCode', 'requestedHeadcount'];
     if (dataset === 'legal-entities') return ['code', 'name', 'status'];
-    if (dataset === 'branches') return ['code', 'name', 'legalEntityCode', 'city', 'status'];
+    if (dataset === 'branches') return ['code', 'name', 'country', 'city', 'status'];
     return ['code', 'title', 'legalEntityCode', 'description', 'status'];
   }, [dataset]);
 
