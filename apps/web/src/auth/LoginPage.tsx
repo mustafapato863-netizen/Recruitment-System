@@ -13,7 +13,6 @@ import { BorderGlow } from '../components/ui/BorderGlow';
 import { ThemeToggle } from '../components/ui/ThemeToggle';
 import { SghAnimatedLogo } from '../design-system/brand/sgh-animated-logo';
 import { SghLogo } from '../design-system/brand/sgh-logo';
-import { SghAnimatedLoader } from '../design-system/brand/sgh-animated-loader';
 import { ThinkingDots } from '../design-system/backgrounds/thinking-dots';
 
 type LoginField = 'email' | 'password';
@@ -69,7 +68,6 @@ export function LoginPage() {
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<LoginFieldErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [selectedPersonaEmail, setSelectedPersonaEmail] = useState('');
 
   const { login } = useAuth();
@@ -128,26 +126,21 @@ export function LoginPage() {
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (isSubmitting) return;
     setError('');
 
     if (!validateForm()) return;
 
     setIsSubmitting(true);
-    setIsAuthenticating(true);
 
     try {
-      // Parallelize login with minimum 2-second SGH brand animation
-      await Promise.all([
-        login({
+      await login({
           email: email.trim(),
           password,
-        }),
-        new Promise((resolve) => setTimeout(resolve, 2000)),
-      ]);
+      });
 
       navigate(redirectPath || '/', { replace: true });
     } catch (err) {
-      setIsAuthenticating(false);
 
       const serverFields = getErrorFields(err);
       if (serverFields && Object.keys(serverFields).length > 0) {
@@ -173,15 +166,6 @@ export function LoginPage() {
 
   return (
     <>
-      {isAuthenticating && (
-        <SghAnimatedLoader
-          fullScreen={true}
-          durationMs={2000}
-          textSequence="Saudi German Health"
-          subtitle="Authenticating & Loading Recruitment Workspace..."
-          isDark={isDark}
-        />
-      )}
         <main className="relative isolate min-h-screen overflow-hidden bg-rf-canvas">
         <AtmosphericBackground className="z-0" variant="auth" />
         <div className="pointer-events-none absolute inset-0 z-0 opacity-40">
@@ -327,7 +311,7 @@ export function LoginPage() {
                   </div>
                 )}
 
-                <form className="grid gap-4" noValidate onSubmit={handleSubmit}>
+                <form className="grid gap-4" noValidate onSubmit={handleSubmit} aria-busy={isSubmitting}>
                   <FormField
                     error={fieldErrors.email}
                     id="login-email"
@@ -352,6 +336,7 @@ export function LoginPage() {
                           clearFieldError('email');
                         }}
                         autoComplete="email"
+                        readOnly={isSubmitting}
                         autoCapitalize="none"
                         spellCheck={false}
                         autoFocus
@@ -388,6 +373,7 @@ export function LoginPage() {
                           clearFieldError('password');
                         }}
                         autoComplete="current-password"
+                        readOnly={isSubmitting}
                         aria-describedby={
                           fieldErrors.password
                             ? 'login-password-message'
@@ -437,6 +423,9 @@ export function LoginPage() {
                   >
                     Sign in to RecruitFlow
                   </Button>
+                  <p role="status" className="m-0 min-h-5 text-center text-xs text-rf-ink-muted">
+                    {isSubmitting ? 'Checking your credentials…' : ''}
+                  </p>
                 </form>
 
                 {/* Local development helpers are excluded from production builds. */}
