@@ -53,10 +53,11 @@ export class CandidateBulkImportController {
 
   @Get('template')
   @RequirePermissions('CANDIDATE_VIEW')
-  @Header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-  @Header('Content-Disposition', 'attachment; filename="recruitflow-candidates-template.xlsx"')
   template() {
-    return this.bulkImportService.template(this.dataset);
+    return new StreamableFile(this.bulkImportService.template(this.dataset), {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      disposition: 'attachment; filename="recruitflow-candidates-template.xlsx"',
+    });
   }
 
   @Post('inspect')
@@ -154,10 +155,11 @@ export class VacancyRequestBulkImportController {
 
   @Get('template')
   @RequirePermissions('VACANCY_REQUEST_VIEW')
-  @Header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-  @Header('Content-Disposition', 'attachment; filename="recruitflow-vacancy-requests-template.xlsx"')
   template() {
-    return this.bulkImportService.template(this.dataset);
+    return new StreamableFile(this.bulkImportService.template(this.dataset), {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      disposition: 'attachment; filename="recruitflow-vacancy-requests-template.xlsx"',
+    });
   }
 
   @Post('inspect')
@@ -260,10 +262,12 @@ export class MasterDataBulkImportController {
 
   @Get(':dataset/template')
   @RequirePermissions('MASTER_DATA_VIEW')
-  @Header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-  @Header('Content-Disposition', 'attachment; filename="recruitflow-master-data-template.xlsx"')
   template(@Param('dataset') dataset: string) {
-    return this.bulkImportService.template(this.dataset(dataset));
+    const resolvedDataset = this.dataset(dataset);
+    return new StreamableFile(this.bulkImportService.template(resolvedDataset), {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      disposition: `attachment; filename="recruitflow-${resolvedDataset}-template.xlsx"`,
+    });
   }
 
   @Post(':dataset/inspect')
