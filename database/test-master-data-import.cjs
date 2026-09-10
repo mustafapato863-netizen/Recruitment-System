@@ -73,7 +73,7 @@ async function main() {
     assert((template.response.headers.get('content-type') || '').includes('spreadsheetml'), `${dataset} template is an Excel workbook`);
   }
 
-  const branchWorkbook = workbookBuffer('Branches', [{ Name: `Bulk Branch ${unique}`, Country: 'EGY', City: 'Offshore', Status: 'Active' }]);
+  const branchWorkbook = workbookBuffer('Branches', [{ Name: `Bulk Branch ${unique}`, Country: 'EGY', City: 'Cairo', Status: 'Active' }]);
   const branchUpload = await upload('/imports/master-data/branches/upload', `master-data-branches-${unique}.xlsx`, branchWorkbook);
   assert(branchUpload.response.status === 201, 'Branch workbook staging succeeds');
   cleanup.jobIds.push(branchUpload.body.jobId);

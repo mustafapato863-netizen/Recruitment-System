@@ -15,7 +15,7 @@ import type {
 } from '@recruitflow/contracts';
 import { Prisma } from '@recruitflow/database';
 import type { MasterDataCategory, MasterDataValueRecord } from '@recruitflow/contracts';
-import { catalogKey, normalizeCatalogText, uniqueCatalogNames } from './catalog-normalization';
+import { catalogKey, normalizeBranchCity, normalizeCatalogText, uniqueCatalogNames } from './catalog-normalization';
 
 const CATALOG_CATEGORIES = new Set<MasterDataCategory>(['departments', 'skills', 'candidate-sources', 'interview-types']);
 const SUPPORTED_CATALOGS = new Set(['branches', 'job-titles', ...CATALOG_CATEGORIES]);
@@ -65,7 +65,7 @@ export class MasterDataService {
       where: { organizationId },
       orderBy: { code: 'asc' },
     });
-    return records.map(r => ({ ...r, createdAt: r.createdAt.toISOString(), updatedAt: r.updatedAt.toISOString() }));
+    return records.map(r => ({ ...r, city: normalizeBranchCity(r.city), createdAt: r.createdAt.toISOString(), updatedAt: r.updatedAt.toISOString() }));
   }
 
   async listCatalog(organizationId: string, category: string) {
@@ -79,7 +79,7 @@ export class MasterDataService {
         code: branch.code,
         name: branch.name,
         country: branch.country,
-        city: branch.city,
+        city: normalizeBranchCity(branch.city),
         metadata: { country: branch.country },
         status: branch.status,
         version: branch.version,
@@ -149,18 +149,19 @@ export class MasterDataService {
               ...(row.code?.trim() ? { code: row.code.trim() } : {}),
               name,
               country,
-              city: row.city?.trim() || null,
+              city: normalizeBranchCity(row.city),
               status,
               version: { increment: 1 },
             } });
             if (result.count !== 1) throw new ConflictException(`Branch ${name} changed since it was loaded. Reload before saving.`);
             results.push(await tx.branch.findUniqueOrThrow({ where: { id: row.id } }));
           } else {
+            const city = normalizeBranchCity(row.city);
             results.push(await this.createBranchInTransaction(tx, organizationId, {
               ...(row.code?.trim() ? { code: row.code.trim() } : {}),
               name,
               country,
-              ...(row.city?.trim() ? { city: row.city.trim() } : {}),
+              ...(city ? { city } : {}),
             }));
           }
         } else if (category === 'job-titles') {
@@ -285,7 +286,7 @@ export class MasterDataService {
   async getBranch(organizationId: string, id: string): Promise<BranchRecord> {
     const r = await this.prisma.branch.findFirst({ where: { id, organizationId } });
     if (!r) throw new NotFoundException('Branch not found.');
-    return { ...r, createdAt: r.createdAt.toISOString(), updatedAt: r.updatedAt.toISOString() };
+    return { ...r, city: normalizeBranchCity(r.city), createdAt: r.createdAt.toISOString(), updatedAt: r.updatedAt.toISOString() };
   }
 
   async createBranch(organizationId: string, data: CreateBranchDto): Promise<BranchRecord> {
@@ -298,7 +299,7 @@ export class MasterDataService {
     if (!r) throw new NotFoundException('Branch not found.');
     if (r.status === 'Archived') throw new BadRequestException('Branch is already archived.');
     const updated = await this.prisma.branch.update({ where: { id }, data: { status: 'Archived', version: { increment: 1 } } });
-    return { ...updated, createdAt: updated.createdAt.toISOString(), updatedAt: updated.updatedAt.toISOString() };
+    return { ...updated, city: normalizeBranchCity(updated.city), createdAt: updated.createdAt.toISOString(), updatedAt: updated.updatedAt.toISOString() };
   }
 
   async restoreBranch(organizationId: string, id: string): Promise<BranchRecord> {
@@ -306,7 +307,7 @@ export class MasterDataService {
     if (!r) throw new NotFoundException('Branch not found.');
     if (r.status === 'Active') throw new BadRequestException('Branch is already active.');
     const updated = await this.prisma.branch.update({ where: { id }, data: { status: 'Active', version: { increment: 1 } } });
-    return { ...updated, createdAt: updated.createdAt.toISOString(), updatedAt: updated.updatedAt.toISOString() };
+    return { ...updated, city: normalizeBranchCity(updated.city), createdAt: updated.createdAt.toISOString(), updatedAt: updated.updatedAt.toISOString() };
   }
 
   async deleteBranch(organizationId: string, id: string): Promise<void> {
@@ -468,7 +469,7 @@ export class MasterDataService {
         code,
         name,
         country,
-        city: data.city?.trim() || null,
+        city: normalizeBranchCity(data.city),
         status: 'Active',
       },
     });

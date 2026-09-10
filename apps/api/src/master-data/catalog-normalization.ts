@@ -14,6 +14,13 @@ export function catalogKey(value: string | null | undefined): string {
   return normalizeCatalogText(value).toLocaleLowerCase('en-US');
 }
 
+/** Keep the branch city catalogue consistent after the Offshore label was renamed to Cairo. */
+export function normalizeBranchCity(value: string | null | undefined): string | null {
+  const city = normalizeCatalogText(value);
+  if (!city) return null;
+  return catalogKey(city) === 'offshore' ? 'Cairo' : city;
+}
+
 export function uniqueCatalogNames(values: readonly (string | null | undefined)[]): string[] {
   const seen = new Set<string>();
   const names: string[] = [];

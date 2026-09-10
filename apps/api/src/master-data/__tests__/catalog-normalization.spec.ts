@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { catalogKey, normalizeCatalogText, uniqueCatalogNames } from '../catalog-normalization';
+import { catalogKey, normalizeBranchCity, normalizeCatalogText, uniqueCatalogNames } from '../catalog-normalization';
 import { MasterDataService } from '../master-data.service';
 
 describe('catalog normalization', () => {
@@ -10,6 +10,12 @@ describe('catalog normalization', () => {
   it('uses a case-insensitive key and keeps the first display spelling', () => {
     expect(catalogKey('  ICU ')).toBe('icu');
     expect(uniqueCatalogNames(['ICU', 'icu', ' ICU\u00a0', 'BLS'])).toEqual(['ICU', 'BLS']);
+  });
+
+  it('maps the retired Offshore city label to Cairo', () => {
+    expect(normalizeBranchCity('  offshore ')).toBe('Cairo');
+    expect(normalizeBranchCity('Dubai')).toBe('Dubai');
+    expect(normalizeBranchCity('')).toBeNull();
   });
 
   it('syncs vacancy skills into the organization catalog idempotently', async () => {

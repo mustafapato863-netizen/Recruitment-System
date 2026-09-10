@@ -20,7 +20,7 @@ import { MasterDataService } from '../master-data/master-data.service';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import type { CreateVacancyRequestDto } from '../vacancy-core/vacancy-core.dto';
 import type { CreateBranchDto, CreatePositionDto } from '../master-data/master-data.dto';
-import { catalogKey, normalizeCatalogText } from '../master-data/catalog-normalization';
+import { catalogKey, normalizeBranchCity, normalizeCatalogText } from '../master-data/catalog-normalization';
 import { fileInvalid, fileTooLarge, importInvalid } from '../common/errors/api-error';
 
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
@@ -838,13 +838,14 @@ export class BulkImportService {
         if (dataset === 'branches') {
           const country = text(raw.country).trim().toUpperCase() || 'EGY';
           if (existingId && row.result === 'Duplicate' && row.decision === 'Update') {
-            await tx.branch.update({ where: { id: existingId }, data: { name: String(raw.name), country, city: raw.city ? String(raw.city) : null, status } });
+            await tx.branch.update({ where: { id: existingId }, data: { name: String(raw.name), country, city: normalizeBranchCity(raw.city ? String(raw.city) : null), status } });
             updated++;
             await tx.candidateImportRow.update({ where: { id: row.id }, data: { details: `Branch ${existingId} updated by recruiter.` } });
           } else {
             const data: CreateBranchDto = { name: String(raw.name), country };
             if (raw.code) data.code = String(raw.code);
-            if (raw.city) data.city = String(raw.city);
+            const city = normalizeBranchCity(raw.city ? String(raw.city) : null);
+            if (city) data.city = city;
             const branch = await this.masterDataService.createBranchInTransaction(tx, organizationId, data);
             if (status !== 'Active') await tx.branch.update({ where: { id: branch.id }, data: { status } });
             created++;

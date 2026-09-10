@@ -35,11 +35,17 @@ const COUNTRY_OPTIONS = [
   { code: 'EGY', label: 'EGY · Egypt' },
   { code: 'UAE', label: 'UAE · United Arab Emirates' },
 ] as const;
-const CITY_OPTIONS = ['Offshore', 'Dubai', 'Ajman', 'Sharjah', 'Clinics'] as const;
+const CITY_OPTIONS = ['Cairo', 'Dubai', 'Ajman', 'Sharjah', 'Clinics'] as const;
+
+function normalizeCityLabel(value: string | null | undefined): string {
+  const city = value?.trim() || '';
+  return city.toLocaleLowerCase('en-US') === 'offshore' ? 'Cairo' : city;
+}
 
 function cityOptions(currentCity: string): string[] {
   const options = new Set<string>(CITY_OPTIONS);
-  if (currentCity.trim()) options.add(currentCity);
+  const normalizedCurrentCity = normalizeCityLabel(currentCity);
+  if (normalizedCurrentCity) options.add(normalizedCurrentCity);
   return Array.from(options);
 }
 
@@ -101,7 +107,7 @@ function normalizeLegacyCatalogRow(category: CatalogKey, value: Record<string, u
     code: typeof value.code === 'string' ? value.code : null,
     name: typeof value.name === 'string' ? value.name : title ?? '',
     country: typeof value.country === 'string' ? value.country : 'EGY',
-    city: typeof value.city === 'string' ? value.city : null,
+    city: typeof value.city === 'string' ? normalizeCityLabel(value.city) || null : null,
     metadata: category === 'job-titles'
       ? { ...metadata, description: value.description ?? metadata.description }
       : metadata,
@@ -169,7 +175,9 @@ export function MasterDataGridPage() {
       const [catalogResult, branchesResult, departmentsResult] = await Promise.allSettled(requests);
       if (catalogResult.status === 'rejected') throw catalogResult.reason;
       const catalog = catalogResult.value;
-      setRows(Array.isArray(catalog) ? catalog : []);
+      setRows(Array.isArray(catalog)
+        ? catalog.map((row) => ({ ...row, city: normalizeCityLabel(row.city) || null }))
+        : []);
       setDirtyIds(new Set());
       if (selectedCategory === 'departments') {
         if (branchesResult.status === 'fulfilled' && Array.isArray(branchesResult.value)) setBranchOptions(branchesResult.value as Array<{ id: string; name: string; code?: string }>);
@@ -333,7 +341,7 @@ export function MasterDataGridPage() {
           ...(row.isNew ? {} : { id: row.id, expectedVersion: row.version }),
           code: row.code?.trim() || null,
           name: row.name.trim(),
-          ...(category === 'branches' ? { country: row.country?.trim().toUpperCase() || 'EGY', city: row.city?.trim() || null } : {}),
+          ...(category === 'branches' ? { country: row.country?.trim().toUpperCase() || 'EGY', city: normalizeCityLabel(row.city) || null } : {}),
           ...(row.metadata ? { metadata: row.metadata } : {}),
           status: row.status,
         })) }),
