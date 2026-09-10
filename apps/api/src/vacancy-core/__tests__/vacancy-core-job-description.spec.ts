@@ -67,9 +67,32 @@ describe('VacancyCoreService job description requirements', () => {
     expect(mockRepository.saveVacancy).not.toHaveBeenCalled();
   });
 
-  it('opens and stamps openedAt when a job summary exists', async () => {
+  it('blocks opening when no primary recruiter is assigned', async () => {
     mockRepository.getVacancy.mockResolvedValue(
       buildVacancy({ jobSummary: 'Senior ICU nurse for Jeddah' }),
+    );
+
+    await expect(
+      service.updateVacancyStatus('vac-uuid-1', 'org-uuid-1', 'Open'),
+    ).rejects.toThrow(/assigned primary recruiter/i);
+    expect(mockRepository.saveVacancy).not.toHaveBeenCalled();
+  });
+
+  it('opens and stamps openedAt when a job summary exists', async () => {
+    mockRepository.getVacancy.mockResolvedValue(
+      buildVacancy({
+        jobSummary: 'Senior ICU nurse for Jeddah',
+        assignments: [
+          {
+            id: 'assignment-1',
+            userId: 'user-1',
+            roleCode: 'RECRUITER',
+            assignmentKind: 'PRIMARY',
+            isActive: true,
+            assignedAt: new Date().toISOString(),
+          },
+        ],
+      }),
     );
 
     const result = await service.updateVacancyStatus('vac-uuid-1', 'org-uuid-1', 'Open');

@@ -666,6 +666,12 @@ export class VacancyCoreService {
       );
     }
 
+    if (status === 'Open' && !this.hasPrimaryAssignment(vacancy)) {
+      throw new BadRequestException(
+        `Vacancy ${vacancy.vacancyCode} needs an assigned primary recruiter before it can be opened. Assign the vacancy and try again.`,
+      );
+    }
+
     vacancy.status = status;
     if (status === 'Open' && !vacancy.openedAt) {
       vacancy.openedAt = new Date().toISOString();
@@ -733,6 +739,12 @@ export class VacancyCoreService {
     const updated = await this.repository.getVacancy(organizationId, id);
     if (!updated) throw new NotFoundException(`Vacancy ${id} was not found.`);
     return updated;
+  }
+
+  private hasPrimaryAssignment(vacancy: Pick<Vacancy, 'assignments'>): boolean {
+    return vacancy.assignments?.some(
+      (assignment) => assignment.isActive && (assignment.assignmentKind ?? 'PRIMARY') === 'PRIMARY',
+    ) ?? false;
   }
 
   /**

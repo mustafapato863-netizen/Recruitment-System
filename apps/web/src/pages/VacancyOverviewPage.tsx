@@ -101,12 +101,13 @@ export function VacancyOverviewPage() {
   const handleStatusChange = async (newStatus: VacancyStatus) => {
     if (!id) return;
     try {
-      const updated = await patchApi<VacancyDetailView>(`/vacancies/${id}`, { status: newStatus });
+      const updated = await patchApi<VacancyDetailView>(`/vacancies/${id}/status`, { status: newStatus });
       if (updated) {
         setVacancy(updated);
       }
       showToast(`✓ Requisition status updated to ${newStatus}`);
       setIsActionsDropdownOpen(false);
+      void loadAllData();
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : 'Failed to update status');
     }
@@ -200,6 +201,10 @@ export function VacancyOverviewPage() {
   const departmentName = vacancy?.department || vacancy?.branch?.name || '—';
   const locationText = vacancy?.location || vacancy?.branch?.name || '—';
   const statusLabel = vacancy?.status || '—';
+  const hasPrimaryAssignment = Boolean(vacancy?.assignments?.some((assignment) =>
+    assignment.isActive && (assignment.assignmentKind ?? 'PRIMARY') === 'PRIMARY',
+  ));
+  const isOpenWithoutAssignment = vacancy?.status === 'Open' && !hasPrimaryAssignment;
 
   const vacancyApps = applications;
   const appIds = new Set(applications.map((a) => a.id));
@@ -337,6 +342,12 @@ export function VacancyOverviewPage() {
           <p className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">
             {departmentName} &bull; {locationText} &bull; {vacancy?.vacancyRequest?.employmentType || 'Full-time'} &bull; Created {vacancy?.createdAt ? new Date(vacancy.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
           </p>
+          {isOpenWithoutAssignment && (
+            <p className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-[11px] font-semibold text-amber-800 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-300">
+              <Icon name="alert-triangle" size={12} />
+              Assign a primary recruiter before working on this open vacancy.
+            </p>
+          )}
         </div>
 
         <div className="flex items-center gap-2.5">
@@ -354,7 +365,9 @@ export function VacancyOverviewPage() {
           <button
             type="button"
             onClick={() => setIsAddApplicantModalOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+            disabled={isOpenWithoutAssignment}
+            title={isOpenWithoutAssignment ? 'Assign a primary recruiter before adding candidates' : undefined}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Icon name="plus" size={14} />
             <span>Add Candidate</span>
@@ -419,7 +432,7 @@ export function VacancyOverviewPage() {
                 <div className="px-3.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
                   Change Status
                 </div>
-                {(['Open', 'On Hold', 'Closed'] as VacancyStatus[]).map((st) => (
+                {(['Open', 'On Hold', 'Cancelled'] as VacancyStatus[]).map((st) => (
                   <button
                     key={st}
                     type="button"
@@ -1077,7 +1090,9 @@ export function VacancyOverviewPage() {
                 <button
                   type="button"
                   onClick={() => setIsAddApplicantModalOpen(true)}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+                  disabled={isOpenWithoutAssignment}
+                  title={isOpenWithoutAssignment ? 'Assign a primary recruiter before adding candidates' : undefined}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Icon name="plus" size={13} />
                   <span>Add Candidate</span>
@@ -1189,7 +1204,9 @@ export function VacancyOverviewPage() {
               <button
                 type="button"
                 onClick={() => setIsAddApplicantModalOpen(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+                disabled={isOpenWithoutAssignment}
+                title={isOpenWithoutAssignment ? 'Assign a primary recruiter before adding candidates' : undefined}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Icon name="plus" size={12} />
                 <span>Add Candidate</span>

@@ -102,9 +102,14 @@ export function AddApplicationModal({
         getApi<Vacancy[] | { data: Vacancy[] }>('/vacancies')
           .then((res) => {
             const vList = Array.isArray(res) ? res : (res as unknown as { data: Vacancy[] })?.data || [];
-            setVacancies(vList);
-            if (vList.length > 0 && !selectedVacancyId) {
-              setSelectedVacancyId(vList[0].id);
+            const availableVacancies = vList.filter((vacancy) =>
+              vacancy.status !== 'Open' || vacancy.assignments?.some((assignment) =>
+                assignment.isActive && (assignment.assignmentKind ?? 'PRIMARY') === 'PRIMARY',
+              ),
+            );
+            setVacancies(availableVacancies);
+            if (availableVacancies.length > 0 && !selectedVacancyId) {
+              setSelectedVacancyId(availableVacancies[0].id);
             }
           })
           .catch(() => {

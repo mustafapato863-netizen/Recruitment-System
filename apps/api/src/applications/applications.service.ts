@@ -233,12 +233,26 @@ export class ApplicationsService {
       : { organizationId };
 
     const [vacancy, candidate] = await Promise.all([
-      this.prisma.vacancy.findFirst({ where: { id: dto.vacancyId, ...vacancyVisibility } }),
+      this.prisma.vacancy.findFirst({
+        where: { id: dto.vacancyId, ...vacancyVisibility },
+        include: {
+          assignments: {
+            where: { isActive: true, assignmentKind: 'PRIMARY' },
+            select: { id: true },
+          },
+        },
+      }),
       this.prisma.candidate.findFirst({ where: { id: dto.candidateId, ...candidateVisibility } }),
     ]);
 
     if (!vacancy || vacancy.organizationId !== organizationId) {
       throw new NotFoundException(`Vacancy ${dto.vacancyId} was not found.`);
+    }
+
+    if (vacancy.status === 'Open' && vacancy.assignments.length === 0) {
+      throw new BadRequestException(
+        `Vacancy ${vacancy.vacancyCode} has no assigned primary recruiter. Assign the vacancy before adding candidates.`,
+      );
     }
 
     if (!candidate || candidate.organizationId !== organizationId) {

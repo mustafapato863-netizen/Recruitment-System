@@ -57,6 +57,7 @@ export class PublicJobsService {
       organizationId: organization.id,
       status: 'Open',
       openedAt: { not: null, lte: now },
+      assignments: { some: { isActive: true, assignmentKind: 'PRIMARY' } },
       ...(search
         ? {
             OR: [
@@ -193,6 +194,13 @@ export class PublicJobsService {
               AND v."status" = 'Open'
               AND v."openedAt" IS NOT NULL
               AND v."openedAt" <= CURRENT_TIMESTAMP
+              AND EXISTS (
+                SELECT 1
+                FROM "vacancy_assignments" va
+                WHERE va."vacancyId" = v."id"
+                  AND va."isActive" = TRUE
+                  AND va."assignmentKind" = 'PRIMARY'
+              )
             LIMIT 1
           )
           FOR UPDATE
@@ -371,6 +379,7 @@ export class PublicJobsService {
         vacancyCode: { equals: normalizedCode, mode: 'insensitive' },
         status: 'Open',
         openedAt: { not: null, lte: new Date() },
+        assignments: { some: { isActive: true, assignmentKind: 'PRIMARY' } },
       },
       include: {
         organization: true,
