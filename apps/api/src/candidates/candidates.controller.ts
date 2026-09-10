@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
@@ -161,5 +162,18 @@ export class CandidatesController {
     @Body() body: UpdateCandidateDto,
   ) {
     return this.candidatesService.updateCandidate(tenantId, id, body, user);
+  }
+
+  @Delete(':id')
+  @RequirePermissions('CANDIDATE_DELETE')
+  @AuditAction('CANDIDATE_DELETE')
+  @UseGuards(TenantScopedGuard)
+  @TenantResource({ resource: 'candidate', param: 'id' })
+  async deleteCandidate(
+    @CurrentUser() user: AuthUser,
+    @CurrentTenant() tenantId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.candidatesService.deleteCandidate(tenantId, id, user);
   }
 }

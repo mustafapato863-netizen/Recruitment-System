@@ -1,6 +1,7 @@
 import {
   ConflictException,
   BadRequestException,
+  ForbiddenException,
   HttpException,
   Inject,
   Injectable,
@@ -13,6 +14,10 @@ import type { AuthUser, Candidate, CandidateMetrics, PaginatedResult } from '@re
 import { PrismaService } from '../database/prisma.service';
 import { AccessControlService } from '../access-control/access-control.service';
 import { exportFailed } from '../common/errors/api-error';
+/* DocumentStorageService is a runtime Nest dependency and must remain a value import. */
+/* eslint-disable @typescript-eslint/consistent-type-imports */
+import { DocumentStorageService } from '../documents/document-storage.service';
+/* eslint-enable @typescript-eslint/consistent-type-imports */
 import type {
   CandidateQueryDto,
   CreateCandidateDto,
@@ -23,6 +28,7 @@ import type {
 export class CandidatesService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Optional() private readonly documentStorage?: DocumentStorageService,
     @Optional() @Inject(AccessControlService) private readonly accessControl?: AccessControlService,
   ) {}
 
@@ -379,6 +385,88 @@ export class CandidatesService {
     });
 
     return this.toCandidate(updated, { viewPii: true });
+  }
+
+  /**
+   * Permanently remove a candidate and the recruitment records that only exist
+   * to support that candidate. This operation is deliberately administrator-only
+   * because it bypasses the normal document archive/retention workflow.
+   */
+  async deleteCandidate(organizationId: string, id: string, user: AuthUser): Promise<{ deleted: true; candidateId: string; candidateCode: string }> {
+    if (!user.roleCodes.includes('ADMINISTRATOR')) {
+      throw new ForbiddenException('Only administrators can permanently delete candidate data.');
+    }
+
+    const candidate = await this.prisma.candidate.findFirst({
+      where: { id, organizationId },
+      select: {
+        id: true,
+        candidateCode: true,
+        documents: { select: { storageKey: true } },
+        applications: { select: { id: true } },
+      },
+    });
+
+    if (!candidate) {
+      throw new NotFoundException(`Candidate ${id} was not found.`);
+    }
+
+    const applicationIds = candidate.applications.map((application) => application.id);
+    const storageKeys = candidate.documents.map((document) => document.storageKey);
+
+    await this.prisma.$transaction(async (tx) => {
+      // Candidate activities are stored as entity references rather than foreign keys.
+      await tx.task.deleteMany({
+        where: {
+          organizationId,
+          OR: [
+            { entityType: 'Candidate', entityId: candidate.id },
+            ...(applicationIds.length > 0
+              ? [{ entityType: 'Application', entityId: { in: applicationIds } }]
+              : []),
+          ],
+        },
+      });
+
+      if (applicationIds.length > 0) {
+        const [interviews, offers] = await Promise.all([
+          tx.interview.findMany({ where: { organizationId, applicationId: { in: applicationIds } }, select: { id: true } }),
+          tx.offer.findMany({ where: { organizationId, applicationId: { in: applicationIds } }, select: { id: true } }),
+        ]);
+        const interviewIds = interviews.map((interview) => interview.id);
+        const offerIds = offers.map((offer) => offer.id);
+
+        if (interviewIds.length > 0) {
+          // Scorecards restrict interview deletion; attendees cascade with interviews.
+          await tx.interviewScorecard.deleteMany({ where: { interviewId: { in: interviewIds } } });
+          await tx.interview.deleteMany({ where: { id: { in: interviewIds }, organizationId } });
+        }
+
+        // Hiring cases reference offers restrictively, so remove the case before its offer.
+        await tx.hiringCase.deleteMany({ where: { organizationId, applicationId: { in: applicationIds } } });
+        if (offerIds.length > 0) {
+          await tx.offer.deleteMany({ where: { id: { in: offerIds }, organizationId } });
+        }
+
+        await tx.applicationStatusHistory.deleteMany({ where: { applicationId: { in: applicationIds } } });
+        await tx.applicationNote.deleteMany({ where: { organizationId, applicationId: { in: applicationIds } } });
+        await tx.screeningLog.deleteMany({ where: { organizationId, applicationId: { in: applicationIds } } });
+        await tx.application.deleteMany({ where: { id: { in: applicationIds }, organizationId, candidateId: candidate.id } });
+      }
+
+      await tx.candidateDocument.deleteMany({ where: { organizationId, candidateId: candidate.id } });
+      await tx.talentPoolCandidate.deleteMany({ where: { candidateId: candidate.id } });
+      await tx.candidate.delete({ where: { id: candidate.id } });
+    });
+
+    // Database state is authoritative. Clean up private files after the transaction
+    // so a storage failure cannot leave a partially deleted candidate record.
+    const documentStorage = this.documentStorage;
+    if (documentStorage && storageKeys.length > 0) {
+      await Promise.allSettled(storageKeys.map((storageKey) => documentStorage.remove(storageKey)));
+    }
+
+    return { deleted: true, candidateId: candidate.id, candidateCode: candidate.candidateCode };
   }
 
   private async nextCandidateCode(): Promise<string> {

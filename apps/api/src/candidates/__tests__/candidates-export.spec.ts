@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import * as XLSX from 'xlsx';
 import { CandidatesService } from '../candidates.service';
 import type { PrismaService } from '../../database/prisma.service';
+import type { AuthUser } from '@recruitflow/contracts';
 
 describe('Candidates Export Service', () => {
   const mockCandidates = [
@@ -149,5 +150,24 @@ describe('Candidates Export Service', () => {
         }),
       })
     );
+  });
+
+  it('rejects permanent candidate deletion for non-administrator roles', async () => {
+    const findFirstMock = vi.fn();
+    const mockPrisma = {
+      candidate: { findFirst: findFirstMock },
+    } as unknown as PrismaService;
+    const service = new CandidatesService(mockPrisma);
+    const user: AuthUser = {
+      userId: 'user-1',
+      organizationId: 'org-1',
+      tokenVersion: 1,
+      roleCodes: ['RECRUITER'],
+    };
+
+    await expect(service.deleteCandidate('org-1', 'candidate-1', user)).rejects.toThrow(
+      'Only administrators can permanently delete candidate data.',
+    );
+    expect(findFirstMock).not.toHaveBeenCalled();
   });
 });

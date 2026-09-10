@@ -23,6 +23,7 @@ import {
   type DetailSummaryItem,
 } from '../components/ui';
 import { Icon } from '../components/Icon';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { CandidateWorkspace } from '../components/candidate/CandidateWorkspace';
 import { CandidateActivityPanel } from '../components/candidate/CandidateActivityPanel';
 import {
@@ -30,7 +31,7 @@ import {
   aggregateInterviewScorecards,
   computeInterviewsStats,
 } from '../components/candidate/ScorecardSummary';
-import { getApi, postApi, patchApi } from '../api/client';
+import { getApi, postApi, patchApi, deleteApi } from '../api/client';
 import type {
   Candidate,
   Application,
@@ -40,6 +41,7 @@ import type {
   PaginatedResult,
 } from '@recruitflow/contracts';
 import { useSetBreadcrumbTitle } from '../context/BreadcrumbContext';
+import { useAuth } from '../auth/AuthContext';
 import './PageEnhancementsV2.css';
 
 type TabKey = 'overview' | 'applications' | 'interviews' | 'offers' | 'timeline';
@@ -47,6 +49,11 @@ type TabKey = 'overview' | 'applications' | 'interviews' | 'offers' | 'timeline'
 export function CandidateDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const canDeleteCandidate = Boolean(
+    user?.roles.some((role) => role.code === 'ADMINISTRATOR') &&
+      user?.permissions.includes('CANDIDATE_DELETE'),
+  );
 
   // Core candidate identity state
   const [candidate, setCandidate] = useState<Candidate | null>(null);
@@ -89,6 +96,9 @@ export function CandidateDetailPage() {
   const [newTag, setNewTag] = useState('');
   const [tagSubmitting, setTagSubmitting] = useState(false);
   const [tagError, setTagError] = useState<string | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // ─── Data Loading ────────────────────────────────────────────
 
@@ -264,6 +274,24 @@ export function CandidateDetailPage() {
       setTagError((err as Error).message || 'Failed to add candidate tag.');
     } finally {
       setTagSubmitting(false);
+    }
+  };
+
+  const handleDeleteCandidate = async (): Promise<boolean> => {
+    if (!id || !canDeleteCandidate) return false;
+
+    setDeleteSubmitting(true);
+    setDeleteError(null);
+    try {
+      await deleteApi(`/candidates/${id}`);
+      navigate('/candidates', { replace: true });
+      return true;
+    } catch (err: unknown) {
+      setDeleteError((err as Error).message || 'Failed to delete candidate data.');
+      setIsDeleteDialogOpen(false);
+      return false;
+    } finally {
+      setDeleteSubmitting(false);
     }
   };
 
@@ -448,9 +476,28 @@ export function CandidateDetailPage() {
               Documents
             </Link>
           </Button>
+          {canDeleteCandidate && (
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={() => {
+                setDeleteError(null);
+                setIsDeleteDialogOpen(true);
+              }}
+            >
+              <Icon name="trash" size={13} />
+              Delete candidate
+            </Button>
+          )}
         </>
       }
     >
+      {deleteError && (
+        <Alert tone="danger" title="Candidate deletion failed" className="mb-4">
+          {deleteError}
+        </Alert>
+      )}
+
       {/* Candidate 360 Workspace Header */}
       <CandidateWorkspace
         candidateName={fullName}
@@ -812,6 +859,23 @@ export function CandidateDetailPage() {
           </div>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        isOpen={isDeleteDialogOpen}
+        onClose={() => {
+          if (!deleteSubmitting) setIsDeleteDialogOpen(false);
+        }}
+        onConfirm={async () => {
+          const deleted = await handleDeleteCandidate();
+          if (deleted) setIsDeleteDialogOpen(false);
+        }}
+        title="Permanently delete candidate?"
+        description="This permanently removes the candidate, linked applications, interviews, offers, follow-ups, pool memberships, and uploaded CV files. This cannot be undone."
+        confirmLabel="Delete permanently"
+        tone="danger"
+        icon="trash"
+        isLoading={deleteSubmitting}
+      />
     </PageFrame>
   );
 }

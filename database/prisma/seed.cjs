@@ -260,6 +260,7 @@ async function main() {
       { code: 'CANDIDATE_VIEW', description: 'View candidate profile and list.' },
       { code: 'CANDIDATE_CREATE', description: 'Create candidate records.' },
       { code: 'CANDIDATE_EDIT', description: 'Edit candidate profile details.' },
+      { code: 'CANDIDATE_DELETE', name: 'Delete candidate data', description: 'Permanently delete a candidate and linked test data.' },
       { code: 'APPLICATION_VIEW', description: 'View recruitment applications.' },
       { code: 'APPLICATION_CREATE', description: 'Apply candidate to a vacancy.' },
       { code: 'APPLICATION_MOVE_STAGE', description: 'Advance or move application stage.' },
