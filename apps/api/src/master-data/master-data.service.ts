@@ -228,6 +228,103 @@ export class MasterDataService {
     return { saved: saved.length, data: await this.listCatalog(organizationId, category) };
   }
 
+  async deleteCatalogValue(organizationId: string, category: string, id: string): Promise<{ deleted: true }> {
+    this.assertCatalog(category);
+
+    // Branches and job titles are backed by legacy entities with real foreign
+    // keys, so keep their existing reference checks and error messages.
+    if (category === 'branches') {
+      await this.deleteBranch(organizationId, id);
+      return { deleted: true };
+    }
+    if (category === 'job-titles') {
+      await this.deletePosition(organizationId, id);
+      return { deleted: true };
+    }
+
+    const record = await this.prisma.masterDataValue.findFirst({
+      where: { id, organizationId, category },
+      select: { id: true, name: true, code: true },
+    });
+    if (!record) throw new NotFoundException('Master Data value not found.');
+
+    const references = await this.countCatalogValueReferences(organizationId, category, record.id, record.name, record.code);
+    if (references.total > 0) {
+      const details = Object.entries(references.breakdown)
+        .filter(([, count]) => count > 0)
+        .map(([type, count]) => `${count} ${type}`)
+        .join(', ');
+      throw new ConflictException(`Cannot delete ${category}: referenced by ${details}. Archive it instead.`);
+    }
+
+    await this.prisma.masterDataValue.delete({ where: { id } });
+    return { deleted: true };
+  }
+
+  private async countCatalogValueReferences(
+    organizationId: string,
+    category: MasterDataCategory,
+    id: string,
+    name: string,
+    code: string | null,
+  ) {
+    const values = [name, code].filter((value): value is string => Boolean(value?.trim()));
+    const keys = new Set(values.map((value) => catalogKey(value)));
+
+    if (category === 'departments') {
+      const [vacancies, positions] = await Promise.all([
+        values.length === 0 ? Promise.resolve(0) : this.prisma.vacancy.count({
+          where: {
+            organizationId,
+            OR: values.map((value) => ({ department: { equals: value, mode: 'insensitive' as const } })),
+          },
+        }),
+        this.prisma.position.findMany({ where: { organizationId }, select: { metadata: true } }),
+      ]);
+      const positionReferences = positions.filter((position) => {
+        const metadata = position.metadata as Record<string, unknown> | null;
+        return typeof metadata?.departmentId === 'string' && metadata.departmentId === id;
+      }).length;
+      return { total: vacancies + positionReferences, breakdown: { vacancies, jobTitles: positionReferences } };
+    }
+
+    if (category === 'skills') {
+      const [vacancies, candidates] = await Promise.all([
+        this.prisma.vacancy.findMany({ where: { organizationId }, select: { requiredSkills: true } }),
+        this.prisma.candidate.findMany({ where: { organizationId }, select: { skills: true } }),
+      ]);
+      const vacancyReferences = vacancies.filter((vacancy) => vacancy.requiredSkills.some((skill) => keys.has(catalogKey(skill)))).length;
+      const candidateReferences = candidates.filter((candidate) => candidate.skills.some((skill) => keys.has(catalogKey(skill)))).length;
+      return { total: vacancyReferences + candidateReferences, breakdown: { vacancies: vacancyReferences, candidates: candidateReferences } };
+    }
+
+    if (category === 'candidate-sources') {
+      const [candidates, applications] = await Promise.all([
+        values.length === 0 ? Promise.resolve(0) : this.prisma.candidate.count({
+          where: {
+            organizationId,
+            OR: values.map((value) => ({ source: { equals: value, mode: 'insensitive' as const } })),
+          },
+        }),
+        values.length === 0 ? Promise.resolve(0) : this.prisma.application.count({
+          where: {
+            organizationId,
+            OR: values.map((value) => ({ source: { equals: value, mode: 'insensitive' as const } })),
+          },
+        }),
+      ]);
+      return { total: candidates + applications, breakdown: { candidates, applications } };
+    }
+
+    const interviews = values.length === 0 ? 0 : await this.prisma.interview.count({
+      where: {
+        organizationId,
+        OR: values.map((value) => ({ interviewType: { equals: value, mode: 'insensitive' as const } })),
+      },
+    });
+    return { total: interviews, breakdown: { interviews } };
+  }
+
   /**
    * Ensure vacancy skills are represented by the tenant Skills catalog.
    * The caller must invoke this inside its business transaction so the

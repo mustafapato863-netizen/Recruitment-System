@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ClipboardEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { BulkImportDataset, BulkImportInspectResult, MasterDataCategory } from '@recruitflow/contracts';
-import { ApiError, downloadApi, fetchApi, postFormDataApi } from '../api/client';
+import { ApiError, deleteApi, downloadApi, fetchApi, postFormDataApi } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { Alert, Button, Input, PageFrame, PageState, Select, Tabs } from '../components/ui';
 import { Icon } from '../components/Icon';
 import { saveBlob } from '../utils/download';
@@ -132,6 +133,8 @@ export function MasterDataGridPage() {
   const [isDownloadingTemplate, setIsDownloadingTemplate] = useState(false);
   const [isInspectingWorkbook, setIsInspectingWorkbook] = useState(false);
   const [isStagingWorkbook, setIsStagingWorkbook] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<CatalogRow | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadInspect, setUploadInspect] = useState<BulkImportInspectResult | null>(null);
   const [uploadSheetName, setUploadSheetName] = useState('');
@@ -222,6 +225,54 @@ export function MasterDataGridPage() {
     setRows((current) => current.map((row) => row.id === id
       ? { ...row, metadata: { ...(row.metadata ?? {}), [key]: value } }
       : row));
+  };
+
+  const removeRowLocally = (id: string) => {
+    setRows((current) => current.filter((row) => row.id !== id));
+    setDirtyIds((current) => {
+      const next = new Set(current);
+      next.delete(id);
+      return next;
+    });
+    setActiveCell(null);
+  };
+
+  const requestDelete = (row: CatalogRow) => {
+    if (!canManage || isSaving || isDeleting) return;
+    setError('');
+    setNotice('');
+    if (row.isNew) {
+      removeRowLocally(row.id);
+      setNoticeKind('success');
+      setNotice('Unsaved row removed.');
+      return;
+    }
+    setDeleteTarget(row);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    setError('');
+    try {
+      const path = deleteTarget.category === 'branches'
+        ? `/branches/${deleteTarget.id}`
+        : deleteTarget.category === 'job-titles'
+          ? `/positions/${deleteTarget.id}`
+          : `/master-data/catalog/${deleteTarget.category}/${deleteTarget.id}`;
+      await deleteApi(path);
+      const deletedName = deleteTarget.name || 'Master Data row';
+      removeRowLocally(deleteTarget.id);
+      setDeleteTarget(null);
+      setNoticeKind('success');
+      setNotice(`${deletedName} deleted.`);
+    } catch (err) {
+      setErrorKind('save');
+      setError(err instanceof Error ? err.message : 'Unable to delete this Master Data row.');
+      setDeleteTarget(null);
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const addRow = () => {
@@ -475,7 +526,7 @@ export function MasterDataGridPage() {
       {isLoading ? <div className="py-12 text-center text-sm text-rf-ink-muted">Loading Master Data…</div> : visibleRows.length === 0 ? <PageState kind="empty" title="No values configured" description="Add a row to start this category." /> : (
         <div className="mt-3 overflow-x-auto rounded-2xl border border-rf-border-subtle bg-rf-surface">
           <table ref={pasteRef} onPaste={onPaste} className="min-w-[720px] w-full text-left text-xs">
-            <thead className="border-b border-rf-border-subtle bg-rf-surface-subtle text-[10px] font-extrabold uppercase tracking-wider text-rf-ink-muted"><tr><th className="px-3 py-3">Code</th><th className="px-3 py-3">{category === 'job-titles' ? 'Title' : 'Name'}</th>{category === 'branches' && <><th className="px-3 py-3">Country</th><th className="px-3 py-3">City</th></>}{metadataFields.map((field) => <th key={field.key} className="px-3 py-3">{field.label}</th>)}<th className="px-3 py-3">Status</th></tr></thead>
+            <thead className="border-b border-rf-border-subtle bg-rf-surface-subtle text-[10px] font-extrabold uppercase tracking-wider text-rf-ink-muted"><tr><th className="px-3 py-3">Code</th><th className="px-3 py-3">{category === 'job-titles' ? 'Title' : 'Name'}</th>{category === 'branches' && <><th className="px-3 py-3">Country</th><th className="px-3 py-3">City</th></>}{metadataFields.map((field) => <th key={field.key} className="px-3 py-3">{field.label}</th>)}<th className="px-3 py-3">Status</th>{canManage && <th className="px-3 py-3 text-right">Actions</th>}</tr></thead>
             <tbody className="divide-y divide-rf-border-subtle">
               {visibleRows.map((row) => { const actualIndex = rows.findIndex((item) => item.id === row.id); return <tr key={row.id} className={row.isNew ? 'bg-amber-50/40 dark:bg-amber-950/10' : undefined}>
                 {(['code'] as const).map((field) => <td key={field} className="px-3 py-2"><Input aria-label={`${field} for ${row.name || 'new row'}`} value={displayValue(row, field)} disabled={!canManage} onFocus={() => setActiveCell({ row: actualIndex, field })} onChange={(event) => updateRow(row.id, { [field]: event.target.value })} placeholder="Auto" /></td>)}
@@ -484,12 +535,23 @@ export function MasterDataGridPage() {
                 {category === 'branches' && <td className="px-3 py-2"><Select aria-label={`city for ${row.name || 'new row'}`} value={row.city || ''} disabled={!canManage} onFocus={() => setActiveCell({ row: actualIndex, field: 'city' })} onChange={(event) => updateRow(row.id, { city: event.target.value || null })}><option value="">Select city</option>{cityOptions(row.city || '').map((city) => <option key={city} value={city}>{city}</option>)}</Select></td>}
                 {metadataFields.map((field) => <td key={field.key} className="px-3 py-2">{field.type === 'select' && field.key === 'branchId' ? <Select aria-label={`${field.label} for ${row.name || 'new row'}`} value={metadataValue(row, field.key)} disabled={!canManage} onChange={(event) => updateMetadata(row.id, field.key, event.target.value)}><option value="">Any branch</option>{branchOptions.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}{branch.code ? ` (${branch.code})` : ''}</option>)}</Select> : field.type === 'select' && field.key === 'departmentId' ? <Select aria-label={`${field.label} for ${row.name || 'new row'}`} value={metadataValue(row, field.key)} disabled={!canManage} onChange={(event) => updateMetadata(row.id, field.key, event.target.value)}><option value="">Any department</option>{departmentOptions.map((department) => <option key={department.id} value={department.id}>{department.name}{department.code ? ` (${department.code})` : ''}</option>)}</Select> : <Input aria-label={`${field.label} for ${row.name || 'new row'}`} value={metadataValue(row, field.key)} disabled={!canManage} onFocus={() => setActiveCell({ row: actualIndex, field: field.key })} onChange={(event) => updateMetadata(row.id, field.key, event.target.value)} placeholder={field.key === 'defaultDuration' ? 'Minutes' : ''} />}</td>)}
                 <td className="px-3 py-2"><Select aria-label={`status for ${row.name || 'new row'}`} value={row.status} disabled={!canManage} onChange={(event) => updateRow(row.id, { status: event.target.value })}><option>Active</option><option>Inactive</option><option>Archived</option></Select></td>
+                {canManage && <td className="px-3 py-2 text-right"><Button variant="ghost" size="icon" className="text-rf-danger hover:bg-rf-danger-soft hover:text-rf-danger" aria-label={row.isNew ? `Remove unsaved row ${row.name || 'new row'}` : `Delete ${row.name || 'Master Data row'}`} title={row.isNew ? 'Remove unsaved row' : 'Delete row'} onClick={() => requestDelete(row)} disabled={isSaving || isDeleting}><Icon name="trash" size={15} /></Button></td>}
               </tr>; })}
             </tbody>
           </table>
         </div>
       )}
-      <p className="mt-3 text-[11px] text-rf-ink-muted">Changes remain unsaved until Save Changes. Paste is limited to the visible columns and saves up to 250 rows per transaction. Inactive values stay available on historical records.</p>
+      <p className="mt-3 text-[11px] text-rf-ink-muted">Changes remain unsaved until Save Changes. Paste is limited to the visible columns and saves up to 250 rows per transaction. Referenced values cannot be deleted; archive them instead so historical records stay intact.</p>
+      <ConfirmDialog
+        isOpen={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={confirmDelete}
+        title="Delete Master Data row"
+        description={deleteTarget ? `Delete “${deleteTarget.name}”? This removes the value permanently. Values used by vacancies, candidates, applications, or interviews must be archived instead.` : undefined}
+        confirmLabel="Delete row"
+        tone="danger"
+        isLoading={isDeleting}
+      />
     </PageFrame>
   );
 }

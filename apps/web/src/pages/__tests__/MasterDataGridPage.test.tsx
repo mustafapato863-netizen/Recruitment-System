@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { MasterDataGridPage } from '../MasterDataGridPage';
-import { downloadApi, fetchApi, postFormDataApi } from '../../api/client';
+import { deleteApi, downloadApi, fetchApi, postFormDataApi } from '../../api/client';
 import { saveBlob } from '../../utils/download';
 
 vi.mock('../../api/client', () => ({
@@ -15,6 +15,7 @@ vi.mock('../../api/client', () => ({
     }
   },
   fetchApi: vi.fn(),
+  deleteApi: vi.fn(),
   downloadApi: vi.fn(),
   postFormDataApi: vi.fn(),
 }));
@@ -93,5 +94,42 @@ describe('MasterDataGridPage Excel actions', () => {
       expect(postFormDataApi).toHaveBeenCalledWith('/imports/master-data/branches/upload?sheetName=Branches', expect.any(FormData));
       expect(screen.getByText('Import review route')).toBeInTheDocument();
     });
+  });
+
+  it('removes a new unsaved row without calling the API', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await user.click(screen.getByRole('button', { name: /add row/i }));
+    expect(screen.getByRole('button', { name: /remove unsaved row/i })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /remove unsaved row/i }));
+
+    expect(screen.queryByRole('button', { name: /remove unsaved row/i })).not.toBeInTheDocument();
+    expect(deleteApi).not.toHaveBeenCalled();
+  });
+
+  it('confirms deletion of a saved row and uses the legacy branch endpoint', async () => {
+    const user = userEvent.setup();
+    vi.mocked(fetchApi).mockImplementation((path: string) => {
+      if (path === '/master-data/catalog/branches') {
+        return Promise.resolve([{
+          id: 'branch-1', organizationId: 'org-1', category: 'branches', code: 'BR-1', name: 'Cairo',
+          country: 'EGY', city: 'Cairo', status: 'Active', version: 1,
+        }]);
+      }
+      return Promise.resolve([]);
+    });
+    vi.mocked(deleteApi).mockResolvedValue({ deleted: true });
+    renderPage();
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Delete Cairo' })).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: 'Delete Cairo' }));
+    expect(screen.getAllByText('Delete Master Data row')).toHaveLength(2);
+
+    await user.click(screen.getByRole('button', { name: 'Delete row' }));
+
+    await waitFor(() => expect(deleteApi).toHaveBeenCalledWith('/branches/branch-1'));
+    expect(screen.queryByRole('button', { name: 'Delete Cairo' })).not.toBeInTheDocument();
   });
 });

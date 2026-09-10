@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, UseGuards } from '@nestjs/common';
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { MasterDataBatchDto } from './master-data.dto';
 import { MasterDataService } from './master-data.service';
@@ -29,5 +29,16 @@ export class MasterDataCatalogController {
     @Body() body: MasterDataBatchDto,
   ) {
     return this.masterDataService.saveCatalogBatch(user.organizationId, category, body.rows);
+  }
+
+  @Delete(':category/:id')
+  @RequirePermissions('MASTER_DATA_MANAGE')
+  @AuditAction('MASTER_DATA_VALUE_DELETE')
+  remove(
+    @CurrentUser() user: AuthUser,
+    @Param('category') category: string,
+    @Param('id') id: string,
+  ) {
+    return this.masterDataService.deleteCatalogValue(user.organizationId, category, id);
   }
 }
