@@ -13,7 +13,7 @@ interface CommandCenterPosition {
   department: string;
   location: string;
   workType: string;
-  status: 'Open' | 'On Hold' | 'Draft' | 'Closed';
+  status: 'Open' | 'On Hold' | 'Draft' | 'Closed' | 'Pending Activation' | 'Partially Filled' | 'Filled' | 'Cancelled';
   approvedHeadcount: number;
   joinedHeadcount: number;
   applicationsCount: number;
@@ -64,7 +64,7 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
   const [positions, setPositions] = useState<CommandCenterPosition[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'Open' | 'On Hold' | 'Closed'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'Open' | 'On Hold' | 'Closed'>('Open');
   const [selectedDept, setSelectedDept] = useState('ALL');
   const [onlyMyPositions, setOnlyMyPositions] = useState(false);
   const [viewMode, setViewMode] = useState<'cards' | 'list'>('cards');
@@ -99,6 +99,10 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
           'On Hold': 'On Hold',
           Draft: 'Draft',
           Closed: 'Closed',
+          'Pending Activation': 'Pending Activation',
+          'Partially Filled': 'Partially Filled',
+          Filled: 'Filled',
+          Cancelled: 'Cancelled',
         };
 
         const mapped: CommandCenterPosition[] = rawList.map((v) => {
@@ -127,7 +131,7 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
             department: v.department || v.position?.department || v.branch?.name || 'General',
             location: v.location || v.branch?.name || 'Riyadh Hospital',
             workType: v.workType || 'Full-time',
-            status: (v.status && statusMap[v.status]) ? statusMap[v.status] : 'Open',
+            status: (v.status && statusMap[v.status]) ? statusMap[v.status] : 'Pending Activation',
             approvedHeadcount: v.approvedHeadcount ?? 1,
             joinedHeadcount: v.joinedHeadcount ?? 0,
             applicationsCount: v.applicationsCount ?? v._count?.applications ?? 0,

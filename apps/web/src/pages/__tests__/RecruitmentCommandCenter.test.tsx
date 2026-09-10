@@ -94,11 +94,11 @@ describe('RecruitmentCommandCenter Component', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Senior ICU Specialist')).toBeInTheDocument();
-      expect(screen.getByText('Emergency Medicine Consultant')).toBeInTheDocument();
+      expect(screen.queryByText('Emergency Medicine Consultant')).not.toBeInTheDocument();
     });
 
     expect(screen.getByText('VAC-101')).toBeInTheDocument();
-    expect(screen.getByText('VAC-102')).toBeInTheDocument();
+    expect(screen.queryByText('VAC-102')).not.toBeInTheDocument();
 
     // Check KPI strip
     expect(screen.getByText('Open Requisitions')).toBeInTheDocument();
