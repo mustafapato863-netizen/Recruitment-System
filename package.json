@@ -37,7 +37,9 @@
     "db:validate": "pnpm --dir database prisma:validate",
     "db:migrate:deploy": "pnpm --dir database prisma:migrate:deploy",
     "db:migrate:status": "pnpm --dir database prisma:migrate:status",
-    "db:seed": "pnpm --dir database prisma:seed"
+    "db:seed": "pnpm --dir database prisma:seed",
+    "master-data:seed-v1": "node scripts/seed-v1-master-data.cjs",
+    "master-data:import-vl": "node scripts/import-vl-master-data.cjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

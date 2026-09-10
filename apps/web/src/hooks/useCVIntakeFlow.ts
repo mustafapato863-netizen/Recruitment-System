@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import type { ImportJobSummary, MasterDataValueRecord, PaginatedResult, Vacancy } from '@recruitflow/contracts';
+import type { ImportJobSummary, PaginatedResult, Vacancy } from '@recruitflow/contracts';
 import { calculateCandidateFitScore, type CriteriaBreakdown } from '@recruitflow/validation';
 import { getApi, postApi, postFormDataApi, patchApi, ApiError } from '../api/client';
 import { parseResumeFile, type ExtractedCandidate } from '../utils/resumeParser';
+import { useMasterDataOptions } from './useMasterDataOptions';
+import { CANDIDATE_SOURCE_FALLBACK } from '../data/masterDataDefaults';
 
 export const INTAKE_STEPS = ['Upload', 'Validate & Edit', 'Resolve', 'Confirm'];
 
@@ -45,7 +47,11 @@ export function useCVIntakeFlow(initialTargetVacancy?: string | null) {
   const [targetVacancy, setTargetVacancy] = useState<string>(initialTargetVacancy || '');
   const [targetStage, setTargetStage] = useState<string>('Screening');
   const [candidateSource, setCandidateSource] = useState<string>('CV Intake Upload');
-  const [candidateSourceOptions, setCandidateSourceOptions] = useState<string[]>(['CV Intake Upload']);
+  const { options: candidateSourceCatalogOptions } = useMasterDataOptions('candidate-sources', CANDIDATE_SOURCE_FALLBACK);
+  const candidateSourceOptions = useMemo(
+    () => candidateSourceCatalogOptions.map((option) => option.name),
+    [candidateSourceCatalogOptions],
+  );
   const [vacancies, setVacancies] = useState<Vacancy[]>([]);
 
   // Step 4: Confirmed candidate state
@@ -122,25 +128,16 @@ export function useCVIntakeFlow(initialTargetVacancy?: string | null) {
     }
   }, []);
 
-  const loadCandidateSources = useCallback(async () => {
-    try {
-      const records = await getApi<MasterDataValueRecord[]>('/master-data/catalog/candidate-sources');
-      const names = records
-        .filter((record) => record.status === 'Active')
-        .map((record) => record.name.trim())
-        .filter(Boolean);
-      setCandidateSourceOptions(Array.from(new Set(['CV Intake Upload', ...names])));
-    } catch {
-      // The built-in upload source remains available when catalog access is unavailable.
-      setCandidateSourceOptions(['CV Intake Upload']);
-    }
-  }, []);
-
   useEffect(() => {
     void loadJobs();
     void loadVacancies();
-    void loadCandidateSources();
-  }, [loadJobs, loadVacancies, loadCandidateSources]);
+  }, [loadJobs, loadVacancies]);
+
+  useEffect(() => {
+    if (candidateSourceOptions.length === 0) return;
+    if (candidateSourceOptions.includes(candidateSource)) return;
+    setCandidateSource(candidateSourceOptions[0]);
+  }, [candidateSource, candidateSourceOptions]);
 
   // Compute real-time fit scores for all vacancies against the candidate profile
   const scoredVacancies = useMemo<ScoredVacancy[]>(() => {

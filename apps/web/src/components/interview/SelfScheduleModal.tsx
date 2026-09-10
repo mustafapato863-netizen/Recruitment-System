@@ -3,6 +3,7 @@ import type { Application, InterviewType, GenerateSelfScheduleResult } from '@re
 import { postApi, getApi, ApiError } from '../../api/client';
 import { Modal } from '../Modal';
 import { Icon } from '../Icon';
+import { useInterviewTypeOptions } from '../../hooks/useInterviewTypeOptions';
 
 interface SelfScheduleModalProps {
   isOpen: boolean;
@@ -32,6 +33,7 @@ export function SelfScheduleModal({
   const [selectedInterviewerIds, setSelectedInterviewerIds] = useState<string[]>([]);
   const [meetingLink, setMeetingLink] = useState('');
   const [availableUsers, setAvailableUsers] = useState<OrganizationUser[]>([]);
+  const { options: interviewTypeOptions, isLoading: isLoadingInterviewTypes } = useInterviewTypeOptions();
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -223,15 +225,19 @@ export function SelfScheduleModal({
               </label>
               <select
                 value={interviewType}
-                onChange={(e) => setInterviewType(e.target.value as InterviewType)}
+                onChange={(e) => {
+                  const next = e.target.value as InterviewType;
+                  setInterviewType(next);
+                  const option = interviewTypeOptions.find((item) => item.code === next);
+                  if (option) setDurationMinutes(option.defaultDuration);
+                }}
                 className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
               >
-                <option value="Screening">Screening Round</option>
-                <option value="Technical">Technical &amp; Clinical</option>
-                <option value="Behavioral">Behavioral</option>
-                <option value="Managerial">HOD / Managerial</option>
-                <option value="Executive">Executive Board</option>
+                {interviewTypeOptions.map((option) => (
+                  <option key={option.code} value={option.code}>{option.name}</option>
+                ))}
               </select>
+              {isLoadingInterviewTypes && <p className="mt-1 text-[10px] text-slate-500">Loading interview types from Master Data…</p>}
             </div>
 
             <div>

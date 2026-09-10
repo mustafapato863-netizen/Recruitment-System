@@ -37,20 +37,40 @@ export class AuditService {
       }),
     ]);
 
+    // Audit rows intentionally store the actor ID, while the UI needs a
+    // readable name. Resolve actors in the same organization so this lookup
+    // cannot accidentally disclose a user from another tenant.
+    const actorIds = [
+      ...new Set(
+        data.map((log) => log.actorUserId).filter((id): id is string => Boolean(id)),
+      ),
+    ];
+    const actors = actorIds.length
+      ? await this.prisma.user.findMany({
+          where: { organizationId, id: { in: actorIds } },
+          select: { id: true, displayName: true },
+        })
+      : [];
+    const actorNames = new Map(actors.map((actor) => [actor.id, actor.displayName]));
+
     return {
-      data: data.map(log => ({
-        id: log.id,
-        organizationId: log.organizationId,
-        actorUserId: log.actorUserId,
-        action: log.action,
-        entityType: log.entityType,
-        entityId: log.entityId,
-        result: log.result,
-        reason: log.reason,
-        correlationId: log.correlationId,
-        ipAddress: log.ipAddress,
-        createdAt: log.createdAt.toISOString(),
-      })),
+      data: data.map((log) => {
+        const actorDisplayName = log.actorUserId ? actorNames.get(log.actorUserId) : undefined;
+        return {
+          id: log.id,
+          organizationId: log.organizationId,
+          actorUserId: log.actorUserId,
+          ...(actorDisplayName ? { actorDisplayName } : {}),
+          action: log.action,
+          entityType: log.entityType,
+          entityId: log.entityId,
+          result: log.result,
+          reason: log.reason,
+          correlationId: log.correlationId,
+          ipAddress: log.ipAddress,
+          createdAt: log.createdAt.toISOString(),
+        };
+      }),
       total,
       page,
       pageSize,

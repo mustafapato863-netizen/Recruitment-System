@@ -15,6 +15,8 @@ import {
 import { Icon } from '../components/Icon';
 import { useAuth } from '../auth/AuthContext';
 import { confirmDiscardChanges, useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import { useMasterDataOptions } from '../hooks/useMasterDataOptions';
+import { CANDIDATE_SOURCE_FALLBACK } from '../data/masterDataDefaults';
 import { QuickGuideTrigger } from '../quickguide';
 import './PageEnhancementsV2.css';
 
@@ -59,7 +61,6 @@ export function CandidatesPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
   const [sourceFilter, setSourceFilter] = useState<string>('All');
-  const [masterDataSources, setMasterDataSources] = useState<string[]>([]);
   const [page, setPage] = useState(1);
   const pageSize = 20;
 
@@ -75,6 +76,7 @@ export function CandidatesPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState('');
   const [successFeedback, setSuccessFeedback] = useState('');
+  const { options: candidateSourceOptions } = useMasterDataOptions('candidate-sources', CANDIDATE_SOURCE_FALLBACK);
 
   useEffect(() => {
     if (searchParams.get('create') !== '1') return;
@@ -85,10 +87,10 @@ export function CandidatesPage() {
   }, [canCreateCandidate, searchParams, setSearchParams]);
 
   useEffect(() => {
-    void fetchApi<Array<{ name?: string; status?: string }>>('/master-data/catalog/candidate-sources')
-      .then((records) => setMasterDataSources(records.filter((record) => record.status !== 'Inactive' && record.status !== 'Archived').map((record) => record.name).filter((name): name is string => Boolean(name))))
-      .catch(() => setMasterDataSources([]));
-  }, []);
+    if (candidateSourceOptions.length === 0) return;
+    if (candidateSourceOptions.some((option) => option.name === form.source)) return;
+    setForm((current) => ({ ...current, source: candidateSourceOptions[0].name }));
+  }, [candidateSourceOptions, form.source]);
 
   const isFormDirty = form.firstName !== initialForm.firstName
     || form.lastName !== initialForm.lastName
@@ -219,9 +221,12 @@ export function CandidatesPage() {
   };
 
   const sources = useMemo<string[]>(() => {
-    const list = Array.from(new Set(candidates.map((c) => c.source).filter((s): s is string => Boolean(s))));
+    const list = Array.from(new Set([
+      ...candidateSourceOptions.map((option) => option.name),
+      ...candidates.map((c) => c.source).filter((s): s is string => Boolean(s)),
+    ]));
     return ['All', ...list];
-  }, [candidates]);
+  }, [candidates, candidateSourceOptions]);
 
   const toggleSelectAll = () => {
     if (selectedCandidateIds.length === candidates.length) {
@@ -889,7 +894,7 @@ export function CandidatesPage() {
                   value={form.source}
                   onChange={(e) => setForm({ ...form, source: e.target.value })}
                 >
-                  {Array.from(new Set(['Direct Sourcing', 'LinkedIn', 'Employee Referral', 'Career Portal', 'Agency', 'Walk-in', 'Campus Recruitment', ...masterDataSources])).map((source) => <option key={source} value={source}>{source}</option>)}
+                  {candidateSourceOptions.map((option) => <option key={option.id} value={option.name}>{option.name}</option>)}
                 </Select>
               </FormField>
 

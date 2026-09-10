@@ -361,3 +361,29 @@ Delivery rules:
 | Playwright network-idle timeout | Existing audit matrix | Use bounded visible-page readiness; keep external font loading as a separate hosting check. |
 | Raw CSS budget remains above 225 KiB | Existing global Tailwind entrypoint exports a large shared stylesheet. | Keep the safe visual baseline, verify gzip at Nginx, and track route-safe CSS code-splitting as a separate performance phase. |
 | Application search/filtering still runs over the complete client working set | The Kanban/list surface needs all stage columns available at once. | Corrected the silent first-page truncation by fetching until the server total is covered; move to per-column/server-filtered queries when record volume requires it. |
+
+## Dynamic Master Data and VL catalog synchronization — 2026-09-10
+
+Goal: implement the approved Master Data plan using the actual VL workbook, make skills synchronize automatically when Job Positions requirements are saved, and make Candidate Sources and Interview Types catalog-driven.
+
+- [x] Audit current catalog, vacancy, interview, candidate-source and import paths while preserving the existing Audit changes.
+- [x] Add normalized, idempotent workbook import for Departments and Job Titles with reviewable mappings; do not seed or reset production data.
+- [x] Synchronize required vacancy skills into the tenant Skills catalog transactionally and remove frontend hardcoded skill suggestions.
+- [x] Seed the approved V1 Candidate Sources and Interview Types through a repeatable script and load them dynamically in all relevant UI forms.
+- [x] Add focused API/UI regression coverage, run typecheck, lint, tests, builds, migration validation and diff review.
+- [x] Apply the data scripts to the explicitly selected local test organization; reruns remain idempotent and preserve existing records.
+
+### Dynamic Master Data errors encountered
+
+| Error | Attempt | Resolution |
+|---|---|---|
+| None yet | — | — |
+
+Implementation status (2026-09-10):
+- [x] Audited current API/UI paths and confirmed the missing synchronization/hardcoded selectors.
+- [x] Added transactional skill catalog synchronization and case-insensitive duplicate protection.
+- [x] Added catalog-backed recruiter selectors for skills, branches, candidate sources, and interview types.
+- [x] Added dry-run-first VL importer and V1 source/type seed scripts.
+- [x] Extended the Positions upload flow to accept Rowdata headers, create missing departments once, and expose correct Update/Skip decisions for duplicates.
+- [x] Ran typecheck, lint, Prisma validation/migration status, API tests, web tests, production builds, bundle checks, and importer dry runs.
+- [x] Applied scripts to an explicitly selected local test organization; no production database was modified.

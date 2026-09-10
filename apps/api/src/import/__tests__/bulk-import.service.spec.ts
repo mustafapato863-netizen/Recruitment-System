@@ -11,6 +11,7 @@ describe('BulkImportService', () => {
     candidate: { findMany: vi.fn() },
     branch: { findMany: vi.fn() },
     position: { findMany: vi.fn() },
+    masterDataValue: { findMany: vi.fn() },
     legalEntity: { findMany: vi.fn() },
     user: { findMany: vi.fn() },
     vacancy: { findMany: vi.fn() },
@@ -165,6 +166,49 @@ describe('BulkImportService', () => {
       const result = service.inspect('candidates', buffer, 'candidates.xlsx');
       expect(result.warnings.length).toBe(0);
       expect(result.sheets[0].rowCount).toBe(1);
+    });
+
+    it('accepts the VL Rowdata position and department headers', () => {
+      const service = createService();
+      const workbook = XLSX.utils.book_new();
+      const sheet = XLSX.utils.aoa_to_sheet([
+        ['Position', 'Department Name', 'Level', 'Entity', 'Type', 'Status'],
+        ['Registered Nurse', 'Clinical Operations', 'L3', 'Egypt', 'Full Time', 'Active'],
+      ]);
+      XLSX.utils.book_append_sheet(workbook, sheet, 'Rowdata');
+      const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+
+      const result = service.inspect('positions', buffer, 'VL.xlsx', 'Rowdata');
+
+      expect(result.requiredColumns).toEqual(['Title']);
+      expect(result.warnings).toEqual([]);
+      expect(result.sheets[0].name).toBe('Rowdata');
+    });
+
+    it('marks repeated Rowdata titles as duplicates before confirmation', async () => {
+      mockPrisma.legalEntity.findMany = vi.fn().mockResolvedValue([]);
+      mockPrisma.branch.findMany = vi.fn().mockResolvedValue([]);
+      mockPrisma.position.findMany = vi.fn().mockResolvedValue([]);
+      mockPrisma.masterDataValue.findMany = vi.fn().mockResolvedValue([]);
+      mockPrisma.candidateImportJob.create = vi.fn().mockResolvedValue({
+        id: 'job-rowdata', fileName: 'VL.xlsx', dataset: 'positions', sourceFormat: 'xlsx', sheetName: 'Rowdata', status: 'Review',
+        totalRows: 2, validRows: 1, invalidRows: 0, duplicateRows: 1, newRows: 0, updateRows: 0, createdAt: new Date('2026-09-10T00:00:00Z'),
+      });
+      const workbook = XLSX.utils.book_new();
+      const sheet = XLSX.utils.aoa_to_sheet([
+        ['Position', 'Department Name', 'Status'],
+        ['Registered Nurse', 'Clinical Operations', 'hold'],
+        [' registered  nurse ', 'Clinical Operations', 'Sourcing'],
+      ]);
+      XLSX.utils.book_append_sheet(workbook, sheet, 'Rowdata');
+      const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+
+      await createService().createJob('org-1', 'user-1', 'positions', buffer, 'VL.xlsx', 'Rowdata');
+
+      const createCall = vi.mocked(mockPrisma.candidateImportJob.create).mock.calls[0]?.[0];
+      const stagedRows = createCall?.data.rows?.createMany?.data as Array<{ result: string; details: string | null }>;
+      expect(stagedRows.map((row) => row.result)).toEqual(['Warning', 'Duplicate']);
+      expect(stagedRows[1].details).toMatch(/more than once/i);
     });
   });
 

@@ -8,6 +8,8 @@ import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { Alert } from '../ui/Alert';
 import { Icon } from '../Icon';
+import { useMasterDataOptions } from '../../hooks/useMasterDataOptions';
+import { CANDIDATE_SOURCE_FALLBACK } from '../../data/masterDataDefaults';
 
 export interface AddApplicationModalProps {
   isOpen: boolean;
@@ -16,17 +18,6 @@ export interface AddApplicationModalProps {
   preselectedVacancyTitle?: string | null;
   onSuccess: (newApp: Application) => void;
 }
-
-const SOURCE_OPTIONS = [
-  'LinkedIn',
-  'Referral',
-  'Career Site',
-  'Direct Sourcing',
-  'Agency',
-  'Internal Transfer',
-  'Walk-in',
-  'Other',
-];
 
 export function AddApplicationModal({
   isOpen,
@@ -64,6 +55,13 @@ export function AddApplicationModal({
   // Submission & Error State
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const { options: candidateSourceOptions } = useMasterDataOptions('candidate-sources', CANDIDATE_SOURCE_FALLBACK);
+
+  useEffect(() => {
+    if (candidateSourceOptions.length === 0) return;
+    if (candidateSourceOptions.some((option) => option.name === source)) return;
+    setSource(candidateSourceOptions[0].name);
+  }, [candidateSourceOptions, source]);
 
   // Reset form when modal opens or vacancy changes
   useEffect(() => {
@@ -77,7 +75,7 @@ export function AddApplicationModal({
       setNewPhone('');
       setNewCurrentTitle('');
       setSelectedVacancyId(preselectedVacancyId || '');
-      setSource('LinkedIn');
+      setSource(candidateSourceOptions[0]?.name || CANDIDATE_SOURCE_FALLBACK[0]);
       setInitialNote('');
       setErrorMessage(null);
 
@@ -484,9 +482,9 @@ export function AddApplicationModal({
               onChange={(e) => setSource(e.target.value)}
               className="text-xs"
             >
-              {SOURCE_OPTIONS.map((opt) => (
-                <option key={opt} value={opt}>
-                  {opt}
+              {candidateSourceOptions.map((option) => (
+                <option key={option.id} value={option.name}>
+                  {option.name}
                 </option>
               ))}
             </Select>

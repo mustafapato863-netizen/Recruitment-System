@@ -2,6 +2,7 @@ import React from 'react';
 import { Modal } from '../Modal';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
+import { useInterviewTypeOptions } from '../../hooks/useInterviewTypeOptions';
 
 interface ScheduleInterviewModalProps {
   isOpen: boolean;
@@ -38,6 +39,8 @@ export const ScheduleInterviewModal: React.FC<ScheduleInterviewModalProps> = ({
   isSubmitting,
   onSubmit,
 }) => {
+  const { options: interviewTypeOptions, isLoading: isLoadingInterviewTypes } = useInterviewTypeOptions();
+
   return (
     <Modal
       isOpen={isOpen}
@@ -77,12 +80,11 @@ export const ScheduleInterviewModal: React.FC<ScheduleInterviewModalProps> = ({
             }
             disabled={isSubmitting}
           >
-            <option value="Screening">Screening Call</option>
-            <option value="Technical">Technical Interview</option>
-            <option value="Behavioral">Behavioral / HR Interview</option>
-            <option value="Managerial">Hiring Manager Interview</option>
-            <option value="Executive">Executive / Final Panel</option>
+            {interviewTypeOptions.map((option) => (
+              <option key={option.code} value={option.code}>{option.name}</option>
+            ))}
           </Select>
+          {isLoadingInterviewTypes && <p className="mt-1 text-[10px] text-slate-500">Loading interview types from Master Data…</p>}
         </div>
         <div>
           <label className="font-bold block mb-1">Date &amp; Time (Arabia Standard Time • AST)</label>

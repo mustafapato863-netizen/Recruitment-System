@@ -20,6 +20,7 @@ import { MasterDataService } from '../master-data/master-data.service';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import type { CreateVacancyRequestDto } from '../vacancy-core/vacancy-core.dto';
 import type { CreateBranchDto, CreateLegalEntityDto, CreatePositionDto } from '../master-data/master-data.dto';
+import { catalogKey, normalizeCatalogText } from '../master-data/catalog-normalization';
 import { fileInvalid, fileTooLarge, importInvalid } from '../common/errors/api-error';
 
 const MAX_FILE_SIZE = 25 * 1024 * 1024;
@@ -94,10 +95,14 @@ const DATASET_COLUMNS: Record<Dataset, ColumnDefinition[]> = {
   ],
   positions: [
     { key: 'code', header: 'Code', aliases: ['position code', 'job code'] },
-    { key: 'title', header: 'Title', aliases: ['position title', 'job title', 'role'], required: true },
+    { key: 'title', header: 'Title', aliases: ['position', 'position title', 'job title', 'role'], required: true },
     { key: 'description', header: 'Description', aliases: ['details', 'notes'] },
     { key: 'legalEntityCode', header: 'Legal Entity Code', aliases: ['entity code', 'legal entity'] },
-    { key: 'legalEntityName', header: 'Legal Entity Name', aliases: ['entity name'] },
+    { key: 'legalEntityName', header: 'Legal Entity Name', aliases: ['entity name', 'legal entity name'] },
+    { key: 'departmentName', header: 'Department Name', aliases: ['department', 'department name', 'function'] },
+    { key: 'level', header: 'Level', aliases: ['grade', 'job level'] },
+    { key: 'entity', header: 'Entity', aliases: ['business entity', 'operating entity'] },
+    { key: 'type', header: 'Type', aliases: ['position type', 'employment type'] },
     { key: 'status', header: 'Status', aliases: ['position status'] },
   ],
 };
@@ -121,6 +126,10 @@ function scalar(value: unknown): string | number | boolean | null {
 function text(value: unknown): string {
   const valueAsScalar = scalar(value);
   return valueAsScalar === null ? '' : String(valueAsScalar).trim();
+}
+
+function normalizedName(value: unknown): string {
+  return normalizeCatalogText(text(value));
 }
 
 function normalizePhone(value: unknown): string {
@@ -390,20 +399,26 @@ export class BulkImportService {
   }
 
   private async validateMasterDataRows(organizationId: string, dataset: Extract<Dataset, 'legal-entities' | 'branches' | 'positions'>, rows: RawRow[]): Promise<{ rows: RawRow[]; counts: { valid: number; invalid: number; duplicate: number } }> {
-    const [legalEntities, branches, positions] = await Promise.all([
+    const [legalEntities, branches, positions, departments] = await Promise.all([
       this.prisma.legalEntity.findMany({ where: { organizationId }, select: { id: true, code: true, name: true, status: true } }),
       this.prisma.branch.findMany({ where: { organizationId }, select: { id: true, legalEntityId: true, code: true, name: true, status: true } }),
-      this.prisma.position.findMany({ where: { organizationId }, select: { id: true, legalEntityId: true, code: true, title: true, status: true } }),
+      this.prisma.position.findMany({ where: { organizationId }, select: { id: true, legalEntityId: true, code: true, title: true, status: true, metadata: true } }),
+      this.prisma.masterDataValue.findMany({ where: { organizationId, category: 'departments' }, select: { id: true, name: true, status: true } }),
     ]);
-    const key = (value: unknown) => text(value).trim().toLowerCase();
+    const key = (value: unknown) => catalogKey(normalizedName(value));
     const allowedStatuses = new Set(['active', 'inactive', 'archived']);
     const entityByCode = new Map(legalEntities.map((item) => [key(item.code), item]));
     const entityByName = new Map(legalEntities.map((item) => [key(item.name), item]));
     const branchByCode = new Map(branches.map((item) => [key(item.code), item]));
     const branchByName = new Map(branches.map((item) => [key(item.name), item]));
     const positionByCode = new Map(positions.map((item) => [key(item.code), item]));
-    const positionByTitle = new Map(positions.map((item) => [`${item.legalEntityId ?? ''}:${key(item.title)}`, item]));
+    // Job titles are organization-wide master records. A title must not be
+    // duplicated just because a workbook row omits or changes its legal entity.
+    const positionByTitle = new Map(positions.map((item) => [key(item.title), item]));
+    const departmentByName = new Map(departments.map((item) => [key(item.name), item]));
     const seen = new Set<string>();
+    const seenPositionTitles = new Set<string>();
+    const seenPositionCodes = new Set<string>();
     const counts = { valid: 0, invalid: 0, duplicate: 0 };
 
     const mapped = rows.map((row, index) => {
@@ -468,23 +483,31 @@ export class BulkImportService {
           if (result !== 'Invalid' && (inputEntityCode || inputEntityName) && !entity) setInvalid('The legal entity could not be resolved in this organization.');
           resolvedLegalEntityId = entity?.id ?? null;
           const title = key(row.title);
+          const departmentName = normalizedName(row.departmentName);
           const code = key(row.code);
           if (result !== 'Invalid' && !title) setInvalid('Title is required.');
           if (result !== 'Invalid') {
-            const existing = (code ? positionByCode.get(code) : undefined) ?? positionByTitle.get(`${resolvedLegalEntityId ?? ''}:${title}`);
-            const duplicateKey = code ? `code:${code}` : `title:${resolvedLegalEntityId ?? ''}:${title}`;
+            const existing = (code ? positionByCode.get(code) : undefined) ?? positionByTitle.get(title);
+            const duplicateInWorkbook = (Boolean(code) && seenPositionCodes.has(code)) || seenPositionTitles.has(title);
             if (existing) {
               result = 'Duplicate';
               existingId = existing.id;
               details = 'A position with this code or title already exists in this organization.';
-            } else if (seen.has(duplicateKey)) {
+            } else if (duplicateInWorkbook) {
               result = 'Duplicate';
               details = 'This position appears more than once in the workbook.';
             } else if (!code) {
               result = 'Warning';
               details = 'Code will be generated automatically when this row is imported.';
             }
-            seen.add(duplicateKey);
+            if (title) seenPositionTitles.add(title);
+            if (code) seenPositionCodes.add(code);
+            if (existing) {
+              (rows[index] as RawRow).masterExistingMetadata = existing.metadata;
+            }
+            if (departmentName && !departmentByName.has(key(departmentName))) {
+              details = details ?? 'Department will be created automatically when this row is imported.';
+            }
           }
         }
       }
@@ -516,7 +539,15 @@ export class BulkImportService {
   ): Promise<{ jobId: string; summary: ImportJobSummary; inspect: BulkImportInspectResult }> {
     const parsed = this.parseWorkbook(buffer, fileName, sheetName);
     const inspected = this.inspect(dataset, buffer, fileName, sheetName);
-    const mapped = this.mapRows(dataset, parsed.rows, parsed.headers);
+    const mapped = this.mapRows(dataset, parsed.rows, parsed.headers).map((row) => {
+      // Rowdata.Status describes the staffing/vacancy note (for example
+      // "hold" or "Sourcing"), not the Position master record lifecycle.
+      // Keep it as source metadata and let the imported position remain Active.
+      if (dataset === 'positions' && parsed.selectedSheet.trim().toLowerCase() === 'rowdata') {
+        return { ...row, sourceStatus: row.status, status: null };
+      }
+      return row;
+    });
     const checked = dataset === 'candidates'
       ? await this.validateCandidateRows(organizationId, mapped)
       : dataset === 'vacancy-requests'
@@ -714,6 +745,32 @@ export class BulkImportService {
     return this.prisma.$transaction(async (tx) => {
       const locked = await tx.candidateImportJob.updateMany({ where: { id: job.id, organizationId, dataset, status: 'Review' }, data: { status: 'Processing' } });
       if (locked.count !== 1) throw importInvalid('Import job is already being processed.');
+      const departmentByName = new Map<string, { id: string; name: string; status: string }>();
+      if (dataset === 'positions') {
+        // A Rowdata position row may introduce a department at the same time.
+        // Serialize this catalog and reuse existing values so repeated uploads
+        // never create a second department with different casing/whitespace.
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`master-data:${organizationId}:departments`}))`;
+        const departments = await tx.masterDataValue.findMany({ where: { organizationId, category: 'departments' }, select: { id: true, name: true, status: true } });
+        departments.forEach((department) => departmentByName.set(catalogKey(department.name), department));
+      }
+      const ensureDepartment = async (value: unknown) => {
+        const name = normalizedName(value);
+        if (!name) return null;
+        const departmentKey = catalogKey(name);
+        const existing = departmentByName.get(departmentKey);
+        if (existing) {
+          if (existing.status !== 'Active') {
+            const updatedDepartment = await tx.masterDataValue.update({ where: { id: existing.id }, data: { status: 'Active', version: { increment: 1 } }, select: { id: true, name: true, status: true } });
+            departmentByName.set(departmentKey, updatedDepartment);
+            return updatedDepartment;
+          }
+          return existing;
+        }
+        const createdDepartment = await tx.masterDataValue.create({ data: { organizationId, category: 'departments', name, status: 'Active' }, select: { id: true, name: true, status: true } });
+        departmentByName.set(departmentKey, createdDepartment);
+        return createdDepartment;
+      };
       let created = 0;
       let updated = 0;
       let skipped = 0;
@@ -757,8 +814,30 @@ export class BulkImportService {
           }
         } else {
           const legalEntityId = raw.masterLegalEntityId ? String(raw.masterLegalEntityId) : undefined;
+          const department = await ensureDepartment(raw.departmentName);
+          const existingMetadata = raw.masterExistingMetadata && typeof raw.masterExistingMetadata === 'object' && !Array.isArray(raw.masterExistingMetadata)
+            ? raw.masterExistingMetadata as Record<string, unknown>
+            : {};
+          const importedMetadata: Record<string, unknown> = {
+            ...existingMetadata,
+            ...(department ? { departmentId: department.id, departmentName: department.name } : {}),
+            ...(raw.level ? { level: String(raw.level) } : {}),
+            ...(raw.entity ? { entity: String(raw.entity) } : {}),
+            ...(raw.type ? { type: String(raw.type) } : {}),
+            ...(raw.sourceStatus ? { sourceStatus: String(raw.sourceStatus) } : {}),
+            sourceFile: job.fileName,
+            ...(job.sheetName ? { sourceSheet: job.sheetName } : {}),
+            sourceRow: row.rowNumber,
+          };
           if (existingId && row.result === 'Duplicate' && row.decision === 'Update') {
-            await tx.position.update({ where: { id: existingId }, data: { title: String(raw.title), description: raw.description ? String(raw.description) : null, legalEntityId: legalEntityId ?? null, status } });
+            await tx.position.update({ where: { id: existingId }, data: {
+              title: String(raw.title),
+              description: raw.description ? String(raw.description) : null,
+              ...(legalEntityId ? { legalEntityId } : {}),
+              metadata: importedMetadata as Prisma.InputJsonValue,
+              status,
+              version: { increment: 1 },
+            } });
             updated++;
             await tx.candidateImportRow.update({ where: { id: row.id }, data: { details: `Position ${existingId} updated by recruiter.` } });
           } else {
@@ -766,6 +845,7 @@ export class BulkImportService {
             if (raw.code) data.code = String(raw.code);
             if (raw.description) data.description = String(raw.description);
             if (legalEntityId) data.legalEntityId = legalEntityId;
+            data.metadata = importedMetadata;
             const position = await this.masterDataService.createPositionInTransaction(tx, organizationId, data);
             if (status !== 'Active') await tx.position.update({ where: { id: position.id }, data: { status } });
             created++;

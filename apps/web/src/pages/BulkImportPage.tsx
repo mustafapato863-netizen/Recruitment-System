@@ -153,6 +153,7 @@ function BulkImportLandingPage() {
     >
       {error && <Alert tone="danger" title="Import attention">{error}</Alert>}
       {message && <Alert tone="success" title="Import staged">{message}</Alert>}
+      {dataset === 'positions' && <Alert tone="info" title="VL Rowdata supported">Choose the <strong>Rowdata</strong> worksheet. Position titles are matched without case or whitespace differences, and Department Name is created once when needed.</Alert>}
 
       <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
         <MetricCard label="Selected dataset" value={datasetLabel(dataset)} detail="Use a matching template" tone="action" icon={<Icon name="database" size={14} />} />
@@ -327,7 +328,7 @@ function BulkImportReviewPage({ dataset, jobId }: { dataset: BulkImportDataset; 
     if (dataset === 'vacancy-requests') return ['externalVacancyCode', 'positionCode', 'positionTitle', 'branchCode', 'requestedHeadcount'];
     if (dataset === 'legal-entities') return ['code', 'name', 'status'];
     if (dataset === 'branches') return ['code', 'name', 'country', 'city', 'status'];
-    return ['code', 'title', 'legalEntityCode', 'description', 'status'];
+    return ['code', 'title', 'departmentName', 'level', 'entity', 'type', 'legalEntityCode', 'description', 'status'];
   }, [dataset]);
 
   if (loading && !summary) return <PageFrame eyebrow="Data Operations" title="Import Review" description="Loading staged rows..."><PageState kind="loading" title="Loading import batch" description="Fetching validation results." /></PageFrame>;
@@ -366,7 +367,16 @@ function BulkImportReviewPage({ dataset, jobId }: { dataset: BulkImportDataset; 
             {visibleColumns.map((column) => <td className={dataTableClasses.td} key={column}><span className="text-xs font-semibold text-rf-ink">{safeValue(row.data[column])}</span></td>)}
             <td className={dataTableClasses.td}><StatusBadge status={row.result} /></td>
             <td className={dataTableClasses.td}><span className="text-xs text-rf-ink-muted">{row.details || 'Ready for review'}</span></td>
-            <td className={dataTableClasses.td}>{row.result === 'Duplicate' && !confirmed ? <div className="flex flex-wrap gap-1.5"><Button variant="primary" size="sm" disabled={working} onClick={() => void decide(row.id, dataset === 'candidates' || ['legal-entities', 'branches', 'positions'].includes(dataset) ? 'Update' : 'Import')}>{dataset === 'candidates' || ['legal-entities', 'branches', 'positions'].includes(dataset) ? 'Update' : 'Import'}</Button><Button variant="ghost" size="sm" disabled={working} onClick={() => void decide(row.id, 'Skip')}>Skip</Button></div> : <span className="text-xs font-semibold text-rf-ink-muted">{row.decision || 'Automatic'}</span>}</td>
+            <td className={dataTableClasses.td}>{row.result === 'Duplicate' && !confirmed ? <div className="flex flex-wrap gap-1.5">
+              {(() => {
+                const isMasterData = ['legal-entities', 'branches', 'positions'].includes(dataset);
+                const canUpdate = !isMasterData || Boolean(row.data.masterExistingId);
+                if (!canUpdate) return null;
+                const decision: 'Import' | 'Update' = isMasterData || dataset === 'candidates' ? 'Update' : 'Import';
+                return <Button variant="primary" size="sm" disabled={working} onClick={() => void decide(row.id, decision)}>{decision}</Button>;
+              })()}
+              <Button variant="ghost" size="sm" disabled={working} onClick={() => void decide(row.id, 'Skip')}>Skip</Button>
+            </div> : <span className="text-xs font-semibold text-rf-ink-muted">{row.decision || 'Automatic'}</span>}</td>
           </tr>)}</tbody>
         </DataTable>
         {rows.length === 0 && <PageState kind="empty" title="No rows to display" description="This import batch has no staged rows." />}

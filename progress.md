@@ -932,3 +932,15 @@ Implemented the current version-one simplification slice across candidate entry,
 - Fresh production Docker web/API/worker containers passed health/readiness checks. Chromium route matrix passed 33/33 at 1440/768/390px with zero JS errors, authenticated HTTP errors, overflow or axe violations. Applicant profile smoke confirmed both quick actions.
 - Final suites passed: web 155/155, API 66/66, worker 4/4, workspace typecheck, lint and diff check. `pnpm check:bundle` now passes transfer-size budgets (main CSS 50.70 KiB gzip; main JS 75.72 KiB gzip); the Nginx smoke downloaded 54,132 and 78,419 bytes respectively. Raw CSS is 396.33 KiB against the historical 225 KiB advisory target, so route-safe CSS reduction remains a separate optimization phase. Reporting-volume benchmarking and long-session refresh observability remain follow-ups.
 - Final local performance smoke (20 requests per endpoint, concurrency 5) returned HTTP 200 for readiness, candidates, vacancies, reports, Master Data and users; p95 latency ranged from 19.33ms to 86.84ms through Nginx.
+
+### Dynamic Master Data and VL catalog synchronization — 2026-09-10
+
+- Started implementation after the Audit pause was lifted. Existing Audit changes remain untouched.
+- Current gaps confirmed: no repeatable Departments/Job Titles workbook importer, required vacancy skills are not synchronized into Skills Master Data, and several source/interview selectors still duplicate hardcoded options.
+- Added transactional skill synchronization, catalog-backed recruiter selectors, and idempotent dry-run-first import/seed scripts.
+- The `positions` bulk-import dataset now accepts the original VL `Rowdata` headers (`Position`, `Department Name`, `Level`, `Entity`, and `Type`). Position duplicate checks are organization-wide and compare normalized titles/codes, including mixed coded/uncoded duplicate rows.
+- During confirmation, missing departments are created once and reused; imported department linkage and workbook provenance are saved in position metadata, while existing position metadata is preserved on updates.
+- `scripts/import-vl-master-data.cjs` reads only `Rowdata` by default. `--include-uae` explicitly adds `UAE VL ` after review. Current dry-run counts are 9 departments and 58 unique job titles from Rowdata (12 departments and 66 titles when UAE is included).
+- Local test organization `10000000-0000-4000-8000-000000000001` was populated earlier with the V1 source/type seed and the reviewed VL catalog; no records are deleted by reruns.
+- Read-only verification of that organization reports 88 position records and 12 departments with no case/whitespace-normalized duplicate position titles or department names.
+- Final validation: typecheck, lint, Prisma validation/migration status, API tests (73/73), web tests (161/161), worker tests (6/6), production build, bundle budgets, importer dry runs, and `git diff --check` pass. The build retains the existing non-blocking Vite chunk-size warning.

@@ -1,4 +1,5 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { PrismaService } from '../database/prisma.service';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
@@ -16,6 +17,7 @@ import type {
 } from '@recruitflow/contracts';
 import { Prisma } from '@recruitflow/database';
 import type { MasterDataCategory, MasterDataValueRecord } from '@recruitflow/contracts';
+import { catalogKey, normalizeCatalogText, uniqueCatalogNames } from './catalog-normalization';
 
 const CATALOG_CATEGORIES = new Set<MasterDataCategory>(['departments', 'skills', 'candidate-sources', 'interview-types']);
 const SUPPORTED_CATALOGS = new Set(['branches', 'job-titles', ...CATALOG_CATEGORIES]);
@@ -192,9 +194,12 @@ export class MasterDataService {
     this.assertCatalog(category);
     if (rows.length > 250) throw new BadRequestException('Master Data saves are limited to 250 rows per batch.');
     const saved = await this.prisma.$transaction(async (tx) => {
+      // Serialize catalog writes so two administrators cannot create values
+      // that differ only by case or invisible whitespace at the same time.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`master-data:${organizationId}:${category}`}))`;
       const results: unknown[] = [];
       for (const row of rows) {
-        const name = row.name.trim();
+        const name = normalizeCatalogText(row.name);
         if (!name) throw new BadRequestException('Every Master Data row needs a name.');
         const status = row.status?.trim() || 'Active';
         if (!['Active', 'Inactive', 'Archived'].includes(status)) throw new BadRequestException(`Invalid status for ${name}.`);
@@ -204,10 +209,11 @@ export class MasterDataService {
             const entity = await tx.legalEntity.findFirst({ where: { id: row.legalEntityId, organizationId } });
             if (!entity) throw new BadRequestException(`Legal entity for branch ${name} is not in this organization.`);
           }
-          const duplicate = await tx.branch.findFirst({ where: { organizationId, OR: [
-            ...(row.code?.trim() ? [{ code: row.code.trim() }] : []),
-            { name },
-          ], ...(row.id ? { id: { not: row.id } } : {}) } });
+          const branchValues = await tx.branch.findMany({ where: { organizationId }, select: { id: true, code: true, name: true } });
+          const duplicate = branchValues.find((value) =>
+            value.id !== row.id &&
+            ((Boolean(row.code?.trim()) && value.code === row.code?.trim()) || catalogKey(value.name) === catalogKey(name)),
+          );
           if (duplicate) throw new ConflictException(`Branch code or name already exists in this organization.`);
           if (row.id) {
             const result = await tx.branch.updateMany({ where: { id: row.id, organizationId, ...(row.expectedVersion === undefined ? {} : { version: row.expectedVersion }) }, data: {
@@ -232,10 +238,11 @@ export class MasterDataService {
           }
         } else if (category === 'job-titles') {
           const legalEntityId = row.legalEntityId || (row.metadata?.legalEntityId as string | undefined);
-          const duplicate = await tx.position.findFirst({ where: { organizationId, OR: [
-            ...(row.code?.trim() ? [{ code: row.code.trim() }] : []),
-            { title: name },
-          ], ...(row.id ? { id: { not: row.id } } : {}) } });
+          const positionValues = await tx.position.findMany({ where: { organizationId }, select: { id: true, code: true, title: true } });
+          const duplicate = positionValues.find((value) =>
+            value.id !== row.id &&
+            ((Boolean(row.code?.trim()) && value.code === row.code?.trim()) || catalogKey(value.title) === catalogKey(name)),
+          );
           if (duplicate) throw new ConflictException(`Job title code or name already exists in this organization.`);
           if (row.id) {
             const result = await tx.position.updateMany({ where: { id: row.id, organizationId, ...(row.expectedVersion === undefined ? {} : { version: row.expectedVersion }) }, data: {
@@ -260,10 +267,11 @@ export class MasterDataService {
           }
         } else {
           const existing = row.id ? await tx.masterDataValue.findFirst({ where: { id: row.id, organizationId, category } }) : null;
-          const duplicate = await tx.masterDataValue.findFirst({ where: { organizationId, category, OR: [
-            ...(row.code?.trim() ? [{ code: row.code.trim() }] : []),
-            { name },
-          ], ...(row.id ? { id: { not: row.id } } : {}) } });
+          const existingValues = await tx.masterDataValue.findMany({ where: { organizationId, category }, select: { id: true, code: true, name: true } });
+          const duplicate = existingValues.find((value) =>
+            value.id !== row.id &&
+            ((Boolean(row.code?.trim()) && value.code === row.code?.trim()) || catalogKey(value.name) === catalogKey(name)),
+          );
           if (duplicate) throw new ConflictException(`${category} code or name already exists in this organization.`);
           if (row.id) {
             if (!existing || (row.expectedVersion !== undefined && existing.version !== row.expectedVersion)) throw new ConflictException(`${name} changed since it was loaded. Reload before saving.`);
@@ -292,6 +300,57 @@ export class MasterDataService {
       throw new ConflictException('Master Data could not be saved because one or more rows conflict with existing values.');
     });
     return { saved: saved.length, data: await this.listCatalog(organizationId, category) };
+  }
+
+  /**
+   * Ensure vacancy skills are represented by the tenant Skills catalog.
+   * The caller must invoke this inside its business transaction so the
+   * vacancy and catalog stay consistent if either write fails.
+   */
+  async syncSkillsInTransaction(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    values: readonly (string | null | undefined)[],
+  ): Promise<string[]> {
+    const names = uniqueCatalogNames(values);
+    if (names.length === 0) return [];
+
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`master-data:${organizationId}:skills`}))`;
+    const existing = await tx.masterDataValue.findMany({
+      where: { organizationId, category: 'skills' },
+      orderBy: { name: 'asc' },
+    });
+    const byKey = new Map(existing.map((record) => [catalogKey(record.name), record]));
+    const canonical: string[] = [];
+
+    for (const name of names) {
+      const key = catalogKey(name);
+      const current = byKey.get(key);
+      if (current) {
+        canonical.push(current.name);
+        if (current.status !== 'Active') {
+          await tx.masterDataValue.update({
+            where: { id: current.id },
+            data: { status: 'Active', version: { increment: 1 } },
+          });
+        }
+        continue;
+      }
+
+      const created = await tx.masterDataValue.create({
+        data: {
+          id: randomUUID(),
+          organizationId,
+          category: 'skills',
+          name,
+          status: 'Active',
+        },
+      });
+      byKey.set(key, created);
+      canonical.push(created.name);
+    }
+
+    return canonical;
   }
 
   private assertCatalog(category: string): asserts category is 'branches' | 'job-titles' | MasterDataCategory {

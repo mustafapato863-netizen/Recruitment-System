@@ -2,6 +2,7 @@ import { useState, useEffect, type KeyboardEvent } from 'react';
 import { patchApi } from '../../api/client';
 import { Icon } from '../Icon';
 import { Modal } from '../Modal';
+import { useMasterDataOptions } from '../../hooks/useMasterDataOptions';
 
 interface EditPositionRequirementsModalProps {
   isOpen: boolean;
@@ -24,24 +25,6 @@ interface EditPositionRequirementsModalProps {
     jobSummary?: string | null;
   }) => void;
 }
-
-const COMMON_HEALTHCARE_SKILLS = [
-  'Critical Care',
-  'Patient Assessment',
-  'BLS',
-  'ACLS',
-  'SCFHS',
-  'EHR',
-  'Medication Administration',
-  'IV Therapy',
-  'Interventional Cardiology',
-  'Pharmacotherapy',
-  'ICD-10-AM',
-  'CT Scan',
-  'MRI Operation',
-  'TypeScript',
-  'Clinical Leadership',
-];
 
 export function EditPositionRequirementsModal({
   isOpen,
@@ -66,6 +49,8 @@ export function EditPositionRequirementsModal({
   const [jobSummary, setJobSummary] = useState(initialJobSummary ?? '');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { options: skillOptions, isLoading: isLoadingSkills } = useMasterDataOptions('skills');
+  const { options: branchOptions } = useMasterDataOptions('branches');
 
   useEffect(() => {
     if (isOpen) {
@@ -213,20 +198,25 @@ export function EditPositionRequirementsModal({
 
           {/* Suggested Skills Chips */}
           <div className="pt-1">
-            <span className="text-[11px] font-semibold text-slate-400 block mb-1">Quick add common healthcare skills:</span>
-            <div className="flex flex-wrap gap-1">
-              {COMMON_HEALTHCARE_SKILLS.filter(
-                (s) => !skills.some((existing) => existing.toLowerCase() === s.toLowerCase())
+              <span className="text-[11px] font-semibold text-slate-400 block mb-1">
+                {isLoadingSkills ? 'Loading skills from Master Data…' : 'Quick add skills from Master Data:'}
+              </span>
+              <div className="flex flex-wrap gap-1">
+              {skillOptions.filter(
+                (option) => !skills.some((existing) => existing.toLowerCase() === option.name.toLowerCase())
               ).slice(0, 8).map((suggestion) => (
                 <button
-                  key={suggestion}
+                  key={suggestion.id}
                   type="button"
-                  onClick={() => handleAddSkill(suggestion)}
+                  onClick={() => handleAddSkill(suggestion.name)}
                   className="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-100 hover:bg-teal-50 dark:bg-slate-800/80 dark:hover:bg-teal-950/40 text-slate-600 hover:text-teal-700 dark:text-slate-400 dark:hover:text-teal-300 border border-slate-200/80 dark:border-slate-700/60 transition"
                 >
-                  + {suggestion}
+                  + {suggestion.name}
                 </button>
               ))}
+              {!isLoadingSkills && skillOptions.length === 0 && (
+                <span className="text-[10px] text-slate-400 italic">No skills configured yet. You can add a new skill above.</span>
+              )}
             </div>
           </div>
         </div>
@@ -261,11 +251,12 @@ export function EditPositionRequirementsModal({
               onChange={(e) => setLocation(e.target.value)}
               className="w-full px-3.5 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500"
             >
-              <option value="SGH Riyadh Hospital">SGH Riyadh Hospital (KSA)</option>
-              <option value="SGH Jeddah Clinic">SGH Jeddah Clinic (KSA)</option>
-              <option value="SGH Dammam Hospital">SGH Dammam Hospital (KSA)</option>
-              <option value="Dubai Medical Center">Dubai Medical Center (UAE)</option>
-              <option value="Ajman Specialty Clinic">Ajman Specialty Clinic (UAE)</option>
+              {branchOptions.length === 0 && <option value={location}>{location || 'No branches configured'}</option>}
+              {branchOptions.map((branch) => (
+                <option key={branch.id} value={branch.name}>
+                  {branch.name}{branch.city ? ` · ${branch.city}` : ''}{branch.country ? ` (${branch.country})` : ''}
+                </option>
+              ))}
             </select>
           </div>
         </div>

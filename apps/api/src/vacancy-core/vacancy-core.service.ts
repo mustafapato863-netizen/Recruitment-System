@@ -40,6 +40,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import { exportFailed } from '../common/errors/api-error';
 import { AccessControlService } from '../access-control/access-control.service';
+import { MasterDataService } from '../master-data/master-data.service';
 import type { AuthUser } from '@recruitflow/contracts';
 
 @Injectable()
@@ -50,6 +51,7 @@ export class VacancyCoreService {
     private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
     @Optional() @Inject(AccessControlService) private readonly accessControl?: AccessControlService,
+    @Optional() @Inject(MasterDataService) private readonly masterData?: MasterDataService,
   ) {}
 
   async exportExcel(organizationId: string, user?: AuthUser): Promise<Buffer> {
@@ -822,6 +824,11 @@ export class VacancyCoreService {
     }
 
     await this.prisma.$transaction(async (tx) => {
+      const normalizedRequiredSkills = dto.requiredSkills !== undefined
+        ? this.masterData
+          ? await this.masterData.syncSkillsInTransaction(tx, organizationId, dto.requiredSkills)
+          : dto.requiredSkills
+        : undefined;
       if (
         dto.approvedHeadcount !== undefined ||
         dto.location !== undefined ||
@@ -846,7 +853,7 @@ export class VacancyCoreService {
             ...(dto.responsibilities !== undefined ? { responsibilities: dto.responsibilities } : {}),
             ...(dto.qualifications !== undefined ? { qualifications: dto.qualifications } : {}),
             ...(dto.benefits !== undefined ? { benefits: dto.benefits } : {}),
-            ...(dto.requiredSkills !== undefined ? { requiredSkills: dto.requiredSkills } : {}),
+            ...(normalizedRequiredSkills !== undefined ? { requiredSkills: normalizedRequiredSkills } : {}),
             ...(dto.minExperienceYears !== undefined ? { minExperienceYears: dto.minExperienceYears } : {}),
             ...(dto.targetStartDate !== undefined
               ? { targetStartDate: dto.targetStartDate ? new Date(dto.targetStartDate) : null }

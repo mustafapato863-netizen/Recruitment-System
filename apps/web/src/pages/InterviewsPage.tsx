@@ -12,6 +12,7 @@ import { FastScorecardModal } from '../components/interview/FastScorecardModal';
 import { SelfScheduleModal } from '../components/interview/SelfScheduleModal';
 import { useAuth } from '../auth/AuthContext';
 import { QuickGuideTrigger } from '../quickguide';
+import { useInterviewTypeOptions } from '../hooks/useInterviewTypeOptions';
 import './PageEnhancementsV2.css';
 
 interface InterviewGroup {
@@ -98,6 +99,13 @@ export function InterviewsPage() {
   const [allowConflict, setAllowConflict] = useState(false);
   const [conflictWarning, setConflictWarning] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { options: interviewTypeOptions, isLoading: isLoadingInterviewTypes } = useInterviewTypeOptions();
+
+  useEffect(() => {
+    if (interviewTypeOptions.length === 0) return;
+    if (interviewTypeOptions.some((option) => option.code === interviewType)) return;
+    setInterviewType(interviewTypeOptions[0].code);
+  }, [interviewType, interviewTypeOptions]);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -430,7 +438,8 @@ export function InterviewsPage() {
 
     try {
       const startDate = new Date(scheduledDateTime);
-      const endDate = new Date(startDate.getTime() + 45 * 60000);
+      const durationMinutes = interviewTypeOptions.find((option) => option.code === interviewType)?.defaultDuration ?? 45;
+      const endDate = new Date(startDate.getTime() + durationMinutes * 60000);
 
       const attendeeIds = selectedAttendees.length > 0 ? selectedAttendees : (user?.id ? [user.id] : []);
 
@@ -803,15 +812,14 @@ export function InterviewsPage() {
             <select
               aria-label="Select interview type"
               value={interviewType}
-                onChange={(e) => setInterviewType(e.target.value as InterviewType)}
+              onChange={(e) => setInterviewType(e.target.value as InterviewType)}
               className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
             >
-              <option value="Screening">Screening Round</option>
-              <option value="Technical">Technical &amp; Clinical Peer Assessment</option>
-              <option value="Behavioral">Behavioral / Leadership</option>
-              <option value="Managerial">HOD / Managerial Round</option>
-              <option value="Executive">Executive Hospital Board</option>
+              {interviewTypeOptions.map((option) => (
+                <option key={option.code} value={option.code}>{option.name}</option>
+              ))}
             </select>
+            {isLoadingInterviewTypes && <p className="mt-1 text-[10px] text-slate-500">Loading interview types from Master Data…</p>}
           </div>
 
           <div>

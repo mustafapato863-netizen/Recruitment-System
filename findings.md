@@ -244,3 +244,13 @@ The focused repair pass recorded in `docs/full-app-audit-2026-09-08.md` is histo
 - Implementation outcome: meeting links now flow through direct scheduling and candidate self-scheduling; the self-schedule path no longer writes a fixed Teams URL. Interviewer responses are tenant-scoped to assigned attendees, reschedule requests require a reason, and response activity is recorded and notified to the panel/primary recruiter. Interview status changes to `Rescheduled` when its time changes and can become `Completed` only after all assigned interviewers have locked scorecards with notes.
 - Follow-up hardening: new attendee invites start as `Pending` instead of silently accepted; meeting links accept only explicit HTTP/HTTPS URLs; at least one interviewer is required; completed/cancelled interviews cannot be rescheduled or moved to another status; cancelled interviews cannot receive scorecards.
 - Rescheduling resets every panel response to `Pending`, preventing a confirmation for the previous time from being treated as confirmation for the replacement slot.
+
+## Dynamic Master Data and VL catalog synchronization — 2026-09-10
+
+- The repository already has tenant-scoped Master Data batch APIs and an Excel-style grid. Departments and Job Titles are backed by dedicated `Branch`/`Position` tables; Skills, Candidate Sources and Interview Types use `MasterDataValue`.
+- `Vacancy.requiredSkills` is persisted but currently does not upsert missing skills into the Skills catalog. The vacancy core module must consume the existing Master Data service for an atomic synchronization.
+- Candidate source and interview type controls still contain duplicated hardcoded options in multiple web components. The catalog endpoints exist, so the remaining work is to centralize active-option loading while preserving stable interview enum codes.
+- The actual source workbook is available at `D:\Manpower\VL.xlsx`; the implementation reads `Rowdata` by default. The optional `--include-uae` flag adds `UAE VL ` after review, with normalization and duplicate checks before confirmation.
+- Implemented tenant/category advisory locking and normalized duplicate checks so spreadsheet case and invisible whitespace cannot create new catalog duplicates.
+- Imported positions are associated with their department record through `metadata.departmentId`; existing records and metadata are preserved.
+- Interview scheduling keeps the stable five API enum codes while loading display names and default durations from the Interview Types catalog.
