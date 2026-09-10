@@ -74,8 +74,11 @@ export const QuickGuideModal: React.FC = () => {
         <div className="p-5 sm:p-6 border-b border-slate-100 dark:border-slate-800 bg-gradient-to-b from-blue-50/70 via-white to-white dark:from-slate-800/70 dark:via-slate-900 dark:to-slate-900">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-emerald-600 shadow-md shadow-blue-600/25 ring-1 ring-white/20 shrink-0 flex items-center justify-center text-white">
-                <SghHeartSvg size={24} glow={false} />
+              <div
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border-2 border-blue-100 bg-white shadow-[0_4px_14px_rgba(0,105,180,0.18)] ring-4 ring-blue-50 dark:border-slate-700 dark:bg-slate-950 dark:ring-blue-500/10"
+                aria-hidden="true"
+              >
+                <SghHeartSvg size={31} glow />
               </div>
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
