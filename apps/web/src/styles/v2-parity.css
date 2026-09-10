@@ -654,16 +654,23 @@
 
 .brand .mark {
   display: grid;
-  width: 40px;
-  height: 40px;
+  width: 40px !important;
+  height: 40px !important;
   flex: 0 0 40px;
   place-items: center;
   border-radius: 12px;
-  background: var(--gradient-action);
-  color: var(--color-on-action);
+  background: var(--color-surface-elevated) !important;
+  border: 1px solid color-mix(in srgb, var(--color-action) 22%, var(--color-border-subtle));
+  color: var(--color-action);
   font-size: 18px;
   font-weight: 850;
-  box-shadow: 0 8px 18px -9px rgba(37, 84, 214, 0.72);
+  box-shadow: 0 6px 16px -9px rgba(0, 105, 180, 0.65);
+}
+
+.brand .mark svg {
+  display: block;
+  width: 34px;
+  height: auto;
 }
 
 .brand-copy {
