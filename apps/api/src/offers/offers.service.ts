@@ -74,7 +74,12 @@ type OfferRecord = {
   application?: {
     vacancyId?: string;
     candidate?: { firstName: string; lastName: string } | null;
-    vacancy?: { id: string; position?: { title: string } | null } | null;
+    vacancy?: {
+      id: string;
+      location?: string | null;
+      branch?: { name: string } | null;
+      position?: { title: string } | null;
+    } | null;
   } | null;
   versions?: OfferVersionRecord[];
 };
@@ -169,7 +174,7 @@ export class OffersService {
         application: {
           include: {
             candidate: true,
-            vacancy: { include: { position: true } },
+            vacancy: { include: { position: true, branch: true } },
           },
         },
         versions: {
@@ -191,7 +196,7 @@ export class OffersService {
         application: {
           include: {
             candidate: true,
-            vacancy: { include: { position: true } },
+            vacancy: { include: { position: true, branch: true } },
           },
         },
         versions: {
@@ -212,6 +217,7 @@ export class OffersService {
     const visibility = await this.applicationVisibility(user);
     const application = await this.prisma.application.findFirst({
       where: { id: dto.applicationId, ...visibility },
+      include: { vacancy: { include: { branch: true } } },
     });
 
     if (!application) throw new NotFoundException('Application not found');
@@ -219,6 +225,8 @@ export class OffersService {
     const year = new Date().getUTCFullYear();
     const offerCode = await this.nextOfferCode(year);
     const { monthlyPackage, annualFixed } = this.calculatePackage(dto.components);
+    const vacancyWorkLocation = application.vacancy?.location?.trim() || application.vacancy?.branch?.name?.trim() || null;
+    const workLocation = dto.workLocation?.trim() || vacancyWorkLocation;
 
     const offerId = await this.prisma.$transaction(async (tx) => {
       const offer = await tx.offer.create({
@@ -240,7 +248,7 @@ export class OffersService {
           probationPeriod: dto.probationPeriod ?? null,
           offerExpiry: dto.offerExpiry ?? null,
           proposedJoiningDate: dto.proposedJoiningDate ?? null,
-          workLocation: dto.workLocation ?? null,
+          workLocation,
           workingSchedule: dto.workingSchedule ?? null,
           approvalStatus: 'Pending',
           components: {
@@ -290,7 +298,10 @@ export class OffersService {
     const visibility = await this.applicationVisibility(user);
     const offer = await this.prisma.offer.findFirst({
       where: { id, organizationId: user.organizationId, application: visibility },
-      include: { versions: { orderBy: { versionNumber: 'desc' }, take: 1 } },
+      include: {
+        versions: { orderBy: { versionNumber: 'desc' }, take: 1 },
+        application: { include: { vacancy: { include: { branch: true } } } },
+      },
     });
 
     if (!offer) throw new NotFoundException('Offer not found');
@@ -298,6 +309,8 @@ export class OffersService {
     const lastVersion = offer.versions[0];
     const newVersionNumber = lastVersion ? lastVersion.versionNumber + 1 : 1;
     const { monthlyPackage, annualFixed } = this.calculatePackage(dto.components);
+    const vacancyWorkLocation = offer.application?.vacancy?.location?.trim() || offer.application?.vacancy?.branch?.name?.trim() || null;
+    const workLocation = dto.workLocation?.trim() || vacancyWorkLocation;
 
     const versionId = await this.prisma.$transaction(async (tx) => {
       const version = await tx.offerVersion.create({
@@ -310,7 +323,7 @@ export class OffersService {
           probationPeriod: dto.probationPeriod ?? null,
           offerExpiry: dto.offerExpiry ?? null,
           proposedJoiningDate: dto.proposedJoiningDate ?? null,
-          workLocation: dto.workLocation ?? null,
+          workLocation,
           workingSchedule: dto.workingSchedule ?? null,
           approvalStatus: 'Pending',
           components: {
@@ -606,6 +619,7 @@ export class OffersService {
         ? `${offer.application.candidate.firstName} ${offer.application.candidate.lastName}`
         : undefined,
       positionTitle: offer.application?.vacancy?.position?.title,
+      location: offer.application?.vacancy?.location ?? offer.application?.vacancy?.branch?.name ?? null,
       currentVersionId: offer.currentVersionId,
       currentVersion: version ? this.mapVersion(version, disclosure) : null,
       createdAt: offer.createdAt.toISOString(),
@@ -626,6 +640,7 @@ export class OffersService {
         ? `${offer.application.candidate.firstName} ${offer.application.candidate.lastName}`
         : undefined,
       positionTitle: offer.application?.vacancy?.position?.title,
+      location: offer.application?.vacancy?.location ?? offer.application?.vacancy?.branch?.name ?? null,
       currentVersionId: offer.currentVersionId,
       currentVersion: currentVersion ? this.mapVersion(currentVersion, disclosure) : null,
       versions: offer.versions?.map((v) => this.mapVersion(v, disclosure)) || [],

@@ -559,23 +559,25 @@ model ScreeningLog {
 }
 
 model Interview {
-  id             String               @id @default(uuid()) @db.Uuid
-  organizationId String               @db.Uuid
-  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  interviewCode  String               @unique @db.VarChar(50)
-  applicationId  String               @db.Uuid
-  application    Application          @relation(fields: [applicationId], references: [id], onDelete: Restrict)
-  title          String               @db.VarChar(200)
-  interviewType  String               @db.VarChar(60)
-  scheduledStart DateTime             @db.Timestamptz(6)
-  scheduledEnd   DateTime             @db.Timestamptz(6)
-  timezone       String               @default("UTC") @db.VarChar(50)
-  locationUrl    String?              @db.VarChar(500)
-  status         String               @default("Scheduled") @db.VarChar(40)
-  attendees      InterviewAttendee[]
-  scorecards     InterviewScorecard[]
-  createdAt      DateTime             @default(now()) @db.Timestamptz(6)
-  updatedAt      DateTime             @updatedAt @db.Timestamptz(6)
+  id                  String               @id @default(uuid()) @db.Uuid
+  organizationId      String               @db.Uuid
+  organization        Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  interviewCode       String               @unique @db.VarChar(50)
+  applicationId       String               @db.Uuid
+  application         Application          @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  title               String               @db.VarChar(200)
+  interviewType       String               @db.VarChar(60)
+  scheduledStart      DateTime             @db.Timestamptz(6)
+  scheduledEnd        DateTime             @db.Timestamptz(6)
+  timezone            String               @default("UTC") @db.VarChar(50)
+  locationUrl         String?              @db.VarChar(500)
+  interviewerName     String?              @db.VarChar(200)
+  interviewerJobTitle String?              @db.VarChar(120)
+  status              String               @default("Scheduled") @db.VarChar(40)
+  attendees           InterviewAttendee[]
+  scorecards          InterviewScorecard[]
+  createdAt           DateTime             @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime             @updatedAt @db.Timestamptz(6)
 
   @@index([organizationId, status])
   @@index([applicationId, scheduledStart])

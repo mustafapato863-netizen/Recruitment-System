@@ -212,7 +212,12 @@ export class InterviewsService {
       throw new BadRequestException('Scheduled end time must be strictly after start time.');
     }
 
-    const attendeeUserIds = [...new Set(dto.attendeeUserIds)];
+    const attendeeUserIds = [...new Set(dto.attendeeUserIds ?? [])];
+    const interviewerName = dto.interviewerName?.trim() || null;
+    const interviewerJobTitle = dto.interviewerJobTitle?.trim() || null;
+    if (attendeeUserIds.length === 0 && !interviewerName) {
+      throw new BadRequestException('Enter an interviewer name before saving the interview.');
+    }
     if (attendeeUserIds.length > 0) {
       const attendees = await this.prisma.user.findMany({
         where: { id: { in: attendeeUserIds }, organizationId, status: 'Active' },
@@ -255,11 +260,13 @@ export class InterviewsService {
           scheduledEnd: end,
           timezone: dto.timezone?.trim() ?? 'UTC',
           locationUrl: dto.locationUrl?.trim() ?? null,
+          interviewerName,
+          interviewerJobTitle,
           status: 'Scheduled',
         },
       });
 
-      if (dto.attendeeUserIds.length > 0) {
+      if (attendeeUserIds.length > 0) {
         await tx.interviewAttendee.createMany({
           data: attendeeUserIds.map((userId) => ({
             interviewId: item.id,
@@ -299,24 +306,6 @@ export class InterviewsService {
         },
       });
     });
-
-    const candidateName = created.application?.candidate
-      ? `${created.application.candidate.firstName} ${created.application.candidate.lastName}`
-      : 'a candidate';
-    for (const attendee of created.attendees) {
-      await this.notifications.create({
-        organizationId,
-        recipientUserId: attendee.userId,
-        type: 'InterviewScheduled',
-        title: 'Interview scheduled',
-        message: `You are an interviewer for "${created.title}" (${candidateName}) on ${created.scheduledStart.toISOString()}.`,
-        entityType: 'Interview',
-        entityId: created.id,
-      });
-    }
-
-    // Touch calendar sync timestamp if integration is enabled
-    await this.notifyCalendarIntegration(organizationId);
 
     return this.toInterview(created);
   }
@@ -759,6 +748,8 @@ export class InterviewsService {
       scheduledEnd: record.scheduledEnd.toISOString(),
       timezone: record.timezone,
       locationUrl: record.locationUrl,
+      interviewerName: record.interviewerName,
+      interviewerJobTitle: record.interviewerJobTitle,
       status: record.status as InterviewStatus,
       attendees: record.attendees.map((att) => ({
         id: att.id,

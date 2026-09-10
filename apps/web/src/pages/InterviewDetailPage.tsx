@@ -549,8 +549,8 @@ export function InterviewDetailPage() {
   const scorecards = interview?.scorecards || [];
 
   const primaryOwner = attendees.find((a) => a.role === 'Lead' || a.role === 'Host' || a.role === 'Organizer') || attendees[0];
-  const ownerName = primaryOwner?.userName || scorecards[0]?.interviewerName || 'Unassigned';
-  const ownerRole = primaryOwner?.role || 'Interviewer';
+  const ownerName = primaryOwner?.userName || scorecards[0]?.interviewerName || interview?.interviewerName || 'Unassigned';
+  const ownerRole = primaryOwner?.role || interview?.interviewerJobTitle || 'Interviewer';
   const ownerInitials = ownerName === 'Unassigned' ? '—' : ownerName.split(' ').filter(Boolean).map((n) => n[0]).join('').slice(0, 2).toUpperCase() || 'IN';
 
   const attachments: { name: string; size?: string; url?: string }[] =

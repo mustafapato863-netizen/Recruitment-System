@@ -32,6 +32,11 @@ export class CreateInterviewDto {
   interviewerJobTitle?: string | null;
 
   @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  interviewerName?: string | null;
+
+  @IsOptional()
   @IsObject()
   attendeeJobTitles?: Record<string, string>;
 
@@ -55,10 +60,10 @@ export class CreateInterviewDto {
   @MaxLength(500)
   locationUrl?: string | null;
 
+  @IsOptional()
   @IsArray()
-  @ArrayMinSize(1)
   @IsUUID('4', { each: true })
-  attendeeUserIds!: string[];
+  attendeeUserIds?: string[];
 
   @IsOptional()
   @IsBoolean()

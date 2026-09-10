@@ -62,7 +62,6 @@ export function ApplicationDetailPage() {
   const [isSavingScreening, setIsSavingScreening] = useState(false);
   const [screeningError, setScreeningError] = useState<string | null>(null);
   const [interviews, setInterviews] = useState<Interview[]>([]);
-  const [interviewers, setInterviewers] = useState<Array<{ id: string; displayName: string; jobTitle?: string | null }>>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [otherActiveApplications, setOtherActiveApplications] = useState<Application[]>([]);
   const [isFeedLoading, setIsFeedLoading] = useState(false);
@@ -90,7 +89,7 @@ export function ApplicationDetailPage() {
 
   // Scheduling modal state
   const [schedInterviewerJobTitle, setSchedInterviewerJobTitle] = useState('');
-  const [schedInterviewerId, setSchedInterviewerId] = useState('');
+  const [schedInterviewerName, setSchedInterviewerName] = useState('');
   const [schedInterviewType, setSchedInterviewType] = useState<
     'Screening' | 'Technical' | 'Behavioral' | 'Managerial' | 'Executive'
   >('Technical');
@@ -102,23 +101,6 @@ export function ApplicationDetailPage() {
   });
   const [schedMeetingLink, setSchedMeetingLink] = useState('');
   const [isSchedulingInterview, setIsSchedulingInterview] = useState(false);
-
-  useEffect(() => {
-    void getApi<Array<{ id: string; displayName: string; jobTitle?: string | null }>>('/users/interviewers')
-      .then((users) => {
-        setInterviewers(users);
-        if (users[0]) {
-          setSchedInterviewerId(users[0].id);
-          setSchedInterviewerJobTitle(users[0].jobTitle ?? '');
-        }
-      })
-      .catch(() => setInterviewers([]));
-  }, []);
-
-  useEffect(() => {
-    const selected = interviewers.find((interviewer) => interviewer.id === schedInterviewerId);
-    if (selected && !schedInterviewerJobTitle.trim()) setSchedInterviewerJobTitle(selected.jobTitle ?? '');
-  }, [interviewers, schedInterviewerId, schedInterviewerJobTitle]);
 
   // Rejection modal state
   const [selectedRejectReason, setSelectedRejectReason] = useState('Skills mismatch');
@@ -417,8 +399,8 @@ export function ApplicationDetailPage() {
 
   const handleScheduleInterviewSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!id || !schedDateTime || !schedInterviewerId) {
-      showToast('Select an interviewer before scheduling.');
+    if (!id || !schedDateTime || !schedInterviewerName.trim()) {
+      showToast('Enter an interviewer name before scheduling.');
       return;
     }
     setIsSchedulingInterview(true);
@@ -427,7 +409,8 @@ export function ApplicationDetailPage() {
       const endDate = new Date(startDate.getTime() + 45 * 60000);
       const created = await postApi<Interview>('/interviews', {
         applicationId: id,
-        attendeeUserIds: [schedInterviewerId],
+        attendeeUserIds: [],
+        interviewerName: schedInterviewerName.trim(),
         interviewerJobTitle: schedInterviewerJobTitle.trim() || null,
         interviewType: schedInterviewType,
         scheduledStart: startDate.toISOString(),
@@ -440,6 +423,8 @@ export function ApplicationDetailPage() {
       }
       showToast(`✓ ${schedInterviewType} interview scheduled successfully.`);
       setIsScheduleModalOpen(false);
+      setSchedInterviewerName('');
+      setSchedInterviewerJobTitle('');
       setSchedMeetingLink('');
       void refetchAll();
     } catch (err: unknown) {
@@ -1628,8 +1613,12 @@ export function ApplicationDetailPage() {
                                   </span>
                                 ))}
                               </div>
+                            ) : intv.interviewerName ? (
+                              <span className="px-2 py-0.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-[11px] font-medium text-slate-700 dark:text-slate-300">
+                                {intv.interviewerName}{intv.interviewerJobTitle ? ` · ${intv.interviewerJobTitle}` : ''}
+                              </span>
                             ) : (
-                              <span className="text-[11px] text-slate-400 italic">No interviewers assigned</span>
+                              <span className="text-[11px] text-slate-400 italic">No interviewer recorded</span>
                             )}
                           </div>
 
@@ -1825,13 +1814,8 @@ export function ApplicationDetailPage() {
       <ScheduleInterviewModal
         isOpen={isScheduleModalOpen}
         onClose={() => setIsScheduleModalOpen(false)}
-        interviewerUserId={schedInterviewerId}
-        setInterviewerUserId={(value) => {
-          setSchedInterviewerId(value);
-          const selected = interviewers.find((interviewer) => interviewer.id === value);
-          setSchedInterviewerJobTitle(selected?.jobTitle ?? '');
-        }}
-        interviewers={interviewers}
+        interviewerName={schedInterviewerName}
+        setInterviewerName={setSchedInterviewerName}
         interviewerJobTitle={schedInterviewerJobTitle}
         setInterviewerJobTitle={setSchedInterviewerJobTitle}
         interviewType={schedInterviewType}

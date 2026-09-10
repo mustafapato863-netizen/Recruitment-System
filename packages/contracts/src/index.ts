@@ -711,6 +711,8 @@ export interface Application {
   organizationId: string;
   applicationCode: string;
   vacancyId: string;
+  vacancyLocation?: string | null | undefined;
+  vacancyBranchName?: string | null | undefined;
   candidateId: string;
   stage: ApplicationStage;
   allowedTransitions: ApplicationStage[];
@@ -923,6 +925,8 @@ export interface Interview {
   scheduledEnd: string;
   timezone: string;
   locationUrl?: string | null | undefined;
+  interviewerName?: string | null | undefined;
+  interviewerJobTitle?: string | null | undefined;
   status: InterviewStatus;
   attendees?: InterviewAttendeeItem[] | undefined;
   scorecards?: InterviewScorecardItem[] | undefined;
@@ -1103,6 +1107,7 @@ export interface Offer {
   applicationCode?: string;
   candidateName?: string;
   positionTitle?: string;
+  location?: string | null;
   offerCode: string;
   currentVersionId?: string | null;
   status: OfferStatus;

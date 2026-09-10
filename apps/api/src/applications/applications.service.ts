@@ -109,7 +109,7 @@ export class ApplicationsService {
         include: {
           candidate: true,
           vacancy: {
-            include: { position: true },
+            include: { position: true, branch: true },
           },
           primaryRecruiter: true,
           taskOwner: true,
@@ -195,6 +195,7 @@ export class ApplicationsService {
         vacancy: {
           include: {
             position: true,
+            branch: true,
             assignments: true,
           },
         },
@@ -292,7 +293,7 @@ export class ApplicationsService {
         },
         include: {
           candidate: true,
-          vacancy: { include: { position: true } },
+          vacancy: { include: { position: true, branch: true } },
           primaryRecruiter: true,
           taskOwner: true,
         },
@@ -391,7 +392,7 @@ export class ApplicationsService {
         where: { id },
         include: {
           candidate: true,
-          vacancy: { include: { position: true } },
+          vacancy: { include: { position: true, branch: true } },
           primaryRecruiter: true,
           taskOwner: true,
         },
@@ -455,7 +456,7 @@ export class ApplicationsService {
       data: updateData,
       include: {
         candidate: true,
-        vacancy: { include: { position: true } },
+        vacancy: { include: { position: true, branch: true } },
         primaryRecruiter: true,
         taskOwner: true,
       },
@@ -567,7 +568,7 @@ export class ApplicationsService {
     record: Prisma.ApplicationGetPayload<{
       include: {
         candidate: true;
-        vacancy: { include: { position: true } };
+        vacancy: { include: { position: true, branch: true } };
         primaryRecruiter: true;
         taskOwner: true;
       };
@@ -617,6 +618,8 @@ export class ApplicationsService {
         : undefined,
       vacancyCode: record.vacancy?.vacancyCode,
       positionTitle: record.vacancy?.position?.title,
+      vacancyLocation: record.vacancy?.location ?? record.vacancy?.branch?.name ?? null,
+      vacancyBranchName: record.vacancy?.branch?.name ?? null,
       appliedAt: record.appliedAt.toISOString(),
       createdAt: record.createdAt.toISOString(),
       updatedAt: record.updatedAt.toISOString(),
@@ -673,7 +676,7 @@ export class ApplicationsService {
     app: Prisma.ApplicationGetPayload<{
       include: {
         candidate: true;
-        vacancy: { include: { position: true } };
+        vacancy: { include: { position: true, branch: true } };
         primaryRecruiter: true;
         taskOwner: true;
       };

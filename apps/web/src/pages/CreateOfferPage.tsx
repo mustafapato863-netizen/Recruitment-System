@@ -83,6 +83,10 @@ export function CreateOfferPage() {
     try {
       const data = await getApi<Application>(`/applications/${id}`);
       setApplication(data);
+      setFormData((current) => ({
+        ...current,
+        workLocation: data.vacancyLocation || data.vacancyBranchName || '',
+      }));
     } catch (err: unknown) {
       setError(getErrorMessage(err));
     }
@@ -410,7 +414,11 @@ export function CreateOfferPage() {
                     id="offer-loc"
                     value={formData.workLocation}
                     onChange={(e) => setFormData({ ...formData, workLocation: e.target.value })}
+                    placeholder="Automatically loaded from the vacancy"
                   />
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    Loaded from the selected position vacancy. You can adjust it for this offer if needed.
+                  </p>
                 </FormField>
 
                 <FormField id="offer-sched" label="Working Schedule">

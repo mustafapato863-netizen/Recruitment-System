@@ -23,6 +23,16 @@ describe('interview workflow DTOs', () => {
       notes: 'Clear evidence of role competency and strong communication.',
     }));
     expect(valid).toHaveLength(0);
+
+    const manualInterviewer = await validate(plainToInstance(CreateInterviewDto, {
+      applicationId: '00000000-0000-4000-8000-000000000001',
+      interviewType: 'Technical',
+      scheduledStart: '2026-09-10T10:00:00.000Z',
+      scheduledEnd: '2026-09-10T10:45:00.000Z',
+      interviewerName: 'Dr. Lina Hassan',
+      attendeeUserIds: [],
+    }));
+    expect(manualInterviewer).toHaveLength(0);
   });
 
   it('accepts only supported interviewer responses', async () => {

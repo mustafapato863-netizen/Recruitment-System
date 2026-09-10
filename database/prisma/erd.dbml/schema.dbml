@@ -503,6 +503,8 @@ Table interviews {
   scheduledEnd DateTime [not null]
   timezone String [not null, default: 'UTC']
   locationUrl String
+  interviewerName String
+  interviewerJobTitle String
   status String [not null, default: 'Scheduled']
   attendees interview_attendees [not null]
   scorecards interview_scorecards [not null]

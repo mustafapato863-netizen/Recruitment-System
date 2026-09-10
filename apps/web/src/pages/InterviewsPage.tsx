@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { getApi, postApi, ApiError } from '../api/client';
+import { getApi, postApi } from '../api/client';
 import type { Interview, InterviewType, Application, PaginatedResult, VacancyDetailView } from '@recruitflow/contracts';
 import { Icon } from '../components/Icon';
 import { Modal } from '../components/Modal';
@@ -43,13 +43,6 @@ interface InterviewGroup {
   }[];
 }
 
-interface OrgUser {
-  id: string;
-  displayName: string;
-  email: string;
-  jobTitle?: string | null;
-}
-
 interface InterviewApplicationView {
   candidateId?: string;
   positionTitle?: string;
@@ -71,7 +64,6 @@ export function InterviewsPage() {
 
   const [apiInterviews, setApiInterviews] = useState<InterviewListItem[]>([]);
   const [applications, setApplications] = useState<Application[]>([]);
-  const [orgUsers, setOrgUsers] = useState<Array<{ id: string; displayName: string; jobTitle?: string | null }>>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [interviewsScope, setInterviewsScope] = useState<'all' | 'mine'>('all');
   const [dateRange, setDateRange] = useState('All Dates');
@@ -94,10 +86,7 @@ export function InterviewsPage() {
     return d.toISOString().slice(0, 16);
   });
   const [meetingLink, setMeetingLink] = useState('');
-  const [selectedAttendees, setSelectedAttendees] = useState<string[]>([]);
-  const [attendeeJobTitles, setAttendeeJobTitles] = useState<Record<string, string>>({});
-  const [allowConflict, setAllowConflict] = useState(false);
-  const [conflictWarning, setConflictWarning] = useState<string | null>(null);
+  const [interviewerName, setInterviewerName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { options: interviewTypeOptions, isLoading: isLoadingInterviewTypes } = useInterviewTypeOptions();
 
@@ -115,14 +104,6 @@ export function InterviewsPage() {
   const loadData = useCallback(async () => {
     try {
       setIsLoading(true);
-      const [usersRes] = await Promise.allSettled([
-        getApi<OrgUser[] | { data?: OrgUser[] }>('/users'),
-      ]);
-      if (usersRes.status === 'fulfilled') {
-        const uList = Array.isArray(usersRes.value) ? usersRes.value : usersRes.value?.data || [];
-        setOrgUsers(uList.map((u) => ({ id: u.id, displayName: u.displayName || u.email, jobTitle: u.jobTitle })));
-      }
-
       if (vacancyId) {
         const [intRes, appRes, vacRes] = await Promise.allSettled([
           getApi<InterviewListItem[] | { data?: InterviewListItem[] }>('/interviews'),
@@ -195,6 +176,7 @@ export function InterviewsPage() {
           }
         });
       }
+      if (int.interviewerName?.trim()) names.add(int.interviewerName.trim());
     });
     return Array.from(names).sort();
   }, [apiInterviews]);
@@ -224,7 +206,7 @@ export function InterviewsPage() {
       if (selectedInterviewer !== 'ALL') {
         const attendeeMatch = Array.isArray(int.attendees) && int.attendees.some((a) => a.userName === selectedInterviewer);
         const scorecardMatch = Array.isArray(int.scorecards) && int.scorecards.some((s) => s.interviewerName === selectedInterviewer);
-        if (!attendeeMatch && !scorecardMatch) return false;
+        if (!attendeeMatch && !scorecardMatch && int.interviewerName !== selectedInterviewer) return false;
       }
       return true;
     });
@@ -273,6 +255,7 @@ export function InterviewsPage() {
 
       const primaryAttendee = (Array.isArray(int.attendees) && int.attendees.find((a) => a.userName)?.userName) ||
         (Array.isArray(int.scorecards) && int.scorecards[0]?.interviewerName) ||
+        int.interviewerName ||
         'Unassigned';
       const interviewerAvatar = primaryAttendee === 'Unassigned'
         ? '—'
@@ -412,7 +395,7 @@ export function InterviewsPage() {
       `"${int.scheduledStart || ''}"`,
       `"${int.scheduledEnd || ''}"`,
       `"${int.status || ''}"`,
-      `"${(int.attendees?.[0]?.userName || '').replace(/"/g, '""')}"`,
+      `"${(int.attendees?.[0]?.userName || int.interviewerName || '').replace(/"/g, '""')}"`,
     ]);
 
     const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
@@ -432,42 +415,36 @@ export function InterviewsPage() {
       showToast('Please select a target application');
       return;
     }
+    if (!interviewerName.trim()) {
+      showToast('Enter an interviewer name before saving.');
+      return;
+    }
 
     setIsSubmitting(true);
-    setConflictWarning(null);
-
     try {
       const startDate = new Date(scheduledDateTime);
       const durationMinutes = interviewTypeOptions.find((option) => option.code === interviewType)?.defaultDuration ?? 45;
       const endDate = new Date(startDate.getTime() + durationMinutes * 60000);
 
-      const attendeeIds = selectedAttendees.length > 0 ? selectedAttendees : (user?.id ? [user.id] : []);
-
       await postApi('/interviews', {
         applicationId: selectedAppId,
-        attendeeJobTitles,
+        interviewerName: interviewerName.trim(),
+        attendeeUserIds: [],
         interviewType,
         scheduledStart: startDate.toISOString(),
         scheduledEnd: endDate.toISOString(),
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Riyadh',
-        attendeeUserIds: attendeeIds,
-        allowConflict,
         locationUrl: meetingLink.trim() || null,
       });
 
       showToast(`✓ ${interviewType} interview scheduled successfully.`);
       setIsScheduleModalOpen(false);
-      setAllowConflict(false);
-      setConflictWarning(null);
       setMeetingLink('');
+      setInterviewerName('');
       await loadData();
     } catch (err: unknown) {
-      if (err instanceof ApiError && err.statusCode === 409) {
-        setConflictWarning(err.message);
-      } else {
-        const msg = err instanceof Error ? err.message : 'Failed to schedule interview';
-        showToast(`Notice: ${msg}`);
-      }
+      const msg = err instanceof Error ? err.message : 'Failed to schedule interview';
+      showToast(`Notice: ${msg}`);
     } finally {
       setIsSubmitting(false);
     }
@@ -512,8 +489,6 @@ export function InterviewsPage() {
           <button
             type="button"
             onClick={() => {
-              setConflictWarning(null);
-              setAllowConflict(false);
               setIsScheduleModalOpen(true);
             }}
             className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
@@ -823,13 +798,27 @@ export function InterviewsPage() {
           </div>
 
           <div>
+            <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300" htmlFor="interview-interviewer-name">
+              Interviewer name <span className="text-rose-500">*</span>
+            </label>
+            <input
+              id="interview-interviewer-name"
+              value={interviewerName}
+              onChange={(e) => setInterviewerName(e.target.value)}
+              placeholder="Type the person conducting the interview"
+              required
+              className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
+            />
+            <p className="mt-1 text-[10px] text-slate-500">The interview is saved immediately. No email or calendar invitation is sent.</p>
+          </div>
+
+          <div>
             <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">Scheduled Date &amp; Time</label>
             <input
               type="datetime-local"
               value={scheduledDateTime}
               onChange={(e) => {
                 setScheduledDateTime(e.target.value);
-                setConflictWarning(null);
               }}
               className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
             />
@@ -849,59 +838,6 @@ export function InterviewsPage() {
             <p className="mt-1 text-[10px] text-slate-500">Add the online meeting URL or leave blank for an on-site interview.</p>
           </div>
 
-          {orgUsers.length > 0 && (
-            <div>
-              <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">Assigned Interviewer Panel</label>
-              <div className="max-h-24 overflow-y-auto p-2 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 space-y-1">
-                {orgUsers.map((u) => {
-                  const isChecked = selectedAttendees.includes(u.id);
-                  return (
-                    <label key={u.id} className="flex items-center gap-2 cursor-pointer text-[11px]">
-                      <input
-                        type="checkbox"
-                        checked={isChecked}
-                        onChange={(e) => {
-                          if (e.target.checked) setSelectedAttendees([...selectedAttendees, u.id]);
-                          else setSelectedAttendees(selectedAttendees.filter((id) => id !== u.id));
-                        }}
-                        className="rounded text-blue-600 focus:ring-0"
-                      />
-                      <span className="text-slate-700 dark:text-slate-200 font-medium">{u.displayName}</span>
-                      {isChecked && (
-                        <input
-                          aria-label={`${u.displayName} job title`}
-                          value={attendeeJobTitles[u.id] ?? u.jobTitle ?? ''}
-                          onChange={(event) => setAttendeeJobTitles((current) => ({ ...current, [u.id]: event.target.value }))}
-                          placeholder="Job title"
-                          className="ml-auto min-w-0 w-36 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] dark:border-slate-700 dark:bg-slate-900"
-                        />
-                      )}
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Conflict Warning & Override Checkbox */}
-          {conflictWarning && (
-            <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl space-y-2 animate-fade-in">
-              <div className="text-xs text-amber-800 dark:text-amber-300 font-semibold flex items-start gap-1.5">
-                <Icon name="alert-triangle" size={14} className="text-amber-500 shrink-0 mt-0.5" />
-                <span>{conflictWarning}</span>
-              </div>
-              <label className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-slate-200 cursor-pointer pt-1">
-                <input
-                  type="checkbox"
-                  checked={allowConflict}
-                  onChange={(e) => setAllowConflict(e.target.checked)}
-                  className="rounded text-amber-600 focus:ring-0"
-                />
-                <span>Allow conflict &amp; book anyway (Urgent healthcare schedule)</span>
-              </label>
-            </div>
-          )}
-
           <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
             <button
               type="button"
@@ -913,15 +849,9 @@ export function InterviewsPage() {
             <button
               type="submit"
               disabled={isSubmitting || !selectedAppId}
-              className={`px-4 py-1.5 text-white rounded-xl font-bold cursor-pointer transition disabled:opacity-50 ${
-                allowConflict ? 'bg-amber-600 hover:bg-amber-700' : 'bg-blue-600 hover:bg-blue-700'
-              }`}
+              className="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold cursor-pointer transition disabled:opacity-50"
             >
-              {isSubmitting
-                ? 'Saving...'
-                : allowConflict
-                ? 'Force Book (Override Conflict)'
-                : 'Schedule & Send Invite'}
+              {isSubmitting ? 'Saving...' : 'Save Interview'}
             </button>
           </div>
         </form>

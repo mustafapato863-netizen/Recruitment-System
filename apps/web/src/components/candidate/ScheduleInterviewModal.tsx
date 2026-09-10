@@ -7,9 +7,8 @@ import { useInterviewTypeOptions } from '../../hooks/useInterviewTypeOptions';
 interface ScheduleInterviewModalProps {
   isOpen: boolean;
   onClose: () => void;
-  interviewerUserId: string;
-  setInterviewerUserId: (v: string) => void;
-  interviewers: Array<{ id: string; displayName: string; jobTitle?: string | null }>;
+  interviewerName: string;
+  setInterviewerName: (v: string) => void;
   interviewerJobTitle: string;
   setInterviewerJobTitle: (v: string) => void;
   interviewType: 'Screening' | 'Technical' | 'Behavioral' | 'Managerial' | 'Executive';
@@ -25,9 +24,8 @@ interface ScheduleInterviewModalProps {
 export const ScheduleInterviewModal: React.FC<ScheduleInterviewModalProps> = ({
   isOpen,
   onClose,
-  interviewerUserId,
-  setInterviewerUserId,
-  interviewers,
+  interviewerName,
+  setInterviewerName,
   interviewerJobTitle,
   setInterviewerJobTitle,
   interviewType,
@@ -52,7 +50,18 @@ export const ScheduleInterviewModal: React.FC<ScheduleInterviewModalProps> = ({
     >
       <form onSubmit={onSubmit} className="space-y-3 text-xs">
         <div>
-          <label className="font-bold block mb-1">Interviewer Job Title</label>
+          <label className="font-bold block mb-1">Interviewer name <span className="text-rose-500">*</span></label>
+          <Input
+            placeholder="Type the person conducting the interview"
+            value={interviewerName}
+            onChange={(e) => setInterviewerName(e.target.value)}
+            disabled={isSubmitting}
+            required
+          />
+          <p className="mt-1 text-[10px] text-slate-500">The interview is saved immediately. No invitation is sent.</p>
+        </div>
+        <div>
+          <label className="font-bold block mb-1">Interviewer job title <span className="font-normal text-slate-400">(optional)</span></label>
           <Input
             placeholder="e.g. Head of Cardiology"
             value={interviewerJobTitle}
@@ -60,14 +69,6 @@ export const ScheduleInterviewModal: React.FC<ScheduleInterviewModalProps> = ({
             disabled={isSubmitting}
           />
           <p className="mt-1 text-[10px] text-slate-500">This is the interviewer’s professional title and is saved with the attendee record.</p>
-        </div>
-        <div>
-          <label className="font-bold block mb-1">Interviewer</label>
-          <Select value={interviewerUserId} onChange={(e) => setInterviewerUserId(e.target.value)} disabled={isSubmitting} required>
-            <option value="">Select an interviewer</option>
-            {interviewers.map((interviewer) => <option key={interviewer.id} value={interviewer.id}>{interviewer.displayName}{interviewer.jobTitle ? ` · ${interviewer.jobTitle}` : ''}</option>)}
-          </Select>
-          {interviewers.length === 0 && <p className="mt-1 text-[10px] text-slate-500">No active interviewers are available for this organization.</p>}
         </div>
         <div>
           <label className="font-bold block mb-1">Interview Type</label>
@@ -117,7 +118,7 @@ export const ScheduleInterviewModal: React.FC<ScheduleInterviewModalProps> = ({
         </div>
 
         <div className="p-2.5 rounded-xl bg-blue-50/70 dark:bg-blue-950/30 border border-blue-200/60 dark:border-blue-900/40 text-[11px] text-blue-800 dark:text-blue-300">
-          <strong>Calendar Notice:</strong> Panelists will automatically receive calendar invites with direct scorecard evaluation links upon dispatch.
+          <strong>Saved immediately:</strong> This creates the interview record and keeps the meeting link for reference. No email or calendar invitation is sent.
         </div>
         <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
           <button
@@ -133,7 +134,7 @@ export const ScheduleInterviewModal: React.FC<ScheduleInterviewModalProps> = ({
             disabled={isSubmitting}
             className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold cursor-pointer transition shadow-xs disabled:opacity-50"
           >
-            {isSubmitting ? 'Sending Invitation...' : 'Send Invitation'}
+            {isSubmitting ? 'Saving...' : 'Save Interview'}
           </button>
         </div>
       </form>
