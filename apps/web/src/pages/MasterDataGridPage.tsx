@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ClipboardEvent } from 'react';
-import type { MasterDataCategory, LegalEntityRecord } from '@recruitflow/contracts';
-import { ApiError, fetchApi } from '../api/client';
+import { useNavigate } from 'react-router-dom';
+import type { BulkImportDataset, BulkImportInspectResult, MasterDataCategory, LegalEntityRecord } from '@recruitflow/contracts';
+import { ApiError, downloadApi, fetchApi, postFormDataApi } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { Alert, Button, Input, PageFrame, PageState, Select, Tabs } from '../components/ui';
 import { Icon } from '../components/Icon';
+import { saveBlob } from '../utils/download';
 
 type CatalogKey = 'branches' | 'job-titles' | MasterDataCategory;
 type CatalogRow = {
@@ -68,6 +70,17 @@ const TABS: Array<{ key: CatalogKey; label: string }> = [
   { key: 'interview-types', label: 'Interview Types' },
 ];
 
+const IMPORT_DATASET_BY_CATEGORY: Record<CatalogKey, BulkImportDataset> = {
+  branches: 'branches',
+  departments: 'departments',
+  'job-titles': 'positions',
+  skills: 'skills',
+  'candidate-sources': 'candidate-sources',
+  'interview-types': 'interview-types',
+};
+
+const CATEGORY_LABELS: Record<CatalogKey, string> = Object.fromEntries(TABS.map((tab) => [tab.key, tab.label])) as Record<CatalogKey, string>;
+
 function displayValue(row: CatalogRow, field: 'code' | 'name' | 'country' | 'city') {
   return field === 'city' ? row.city || '' : row[field] || '';
 }
@@ -102,6 +115,7 @@ function normalizeLegacyCatalogRow(category: CatalogKey, value: Record<string, u
 }
 
 export function MasterDataGridPage() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const canManage = Boolean(user?.permissions.includes('MASTER_DATA_MANAGE'));
   const [category, setCategory] = useState<CatalogKey>('branches');
@@ -112,6 +126,12 @@ export function MasterDataGridPage() {
   const [search, setSearch] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isDownloadingTemplate, setIsDownloadingTemplate] = useState(false);
+  const [isInspectingWorkbook, setIsInspectingWorkbook] = useState(false);
+  const [isStagingWorkbook, setIsStagingWorkbook] = useState(false);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadInspect, setUploadInspect] = useState<BulkImportInspectResult | null>(null);
+  const [uploadSheetName, setUploadSheetName] = useState('');
   const [error, setError] = useState('');
   const [errorKind, setErrorKind] = useState<'load' | 'save'>('load');
   const [notice, setNotice] = useState('');
@@ -119,6 +139,7 @@ export function MasterDataGridPage() {
   const [dirtyIds, setDirtyIds] = useState<Set<string>>(() => new Set());
   const [activeCell, setActiveCell] = useState<{ row: number; field: GridField } | null>(null);
   const pasteRef = useRef<HTMLTableElement>(null);
+  const uploadInputRef = useRef<HTMLInputElement>(null);
 
   const loadCatalog = useCallback(async (selectedCategory: CatalogKey): Promise<CatalogRow[]> => {
     try {
@@ -176,6 +197,12 @@ export function MasterDataGridPage() {
 
   useEffect(() => { void load(category); }, [category, load]);
 
+  useEffect(() => {
+    setUploadFile(null);
+    setUploadInspect(null);
+    setUploadSheetName('');
+  }, [category]);
+
   const visibleRows = useMemo(() => {
     const term = search.trim().toLowerCase();
     if (!term) return rows;
@@ -224,6 +251,77 @@ export function MasterDataGridPage() {
       setNoticeKind('success');
       setNotice('Unsaved edits discarded.');
     });
+  };
+
+  const downloadTemplate = async () => {
+    setIsDownloadingTemplate(true);
+    setError('');
+    try {
+      const dataset = IMPORT_DATASET_BY_CATEGORY[category];
+      const workbook = await downloadApi(`/imports/master-data/${dataset}/template`);
+      saveBlob(workbook, `recruitflow-${category}-template.xlsx`);
+    } catch (err) {
+      setErrorKind('load');
+      setError(err instanceof Error ? err.message : 'Unable to download the Master Data template.');
+    } finally {
+      setIsDownloadingTemplate(false);
+    }
+  };
+
+  const inspectWorkbook = async (file: File) => {
+    setIsInspectingWorkbook(true);
+    setError('');
+    setNotice('');
+    setUploadFile(file);
+    setUploadInspect(null);
+    setUploadSheetName('');
+    try {
+      const body = new FormData();
+      body.append('file', file);
+      const dataset = IMPORT_DATASET_BY_CATEGORY[category];
+      const inspected = await postFormDataApi<BulkImportInspectResult>(`/imports/master-data/${dataset}/inspect`, body);
+      setUploadInspect(inspected);
+      setUploadSheetName(inspected.sheets[0]?.name ?? '');
+      if (inspected.warnings.length > 0) {
+        setNoticeKind('warning');
+        setNotice(inspected.warnings.join(' '));
+      } else {
+        setNoticeKind('success');
+        setNotice(`${file.name} is ready to stage for review.`);
+      }
+    } catch (err) {
+      setUploadFile(null);
+      setErrorKind('save');
+      setError(err instanceof Error ? err.message : 'Unable to inspect the selected workbook.');
+    } finally {
+      setIsInspectingWorkbook(false);
+    }
+  };
+
+  const stageWorkbook = async () => {
+    if (!uploadFile || !uploadInspect) return;
+    setIsStagingWorkbook(true);
+    setError('');
+    try {
+      const body = new FormData();
+      body.append('file', uploadFile);
+      const dataset = IMPORT_DATASET_BY_CATEGORY[category];
+      const query = uploadSheetName ? `?sheetName=${encodeURIComponent(uploadSheetName)}` : '';
+      const result = await postFormDataApi<{ jobId: string }>(`/imports/master-data/${dataset}/upload${query}`, body);
+      navigate(`/import/${dataset}/${result.jobId}`);
+    } catch (err) {
+      setErrorKind('save');
+      setError(err instanceof Error ? err.message : 'Unable to stage the workbook for review.');
+    } finally {
+      setIsStagingWorkbook(false);
+    }
+  };
+
+  const cancelWorkbook = () => {
+    setUploadFile(null);
+    setUploadInspect(null);
+    setUploadSheetName('');
+    setNotice('');
   };
 
   const save = async () => {
@@ -322,8 +420,57 @@ export function MasterDataGridPage() {
       actions={canManage ? <div className="flex gap-2"><Button variant="secondary" size="sm" onClick={discard} disabled={isSaving}>Discard</Button><Button variant="primary" size="sm" onClick={() => void save()} loading={isSaving} disabled={pendingRows.length === 0}>Save Changes</Button></div> : undefined}
     >
       {error && <Alert tone="danger" title={errorKind === 'load' ? 'Unable to load Master Data' : 'Master Data could not be saved'}>{error}</Alert>}
-      {notice && <Alert tone={noticeKind} title={noticeKind === 'warning' ? 'Some options are unavailable' : 'Changes staged'}>{notice}</Alert>}
+      {notice && <Alert tone={noticeKind} title={noticeKind === 'warning' ? (uploadInspect ? 'Workbook needs attention' : 'Some options are unavailable') : uploadInspect ? 'Workbook ready' : 'Changes staged'}>{notice}</Alert>}
       <Tabs ariaLabel="Master Data categories" activeKey={category} items={TABS} onChange={(key) => setCategory(key as CatalogKey)} />
+      <section className="mt-4 flex flex-col gap-4 rounded-2xl border border-rf-border-subtle bg-rf-surface p-4 shadow-xs sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h2 className="m-0 text-sm font-extrabold text-rf-ink">Excel template · {CATEGORY_LABELS[category]}</h2>
+          <p className="mt-1 text-xs font-medium text-rf-ink-muted">Download the controlled columns, fill one record per row, then upload the workbook here. Existing names and codes are flagged before saving.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" size="sm" loading={isDownloadingTemplate} loadingLabel="Downloading" onClick={() => void downloadTemplate()}>
+            <Icon name="download" size={14} />Download template
+          </Button>
+          {canManage && <>
+            <input
+              ref={uploadInputRef}
+              className="sr-only"
+              type="file"
+              aria-label={`Upload ${CATEGORY_LABELS[category]} workbook`}
+              accept=".xlsx,.xls,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv"
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.currentTarget.value = '';
+                if (file) void inspectWorkbook(file);
+              }}
+            />
+            <Button variant="primary" size="sm" loading={isInspectingWorkbook} loadingLabel="Checking file" onClick={() => uploadInputRef.current?.click()}>
+              <Icon name="upload" size={14} />Upload filled template
+            </Button>
+          </>}
+        </div>
+      </section>
+      {uploadFile && uploadInspect && (
+        <section className="mt-3 grid gap-3 rounded-2xl border border-rf-action/25 bg-rf-action-soft/20 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(180px,280px)_auto] sm:items-end">
+          <div>
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-rf-ink-muted">Selected workbook</span>
+            <p className="mt-1 truncate text-sm font-bold text-rf-ink">{uploadFile.name}</p>
+            <p className="mt-0.5 text-xs text-rf-ink-muted">{uploadInspect.sheets.reduce((total, sheet) => total + sheet.rowCount, 0)} data rows detected</p>
+          </div>
+          <label className="grid gap-1 text-[11px] font-bold text-rf-ink">
+            Worksheet
+            <Select value={uploadSheetName} onChange={(event) => setUploadSheetName(event.target.value)}>
+              {uploadInspect.sheets.map((sheet) => <option key={sheet.name} value={sheet.name}>{sheet.name} · {sheet.rowCount} rows</option>)}
+            </Select>
+          </label>
+          <div className="flex gap-2">
+            <Button variant="ghost" size="sm" onClick={cancelWorkbook} disabled={isStagingWorkbook}>Cancel</Button>
+            <Button variant="primary" size="sm" loading={isStagingWorkbook} loadingLabel="Staging" onClick={() => void stageWorkbook()}>
+              <Icon name="check-circle" size={14} />Review import
+            </Button>
+          </div>
+        </section>
+      )}
       <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <Input aria-label="Search Master Data" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search this category" />
         {canManage && <Button variant="secondary" size="sm" onClick={addRow}><Icon name="plus" size={14} />Add row</Button>}

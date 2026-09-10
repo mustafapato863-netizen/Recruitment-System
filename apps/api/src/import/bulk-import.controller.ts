@@ -27,7 +27,17 @@ import { fileInvalid, importInvalid } from '../common/errors/api-error';
 import type { AuthUser, BulkImportDataset } from '@recruitflow/contracts';
 
 type UploadedWorkbook = { buffer: Buffer; originalname: string };
+type MasterDataImportDataset = Extract<BulkImportDataset, 'legal-entities' | 'branches' | 'positions' | 'departments' | 'skills' | 'candidate-sources' | 'interview-types'>;
 const WORKBOOK_UPLOAD_OPTIONS = { limits: { fileSize: 25 * 1024 * 1024 } };
+const MASTER_DATA_IMPORT_DATASETS = new Set<string>([
+  'legal-entities',
+  'branches',
+  'positions',
+  'departments',
+  'skills',
+  'candidate-sources',
+  'interview-types',
+]);
 
 function requireWorkbook(file: UploadedWorkbook | undefined): UploadedWorkbook {
   if (!file?.buffer?.length) throw fileInvalid('Attach an Excel or CSV workbook in the file field.');
@@ -241,11 +251,11 @@ export class VacancyRequestBulkImportController {
 export class MasterDataBulkImportController {
   constructor(private readonly bulkImportService: BulkImportService) {}
 
-  private dataset(value: string): Extract<BulkImportDataset, 'legal-entities' | 'branches' | 'positions'> {
-    if (value !== 'legal-entities' && value !== 'branches' && value !== 'positions') {
-      throw importInvalid('Master-data dataset must be legal-entities, branches, or positions.');
+  private dataset(value: string): MasterDataImportDataset {
+    if (!MASTER_DATA_IMPORT_DATASETS.has(value)) {
+      throw importInvalid('Unsupported Master Data import category.');
     }
-    return value;
+    return value as MasterDataImportDataset;
   }
 
   @Get(':dataset/template')

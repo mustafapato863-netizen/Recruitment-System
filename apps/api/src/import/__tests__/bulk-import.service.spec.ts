@@ -8,10 +8,12 @@ import type { MasterDataService } from '../../master-data/master-data.service';
 
 describe('BulkImportService', () => {
   const mockPrisma = {
+    $executeRaw: vi.fn(),
+    $transaction: vi.fn(),
     candidate: { findMany: vi.fn() },
     branch: { findMany: vi.fn() },
     position: { findMany: vi.fn() },
-    masterDataValue: { findMany: vi.fn() },
+    masterDataValue: { findMany: vi.fn(), create: vi.fn(), update: vi.fn() },
     legalEntity: { findMany: vi.fn() },
     user: { findMany: vi.fn() },
     vacancy: { findMany: vi.fn() },
@@ -94,6 +96,27 @@ describe('BulkImportService', () => {
       const posBuffer = service.template('positions');
       const posWb = XLSX.read(posBuffer, { type: 'buffer' });
       expect(posWb.SheetNames).toContain('Positions');
+    });
+
+    it('generates structured templates for every Master Data grid category', () => {
+      const service = createService();
+      const expectations = [
+        ['departments', 'Departments', ['Code', 'Name', 'Branch Code', 'Branch Name', 'Status']],
+        ['skills', 'Skills', ['Code', 'Name', 'Category', 'Description', 'Status']],
+        ['candidate-sources', 'Candidate Sources', ['Code', 'Name', 'Type', 'Status']],
+        ['interview-types', 'Interview Types', ['Code', 'Name', 'Default Duration (min)', 'Status']],
+      ] as const;
+
+      for (const [dataset, sheetName, expectedHeaders] of expectations) {
+        const buffer = service.template(dataset);
+        const workbook = XLSX.read(buffer, { type: 'buffer' });
+        expect(workbook.SheetNames).toEqual([sheetName, 'Instructions']);
+        const rows = XLSX.utils.sheet_to_json<string[]>(workbook.Sheets[sheetName], { header: 1 });
+        expect(rows[0]).toEqual(expectedHeaders);
+        const inspected = service.inspect(dataset, buffer, `${dataset}.xlsx`);
+        expect(inspected.sheets.map((sheet) => sheet.name)).toEqual([sheetName]);
+        expect(inspected.warnings.some((warning) => /multiple worksheets/i.test(warning))).toBe(false);
+      }
     });
   });
 
@@ -210,6 +233,32 @@ describe('BulkImportService', () => {
       expect(stagedRows.map((row) => row.result)).toEqual(['Warning', 'Duplicate']);
       expect(stagedRows[1].details).toMatch(/more than once/i);
     });
+
+    it('stages repeated department names once and flags the duplicate row', async () => {
+      mockPrisma.legalEntity.findMany = vi.fn().mockResolvedValue([]);
+      mockPrisma.branch.findMany = vi.fn().mockResolvedValue([]);
+      mockPrisma.position.findMany = vi.fn().mockResolvedValue([]);
+      mockPrisma.masterDataValue.findMany = vi.fn().mockResolvedValue([]);
+      mockPrisma.candidateImportJob.create = vi.fn().mockResolvedValue({
+        id: 'job-departments', fileName: 'departments.xlsx', dataset: 'departments', sourceFormat: 'xlsx', sheetName: 'Departments', status: 'Review',
+        totalRows: 2, validRows: 1, invalidRows: 0, duplicateRows: 1, newRows: 0, updateRows: 0, createdAt: new Date('2026-09-10T00:00:00Z'),
+      });
+      const workbook = XLSX.utils.book_new();
+      const sheet = XLSX.utils.aoa_to_sheet([
+        ['Code', 'Name', 'Status'],
+        ['', 'Clinical Operations', 'Active'],
+        ['', ' clinical   operations ', 'Active'],
+      ]);
+      XLSX.utils.book_append_sheet(workbook, sheet, 'Departments');
+      const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
+
+      await createService().createJob('org-1', 'user-1', 'departments', buffer, 'departments.xlsx');
+
+      const createCall = vi.mocked(mockPrisma.candidateImportJob.create).mock.calls[0]?.[0];
+      const stagedRows = createCall?.data.rows?.createMany?.data as Array<{ result: string; details: string | null }>;
+      expect(stagedRows.map((row) => row.result)).toEqual(['Warning', 'Duplicate']);
+      expect(stagedRows[1].details).toMatch(/more than once/i);
+    });
   });
 
   describe('Error Report Generation', () => {
@@ -264,6 +313,46 @@ describe('BulkImportService', () => {
 
       expect(data[2][0]).toBe(3);
       expect(data[2][1]).toBe('Duplicate');
+    });
+  });
+
+  describe('Master Data confirmation', () => {
+    it('creates reviewed department rows through the shared import transaction', async () => {
+      const prisma = mockPrisma as unknown as {
+        $transaction: ReturnType<typeof vi.fn>;
+        $executeRaw: ReturnType<typeof vi.fn>;
+        candidateImportJob: { findFirst: ReturnType<typeof vi.fn>; updateMany: ReturnType<typeof vi.fn>; update: ReturnType<typeof vi.fn> };
+        candidateImportRow: { update: ReturnType<typeof vi.fn> };
+        masterDataValue: { findMany: ReturnType<typeof vi.fn>; create: ReturnType<typeof vi.fn> };
+      };
+      prisma.candidateImportJob.findFirst.mockResolvedValue({
+        id: 'job-confirm-dept',
+        organizationId: 'org-1',
+        dataset: 'departments',
+        status: 'Review',
+        rows: [{
+          id: 'row-dept-1',
+          result: 'Warning',
+          decision: null,
+          rawData: { code: null, name: 'Clinical Operations', status: 'Active', masterExistingId: null },
+        }],
+      });
+      prisma.candidateImportJob.updateMany.mockResolvedValue({ count: 1 });
+      prisma.candidateImportJob.update.mockResolvedValue({ status: 'Confirmed' });
+      prisma.candidateImportRow.update.mockResolvedValue({});
+      prisma.masterDataValue.findMany.mockResolvedValue([]);
+      prisma.masterDataValue.create.mockResolvedValue({ id: 'dept-1' });
+      prisma.$transaction.mockImplementation(async (callback: (tx: typeof prisma) => unknown) => callback(prisma));
+
+      const result = await createService().confirm('org-1', 'user-1', 'departments', 'job-confirm-dept');
+
+      expect(result).toMatchObject({ success: true, status: 'Confirmed', newRows: 1, updateRows: 0 });
+      expect(prisma.masterDataValue.create).toHaveBeenCalledWith({ data: expect.objectContaining({
+        organizationId: 'org-1',
+        category: 'departments',
+        name: 'Clinical Operations',
+        status: 'Active',
+      }) });
     });
   });
 });

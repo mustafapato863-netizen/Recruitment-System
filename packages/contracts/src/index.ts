@@ -1312,7 +1312,16 @@ export interface ImportRowDecisionInput {
   decision: ImportRowDecision;
 }
 
-export type BulkImportDataset = 'candidates' | 'vacancy-requests' | 'legal-entities' | 'branches' | 'positions';
+export type BulkImportDataset =
+  | 'candidates'
+  | 'vacancy-requests'
+  | 'legal-entities'
+  | 'branches'
+  | 'positions'
+  | 'departments'
+  | 'skills'
+  | 'candidate-sources'
+  | 'interview-types';
 
 export interface BulkImportSheetInfo {
   name: string;

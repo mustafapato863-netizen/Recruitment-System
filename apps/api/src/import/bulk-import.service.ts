@@ -4,7 +4,7 @@ import {
 } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import * as XLSX from 'xlsx';
-import type { Prisma } from '@recruitflow/database';
+import { Prisma } from '@recruitflow/database';
 import type {
   BulkImportDataset,
   BulkImportInspectResult,
@@ -105,6 +105,32 @@ const DATASET_COLUMNS: Record<Dataset, ColumnDefinition[]> = {
     { key: 'type', header: 'Type', aliases: ['position type', 'employment type'] },
     { key: 'status', header: 'Status', aliases: ['position status'] },
   ],
+  departments: [
+    { key: 'code', header: 'Code', aliases: ['department code'] },
+    { key: 'name', header: 'Name', aliases: ['department name', 'department'], required: true },
+    { key: 'branchCode', header: 'Branch Code', aliases: ['branch code', 'location code'] },
+    { key: 'branchName', header: 'Branch Name', aliases: ['branch name', 'branch', 'location'] },
+    { key: 'status', header: 'Status', aliases: ['department status'] },
+  ],
+  skills: [
+    { key: 'code', header: 'Code', aliases: ['skill code'] },
+    { key: 'name', header: 'Name', aliases: ['skill', 'skill name'], required: true },
+    { key: 'category', header: 'Category', aliases: ['skill category'] },
+    { key: 'description', header: 'Description', aliases: ['details', 'notes'] },
+    { key: 'status', header: 'Status', aliases: ['skill status'] },
+  ],
+  'candidate-sources': [
+    { key: 'code', header: 'Code', aliases: ['source code'] },
+    { key: 'name', header: 'Name', aliases: ['source', 'source name', 'candidate source'], required: true },
+    { key: 'type', header: 'Type', aliases: ['source type', 'channel type'] },
+    { key: 'status', header: 'Status', aliases: ['source status'] },
+  ],
+  'interview-types': [
+    { key: 'code', header: 'Code', aliases: ['interview type code'] },
+    { key: 'name', header: 'Name', aliases: ['interview type', 'type name'], required: true },
+    { key: 'defaultDuration', header: 'Default Duration (min)', aliases: ['default duration', 'duration', 'duration minutes'] },
+    { key: 'status', header: 'Status', aliases: ['interview type status'] },
+  ],
 };
 
 function normalizeHeader(value: unknown): string {
@@ -148,6 +174,13 @@ function integer(value: unknown): number | null {
   return Number.isInteger(parsed) ? parsed : null;
 }
 
+type CatalogDataset = Extract<Dataset, 'legal-entities' | 'branches' | 'positions' | 'departments' | 'skills' | 'candidate-sources' | 'interview-types'>;
+const CATALOG_DATASETS = new Set<Dataset>(['legal-entities', 'branches', 'positions', 'departments', 'skills', 'candidate-sources', 'interview-types']);
+
+function isCatalogDataset(dataset: Dataset): dataset is CatalogDataset {
+  return CATALOG_DATASETS.has(dataset);
+}
+
 function dateOnly(value: unknown): string | null {
   if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString().slice(0, 10);
   const raw = text(value);
@@ -170,6 +203,12 @@ function assertNoFormulas(sheet: XLSX.WorkSheet): void {
       throw importInvalid('Formula cells are not accepted. Paste values only before importing.');
     }
   }
+}
+
+function importableSheetNames(workbook: XLSX.WorkBook): string[] {
+  if (workbook.SheetNames.length <= 1) return workbook.SheetNames;
+  const filtered = workbook.SheetNames.filter((name) => normalizeHeader(name) !== 'instructions');
+  return filtered.length > 0 ? filtered : workbook.SheetNames;
 }
 
 @Injectable()
@@ -201,12 +240,13 @@ export class BulkImportService {
     const format = fileFormat(fileName);
     const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: true, cellFormula: true });
     if (workbook.SheetNames.length === 0) throw importInvalid('The workbook does not contain a worksheet.');
+    const availableSheets = importableSheetNames(workbook);
 
-    const selectedSheet = sheetName && workbook.SheetNames.includes(sheetName)
+    const selectedSheet = sheetName && availableSheets.includes(sheetName)
       ? sheetName
-      : workbook.SheetNames[0];
+      : availableSheets[0];
     if (!selectedSheet) throw importInvalid('The workbook does not contain a selectable worksheet.');
-    if (sheetName && !workbook.SheetNames.includes(sheetName)) {
+    if (sheetName && !availableSheets.includes(sheetName)) {
       throw importInvalid(`Worksheet ${sheetName} was not found in the workbook.`);
     }
 
@@ -242,9 +282,10 @@ export class BulkImportService {
       const present = members.some((column) => normalizedHeaders.has(normalizeHeader(column.header)) || column.aliases.some((alias) => normalizedHeaders.has(normalizeHeader(alias))));
       if (!present) warnings.push(`One of the required ${group} columns must be provided.`);
     }
-    if (parsed.workbook.SheetNames.length > 1) warnings.push('This workbook has multiple worksheets. Re-upload with the intended worksheet selected.');
+    const importableSheets = importableSheetNames(parsed.workbook);
+    if (importableSheets.length > 1) warnings.push('This workbook has multiple worksheets. Select the intended worksheet before staging it.');
 
-    const sheets: BulkImportSheetInfo[] = parsed.workbook.SheetNames.map((name) => {
+    const sheets: BulkImportSheetInfo[] = importableSheets.map((name) => {
       const sheet = parsed.workbook.Sheets[name];
       if (!sheet) return { name, headers: [], rowCount: 0 };
       const matrix = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: null, blankrows: false, raw: true });
@@ -280,6 +321,7 @@ export class BulkImportService {
           .find(Boolean);
         const value = sourceHeader ? row[sourceHeader] : null;
         if (['skills', 'certifications', 'languages', 'requiredSkills'].includes(column.key)) canonical[column.key] = list(value);
+        else if (column.key === 'defaultDuration') canonical[column.key] = integer(value) ?? (text(value) || null);
         else if (['experienceYears', 'minExperienceYears', 'requestedHeadcount'].includes(column.key)) canonical[column.key] = integer(value);
         else if (column.key === 'targetStartDate') canonical[column.key] = dateOnly(value);
         else canonical[column.key] = text(value) || null;
@@ -398,13 +440,15 @@ export class BulkImportService {
     return { rows: mapped, counts };
   }
 
-  private async validateMasterDataRows(organizationId: string, dataset: Extract<Dataset, 'legal-entities' | 'branches' | 'positions'>, rows: RawRow[]): Promise<{ rows: RawRow[]; counts: { valid: number; invalid: number; duplicate: number } }> {
-    const [legalEntities, branches, positions, departments] = await Promise.all([
+  private async validateMasterDataRows(organizationId: string, dataset: CatalogDataset, rows: RawRow[]): Promise<{ rows: RawRow[]; counts: { valid: number; invalid: number; duplicate: number } }> {
+    const [legalEntities, branches, positions, masterValues] = await Promise.all([
       this.prisma.legalEntity.findMany({ where: { organizationId }, select: { id: true, code: true, name: true, status: true } }),
       this.prisma.branch.findMany({ where: { organizationId }, select: { id: true, legalEntityId: true, code: true, name: true, status: true } }),
       this.prisma.position.findMany({ where: { organizationId }, select: { id: true, legalEntityId: true, code: true, title: true, status: true, metadata: true } }),
-      this.prisma.masterDataValue.findMany({ where: { organizationId, category: 'departments' }, select: { id: true, name: true, status: true } }),
+      this.prisma.masterDataValue.findMany({ where: { organizationId }, select: { id: true, category: true, code: true, name: true, status: true, metadata: true } }),
     ]);
+    const departments = masterValues.filter((item) => item.category === 'departments');
+    const catalogValues = masterValues.filter((item) => item.category === dataset);
     const key = (value: unknown) => catalogKey(normalizedName(value));
     const allowedStatuses = new Set(['active', 'inactive', 'archived']);
     const entityByCode = new Map(legalEntities.map((item) => [key(item.code), item]));
@@ -416,9 +460,13 @@ export class BulkImportService {
     // duplicated just because a workbook row omits or changes its legal entity.
     const positionByTitle = new Map(positions.map((item) => [key(item.title), item]));
     const departmentByName = new Map(departments.map((item) => [key(item.name), item]));
+    const catalogByCode = new Map(catalogValues.map((item) => [key(item.code), item]));
+    const catalogByName = new Map(catalogValues.map((item) => [key(item.name), item]));
     const seen = new Set<string>();
     const seenPositionTitles = new Set<string>();
     const seenPositionCodes = new Set<string>();
+    const seenCatalogNames = new Set<string>();
+    const seenCatalogCodes = new Set<string>();
     const counts = { valid: 0, invalid: 0, duplicate: 0 };
 
     const mapped = rows.map((row, index) => {
@@ -426,8 +474,9 @@ export class BulkImportService {
       let details: string | null = null;
       let existingId: string | null = null;
       let resolvedLegalEntityId: string | null = null;
+      let resolvedBranchId: string | null = null;
       const status = key(row.status) || 'active';
-      const displayStatus = text(row.status) || 'Active';
+      const displayStatus = status === 'inactive' ? 'Inactive' : status === 'archived' ? 'Archived' : 'Active';
       const setInvalid = (message: string) => { result = 'Invalid'; details = message; };
 
       if (!allowedStatuses.has(status)) setInvalid('Status must be Active, Inactive, or Archived.');
@@ -450,8 +499,7 @@ export class BulkImportService {
           details = 'Code will be generated automatically when this row is imported.';
         }
         if (result !== 'Invalid') seen.add(duplicateKey);
-      } else {
-        if (dataset === 'branches') {
+      } else if (dataset === 'branches') {
           const name = key(row.name);
           const code = key(row.code);
           const country = key(row.country).toUpperCase() || 'EGY';
@@ -473,7 +521,7 @@ export class BulkImportService {
             }
             seen.add(duplicateKey);
           }
-        } else {
+      } else if (dataset === 'positions') {
           const inputEntityCode = key(row.legalEntityCode);
           const inputEntityName = key(row.legalEntityName);
           const entityByInputCode = inputEntityCode ? entityByCode.get(inputEntityCode) : undefined;
@@ -509,6 +557,46 @@ export class BulkImportService {
               details = details ?? 'Department will be created automatically when this row is imported.';
             }
           }
+      } else {
+        const name = key(row.name);
+        const code = key(row.code);
+        if (result !== 'Invalid' && !name) setInvalid('Name is required.');
+        if (result !== 'Invalid' && dataset === 'departments') {
+          const inputBranchCode = key(row.branchCode);
+          const inputBranchName = key(row.branchName);
+          const branchByInputCode = inputBranchCode ? branchByCode.get(inputBranchCode) : undefined;
+          const branchByInputName = inputBranchName ? branchByName.get(inputBranchName) : undefined;
+          if (branchByInputCode && branchByInputName && branchByInputCode.id !== branchByInputName.id) {
+            setInvalid('Branch Code and Branch Name refer to different branches.');
+          } else {
+            const branch = branchByInputCode ?? branchByInputName;
+            if ((inputBranchCode || inputBranchName) && !branch) setInvalid('The branch could not be resolved in this organization.');
+            resolvedBranchId = branch?.id ?? null;
+          }
+        }
+        if (result !== 'Invalid' && dataset === 'interview-types' && row.defaultDuration !== null) {
+          const duration = Number(row.defaultDuration);
+          if (!Number.isInteger(duration) || duration < 5 || duration > 480) {
+            setInvalid('Default Duration must be a whole number between 5 and 480 minutes.');
+          }
+        }
+        if (result !== 'Invalid') {
+          const existing = (code ? catalogByCode.get(code) : undefined) ?? catalogByName.get(name);
+          const duplicateInWorkbook = (Boolean(code) && seenCatalogCodes.has(code)) || seenCatalogNames.has(name);
+          if (existing) {
+            result = 'Duplicate';
+            existingId = existing.id;
+            (rows[index] as RawRow).masterExistingMetadata = existing.metadata;
+            details = `A ${dataset.replace('-', ' ')} value with this code or name already exists in this organization.`;
+          } else if (duplicateInWorkbook) {
+            result = 'Duplicate';
+            details = `This ${dataset.replace('-', ' ')} value appears more than once in the workbook.`;
+          } else if (!code) {
+            result = 'Warning';
+            details = 'Code is optional; leave it blank when an organization code is not needed.';
+          }
+          if (name) seenCatalogNames.add(name);
+          if (code) seenCatalogCodes.add(code);
         }
       }
 
@@ -517,6 +605,7 @@ export class BulkImportService {
         status: displayStatus,
         masterExistingId: existingId,
         masterLegalEntityId: resolvedLegalEntityId,
+        masterBranchId: resolvedBranchId,
         __rowNumber: index + 2,
         __result: result,
         __details: details,
@@ -673,7 +762,7 @@ export class BulkImportService {
     if (row.result !== 'Duplicate') throw importInvalid('A decision is only required for duplicate rows.');
     if (dataset === 'vacancy-requests' && !['Import', 'Skip'].includes(decision)) throw importInvalid('Vacancy duplicate decisions must be Import or Skip.');
     if (dataset === 'candidates' && !['Update', 'Skip', 'Import'].includes(decision)) throw importInvalid('Candidate duplicate decisions must be Update, Import, or Skip.');
-    if (['legal-entities', 'branches', 'positions'].includes(dataset)) {
+    if (isCatalogDataset(dataset)) {
       if (!['Update', 'Skip'].includes(decision)) throw importInvalid('Master-data duplicate decisions must be Update or Skip.');
       if (decision === 'Update' && !(row.rawData as Record<string, unknown>)?.masterExistingId) throw importInvalid('This duplicate has no existing record to update; skip it or correct the workbook.');
     }
@@ -683,7 +772,7 @@ export class BulkImportService {
 
   async confirm(organizationId: string, userId: string, dataset: Dataset, jobId: string) {
     if (dataset === 'candidates') return this.importService.confirmJob(organizationId, jobId, userId);
-    if (dataset === 'legal-entities' || dataset === 'branches' || dataset === 'positions') {
+    if (isCatalogDataset(dataset)) {
       return this.confirmMasterData(organizationId, dataset, jobId);
     }
     const job = await this.getJob(organizationId, dataset, jobId);
@@ -735,7 +824,7 @@ export class BulkImportService {
 
   private async confirmMasterData(
     organizationId: string,
-    dataset: Extract<Dataset, 'legal-entities' | 'branches' | 'positions'>,
+    dataset: CatalogDataset,
     jobId: string,
   ) {
     const job = await this.getJob(organizationId, dataset, jobId);
@@ -745,6 +834,16 @@ export class BulkImportService {
     return this.prisma.$transaction(async (tx) => {
       const locked = await tx.candidateImportJob.updateMany({ where: { id: job.id, organizationId, dataset, status: 'Review' }, data: { status: 'Processing' } });
       if (locked.count !== 1) throw importInvalid('Import job is already being processed.');
+      const catalogByName = new Map<string, string>();
+      const catalogByCode = new Map<string, string>();
+      if (['departments', 'skills', 'candidate-sources', 'interview-types'].includes(dataset)) {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`master-data:${organizationId}:${dataset}`}))`;
+        const values = await tx.masterDataValue.findMany({ where: { organizationId, category: dataset }, select: { id: true, code: true, name: true } });
+        values.forEach((value) => {
+          catalogByName.set(catalogKey(value.name), value.id);
+          if (value.code) catalogByCode.set(catalogKey(value.code), value.id);
+        });
+      }
       const departmentByName = new Map<string, { id: string; name: string; status: string }>();
       if (dataset === 'positions') {
         // A Rowdata position row may introduce a department at the same time.
@@ -812,7 +911,7 @@ export class BulkImportService {
             created++;
             await tx.candidateImportRow.update({ where: { id: row.id }, data: { details: `Branch ${branch.code} created.` } });
           }
-        } else {
+        } else if (dataset === 'positions') {
           const legalEntityId = raw.masterLegalEntityId ? String(raw.masterLegalEntityId) : undefined;
           const department = await ensureDepartment(raw.departmentName);
           const existingMetadata = raw.masterExistingMetadata && typeof raw.masterExistingMetadata === 'object' && !Array.isArray(raw.masterExistingMetadata)
@@ -851,6 +950,52 @@ export class BulkImportService {
             created++;
             await tx.candidateImportRow.update({ where: { id: row.id }, data: { details: `Position ${position.code} created.` } });
           }
+        } else {
+          const nameKey = catalogKey(String(raw.name));
+          const codeKey = raw.code ? catalogKey(String(raw.code)) : '';
+          const conflictingId = catalogByName.get(nameKey) ?? (codeKey ? catalogByCode.get(codeKey) : undefined);
+          if (conflictingId && conflictingId !== existingId) {
+            throw importInvalid(`Master Data changed after this workbook was reviewed. ${String(raw.name)} now conflicts with an existing value; upload the file again.`);
+          }
+          const existingMetadata = raw.masterExistingMetadata && typeof raw.masterExistingMetadata === 'object' && !Array.isArray(raw.masterExistingMetadata)
+            ? raw.masterExistingMetadata as Record<string, unknown>
+            : {};
+          const importedMetadata: Record<string, unknown> = {
+            ...existingMetadata,
+            ...(dataset === 'departments' && raw.masterBranchId ? { branchId: String(raw.masterBranchId) } : {}),
+            ...(dataset === 'departments' && raw.branchCode ? { branchCode: String(raw.branchCode) } : {}),
+            ...(dataset === 'departments' && raw.branchName ? { branchName: String(raw.branchName) } : {}),
+            ...(dataset === 'skills' && raw.category ? { category: String(raw.category) } : {}),
+            ...(dataset === 'skills' && raw.description ? { description: String(raw.description) } : {}),
+            ...(dataset === 'candidate-sources' && raw.type ? { type: String(raw.type) } : {}),
+            ...(dataset === 'interview-types' && raw.defaultDuration !== null && raw.defaultDuration !== undefined ? { defaultDuration: Number(raw.defaultDuration) } : {}),
+          };
+          if (existingId && row.result === 'Duplicate' && row.decision === 'Update') {
+            await tx.masterDataValue.update({ where: { id: existingId }, data: {
+              ...(raw.code ? { code: String(raw.code) } : {}),
+              name: String(raw.name),
+              metadata: Object.keys(importedMetadata).length > 0 ? importedMetadata as Prisma.InputJsonValue : Prisma.JsonNull,
+              status,
+              version: { increment: 1 },
+            } });
+            catalogByName.set(nameKey, existingId);
+            if (codeKey) catalogByCode.set(codeKey, existingId);
+            updated++;
+            await tx.candidateImportRow.update({ where: { id: row.id }, data: { details: `${dataset.replace('-', ' ')} ${existingId} updated by recruiter.` } });
+          } else {
+            const record = await tx.masterDataValue.create({ data: {
+              organizationId,
+              category: dataset,
+              code: raw.code ? String(raw.code) : null,
+              name: String(raw.name),
+              metadata: Object.keys(importedMetadata).length > 0 ? importedMetadata as Prisma.InputJsonValue : Prisma.JsonNull,
+              status,
+            } });
+            catalogByName.set(nameKey, record.id);
+            if (codeKey) catalogByCode.set(codeKey, record.id);
+            created++;
+            await tx.candidateImportRow.update({ where: { id: row.id }, data: { details: `${dataset.replace('-', ' ')} ${record.id} created.` } });
+          }
         }
       }
 
@@ -875,17 +1020,35 @@ export class BulkImportService {
 
   template(dataset: Dataset): Buffer {
     const columns = this.getDatasetDefinition(dataset);
-    const rows = [columns.map((column) => column.header), columns.map((column) => column.required ? '' : '')];
-    const sheet = XLSX.utils.aoa_to_sheet(rows);
+    const sheet = XLSX.utils.aoa_to_sheet([columns.map((column) => column.header)]);
+    sheet['!autofilter'] = { ref: `A1:${XLSX.utils.encode_col(columns.length - 1)}1` };
+    sheet['!cols'] = columns.map((column) => ({ wch: Math.max(16, column.header.length + 4) }));
     const workbook = XLSX.utils.book_new();
-    const sheetName = dataset === 'candidates'
-      ? 'Candidates'
-      : dataset === 'vacancy-requests'
-        ? 'Vacancy Requests'
-        : dataset === 'legal-entities'
-          ? 'Legal Entities'
-          : dataset === 'branches' ? 'Branches' : 'Positions';
+    const sheetNames: Record<Dataset, string> = {
+      candidates: 'Candidates',
+      'vacancy-requests': 'Vacancy Requests',
+      'legal-entities': 'Legal Entities',
+      branches: 'Branches',
+      positions: 'Positions',
+      departments: 'Departments',
+      skills: 'Skills',
+      'candidate-sources': 'Candidate Sources',
+      'interview-types': 'Interview Types',
+    };
+    const sheetName = sheetNames[dataset];
     XLSX.utils.book_append_sheet(workbook, sheet, sheetName);
+    const instructions = XLSX.utils.aoa_to_sheet([
+      ['How to use this template'],
+      ['1. Enter one record per row in the first worksheet.'],
+      ['2. Keep the header names unchanged and paste values only; formulas are rejected.'],
+      ['3. Code is optional unless your organization needs a fixed external code.'],
+      ['4. Status accepts Active, Inactive, or Archived.'],
+      [],
+      ['Column', 'Required', 'Accepted heading aliases'],
+      ...columns.map((column) => [column.header, column.required ? 'Yes' : 'No', column.aliases.join(', ')]),
+    ]);
+    instructions['!cols'] = [{ wch: 34 }, { wch: 12 }, { wch: 70 }];
+    XLSX.utils.book_append_sheet(workbook, instructions, 'Instructions');
     return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
   }
 }

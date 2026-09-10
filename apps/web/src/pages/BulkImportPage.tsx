@@ -23,6 +23,7 @@ import { saveBlob } from '../utils/download';
 import './PageEnhancementsV2.css';
 
 const PAGE_SIZE = 50;
+const MASTER_DATASETS: BulkImportDataset[] = ['legal-entities', 'branches', 'positions', 'departments', 'skills', 'candidate-sources', 'interview-types'];
 
 function messageFrom(error: unknown): string {
   return error instanceof Error ? error.message : 'The import operation could not be completed.';
@@ -35,6 +36,10 @@ function datasetLabel(dataset: BulkImportDataset): string {
     case 'legal-entities': return 'Legal entities';
     case 'branches': return 'Branches';
     case 'positions': return 'Positions';
+    case 'departments': return 'Departments';
+    case 'skills': return 'Skills';
+    case 'candidate-sources': return 'Candidate sources';
+    case 'interview-types': return 'Interview types';
   }
 }
 
@@ -256,6 +261,7 @@ function BulkImportLandingPage() {
 
 function BulkImportReviewPage({ dataset, jobId }: { dataset: BulkImportDataset; jobId: string }) {
   const navigate = useNavigate();
+  const isMasterData = MASTER_DATASETS.includes(dataset);
   const [summary, setSummary] = useState<ImportJobSummary | null>(null);
   const [rows, setRows] = useState<BulkImportRowItem[]>([]);
   const [total, setTotal] = useState(0);
@@ -328,6 +334,10 @@ function BulkImportReviewPage({ dataset, jobId }: { dataset: BulkImportDataset; 
     if (dataset === 'vacancy-requests') return ['externalVacancyCode', 'positionCode', 'positionTitle', 'branchCode', 'requestedHeadcount'];
     if (dataset === 'legal-entities') return ['code', 'name', 'status'];
     if (dataset === 'branches') return ['code', 'name', 'country', 'city', 'status'];
+    if (dataset === 'departments') return ['code', 'name', 'branchCode', 'branchName', 'status'];
+    if (dataset === 'skills') return ['code', 'name', 'category', 'description', 'status'];
+    if (dataset === 'candidate-sources') return ['code', 'name', 'type', 'status'];
+    if (dataset === 'interview-types') return ['code', 'name', 'defaultDuration', 'status'];
     return ['code', 'title', 'departmentName', 'level', 'entity', 'type', 'legalEntityCode', 'description', 'status'];
   }, [dataset]);
 
@@ -345,7 +355,7 @@ function BulkImportReviewPage({ dataset, jobId }: { dataset: BulkImportDataset; 
           : 'Review master-data rows, resolve duplicates, and confirm controlled records with automatic code generation.'}
       actions={<>
         <Button variant="ghost" size="sm" onClick={() => void downloadErrors()}><Icon name="download" size={13} /> Error report</Button>
-        <Button variant="secondary" size="sm" onClick={() => void navigate('/import')}>New import</Button>
+        <Button variant="secondary" size="sm" onClick={() => void navigate(isMasterData ? '/master-data' : '/import')}>{isMasterData ? 'Back to Master Data' : 'New import'}</Button>
         <Button variant="primary" size="sm" disabled={working || confirmed || unresolved > 0 || summary?.status !== 'Review'} loading={working} loadingLabel="Confirming" onClick={() => void confirm()}><Icon name="check-circle" size={13} /> Confirm import</Button>
       </>}
     >
@@ -369,7 +379,6 @@ function BulkImportReviewPage({ dataset, jobId }: { dataset: BulkImportDataset; 
             <td className={dataTableClasses.td}><span className="text-xs text-rf-ink-muted">{row.details || 'Ready for review'}</span></td>
             <td className={dataTableClasses.td}>{row.result === 'Duplicate' && !confirmed ? <div className="flex flex-wrap gap-1.5">
               {(() => {
-                const isMasterData = ['legal-entities', 'branches', 'positions'].includes(dataset);
                 const canUpdate = !isMasterData || Boolean(row.data.masterExistingId);
                 if (!canUpdate) return null;
                 const decision: 'Import' | 'Update' = isMasterData || dataset === 'candidates' ? 'Update' : 'Import';
@@ -392,7 +401,7 @@ export function BulkImportPage() {
   const legacyJobId = new URLSearchParams(location.search).get('jobId');
   const pathSegments = location.pathname.split('/').filter(Boolean);
   const routeDatasetValue = routeDataset ?? pathSegments[1];
-  const supportedDatasets: BulkImportDataset[] = ['candidates', 'vacancy-requests', 'legal-entities', 'branches', 'positions'];
+  const supportedDatasets: BulkImportDataset[] = ['candidates', 'vacancy-requests', ...MASTER_DATASETS];
   const resolvedDataset = supportedDatasets.includes(routeDatasetValue as BulkImportDataset) ? routeDatasetValue : undefined;
   const resolvedJobId = jobId ?? (pathSegments[0] === 'import' && pathSegments.length >= 3 ? pathSegments[2] : undefined);
   const dataset: BulkImportDataset = (resolvedDataset as BulkImportDataset | undefined) ?? 'candidates';
