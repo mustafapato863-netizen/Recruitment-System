@@ -4,7 +4,7 @@ import { calculateCandidateFitScore } from '@recruitflow/validation';
 import { Icon } from '../Icon';
 import { Spinner } from '../Spinner';
 import type { ExtractedCandidate } from '../../utils/resumeParser';
-import type { ScoredVacancy } from '../../hooks/useCVIntakeFlow';
+import type { DuplicateCandidate, ScoredVacancy } from '../../hooks/useCVIntakeFlow';
 
 interface CVMatchAssignerProps {
   profile: ExtractedCandidate;
@@ -19,6 +19,9 @@ interface CVMatchAssignerProps {
   setCandidateSource: (s: string) => void;
   duplicateDecision: 'update' | 'new' | 'link';
   setDuplicateDecision: (d: 'update' | 'new' | 'link') => void;
+  duplicateCandidates: DuplicateCandidate[];
+  checkingDuplicates: boolean;
+  duplicateCheckError: string | null;
   submitting: boolean;
   onBack: () => void;
   onConfirm: () => void;
@@ -37,6 +40,9 @@ export const CVMatchAssigner: React.FC<CVMatchAssignerProps> = ({
   setCandidateSource,
   duplicateDecision,
   setDuplicateDecision,
+  duplicateCandidates,
+  checkingDuplicates,
+  duplicateCheckError,
   submitting,
   onBack,
   onConfirm,
@@ -84,6 +90,30 @@ export const CVMatchAssigner: React.FC<CVMatchAssignerProps> = ({
     return scoredList.slice(0, 3);
   }, [scoredList]);
 
+  const hasDuplicateCandidates = duplicateCandidates.length > 0;
+  const canChooseExistingCandidate = hasDuplicateCandidates && !checkingDuplicates;
+  const duplicatePanelTone = checkingDuplicates
+    ? 'border-blue-200/80 bg-blue-50/60 text-blue-900 dark:border-blue-900/50 dark:bg-blue-950/20 dark:text-blue-200'
+    : hasDuplicateCandidates
+    ? 'border-amber-200/80 bg-amber-50/60 text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-200'
+    : duplicateCheckError
+    ? 'border-orange-200/80 bg-orange-50/60 text-orange-900 dark:border-orange-900/50 dark:bg-orange-950/20 dark:text-orange-200'
+    : 'border-emerald-200/80 bg-emerald-50/60 text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-200';
+  const duplicateStatusTitle = checkingDuplicates
+    ? 'Checking candidate identity'
+    : hasDuplicateCandidates
+    ? 'Potential duplicate found'
+    : duplicateCheckError
+    ? 'Duplicate check unavailable'
+    : 'No duplicate found';
+  const duplicateStatusDescription = checkingDuplicates
+    ? 'Checking existing candidates by email and phone before you save this CV.'
+    : hasDuplicateCandidates
+    ? 'A matching candidate already exists in your organization. Choose whether to update that profile, create a separate identity, or link this CV to an application.'
+    : duplicateCheckError
+    ? duplicateCheckError
+    : 'No existing candidate matched this CV’s email or phone. A new candidate profile will be created.';
+
   return (
     <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs overflow-hidden animate-fade-in">
       {/* Header Bar */}
@@ -117,12 +147,12 @@ export const CVMatchAssigner: React.FC<CVMatchAssignerProps> = ({
           </button>
           <button
             type="button"
-            disabled={submitting}
+            disabled={submitting || checkingDuplicates}
             onClick={onConfirm}
             className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-sm cursor-pointer shadow-blue-500/20 disabled:opacity-50"
           >
-            {submitting ? <Spinner size={14} /> : <Icon name="check" size={14} />}
-            <span>Confirm & Ingest Candidate</span>
+            {submitting || checkingDuplicates ? <Spinner size={14} /> : <Icon name="check" size={14} />}
+            <span>{checkingDuplicates ? 'Checking candidate…' : 'Confirm & Ingest Candidate'}</span>
           </button>
         </div>
       </div>
@@ -131,25 +161,53 @@ export const CVMatchAssigner: React.FC<CVMatchAssignerProps> = ({
         {/* Left Card: Duplicate Identity Resolution */}
         <div className="border border-slate-200 dark:border-slate-800 rounded-2xl p-5 space-y-4">
           <div className="flex items-center gap-2">
-            <div className="w-6 h-6 rounded-lg bg-amber-50 dark:bg-amber-950 text-amber-600 flex items-center justify-center">
-              <Icon name="users" size={13} />
+            <div className={`w-6 h-6 rounded-lg flex items-center justify-center ${
+              checkingDuplicates
+                ? 'bg-blue-50 dark:bg-blue-950 text-blue-600'
+                : hasDuplicateCandidates
+                ? 'bg-amber-50 dark:bg-amber-950 text-amber-600'
+                : duplicateCheckError
+                ? 'bg-orange-50 dark:bg-orange-950 text-orange-600'
+                : 'bg-emerald-50 dark:bg-emerald-950 text-emerald-600'
+            }`}>
+              <Icon name={checkingDuplicates ? 'clock' : hasDuplicateCandidates ? 'copy' : duplicateCheckError ? 'alert-triangle' : 'check-circle'} size={13} />
             </div>
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">
-              Duplicate Identity Check
+              {duplicateStatusTitle}
             </h3>
           </div>
 
-          <div className="p-3.5 rounded-xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-900/50 text-xs">
-            <div className="flex items-center gap-2 font-bold text-amber-900 dark:text-amber-200">
-              <Icon name="copy" size={14} />
-              <span>Duplicate check</span>
+          <div className={`p-3.5 rounded-xl border text-xs ${duplicatePanelTone}`}>
+            <div className="flex items-center gap-2 font-bold">
+              <Icon name={checkingDuplicates ? 'clock' : hasDuplicateCandidates ? 'copy' : duplicateCheckError ? 'alert-triangle' : 'check-circle'} size={14} />
+              <span>{checkingDuplicates ? 'Checking duplicate identity' : hasDuplicateCandidates ? `${duplicateCandidates.length} matching candidate${duplicateCandidates.length === 1 ? '' : 's'} found` : duplicateStatusTitle}</span>
             </div>
-            <p className="text-amber-700 dark:text-amber-400 mt-1">
-              Existing candidates in your organization are checked by email or phone when you confirm this record.
-              Choose how to handle a match below.
-            </p>
+            <p className="mt-1 opacity-90">{duplicateStatusDescription}</p>
 
-            <div className="mt-3 pt-3 border-t border-amber-200/80 dark:border-amber-900/50 p-2.5 rounded-lg bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800/60">
+            {hasDuplicateCandidates && (
+              <div className="mt-3 pt-3 border-t border-amber-200/80 dark:border-amber-900/50 space-y-2">
+                <span className="font-bold block text-[10px] uppercase tracking-wider">Existing candidate match</span>
+                {duplicateCandidates.slice(0, 3).map((candidate) => (
+                  <div key={candidate.id} className="p-2.5 rounded-lg bg-white/70 dark:bg-slate-900/50 border border-amber-200/70 dark:border-amber-900/50">
+                    <strong className="text-slate-800 dark:text-slate-200 block">
+                      {[candidate.firstName, candidate.lastName].filter(Boolean).join(' ') || 'Candidate profile'}
+                    </strong>
+                    <span className="text-[10.5px] opacity-80 block mt-0.5">
+                      {candidate.candidateCode || 'Existing candidate'}
+                    </span>
+                  </div>
+                ))}
+                {duplicateCandidates.length > 3 && (
+                  <span className="text-[10px] opacity-80 block">+{duplicateCandidates.length - 3} more matches</span>
+                )}
+              </div>
+            )}
+
+            <div className={`mt-3 pt-3 border-t p-2.5 rounded-lg bg-emerald-50/80 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800/60 ${
+              hasDuplicateCandidates || duplicateCheckError
+                ? 'border-t-amber-200/80 dark:border-t-amber-900/50'
+                : 'border-t-emerald-200/80 dark:border-t-emerald-900/50'
+            }`}>
               <span className="font-bold text-emerald-600 dark:text-emerald-400 block text-[10px] uppercase tracking-wider">
                 Parsed CV record
               </span>
@@ -166,77 +224,84 @@ export const CVMatchAssigner: React.FC<CVMatchAssignerProps> = ({
           </div>
 
           <div className="space-y-3 pt-1">
-            <label
-              className={`flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer transition ${
-                duplicateDecision === 'update'
-                  ? 'border-blue-600 bg-blue-50/40 dark:bg-blue-950/20 ring-2 ring-blue-500/20'
-                  : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/40'
-              }`}
-            >
-              <input
-                type="radio"
-                name="dup-decision"
-                checked={duplicateDecision === 'update'}
-                onChange={() => setDuplicateDecision('update')}
-                className="mt-1 text-blue-600"
-              />
-              <div>
-                <strong className="block text-xs font-bold text-slate-900 dark:text-white">
-                  Update Existing Candidate Profile (Recommended)
-                </strong>
-                <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                  Enriches the existing profile with newly parsed experience, skills, and current CV document without creating duplicate records.
-                </span>
-              </div>
-            </label>
+            {canChooseExistingCandidate && (
+              <label
+                className={`flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer transition ${
+                  duplicateDecision === 'update'
+                    ? 'border-blue-600 bg-blue-50/40 dark:bg-blue-950/20 ring-2 ring-blue-500/20'
+                    : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/40'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="dup-decision"
+                  checked={duplicateDecision === 'update'}
+                  onChange={() => setDuplicateDecision('update')}
+                  className="mt-1 text-blue-600"
+                />
+                <div>
+                  <strong className="block text-xs font-bold text-slate-900 dark:text-white">
+                    Update Existing Candidate Profile (Recommended)
+                  </strong>
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Enriches the matched profile with newly parsed experience, skills, and the current CV document.
+                  </span>
+                </div>
+              </label>
+            )}
 
             <label
-              className={`flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer transition ${
-                duplicateDecision === 'new'
-                  ? 'border-blue-600 bg-blue-50/40 dark:bg-blue-950/20 ring-2 ring-blue-500/20'
-                  : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/40'
+              className={`flex items-start gap-3 p-3.5 rounded-xl border transition ${
+                checkingDuplicates
+                  ? 'border-slate-200 dark:border-slate-700 opacity-60 cursor-wait'
+                  : duplicateDecision === 'new'
+                  ? 'border-blue-600 bg-blue-50/40 dark:bg-blue-950/20 ring-2 ring-blue-500/20 cursor-pointer'
+                  : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/40 cursor-pointer'
               }`}
             >
               <input
                 type="radio"
                 name="dup-decision"
                 checked={duplicateDecision === 'new'}
+                disabled={checkingDuplicates}
                 onChange={() => setDuplicateDecision('new')}
                 className="mt-1 text-blue-600"
               />
               <div>
                 <strong className="block text-xs font-bold text-slate-900 dark:text-white">
-                  Create Fresh Independent Candidate Record
+                  Create New Candidate Profile
                 </strong>
                 <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                  Issues a new candidate identity code if this is a different individual with a shared or corporate email.
+                  Creates a new candidate identity. Use this when the CV belongs to a different person or no match was found.
                 </span>
               </div>
             </label>
 
-            <label
-              className={`flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer transition ${
-                duplicateDecision === 'link'
-                  ? 'border-blue-600 bg-blue-50/40 dark:bg-blue-950/20 ring-2 ring-blue-500/20'
-                  : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/40'
-              }`}
-            >
-              <input
-                type="radio"
-                name="dup-decision"
-                checked={duplicateDecision === 'link'}
-                onChange={() => setDuplicateDecision('link')}
-                className="mt-1 text-blue-600"
-              />
-              <div>
-                <strong className="block text-xs font-bold text-slate-900 dark:text-white">
-                  Attach as New Vacancy Application Only
-                </strong>
-                <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                  Leaves candidate master identity untouched; registers an application to the selected target opening.
-                </span>
-              </div>
-            </label>
+            {canChooseExistingCandidate && (
+              <label
+                className={`flex items-start gap-3 p-3.5 rounded-xl border cursor-pointer transition ${
+                  duplicateDecision === 'link'
+                    ? 'border-blue-600 bg-blue-50/40 dark:bg-blue-950/20 ring-2 ring-blue-500/20'
+                    : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/40'
+                }`}
+              >
+                <input
+                  type="radio"
+                  name="dup-decision"
+                  checked={duplicateDecision === 'link'}
+                  onChange={() => setDuplicateDecision('link')}
+                  className="mt-1 text-blue-600"
+                />
+                <div>
+                  <strong className="block text-xs font-bold text-slate-900 dark:text-white">
+                    Attach as New Vacancy Application Only
+                  </strong>
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                    Leaves the matched candidate profile unchanged and registers this CV against the selected opening.
+                  </span>
+                </div>
+              </label>
+            )}
           </div>
         </div>
 

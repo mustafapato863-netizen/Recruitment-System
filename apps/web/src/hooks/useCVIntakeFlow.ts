@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type { ImportJobSummary, MasterDataValueRecord, PaginatedResult, Vacancy } from '@recruitflow/contracts';
 import { calculateCandidateFitScore, type CriteriaBreakdown } from '@recruitflow/validation';
 import { getApi, postApi, postFormDataApi, patchApi, ApiError } from '../api/client';
@@ -9,6 +9,15 @@ export const INTAKE_STEPS = ['Upload', 'Validate & Edit', 'Resolve', 'Confirm'];
 export interface ScoredVacancy {
   vacancy: Vacancy;
   fitResult: CriteriaBreakdown;
+}
+
+export interface DuplicateCandidate {
+  id: string;
+  candidateCode?: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string | null;
+  phone?: string | null;
 }
 
 const ALLOWED_EXTENSIONS = ['.pdf', '.doc', '.docx'];
@@ -28,7 +37,11 @@ export function useCVIntakeFlow(initialTargetVacancy?: string | null) {
   const [initialProfile, setInitialProfile] = useState<ExtractedCandidate | null>(null);
 
   // Step 3: Resolve & Assignment state
-  const [duplicateDecision, setDuplicateDecision] = useState<'update' | 'new' | 'link'>('update');
+  const [duplicateDecision, setDuplicateDecision] = useState<'update' | 'new' | 'link'>('new');
+  const [duplicateCandidates, setDuplicateCandidates] = useState<DuplicateCandidate[]>([]);
+  const [checkingDuplicates, setCheckingDuplicates] = useState(false);
+  const [duplicateCheckError, setDuplicateCheckError] = useState<string | null>(null);
+  const duplicateLookupVersion = useRef(0);
   const [targetVacancy, setTargetVacancy] = useState<string>(initialTargetVacancy || '');
   const [targetStage, setTargetStage] = useState<string>('Screening');
   const [candidateSource, setCandidateSource] = useState<string>('CV Intake Upload');
@@ -49,6 +62,41 @@ export function useCVIntakeFlow(initialTargetVacancy?: string | null) {
   const showToast = useCallback((msg: string) => {
     setSuccessToast(msg);
     setTimeout(() => setSuccessToast(null), 4000);
+  }, []);
+
+  const lookupDuplicateCandidates = useCallback(async (candidate: ExtractedCandidate) => {
+    const requestVersion = ++duplicateLookupVersion.current;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const normalizedEmail = candidate.email?.trim().toLowerCase();
+    const normalizedPhone = candidate.phone?.replace(/\D/g, '') || '';
+
+    setCheckingDuplicates(true);
+    setDuplicateCheckError(null);
+    setDuplicateCandidates([]);
+
+    try {
+      if ((!normalizedEmail || !emailRegex.test(normalizedEmail)) && normalizedPhone.length < 7) {
+        setDuplicateDecision('new');
+        return;
+      }
+
+      const lookupParams = new URLSearchParams();
+      if (normalizedEmail && emailRegex.test(normalizedEmail)) lookupParams.set('email', normalizedEmail);
+      if (normalizedPhone.length >= 7) lookupParams.set('phone', normalizedPhone);
+
+      const matches = await getApi<DuplicateCandidate[]>(`/candidates/duplicates?${lookupParams.toString()}`);
+      if (requestVersion !== duplicateLookupVersion.current) return;
+      const safeMatches = Array.isArray(matches) ? matches : [];
+      setDuplicateCandidates(safeMatches);
+      setDuplicateDecision(safeMatches.length > 0 ? 'update' : 'new');
+    } catch {
+      if (requestVersion !== duplicateLookupVersion.current) return;
+      setDuplicateCandidates([]);
+      setDuplicateDecision('new');
+      setDuplicateCheckError('We could not complete the duplicate check. You can continue, and the server will re-check before saving.');
+    } finally {
+      if (requestVersion === duplicateLookupVersion.current) setCheckingDuplicates(false);
+    }
   }, []);
 
   const loadJobs = useCallback(async () => {
@@ -142,6 +190,11 @@ export function useCVIntakeFlow(initialTargetVacancy?: string | null) {
     setInitialProfile(null);
     setUploadedFileName(null);
     setUploadedFile(null);
+    duplicateLookupVersion.current += 1;
+    setDuplicateDecision('new');
+    setDuplicateCandidates([]);
+    setCheckingDuplicates(false);
+    setDuplicateCheckError(null);
 
     const fileNameLower = file.name.toLowerCase();
     const isWordOrPdf = ALLOWED_EXTENSIONS.some((ext) => fileNameLower.endsWith(ext)) || ALLOWED_MIMES.includes(file.type);
@@ -193,7 +246,11 @@ export function useCVIntakeFlow(initialTargetVacancy?: string | null) {
       return false;
     }
     setError(null);
+    setDuplicateCandidates([]);
+    setDuplicateDecision('new');
+    setDuplicateCheckError(null);
     setCurrentStep(2);
+    void lookupDuplicateCandidates(profile);
     return true;
   };
 
@@ -243,13 +300,12 @@ export function useCVIntakeFlow(initialTargetVacancy?: string | null) {
           const lookupParams = new URLSearchParams();
           if (candidatePayload.email) lookupParams.set('email', candidatePayload.email);
           if (candidatePayload.phone) lookupParams.set('phone', candidatePayload.phone);
-          const searchRes = await getApi<Array<{ id: string; candidateCode?: string; email?: string | null; phone?: string | null }>>(
+          const searchRes = await getApi<DuplicateCandidate[]>(
             `/candidates/duplicates?${lookupParams.toString()}`
           );
-          const match = searchRes.find(
-            (c) => (candidatePayload.email && c.email?.trim().toLowerCase() === candidatePayload.email)
-              || (candidatePayload.phone && c.phone?.replace(/\D/g, '') === candidatePayload.phone),
-          ) ?? searchRes[0];
+          // The API only returns exact duplicate suggestions. Do not infer a match
+          // from masked PII or from an arbitrary first result on the client.
+          const match = searchRes[0] ?? null;
           if (match) {
             candId = match.id;
             candCode = match.candidateCode;
@@ -282,13 +338,12 @@ export function useCVIntakeFlow(initialTargetVacancy?: string | null) {
             const lookupParams = new URLSearchParams();
             if (candidatePayload.email) lookupParams.set('email', candidatePayload.email);
             if (candidatePayload.phone) lookupParams.set('phone', candidatePayload.phone);
-            const searchRes = await getApi<Array<{ id: string; candidateCode?: string; email?: string | null; phone?: string | null }>>(
+            const searchRes = await getApi<DuplicateCandidate[]>(
               `/candidates/duplicates?${lookupParams.toString()}`
             ).catch(() => null);
-            const match = searchRes?.find(
-              (c) => (candidatePayload.email && c.email?.trim().toLowerCase() === candidatePayload.email)
-                || (candidatePayload.phone && c.phone?.replace(/\D/g, '') === candidatePayload.phone),
-            ) ?? searchRes?.[0];
+            // A 409 means the server found a conflict; use only the server's
+            // exact duplicate response to resolve it.
+            const match = searchRes?.[0] ?? null;
 
             if (match) {
               candId = match.id;
@@ -381,11 +436,16 @@ export function useCVIntakeFlow(initialTargetVacancy?: string | null) {
   };
 
   const clearUpload = () => {
+    duplicateLookupVersion.current += 1;
     setProfile(null);
     setInitialProfile(null);
     setUploadedFileName(null);
     setUploadedFile(null);
     setError(null);
+    setDuplicateDecision('new');
+    setDuplicateCandidates([]);
+    setCheckingDuplicates(false);
+    setDuplicateCheckError(null);
     setCurrentStep(0);
   };
 
@@ -413,6 +473,9 @@ export function useCVIntakeFlow(initialTargetVacancy?: string | null) {
     setCandidateSource,
     duplicateDecision,
     setDuplicateDecision,
+    duplicateCandidates,
+    checkingDuplicates,
+    duplicateCheckError,
     vacancies,
     scoredVacancies,
     confirmedCandidateCode,

@@ -35,6 +35,9 @@ export const CVIntakePage: React.FC = () => {
     setCandidateSource,
     duplicateDecision,
     setDuplicateDecision,
+    duplicateCandidates,
+    checkingDuplicates,
+    duplicateCheckError,
     vacancies,
     scoredVacancies,
     confirmedCandidateCode,
@@ -192,6 +195,9 @@ export const CVIntakePage: React.FC = () => {
           setCandidateSource={setCandidateSource}
           duplicateDecision={duplicateDecision}
           setDuplicateDecision={setDuplicateDecision}
+          duplicateCandidates={duplicateCandidates}
+          checkingDuplicates={checkingDuplicates}
+          duplicateCheckError={duplicateCheckError}
           submitting={submitting}
           onBack={() => setCurrentStep(1)}
           onConfirm={() => void executeFinalIngest()}
