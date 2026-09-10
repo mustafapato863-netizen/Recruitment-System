@@ -254,3 +254,15 @@ The focused repair pass recorded in `docs/full-app-audit-2026-09-08.md` is histo
 - Implemented tenant/category advisory locking and normalized duplicate checks so spreadsheet case and invisible whitespace cannot create new catalog duplicates.
 - Imported positions are associated with their department record through `metadata.departmentId`; existing records and metadata are preserved.
 - Interview scheduling keeps the stable five API enum codes while loading display names and default durations from the Interview Types catalog.
+# Job Titles workbook and Legal Entity removal — 2026-09-10
+
+- Supplied workbook exists at `\\sghfslogix\UserData\sghd70204\Downloads\recruitflow-job-titles-template.xlsx` and is 10,172 bytes.
+- Legal Entity is currently a first-class Prisma model and optional foreign key on branches, positions, vacancies, and vacancy requests; removal requires a schema migration and coordinated contract/API/UI changes.
+- The Job Titles template currently includes Legal Entity columns, so its import contract must be changed before the filled workbook is finalized.
+- Workbook inspection found one manually entered row and two sheets. The `Positions` sheet currently has 10 columns, including `Legal Entity Code` and `Legal Entity Name`; the `Instructions` sheet documents both obsolete columns.
+- The workbook is visually plain but structurally valid. The populated row uses numeric code/level values and a vague description; it will be replaced with clean English recruitment-role records after the application contract is updated.
+- The prior search confirms Legal Entity spans Prisma relations, master-data CRUD, bulk imports, vacancy-request validation, and multiple UI forms. A safe removal must first make records independent, then drop foreign keys/model through a migration.
+- Prisma currently keeps `legalEntityId` optional on Branch, Position, VacancyRequest, and Vacancy. Therefore dependent records can be preserved exactly while the four nullable columns and `legal_entities` table are removed.
+- Branch uniqueness is currently scoped by `(legalEntityId, code)`. After removal it must become `(organizationId, code)` so blank entity values cannot allow duplicate branch codes inside one organization.
+- Runtime validation and repository logic currently cross-check branch-to-entity ownership. Those checks become redundant; organization ownership of branch, position, and requester remains the authoritative tenant boundary.
+- The active Master Data grid still loads legal entities and renders a Legal Entity selector for Job Titles. The old `MasterDataPage` also contains a legacy implementation, but it delegates to the grid in its exported route and can be simplified after reference cleanup.

@@ -600,16 +600,16 @@ export function UsersRolesPage() {
 `,
   'pages/MasterDataPage.tsx': `
 import React, { useState, useEffect } from 'react';
-import { LegalEntityRecord, BranchRecord, PositionRecord } from '@recruitflow/contracts';
+import { BranchRecord, PositionRecord } from '@recruitflow/contracts';
 import { fetchApi } from '../api/client';
 import { Modal } from '../components/Modal';
 import { StatusBadge } from '../components/StatusBadge';
 import '../styles/admin.css';
 
-type Category = 'legal-entities' | 'branches' | 'positions';
+type Category = 'branches' | 'positions';
 
 export function MasterDataPage() {
-  const [category, setCategory] = useState<Category>('legal-entities');
+  const [category, setCategory] = useState<Category>('branches');
   const [data, setData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -631,7 +631,6 @@ export function MasterDataPage() {
   }, [category]);
 
   const categoryTitles = {
-    'legal-entities': 'Legal Entities',
     'branches': 'Branches',
     'positions': 'Positions'
   };
@@ -652,7 +651,6 @@ export function MasterDataPage() {
       <div className="page-layout">
         <div className="sidebar-panel">
           <div className="nav-list">
-            <a href="#" className={category === 'legal-entities' ? 'active' : ''} onClick={(e) => { e.preventDefault(); setCategory('legal-entities'); }}>Legal Entities</a>
             <a href="#" className={category === 'branches' ? 'active' : ''} onClick={(e) => { e.preventDefault(); setCategory('branches'); }}>Branches</a>
             <a href="#" className={category === 'positions' ? 'active' : ''} onClick={(e) => { e.preventDefault(); setCategory('positions'); }}>Positions</a>
             <a href="#" style={{ opacity: 0.5 }}>Departments</a>

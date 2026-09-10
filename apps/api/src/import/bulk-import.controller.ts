@@ -27,10 +27,9 @@ import { fileInvalid, importInvalid } from '../common/errors/api-error';
 import type { AuthUser, BulkImportDataset } from '@recruitflow/contracts';
 
 type UploadedWorkbook = { buffer: Buffer; originalname: string };
-type MasterDataImportDataset = Extract<BulkImportDataset, 'legal-entities' | 'branches' | 'positions' | 'departments' | 'skills' | 'candidate-sources' | 'interview-types'>;
+type MasterDataImportDataset = Extract<BulkImportDataset, 'branches' | 'positions' | 'departments' | 'skills' | 'candidate-sources' | 'interview-types'>;
 const WORKBOOK_UPLOAD_OPTIONS = { limits: { fileSize: 25 * 1024 * 1024 } };
 const MASTER_DATA_IMPORT_DATASETS = new Set<string>([
-  'legal-entities',
   'branches',
   'positions',
   'departments',

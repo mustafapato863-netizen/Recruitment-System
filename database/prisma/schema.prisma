@@ -18,7 +18,6 @@ model Organization {
   code                String               @unique @db.VarChar(50)
   name                String               @db.VarChar(200)
   status              String               @default("Active") @db.VarChar(30)
-  legalEntities       LegalEntity[]
   branches            Branch[]
   positions           Position[]
   users               User[]
@@ -51,31 +50,10 @@ model Organization {
   @@map("organizations")
 }
 
-model LegalEntity {
-  id              String           @id @default(uuid()) @db.Uuid
-  organizationId  String           @db.Uuid
-  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  code            String           @db.VarChar(50)
-  name            String           @db.VarChar(200)
-  status          String           @default("Active") @db.VarChar(30)
-  branches        Branch[]
-  positions       Position[]
-  vacancyRequests VacancyRequest[]
-  vacancies       Vacancy[]
-  createdAt       DateTime         @default(now()) @db.Timestamptz(6)
-  updatedAt       DateTime         @updatedAt @db.Timestamptz(6)
-
-  @@unique([organizationId, code])
-  @@index([status])
-  @@map("legal_entities")
-}
-
 model Branch {
   id              String           @id @default(uuid()) @db.Uuid
   organizationId  String           @db.Uuid
   organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  legalEntityId   String?          @db.Uuid
-  legalEntity     LegalEntity?     @relation(fields: [legalEntityId], references: [id], onDelete: Restrict)
   code            String           @db.VarChar(50)
   name            String           @db.VarChar(200)
   country         String           @default("EGY") @db.VarChar(3)
@@ -87,7 +65,7 @@ model Branch {
   createdAt       DateTime         @default(now()) @db.Timestamptz(6)
   updatedAt       DateTime         @updatedAt @db.Timestamptz(6)
 
-  @@unique([legalEntityId, code])
+  @@unique([organizationId, code])
   @@index([organizationId, status])
   @@map("branches")
 }
@@ -96,8 +74,6 @@ model Position {
   id              String           @id @default(uuid()) @db.Uuid
   organizationId  String           @db.Uuid
   organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  legalEntityId   String?          @db.Uuid
-  legalEntity     LegalEntity?     @relation(fields: [legalEntityId], references: [id], onDelete: Restrict)
   code            String           @db.VarChar(50)
   title           String           @db.VarChar(200)
   description     String?
@@ -269,8 +245,6 @@ model VacancyRequest {
   id                 String                   @id @default(uuid()) @db.Uuid
   organizationId     String                   @db.Uuid
   organization       Organization             @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  legalEntityId      String?                  @db.Uuid
-  legalEntity        LegalEntity?             @relation(fields: [legalEntityId], references: [id], onDelete: Restrict)
   branchId           String                   @db.Uuid
   branch             Branch                   @relation(fields: [branchId], references: [id], onDelete: Restrict)
   positionId         String                   @db.Uuid
@@ -326,8 +300,6 @@ model Vacancy {
   id                 String              @id @default(uuid()) @db.Uuid
   organizationId     String              @db.Uuid
   organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  legalEntityId      String?             @db.Uuid
-  legalEntity        LegalEntity?        @relation(fields: [legalEntityId], references: [id], onDelete: Restrict)
   branchId           String              @db.Uuid
   branch             Branch              @relation(fields: [branchId], references: [id], onDelete: Restrict)
   positionId         String              @db.Uuid

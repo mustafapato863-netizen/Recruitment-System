@@ -31,7 +31,7 @@ async function upsertPosition(tx, orgId, id, code, title, description) {
   });
 }
 
-async function upsertBranch(tx, orgId, legalEntityId, id, code, name, city) {
+async function upsertBranch(tx, orgId, id, code, name, city) {
   const country = 'UAE';
   const existingById = await tx.branch.findUnique({ where: { id } });
   if (existingById) {
@@ -41,7 +41,7 @@ async function upsertBranch(tx, orgId, legalEntityId, id, code, name, city) {
     });
   }
   const existingByCode = await tx.branch.findUnique({
-    where: { legalEntityId_code: { legalEntityId, code } },
+    where: { organizationId_code: { organizationId: orgId, code } },
   });
   if (existingByCode) {
     return tx.branch.update({
@@ -50,7 +50,7 @@ async function upsertBranch(tx, orgId, legalEntityId, id, code, name, city) {
     });
   }
   return tx.branch.create({
-    data: { id, organizationId: orgId, legalEntityId, code, name, city, country, status: 'Active' },
+    data: { id, organizationId: orgId, code, name, city, country, status: 'Active' },
   });
 }
 
@@ -111,15 +111,21 @@ async function upsertVacancy(tx, id, data) {
   const existingByCode = await tx.vacancy.findUnique({
     where: { vacancyCode: data.vacancyCode },
   });
+  const existingByReq = await tx.vacancy.findUnique({
+    where: { vacancyRequestId: data.vacancyRequestId },
+  });
+  // Older demo runs could associate a vacancy code with a different request.
+  // Keep the existing coded record and its history instead of failing on the
+  // one-to-one request constraint during an otherwise idempotent seed.
+  if (existingByCode && existingByReq && existingByCode.id !== existingByReq.id) {
+    return existingByCode;
+  }
   if (existingByCode) {
     return tx.vacancy.update({
       where: { id: existingByCode.id },
       data,
     });
   }
-  const existingByReq = await tx.vacancy.findUnique({
-    where: { vacancyRequestId: data.vacancyRequestId },
-  });
   if (existingByReq) {
     return tx.vacancy.update({
       where: { id: existingByReq.id },
@@ -235,7 +241,7 @@ async function upsertOfferVersion(tx, id, data) {
   });
 }
 
-async function seedDemoFixtures(tx, { organization, legalEntity, branch, position, users: seededUsers }) {
+async function seedDemoFixtures(tx, { organization, branch, position, users: seededUsers }) {
   const userRows = await tx.user.findMany({ where: { organizationId: organization.id } });
   const usersByEmail = Object.fromEntries(userRows.map((user) => [user.email, user]));
 
@@ -310,16 +316,14 @@ async function seedDemoFixtures(tx, { organization, legalEntity, branch, positio
 
   // ── 2. Real Branches from 2026 Manpower List ───────────────
   const orgId = organization.id;
-  const leId = legalEntity.id;
-
   const branches = {
-    dubai: await upsertBranch(tx, orgId, leId, fixtureId(101), 'DXB-MAIN', 'SGH Dubai Hospital', 'Dubai'),
-    ajman: await upsertBranch(tx, orgId, leId, fixtureId(102), 'AJM-HOSP', 'SGH Ajman Hospital', 'Ajman'),
-    sharjah: await upsertBranch(tx, orgId, leId, fixtureId(103), 'SHJ-HOSP', 'SGH Sharjah Hospital', 'Sharjah'),
-    mentalHealth: await upsertBranch(tx, orgId, leId, fixtureId(104), 'DXB-PSYCH', 'Mental Health Center Dubai', 'Dubai'),
-    rak: await upsertBranch(tx, orgId, leId, fixtureId(105), 'RAK-CLINIC', 'SGH Clinic RAK', 'Ras Al Khaimah'),
-    alSuyouh: await upsertBranch(tx, orgId, leId, fixtureId(106), 'SUYOUH-CLN', 'SGH Clinic Al Suyouh', 'Sharjah'),
-    group: await upsertBranch(tx, orgId, leId, fixtureId(107), 'GRP-HQ', 'SGH Group Corporate Office', 'Dubai'),
+    dubai: await upsertBranch(tx, orgId, fixtureId(101), 'DXB-MAIN', 'SGH Dubai Hospital', 'Dubai'),
+    ajman: await upsertBranch(tx, orgId, fixtureId(102), 'AJM-HOSP', 'SGH Ajman Hospital', 'Ajman'),
+    sharjah: await upsertBranch(tx, orgId, fixtureId(103), 'SHJ-HOSP', 'SGH Sharjah Hospital', 'Sharjah'),
+    mentalHealth: await upsertBranch(tx, orgId, fixtureId(104), 'DXB-PSYCH', 'Mental Health Center Dubai', 'Dubai'),
+    rak: await upsertBranch(tx, orgId, fixtureId(105), 'RAK-CLINIC', 'SGH Clinic RAK', 'Ras Al Khaimah'),
+    alSuyouh: await upsertBranch(tx, orgId, fixtureId(106), 'SUYOUH-CLN', 'SGH Clinic Al Suyouh', 'Sharjah'),
+    group: await upsertBranch(tx, orgId, fixtureId(107), 'GRP-HQ', 'SGH Group Corporate Office', 'Dubai'),
   };
 
   // ── 3. Real Positions from 2026 Manpower List ──────────────
@@ -442,7 +446,7 @@ async function seedDemoFixtures(tx, { organization, legalEntity, branch, positio
   const reqMap = {};
   for (const r of requestSeeds) {
     const createdReq = await upsertVacancyRequest(tx, r.id, {
-      organizationId: orgId, legalEntityId: leId, branchId: r.br.id, positionId: r.pos.id,
+      organizationId: orgId, branchId: r.br.id, positionId: r.pos.id,
       requesterId: r.req.id, requestCode: r.code, status: r.status,
       requestedHeadcount: r.headcount, employmentType: r.empType, reason: r.reason,
       budgetStatus: r.budget, criticality: r.crit,
@@ -470,7 +474,7 @@ async function seedDemoFixtures(tx, { organization, legalEntity, branch, positio
     const vr = reqMap[v.reqCode];
     if (!vr) continue;
     const createdVac = await upsertVacancy(tx, v.id, {
-      organizationId: orgId, legalEntityId: leId, branchId: v.br.id, positionId: v.pos.id,
+      organizationId: orgId, branchId: v.br.id, positionId: v.pos.id,
       vacancyRequestId: vr.id, vacancyCode: v.code, status: 'Open',
       approvedHeadcount: v.target, joinedHeadcount: 0,
       location: v.br.city, openedAt: dateFromNow(-v.days), targetStartDate: dateFromNow(30),

@@ -71,7 +71,6 @@ async function run() {
     ['/roles', 'roles list'],
     ['/roles/permissions', 'permission registry'],
     ['/organizations', 'organizations'],
-    ['/legal-entities', 'legal entities'],
     ['/branches', 'branches'],
     ['/positions', 'positions'],
     ['/pipeline-templates', 'pipeline templates'],

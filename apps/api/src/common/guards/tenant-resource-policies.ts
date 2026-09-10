@@ -74,7 +74,6 @@ export const TENANT_RESOURCE_POLICIES: Record<string, TenantVerifier> = {
   pipelineTemplate: directOrgScope((p) => p.pipelineTemplate),
   candidateImportJob: directOrgScope((p) => p.candidateImportJob),
   user: directOrgScope((p) => p.user),
-  legalEntity: directOrgScope((p) => p.legalEntity),
   branch: directOrgScope((p) => p.branch),
   position: directOrgScope((p) => p.position),
 

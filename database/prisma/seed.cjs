@@ -52,28 +52,11 @@ async function main() {
       },
     });
 
-    // ── Legal Entity ──────────────────────────────────────────
-    const legalEntity = await tx.legalEntity.upsert({
-      where: {
-        organizationId_code: {
-          organizationId: organization.id,
-          code: 'HQ',
-        },
-      },
-      update: {},
-      create: {
-        id: '10000000-0000-4000-8000-000000000005',
-        organizationId: organization.id,
-        code: 'HQ',
-        name: 'RecruitFlow Head Office',
-      },
-    });
-
     // ── Branch ────────────────────────────────────────────────
     const branch = await tx.branch.upsert({
       where: {
-        legalEntityId_code: {
-          legalEntityId: legalEntity.id,
+        organizationId_code: {
+          organizationId: organization.id,
           code: 'HEAD-OFFICE',
         },
       },
@@ -81,7 +64,6 @@ async function main() {
       create: {
         id: '10000000-0000-4000-8000-000000000002',
         organizationId: organization.id,
-        legalEntityId: legalEntity.id,
         code: 'HEAD-OFFICE',
         name: 'Head Office',
         country: 'EGY',
@@ -101,7 +83,6 @@ async function main() {
       create: {
         id: '10000000-0000-4000-8000-000000000003',
         organizationId: organization.id,
-        legalEntityId: legalEntity.id,
         code: 'SSE',
         title: 'Senior Software Engineer',
       },
@@ -113,7 +94,6 @@ async function main() {
       update: {},
       create: {
         organizationId: organization.id,
-        legalEntityId: legalEntity.id,
         code: 'SR-PHARM',
         title: 'Senior Pharmacist',
         description: 'Licensed pharmacist for retail pharmacy operations.',
@@ -482,7 +462,7 @@ async function main() {
       }
     }
 
-    const demo = await seedDemoFixtures(tx, { organization, legalEntity, branch, position, users });
+    const demo = await seedDemoFixtures(tx, { organization, branch, position, users });
 
     // ── Organization B (for Cross-Tenant Isolation Testing) ─────
     const orgB = await tx.organization.upsert({
@@ -495,24 +475,12 @@ async function main() {
       },
     });
 
-    const legalEntityB = await tx.legalEntity.upsert({
-      where: { organizationId_code: { organizationId: orgB.id, code: 'ACME-HQ' } },
-      update: {},
-      create: {
-        id: '20000000-0000-4000-8000-000000000005',
-        organizationId: orgB.id,
-        code: 'ACME-HQ',
-        name: 'Acme Head Office',
-      },
-    });
-
     const branchB = await tx.branch.upsert({
-      where: { legalEntityId_code: { legalEntityId: legalEntityB.id, code: 'ACME-ALEX' } },
+      where: { organizationId_code: { organizationId: orgB.id, code: 'ACME-ALEX' } },
       update: {},
       create: {
         id: '20000000-0000-4000-8000-000000000002',
         organizationId: orgB.id,
-        legalEntityId: legalEntityB.id,
         code: 'ACME-ALEX',
         name: 'Alexandria Medical Branch',
         country: 'EGY',
@@ -526,7 +494,6 @@ async function main() {
       create: {
         id: '20000000-0000-4000-8000-000000000003',
         organizationId: orgB.id,
-        legalEntityId: legalEntityB.id,
         code: 'MED-DIR',
         title: 'Medical Director',
       },
@@ -574,7 +541,7 @@ async function main() {
       },
     });
 
-    return { organization, legalEntity, branch, position, users, roles, demo, orgB, userB, candidateB, branchB };
+    return { organization, branch, position, users, roles, demo, orgB, userB, candidateB, branchB };
   }, { timeout: 30000 });
 
   await resyncCodeSequences();

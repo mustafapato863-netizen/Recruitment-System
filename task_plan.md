@@ -387,3 +387,16 @@ Implementation status (2026-09-10):
 - [x] Extended the Positions upload flow to accept Rowdata headers, create missing departments once, and expose correct Update/Skip decisions for duplicates.
 - [x] Ran typecheck, lint, Prisma validation/migration status, API tests, web tests, production builds, bundle checks, and importer dry runs.
 - [x] Applied scripts to an explicitly selected local test organization; no production database was modified.
+# Job Titles workbook and Legal Entity removal — 2026-09-10
+
+Goal: remove Legal Entity from the active product model and workflows without breaking existing tenant data, and update import templates so the user can fill them afterward.
+
+1. Inspect the workbook, import contract, schema, APIs, and UI references — in progress.
+2. Remove Legal Entity columns from generated templates and prepare a clean Job Titles workbook — pending.
+3. Remove Legal Entity from contracts, database relationships, API logic, imports, and UI — pending.
+4. Add a safe migration/backfill for existing records — pending.
+5. Run migration, type, lint, unit, build, and workbook verification — pending.
+
+Constraints: preserve existing branch/position/vacancy records, remove the user-facing and active dependency rather than silently dropping dependent rows, keep Job Titles import deduplicated, and do not add sample rows because the user will fill the workbook.
+
+Implementation completed: the active schema/API/UI/import contracts no longer expose Legal Entity; the safe removal migration was applied locally; the supplied Job Titles workbook is a blank eight-column template; and all planned verification checks passed. Production only needs the migration during the next deployment.

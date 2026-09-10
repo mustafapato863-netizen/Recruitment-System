@@ -38,31 +38,20 @@ async function createTenantFixtures(orgId, suffix, runId) {
     },
   }) || (await prisma.user.findFirst({ where: { organizationId: orgId } }));
 
-  // 1. Legal Entity
-  const legalEntity = await prisma.legalEntity.create({
-    data: {
-      organizationId: orgId,
-      code: `LE_${prefix}`.slice(0, 50),
-      name: `Legal Entity ${suffix} ${runId}`,
-    },
-  });
-
-  // 2. Branch
+  // 1. Branch
   const branch = await prisma.branch.create({
     data: {
       organizationId: orgId,
-      legalEntityId: legalEntity.id,
       code: `BR_${prefix}`.slice(0, 50),
       name: `Branch ${suffix} ${runId}`,
       city: 'Cairo',
     },
   });
 
-  // 3. Position
+  // 2. Position
   const position = await prisma.position.create({
     data: {
       organizationId: orgId,
-      legalEntityId: legalEntity.id,
       code: `POS_${prefix}`.slice(0, 50),
       title: `Position ${suffix} ${runId}`,
     },
@@ -359,7 +348,6 @@ async function createTenantFixtures(orgId, suffix, runId) {
     organizationId: orgId,
     suffix,
     prefix,
-    legalEntity,
     branch,
     position,
     user,
@@ -585,14 +573,13 @@ async function cleanup(runId) {
     },
   });
 
-  // 12. Roles, Users, Positions, Branches, Legal Entities
+  // 12. Roles, Users, Positions, and Branches
   await prisma.userRole.deleteMany({ where: { user: { email: { contains: prefixLower } } } });
   await prisma.rolePermission.deleteMany({ where: { role: { code: { contains: prefix } } } });
   await prisma.role.deleteMany({ where: { code: { contains: prefix } } });
   await prisma.user.deleteMany({ where: { email: { contains: prefixLower } } });
   await prisma.position.deleteMany({ where: { code: { contains: prefix } } });
   await prisma.branch.deleteMany({ where: { code: { contains: prefix } } });
-  await prisma.legalEntity.deleteMany({ where: { code: { contains: prefix } } });
 }
 
 module.exports = {

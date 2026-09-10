@@ -18,10 +18,6 @@ export class CreateVacancyRequestDto {
   @IsUUID()
   organizationId?: string;
 
-  @IsOptional()
-  @IsUUID()
-  legalEntityId?: string | null;
-
   @IsUUID()
   branchId!: string;
 
@@ -94,10 +90,6 @@ export class CreateVacancyRequestDto {
 }
 
 export class UpdateVacancyRequestDto {
-  @IsOptional()
-  @IsUUID()
-  legalEntityId?: string | null;
-
   @IsOptional()
   @IsUUID()
   branchId?: string;

@@ -14,7 +14,6 @@ describe('BulkImportService', () => {
     branch: { findMany: vi.fn() },
     position: { findMany: vi.fn() },
     masterDataValue: { findMany: vi.fn(), create: vi.fn(), update: vi.fn() },
-    legalEntity: { findMany: vi.fn() },
     user: { findMany: vi.fn() },
     vacancy: { findMany: vi.fn() },
     vacancyRequest: { findMany: vi.fn() },
@@ -83,10 +82,6 @@ describe('BulkImportService', () => {
     it('generates valid XLSX templates for master data entities', () => {
       const service = createService();
 
-      const leBuffer = service.template('legal-entities');
-      const leWb = XLSX.read(leBuffer, { type: 'buffer' });
-      expect(leWb.SheetNames).toContain('Legal Entities');
-
       const brBuffer = service.template('branches');
       const brWb = XLSX.read(brBuffer, { type: 'buffer' });
       expect(brWb.SheetNames).toContain('Branches');
@@ -96,6 +91,9 @@ describe('BulkImportService', () => {
       const posBuffer = service.template('positions');
       const posWb = XLSX.read(posBuffer, { type: 'buffer' });
       expect(posWb.SheetNames).toContain('Positions');
+      const positionHeaders = XLSX.utils.sheet_to_json<string[]>(posWb.Sheets['Positions'], { header: 1 })[0];
+      expect(positionHeaders).not.toContain('Legal Entity Code');
+      expect(positionHeaders).not.toContain('Legal Entity Name');
     });
 
     it('generates structured templates for every Master Data grid category', () => {
@@ -209,7 +207,6 @@ describe('BulkImportService', () => {
     });
 
     it('marks repeated Rowdata titles as duplicates before confirmation', async () => {
-      mockPrisma.legalEntity.findMany = vi.fn().mockResolvedValue([]);
       mockPrisma.branch.findMany = vi.fn().mockResolvedValue([]);
       mockPrisma.position.findMany = vi.fn().mockResolvedValue([]);
       mockPrisma.masterDataValue.findMany = vi.fn().mockResolvedValue([]);
@@ -235,7 +232,6 @@ describe('BulkImportService', () => {
     });
 
     it('stages repeated department names once and flags the duplicate row', async () => {
-      mockPrisma.legalEntity.findMany = vi.fn().mockResolvedValue([]);
       mockPrisma.branch.findMany = vi.fn().mockResolvedValue([]);
       mockPrisma.position.findMany = vi.fn().mockResolvedValue([]);
       mockPrisma.masterDataValue.findMany = vi.fn().mockResolvedValue([]);

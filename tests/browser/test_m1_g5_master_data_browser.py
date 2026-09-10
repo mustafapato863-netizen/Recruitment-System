@@ -139,62 +139,14 @@ def run_browser_tests():
                 # Wait for interaction stability
                 page.wait_for_timeout(200)
 
-                # Creation Flow for Legal Entity
-                page.click('button[role="tab"]:has-text("Legal Entities")')
-                print("-> Clicked Tab ", end="", flush=True)
-                page.locator('button:has-text("Add Legal Entity")').first.click()
-                print("-> Clicked Add ", end="", flush=True)
-                page.wait_for_selector('input#m-name', state="visible")
-                le_name = f"LE_{width}_{theme}_{run_id}"
-                page.fill('input#m-name', le_name)
-                page.click('button[type="submit"]:has-text("Save")')
-                print(" -> Created LE ", end="", flush=True)
-                
-                # Validate Creation & Archive/Restore Toggle
-                row = get_row(page, le_name)
-                row.locator('button:has-text("Archive")').first.click()
-                get_row(page, le_name).locator('text=Archived').first.wait_for(state="visible")
-                print(" -> Archived ", end="", flush=True)
-                
-                row = get_row(page, le_name)
-                row.locator('button:has-text("Restore")').first.click()
-                get_row(page, le_name).locator('text=Active').first.wait_for(state="visible")
-                print(" -> Restored ", end="", flush=True)
-                
-                # Reload to refresh the legal-entities list in the branch creation dropdown
-                page.reload()
-                page.wait_for_selector("text=Master Data & Catalogs", state="visible")
-                
-                # Create a Branch referencing the Legal Entity
+                # Verify the simplified Branches catalog can be opened without
+                # the removed entity workflow.
                 page.click('button[role="tab"]:has-text("Branches")')
-                page.locator('button:has-text("Add Branch")').first.click()
-                page.wait_for_selector('input#m-name', state="visible")
-                page.fill('input#m-name', f"Branch_{width}_{theme}_{run_id}")
-                
-                # The select element has id m-entity, use the option's value
-                option_value = page.locator(f'option:has-text("{le_name}")').first.get_attribute("value")
-                page.locator('select#m-entity').select_option(value=option_value)
-                page.click('button[type="submit"]:has-text("Save")')
-                
-                get_row(page, f"Branch_{width}_{theme}_{run_id}").wait_for(state="visible")
-                print(" -> Created Branch ", end="", flush=True)
-                
-                # Go back to Legal Entities and attempt to delete the referenced LE
-                page.click('button[role="tab"]:has-text("Legal Entities")')
-                ref_row = get_row(page, le_name)
-                ref_row.locator('button:has-text("Delete")').first.click()
-                print(" -> Clicked Delete ", end="", flush=True)
-                
-                # Wait for API to return 409 and UI to alert
-                page.wait_for_timeout(1000)
-                has_error_alert = any("failed" in msg.lower() or "conflict" in msg.lower() or "referenced" in msg.lower() for msg in dialog_messages)
-                if not has_error_alert:
-                    if not page.locator('text=Failed to delete').is_visible() and not page.locator('text=referenced').is_visible():
-                        raise Exception(f"Expected reference-delete error alert, got {dialog_messages} and no visible UI error.")
+                page.wait_for_selector('text=Branches', state="visible")
                 
                 # Check Console/HTTP Errors
-                # Ignore 401 (auth check on load) and 409 (expected from the reference delete test)
-                ignore_list = ["favicon", "vite", "401", "409"]
+                # Ignore the auth check performed while the page initializes.
+                ignore_list = ["favicon", "vite", "401"]
                 real_console_errors = [e for e in console_errors if not any(x in e.lower() for x in ignore_list)]
                 real_http_errors = [e for e in http_errors if not any(x in e.lower() for x in ignore_list)]
                 
@@ -225,7 +177,7 @@ def run_browser_tests():
                 page.goto(f"{BASE_URL}/master-data")
                 page.wait_for_selector("text=Master Data & Catalogs", state="visible")
                 
-                create_btn = page.locator('button:has-text("Add Legal Entity")')
+                create_btn = page.locator('button:has-text("Add row")')
                 if create_btn.count() > 0 and create_btn.is_visible():
                     raise Exception("Recruiter should not see Create button")
                     

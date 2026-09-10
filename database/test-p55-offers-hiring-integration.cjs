@@ -134,7 +134,7 @@ async function runTests() {
 
     const baseVacancy = await prisma.vacancy.findFirst({
       where: { organizationId: orgAAdminRecord.organizationId, status: 'Open' },
-      select: { branchId: true, positionId: true, legalEntityId: true },
+      select: { branchId: true, positionId: true },
     });
     if (!baseVacancy) throw new Error('No open vacancy context exists for the joining fixture');
 
@@ -142,7 +142,6 @@ async function runTests() {
     const fixtureRequest = await prisma.vacancyRequest.create({
       data: {
         organizationId: orgAAdminRecord.organizationId,
-        legalEntityId: baseVacancy.legalEntityId,
         branchId: baseVacancy.branchId,
         positionId: baseVacancy.positionId,
         requesterId: orgAAdminRecord.id,
@@ -164,7 +163,6 @@ async function runTests() {
     testVacancy = await prisma.vacancy.create({
       data: {
         organizationId: orgAAdminRecord.organizationId,
-        legalEntityId: baseVacancy.legalEntityId,
         branchId: baseVacancy.branchId,
         positionId: baseVacancy.positionId,
         vacancyRequestId: fixtureRequest.id,

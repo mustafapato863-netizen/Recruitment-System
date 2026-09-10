@@ -167,7 +167,7 @@ async function main() {
     const code = `VL-${slug(row.title).toUpperCase()}`;
     return [code, row.title, `Source: VL.xlsx / ${row.sheetName} row ${row.sourceRow}. Department: ${row.department || '—'}. Section: ${row.section || '—'}. Level: ${row.level || '—'}. Source status: ${row.status || '—'}.`, 'Active'];
   });
-  const vacancyHeaders = ['Position Code', 'Position Title', 'Branch Code', 'Legal Entity Code', 'Requested Headcount', 'Employment Type', 'Budget Status', 'Criticality', 'Required Skills', 'Minimum Experience Years', 'Work Location', 'External Vacancy Code', 'Justification', 'Job Summary', 'Role Description', 'Qualifications', 'Benefits'];
+  const vacancyHeaders = ['Position Code', 'Position Title', 'Branch Code', 'Requested Headcount', 'Employment Type', 'Budget Status', 'Criticality', 'Required Skills', 'Minimum Experience Years', 'Work Location', 'External Vacancy Code', 'Justification', 'Job Summary', 'Role Description', 'Qualifications', 'Benefits'];
   const vacancyRows = rows.map((row) => {
     const code = `VL-${slug(row.title).toUpperCase()}`;
     const skills = recommendedSkills(row);

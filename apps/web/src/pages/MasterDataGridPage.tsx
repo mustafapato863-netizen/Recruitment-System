@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ClipboardEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { BulkImportDataset, BulkImportInspectResult, MasterDataCategory, LegalEntityRecord } from '@recruitflow/contracts';
+import type { BulkImportDataset, BulkImportInspectResult, MasterDataCategory } from '@recruitflow/contracts';
 import { ApiError, downloadApi, fetchApi, postFormDataApi } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { Alert, Button, Input, PageFrame, PageState, Select, Tabs } from '../components/ui';
@@ -16,7 +16,6 @@ type CatalogRow = {
   name: string;
   country?: string | null;
   city?: string | null;
-  legalEntityId?: string | null;
   metadata?: Record<string, unknown> | null;
   status: string;
   version: number;
@@ -30,7 +29,7 @@ type MetadataField = {
   label: string;
   type?: 'text' | 'select';
 };
-type GridField = 'code' | 'name' | 'country' | 'city' | 'legalEntityId' | 'status' | MetadataField['key'];
+type GridField = 'code' | 'name' | 'country' | 'city' | 'status' | MetadataField['key'];
 
 const COUNTRY_OPTIONS = [
   { code: 'EGY', label: 'EGY · Egypt' },
@@ -103,9 +102,8 @@ function normalizeLegacyCatalogRow(category: CatalogKey, value: Record<string, u
     name: typeof value.name === 'string' ? value.name : title ?? '',
     country: typeof value.country === 'string' ? value.country : 'EGY',
     city: typeof value.city === 'string' ? value.city : null,
-    legalEntityId: typeof value.legalEntityId === 'string' ? value.legalEntityId : null,
     metadata: category === 'job-titles'
-      ? { ...metadata, legalEntityId: value.legalEntityId ?? metadata.legalEntityId, description: value.description ?? metadata.description }
+      ? { ...metadata, description: value.description ?? metadata.description }
       : metadata,
     status: typeof value.status === 'string' ? value.status : 'Active',
     version: typeof value.version === 'number' ? value.version : 1,
@@ -120,7 +118,6 @@ export function MasterDataGridPage() {
   const canManage = Boolean(user?.permissions.includes('MASTER_DATA_MANAGE'));
   const [category, setCategory] = useState<CatalogKey>('branches');
   const [rows, setRows] = useState<CatalogRow[]>([]);
-  const [legalEntities, setLegalEntities] = useState<LegalEntityRecord[]>([]);
   const [branchOptions, setBranchOptions] = useState<Array<{ id: string; name: string; code?: string }>>([]);
   const [departmentOptions, setDepartmentOptions] = useState<Array<{ id: string; name: string; code?: string }>>([]);
   const [search, setSearch] = useState('');
@@ -164,21 +161,16 @@ export function MasterDataGridPage() {
     setNotice('');
     setNoticeKind('success');
     try {
-      const requests: [Promise<CatalogRow[]>, Promise<LegalEntityRecord[] | unknown[]>, Promise<Array<{ id: string; name: string; code?: string }> | unknown[]>, Promise<Array<{ id: string; name: string; code?: string }> | unknown[]>] = [
+      const requests: [Promise<CatalogRow[]>, Promise<Array<{ id: string; name: string; code?: string }> | unknown[]>, Promise<Array<{ id: string; name: string; code?: string }> | unknown[]>] = [
         loadCatalog(selectedCategory),
-        selectedCategory === 'job-titles' ? fetchApi<LegalEntityRecord[]>('/legal-entities') : Promise.resolve([]),
         selectedCategory === 'departments' ? fetchApi<Array<{ id: string; name: string; code?: string }>>('/branches') : Promise.resolve([]),
         selectedCategory === 'job-titles' ? fetchApi<Array<{ id: string; name: string; code?: string }>>('/master-data/catalog/departments') : Promise.resolve([]),
       ];
-      const [catalogResult, entitiesResult, branchesResult, departmentsResult] = await Promise.allSettled(requests);
+      const [catalogResult, branchesResult, departmentsResult] = await Promise.allSettled(requests);
       if (catalogResult.status === 'rejected') throw catalogResult.reason;
       const catalog = catalogResult.value;
       setRows(Array.isArray(catalog) ? catalog : []);
       setDirtyIds(new Set());
-      if (selectedCategory === 'job-titles') {
-        if (entitiesResult.status === 'fulfilled' && Array.isArray(entitiesResult.value)) setLegalEntities(entitiesResult.value as LegalEntityRecord[]);
-        else { setNoticeKind('warning'); setNotice('Reference options could not be loaded. Retry before adding a linked record.'); }
-      }
       if (selectedCategory === 'departments') {
         if (branchesResult.status === 'fulfilled' && Array.isArray(branchesResult.value)) setBranchOptions(branchesResult.value as Array<{ id: string; name: string; code?: string }>);
         else { setNoticeKind('warning'); setNotice('Branch options could not be loaded. Retry before adding a linked record.'); }
@@ -238,7 +230,6 @@ export function MasterDataGridPage() {
       name: '',
       country: category === 'branches' ? 'EGY' : undefined,
       city: category === 'branches' ? '' : undefined,
-      legalEntityId: category === 'job-titles' ? null : undefined,
       metadata: null,
       status: 'Active',
       version: 1,
@@ -343,7 +334,6 @@ export function MasterDataGridPage() {
           code: row.code?.trim() || null,
           name: row.name.trim(),
           ...(category === 'branches' ? { country: row.country?.trim().toUpperCase() || 'EGY', city: row.city?.trim() || null } : {}),
-          ...(category === 'job-titles' ? { legalEntityId: row.legalEntityId || null } : {}),
           ...(row.metadata ? { metadata: row.metadata } : {}),
           status: row.status,
         })) }),
@@ -366,7 +356,7 @@ export function MasterDataGridPage() {
     const values = text.split(/\r?\n/).filter((line) => line.length > 0).map((line) => line.split('\t'));
     const fields: GridField[] = category === 'branches'
       ? ['code', 'name', 'country', 'city', 'status']
-      : ['code', 'name', ...(category === 'job-titles' ? ['legalEntityId' as const] : []), ...METADATA_FIELDS[category].map((field) => field.key as GridField), 'status'];
+      : ['code', 'name', ...METADATA_FIELDS[category].map((field) => field.key as GridField), 'status'];
     const changedIds = new Set<string>();
     const next = [...rows];
     let stagedCount = 0;
@@ -382,7 +372,6 @@ export function MasterDataGridPage() {
           name: '',
           country: category === 'branches' ? 'EGY' : undefined,
           city: category === 'branches' ? '' : undefined,
-          legalEntityId: category === 'job-titles' ? legalEntities.find((item) => item.status === 'Active')?.id || null : undefined,
           metadata: null,
           status: 'Active',
           version: 1,
@@ -394,7 +383,7 @@ export function MasterDataGridPage() {
       cells.forEach((value, colOffset) => {
         const field = fields[fields.indexOf(activeCell.field) + colOffset];
         if (!field) return;
-        if (field === 'code' || field === 'name' || field === 'country' || field === 'city' || field === 'legalEntityId' || field === 'status') {
+        if (field === 'code' || field === 'name' || field === 'country' || field === 'city' || field === 'status') {
           next[targetIndex] = { ...next[targetIndex], [field]: value.trim() };
         } else {
           next[targetIndex] = {
@@ -478,12 +467,11 @@ export function MasterDataGridPage() {
       {isLoading ? <div className="py-12 text-center text-sm text-rf-ink-muted">Loading Master Data…</div> : visibleRows.length === 0 ? <PageState kind="empty" title="No values configured" description="Add a row to start this category." /> : (
         <div className="mt-3 overflow-x-auto rounded-2xl border border-rf-border-subtle bg-rf-surface">
           <table ref={pasteRef} onPaste={onPaste} className="min-w-[720px] w-full text-left text-xs">
-            <thead className="border-b border-rf-border-subtle bg-rf-surface-subtle text-[10px] font-extrabold uppercase tracking-wider text-rf-ink-muted"><tr><th className="px-3 py-3">Code</th><th className="px-3 py-3">{category === 'job-titles' ? 'Title' : 'Name'}</th>{category === 'job-titles' && <th className="px-3 py-3">Legal Entity</th>}{category === 'branches' && <><th className="px-3 py-3">Country</th><th className="px-3 py-3">City</th></>}{metadataFields.map((field) => <th key={field.key} className="px-3 py-3">{field.label}</th>)}<th className="px-3 py-3">Status</th></tr></thead>
+            <thead className="border-b border-rf-border-subtle bg-rf-surface-subtle text-[10px] font-extrabold uppercase tracking-wider text-rf-ink-muted"><tr><th className="px-3 py-3">Code</th><th className="px-3 py-3">{category === 'job-titles' ? 'Title' : 'Name'}</th>{category === 'branches' && <><th className="px-3 py-3">Country</th><th className="px-3 py-3">City</th></>}{metadataFields.map((field) => <th key={field.key} className="px-3 py-3">{field.label}</th>)}<th className="px-3 py-3">Status</th></tr></thead>
             <tbody className="divide-y divide-rf-border-subtle">
               {visibleRows.map((row) => { const actualIndex = rows.findIndex((item) => item.id === row.id); return <tr key={row.id} className={row.isNew ? 'bg-amber-50/40 dark:bg-amber-950/10' : undefined}>
                 {(['code'] as const).map((field) => <td key={field} className="px-3 py-2"><Input aria-label={`${field} for ${row.name || 'new row'}`} value={displayValue(row, field)} disabled={!canManage} onFocus={() => setActiveCell({ row: actualIndex, field })} onChange={(event) => updateRow(row.id, { [field]: event.target.value })} placeholder="Auto" /></td>)}
                 <td className="px-3 py-2"><Input aria-label={`name for ${row.name || 'new row'}`} value={displayValue(row, 'name')} disabled={!canManage} onFocus={() => setActiveCell({ row: actualIndex, field: 'name' })} onChange={(event) => updateRow(row.id, { name: event.target.value })} placeholder="Required" /></td>
-                {category === 'job-titles' && <td className="px-3 py-2"><Select aria-label={`legal entity for ${row.name || 'new row'}`} value={row.legalEntityId || ''} disabled={!canManage} onFocus={() => setActiveCell({ row: actualIndex, field: 'legalEntityId' })} onChange={(event) => updateRow(row.id, { legalEntityId: event.target.value || null })}><option value="">Any legal entity</option>{legalEntities.map((entity) => <option key={entity.id} value={entity.id}>{entity.name} ({entity.code})</option>)}</Select></td>}
                 {category === 'branches' && <td className="px-3 py-2"><Select aria-label={`country for ${row.name || 'new row'}`} value={row.country || 'EGY'} disabled={!canManage} onFocus={() => setActiveCell({ row: actualIndex, field: 'country' })} onChange={(event) => updateRow(row.id, { country: event.target.value })}>{COUNTRY_OPTIONS.map((country) => <option key={country.code} value={country.code}>{country.label}</option>)}</Select></td>}
                 {category === 'branches' && <td className="px-3 py-2"><Select aria-label={`city for ${row.name || 'new row'}`} value={row.city || ''} disabled={!canManage} onFocus={() => setActiveCell({ row: actualIndex, field: 'city' })} onChange={(event) => updateRow(row.id, { city: event.target.value || null })}><option value="">Select city</option>{cityOptions(row.city || '').map((city) => <option key={city} value={city}>{city}</option>)}</Select></td>}
                 {metadataFields.map((field) => <td key={field.key} className="px-3 py-2">{field.type === 'select' && field.key === 'branchId' ? <Select aria-label={`${field.label} for ${row.name || 'new row'}`} value={metadataValue(row, field.key)} disabled={!canManage} onChange={(event) => updateMetadata(row.id, field.key, event.target.value)}><option value="">Any branch</option>{branchOptions.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}{branch.code ? ` (${branch.code})` : ''}</option>)}</Select> : field.type === 'select' && field.key === 'departmentId' ? <Select aria-label={`${field.label} for ${row.name || 'new row'}`} value={metadataValue(row, field.key)} disabled={!canManage} onChange={(event) => updateMetadata(row.id, field.key, event.target.value)}><option value="">Any department</option>{departmentOptions.map((department) => <option key={department.id} value={department.id}>{department.name}{department.code ? ` (${department.code})` : ''}</option>)}</Select> : <Input aria-label={`${field.label} for ${row.name || 'new row'}`} value={metadataValue(row, field.key)} disabled={!canManage} onFocus={() => setActiveCell({ row: actualIndex, field: field.key })} onChange={(event) => updateMetadata(row.id, field.key, event.target.value)} placeholder={field.key === 'defaultDuration' ? 'Minutes' : ''} />}</td>)}

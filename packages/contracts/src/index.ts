@@ -110,7 +110,6 @@ export interface VacancyRequest {
   position?: { title: string } | null;
   id: string;
   organizationId: string;
-  legalEntityId: string | null;
   branchId: string;
   positionId: string;
   requesterId: string;
@@ -138,7 +137,6 @@ export interface VacancyRequest {
 export interface Vacancy {
   id: string;
   organizationId: string;
-  legalEntityId: string | null;
   branchId: string;
   positionId: string;
   position?: { id: string; title: string; code?: string } | null;
@@ -215,7 +213,6 @@ export interface JobWorkQueueItem {
 
 export interface CreateVacancyRequestInput {
   organizationId: string;
-  legalEntityId?: string | null;
   branchId: string;
   positionId: string;
   requesterId: string;
@@ -247,7 +244,6 @@ export interface VacancyCoreContext {
 }
 
 export interface UpdateVacancyRequestInput {
-  legalEntityId?: string | null;
   branchId?: string;
   positionId?: string;
   requestedHeadcount?: number;
@@ -296,7 +292,6 @@ export interface VacancyDetailView extends Vacancy {
   organizationName?: string | undefined;
   organizationCode?: string | undefined;
   branchName?: string | undefined;
-  legalEntityName?: string | undefined;
   positionTitle?: string | undefined;
   funnelCounts: {
     applied: number;
@@ -533,20 +528,9 @@ export interface OrganizationDetail {
   status: string;
 }
 
-export interface LegalEntityRecord {
-  id: string;
-  organizationId: string;
-  code: string;
-  name: string;
-  status: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
 export interface BranchRecord {
   id: string;
   organizationId: string;
-  legalEntityId: string | null;
   code: string;
   name: string;
   country: string;
@@ -1315,7 +1299,6 @@ export interface ImportRowDecisionInput {
 export type BulkImportDataset =
   | 'candidates'
   | 'vacancy-requests'
-  | 'legal-entities'
   | 'branches'
   | 'positions'
   | 'departments'

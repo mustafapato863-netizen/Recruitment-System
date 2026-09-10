@@ -384,10 +384,6 @@ async function main() {
   });
   if (!org) throw new Error('RECRUITFLOW-DEMO organization not found');
 
-  const legalEntity = await prisma.legalEntity.findFirst({
-    where: { organizationId: org.id },
-  });
-
   const branches = await prisma.branch.findMany({
     where: { organizationId: org.id },
   });
@@ -414,7 +410,6 @@ async function main() {
       position = await prisma.position.create({
         data: {
           organizationId: org.id,
-          legalEntityId: legalEntity?.id,
           code,
           title: req.title,
           description: req.description,
@@ -455,7 +450,6 @@ async function main() {
       const vacancyRequest = await prisma.vacancyRequest.create({
         data: {
           organizationId: org.id,
-          legalEntityId: legalEntity?.id,
           branchId: targetBranch.id,
           positionId: position.id,
           requesterId: adminUser.id,
@@ -479,7 +473,6 @@ async function main() {
       vacancy = await prisma.vacancy.create({
         data: {
           organizationId: org.id,
-          legalEntityId: legalEntity?.id,
           branchId: targetBranch.id,
           positionId: position.id,
           vacancyRequestId: vacancyRequest.id,

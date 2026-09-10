@@ -141,7 +141,8 @@ describe('BulkImportPage', () => {
       expect(screen.getByText('Bulk Import Center')).toBeInTheDocument();
       expect(screen.getByRole('tab', { name: /candidates/i })).toBeInTheDocument();
       expect(screen.getByRole('tab', { name: /vacancy requests/i })).toBeInTheDocument();
-      expect(screen.getByRole('tab', { name: /legal entities/i })).toBeInTheDocument();
+      expect(screen.getByRole('tab', { name: /branches/i })).toBeInTheDocument();
+      expect(screen.queryByRole('tab', { name: /legal entities/i })).not.toBeInTheDocument();
 
       await waitFor(() => {
         expect(screen.getByText('candidates_batch_jan.xlsx')).toBeInTheDocument();

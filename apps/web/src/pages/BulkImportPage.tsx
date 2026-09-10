@@ -23,7 +23,7 @@ import { saveBlob } from '../utils/download';
 import './PageEnhancementsV2.css';
 
 const PAGE_SIZE = 50;
-const MASTER_DATASETS: BulkImportDataset[] = ['legal-entities', 'branches', 'positions', 'departments', 'skills', 'candidate-sources', 'interview-types'];
+const MASTER_DATASETS: BulkImportDataset[] = ['branches', 'positions', 'departments', 'skills', 'candidate-sources', 'interview-types'];
 
 function messageFrom(error: unknown): string {
   return error instanceof Error ? error.message : 'The import operation could not be completed.';
@@ -33,7 +33,6 @@ function datasetLabel(dataset: BulkImportDataset): string {
   switch (dataset) {
     case 'candidates': return 'Candidate database';
     case 'vacancy-requests': return 'Vacancy requests';
-    case 'legal-entities': return 'Legal entities';
     case 'branches': return 'Branches';
     case 'positions': return 'Positions';
     case 'departments': return 'Departments';
@@ -55,7 +54,7 @@ function safeValue(value: unknown): string {
 
 function BulkImportLandingPage() {
   const { user } = useAuth();
-  const [dataset, setDataset] = useState<BulkImportDataset>(user?.permissions.includes('CANDIDATE_CREATE') ? 'candidates' : user?.permissions.includes('VACANCY_REQUEST_CREATE') ? 'vacancy-requests' : 'legal-entities');
+  const [dataset, setDataset] = useState<BulkImportDataset>(user?.permissions.includes('CANDIDATE_CREATE') ? 'candidates' : user?.permissions.includes('VACANCY_REQUEST_CREATE') ? 'vacancy-requests' : 'branches');
   const [file, setFile] = useState<File | null>(null);
   const [inspect, setInspect] = useState<BulkImportInspectResult | null>(null);
   const [sheetName, setSheetName] = useState('');
@@ -185,9 +184,9 @@ function BulkImportLandingPage() {
             )}
             {canMasterData && (
               <>
-                {(['legal-entities', 'branches', 'positions'] as const).map((masterDataset) => (
+                {(['branches', 'positions'] as const).map((masterDataset) => (
                   <Button key={masterDataset} variant={dataset === masterDataset ? 'primary' : 'secondary'} size="sm" onClick={() => { setDataset(masterDataset); setFile(null); setInspect(null); setError(null); }} role="tab" aria-selected={dataset === masterDataset}>
-                    <Icon name={masterDataset === 'legal-entities' || masterDataset === 'branches' ? 'building' : 'briefcase'} size={14} /> {datasetLabel(masterDataset)}
+                    <Icon name={masterDataset === 'branches' ? 'building' : 'briefcase'} size={14} /> {datasetLabel(masterDataset)}
                   </Button>
                 ))}
               </>
@@ -332,13 +331,12 @@ function BulkImportReviewPage({ dataset, jobId }: { dataset: BulkImportDataset; 
   const visibleColumns = useMemo(() => {
     if (dataset === 'candidates') return ['firstName', 'lastName', 'email', 'currentTitle', 'location'];
     if (dataset === 'vacancy-requests') return ['externalVacancyCode', 'positionCode', 'positionTitle', 'branchCode', 'requestedHeadcount'];
-    if (dataset === 'legal-entities') return ['code', 'name', 'status'];
     if (dataset === 'branches') return ['code', 'name', 'country', 'city', 'status'];
     if (dataset === 'departments') return ['code', 'name', 'branchCode', 'branchName', 'status'];
     if (dataset === 'skills') return ['code', 'name', 'category', 'description', 'status'];
     if (dataset === 'candidate-sources') return ['code', 'name', 'type', 'status'];
     if (dataset === 'interview-types') return ['code', 'name', 'defaultDuration', 'status'];
-    return ['code', 'title', 'departmentName', 'level', 'entity', 'type', 'legalEntityCode', 'description', 'status'];
+    return ['code', 'title', 'departmentName', 'level', 'entity', 'type', 'description', 'status'];
   }, [dataset]);
 
   if (loading && !summary) return <PageFrame eyebrow="Data Operations" title="Import Review" description="Loading staged rows..."><PageState kind="loading" title="Loading import batch" description="Fetching validation results." /></PageFrame>;

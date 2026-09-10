@@ -15,8 +15,6 @@ describe('Vacancies Export Service', () => {
       position: { title: 'ICU Head Nurse', code: 'POS-001' },
       branchId: 'br-1',
       branch: { name: 'Riyadh Main Hospital', code: 'BR-001' },
-      legalEntityId: 'le-1',
-      legalEntity: { name: 'Saudi German Health LLC', code: 'LE-001' },
       status: 'Open',
       approvedHeadcount: 5,
       joinedHeadcount: 2,
@@ -57,7 +55,6 @@ describe('Vacancies Export Service', () => {
       'Position Code',
       'Branch Name',
       'Branch Code',
-      'Legal Entity',
       'Status',
       'Approved Headcount',
       'Joined Headcount',
@@ -73,13 +70,12 @@ describe('Vacancies Export Service', () => {
     expect(rows[1][2]).toBe('POS-001');
     expect(rows[1][3]).toBe('Riyadh Main Hospital');
     expect(rows[1][4]).toBe('BR-001');
-    expect(rows[1][5]).toBe('Saudi German Health LLC');
-    expect(rows[1][6]).toBe('Open');
-    expect(rows[1][7]).toBe(5);
-    expect(rows[1][8]).toBe(2);
-    expect(rows[1][9]).toBe(3); // 5 - 2 = 3 remaining headcount
-    expect(rows[1][10]).toBe(14);
-    expect(rows[1][11]).toBe('Mona AlHarbi');
-    expect(rows[1][12]).toBe('2026-06-01');
+    expect(rows[1][5]).toBe('Open');
+    expect(rows[1][6]).toBe(5);
+    expect(rows[1][7]).toBe(2);
+    expect(rows[1][8]).toBe(3); // 5 - 2 = 3 remaining headcount
+    expect(rows[1][9]).toBe(14);
+    expect(rows[1][10]).toBe('Mona AlHarbi');
+    expect(rows[1][11]).toBe('2026-06-01');
   });
 });

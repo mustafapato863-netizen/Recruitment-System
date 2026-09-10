@@ -91,7 +91,6 @@ async function runTests() {
   console.log('Tokens acquired. Starting test cases...\n');
   let passed = 0;
   let failed = 0;
-  let createdEntities = [];
   let createdBranches = [];
   let createdPositions = [];
 
@@ -122,23 +121,19 @@ async function runTests() {
 
   // --- Tests ---
 
-  await test('1. Automatic code generation (Legal Entity)', async () => {
-    const res = await apiRequest('POST', '/legal-entities', { name: 'Auto Gen LE' }, adminToken);
+  await test('1. Automatic code generation (Branch)', async () => {
+    const res = await apiRequest('POST', '/branches', { name: 'Auto Gen Branch' }, adminToken);
     assertEqual(res.status, 201, 'Status should be 201');
-    assertMatch(res.data.code, /^LE-\d{4}$/, 'Code should match LE-XXXX pattern');
-    createdEntities.push(res.data.id);
+    assertMatch(res.data.code, /^BR-\d{4}$/, 'Code should match BR-XXXX pattern');
+    createdBranches.push(res.data.id);
   });
 
   await test('2. Explicit code duplicate rejection (Branch)', async () => {
-    const leRes = await apiRequest('POST', '/legal-entities', { name: 'Parent LE for Duplicate Test' }, adminToken);
-    const leId = leRes.data.id;
-    createdEntities.push(leId);
-
-    const res1 = await apiRequest('POST', '/branches', { legalEntityId: leId, code: 'BR-DUP', name: 'Dup Branch 1' }, adminToken);
+    const res1 = await apiRequest('POST', '/branches', { code: 'BR-DUP', name: 'Dup Branch 1' }, adminToken);
     assertEqual(res1.status, 201, 'First creation should succeed');
     createdBranches.push(res1.data.id);
 
-    const res2 = await apiRequest('POST', '/branches', { legalEntityId: leId, code: 'BR-DUP', name: 'Dup Branch 2' }, adminToken);
+    const res2 = await apiRequest('POST', '/branches', { code: 'BR-DUP', name: 'Dup Branch 2' }, adminToken);
     assertEqual(res2.status, 409, 'Second creation with same code should return 409');
   });
 
@@ -158,10 +153,6 @@ async function runTests() {
   });
 
   await test('4. GET :id works for all master data types', async () => {
-    const leRes = await apiRequest('GET', `/legal-entities/${createdEntities[0]}`, null, adminToken);
-    if (leRes.status !== 200) console.log('GET LE failed:', leRes);
-    assertEqual(leRes.status, 200, 'GET legal entity by id should succeed');
-    
     const brRes = await apiRequest('GET', `/branches/${createdBranches[0]}`, null, adminToken);
     assertEqual(brRes.status, 200, 'GET branch by id should succeed');
 
@@ -170,16 +161,15 @@ async function runTests() {
   });
 
   await test('5. Cross-tenant access is rejected (404 Not Found)', async () => {
-    const leRes = await apiRequest('GET', `/legal-entities/${createdEntities[0]}`, null, orgBAdminToken);
-    assertEqual(leRes.status, 404, 'Cross-tenant GET should return 404');
-
+    const brRes = await apiRequest('GET', `/branches/${createdBranches[0]}`, null, orgBAdminToken);
+    assertEqual(brRes.status, 404, 'Cross-tenant GET should return 404');
     const archiveRes = await apiRequest('POST', `/branches/${createdBranches[0]}/archive`, null, orgBAdminToken);
     assertEqual(archiveRes.status, 404, 'Cross-tenant archive should return 404');
   });
 
   await test('6. Role-based access control (RBAC)', async () => {
     // Recruiter has MASTER_DATA_VIEW, but not MASTER_DATA_MANAGE
-    const getRes = await apiRequest('GET', `/legal-entities/${createdEntities[0]}`, null, recruiterToken);
+    const getRes = await apiRequest('GET', `/branches/${createdBranches[0]}`, null, recruiterToken);
     assertEqual(getRes.status, 200, 'Recruiter should be able to view');
 
     const postRes = await apiRequest('POST', '/positions', { title: 'Unauthorized Pos' }, recruiterToken);
@@ -206,15 +196,7 @@ async function runTests() {
     assertEqual(restoreAgainRes.status, 400, 'Restoring an already active record should return 400');
   });
 
-  await test('8. Referenced-record deletion rejection (409 Conflict)', async () => {
-    // Branches reference LegalEntities
-    const leId = createdEntities[1]; // parent of the branch created in test 2
-    const delRes = await apiRequest('DELETE', `/legal-entities/${leId}`, null, adminToken);
-    assertEqual(delRes.status, 409, 'Deleting referenced record should return 409');
-    assertMatch(delRes.data.message, /referenced by/, 'Error message should mention references');
-  });
-
-  await test('9. Unreferenced deletion (200 OK)', async () => {
+  await test('8. Unreferenced deletion (200 OK)', async () => {
     const posId = createdPositions[1]; // Standalone position with no vacancies
     const delRes = await apiRequest('DELETE', `/positions/${posId}`, null, adminToken);
     assertEqual(delRes.status, 200, 'Deleting unreferenced position should succeed');
@@ -223,8 +205,8 @@ async function runTests() {
     assertEqual(getRes.status, 404, 'Deleted position should return 404');
   });
 
-  await test('10. Invalid input handling (400 Bad Request)', async () => {
-    const res = await apiRequest('POST', '/legal-entities', { name: '  ' }, adminToken);
+  await test('9. Invalid input handling (400 Bad Request)', async () => {
+    const res = await apiRequest('POST', '/branches', { name: '  ' }, adminToken);
     assertEqual(res.status, 400, 'Empty name should return 400');
   });
 
@@ -248,7 +230,6 @@ async function runTests() {
   console.log('Cleaning up master data...');
   for (const id of createdPositions) await prisma.position.deleteMany({ where: { id } });
   for (const id of createdBranches) await prisma.branch.deleteMany({ where: { id } });
-  for (const id of createdEntities) await prisma.legalEntity.deleteMany({ where: { id } });
   
   if (failed > 0) process.exit(1);
 }

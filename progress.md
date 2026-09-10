@@ -944,3 +944,16 @@ Implemented the current version-one simplification slice across candidate entry,
 - Local test organization `10000000-0000-4000-8000-000000000001` was populated earlier with the V1 source/type seed and the reviewed VL catalog; no records are deleted by reruns.
 - Read-only verification of that organization reports 88 position records and 12 departments with no case/whitespace-normalized duplicate position titles or department names.
 - Final validation: typecheck, lint, Prisma validation/migration status, API tests (73/73), web tests (161/161), worker tests (6/6), production build, bundle budgets, importer dry runs, and `git diff --check` pass. The build retains the existing non-blocking Vite chunk-size warning.
+# Job Titles workbook and Legal Entity removal — 2026-09-10
+
+- Started schema, API, UI, and workbook audit.
+- Selected a preservation strategy: remove Legal Entity references and feature surfaces while retaining all dependent business records.
+- Inspected and rendered both workbook sheets before editing.
+- Completed the first dependency audit across Prisma, shared contracts/validation, master data, vacancy workflows, bulk imports, and frontend forms.
+- User narrowed the workbook scope: update the template structure only; do not populate sample job-title rows.
+
+- Removed Legal Entity from the active Prisma schema, contracts, validation, controllers, imports, vacancy persistence, tenant policies, seed/fixture scripts, and frontend routes. Branch uniqueness is now organization-scoped.
+- Added and applied `20260910_remove_legal_entities` locally. It fails fast on duplicate branch codes, strips legacy position metadata, drops nullable foreign-key columns and the legacy table, then creates the replacement branch index.
+- Rebuilt the Job Titles workbook at the supplied UNC path as a blank styled template with `Code`, `Title`, `Description`, `Department Name`, `Level`, `Entity`, `Type`, and `Status`, plus an Instructions sheet.
+- Verification passed: Prisma format/validate/generate, typecheck, lint, API tests (77), web tests (163), web build, workbook inspection/render, and JavaScript syntax checks.
+- Final verification also passed the local migration status check and demo seed. The production build retains only the existing non-blocking Vite large-chunk warning.

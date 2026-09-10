@@ -5,13 +5,11 @@ import { PrismaService } from '../database/prisma.service';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import type {
   CreateOrganizationDto,
-  CreateLegalEntityDto,
   CreateBranchDto,
   CreatePositionDto
 } from './master-data.dto';
 import type {
   OrganizationDetail,
-  LegalEntityRecord,
   BranchRecord,
   PositionRecord
 } from '@recruitflow/contracts';
@@ -27,7 +25,6 @@ type MasterDataBatchRow = {
   code?: string | null;
   name: string;
   city?: string | null;
-  legalEntityId?: string | null;
   country?: string | null;
   metadata?: Record<string, unknown> | null;
   status?: string;
@@ -61,70 +58,6 @@ export class MasterDataService {
     });
   }
 
-  // ─── Legal Entity ──────────────────────────────────────────────
-
-  async listLegalEntities(organizationId: string): Promise<LegalEntityRecord[]> {
-    const records = await this.prisma.legalEntity.findMany({
-      where: { organizationId },
-      orderBy: { code: 'asc' },
-    });
-    return records.map(r => ({ ...r, createdAt: r.createdAt.toISOString(), updatedAt: r.updatedAt.toISOString() }));
-  }
-
-  async getLegalEntity(organizationId: string, id: string): Promise<LegalEntityRecord> {
-    const r = await this.prisma.legalEntity.findFirst({ where: { id, organizationId } });
-    if (!r) throw new NotFoundException('Legal entity not found.');
-    return { ...r, createdAt: r.createdAt.toISOString(), updatedAt: r.updatedAt.toISOString() };
-  }
-
-  async createLegalEntity(organizationId: string, data: CreateLegalEntityDto): Promise<LegalEntityRecord> {
-    const r = await this.prisma.$transaction((tx) => this.createLegalEntityInTransaction(tx, organizationId, data));
-    return { ...r, createdAt: r.createdAt.toISOString(), updatedAt: r.updatedAt.toISOString() };
-  }
-
-  async archiveLegalEntity(organizationId: string, id: string): Promise<LegalEntityRecord> {
-    const r = await this.prisma.legalEntity.findFirst({ where: { id, organizationId } });
-    if (!r) throw new NotFoundException('Legal entity not found.');
-    if (r.status === 'Archived') throw new BadRequestException('Legal entity is already archived.');
-    const updated = await this.prisma.legalEntity.update({ where: { id }, data: { status: 'Archived' } });
-    return { ...updated, createdAt: updated.createdAt.toISOString(), updatedAt: updated.updatedAt.toISOString() };
-  }
-
-  async restoreLegalEntity(organizationId: string, id: string): Promise<LegalEntityRecord> {
-    const r = await this.prisma.legalEntity.findFirst({ where: { id, organizationId } });
-    if (!r) throw new NotFoundException('Legal entity not found.');
-    if (r.status === 'Active') throw new BadRequestException('Legal entity is already active.');
-    const updated = await this.prisma.legalEntity.update({ where: { id }, data: { status: 'Active' } });
-    return { ...updated, createdAt: updated.createdAt.toISOString(), updatedAt: updated.updatedAt.toISOString() };
-  }
-
-  async deleteLegalEntity(organizationId: string, id: string): Promise<void> {
-    const r = await this.prisma.legalEntity.findFirst({ where: { id, organizationId } });
-    if (!r) throw new NotFoundException('Legal entity not found.');
-    const refs = await this.countLegalEntityReferences(id);
-    if (refs.total > 0) {
-      const details = Object.entries(refs.breakdown)
-        .filter(([, count]) => count > 0)
-        .map(([type, count]) => `${count} ${type}`)
-        .join(', ');
-      throw new ConflictException(`Cannot delete legal entity: referenced by ${details}. Archive it instead.`);
-    }
-    await this.prisma.legalEntity.delete({ where: { id } });
-  }
-
-  private async countLegalEntityReferences(id: string) {
-    const [branches, positions, vacancyRequests, vacancies] = await Promise.all([
-      this.prisma.branch.count({ where: { legalEntityId: id } }),
-      this.prisma.position.count({ where: { legalEntityId: id } }),
-      this.prisma.vacancyRequest.count({ where: { legalEntityId: id } }),
-      this.prisma.vacancy.count({ where: { legalEntityId: id } }),
-    ]);
-    return {
-      total: branches + positions + vacancyRequests + vacancies,
-      breakdown: { branches, positions, vacancyRequests, vacancies },
-    };
-  }
-
   // ─── Branch ────────────────────────────────────────────────────
 
   async listBranches(organizationId: string): Promise<BranchRecord[]> {
@@ -147,8 +80,7 @@ export class MasterDataService {
         name: branch.name,
         country: branch.country,
         city: branch.city,
-        legalEntityId: branch.legalEntityId,
-        metadata: { country: branch.country, legalEntityId: branch.legalEntityId },
+        metadata: { country: branch.country },
         status: branch.status,
         version: branch.version,
         createdAt: branch.createdAt.toISOString(),
@@ -157,23 +89,24 @@ export class MasterDataService {
     }
     if (category === 'job-titles') {
       const positions = await this.prisma.position.findMany({ where: { organizationId }, orderBy: { code: 'asc' } });
-      return positions.map((position) => ({
+      return positions.map((position) => {
+        const metadata = ((position.metadata as Record<string, unknown> | null) ?? {});
+        return {
         id: position.id,
         organizationId,
         category,
         code: position.code,
         name: position.title,
         metadata: {
-          ...((position.metadata as Record<string, unknown> | null) ?? {}),
-          legalEntityId: position.legalEntityId,
+          ...metadata,
           description: position.description,
         },
-        legalEntityId: position.legalEntityId,
         status: position.status,
         version: position.version,
         createdAt: position.createdAt.toISOString(),
         updatedAt: position.updatedAt.toISOString(),
-      }));
+        };
+      });
     }
     const records = await this.prisma.masterDataValue.findMany({ where: { organizationId, category }, orderBy: [{ status: 'asc' }, { name: 'asc' }] });
     return records.map((record): MasterDataValueRecord => ({
@@ -205,10 +138,6 @@ export class MasterDataService {
         if (!['Active', 'Inactive', 'Archived'].includes(status)) throw new BadRequestException(`Invalid status for ${name}.`);
         if (category === 'branches') {
           const country = this.normalizeBranchCountry(row.country);
-          if (row.legalEntityId) {
-            const entity = await tx.legalEntity.findFirst({ where: { id: row.legalEntityId, organizationId } });
-            if (!entity) throw new BadRequestException(`Legal entity for branch ${name} is not in this organization.`);
-          }
           const branchValues = await tx.branch.findMany({ where: { organizationId }, select: { id: true, code: true, name: true } });
           const duplicate = branchValues.find((value) =>
             value.id !== row.id &&
@@ -221,7 +150,6 @@ export class MasterDataService {
               name,
               country,
               city: row.city?.trim() || null,
-              legalEntityId: row.legalEntityId || null,
               status,
               version: { increment: 1 },
             } });
@@ -233,11 +161,10 @@ export class MasterDataService {
               name,
               country,
               ...(row.city?.trim() ? { city: row.city.trim() } : {}),
-              ...(row.legalEntityId ? { legalEntityId: row.legalEntityId } : {}),
             }));
           }
         } else if (category === 'job-titles') {
-          const legalEntityId = row.legalEntityId || (row.metadata?.legalEntityId as string | undefined);
+          const positionMetadata = row.metadata ?? {};
           const positionValues = await tx.position.findMany({ where: { organizationId }, select: { id: true, code: true, title: true } });
           const duplicate = positionValues.find((value) =>
             value.id !== row.id &&
@@ -249,8 +176,7 @@ export class MasterDataService {
               ...(row.code?.trim() ? { code: row.code.trim() } : {}),
               title: name,
               ...(typeof row.metadata?.description === 'string' ? { description: row.metadata.description.trim() || null } : {}),
-              ...(row.metadata ? { metadata: row.metadata as Prisma.InputJsonValue } : {}),
-              legalEntityId: legalEntityId || null,
+              ...(row.metadata ? { metadata: positionMetadata as Prisma.InputJsonValue } : {}),
               status,
               version: { increment: 1 },
             } });
@@ -261,8 +187,7 @@ export class MasterDataService {
               ...(row.code?.trim() ? { code: row.code.trim() } : {}),
               title: name,
               ...(typeof row.metadata?.description === 'string' ? { description: row.metadata.description } : {}),
-              ...(row.metadata ? { metadata: row.metadata } : {}),
-              ...(legalEntityId ? { legalEntityId } : {}),
+              ...(row.metadata ? { metadata: positionMetadata } : {}),
             }));
           }
         } else {
@@ -528,26 +453,11 @@ export class MasterDataService {
 
   // ─── Transactional Create Helpers (used by BulkImportService) ──
 
-  async createLegalEntityInTransaction(
-    tx: Prisma.TransactionClient,
-    organizationId: string,
-    data: CreateLegalEntityDto,
-  ) {
-    const name = data.name.trim();
-    if (!name) throw new BadRequestException('Legal entity name is required.');
-    const code = await this.resolveCode(tx, organizationId, 'legal-entity', 'LE', data.code);
-    return tx.legalEntity.create({ data: { organizationId, code, name, status: 'Active' } });
-  }
-
   async createBranchInTransaction(
     tx: Prisma.TransactionClient,
     organizationId: string,
     data: CreateBranchDto,
   ) {
-    if (data.legalEntityId) {
-      const legalEntity = await tx.legalEntity.findFirst({ where: { id: data.legalEntityId, organizationId } });
-      if (!legalEntity) throw new BadRequestException('Legal entity does not belong to this organization.');
-    }
     const name = data.name.trim();
     if (!name) throw new BadRequestException('Branch name is required.');
     const country = this.normalizeBranchCountry(data.country);
@@ -555,7 +465,6 @@ export class MasterDataService {
     return tx.branch.create({
       data: {
         organizationId,
-        legalEntityId: data.legalEntityId || null,
         code,
         name,
         country,
@@ -580,15 +489,10 @@ export class MasterDataService {
   ) {
     const title = data.title.trim();
     if (!title) throw new BadRequestException('Position title is required.');
-    if (data.legalEntityId) {
-      const legalEntity = await tx.legalEntity.findFirst({ where: { id: data.legalEntityId, organizationId } });
-      if (!legalEntity) throw new BadRequestException('Legal entity does not belong to this organization.');
-    }
     const code = await this.resolveCode(tx, organizationId, 'position', 'POS', data.code);
     return tx.position.create({
       data: {
         organizationId,
-        legalEntityId: data.legalEntityId || null,
         code,
         title,
         description: data.description?.trim() || null,
@@ -603,7 +507,7 @@ export class MasterDataService {
   private async resolveCode(
     tx: Prisma.TransactionClient,
     organizationId: string,
-    entityType: 'legal-entity' | 'branch' | 'position',
+    entityType: 'branch' | 'position',
     prefix: string,
     requestedCode?: string,
   ): Promise<string> {
@@ -612,18 +516,14 @@ export class MasterDataService {
     await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
 
     if (explicitCode) {
-      const duplicate = entityType === 'legal-entity'
-        ? await tx.legalEntity.findFirst({ where: { organizationId, code: explicitCode }, select: { id: true } })
-        : entityType === 'branch'
+      const duplicate = entityType === 'branch'
           ? await tx.branch.findFirst({ where: { organizationId, code: explicitCode }, select: { id: true } })
           : await tx.position.findFirst({ where: { organizationId, code: explicitCode }, select: { id: true } });
       if (duplicate) throw new ConflictException(`The code ${explicitCode} already exists in this organization.`);
       return explicitCode;
     }
 
-    const records = entityType === 'legal-entity'
-      ? await tx.legalEntity.findMany({ where: { organizationId }, select: { code: true } })
-      : entityType === 'branch'
+    const records = entityType === 'branch'
         ? await tx.branch.findMany({ where: { organizationId }, select: { code: true } })
         : await tx.position.findMany({ where: { organizationId }, select: { code: true } });
     const highest = records.reduce((max, record) => {

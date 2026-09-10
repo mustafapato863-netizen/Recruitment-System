@@ -66,7 +66,6 @@ export class InMemoryVacancyCoreRepository implements VacancyCoreRepository {
     const request: VacancyRequest = {
       id: randomUUID(),
       organizationId: input.organizationId,
-      legalEntityId: input.legalEntityId ?? null,
       branchId: input.branchId,
       positionId: input.positionId,
       requesterId: input.requesterId,

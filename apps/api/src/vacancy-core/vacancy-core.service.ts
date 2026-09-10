@@ -68,7 +68,6 @@ export class VacancyCoreService {
         include: {
           position: { select: { title: true, code: true } },
           branch: { select: { name: true, code: true } },
-          legalEntity: { select: { name: true, code: true } },
           assignments: {
             where: { isActive: true },
             include: { user: { select: { displayName: true } } },
@@ -83,7 +82,6 @@ export class VacancyCoreService {
         'Position Code',
         'Branch Name',
         'Branch Code',
-        'Legal Entity',
         'Status',
         'Approved Headcount',
         'Joined Headcount',
@@ -106,7 +104,6 @@ export class VacancyCoreService {
           v.position.code,
           v.branch.name,
           v.branch.code,
-          v.legalEntity?.name ?? '',
           v.status,
           v.approvedHeadcount,
           v.joinedHeadcount,
@@ -289,7 +286,6 @@ export class VacancyCoreService {
   ): Promise<VacancyRequest> {
     const payload: CreateVacancyRequestInput = {
       organizationId,
-      legalEntityId: input.legalEntityId ?? null,
       branchId: input.branchId,
       positionId: input.positionId,
       requesterId: actorUserId,
@@ -320,7 +316,6 @@ export class VacancyCoreService {
       throw new ConflictException(`Request ${request.requestCode} cannot be updated from ${request.status}.`);
     }
 
-    if (input.legalEntityId !== undefined) request.legalEntityId = input.legalEntityId;
     if (input.branchId !== undefined) request.branchId = input.branchId;
     if (input.positionId !== undefined) request.positionId = input.positionId;
     if (input.requestedHeadcount !== undefined) request.requestedHeadcount = input.requestedHeadcount;
@@ -475,7 +470,6 @@ export class VacancyCoreService {
     const vacancy: Vacancy = {
       id: randomUUID(),
       organizationId: request.organizationId,
-      legalEntityId: request.legalEntityId,
       branchId: request.branchId,
       positionId: request.positionId,
       vacancyRequestId: request.id,

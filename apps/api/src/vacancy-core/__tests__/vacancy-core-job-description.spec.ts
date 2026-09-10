@@ -17,7 +17,6 @@ function buildVacancy(overrides: Partial<Vacancy> = {}): Vacancy {
   return {
     id: 'vac-uuid-1',
     organizationId: 'org-uuid-1',
-    legalEntityId: null,
     branchId: 'branch-uuid-1',
     positionId: 'pos-uuid-1',
     vacancyRequestId: 'req-uuid-1',

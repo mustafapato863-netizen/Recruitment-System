@@ -132,10 +132,10 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
   }
 
   async createRequest(input: CreateVacancyRequestInput): Promise<VacancyRequest> {
-    const [branch, position, requester, legalEntity] = await Promise.all([
+    const [branch, position, requester] = await Promise.all([
       this.prisma.branch.findFirst({
         where: { id: input.branchId, organizationId: input.organizationId },
-        select: { id: true, legalEntityId: true },
+        select: { id: true },
       }),
       this.prisma.position.findFirst({
         where: { id: input.positionId, organizationId: input.organizationId },
@@ -145,20 +145,10 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
         where: { id: input.requesterId, organizationId: input.organizationId, status: 'Active' },
         select: { id: true },
       }),
-      input.legalEntityId
-        ? this.prisma.legalEntity.findFirst({
-            where: { id: input.legalEntityId, organizationId: input.organizationId },
-            select: { id: true },
-          })
-        : Promise.resolve(null),
     ]);
 
-    if (!branch || !position || !requester || (input.legalEntityId && !legalEntity)) {
+    if (!branch || !position || !requester) {
       throw new BadRequestException('Vacancy request references data outside the current organization.');
-    }
-
-    if (input.legalEntityId && branch.legalEntityId !== input.legalEntityId) {
-      throw new BadRequestException('Branch does not belong to the selected legal entity.');
     }
 
     const requestCode = await this.nextBusinessCode('VR');
@@ -166,7 +156,6 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
       data: {
         id: randomUUID(),
         organizationId: input.organizationId,
-        legalEntityId: input.legalEntityId ?? null,
         branchId: input.branchId,
         positionId: input.positionId,
         requesterId: input.requesterId,
@@ -240,10 +229,10 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
   }
 
   private async assertRequestReferences(request: VacancyRequest): Promise<void> {
-    const [branch, position, requester, legalEntity] = await Promise.all([
+    const [branch, position, requester] = await Promise.all([
       this.prisma.branch.findFirst({
         where: { id: request.branchId, organizationId: request.organizationId },
-        select: { id: true, legalEntityId: true },
+        select: { id: true },
       }),
       this.prisma.position.findFirst({
         where: { id: request.positionId, organizationId: request.organizationId },
@@ -253,19 +242,10 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
         where: { id: request.requesterId, organizationId: request.organizationId },
         select: { id: true },
       }),
-      request.legalEntityId
-        ? this.prisma.legalEntity.findFirst({
-            where: { id: request.legalEntityId, organizationId: request.organizationId },
-            select: { id: true },
-          })
-        : Promise.resolve(null),
     ]);
 
-    if (!branch || !position || !requester || (request.legalEntityId && !legalEntity)) {
+    if (!branch || !position || !requester) {
       throw new BadRequestException('Vacancy request references data outside the current organization.');
-    }
-    if (request.legalEntityId && branch.legalEntityId !== request.legalEntityId) {
-      throw new BadRequestException('Branch does not belong to the selected legal entity.');
     }
   }
 
@@ -315,7 +295,6 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
         },
         organization: true,
         branch: true,
-        legalEntity: true,
         position: true,
       },
     });
@@ -328,7 +307,6 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
       organizationName: vacancy.organization.name,
       organizationCode: vacancy.organization.code,
       branchName: vacancy.branch.name,
-      legalEntityName: vacancy.legalEntity?.name,
       positionTitle: vacancy.position.title,
       funnelCounts: {
         applied: 0,
@@ -349,7 +327,6 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
       where: { id: request.id },
       data: {
         organizationId: request.organizationId,
-        legalEntityId: request.legalEntityId,
         branchId: request.branchId,
         positionId: request.positionId,
         requesterId: request.requesterId,
@@ -421,7 +398,6 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
       create: {
         id: vacancy.id,
         organizationId: vacancy.organizationId,
-        legalEntityId: vacancy.legalEntityId,
         branchId: vacancy.branchId,
         positionId: vacancy.positionId,
         vacancyRequestId: vacancy.vacancyRequestId,
@@ -443,7 +419,6 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
       },
       update: {
         organizationId: vacancy.organizationId,
-        legalEntityId: vacancy.legalEntityId,
         branchId: vacancy.branchId,
         positionId: vacancy.positionId,
         vacancyRequestId: vacancy.vacancyRequestId,
@@ -492,7 +467,6 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
     return {
       id: request.id,
       organizationId: request.organizationId,
-      legalEntityId: request.legalEntityId,
       branchId: request.branchId,
       positionId: request.positionId,
       requesterId: request.requesterId,
@@ -545,7 +519,6 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
     return {
       id: vacancy.id,
       organizationId: vacancy.organizationId,
-      legalEntityId: vacancy.legalEntityId,
       branchId: vacancy.branchId,
       positionId: vacancy.positionId,
       position,

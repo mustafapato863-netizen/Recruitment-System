@@ -19,7 +19,6 @@ const optionalText = (max: number) =>
 
 export const createVacancyRequestSchema = z.object({
   organizationId: idSchema,
-  legalEntityId: idSchema.nullable().optional(),
   branchId: idSchema,
   positionId: idSchema,
   requesterId: idSchema,
@@ -42,7 +41,6 @@ export const createVacancyRequestSchema = z.object({
 });
 
 export const updateVacancyRequestSchema = z.object({
-  legalEntityId: idSchema.nullable().optional(),
   branchId: idSchema.optional(),
   positionId: idSchema.optional(),
   requestedHeadcount: z.coerce.number().int().min(1).max(10_000).optional(),
@@ -106,13 +104,7 @@ export const updateRoleSchema = z.object({
 
 // ─── Master Data ─────────────────────────────────────────────
 
-export const createLegalEntitySchema = z.object({
-  code: z.string().trim().min(1).max(50),
-  name: z.string().trim().min(1).max(200),
-});
-
 export const createBranchSchema = z.object({
-  legalEntityId: idSchema,
   code: z.string().trim().min(1).max(50),
   name: z.string().trim().min(1).max(200),
   city: z.string().trim().max(120).nullable().optional(),
@@ -350,4 +342,3 @@ export const updateIntegrationConfigSchema = z.object({
 
 // ─── Candidate Position Fit Matching ────────────────────────
 export * from './matching';
-

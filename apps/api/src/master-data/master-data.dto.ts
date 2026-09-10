@@ -11,22 +11,7 @@ export class CreateOrganizationDto {
   name!: string;
 }
 
-export class CreateLegalEntityDto {
-  @IsString()
-  @IsOptional()
-  code?: string;
-
-  @IsString()
-  @IsNotEmpty()
-  name!: string;
-}
-
 export class CreateBranchDto {
-  @IsString()
-  @IsOptional()
-  @IsNotEmpty()
-  legalEntityId?: string;
-
   @IsString()
   @IsIn(['EGY', 'UAE'])
   @IsOptional()
@@ -46,10 +31,6 @@ export class CreateBranchDto {
 }
 
 export class CreatePositionDto {
-  @IsString()
-  @IsOptional()
-  legalEntityId?: string;
-
   @IsString()
   @IsOptional()
   code?: string;
@@ -86,10 +67,6 @@ export class MasterDataBatchRowDto {
   @IsString()
   @MaxLength(200)
   city?: string | null;
-
-  @IsOptional()
-  @IsUUID()
-  legalEntityId?: string | null;
 
   @IsOptional()
   @IsString()

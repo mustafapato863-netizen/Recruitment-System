@@ -271,7 +271,7 @@ async function run() {
 
   const tarek = await login('tarek.audit@recruitflow.local', 'Password123!');
   check('Tarek (Performance Admin) can sign in', tarek.status === 200, `got ${tarek.status}`);
-  const forbidden = await request('/imports/master-data/legal-entities/inspect', {
+  const forbidden = await request('/imports/master-data/branches/inspect', {
     method: 'POST',
     headers: await cookieHeader(tarek.cookies),
   }, undefined);
@@ -430,7 +430,7 @@ async function run() {
     [{ fieldname: 'file', filename: 'x.csv', contentType: 'text/csv', content: Buffer.from('a,b\n1,2') }]);
   collectedErrors.push(bogusDataset);
   check('Invalid master-data dataset -> 400 IMPORT_INVALID', bogusDataset.status === 400 && bogusDataset.body?.code === 'IMPORT_INVALID', `got ${bogusDataset.status}/${bogusDataset.body?.code}`);
-  check('IMPORT_INVALID message preserved', bogusDataset.body?.message === 'Master-data dataset must be legal-entities, branches, or positions.', `got "${bogusDataset.body?.message}"`);
+  check('IMPORT_INVALID message preserved', bogusDataset.body?.message === 'Master-data dataset must be branches or positions.', `got "${bogusDataset.body?.message}"`);
 
   // ─── [10] REQUEST / CORRELATION ID ───────────────────────────────────────
   console.log('\n[10] REQUEST & CORRELATION ID');

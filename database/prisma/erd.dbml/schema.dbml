@@ -7,7 +7,6 @@ Table organizations {
   code String [unique, not null]
   name String [not null]
   status String [not null, default: 'Active']
-  legalEntities legal_entities [not null]
   branches branches [not null]
   positions positions [not null]
   users users [not null]
@@ -37,31 +36,10 @@ Table organizations {
   updatedAt DateTime [not null]
 }
 
-Table legal_entities {
-  id String [pk]
-  organizationId String [not null]
-  organization organizations [not null]
-  code String [not null]
-  name String [not null]
-  status String [not null, default: 'Active']
-  branches branches [not null]
-  positions positions [not null]
-  vacancyRequests vacancy_requests [not null]
-  vacancies vacancies [not null]
-  createdAt DateTime [default: `now()`, not null]
-  updatedAt DateTime [not null]
-
-  indexes {
-    (organizationId, code) [unique]
-  }
-}
-
 Table branches {
   id String [pk]
   organizationId String [not null]
   organization organizations [not null]
-  legalEntityId String
-  legalEntity legal_entities
   code String [not null]
   name String [not null]
   country String [not null, default: 'EGY']
@@ -74,7 +52,7 @@ Table branches {
   updatedAt DateTime [not null]
 
   indexes {
-    (legalEntityId, code) [unique]
+    (organizationId, code) [unique]
   }
 }
 
@@ -82,8 +60,6 @@ Table positions {
   id String [pk]
   organizationId String [not null]
   organization organizations [not null]
-  legalEntityId String
-  legalEntity legal_entities
   code String [not null]
   title String [not null]
   description String
@@ -239,8 +215,6 @@ Table vacancy_requests {
   id String [pk]
   organizationId String [not null]
   organization organizations [not null]
-  legalEntityId String
-  legalEntity legal_entities
   branchId String [not null]
   branch branches [not null]
   positionId String [not null]
@@ -292,8 +266,6 @@ Table vacancies {
   id String [pk]
   organizationId String [not null]
   organization organizations [not null]
-  legalEntityId String
-  legalEntity legal_entities
   branchId String [not null]
   branch branches [not null]
   positionId String [not null]
@@ -882,15 +854,9 @@ Table master_data_values {
   }
 }
 
-Ref: legal_entities.organizationId > organizations.id [delete: Restrict]
-
 Ref: branches.organizationId > organizations.id [delete: Restrict]
 
-Ref: branches.legalEntityId > legal_entities.id [delete: Restrict]
-
 Ref: positions.organizationId > organizations.id [delete: Restrict]
-
-Ref: positions.legalEntityId > legal_entities.id [delete: Restrict]
 
 Ref: users.organizationId > organizations.id [delete: Restrict]
 
@@ -914,8 +880,6 @@ Ref: role_permissions.permissionId > permissions.id [delete: Restrict]
 
 Ref: vacancy_requests.organizationId > organizations.id [delete: Restrict]
 
-Ref: vacancy_requests.legalEntityId > legal_entities.id [delete: Restrict]
-
 Ref: vacancy_requests.branchId > branches.id [delete: Restrict]
 
 Ref: vacancy_requests.positionId > positions.id [delete: Restrict]
@@ -927,8 +891,6 @@ Ref: vacancy_request_approvals.vacancyRequestId > vacancy_requests.id [delete: R
 Ref: vacancy_request_approvals.assigneeUserId > users.id [delete: Restrict]
 
 Ref: vacancies.organizationId > organizations.id [delete: Restrict]
-
-Ref: vacancies.legalEntityId > legal_entities.id [delete: Restrict]
 
 Ref: vacancies.branchId > branches.id [delete: Restrict]
 
