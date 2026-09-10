@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import type { UserProfile, LoginRequest } from '@recruitflow/contracts';
 import { fetchApi } from '../api/client';
 
@@ -16,6 +16,9 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const authRequestVersion = useRef(0);
+  const initialSessionCheckPending = useRef(true);
+  const loginInFlight = useRef(false);
 
   const refreshUser = useCallback(async () => {
     const profile = await fetchApi<UserProfile>('/auth/me');
@@ -24,20 +27,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let isMounted = true;
+    const initialRequestVersion = ++authRequestVersion.current;
     refreshUser()
       .catch(() => {
-        if (isMounted) {
+        // Do not let the unauthenticated startup probe overwrite a login that
+        // completed while the probe was still in flight.
+        if (isMounted && authRequestVersion.current === initialRequestVersion) {
           setUser(null);
         }
       })
       .finally(() => {
         if (isMounted) {
+          initialSessionCheckPending.current = false;
           setIsLoading(false);
         }
       });
 
     const handleUnauthorized = () => {
-      if (isMounted) {
+      // A cold /login page performs an initial /auth/me probe. Its expected
+      // 401 must not log out a login submitted before that probe settles.
+      if (isMounted && !initialSessionCheckPending.current && !loginInFlight.current) {
         setUser(null);
       }
     };
@@ -51,18 +60,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [refreshUser]);
 
   const login = async (credentials: LoginRequest) => {
-    const result = await fetchApi<{ user: UserProfile }>('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify(credentials),
-    });
-    if (result?.user) {
-      setUser(result.user);
-    } else {
-      await refreshUser();
+    const loginVersion = ++authRequestVersion.current;
+    loginInFlight.current = true;
+    try {
+      const result = await fetchApi<{ user: UserProfile }>('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify(credentials),
+      });
+      if (loginVersion !== authRequestVersion.current) return;
+      if (result?.user) {
+        setUser(result.user);
+      } else {
+        await refreshUser();
+      }
+    } finally {
+      loginInFlight.current = false;
     }
   };
 
   const logout = async () => {
+    authRequestVersion.current += 1;
     try {
       await fetchApi('/auth/logout', { method: 'POST' });
     } catch {
