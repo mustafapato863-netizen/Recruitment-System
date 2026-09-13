@@ -6,6 +6,8 @@ Status: implementation plan with staged implementation evidence recorded in `pro
 
 The current build and automated tests are healthy, so the next work should focus on release risk rather than adding new modules. Execute the stages below in order:
 
+The worker/queue readiness slice in Stage 5 is now implemented: the worker publishes a database-backed heartbeat and production API readiness reports it. The remaining Stage 5 bullets (storage/retry exercises, adapter verification, CSS cleanup, load testing and hosted smoke) are still pending.
+
 1. **P1 security:** finish shared branch/department authorization for application-linked resources, verify tenant isolation, and test revoked assignments and direct URL access.
 2. **P1 integrity:** make repeated vacancy reassignment safe and transactional, including A → B → A → B and concurrent edits.
 3. **P1/P2 task reliability:** validate assignees and linked records against organization and scope, and only show success after persistence succeeds.
