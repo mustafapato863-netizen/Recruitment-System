@@ -1,5 +1,12 @@
 # Progress Log — RecruitFlow Candidate Journey
 
+## Enhancement implementation 2026-09-13
+
+- Started the highest-priority operational item from `docs/uat-enhancement-plan.md`: expose a database-backed worker heartbeat and include it in API readiness when required in production.
+- Added `service_heartbeats` schema/migration. The worker upserts a fresh heartbeat, reports its queue mode, retries through API migration startup races, and marks itself stopped during graceful shutdown.
+- API readiness now reports database and worker status; production requires a healthy heartbeat unless `WORKER_READINESS_REQUIRED=false` is explicitly configured. Compose starts the worker after API process start to avoid a readiness deadlock.
+- Verification passed: full tests (47 web files/165 tests), API tests (18 files/84 tests), worker tests (2 files/6 tests), typecheck, lint, production build, bundle budget check, migration status, and code-quality review (0 findings).
+
 ## Deployment preparation 2026-09-08
 
 - Passed: clean database replay (30 migrations), no schema diff, API production image build, 66 API tests, 8 deployment environment validation tests.

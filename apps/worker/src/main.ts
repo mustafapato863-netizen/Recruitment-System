@@ -9,6 +9,7 @@ import { sweepStaleApplicants, sweepConsentExpiry } from './sweepers';
 const BATCH_SIZE = positiveInt(process.env.WORKER_BATCH_SIZE, 20, 100);
 const POLL_INTERVAL_MS = positiveInt(process.env.WORKER_POLL_INTERVAL_MS, 2_000, 60_000);
 const SWEEPER_INTERVAL_MS = positiveInt(process.env.SWEEPER_INTERVAL_MS, 5 * 60_000, 60 * 60_000);
+const HEARTBEAT_INTERVAL_MS = positiveInt(process.env.WORKER_HEARTBEAT_INTERVAL_MS, 10_000, 60_000);
 const IDLE_DELAY_MS = 250;
 const QUEUE_NAME = 'recruitflow-email-outbox';
 const MAIL_DELIVERY_ENABLED = !['false', '0'].includes(process.env.MAIL_DELIVERY_ENABLED?.trim().toLowerCase() ?? 'true');
@@ -28,6 +29,15 @@ interface BullRuntime {
 async function main(): Promise<void> {
   assertOutboxEncryptionKey();
   const bullRuntime = MAIL_DELIVERY_ENABLED ? await startBullRuntime() : null;
+  const queueMode = MAIL_DELIVERY_ENABLED && bullRuntime ? 'bullmq' : MAIL_DELIVERY_ENABLED ? 'database-poll' : 'paused';
+  try {
+    await touchWorkerHeartbeat(queueMode);
+  } catch (err) {
+    // The API container may start the worker while its migration command is
+    // still running. Keep the worker alive; the heartbeat loop retries once
+    // the database is ready instead of turning a startup race into a crash.
+    console.error(`[worker] initial heartbeat failed: ${err instanceof Error ? err.message : err}`);
+  }
   console.log(
     `[worker] email outbox ${MAIL_DELIVERY_ENABLED ? 'drain started' : 'paused'} — transport=${transport.name}, batch=${BATCH_SIZE}, poll=${POLL_INTERVAL_MS}ms, scheduler=${MAIL_DELIVERY_ENABLED ? (bullRuntime ? 'bullmq' : 'db-poll-fallback') : 'paused'}`,
   );
@@ -37,7 +47,10 @@ async function main(): Promise<void> {
   await Promise.all([
     ...(MAIL_DELIVERY_ENABLED ? [runPollingFallback()] : []),
     runSweeperLoop(),
+    runHeartbeatLoop(queueMode),
   ]);
+
+  await markWorkerStopped();
 
   await bullRuntime?.worker.close();
   await bullRuntime?.queue.close();
@@ -84,6 +97,56 @@ async function runSweeperLoop(): Promise<void> {
       console.error(`[sweeper] error: ${err instanceof Error ? err.message : err}`);
     }
     await sleep(stopping ? 0 : SWEEPER_INTERVAL_MS);
+  }
+}
+
+async function runHeartbeatLoop(queueMode: string): Promise<void> {
+  while (!stopping) {
+    try {
+      await touchWorkerHeartbeat(queueMode);
+    } catch (err) {
+      console.error(`[worker] heartbeat error: ${err instanceof Error ? err.message : err}`);
+    }
+    await sleep(stopping ? 0 : HEARTBEAT_INTERVAL_MS);
+  }
+}
+
+async function touchWorkerHeartbeat(queueMode: string): Promise<void> {
+  const now = new Date();
+  await prisma.serviceHeartbeat.upsert({
+    where: { service: 'worker' },
+    create: {
+      service: 'worker',
+      status: 'healthy',
+      observedAt: now,
+      metadata: {
+        pid: process.pid,
+        queueMode,
+        mailDeliveryEnabled: MAIL_DELIVERY_ENABLED,
+        transport: transport.name,
+      },
+    },
+    update: {
+      status: 'healthy',
+      observedAt: now,
+      metadata: {
+        pid: process.pid,
+        queueMode,
+        mailDeliveryEnabled: MAIL_DELIVERY_ENABLED,
+        transport: transport.name,
+      },
+    },
+  });
+}
+
+async function markWorkerStopped(): Promise<void> {
+  try {
+    await prisma.serviceHeartbeat.updateMany({
+      where: { service: 'worker' },
+      data: { status: 'stopped', observedAt: new Date() },
+    });
+  } catch (err) {
+    console.error(`[worker] heartbeat shutdown update failed: ${err instanceof Error ? err.message : err}`);
   }
 }
 

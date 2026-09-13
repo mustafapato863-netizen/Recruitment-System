@@ -38,7 +38,9 @@ services:
       NODE_ENV: production
     depends_on:
       api:
-        condition: service_healthy
+        # The API readiness probe includes the worker heartbeat. Start the
+        # worker once the API process exists so both services can become ready.
+        condition: service_started
     restart: unless-stopped
 volumes:
   documents:

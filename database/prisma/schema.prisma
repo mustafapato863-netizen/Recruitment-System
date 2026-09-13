@@ -929,6 +929,22 @@ model Integration {
   @@map("integrations")
 }
 
+// Process-level liveness markers used by the API readiness probe. This table
+// intentionally has no organization relation because the worker serves the
+// whole deployment, while the API serves every organization.
+model ServiceHeartbeat {
+  id         String   @id @default(uuid()) @db.Uuid
+  service    String   @unique @db.VarChar(80)
+  status     String   @default("healthy") @db.VarChar(30)
+  metadata   Json?
+  observedAt DateTime @default(now()) @db.Timestamptz(6)
+  createdAt  DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(6)
+
+  @@index([status, observedAt])
+  @@map("service_heartbeats")
+}
+
 // ─── Phase 10: Notifications & Tasks ──────────────────────────
 
 model Notification {

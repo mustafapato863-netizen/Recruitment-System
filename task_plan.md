@@ -14,6 +14,15 @@
 - Delivery order: baseline/session diagnosis; profile actions; interview fields; My Work/navigation; unified candidate bank; Excel-style Master Data; write-workflow UAT.
 - Important dependency: candidate email is currently required in both DTO and database; phone-only entry needs coordinated persistence and consumer changes.
 
+## Enhancement implementation — 2026-09-13
+
+- [done] Add production readiness telemetry for the background worker and queue path.
+- [pending] Add deterministic access-control, reassignment, and task-integrity regression coverage.
+- [pending] Finish recruiter UX/accessibility and realistic-volume performance gates.
+- [pending] Run the complete UAT release gate and record remaining limitations.
+
+Verification for the completed stage: the worker heartbeat migration is applied locally; API/worker tests, full monorepo tests (165 tests), typechecks, lint, production build, bundle budgets, and code-quality review all pass.
+
 ## Candidate activity and system review — current request
 
 ### Follow-up: full UAT enhancement planning
