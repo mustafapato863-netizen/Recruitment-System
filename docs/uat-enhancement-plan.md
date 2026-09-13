@@ -1,6 +1,17 @@
 # RecruitFlow — issue fixes and full UAT enhancement plan
 
-Status: implementation plan with staged implementation evidence recorded in `progress.md` and `findings.md`. Prepared 7 September 2026 from the current repository and system review.
+Status: implementation plan with staged implementation evidence recorded in `progress.md` and `findings.md`. Updated 13 September 2026 after the latest full repository audit.
+
+## Latest audit priority
+
+The current build and automated tests are healthy, so the next work should focus on release risk rather than adding new modules. Execute the stages below in order:
+
+1. **P1 security:** finish shared branch/department authorization for application-linked resources, verify tenant isolation, and test revoked assignments and direct URL access.
+2. **P1 integrity:** make repeated vacancy reassignment safe and transactional, including A → B → A → B and concurrent edits.
+3. **P1/P2 task reliability:** validate assignees and linked records against organization and scope, and only show success after persistence succeeds.
+4. **P2 recruiter UX:** complete accessibility fixes, compact mobile navigation, truthful activity summaries, and candidate history pagination.
+5. **P2 operations:** add worker/queue readiness, test document storage and CV retries, verify mail/calendar adapters, and benchmark reports with realistic data.
+6. **Release gate:** rerun typecheck, lint, unit/API/worker suites, migration checks, authorization tests, browser matrix, bundle checks, and hosted smoke tests. Release only with zero known P1 defects.
 
 ## 1. Agreed outcome and boundaries
 
