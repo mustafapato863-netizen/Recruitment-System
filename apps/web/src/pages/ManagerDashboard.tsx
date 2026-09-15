@@ -16,6 +16,7 @@ export interface OpenVacancyOption {
   title: string;
   department: string;
   location: string;
+  status: 'Open' | 'Pending Activation';
   currentRecruiter: string;
   currentRecruiterId: string;
   targetHires: number;
@@ -225,7 +226,9 @@ export function ManagerDashboard() {
         if (!selectedRecruiterId) setSelectedRecruiterId(user.id);
       }
 
-      const mappedVacancies: OpenVacancyOption[] = loadedVacancies.filter((v) => v.status === 'Open').map((v) => {
+      const mappedVacancies: OpenVacancyOption[] = loadedVacancies
+        .filter((v) => v.status === 'Open' || v.status === 'Pending Activation')
+        .map((v) => {
         const title = v.title || v.position?.title || 'No position';
         const department = (v as unknown as { department?: string }).department || v.branch?.name || 'Operations';
         const location = v.location || v.branch?.name || '—';
@@ -238,6 +241,7 @@ export function ManagerDashboard() {
           title,
           department,
           location,
+          status: v.status === 'Pending Activation' ? 'Pending Activation' : 'Open',
           currentRecruiter: recruiter,
           currentRecruiterId: recruiterId,
           targetHires,
@@ -1093,12 +1097,12 @@ export function ManagerDashboard() {
       <Modal
         isOpen={isAssignTaskModalOpen && isManagerOrAdmin}
         onClose={() => setIsAssignTaskModalOpen(false)}
-        title="Assign Open Vacancy & Target to Recruiter"
+        title="Assign Vacancy & Target to Recruiter"
         maxWidthClass="max-w-lg"
       >
         <form onSubmit={handleAssignTaskSubmit} className="space-y-4 text-xs">
           <p className="text-slate-500 dark:text-slate-400">
-            Select an open vacancy position, delegate to a recruiter, and establish hiring &amp; screening targets with SLAs.
+            Select an open or pending vacancy, delegate it to a recruiter, and establish hiring &amp; screening targets with SLAs.
           </p>
 
           {openVacanciesList.length === 0 ? (
@@ -1110,7 +1114,7 @@ export function ManagerDashboard() {
               {/* Vacancy Selector */}
               <div>
                 <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">
-                  Select Open Vacancy Position
+                  Select Vacancy Position
                 </label>
                 <select
                   value={selectedVacancyId}
@@ -1126,7 +1130,7 @@ export function ManagerDashboard() {
                 >
                   {openVacanciesList.map((vac) => (
                     <option key={vac.id} value={vac.id}>
-                      {vac.title} — {vac.department} ({vac.location}) [Current: {vac.currentRecruiter}]
+                      {vac.title} — {vac.department} ({vac.location}) [{vac.status}] [Current: {vac.currentRecruiter}]
                     </option>
                   ))}
                 </select>
@@ -1150,7 +1154,7 @@ export function ManagerDashboard() {
                       <div className="flex items-center justify-between text-[11px]">
                         <span className="font-bold text-slate-500 uppercase tracking-wider">Position Status</span>
                         <span className="px-2 py-0.5 rounded-full font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
-                          OPEN REQUISITION
+                          {currentVac.status === 'Pending Activation' ? 'PENDING ACTIVATION' : 'OPEN REQUISITION'}
                         </span>
                       </div>
                       <div className="flex items-center justify-between text-xs">

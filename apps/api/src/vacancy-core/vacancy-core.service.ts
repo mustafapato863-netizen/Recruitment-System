@@ -736,6 +736,21 @@ export class VacancyCoreService {
       }
     });
 
+    // A converted request starts in Pending Activation because it must have a
+    // primary owner before recruiters can work it. Once that owner is set, a
+    // complete vacancy can become live immediately; this removes the dead-end
+    // where the assignment screen only offered open vacancies while opening
+    // itself required an assignment.
+    if (assignmentKind === 'PRIMARY' && vacancy.status === 'Pending Activation' && vacancy.jobSummary?.trim()) {
+      const now = new Date().toISOString();
+      await this.repository.saveVacancy({
+        ...vacancy,
+        status: 'Open',
+        openedAt: vacancy.openedAt ?? now,
+        updatedAt: now,
+      });
+    }
+
     const updated = await this.repository.getVacancy(organizationId, id);
     if (!updated) throw new NotFoundException(`Vacancy ${id} was not found.`);
     return updated;
