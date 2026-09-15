@@ -1,16 +1,20 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type { VacancyDetailView, Application, PaginatedResult, Interview, Offer, VacancyStatus } from '@recruitflow/contracts';
 import { fetchApi, getApi, patchApi, postApi } from '../api/client';
+import { useAuth } from '../auth/AuthContext';
 import { Icon } from '../components/Icon';
 import { Modal } from '../components/Modal';
 import { AddApplicationModal } from '../components/candidate/AddApplicationModal';
+import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { Textarea } from '../components/ui/Textarea';
 import { PageState } from '../components/ui/PageState';
 import { useSetBreadcrumbTitle } from '../context/BreadcrumbContext';
 import { QuickGuideTrigger } from '../quickguide';
+import { getVacancyBlockingReasons } from '../utils/vacancyActivation';
+import { ImportJobDescriptionModal } from '../components/vacancy/ImportJobDescriptionModal';
 
 interface InterviewerUser {
   id: string;
@@ -30,6 +34,8 @@ function getInitials(name?: string | null): string {
 export function VacancyOverviewPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { user } = useAuth();
   const [vacancy, setVacancy] = useState<VacancyDetailView | null>(null);
   const [applications, setApplications] = useState<Application[]>([]);
   const [interviews, setInterviews] = useState<Interview[]>([]);
@@ -40,7 +46,12 @@ export function VacancyOverviewPage() {
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isAddApplicantModalOpen, setIsAddApplicantModalOpen] = useState(false);
+  const [assignRecruiterOpen, setAssignRecruiterOpen] = useState(false);
+  const [selectedRecruiterId, setSelectedRecruiterId] = useState('');
+  const [recruiters, setRecruiters] = useState<Array<{ id: string; name: string }>>([]);
+  const [isAssigningRecruiter, setIsAssigningRecruiter] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isJdModalOpen, setIsJdModalOpen] = useState(false);
 
   const [editFormData, setEditFormData] = useState<{
     title: string;
@@ -206,6 +217,97 @@ export function VacancyOverviewPage() {
   ));
   const isOpenWithoutAssignment = vacancy?.status === 'Open' && !hasPrimaryAssignment;
 
+  const canAssignRecruiter = Boolean(
+    user?.permissions?.some((permission) =>
+      ['VACANCY_MANAGE', 'VACANCY_ASSIGN', 'VACANCY_REASSIGN'].includes(permission),
+    ),
+  );
+
+  const currentRecruiterAssignment = vacancy?.assignments?.find(
+    (a) => a.isActive && (a.roleCode === 'RECRUITER' || a.roleCode === 'LEAD_RECRUITER' || (a.assignmentKind ?? 'PRIMARY') === 'PRIMARY'),
+  ) || vacancy?.assignments?.find((a) => a.isActive);
+
+  const isRecruiterAssigned = Boolean(currentRecruiterAssignment);
+  const currentRecruiterUser = currentRecruiterAssignment
+    ? (interviewers.find((u) => u.id === currentRecruiterAssignment.userId) || currentRecruiterAssignment.user)
+    : null;
+  const currentRecruiterName = currentRecruiterUser?.displayName || (currentRecruiterUser as unknown as { name?: string })?.name || 'Unassigned';
+
+  useEffect(() => {
+    if (searchParams.get('assignRecruiter') === 'true') {
+      setAssignRecruiterOpen(true);
+      const nextParams = new URLSearchParams(searchParams);
+      nextParams.delete('assignRecruiter');
+      setSearchParams(nextParams, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchRecruiters = async () => {
+      try {
+        const res = await getApi<Array<{ id: string; displayName?: string; name?: string }>>('/users/interviewers');
+        if (isMounted && Array.isArray(res) && res.length > 0) {
+          setRecruiters(res.map((r) => ({ id: r.id, name: r.displayName || r.name || 'Recruiter' })));
+          return;
+        }
+      } catch {
+        // Fallback to /users?role=RECRUITER
+      }
+      try {
+        const res = await getApi<Array<{ id: string; displayName?: string; name?: string }>>('/users?role=RECRUITER');
+        if (isMounted && Array.isArray(res) && res.length > 0) {
+          setRecruiters(res.map((r) => ({ id: r.id, name: r.displayName || r.name || 'Recruiter' })));
+        }
+      } catch {
+        // ignore
+      }
+    };
+    void fetchRecruiters();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (recruiters.length === 0 && interviewers.length > 0) {
+      setRecruiters(interviewers.map((r) => ({ id: r.id, name: r.displayName || r.name || 'Recruiter' })));
+    }
+  }, [interviewers, recruiters.length]);
+
+  useEffect(() => {
+    if (currentRecruiterAssignment?.userId) {
+      setSelectedRecruiterId((prev) => prev || currentRecruiterAssignment.userId);
+    }
+  }, [currentRecruiterAssignment?.userId]);
+
+  const handleAssignAndNavigate = async () => {
+    if (!selectedRecruiterId || !vacancy) return;
+    setIsAssigningRecruiter(true);
+    try {
+      const updated = await postApi<{ status?: string }>(`/vacancies/${vacancy.id}/assignments`, {
+        userId: selectedRecruiterId,
+        roleCode: 'RECRUITER',
+        assignmentKind: 'PRIMARY',
+      });
+      const isActivation = vacancy.status === 'Pending Activation';
+      const willBeOpen =
+        isActivation &&
+        (updated?.status === 'Open' || Boolean(vacancy.jobSummary?.trim()));
+      if (willBeOpen) {
+        showToast(`Position "${jobTitle}" is now open and ready for candidates.`);
+      } else {
+        showToast('Recruiter assigned');
+      }
+      setAssignRecruiterOpen(false);
+      navigate(`/applications?vacancyId=${vacancy.id}`);
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : 'Assignment failed');
+    } finally {
+      setIsAssigningRecruiter(false);
+    }
+  };
+
   const vacancyApps = applications;
   const appIds = new Set(applications.map((a) => a.id));
   const vacancyInterviews = interviews.filter((i) => appIds.has(i.applicationId));
@@ -348,6 +450,57 @@ export function VacancyOverviewPage() {
               Assign a primary recruiter before working on this open vacancy.
             </p>
           )}
+          {vacancy?.status === 'Pending Activation' && (() => {
+            const blockingReasons = getVacancyBlockingReasons(vacancy);
+            return (
+              <div className="mt-3 rounded-xl border border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40 p-3 text-xs">
+                <div className="flex items-center justify-between text-amber-900 dark:text-amber-300 font-bold mb-1.5">
+                  <span className="flex items-center gap-1.5">
+                    <Icon name="alert-triangle" size={14} className="text-amber-600 dark:text-amber-400" />
+                    <span>Pending Activation &bull; {blockingReasons.length} blocking issue(s)</span>
+                  </span>
+                  <span className="text-[11px] font-normal text-amber-700 dark:text-amber-400">Resolve to open requisition</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                  {blockingReasons.map((reason) => (
+                    <div
+                      key={reason.key}
+                      className="flex items-center justify-between p-2 rounded-lg bg-white/80 dark:bg-slate-900/80 border border-amber-200/80 dark:border-amber-900/60"
+                    >
+                      <span className="text-slate-700 dark:text-slate-300 font-medium truncate">&bull; {reason.label}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (reason.isRecruiterAction) {
+                            setAssignRecruiterOpen(true);
+                          } else {
+                            openEditModal();
+                          }
+                        }}
+                        className="shrink-0 text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer ml-2"
+                      >
+                        {reason.actionLabel} &rarr;
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-3 pt-2.5 border-t border-amber-200/80 dark:border-amber-900/60 flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-[11px] text-amber-800 dark:text-amber-300 font-medium">
+                    Have an official Job Description (.docx, .pdf)? Auto-extract requirements &amp; sync Master Data.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setIsJdModalOpen(true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 bg-white dark:bg-slate-900 border border-teal-300 dark:border-teal-700 text-teal-700 dark:text-teal-300 rounded-lg text-xs font-bold hover:bg-teal-50 dark:hover:bg-teal-950/40 transition shadow-xs cursor-pointer"
+                  >
+                    <Icon name="file-text" size={13} className="text-teal-600 dark:text-teal-400" />
+                    <span>⚡ Upload JD to Auto-Fill Specs</span>
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         <div className="flex items-center gap-2.5">
@@ -361,6 +514,17 @@ export function VacancyOverviewPage() {
             <Icon name="external-link" size={13} />
             <span>Public Preview</span>
           </a>
+
+          {canAssignRecruiter && (
+            <Button
+              variant={isRecruiterAssigned ? 'secondary' : 'primary'}
+              onClick={() => setAssignRecruiterOpen(true)}
+              className="rounded-xl text-xs font-bold"
+            >
+              <Icon name="user-check" size={14} />
+              <span>{isRecruiterAssigned ? 'Change Recruiter' : 'Assign Recruiter & Start'}</span>
+            </Button>
+          )}
 
           <button
             type="button"
@@ -389,6 +553,16 @@ export function VacancyOverviewPage() {
           >
             <span>Edit</span>
             <Icon name="edit" size={13} className="text-slate-400" />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsJdModalOpen(true)}
+            className="inline-flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs cursor-pointer"
+            title="Import official Job Description (.docx, .pdf) to auto-fill specs"
+          >
+            <Icon name="file-text" size={13} className="text-teal-600 dark:text-teal-400" />
+            <span>Import JD</span>
           </button>
 
           <div className="relative">
@@ -1554,6 +1728,97 @@ export function VacancyOverviewPage() {
         </form>
       </Modal>
 
+      {/* Assign Recruiter Modal */}
+      <Modal
+        isOpen={assignRecruiterOpen}
+        onClose={() => setAssignRecruiterOpen(false)}
+        title={isRecruiterAssigned ? 'Reassign Recruiter & Open Applications' : 'Assign Recruiter & Start Evaluation'}
+      >
+        <div className="space-y-4">
+          <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 p-3.5 border border-slate-200/80 dark:border-slate-700/80 space-y-1.5 text-xs">
+            <div className="flex justify-between items-center text-slate-500 dark:text-slate-400">
+              <span>Vacancy:</span>
+              <span className="font-bold text-slate-900 dark:text-white">
+                {vacancy?.position?.title || vacancy?.title || 'Requisition'}
+              </span>
+            </div>
+            <div className="flex justify-between items-center text-slate-500 dark:text-slate-400">
+              <span>Department:</span>
+              <span className="font-semibold text-slate-700 dark:text-slate-300">{departmentName}</span>
+            </div>
+            <div className="flex justify-between items-center text-slate-500 dark:text-slate-400">
+              <span>Current:</span>
+              <span className="font-bold text-slate-900 dark:text-white">{currentRecruiterName}</span>
+            </div>
+          </div>
+
+          {/* Reassignment Status Notice */}
+          {(() => {
+            const selectedRecruiter = recruiters.find((r) => r.id === selectedRecruiterId);
+            if (isRecruiterAssigned && selectedRecruiter && selectedRecruiter.name !== currentRecruiterName) {
+              return (
+                <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 text-xs flex items-start gap-2">
+                  <span className="text-base leading-none">🔄</span>
+                  <div>
+                    <span className="font-bold block">Reassigning Position</span>
+                    <span className="text-[11px] block mt-0.5">
+                      Responsibility for <b>{jobTitle}</b> will transfer from{' '}
+                      <b>{currentRecruiterName}</b> to <b>{selectedRecruiter.name}</b>.
+                    </span>
+                  </div>
+                </div>
+              );
+            }
+            return null;
+          })()}
+
+          <div>
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+              Recruiter
+            </label>
+            {recruiters.length === 0 ? (
+              <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300 text-xs flex items-center gap-2">
+                <Icon name="alert-circle" size={16} className="text-rose-500 shrink-0" />
+                <span>No recruiters available. Please ensure recruiter accounts are configured in Master Data / User Roles.</span>
+              </div>
+            ) : (
+              <Select
+                aria-label="Select recruiter"
+                value={selectedRecruiterId}
+                onChange={(e) => setSelectedRecruiterId(e.target.value)}
+                disabled={isAssigningRecruiter}
+              >
+                <option value="">Select recruiter...</option>
+                {recruiters.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
+            <Button
+              variant="ghost"
+              onClick={() => setAssignRecruiterOpen(false)}
+              disabled={isAssigningRecruiter}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleAssignAndNavigate}
+              disabled={!selectedRecruiterId || recruiters.length === 0 || isAssigningRecruiter}
+              loading={isAssigningRecruiter}
+              loadingLabel="Assigning..."
+            >
+              {isRecruiterAssigned ? 'Reassign & Open Applications' : 'Assign & Open Applications'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
       {/* Add Candidate Modal */}
       <AddApplicationModal
         isOpen={isAddApplicantModalOpen}
@@ -1562,6 +1827,27 @@ export function VacancyOverviewPage() {
         preselectedVacancyTitle={jobTitle}
         onSuccess={() => {
           showToast('Candidate added to requisition pipeline successfully');
+          void loadAllData();
+        }}
+      />
+
+      {/* Import Job Description & Auto-Sync Modal */}
+      <ImportJobDescriptionModal
+        isOpen={isJdModalOpen}
+        onClose={() => setIsJdModalOpen(false)}
+        targetVacancy={
+          vacancy
+            ? {
+                id: vacancy.id,
+                title: jobTitle,
+                department: departmentName !== '—' ? departmentName : undefined,
+                location: locationText !== '—' ? locationText : undefined,
+                status: vacancy.status,
+              }
+            : null
+        }
+        onSuccess={() => {
+          showToast('Job Description ingested and position requirements updated successfully');
           void loadAllData();
         }}
       />

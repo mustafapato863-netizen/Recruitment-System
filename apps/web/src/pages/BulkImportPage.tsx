@@ -20,6 +20,7 @@ import { Select } from '../components/ui/Select';
 import { StatusBadge } from '../components/StatusBadge';
 import { Icon } from '../components/Icon';
 import { saveBlob } from '../utils/download';
+import { ImportJobDescriptionModal } from '../components/vacancy/ImportJobDescriptionModal';
 import './PageEnhancementsV2.css';
 
 const PAGE_SIZE = 50;
@@ -63,6 +64,7 @@ function BulkImportLandingPage() {
   const [loadingJobs, setLoadingJobs] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [isJdModalOpen, setIsJdModalOpen] = useState(false);
 
   const canCandidates = Boolean(user?.permissions.includes('CANDIDATE_CREATE'));
   const canVacancies = Boolean(user?.permissions.includes('VACANCY_REQUEST_CREATE'));
@@ -149,10 +151,21 @@ function BulkImportLandingPage() {
       title="Bulk Import Center"
       description="Load candidates, vacancy requests, and controlled master data from Excel, validate them, resolve issues, then confirm changes with an audit trail."
       actions={
-        <Button variant="ghost" size="sm" onClick={() => void downloadTemplate()}>
-          <Icon name="download" size={14} />
-          Download template
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setIsJdModalOpen(true)}
+            className="border-teal-300 dark:border-teal-700 text-teal-700 dark:text-teal-300 font-bold"
+          >
+            <Icon name="file-text" size={14} className="text-teal-600 dark:text-teal-400 mr-1" />
+            Import JD Document (.docx)
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => void downloadTemplate()}>
+            <Icon name="download" size={14} />
+            Download template
+          </Button>
+        </div>
       }
     >
       {error && <Alert tone="danger" title="Import attention">{error}</Alert>}
@@ -254,6 +267,14 @@ function BulkImportLandingPage() {
           </DataTable>
         )}
       </section>
+
+      <ImportJobDescriptionModal
+        isOpen={isJdModalOpen}
+        onClose={() => setIsJdModalOpen(false)}
+        onSuccess={({ updatedTitle }) => {
+          setMessage(`Job Description for "${updatedTitle}" ingested and Master Data updated successfully.`);
+        }}
+      />
     </PageFrame>
   );
 }

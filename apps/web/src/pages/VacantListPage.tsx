@@ -1,20 +1,27 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { downloadApi, getApi } from '../api/client';
+import { downloadApi, getApi, postApi } from '../api/client';
+import { useAuth } from '../auth/AuthContext';
 import { Icon } from '../components/Icon';
 import { Modal } from '../components/Modal';
 import { Alert } from '../components/ui';
+import { Button } from '../components/ui/Button';
+import { Select } from '../components/ui/Select';
 import { PageState } from '../components/ui/PageState';
 import { QuickGuideTrigger } from '../quickguide';
 import { saveBlob } from '../utils/download';
 import { EditPositionRequirementsModal } from '../components/vacancy/EditPositionRequirementsModal';
+import { ImportJobDescriptionModal } from '../components/vacancy/ImportJobDescriptionModal';
+import { getVacancyBlockingReasons } from '../utils/vacancyActivation';
 
 interface JobPositionRow {
   id: string;
   title: string;
   location: string;
+  branchId?: string;
   workType: string;
   department: string;
+  primaryRecruiterId?: string;
   recruiter: {
     initials: string;
     name: string;
@@ -26,7 +33,7 @@ interface JobPositionRow {
   slaPercent: number;
   slaStatus: 'on track' | 'at risk';
   lastActivity: string;
-  status: 'Open' | 'On Hold' | 'Draft' | 'Closed';
+  status: 'Open' | 'Pending Activation' | 'On Hold' | 'Draft' | 'Closed';
   vacancyCode: string;
   approvedHeadcount: number;
   joinedHeadcount: number;
@@ -48,9 +55,11 @@ interface RawVacancyResponseItem {
   position?: { id?: string; code?: string; title?: string; department?: string; description?: string };
   positionTitle?: string;
   location?: string;
-  branch?: { name?: string; city?: string };
+  branchId?: string;
+  branch?: { id?: string; name?: string; city?: string };
   workType?: string;
   department?: string;
+  primaryRecruiterId?: string;
   requiredSkills?: string[];
   minExperienceYears?: number | null;
   qualifications?: string | null;
@@ -70,6 +79,14 @@ interface RawVacancyResponseItem {
 export function VacantListPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const { user } = useAuth();
+  const canAssignRecruiter = useMemo(() => {
+    return Boolean(
+      user?.permissions?.some((permission) =>
+        ['VACANCY_MANAGE', 'VACANCY_ASSIGN', 'VACANCY_REASSIGN'].includes(permission),
+      ),
+    );
+  }, [user?.permissions]);
 
   // Active section tab: 'catalog' (Full Positions & Requirements Directory) vs 'requisitions' (Work Queue)
   const activeSection = searchParams.get('tab') === 'requisitions' ? 'requisitions' : 'catalog';
@@ -86,7 +103,7 @@ export function VacantListPage() {
   const [selectedDept, setSelectedDept] = useState('ALL');
   const [selectedLocation, setSelectedLocation] = useState('ALL');
   const [selectedOwner, setSelectedOwner] = useState('ALL');
-  const [statusFilter, setStatusFilter] = useState<'ALL' | 'Open' | 'On Hold' | 'Closed'>('ALL');
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'Open' | 'Pending Activation' | 'On Hold' | 'Closed'>('ALL');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isMoreFiltersOpen, setIsMoreFiltersOpen] = useState(false);
@@ -102,6 +119,54 @@ export function VacantListPage() {
 
   // Edit Position Requirements Modal
   const [editingPosition, setEditingPosition] = useState<JobPositionRow | null>(null);
+  const [editingFocusSection, setEditingFocusSection] = useState<'jobSummary' | 'skills' | 'department' | 'location' | undefined>(undefined);
+
+  const openSetupForPosition = (pos: JobPositionRow, preferredSection?: 'jobSummary' | 'skills' | 'department' | 'location') => {
+    let section = preferredSection;
+    if (!section) {
+      const reasons = getVacancyBlockingReasons(pos);
+      const firstIssue = reasons.find((r) => !r.isRecruiterAction);
+      if (firstIssue) {
+        if (firstIssue.key === 'jobSummary') section = 'jobSummary';
+        else if (firstIssue.key === 'skills') section = 'skills';
+        else if (firstIssue.key === 'department') section = 'department';
+        else if (firstIssue.key === 'location') section = 'location';
+      }
+    }
+    setEditingFocusSection(section);
+    setEditingPosition(pos);
+  };
+
+  // Direct Assign Recruiter Modal on Card
+  const [assigningVacancy, setAssigningVacancy] = useState<JobPositionRow | null>(null);
+  const [selectedRecruiterId, setSelectedRecruiterId] = useState('');
+  const [recruiters, setRecruiters] = useState<Array<{ id: string; name: string }>>([]);
+  const [isSubmittingAssign, setIsSubmittingAssign] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const applicantFileInputRef = useRef<HTMLInputElement>(null);
+
+  // JD Ingestion & Master Data Auto-Sync Modal
+  const [isJdModalOpen, setIsJdModalOpen] = useState(false);
+  const [jdTargetVacancy, setJdTargetVacancy] = useState<{
+    id: string;
+    title: string;
+    department?: string;
+    location?: string;
+    status?: string;
+  } | null>(null);
+
+  const openAssignModal = (pos: JobPositionRow) => {
+    setAssigningVacancy(pos);
+    const existingRecruiter = recruiters.find(
+      (r) => r.id === pos.primaryRecruiterId || r.name.toLowerCase() === pos.recruiter.name.toLowerCase()
+    );
+    setSelectedRecruiterId(existingRecruiter?.id || pos.primaryRecruiterId || '');
+  };
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => setToastMessage(null), 3500);
+  };
 
   const handleExportExcel = async () => {
     setIsExporting(true);
@@ -117,71 +182,163 @@ export function VacantListPage() {
   };
 
   useEffect(() => {
-    setIsLoading(true);
-    getApi<RawVacancyResponseItem[] | { data: RawVacancyResponseItem[] }>('/vacancies')
-      .then((res) => {
-        const rawList = Array.isArray(res) ? res : res?.data || [];
-        const statusMap: Record<string, JobPositionRow['status']> = {
-          Open: 'Open',
-          'On Hold': 'On Hold',
-          Draft: 'Draft',
-          Closed: 'Closed',
-        };
-        const mapped: JobPositionRow[] = rawList.map((v: RawVacancyResponseItem) => {
-          const recruiterName =
-            v.recruiter?.displayName ||
-            (v.recruiter ? `${v.recruiter.firstName || ''} ${v.recruiter.lastName || ''}`.trim() : null) ||
-            v.primaryRecruiterName ||
-            (v.assignments?.[0]?.user?.displayName) ||
-            'Unassigned';
-          const initials =
-            recruiterName === 'Unassigned'
-              ? '—'
-              : recruiterName
-                  .split(' ')
-                  .filter(Boolean)
-                  .map((n: string) => n[0])
-                  .join('')
-                  .substring(0, 2)
-                  .toUpperCase() || 'UN';
-
-          return {
-            id: v.id,
-            vacancyCode: v.vacancyCode || `VAC-${v.id.slice(0, 6).toUpperCase()}`,
-            approvedHeadcount: v.approvedHeadcount ?? 1,
-            joinedHeadcount: v.joinedHeadcount ?? 0,
-            title: v.title || v.position?.title || v.positionTitle || 'No position',
-            location: v.location || v.branch?.name || 'SGH Riyadh Hospital',
-            workType: v.workType || 'Full-Time',
-            department: v.department || v.position?.department || 'Clinical Services',
-            recruiter: {
-              initials,
-              name: recruiterName,
-            },
-            applicationsCount: v.applicationsCount ?? v._count?.applications ?? 0,
-            needActionCount: v.needActionCount ?? 0,
-            isOverdue: Boolean(v.isOverdue),
-            slaPercent: typeof v.slaPercent === 'number' ? v.slaPercent : 100,
-            slaStatus: (v.isOverdue ? 'at risk' : 'on track') as 'at risk' | 'on track',
-            lastActivity: v.updatedAt ? new Date(v.updatedAt).toLocaleDateString() : '—',
-            status: (v.status && statusMap[v.status]) ? statusMap[v.status] : 'Open',
-            positionId: v.positionId || v.position?.id,
-            positionCode: v.position?.code || v.vacancyCode?.replace('VAC-SGH-', '') || 'POS',
-            requiredSkills: v.requiredSkills || [],
-            minExperienceYears: v.minExperienceYears ?? null,
-            qualifications: v.qualifications,
-            jobSummary: v.jobSummary,
-          };
-        });
-        setApiVacancies(mapped);
-      })
-      .catch(() => {
-        setApiVacancies([]);
-      })
-      .finally(() => {
-        setIsLoading(false);
-      });
+    let isMounted = true;
+    const fetchRecruiters = async () => {
+      try {
+        const res = await getApi<Array<{ id: string; displayName?: string; name?: string }>>('/users/interviewers');
+        if (isMounted && Array.isArray(res) && res.length > 0) {
+          setRecruiters(res.map((r) => ({ id: r.id, name: r.displayName || r.name || 'Recruiter' })));
+          return;
+        }
+      } catch {
+        // Fallback to /users?role=RECRUITER
+      }
+      try {
+        const res = await getApi<Array<{ id: string; displayName?: string; name?: string }>>('/users?role=RECRUITER');
+        if (isMounted && Array.isArray(res) && res.length > 0) {
+          setRecruiters(res.map((r) => ({ id: r.id, name: r.displayName || r.name || 'Recruiter' })));
+        }
+      } catch {
+        // ignore
+      }
+    };
+    void fetchRecruiters();
+    return () => {
+      isMounted = false;
+    };
   }, []);
+
+  const loadVacancies = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const res = await getApi<RawVacancyResponseItem[] | { data: RawVacancyResponseItem[] }>('/vacancies');
+      const rawList = Array.isArray(res) ? res : res?.data || [];
+      const statusMap: Record<string, JobPositionRow['status']> = {
+        Open: 'Open',
+        'Pending Activation': 'Pending Activation',
+        'On Hold': 'On Hold',
+        Draft: 'Draft',
+        Closed: 'Closed',
+      };
+      const mapped: JobPositionRow[] = rawList.map((v: RawVacancyResponseItem) => {
+        const recruiterName =
+          v.recruiter?.displayName ||
+          (v.recruiter ? `${v.recruiter.firstName || ''} ${v.recruiter.lastName || ''}`.trim() : null) ||
+          v.primaryRecruiterName ||
+          (v.assignments?.[0]?.user?.displayName) ||
+          'Unassigned';
+        const initials =
+          recruiterName === 'Unassigned'
+            ? '—'
+            : recruiterName
+                .split(' ')
+                .filter(Boolean)
+                .map((n: string) => n[0])
+                .join('')
+                .substring(0, 2)
+                .toUpperCase() || 'UN';
+
+        return {
+          id: v.id,
+          vacancyCode: v.vacancyCode || `VAC-${v.id.slice(0, 6).toUpperCase()}`,
+          approvedHeadcount: v.approvedHeadcount ?? 1,
+          joinedHeadcount: v.joinedHeadcount ?? 0,
+          title: v.title || v.position?.title || v.positionTitle || 'No position',
+          location: v.location || v.branch?.name || 'SGH Riyadh Hospital',
+          branchId: v.branchId || v.branch?.id,
+          workType: v.workType || 'Full-Time',
+          department: v.department || v.position?.department || 'Clinical Services',
+          primaryRecruiterId: v.primaryRecruiterId || (recruiterName !== 'Unassigned' ? 'assigned' : undefined),
+          recruiter: {
+            initials,
+            name: recruiterName,
+          },
+          applicationsCount: v.applicationsCount ?? v._count?.applications ?? 0,
+          needActionCount: v.needActionCount ?? 0,
+          isOverdue: Boolean(v.isOverdue),
+          slaPercent: typeof v.slaPercent === 'number' ? v.slaPercent : 100,
+          slaStatus: (v.isOverdue ? 'at risk' : 'on track') as 'at risk' | 'on track',
+          lastActivity: v.updatedAt ? new Date(v.updatedAt).toLocaleDateString() : '—',
+          status: (v.status && statusMap[v.status]) ? statusMap[v.status] : 'Open',
+          positionId: v.positionId || v.position?.id,
+          positionCode: v.position?.code || v.vacancyCode?.replace('VAC-SGH-', '') || 'POS',
+          requiredSkills: v.requiredSkills || [],
+          minExperienceYears: v.minExperienceYears ?? null,
+          qualifications: v.qualifications,
+          jobSummary: v.jobSummary,
+        };
+      });
+      setApiVacancies(mapped);
+    } catch {
+      setApiVacancies([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadVacancies();
+  }, [loadVacancies]);
+
+  const handleAssignSubmit = async () => {
+    if (!assigningVacancy || !selectedRecruiterId) return;
+    setIsSubmittingAssign(true);
+    const vacancyTitle = assigningVacancy.title;
+    const selectedRecruiter = recruiters.find((r) => r.id === selectedRecruiterId);
+    const recruiterName = selectedRecruiter?.name || 'Recruiter';
+
+    try {
+      const updated = await postApi<{ status?: string }>(`/vacancies/${assigningVacancy.id}/assignments`, {
+        userId: selectedRecruiterId,
+        roleCode: 'RECRUITER',
+        assignmentKind: 'PRIMARY',
+      });
+
+      const isActivation = assigningVacancy.status === 'Pending Activation';
+      const willBeOpen =
+        isActivation &&
+        (updated?.status === 'Open' || Boolean(assigningVacancy.jobSummary?.trim()));
+      const nextStatus = willBeOpen ? 'Open' : assigningVacancy.status;
+
+      setApiVacancies((prev) =>
+        prev.map((item) =>
+          item.id === assigningVacancy.id
+            ? {
+                ...item,
+                status: nextStatus,
+                primaryRecruiterId: selectedRecruiterId,
+                recruiter: {
+                  ...item.recruiter,
+                  name: recruiterName,
+                  initials:
+                    recruiterName
+                      .split(' ')
+                      .filter(Boolean)
+                      .map((n) => n[0])
+                      .join('')
+                      .slice(0, 2)
+                      .toUpperCase() || 'RC',
+                },
+              }
+            : item,
+        ),
+      );
+
+      if (willBeOpen) {
+        showToast(`Position "${vacancyTitle}" is now open and ready for candidates.`);
+      } else {
+        showToast(`Recruiter ${recruiterName} assigned to "${vacancyTitle}".`);
+      }
+
+      setAssigningVacancy(null);
+      setSelectedRecruiterId('');
+      void loadVacancies();
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : 'Failed to assign recruiter');
+    } finally {
+      setIsSubmittingAssign(false);
+    }
+  };
 
   const positions = apiVacancies;
 
@@ -260,6 +417,7 @@ export function VacantListPage() {
   // Counts for pill tabs
   const allCount = positions.length;
   const openCount = positions.filter((p) => p.status === 'Open').length;
+  const pendingActivationCount = positions.filter((p) => p.status === 'Pending Activation').length;
   const onHoldCount = positions.filter((p) => p.status === 'On Hold').length;
   const closedCount = positions.filter((p) => p.status === 'Closed').length;
 
@@ -344,6 +502,19 @@ export function VacantListPage() {
           >
             <Icon name={isExporting ? 'refresh-cw' : 'download'} size={14} className={`text-emerald-600 dark:text-emerald-400 ${isExporting ? 'animate-spin' : ''}`} />
             <span>{isExporting ? 'Exporting...' : 'Export XLSX'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setJdTargetVacancy(null);
+              setIsJdModalOpen(true);
+            }}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-md shadow-teal-500/20 cursor-pointer"
+            title="Upload a Job Description (.docx, .pdf) to auto-extract specs and sync Master Data"
+          >
+            <Icon name="file-text" size={14} />
+            <span>📄 Upload JD (.docx)</span>
           </button>
 
           <button
@@ -649,7 +820,7 @@ export function VacantListPage() {
                   <div className="flex items-center justify-between gap-2 pt-4 mt-4 border-t border-slate-100 dark:border-slate-800/80">
                     <button
                       type="button"
-                      onClick={() => setEditingPosition(pos)}
+                      onClick={() => openSetupForPosition(pos)}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition cursor-pointer shadow-2xs"
                       title="Edit position skills, experience, location, and qualifications"
                     >
@@ -869,6 +1040,21 @@ export function VacantListPage() {
             <button
               type="button"
               onClick={() => {
+                setStatusFilter('Pending Activation');
+                setCurrentPage(1);
+              }}
+              className={`px-3.5 py-1.5 rounded-full text-xs transition cursor-pointer shrink-0 ${
+                statusFilter === 'Pending Activation'
+                  ? 'bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-800 font-extrabold'
+                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 font-medium'
+              }`}
+            >
+              Pending Activation &bull; {pendingActivationCount}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
                 setStatusFilter('On Hold');
                 setCurrentPage(1);
               }}
@@ -932,6 +1118,8 @@ export function VacantListPage() {
                               className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
                                 pos.status === 'Open'
                                   ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+                                  : pos.status === 'Pending Activation'
+                                  ? 'bg-amber-50 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-800'
                                   : pos.status === 'On Hold'
                                   ? 'bg-amber-50 text-amber-600 border border-amber-200'
                                   : 'bg-slate-100 text-slate-600'
@@ -949,6 +1137,68 @@ export function VacantListPage() {
                               {pos.department} &bull; {pos.location}
                             </p>
                           </div>
+
+                          {pos.status === 'Pending Activation' && (() => {
+                            const blockingReasons = getVacancyBlockingReasons(pos);
+                            return (
+                              <div
+                                className="mt-1 rounded-xl border border-amber-200 bg-amber-50/90 dark:border-amber-900/60 dark:bg-amber-950/40 p-2.5 text-[11px]"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <div className="flex items-center justify-between text-amber-900 dark:text-amber-300 font-bold mb-1.5">
+                                  <span className="flex items-center gap-1">
+                                    <Icon name="alert-triangle" size={13} className="text-amber-600 dark:text-amber-400" />
+                                    <span>Pending Activation ({blockingReasons.length})</span>
+                                  </span>
+                                  <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-400">Action needed</span>
+                                </div>
+                                <div className="space-y-1">
+                                  {blockingReasons.map((reason) => (
+                                    <div key={reason.key} className="flex items-center justify-between gap-2 text-slate-700 dark:text-slate-300">
+                                      <span className="truncate">&bull; {reason.label}</span>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          if (reason.isRecruiterAction) {
+                                            openAssignModal(pos);
+                                          } else {
+                                            openSetupForPosition(
+                                              pos,
+                                              reason.key === 'recruiter' ? undefined : (reason.key as 'jobSummary' | 'skills' | 'department' | 'location')
+                                            );
+                                          }
+                                        }}
+                                        className="shrink-0 text-[10px] font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                                      >
+                                        {reason.actionLabel} &rarr;
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+
+                                <div className="pt-2 mt-1.5 border-t border-amber-200/70 dark:border-amber-900/40 flex items-center justify-between">
+                                  <span className="text-[10px] text-amber-800 dark:text-amber-300 font-medium">Have official JD document?</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setJdTargetVacancy({
+                                        id: pos.id,
+                                        title: pos.title,
+                                        department: pos.department,
+                                        location: pos.location,
+                                        status: pos.status,
+                                      });
+                                      setIsJdModalOpen(true);
+                                    }}
+                                    className="inline-flex items-center gap-1 text-[10px] font-bold text-teal-700 dark:text-teal-300 hover:text-teal-800 dark:hover:text-teal-200 hover:underline cursor-pointer"
+                                  >
+                                    <Icon name="file-text" size={11} />
+                                    <span>⚡ Auto-fill from JD</span>
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })()}
 
                           <div className="flex items-center gap-3 text-xs pt-1 border-t border-slate-100 dark:border-slate-800">
                             <div>
@@ -978,9 +1228,23 @@ export function VacantListPage() {
                             <Icon name="sparkles" size={12} />
                             <span>⚡ Match Sourcing</span>
                           </button>
-                          <span className="text-slate-400 text-[11px] group-hover:text-blue-600">
-                            View details &rarr;
-                          </span>
+                          <div className="flex items-center gap-2">
+                            {canAssignRecruiter && (
+                              <Button
+                                size="sm"
+                                variant={pos.recruiter.name === 'Unassigned' ? 'primary' : 'secondary'}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openAssignModal(pos);
+                                }}
+                              >
+                                {pos.recruiter.name === 'Unassigned' ? 'Assign recruiter' : 'Reassign'}
+                              </Button>
+                            )}
+                            <span className="text-slate-400 text-[11px] group-hover:text-blue-600">
+                              View details &rarr;
+                            </span>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -1041,11 +1305,33 @@ export function VacantListPage() {
                                 className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
                                   pos.status === 'Open'
                                     ? 'bg-emerald-50 text-emerald-600'
+                                    : pos.status === 'Pending Activation'
+                                    ? 'bg-amber-50 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-800'
                                     : 'bg-amber-50 text-amber-600'
                                 }`}
                               >
                                 {pos.status}
                               </span>
+                              {pos.status === 'Pending Activation' && (() => {
+                                const reasons = getVacancyBlockingReasons(pos);
+                                return (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      if (reasons.some((r) => r.isRecruiterAction)) {
+                                        openAssignModal(pos);
+                                      } else {
+                                        openSetupForPosition(pos);
+                                      }
+                                    }}
+                                    className="block text-[10px] text-amber-600 dark:text-amber-400 mt-1 font-semibold hover:underline cursor-pointer text-left"
+                                    title={reasons.map((r) => r.label).join(', ')}
+                                  >
+                                    ⚠ {reasons.length} issue(s)
+                                  </button>
+                                );
+                              })()}
                             </td>
                             <td className="p-3 font-bold text-slate-700 dark:text-slate-300">
                               {pos.applicationsCount}
@@ -1057,13 +1343,53 @@ export function VacantListPage() {
                               {pos.recruiter.name}
                             </td>
                             <td className="p-3 text-right" onClick={(e) => e.stopPropagation()}>
-                              <button
-                                type="button"
-                                onClick={() => navigate(`/sourcing-match?vacancyId=${pos.id}`)}
-                                className="px-2 py-1 rounded bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 font-bold hover:bg-teal-100 text-[11px] transition"
-                              >
-                                ⚡ Match
-                              </button>
+                              <div className="flex items-center justify-end gap-1.5">
+                                {pos.status === 'Pending Activation' && (
+                                  <>
+                                    <button
+                                      type="button"
+                                      onClick={() => openSetupForPosition(pos)}
+                                      className="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-[11px] transition cursor-pointer"
+                                      title="Complete requirements setup"
+                                    >
+                                      Setup
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setJdTargetVacancy({
+                                          id: pos.id,
+                                          title: pos.title,
+                                          department: pos.department,
+                                          location: pos.location,
+                                          status: pos.status,
+                                        });
+                                        setIsJdModalOpen(true);
+                                      }}
+                                      className="px-2 py-1 rounded bg-teal-50 hover:bg-teal-100 dark:bg-teal-950/40 dark:hover:bg-teal-900/60 text-teal-700 dark:text-teal-300 font-bold text-[11px] transition cursor-pointer"
+                                      title="Auto-fill requirements from JD document"
+                                    >
+                                      📄 JD
+                                    </button>
+                                  </>
+                                )}
+                                {canAssignRecruiter && (
+                                  <Button
+                                    size="sm"
+                                    variant={pos.recruiter.name === 'Unassigned' ? 'primary' : 'secondary'}
+                                    onClick={() => openAssignModal(pos)}
+                                  >
+                                    {pos.recruiter.name === 'Unassigned' ? 'Assign recruiter' : 'Reassign'}
+                                  </Button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => navigate(`/sourcing-match?vacancyId=${pos.id}`)}
+                                  className="px-2 py-1 rounded bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 font-bold hover:bg-teal-100 text-[11px] transition cursor-pointer"
+                                >
+                                  ⚡ Match
+                                </button>
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -1122,7 +1448,10 @@ export function VacantListPage() {
       {editingPosition && (
         <EditPositionRequirementsModal
           isOpen={Boolean(editingPosition)}
-          onClose={() => setEditingPosition(null)}
+          onClose={() => {
+            setEditingPosition(null);
+            setEditingFocusSection(undefined);
+          }}
           vacancyId={editingPosition.id}
           positionTitle={editingPosition.title}
           positionCode={editingPosition.positionCode || editingPosition.vacancyCode}
@@ -1132,6 +1461,7 @@ export function VacantListPage() {
           initialDepartment={editingPosition.department}
           initialQualifications={editingPosition.qualifications}
           initialJobSummary={editingPosition.jobSummary}
+          initialFocusSection={editingFocusSection}
           onSaved={handlePositionRequirementsSaved}
         />
       )}
@@ -1144,17 +1474,52 @@ export function VacantListPage() {
         maxWidthClass="max-w-md"
       >
         <div className="space-y-4">
+          {/* Quick link if user intended to upload a Job Description */}
+          <div className="p-3.5 rounded-xl bg-gradient-to-r from-teal-50 to-emerald-50 dark:from-teal-950/40 dark:to-emerald-950/40 border border-teal-200 dark:border-teal-800 flex items-center justify-between gap-3">
+            <div>
+              <span className="font-bold text-teal-900 dark:text-teal-200 block text-xs">Uploading a Job Description (JD)?</span>
+              <span className="text-[11px] text-teal-700 dark:text-teal-300">Extract skills &amp; sync Master Data for requisitions</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setIsImportModalOpen(false);
+                setJdTargetVacancy(null);
+                setIsJdModalOpen(true);
+              }}
+              className="shrink-0 px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs shadow-xs cursor-pointer transition"
+            >
+              📄 Upload JD File &rarr;
+            </button>
+          </div>
+
           <p className="text-xs text-slate-500">
             Upload candidate resumes (.pdf, .docx) or a CSV/XLSX file to automatically parse and link candidates to job positions.
           </p>
 
-          <div className="border-2 border-dashed border-slate-200 dark:border-slate-700 rounded-xl p-6 text-center space-y-2 bg-slate-50/50 dark:bg-slate-800/40">
-            <Icon name="upload" size={24} className="mx-auto text-slate-400" />
-            <span className="block text-xs font-bold text-slate-700 dark:text-slate-200">
-              Drag &amp; drop files here or browse
+          <div
+            onClick={() => applicantFileInputRef.current?.click()}
+            className="border-2 border-dashed border-slate-300 dark:border-slate-700 hover:border-blue-500 rounded-xl p-6 text-center space-y-2 bg-slate-50/50 dark:bg-slate-800/40 cursor-pointer transition-all hover:bg-blue-50/20 group"
+          >
+            <input
+              ref={applicantFileInputRef}
+              type="file"
+              accept=".pdf,.docx,.xlsx,.csv"
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files && e.target.files.length > 0) {
+                  setIsImportModalOpen(false);
+                  navigate('/cv-intake');
+                }
+              }}
+            />
+            <Icon name="upload" size={24} className="mx-auto text-slate-400 group-hover:text-blue-500 transition-colors" />
+            <span className="block text-xs font-bold text-slate-700 dark:text-slate-200 group-hover:text-blue-600">
+              Drag &amp; drop files here or browse from computer
             </span>
             <span className="block text-[11px] text-slate-400">
-              Supports bulk CV upload up to 50 files
+              Supports bulk CV upload up to 50 files (.pdf, .docx, .xlsx)
             </span>
           </div>
 
@@ -1179,6 +1544,143 @@ export function VacantListPage() {
           </div>
         </div>
       </Modal>
+
+      {/* ── Assign Recruiter Modal ── */}
+      <Modal
+        isOpen={Boolean(assigningVacancy)}
+        onClose={() => {
+          setAssigningVacancy(null);
+          setSelectedRecruiterId('');
+        }}
+        title={
+          assigningVacancy?.recruiter.name && assigningVacancy.recruiter.name !== 'Unassigned'
+            ? 'Reassign Recruiter'
+            : 'Assign Recruiter & Activate Vacancy'
+        }
+      >
+        <div className="space-y-4">
+          <div className="rounded-xl bg-slate-50 dark:bg-slate-800/60 p-3.5 border border-slate-200/80 dark:border-slate-700/80 space-y-1.5 text-xs">
+            <div className="flex justify-between items-center text-slate-500 dark:text-slate-400">
+              <span>Vacancy:</span>
+              <span className="font-bold text-slate-900 dark:text-white">{assigningVacancy?.title}</span>
+            </div>
+            <div className="flex justify-between items-center text-slate-500 dark:text-slate-400">
+              <span>Department:</span>
+              <span className="font-semibold text-slate-700 dark:text-slate-300">{assigningVacancy?.department}</span>
+            </div>
+            <div className="flex justify-between items-center text-slate-500 dark:text-slate-400">
+              <span>Status:</span>
+              <span className="font-bold text-amber-700 dark:text-amber-400">{assigningVacancy?.status}</span>
+            </div>
+            <div className="flex justify-between items-center text-slate-500 dark:text-slate-400">
+              <span>Current Recruiter:</span>
+              <span className="font-bold text-slate-900 dark:text-white">{assigningVacancy?.recruiter.name}</span>
+            </div>
+          </div>
+
+          {/* Reassignment Status Notice */}
+          {(() => {
+            const isReassign = Boolean(
+              assigningVacancy?.recruiter.name && assigningVacancy.recruiter.name !== 'Unassigned'
+            );
+            const selectedRecruiter = recruiters.find((r) => r.id === selectedRecruiterId);
+            if (isReassign && selectedRecruiter && selectedRecruiter.name !== assigningVacancy?.recruiter.name) {
+              return (
+                <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 text-xs flex items-start gap-2">
+                  <span className="text-base leading-none">🔄</span>
+                  <div>
+                    <span className="font-bold block">Reassigning Position</span>
+                    <span className="text-[11px] block mt-0.5">
+                      Responsibility for <b>{assigningVacancy?.title}</b> will transfer from{' '}
+                      <b>{assigningVacancy?.recruiter.name}</b> to <b>{selectedRecruiter.name}</b>.
+                    </span>
+                  </div>
+                </div>
+              );
+            }
+            return null;
+          })()}
+
+          <div>
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+              Select Recruiter
+            </label>
+            {recruiters.length === 0 ? (
+              <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300 text-xs flex items-center gap-2">
+                <Icon name="alert-circle" size={16} className="text-rose-500 shrink-0" />
+                <span>No recruiters available. Please ensure recruiter accounts are configured in Master Data / User Roles.</span>
+              </div>
+            ) : (
+              <Select
+                aria-label="Select recruiter"
+                value={selectedRecruiterId}
+                onChange={(e) => setSelectedRecruiterId(e.target.value)}
+                disabled={isSubmittingAssign}
+              >
+                <option value="">Select recruiter...</option>
+                {recruiters.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setAssigningVacancy(null);
+                setSelectedRecruiterId('');
+              }}
+              disabled={isSubmittingAssign}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              onClick={handleAssignSubmit}
+              disabled={!selectedRecruiterId || recruiters.length === 0 || isSubmittingAssign}
+              loading={isSubmittingAssign}
+              loadingLabel="Assigning..."
+            >
+              {assigningVacancy?.recruiter.name && assigningVacancy.recruiter.name !== 'Unassigned'
+                ? 'Reassign Position'
+                : 'Assign & Open'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* ── Import Job Description & Auto-Sync Modal ── */}
+      <ImportJobDescriptionModal
+        isOpen={isJdModalOpen}
+        onClose={() => {
+          setIsJdModalOpen(false);
+          setJdTargetVacancy(null);
+        }}
+        targetVacancy={jdTargetVacancy}
+        availableVacancies={positions.map((p) => ({
+          id: p.id,
+          title: p.title,
+          department: p.department,
+          location: p.location,
+          status: p.status,
+        }))}
+        onSuccess={() => {
+          showToast('Job Description ingested and Master Data synchronized successfully');
+          void loadVacancies();
+        }}
+      />
+
+      {/* ── Toast Notification ── */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-xl text-xs font-bold flex items-center gap-2 border border-slate-700 animate-fade-in">
+          <Icon name="check-circle" size={14} className="text-emerald-400" />
+          <span>{toastMessage}</span>
+        </div>
+      )}
     </div>
   );
 }

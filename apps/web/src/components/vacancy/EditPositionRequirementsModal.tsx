@@ -1,4 +1,4 @@
-import { useState, useEffect, type KeyboardEvent } from 'react';
+import { useState, useEffect, useRef, type KeyboardEvent } from 'react';
 import { patchApi } from '../../api/client';
 import { Icon } from '../Icon';
 import { Modal } from '../Modal';
@@ -16,6 +16,7 @@ interface EditPositionRequirementsModalProps {
   initialDepartment?: string;
   initialQualifications?: string | null;
   initialJobSummary?: string | null;
+  initialFocusSection?: 'jobSummary' | 'skills' | 'department' | 'location';
   onSaved: (updated: {
     requiredSkills: string[];
     minExperienceYears: number | null;
@@ -38,6 +39,7 @@ export function EditPositionRequirementsModal({
   initialDepartment = 'Clinical Services',
   initialQualifications = '',
   initialJobSummary = '',
+  initialFocusSection,
   onSaved,
 }: EditPositionRequirementsModalProps) {
   const [skills, setSkills] = useState<string[]>(initialSkills);
@@ -52,6 +54,11 @@ export function EditPositionRequirementsModal({
   const { options: skillOptions, isLoading: isLoadingSkills } = useMasterDataOptions('skills');
   const { options: branchOptions } = useMasterDataOptions('branches');
 
+  const jobSummaryRef = useRef<HTMLTextAreaElement>(null);
+  const skillsRef = useRef<HTMLInputElement>(null);
+  const departmentRef = useRef<HTMLInputElement>(null);
+  const locationRef = useRef<HTMLSelectElement>(null);
+
   useEffect(() => {
     if (isOpen) {
       setSkills(initialSkills || []);
@@ -62,8 +69,17 @@ export function EditPositionRequirementsModal({
       setJobSummary(initialJobSummary ?? '');
       setError(null);
       setSkillInput('');
+
+      if (initialFocusSection) {
+        setTimeout(() => {
+          if (initialFocusSection === 'jobSummary') jobSummaryRef.current?.focus();
+          else if (initialFocusSection === 'skills') skillsRef.current?.focus();
+          else if (initialFocusSection === 'department') departmentRef.current?.focus();
+          else if (initialFocusSection === 'location') locationRef.current?.focus();
+        }, 50);
+      }
     }
-  }, [isOpen, initialSkills, initialMinExp, initialLocation, initialDepartment, initialQualifications, initialJobSummary]);
+  }, [isOpen, initialSkills, initialMinExp, initialLocation, initialDepartment, initialQualifications, initialJobSummary, initialFocusSection]);
 
   const handleAddSkill = (skillToAdd?: string) => {
     const s = (skillToAdd || skillInput).trim();
@@ -148,6 +164,28 @@ export function EditPositionRequirementsModal({
           </div>
         )}
 
+        {/* Job Summary & Purpose */}
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+              Job Summary &bull; Core Purpose
+            </label>
+            {!jobSummary?.trim() && (
+              <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                Required for Activation
+              </span>
+            )}
+          </div>
+          <textarea
+            ref={jobSummaryRef}
+            rows={3}
+            value={jobSummary}
+            onChange={(e) => setJobSummary(e.target.value)}
+            placeholder="Describe the primary mission, key clinical/operational responsibilities, and team context for this requisition..."
+            className="w-full px-3.5 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
+          />
+        </div>
+
         {/* Skills Tag Management */}
         <div className="space-y-2">
           <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
@@ -155,6 +193,7 @@ export function EditPositionRequirementsModal({
           </label>
           <div className="flex gap-2">
             <input
+              ref={skillsRef}
               type="text"
               value={skillInput}
               onChange={(e) => setSkillInput(e.target.value)}
@@ -247,6 +286,7 @@ export function EditPositionRequirementsModal({
               Hospital Branch / Location
             </label>
             <select
+              ref={locationRef}
               value={location}
               onChange={(e) => setLocation(e.target.value)}
               className="w-full px-3.5 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500"
@@ -268,6 +308,7 @@ export function EditPositionRequirementsModal({
               Department / Clinical Specialty
             </label>
             <input
+              ref={departmentRef}
               type="text"
               value={department}
               onChange={(e) => setDepartment(e.target.value)}
