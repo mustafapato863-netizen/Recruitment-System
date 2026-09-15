@@ -774,6 +774,7 @@ Table pipeline_stages {
   defaultOwner String
   entryGate String
   exitGate String
+  required Boolean [not null, default: false]
   status String [not null, default: 'Active']
   emailTemplateId String
   emailTemplate email_templates

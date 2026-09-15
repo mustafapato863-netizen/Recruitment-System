@@ -27,6 +27,7 @@ export const errorCodes = [
   'FORBIDDEN',
   'NOT_FOUND',
   'CONFLICT',
+  'STAGE_GATE_BLOCKED',
   'RATE_LIMITED',
   'INVALID_CREDENTIALS',
   'TOKEN_INVALID',
@@ -704,7 +705,10 @@ export type ApplicationStage =
   | 'Pre-Hire'
   | 'Joined'
   | 'Rejected'
-  | 'Withdrawn';
+  | 'Withdrawn'
+  // Pipeline templates can add organization-specific labels. Keep the
+  // standard literals for autocomplete while allowing persisted custom stages.
+  | (string & {});
 
 export interface Application {
   id: string;
@@ -895,6 +899,57 @@ export interface MasterDataValueRecord {
   version: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export type ApplicationStageRequirementKind = 'entry' | 'exit';
+
+export interface ApplicationStageRequirement {
+  id: string;
+  code: string;
+  label: string;
+  kind: ApplicationStageRequirementKind;
+  required: boolean;
+  complete: boolean;
+  blocking: boolean;
+  reason?: string | null;
+  actionLabel?: string | null;
+  actionTab?: string | null;
+}
+
+export interface ApplicationWorkspaceStage {
+  id: string;
+  name: string;
+  stageType: string;
+  sortOrder: number;
+  slaDays?: number | null;
+  defaultOwner?: string | null;
+  entryGate?: string | null;
+  exitGate?: string | null;
+  required: boolean;
+  isCurrent: boolean;
+  isCompleted: boolean;
+  isNext: boolean;
+  isAvailable: boolean;
+  requirements: ApplicationStageRequirement[];
+}
+
+export interface ApplicationWorkspaceResponse {
+  application: Application;
+  templateId?: string | null;
+  templateName?: string | null;
+  stages: ApplicationWorkspaceStage[];
+  nextStage?: string | null;
+  nextStageRequirements: ApplicationStageRequirement[];
+  canAdvance: boolean;
+  summary?: {
+    screeningOutcome?: string | null;
+    interviewCount: number;
+    completedInterviewCount: number;
+    offerStatus?: string | null;
+    hiringStatus?: string | null;
+    actualJoiningDate?: string | null;
+    documentCount: number;
+  };
 }
 
 export interface InterviewScorecardItem {
@@ -1463,6 +1518,7 @@ export interface PipelineStageItem {
   defaultOwner?: string | null;
   entryGate?: string | null;
   exitGate?: string | null;
+  required?: boolean;
   status: string;
   // Phase C — Stage Automation fields
   emailTemplateId?: string | null;

@@ -109,4 +109,30 @@ describe('Error Normalizer', () => {
     expect(result.retryable).toBe(true);
     expect(result.retryAfterSeconds).toBe(120);
   });
+
+  it('preserves safe stage gate details for a blocked transition', () => {
+    const error = new HttpException({
+      code: 'STAGE_GATE_BLOCKED',
+      message: 'Cannot move to Interview until all required stage requirements are complete.',
+      details: {
+        targetStage: 'Interview',
+        requirements: [{
+          id: 'stage:exit:0',
+          code: 'screening',
+          label: 'Screening passed',
+          kind: 'exit',
+          required: true,
+          complete: false,
+          blocking: true,
+          reason: 'Save a Passed screening result.',
+          actionLabel: 'Open Screening',
+          actionTab: 'Screening',
+        }],
+      },
+    }, 400);
+    const result = normalizeError(error);
+    expect(result.code).toBe('STAGE_GATE_BLOCKED');
+    expect(result.details?.targetStage).toBe('Interview');
+    expect(result.details?.requirements).toHaveLength(1);
+  });
 });

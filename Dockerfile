@@ -48,5 +48,8 @@ HEALTHCHECK --interval=30s --timeout=5s CMD wget -q -O /dev/null http://127.0.0.
 FROM runtime AS api
 WORKDIR /app/apps/api
 EXPOSE 3000
-HEALTHCHECK --interval=30s --timeout=5s --start-period=60s CMD node -e "fetch('http://127.0.0.1:'+process.env.PORT+'/api/v1/readiness').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+# Container health must reflect the API process itself. Dependency readiness is
+# checked separately at /api/v1/readiness; using it here makes Compose mark the
+# API unhealthy during the normal worker heartbeat warm-up window.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=5 CMD node -e "fetch('http://127.0.0.1:'+process.env.PORT+'/api/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 CMD ["sh", "/app/deploy/start-api.sh"]

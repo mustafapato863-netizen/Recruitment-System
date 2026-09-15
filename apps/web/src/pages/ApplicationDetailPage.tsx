@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { getApi, patchApi, postApi, ApiError } from '../api/client';
 import type {
   Application,
@@ -11,6 +11,7 @@ import type {
   ScreeningLog,
   ScreeningOutcome,
   UpdateApplicationStageInput,
+  ApplicationWorkspaceResponse,
   Vacancy,
 } from '@recruitflow/contracts';
 import { CandidateFitScorecard } from '../components/candidate/CandidateFitScorecard';
@@ -33,7 +34,9 @@ import { computeInterviewsStats } from '../components/candidate/ScorecardSummary
 import { ScheduleInterviewModal } from '../components/candidate/ScheduleInterviewModal';
 import { RejectApplicantModal } from '../components/candidate/RejectApplicantModal';
 import { NextActionGuidanceBanner } from '../components/candidate/NextActionGuidanceBanner';
+import { ApplicantStageWorkspace } from '../components/candidate/ApplicantStageWorkspace';
 import { useSetBreadcrumbTitle } from '../context/BreadcrumbContext';
+import { confirmDiscardChanges, useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import './PageEnhancementsV2.css';
 
 function getInitials(name?: string | null): string {
@@ -47,7 +50,10 @@ function getInitials(name?: string | null): string {
 export function ApplicationDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const requestedStage = searchParams.get('stage');
   const { user } = useAuth();
+  const canViewInterviews = Boolean(user?.permissions.includes('VACANCY_VIEW'));
   const [application, setApplication] = useState<Application | null>(null);
   const [vacancy, setVacancy] = useState<Vacancy | null>(null);
   const [history, setHistory] = useState<ApplicationStatusHistoryItem[]>([]);
@@ -67,7 +73,9 @@ export function ApplicationDetailPage() {
   const [isFeedLoading, setIsFeedLoading] = useState(false);
   const [feedError, setFeedError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'resume' | 'interviews' | 'activity' | 'tasks'>('overview');
-  const [activityIntent, setActivityIntent] = useState<{ kind: 'Call' | 'Offer Follow-up'; scheduled: boolean } | null>(null);
+  const [workspace, setWorkspace] = useState<ApplicationWorkspaceResponse | null>(null);
+  const [workspaceStage, setWorkspaceStage] = useState<string | null>(() => requestedStage);
+  const [activityIntent, setActivityIntent] = useState<{ kind: 'Call' | 'Email' | 'Offer Follow-up'; scheduled: boolean } | null>(null);
 
   const interviewStats = useMemo(() => computeInterviewsStats(interviews), [interviews]);
 
@@ -129,6 +137,8 @@ export function ApplicationDetailPage() {
   }, []);
 
   useEffect(() => {
+    setWorkspace(null);
+    setWorkspaceStage(requestedStage);
     setScreeningLogs([]);
     setScreeningOutcome('On Hold');
     setScreeningNotes('');
@@ -137,10 +147,12 @@ export function ApplicationDetailPage() {
     setCurrentSalary('');
     setSalaryCurrency('SAR');
     setScreeningError(null);
-  }, [id]);
+  }, [id, requestedStage]);
 
   useEffect(() => {
-    if (application?.allowedTransitions && application.allowedTransitions.length > 0) {
+    if (workspace?.nextStage && workspace.nextStage !== application?.stage) {
+      setSelectedNextStage(workspace.nextStage as ApplicationStage);
+    } else if (application?.allowedTransitions && application.allowedTransitions.length > 0) {
       setSelectedNextStage(application.allowedTransitions[0]);
     } else if (application?.stage) {
       const remaining: ApplicationStage[] = [
@@ -157,19 +169,22 @@ export function ApplicationDetailPage() {
         setSelectedNextStage(remaining[0]);
       }
     }
-  }, [application?.stage, application?.allowedTransitions]);
+  }, [application?.stage, application?.allowedTransitions, workspace?.nextStage]);
 
   const refetchApplication = useCallback(async () => {
     if (!id) return;
     setIsFeedLoading(true);
     setFeedError(null);
     try {
-      const [appRes, histRes, scrRes, notesRes, intvsRes] = await Promise.allSettled([
+      const [appRes, histRes, scrRes, notesRes, intvsRes, workspaceRes] = await Promise.allSettled([
         getApi<Application>(`/applications/${id}`),
         getApi<ApplicationStatusHistoryItem[]>(`/applications/${id}/history`),
         getApi<ScreeningLog[]>(`/screening/application/${id}`),
         getApi<ApplicationNote[]>(`/applications/${id}/notes`),
-        getApi<Interview[]>(`/interviews?applicationId=${id}`),
+        canViewInterviews
+          ? getApi<Interview[]>(`/interviews?applicationId=${id}`)
+          : Promise.resolve<Interview[]>([]),
+        getApi<ApplicationWorkspaceResponse>(`/applications/${id}/workspace`),
       ]);
       if (appRes.status === 'fulfilled' && appRes.value) {
         setApplication(appRes.value);
@@ -238,12 +253,21 @@ export function ApplicationDetailPage() {
       } else {
         setInterviews([]);
       }
+      if (
+        workspaceRes.status === 'fulfilled' &&
+        workspaceRes.value &&
+        !Array.isArray(workspaceRes.value) &&
+        workspaceRes.value.application
+      ) {
+        setWorkspace(workspaceRes.value);
+        setWorkspaceStage((current) => current ?? workspaceRes.value.application.stage);
+      }
     } catch {
       // ignore
     } finally {
       setIsFeedLoading(false);
     }
-  }, [id]);
+  }, [id, canViewInterviews]);
 
   const refetchAll = refetchApplication;
 
@@ -282,6 +306,10 @@ export function ApplicationDetailPage() {
   }, [history, notes]);
 
   const handleSaveModalNote = async () => {
+    if (!canEditApplicant) {
+      showToast('You do not have permission to add notes.');
+      return;
+    }
     if (!id || !modalNoteContent.trim() || isSavingNote) return;
     setIsSavingNote(true);
     try {
@@ -319,8 +347,27 @@ export function ApplicationDetailPage() {
   const cleanAppId = rawAppId.replace(/^app[-_]?/i, '');
   const appIdDisplay = rawAppId ? `APP-${(cleanAppId || rawAppId).slice(0, 8).toUpperCase()}` : '';
   const latestScreening = screeningLogs[0] ?? null;
-  const canSubmitScreening = Boolean(user?.permissions.includes('APPLICATION_MOVE_STAGE'));
+  const canEditApplicant = Boolean(user?.permissions.includes('CANDIDATE_EDIT'));
+  const canMoveStage = Boolean(user?.permissions.includes('APPLICATION_MOVE_STAGE'));
+  const canSubmitScreening = canEditApplicant;
+  const canApproveOffers = Boolean(user?.permissions.includes('APPROVE_OFFERS'));
+  const canApproveHiring = Boolean(user?.permissions.includes('FINAL_HIRING_APPROVAL'));
   const canViewSalary = Boolean(user?.permissions.includes('VIEW_CURRENT_SALARY'));
+  const isScreeningDirty = Boolean(application) && (
+    screeningOutcome !== (latestScreening?.outcome ?? 'On Hold') ||
+    screeningNotes !== (latestScreening?.notes ?? '') ||
+    noticePeriodDays !== (latestScreening?.noticePeriodDays == null ? '' : String(latestScreening.noticePeriodDays)) ||
+    expectedSalary !== (latestScreening?.expectedSalary == null ? '' : String(latestScreening.expectedSalary)) ||
+    currentSalary !== (latestScreening?.currentSalary == null ? '' : String(latestScreening.currentSalary)) ||
+    salaryCurrency !== (latestScreening?.salaryCurrency ?? 'SAR')
+  );
+  useUnsavedChanges(isScreeningDirty && !isSavingScreening);
+  const navigateWithUnsavedChanges = useCallback((to: string) => {
+    if (confirmDiscardChanges(isScreeningDirty)) navigate(to);
+  }, [isScreeningDirty, navigate]);
+  const selectApplicantTab = (tab: typeof activeTab) => {
+    if (confirmDiscardChanges(isScreeningDirty)) setActiveTab(tab);
+  };
 
   const handleSaveScreening = async () => {
     if (!id || !canSubmitScreening || isSavingScreening) return;
@@ -371,15 +418,15 @@ export function ApplicationDetailPage() {
 
       if (e.key === '[' && prevApplication) {
         e.preventDefault();
-        navigate(`/applications/${prevApplication.id}`);
+        navigateWithUnsavedChanges(`/applications/${prevApplication.id}`);
       } else if (e.key === ']' && nextApplication) {
         e.preventDefault();
-        navigate(`/applications/${nextApplication.id}`);
+        navigateWithUnsavedChanges(`/applications/${nextApplication.id}`);
       }
     };
     window.addEventListener('keydown', handleKeyNavigation);
     return () => window.removeEventListener('keydown', handleKeyNavigation);
-  }, [prevApplication, nextApplication, navigate]);
+  }, [prevApplication, nextApplication, navigateWithUnsavedChanges]);
 
   const handleAddTag = async () => {
     if (!newTagInput.trim() || tags.includes(newTagInput.trim())) return;
@@ -399,10 +446,15 @@ export function ApplicationDetailPage() {
 
   const handleScheduleInterviewSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canMoveStage) {
+      showToast('You do not have permission to schedule interviews.');
+      return;
+    }
     if (!id || !schedDateTime || !schedInterviewerName.trim()) {
       showToast('Enter an interviewer name before scheduling.');
       return;
     }
+    if (!confirmDiscardChanges(isScreeningDirty)) return;
     setIsSchedulingInterview(true);
     try {
       const startDate = new Date(schedDateTime);
@@ -435,7 +487,12 @@ export function ApplicationDetailPage() {
   };
 
   const handleConfirmRejection = async () => {
+    if (!canMoveStage) {
+      showToast('You do not have permission to change the application stage.');
+      return;
+    }
     if (!id || !application) return;
+    if (!confirmDiscardChanges(isScreeningDirty)) return;
     setIsSubmittingRejection(true);
     try {
       const fullReason = rejectNote.trim()
@@ -470,7 +527,12 @@ export function ApplicationDetailPage() {
   };
 
   const handleStageMove = async () => {
+    if (!canMoveStage) {
+      showToast('You do not have permission to change the application stage.');
+      return;
+    }
     if (!id || !application) return;
+    if (!confirmDiscardChanges(isScreeningDirty)) return;
     setIsStageMoving(true);
     setStageError(null);
     setConflictAlert(null);
@@ -486,13 +548,18 @@ export function ApplicationDetailPage() {
       const updated = await patchApi<Application>(`/applications/${id}/stage`, payload);
       if (updated) {
         setApplication(updated);
+        setWorkspaceStage(updated.stage);
       } else {
         const refreshed = await getApi<Application>(`/applications/${id}`);
-        if (refreshed) setApplication(refreshed);
+        if (refreshed) {
+          setApplication(refreshed);
+          setWorkspaceStage(refreshed.stage);
+        }
       }
       setIsMoveStageModalOpen(false);
       setStageReason('');
       showToast('Stage updated successfully');
+      await refetchApplication();
     } catch (err: unknown) {
       const isConflict =
         (err instanceof ApiError && (err.statusCode === 409 || err.code === 'CONFLICT')) ||
@@ -507,10 +574,10 @@ export function ApplicationDetailPage() {
       if (isConflict) {
         setConflictAlert('This application was updated by someone else. Refreshing...');
         try {
-          const refreshed = await getApi<Application>(`/applications/${id}`);
-          if (refreshed) {
-            setApplication(refreshed);
-          }
+          // Refresh the application, workspace requirements, timeline, and
+          // related stage records together so the user can retry against the
+          // server's current version.
+          await refetchApplication();
         } catch {
           // ignore refresh failure on conflict
         }
@@ -521,9 +588,15 @@ export function ApplicationDetailPage() {
           setConflictAlert(null);
         }, 4000);
       } else {
+        const gateDetails = err instanceof ApiError && err.code === 'STAGE_GATE_BLOCKED'
+          ? err.details as { requirements?: Array<{ label?: string; reason?: string }> } | undefined
+          : undefined;
+        const missingGates = gateDetails?.requirements?.map((requirement) => requirement.label || requirement.reason).filter(Boolean) ?? [];
         const errorMsg =
           err instanceof ApiError && err.statusCode >= 500
             ? 'Server error occurred while updating stage. Please try again.'
+            : err instanceof ApiError && err.code === 'STAGE_GATE_BLOCKED'
+              ? `${err.message}${missingGates.length > 0 ? ` Missing: ${missingGates.join(', ')}.` : ''}`
             : err instanceof Error && err.message
               ? err.message
               : 'Server error occurred while updating stage. Please try again.';
@@ -533,6 +606,14 @@ export function ApplicationDetailPage() {
       setIsStageMoving(false);
     }
   };
+
+  const allowedTransitionOptions = application?.allowedTransitions ?? [];
+  const transitionOptions: ApplicationStage[] = workspace?.nextStage
+    ? [
+        workspace.nextStage as ApplicationStage,
+        ...allowedTransitionOptions.filter((stage) => stage !== workspace.nextStage),
+      ]
+    : allowedTransitionOptions;
 
   if (isLoading) {
     return (
@@ -546,7 +627,7 @@ export function ApplicationDetailPage() {
     return (
       <div className="flex w-full flex-col p-4 sm:p-6 lg:p-7 max-w-[1720px] mx-auto space-y-6">
         <div className="flex items-center gap-2">
-          <Button variant="secondary" size="sm" onClick={() => navigate('/applications')}>
+          <Button variant="secondary" size="sm" onClick={() => navigateWithUnsavedChanges('/applications')}>
             <Icon name="arrow-left" size={13} />
             <span>Back to applications</span>
           </Button>
@@ -580,7 +661,13 @@ export function ApplicationDetailPage() {
             {application?.stage && <StatusBadge status={application.stage} />}
             <button
               type="button"
-              onClick={() => setActiveTab('interviews')}
+              onClick={() => {
+                if (workspace) {
+                  if (confirmDiscardChanges(isScreeningDirty)) setWorkspaceStage('Interview');
+                } else {
+                  setActiveTab('interviews');
+                }
+              }}
               className="inline-flex items-center gap-1.5 no-underline hover:opacity-85 transition-opacity cursor-pointer bg-transparent border-0 p-0"
               title="View interviews tab"
             >
@@ -608,7 +695,7 @@ export function ApplicationDetailPage() {
             <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700 text-xs shadow-2xs">
               <button
                 type="button"
-                onClick={() => prevApplication && navigate(`/applications/${prevApplication.id}`)}
+                onClick={() => prevApplication && navigateWithUnsavedChanges(`/applications/${prevApplication.id}`)}
                 disabled={!prevApplication}
                 className="h-7 px-2 inline-flex items-center gap-1 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-700 disabled:opacity-35 disabled:hover:bg-transparent transition font-semibold cursor-pointer"
                 title="Previous candidate in this requisition (Shortcut: [)"
@@ -621,7 +708,7 @@ export function ApplicationDetailPage() {
               </span>
               <button
                 type="button"
-                onClick={() => nextApplication && navigate(`/applications/${nextApplication.id}`)}
+                onClick={() => nextApplication && navigateWithUnsavedChanges(`/applications/${nextApplication.id}`)}
                 disabled={!nextApplication}
                 className="h-7 px-2 inline-flex items-center gap-1 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-white dark:hover:bg-slate-700 disabled:opacity-35 disabled:hover:bg-transparent transition font-semibold cursor-pointer"
                 title="Next candidate in this requisition (Shortcut: ])"
@@ -636,7 +723,8 @@ export function ApplicationDetailPage() {
           <button
             type="button"
             onClick={() => setIsMoveStageModalOpen(true)}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/50 text-[#0084ce] dark:text-sky-300 hover:bg-sky-100 dark:hover:bg-sky-900/60 text-xs font-bold transition shadow-2xs cursor-pointer"
+            disabled={!canMoveStage || transitionOptions.length === 0}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-950/50 text-[#0084ce] dark:text-sky-300 hover:bg-sky-100 dark:hover:bg-sky-900/60 text-xs font-bold transition shadow-2xs cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
             title="Fast advance stage"
           >
             <Icon name="pipeline" size={13} />
@@ -644,7 +732,7 @@ export function ApplicationDetailPage() {
           </button>
 
           {/* Quick Reject Button */}
-          {application?.stage !== 'Rejected' && application?.stage !== 'Withdrawn' && (
+          {canMoveStage && application?.stage !== 'Rejected' && application?.stage !== 'Withdrawn' && (
             <button
               type="button"
               onClick={() => setIsRejectModalOpen(true)}
@@ -682,7 +770,7 @@ export function ApplicationDetailPage() {
           {application?.vacancyId && (
             <button
               type="button"
-              onClick={() => navigate(`/vacancies/${application.vacancyId}`)}
+              onClick={() => navigateWithUnsavedChanges(`/vacancies/${application.vacancyId}`)}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50/60 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-xs font-bold transition shadow-xs cursor-pointer"
             >
               <Icon name="briefcase" size={13} />
@@ -753,13 +841,242 @@ export function ApplicationDetailPage() {
         </Alert>
       )}
 
+      {/* Legacy workspace renderer superseded by ApplicantStageWorkspace.
+      {false && workspace?.stages && workspace.stages.length > 0 && (
+        <section aria-label="Applicant pipeline stages" className="rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 p-4 shadow-xs overflow-x-auto">
+          <ol className="flex min-w-max items-center gap-2 sm:gap-3" role="list">
+            {workspace.stages.map((stage) => {
+              const selected = (workspaceStage ?? application.stage) === stage.name;
+              return (
+                <li key={stage.id} className="flex items-center gap-2 sm:gap-3">
+                  <button
+                    type="button"
+                    aria-current={selected ? 'step' : undefined}
+                    aria-disabled={!stage.isAvailable}
+                    disabled={!stage.isAvailable}
+                    onClick={() => {
+                      if (!stage.isAvailable) return;
+                      if (!confirmDiscardChanges(isScreeningDirty)) return;
+                      setWorkspaceStage(stage.name);
+                      if (stage.name === 'Applied' || stage.name === 'Screening') setActiveTab('overview');
+                      if (stage.name === 'Interview') setActiveTab('interviews');
+                    }}
+                    className={`inline-flex min-h-10 items-center gap-2 rounded-xl border px-3 py-2 text-xs font-bold transition ${selected ? 'border-blue-500 bg-blue-50 text-blue-700 dark:border-blue-400 dark:bg-blue-950/40 dark:text-blue-300' : stage.isCompleted ? 'border-emerald-200 bg-emerald-50/60 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-300' : 'border-slate-200 text-slate-500 hover:border-blue-300 dark:border-slate-700 dark:text-slate-400'}`}
+                  >
+                    <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-current/10 text-[10px]">{stage.isCompleted ? '✓' : stage.sortOrder + 1}</span>
+                    <span>{stage.name}</span>
+                    {stage.isNext && <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">Next</span>}
+                  </button>
+                  {stage.sortOrder < workspace.stages.length - 1 && <span aria-hidden="true" className="text-slate-300">→</span>}
+                </li>
+              );
+            })}
+          </ol>
+          {workspace.nextStageRequirements.length > 0 && (workspaceStage === workspace.nextStage || workspaceStage === application.stage) && (
+            <div className="mt-3 border-t border-slate-100 pt-3 dark:border-slate-800" role="status">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-xs font-bold text-slate-700 dark:text-slate-200">Next stage requirements</p>
+                {!workspace.canAdvance && <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">Complete required items before advancing</span>}
+              </div>
+              <ul className="mt-2 grid gap-1.5 sm:grid-cols-2">
+                {workspace.nextStageRequirements.map((requirement) => (
+                  <li key={requirement.id} className={`rounded-lg px-2.5 py-2 text-[11px] ${requirement.complete ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300' : 'bg-amber-50 text-amber-800 dark:bg-amber-950/30 dark:text-amber-300'}`}>
+                    <span>{requirement.complete ? '✓' : '○'} {requirement.label}{!requirement.complete && requirement.reason ? ` — ${requirement.reason}` : ''}</span>
+                    {!requirement.complete && requirement.actionTab && (
+                      <button
+                        type="button"
+                        className="ml-2 font-bold underline underline-offset-2 hover:no-underline"
+                        onClick={() => {
+                          if (!confirmDiscardChanges(isScreeningDirty)) return;
+                          const actionTab = requirement.actionTab;
+                          if (!actionTab) return;
+                          setWorkspaceStage(actionTab);
+                          if (actionTab === 'Interview') setActiveTab('interviews');
+                          else if (actionTab === 'Applied' || actionTab === 'Screening') setActiveTab('overview');
+                        }}
+                      >
+                        {requirement.actionLabel ?? 'Open'}
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </section>
+      )}
+
+      {false && workspace && workspaceStage && (
+        <section
+          aria-label={`${workspaceStage} workspace`}
+          className="rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50/80 via-white to-emerald-50/50 p-4 shadow-xs dark:border-blue-950 dark:from-blue-950/30 dark:via-slate-900 dark:to-emerald-950/20 sm:p-5"
+        >
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-blue-700 dark:text-blue-300">Current workspace</p>
+              <h2 className="mt-1 text-base font-extrabold text-slate-900 dark:text-white">{workspaceStage}</h2>
+              <p className="mt-1 max-w-2xl text-xs text-slate-600 dark:text-slate-300">
+                Keep the candidate review in one place. Stage-specific information and actions stay available while the profile remains open.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {workspaceStage === 'Interview' && (
+                <Button type="button" size="sm" variant="primary" onClick={() => setIsScheduleModalOpen(true)}>
+                  <Icon name="calendar" size={13} /> Schedule interview
+                </Button>
+              )}
+              {workspaceStage === 'Offer' && (
+                <Button type="button" size="sm" variant="primary" onClick={() => navigate(`/offers/create?applicationId=${encodeURIComponent(id || '')}`)}>
+                  <Icon name="file-text" size={13} /> Create or review offer
+                </Button>
+              )}
+              {(workspaceStage === 'Pre-Hire' || workspaceStage === 'Joined') && (
+                <Button type="button" size="sm" variant="secondary" onClick={() => navigate('/hiring')}>
+                  <Icon name="briefcase" size={13} /> Open hiring workspace
+                </Button>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {workspaceStage === 'Applied' && (
+              <div className="rounded-xl border border-slate-200 bg-white/80 p-3 dark:border-slate-800 dark:bg-slate-900/80 sm:col-span-2 lg:col-span-4">
+                <p className="text-xs font-bold text-slate-800 dark:text-slate-100">Application intake</p>
+                <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">Review the source, CV and initial fit score below, then save screening details before advancing.</p>
+              </div>
+            )}
+            {workspaceStage === 'Screening' && (
+              <div className="rounded-xl border border-slate-200 bg-white/80 p-3 dark:border-slate-800 dark:bg-slate-900/80 sm:col-span-2 lg:col-span-4">
+                <p className="text-xs font-bold text-slate-800 dark:text-slate-100">Screening assessment</p>
+                <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">Outcome, notice period, salary context and recruiter notes are available in the Screening details card on this page.</p>
+              </div>
+            )}
+            {workspaceStage === 'Interview' && (
+              <>
+                <div className="rounded-xl border border-slate-200 bg-white/80 p-3 dark:border-slate-800 dark:bg-slate-900/80">
+                  <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Interviews</p>
+                  <p className="mt-1 text-xl font-extrabold text-slate-900 dark:text-white">{workspace.summary?.interviewCount ?? interviews.length}</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white/80 p-3 dark:border-slate-800 dark:bg-slate-900/80">
+                  <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Completed</p>
+                  <p className="mt-1 text-xl font-extrabold text-emerald-600 dark:text-emerald-400">{workspace.summary?.completedInterviewCount ?? interviews.filter((interview) => interview.status === 'Completed').length}</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white/80 p-3 dark:border-slate-800 dark:bg-slate-900/80 sm:col-span-2">
+                  <p className="text-xs font-bold text-slate-800 dark:text-slate-100">Interview feedback</p>
+                  <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">Open the Interviews tab to record the interviewer result, rating and notes before advancing.</p>
+                </div>
+              </>
+            )}
+            {workspaceStage === 'Offer' && (
+              <>
+                <div className="rounded-xl border border-slate-200 bg-white/80 p-3 dark:border-slate-800 dark:bg-slate-900/80">
+                  <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Offer status</p>
+                  <p className="mt-1 text-sm font-extrabold text-slate-900 dark:text-white">{workspace.summary?.offerStatus ?? 'No offer yet'}</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white/80 p-3 dark:border-slate-800 dark:bg-slate-900/80 sm:col-span-2 lg:col-span-3">
+                  <p className="text-xs font-bold text-slate-800 dark:text-slate-100">Position work location</p>
+                  <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">{application.vacancyLocation || application.vacancyBranchName || 'Inherited from the job position when the offer is created.'}</p>
+                </div>
+              </>
+            )}
+            {workspaceStage === 'Pre-Hire' && (
+              <>
+                <div className="rounded-xl border border-slate-200 bg-white/80 p-3 dark:border-slate-800 dark:bg-slate-900/80">
+                  <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Hiring case</p>
+                  <p className="mt-1 text-sm font-extrabold text-slate-900 dark:text-white">{workspace.summary?.hiringStatus ?? 'Not created'}</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white/80 p-3 dark:border-slate-800 dark:bg-slate-900/80">
+                  <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Documents</p>
+                  <p className="mt-1 text-xl font-extrabold text-slate-900 dark:text-white">{workspace.summary?.documentCount ?? 0}</p>
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white/80 p-3 dark:border-slate-800 dark:bg-slate-900/80 sm:col-span-2">
+                  <p className="text-xs font-bold text-slate-800 dark:text-slate-100">Compliance checklist</p>
+                  <p className="mt-1 text-xs text-slate-600 dark:text-slate-300">Complete the required licenses and joining documents in the hiring workspace, then return here to advance.</p>
+                </div>
+              </>
+            )}
+            {workspaceStage === 'Joined' && (
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-3 dark:border-emerald-900 dark:bg-emerald-950/30 sm:col-span-2 lg:col-span-4">
+                <p className="text-xs font-bold text-emerald-800 dark:text-emerald-300">Joining completed</p>
+                <p className="mt-1 text-xs text-emerald-700 dark:text-emerald-400">
+                  {workspace.summary?.actualJoiningDate ? `Recorded on ${new Date(workspace.summary.actualJoiningDate).toLocaleDateString('en-GB')}.` : 'The candidate is in the Joined stage. Confirm the joining date in the hiring workspace if it is missing.'}
+                </p>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+      */}
+
+      <ApplicantStageWorkspace
+        application={application}
+        workspace={workspace}
+        selectedStage={workspaceStage ?? application.stage}
+        onStageChange={(stage) => {
+          if (!confirmDiscardChanges(isScreeningDirty)) return;
+          setWorkspaceStage(stage);
+        }}
+        onAdvanceStage={() => {
+          setStageError(null);
+          setIsMoveStageModalOpen(true);
+        }}
+        onReject={() => {
+          setIsRejectModalOpen(true);
+        }}
+        onAddNote={() => {
+          setModalNoteContent('');
+          setIsAddNoteModalOpen(true);
+        }}
+        onViewResume={() => setIsViewResumeModalOpen(true)}
+        onActivity={(kind) => {
+          if (!confirmDiscardChanges(isScreeningDirty)) return;
+          setActivityIntent({ kind, scheduled: kind === 'Offer Follow-up' });
+          setActiveTab('activity');
+        }}
+        onScheduleInterview={() => {
+          setIsScheduleModalOpen(true);
+        }}
+        interviews={interviews}
+        onRefresh={refetchApplication}
+        screeningLogs={screeningLogs}
+        screeningOutcome={screeningOutcome}
+        setScreeningOutcome={setScreeningOutcome}
+        screeningNotes={screeningNotes}
+        setScreeningNotes={setScreeningNotes}
+        noticePeriodDays={noticePeriodDays}
+        setNoticePeriodDays={setNoticePeriodDays}
+        expectedSalary={expectedSalary}
+        setExpectedSalary={setExpectedSalary}
+        currentSalary={currentSalary}
+        setCurrentSalary={setCurrentSalary}
+        salaryCurrency={salaryCurrency}
+        setSalaryCurrency={setSalaryCurrency}
+        canEdit={canEditApplicant}
+        canMoveStage={canMoveStage}
+        canViewInterviews={canViewInterviews}
+        canViewSalary={canViewSalary}
+        canApproveOffers={canApproveOffers}
+        canApproveHiring={canApproveHiring}
+        isScreeningDirty={isScreeningDirty}
+        onSaveScreening={handleSaveScreening}
+        isSavingScreening={isSavingScreening}
+      />
+
       {/* ── Horizontal Navigation Tabs (Overview, Resume, Interviews, Activity, Tasks) ── */}
       <div className="border-b border-slate-200 dark:border-slate-800 flex items-center gap-6 overflow-x-auto rf-scrollbar text-xs font-semibold">
         {(['overview', 'resume', 'interviews', 'activity', 'tasks'] as const).map((tab) => (
           <button
             key={tab}
             type="button"
-            onClick={() => setActiveTab(tab)}
+            onClick={() => {
+              if (workspace && tab === 'interviews') {
+                if (!confirmDiscardChanges(isScreeningDirty)) return;
+                setWorkspaceStage('Interview');
+                setActiveTab('overview');
+                return;
+              }
+              selectApplicantTab(tab);
+            }}
             className={`pb-3.5 border-b-2 transition capitalize cursor-pointer shrink-0 ${
               activeTab === tab
                 ? 'border-blue-600 text-blue-600 font-extrabold'
@@ -772,7 +1089,7 @@ export function ApplicationDetailPage() {
       </div>
 
       {/* ── Main Two-Column Layout ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+      <div className={`grid grid-cols-1 lg:grid-cols-12 gap-6 items-start ${workspace && (activeTab === 'overview' || activeTab === 'interviews') ? 'hidden' : ''}`}>
         {/* ════════ Left Sidebar (~28% width / 4 cols) ════════ */}
         <div className="lg:col-span-4 xl:col-span-3 space-y-6">
           {!application?.candidate ? (
@@ -1005,7 +1322,7 @@ export function ApplicationDetailPage() {
           </div>
 
           {/* ── Intelligent Next Action Guidance ── */}
-          <NextActionGuidanceBanner
+          {!workspace && <NextActionGuidanceBanner
             stage={application?.stage}
             candidateName={candidateName}
             onAdvanceStage={() => setIsMoveStageModalOpen(true)}
@@ -1013,15 +1330,15 @@ export function ApplicationDetailPage() {
             onCreateOffer={() => {
               const candId = application?.candidateId || application?.candidate?.id;
               const vacId = application?.vacancyId;
-              navigate(
+              navigateWithUnsavedChanges(
                 `/offers/create?${candId ? `candidateId=${candId}` : ''}${vacId ? `&vacancyId=${vacId}` : ''}`
               );
             }}
             onViewCandidate360={() => {
               const candId = application?.candidateId || application?.candidate?.id;
-              if (candId) navigate(`/candidates/${candId}`);
+              if (candId) navigateWithUnsavedChanges(`/candidates/${candId}`);
             }}
-          />
+          />}
 
           {/* ── Tab Views ── */}
           {activeTab === 'activity' && (
@@ -1071,7 +1388,7 @@ export function ApplicationDetailPage() {
             </div>
           )}
 
-          {activeTab === 'overview' && (
+          {activeTab === 'overview' && !workspace && (
             <>
               {/* SGH Empirical Fit Scorecard */}
               <div className="mb-6">
@@ -1092,7 +1409,7 @@ export function ApplicationDetailPage() {
                     </h2>
                     <button
                       type="button"
-                      onClick={() => setActiveTab('activity')}
+                      onClick={() => selectApplicantTab('activity')}
                       className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
                     >
                       View full timeline
@@ -1141,7 +1458,7 @@ export function ApplicationDetailPage() {
                 {/* Right: Quick Actions & About this application (5 cols) */}
                 <div className="md:col-span-5 space-y-6">
                   {/* Recruiter screening details */}
-                  <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-4">
+                  <div hidden={Boolean(workspace)} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-4">
                     <div className="flex items-center justify-between gap-3 border-b border-slate-100 dark:border-slate-800 pb-3">
                       <div>
                         <h2 className="text-base font-extrabold text-slate-900 dark:text-white tracking-tight">
@@ -1265,7 +1582,7 @@ export function ApplicationDetailPage() {
                   </div>
 
                   {/* Quick Actions Card */}
-                  <div data-tour="quick-actions" className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-3">
+                  <div hidden={Boolean(workspace)} data-tour="quick-actions" className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-3">
                     <h2 className="text-base font-extrabold text-slate-900 dark:text-white tracking-tight mb-2">
                       Quick actions
                     </h2>
@@ -1294,7 +1611,7 @@ export function ApplicationDetailPage() {
                     </div>
 
                     <div
-                      onClick={() => setIsScheduleModalOpen(true)}
+                      onClick={() => canMoveStage && setIsScheduleModalOpen(true)}
                       className="p-2.5 rounded-xl border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer flex items-center justify-between group"
                     >
                       <div className="flex items-center gap-3">
@@ -1316,7 +1633,11 @@ export function ApplicationDetailPage() {
                     <div className="grid grid-cols-2 gap-2">
                       <button
                         type="button"
-                        onClick={() => { setActivityIntent({ kind: 'Call', scheduled: false }); setActiveTab('activity'); }}
+                        onClick={() => {
+                          if (!confirmDiscardChanges(isScreeningDirty)) return;
+                          setActivityIntent({ kind: 'Call', scheduled: false });
+                          setActiveTab('activity');
+                        }}
                         className="inline-flex items-center justify-center gap-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-xs font-bold text-blue-700 transition hover:bg-blue-100 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-300 dark:hover:bg-blue-950/50"
                       >
                         <Icon name="phone" size={14} />
@@ -1324,7 +1645,11 @@ export function ApplicationDetailPage() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => { setActivityIntent({ kind: 'Offer Follow-up', scheduled: true }); setActiveTab('activity'); }}
+                        onClick={() => {
+                          if (!confirmDiscardChanges(isScreeningDirty)) return;
+                          setActivityIntent({ kind: 'Offer Follow-up', scheduled: true });
+                          setActiveTab('activity');
+                        }}
                         className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs font-bold text-amber-700 transition hover:bg-amber-100 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-300 dark:hover:bg-amber-950/50"
                       >
                         <Icon name="clock" size={14} />
@@ -1334,10 +1659,12 @@ export function ApplicationDetailPage() {
 
                     <div
                       onClick={() => {
+                        if (!canEditApplicant) return;
                         setModalNoteContent('');
                         setIsAddNoteModalOpen(true);
                       }}
-                      className="p-2.5 rounded-xl border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer flex items-center justify-between group"
+                      aria-disabled={!canEditApplicant}
+                      className="p-2.5 rounded-xl border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer flex items-center justify-between group disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-lg bg-amber-50 dark:bg-amber-950/40 text-amber-600 flex items-center justify-center shrink-0">
@@ -1356,7 +1683,8 @@ export function ApplicationDetailPage() {
                     </div>
 
                     <div
-                      onClick={() => setIsRejectModalOpen(true)}
+                      onClick={() => canMoveStage && setIsRejectModalOpen(true)}
+                      aria-disabled={!canMoveStage}
                       className="p-2.5 rounded-xl border border-slate-100 dark:border-slate-800 hover:bg-red-50/50 dark:hover:bg-red-950/20 transition cursor-pointer flex items-center justify-between group"
                     >
                       <div className="flex items-center gap-3">
@@ -1420,7 +1748,7 @@ export function ApplicationDetailPage() {
                     </h2>
                     <button
                       type="button"
-                      onClick={() => setActiveTab('activity')}
+                      onClick={() => selectApplicantTab('activity')}
                       className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
                     >
                       View all notes
@@ -1476,8 +1804,9 @@ export function ApplicationDetailPage() {
                     )}
                     <button
                       type="button"
-                      onClick={() => setIsAddTagModalOpen(true)}
-                      className="px-2.5 py-1 rounded-full text-xs font-semibold text-slate-500 border border-dashed border-slate-300 dark:border-slate-700 hover:border-blue-500 hover:text-blue-600 transition cursor-pointer"
+                      onClick={() => canEditApplicant && setIsAddTagModalOpen(true)}
+                      disabled={!canEditApplicant}
+                      className="px-2.5 py-1 rounded-full text-xs font-semibold text-slate-500 border border-dashed border-slate-300 dark:border-slate-700 hover:border-blue-500 hover:text-blue-600 transition cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       + Add tag
                     </button>
@@ -1501,7 +1830,7 @@ export function ApplicationDetailPage() {
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => setIsScheduleModalOpen(true)}
+                    onClick={() => canMoveStage && setIsScheduleModalOpen(true)}
                     className="inline-flex items-center gap-2 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-2xs cursor-pointer"
                   >
                     <Icon name="calendar" size={13} />
@@ -1510,7 +1839,7 @@ export function ApplicationDetailPage() {
                   {application.vacancyId && (
                     <button
                       type="button"
-                      onClick={() => navigate(`/interviews?vacancyId=${application.vacancyId}`)}
+                      onClick={() => navigateWithUnsavedChanges(`/interviews?vacancyId=${application.vacancyId}`)}
                       className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold transition cursor-pointer"
                     >
                       <Icon name="users" size={13} />
@@ -1546,8 +1875,8 @@ export function ApplicationDetailPage() {
                   kind="empty"
                   title="No interviews scheduled"
                   description="No interview sessions have been scheduled yet for this candidate."
-                  actionLabel="Schedule First Interview"
-                  onAction={() => setIsScheduleModalOpen(true)}
+                  actionLabel={canMoveStage ? 'Schedule First Interview' : undefined}
+                  onAction={canMoveStage ? () => setIsScheduleModalOpen(true) : undefined}
                 />
               ) : (
                 <div className="space-y-3">
@@ -1729,7 +2058,7 @@ export function ApplicationDetailPage() {
       </div>
 
       {/* ── Smart Action Bar ── */}
-      {application != null && (
+      {application != null && !workspace && (
         <SmartActionBar
           applicationId={id || application.id}
           stage={application.stage}
@@ -1757,19 +2086,7 @@ export function ApplicationDetailPage() {
               onChange={(e) => setSelectedNextStage(e.target.value as ApplicationStage)}
               disabled={isStageMoving}
             >
-              {(application?.allowedTransitions && application.allowedTransitions.length > 0
-                ? application.allowedTransitions
-                : ([
-                    'Applied',
-                    'Screening',
-                    'Interview',
-                    'Offer',
-                    'Pre-Hire',
-                    'Joined',
-                    'Rejected',
-                    'Withdrawn',
-                  ] as ApplicationStage[])
-              ).map((stageOption) => (
+              {transitionOptions.map((stageOption) => (
                 <option key={stageOption} value={stageOption}>
                   {stageOption}
                 </option>

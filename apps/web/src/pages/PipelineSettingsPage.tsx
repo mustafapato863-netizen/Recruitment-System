@@ -26,11 +26,14 @@ type StageForm = {
   name: string;
   stageType: string;
   slaDays: string;
+  entryGate: string;
+  exitGate: string;
   // Phase C — Stage Automation fields
   emailTemplateId: string;
   folded: boolean;
   isHiredStage: boolean;
   tooltip: string;
+  required: boolean;
 };
 
 const emptyTemplateForm: TemplateForm = { name: '', isDefault: false };
@@ -38,10 +41,13 @@ const emptyStageForm: StageForm = {
   name: '',
   stageType: 'Screening',
   slaDays: '',
+  entryGate: '',
+  exitGate: '',
   emailTemplateId: '',
   folded: false,
   isHiredStage: false,
   tooltip: '',
+  required: false,
 };
 
 const stageColumns: ResponsiveDataColumn<PipelineStageItem>[] = [
@@ -168,9 +174,12 @@ export function PipelineSettingsPage() {
         name: stageForm.name.trim(),
         stageType: stageForm.stageType,
         slaDays: stageForm.slaDays ? Number(stageForm.slaDays) : undefined,
+        entryGate: stageForm.entryGate.trim() || undefined,
+        exitGate: stageForm.exitGate.trim() || undefined,
         emailTemplateId: stageForm.emailTemplateId || undefined,
         folded: stageForm.folded,
         isHiredStage: stageForm.isHiredStage,
+        required: stageForm.required,
         tooltip: stageForm.tooltip.trim() || undefined,
       });
       setStageForm(emptyStageForm);
@@ -192,9 +201,12 @@ export function PipelineSettingsPage() {
         name: stageForm.name.trim(),
         stageType: stageForm.stageType,
         slaDays: stageForm.slaDays ? Number(stageForm.slaDays) : null,
+        entryGate: stageForm.entryGate.trim() || null,
+        exitGate: stageForm.exitGate.trim() || null,
         emailTemplateId: stageForm.emailTemplateId || null,
         folded: stageForm.folded,
         isHiredStage: stageForm.isHiredStage,
+        required: stageForm.required,
         tooltip: stageForm.tooltip.trim() || null,
       });
       setEditingStage(null);
@@ -358,9 +370,12 @@ export function PipelineSettingsPage() {
                          name: stage.name,
                          stageType: stage.stageType,
                          slaDays: stage.slaDays ? String(stage.slaDays) : '',
+                         entryGate: stage.entryGate ?? '',
+                         exitGate: stage.exitGate ?? '',
                          emailTemplateId: stage.emailTemplateId ?? '',
                          folded: stage.folded ?? false,
                          isHiredStage: stage.isHiredStage ?? false,
+                         required: stage.required ?? false,
                          tooltip: stage.tooltip ?? '',
                        });
                      }}>
@@ -433,6 +448,30 @@ export function PipelineSettingsPage() {
               />
             </FormField>
 
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField id="s-entry-gate" label="Entry gates">
+                <Input
+                  id="s-entry-gate"
+                  placeholder="e.g. screening, document"
+                  value={stageForm.entryGate}
+                  onChange={(event) => setStageForm({ ...stageForm, entryGate: event.target.value })}
+                />
+                <p className="mt-1 text-[11px] text-rf-ink-muted">Comma-separated checks required to enter this stage.</p>
+              </FormField>
+              <FormField id="s-exit-gate" label="Exit gates">
+                <Input
+                  id="s-exit-gate"
+                  placeholder="e.g. feedback, offer"
+                  value={stageForm.exitGate}
+                  onChange={(event) => setStageForm({ ...stageForm, exitGate: event.target.value })}
+                />
+                <p className="mt-1 text-[11px] text-rf-ink-muted">Comma-separated checks required to advance.</p>
+              </FormField>
+            </div>
+            <p className="-mt-2 text-[11px] text-rf-ink-muted">
+              Supported checks: candidate, document, assignment, screening, interview, feedback, offer, compliance, license, joined.
+            </p>
+
             {/* Phase C — Stage Automation fields */}
             <FormField id="s-email-template" label="Auto-email on stage entry">
               <Select
@@ -467,6 +506,11 @@ export function PipelineSettingsPage() {
                 checked={stageForm.isHiredStage}
                 label="This is the hired / terminal success stage"
                 onChange={(event) => setStageForm({ ...stageForm, isHiredStage: event.target.checked })}
+              />
+              <CheckboxField
+                checked={stageForm.required}
+                label="Block stage transitions until this stage's gates are complete"
+                onChange={(event) => setStageForm({ ...stageForm, required: event.target.checked })}
               />
             </div>
           </div>

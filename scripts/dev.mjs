@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process';
+import { readFileSync, existsSync } from 'node:fs';
 import process from 'node:process';
 
 const isWin = process.platform === 'win32';
@@ -11,6 +12,22 @@ const yellow = '\x1b[33m';
 const red = '\x1b[31m';
 const reset = '\x1b[0m';
 const bold = '\x1b[1m';
+
+// The API loads its own .env through Nest ConfigModule, but the worker is a
+// plain Node process and Prisma requires DATABASE_URL at module load time.
+// Load the repository .env once here so every local child receives the same
+// database and queue configuration without duplicating secrets in scripts.
+if (existsSync('.env')) {
+  for (const line of readFileSync('.env', 'utf8').split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const separator = trimmed.indexOf('=');
+    if (separator <= 0) continue;
+    const key = trimmed.slice(0, separator).trim();
+    const value = trimmed.slice(separator + 1).trim().replace(/^(['"])(.*)\1$/, '$2');
+    if (!(key in process.env)) process.env[key] = value;
+  }
+}
 
 console.log(`
 ${cyan}${bold}╔═══════════════════════════════════════════════════════════════════════════╗

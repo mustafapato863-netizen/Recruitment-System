@@ -161,7 +161,10 @@ export const createApplicationSchema = z.object({
 });
 
 export const updateApplicationStageSchema = z.object({
-  stage: applicationStageEnum,
+  // Pipeline settings may define organization-specific stage names. The API
+  // still validates whether a transition is allowed against the persisted
+  // pipeline, while this transport schema accepts any bounded stage label.
+  stage: z.string().trim().min(1).max(50),
   reason: z.string().trim().max(1_000).optional(),
 });
 

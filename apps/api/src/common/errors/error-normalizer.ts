@@ -434,9 +434,11 @@ export function normalizeError(
       const fields = hasFieldErrors
         ? (resObj.fields as ErrorFieldErrors)
         : undefined;
-      const details = status === HttpStatus.CONFLICT && isSafePublicDetails(resObj.details)
-        ? resObj.details
-        : undefined;
+      const details =
+        (status === HttpStatus.CONFLICT || bodyCode === 'STAGE_GATE_BLOCKED') &&
+        isSafePublicDetails(resObj.details)
+          ? resObj.details
+          : undefined;
 
       const rawMessage = Array.isArray(resObj.message)
         ? resObj.message
@@ -558,6 +560,7 @@ function isStableCode(value: string): boolean {
     'FORBIDDEN',
     'NOT_FOUND',
     'CONFLICT',
+    'STAGE_GATE_BLOCKED',
     'RATE_LIMITED',
     'INVALID_CREDENTIALS',
     'TOKEN_INVALID',
@@ -606,7 +609,40 @@ export function buildErrorEnvelope(normalized: NormalizedError, requestId: strin
 
 function isSafePublicDetails(value: unknown): value is Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
-  return Object.keys(value).every((key) => key === 'currentApplication' || key === 'currentStage' || key === 'currentVersion');
+  const keys = Object.keys(value);
+  if (keys.every((key) => key === 'currentApplication' || key === 'currentStage' || key === 'currentVersion')) {
+    return true;
+  }
+  if (!keys.every((key) => key === 'targetStage' || key === 'requirements')) return false;
+  const record = value as { targetStage?: unknown; requirements?: unknown };
+  if (typeof record.targetStage !== 'string' || !Array.isArray(record.requirements)) return false;
+  return record.requirements.every((requirement) => {
+    if (typeof requirement !== 'object' || requirement === null || Array.isArray(requirement)) return false;
+    const item = requirement as Record<string, unknown>;
+    const allowedKeys = new Set([
+      'id',
+      'code',
+      'label',
+      'kind',
+      'required',
+      'complete',
+      'blocking',
+      'reason',
+      'actionLabel',
+      'actionTab',
+    ]);
+    if (!Object.keys(item).every((key) => allowedKeys.has(key))) return false;
+    return typeof item.id === 'string' &&
+      typeof item.code === 'string' &&
+      typeof item.label === 'string' &&
+      (item.kind === 'entry' || item.kind === 'exit') &&
+      typeof item.required === 'boolean' &&
+      typeof item.complete === 'boolean' &&
+      typeof item.blocking === 'boolean' &&
+      (item.reason === undefined || item.reason === null || typeof item.reason === 'string') &&
+      (item.actionLabel === undefined || item.actionLabel === null || typeof item.actionLabel === 'string') &&
+      (item.actionTab === undefined || item.actionTab === null || typeof item.actionTab === 'string');
+  });
 }
 
 /**

@@ -51,6 +51,10 @@ export class CreatePipelineStageDto {
   @IsOptional()
   exitGate?: string;
 
+  @IsBoolean()
+  @IsOptional()
+  required?: boolean;
+
   // Phase C — Stage Automation fields
   @IsUUID()
   @IsOptional()
@@ -98,6 +102,10 @@ export class UpdatePipelineStageDto {
   @IsOptional()
   exitGate?: string;
 
+  @IsBoolean()
+  @IsOptional()
+  required?: boolean;
+
   // Phase C — Stage Automation fields
   @IsUUID()
   @IsOptional()
@@ -120,4 +128,3 @@ export class ReorderStagesDto {
   @IsString({ each: true })
   stageIds!: string[];
 }
-

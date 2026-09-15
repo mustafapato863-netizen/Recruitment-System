@@ -34,28 +34,14 @@ export class CreateApplicationDto {
 }
 
 export class UpdateApplicationStageDto {
-  @IsEnum([
-    'Applied',
-    'Screening',
-    'Interview',
-    'Offer',
-    'Pre-Hire',
-    'Joined',
-    'Rejected',
-    'Withdrawn',
-  ])
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(50)
   stage!: ApplicationStage;
 
-  @IsEnum([
-    'Applied',
-    'Screening',
-    'Interview',
-    'Offer',
-    'Pre-Hire',
-    'Joined',
-    'Rejected',
-    'Withdrawn',
-  ])
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(50)
   expectedStage!: ApplicationStage;
 
   @Type(() => Number)

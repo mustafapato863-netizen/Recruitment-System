@@ -41,6 +41,14 @@ export class ApplicationsController {
     return this.applicationsService.listApplications(user.organizationId, query, user);
   }
 
+  @Get(':id/workspace')
+  @RequirePermissions('APPLICATION_VIEW')
+  @UseGuards(TenantScopedGuard)
+  @TenantResource({ resource: 'application', param: 'id' })
+  getWorkspace(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.applicationsService.getWorkspace(user.organizationId, id, user);
+  }
+
   @Get(':id')
   @RequirePermissions('APPLICATION_VIEW')
   @UseGuards(TenantScopedGuard)
@@ -72,7 +80,7 @@ export class ApplicationsController {
   }
 
   @Post(':id/notes')
-  @RequirePermissions('APPLICATION_MOVE_STAGE')
+  @RequirePermissions('CANDIDATE_EDIT')
   @AuditAction('APPLICATION_NOTE_CREATE')
   @UseGuards(TenantScopedGuard)
   @TenantResource({ resource: 'application', param: 'id' })
@@ -120,7 +128,7 @@ export class ApplicationsController {
   }
 
   @Patch(':id')
-  @RequirePermissions('APPLICATION_MOVE_STAGE')
+  @RequirePermissions('CANDIDATE_EDIT')
   @AuditAction('APPLICATION_UPDATE')
   @UseGuards(TenantScopedGuard)
   @TenantResource({ resource: 'application', param: 'id' })

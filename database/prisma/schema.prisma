@@ -897,6 +897,7 @@ model PipelineStage {
   defaultOwner      String?          @db.VarChar(100)
   entryGate         String?          @db.VarChar(200)
   exitGate          String?          @db.VarChar(200)
+  required          Boolean          @default(false)
   status            String           @default("Active") @db.VarChar(30)
   // Stage automation fields (Phase C)
   emailTemplateId   String?          @db.Uuid

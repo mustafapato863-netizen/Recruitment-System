@@ -46,7 +46,7 @@ export class ScreeningController {
   }
 
   @Post()
-  @RequirePermissions('APPLICATION_MOVE_STAGE')
+  @RequirePermissions('CANDIDATE_EDIT')
   @AuditAction('SCREENING_SUBMIT')
   async createScreeningLog(
     @CurrentUser() user: AuthUser,

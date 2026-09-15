@@ -36,7 +36,7 @@ builds the API, web, and worker targets.
 
 | Service | Docker target | Internal port | Health route |
 | --- | --- | --- | --- |
-| API | `api` (default) | `3000` | `/api/v1/readiness` |
+| API | `api` (default) | `3000` | `/api/v1/health` (liveness) |
 | Web | `web` | `80` | `/healthz` |
 | Email worker | `worker` | none | process monitoring / outbox delivery |
 
@@ -127,6 +127,12 @@ The API preflight rejects unresolved example values, wildcard origins, invalid
 PostgreSQL/Redis URLs, and incomplete production SMTP settings before migrations
 run. A rejected preflight is intentional: fix the value in Dokploy's Environment
 tab (or the Compose env file), redeploy, and then inspect `/api/v1/readiness`.
+
+The container health check uses `/api/v1/health` so Compose can start the web
+service while the worker establishes its first heartbeat. Treat
+`/api/v1/readiness` as the release check: it must report a connected database
+and, in production, a fresh worker heartbeat before accepting traffic that
+depends on background processing.
 
 Build all final targets:
 

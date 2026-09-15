@@ -12,6 +12,9 @@ import type {
   ApplicationNote,
   ApplicationStage,
   ApplicationStatusHistoryItem,
+  ApplicationStageRequirement,
+  ApplicationWorkspaceResponse,
+  ApplicationWorkspaceStage,
   AuthUser,
   Candidate,
   PaginatedResult,
@@ -40,6 +43,90 @@ const ALLOWED_STAGE_TRANSITIONS: Record<ApplicationStage, ApplicationStage[]> = 
   Rejected: ['Applied', 'Screening', 'Interview'],
   Withdrawn: ['Applied'],
 };
+
+type GateContext = {
+  application: Application;
+  screeningOutcome: string | null;
+  interviews: Array<{
+    status: string;
+    scorecards: Array<{ isLocked: boolean; notes: string | null }>;
+  }>;
+  offerStatus: string | null;
+  hiringStatus: string | null;
+  actualJoiningDate: Date | null;
+  complianceRequirements: Array<{ status: string; isRequired: boolean }>;
+  documentCount: number;
+};
+
+const KNOWN_GATE_CODES = new Set([
+  'candidate',
+  'identity',
+  'cv',
+  'document',
+  'assignment',
+  'owner',
+  'screening',
+  'interview',
+  'feedback',
+  'scorecard',
+  'offer',
+  'prehire',
+  'compliance',
+  'license',
+  'joined',
+]);
+
+function normalizeGateCode(value: string): string {
+  const normalized = value
+    .toLowerCase()
+    .replace(/&/g, ' and ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+  if (normalized.includes('pre hire') || normalized.includes('pre-hire')) return 'prehire';
+  for (const code of KNOWN_GATE_CODES) {
+    if (normalized === code || normalized.includes(code)) return code;
+  }
+  return normalized.replace(/\s+/g, '_') || 'custom';
+}
+
+function gateIncompleteReason(code: string): string {
+  const reasons: Record<string, string> = {
+    candidate: 'Complete the candidate identity and contact details.',
+    identity: 'Complete the candidate identity and contact details.',
+    cv: 'Upload and verify a candidate document.',
+    document: 'Upload and verify a candidate document.',
+    assignment: 'Assign a recruiter or owner to this application.',
+    owner: 'Assign a recruiter or owner to this application.',
+    screening: 'Save a Passed screening result.',
+    interview: 'Complete an interview or lock an interviewer scorecard.',
+    feedback: 'Lock at least one interviewer scorecard with written notes.',
+    scorecard: 'Lock at least one interviewer scorecard with written notes.',
+    offer: 'Create a non-rejected offer for this application.',
+    prehire: 'Complete required pre-hire compliance checks.',
+    compliance: 'Complete required compliance checks.',
+    license: 'Verify required licenses or mark them not required.',
+    joined: 'Record the candidate as joined.',
+  };
+  return reasons[code] ?? 'Complete this stage requirement before advancing.';
+}
+
+function gateActionLabel(code: string): string {
+  if (code === 'screening') return 'Open Screening';
+  if (code === 'interview' || code === 'feedback' || code === 'scorecard') return 'Open Interviews';
+  if (code === 'offer') return 'Open Offer';
+  if (code === 'prehire' || code === 'compliance' || code === 'license') return 'Open Pre-Hire';
+  if (code === 'cv' || code === 'document') return 'Open Resume';
+  return 'Open Overview';
+}
+
+function gateActionTab(code: string): string {
+  if (code === 'screening') return 'Screening';
+  if (code === 'interview' || code === 'feedback' || code === 'scorecard') return 'Interview';
+  if (code === 'offer') return 'Offer';
+  if (code === 'prehire' || code === 'compliance' || code === 'license') return 'Pre-Hire';
+  if (code === 'cv' || code === 'document') return 'Applied';
+  return 'Applied';
+}
 
 @Injectable()
 export class ApplicationsService {
@@ -211,6 +298,155 @@ export class ApplicationsService {
     return this.toApplication(application, policy?.canViewPii ?? true);
   }
 
+  /**
+   * Return the persisted pipeline context used by the unified Applicant Profile.
+   * Pipeline templates are organization-scoped today, so the active default
+   * template is the effective workflow until vacancies gain an explicit
+   * template relationship.
+   */
+  async getWorkspace(
+    organizationId: string,
+    id: string,
+    user?: AuthUser,
+  ): Promise<ApplicationWorkspaceResponse> {
+    const application = await this.getApplication(organizationId, id, user);
+    const [template, screening, interviews, offer, hiringCase, documentCount] = await Promise.all([
+      this.prisma.pipelineTemplate.findFirst({
+        where: { organizationId, isDefault: true, status: { not: 'Archived' } },
+        include: {
+          stages: {
+            where: { status: { not: 'Archived' } },
+            orderBy: { sortOrder: 'asc' },
+          },
+        },
+      }),
+      this.prisma.screeningLog.findFirst({
+        where: { organizationId, applicationId: id },
+        orderBy: [{ screenedAt: 'desc' }, { createdAt: 'desc' }],
+        select: { outcome: true },
+      }),
+      this.prisma.interview.findMany({
+        where: { organizationId, applicationId: id },
+        select: {
+          status: true,
+          scorecards: { select: { isLocked: true, notes: true } },
+        },
+      }),
+      this.prisma.offer.findFirst({
+        where: { organizationId, applicationId: id },
+        orderBy: { createdAt: 'desc' },
+        select: { status: true },
+      }),
+      this.prisma.hiringCase.findUnique({
+        where: { applicationId: id },
+        select: {
+          status: true,
+          actualJoiningDate: true,
+          complianceRequirements: { select: { status: true, isRequired: true } },
+        },
+      }),
+      this.prisma.candidateDocument.count({
+        where: {
+          organizationId,
+          candidateId: application.candidateId,
+          deletedAt: null,
+        },
+      }),
+    ]);
+
+    const stages = template?.stages ?? [];
+    const currentIndex = stages.findIndex((stage) => stage.name === application.stage);
+    const hasCurrentStage = currentIndex >= 0;
+    const allowedTransitions = new Set(application.allowedTransitions);
+    const context: GateContext = {
+      application,
+      screeningOutcome: screening?.outcome ?? null,
+      interviews,
+      offerStatus: offer?.status ?? null,
+      hiringStatus: hiringCase?.status ?? null,
+      actualJoiningDate: hiringCase?.actualJoiningDate ?? null,
+      complianceRequirements: hiringCase?.complianceRequirements ?? [],
+      documentCount,
+    };
+
+    const workspaceStages: ApplicationWorkspaceStage[] = stages.map((stage, index) => {
+      const isCurrent = stage.name === application.stage;
+      const isNext = hasCurrentStage && index === currentIndex + 1;
+      const isAvailable =
+        isCurrent ||
+        (hasCurrentStage && index <= currentIndex) ||
+        allowedTransitions.has(stage.name as ApplicationStage);
+      const requirements = [
+        ...this.buildGateRequirements(stage.id, stage.entryGate, 'entry', stage.required, context),
+        ...this.buildGateRequirements(stage.id, stage.exitGate, 'exit', stage.required, context),
+      ];
+
+      return {
+        id: stage.id,
+        name: stage.name,
+        stageType: stage.stageType,
+        sortOrder: stage.sortOrder,
+        slaDays: stage.slaDays,
+        defaultOwner: stage.defaultOwner,
+        entryGate: stage.entryGate,
+        exitGate: stage.exitGate,
+        required: stage.required,
+        isCurrent,
+        isCompleted: hasCurrentStage && index < currentIndex,
+        isNext,
+        isAvailable,
+        requirements,
+      };
+    });
+
+    // Keep the legacy transition contract usable when an organization has not
+    // configured a default pipeline yet (or an existing application predates
+    // the current template). The persisted pipeline remains authoritative when
+    // it contains the current stage; this fallback only prevents the workspace
+    // from becoming read-only during migration/setup.
+    const legacyNextStage = application.allowedTransitions.find(
+      (stage) => stage !== 'Rejected' && stage !== 'Withdrawn',
+    ) ?? null;
+    const nextStage = workspaceStages.find((stage) => stage.isNext)?.name ?? legacyNextStage;
+    const currentStageConfig = stages.find((stage) => stage.name === application.stage);
+    const nextStageConfig = stages.find((stage) => stage.name === nextStage);
+    const nextStageRequirements = [
+      ...this.buildGateRequirements(
+        currentStageConfig?.id ?? `${id}:current`,
+        currentStageConfig?.exitGate,
+        'exit',
+        currentStageConfig?.required ?? false,
+        context,
+      ),
+      ...this.buildGateRequirements(
+        nextStageConfig?.id ?? `${id}:next`,
+        nextStageConfig?.entryGate,
+        'entry',
+        nextStageConfig?.required ?? false,
+        context,
+      ),
+    ];
+
+    return {
+      application,
+      templateId: template?.id ?? null,
+      templateName: template?.name ?? null,
+      stages: workspaceStages,
+      nextStage,
+      nextStageRequirements,
+      canAdvance: Boolean(nextStage) && !nextStageRequirements.some((requirement) => requirement.blocking),
+      summary: {
+        screeningOutcome: screening?.outcome ?? null,
+        interviewCount: interviews.length,
+        completedInterviewCount: interviews.filter((item) => item.status === 'Completed').length,
+        offerStatus: offer?.status ?? null,
+        hiringStatus: hiringCase?.status ?? null,
+        actualJoiningDate: hiringCase?.actualJoiningDate?.toISOString() ?? null,
+        documentCount,
+      },
+    };
+  }
+
   async createApplication(
     organizationId: string,
     dto: CreateApplicationDto,
@@ -341,11 +577,38 @@ export class ApplicationsService {
       this.throwTransitionConflict(application);
     }
 
-    const allowed = ALLOWED_STAGE_TRANSITIONS[application.stage];
-    if (!allowed.includes(dto.stage)) {
+    // Applications created before a pipeline template was configured (or
+    // using a custom stage name) do not have a canonical transition map
+    // entry. When a persisted pipeline contains the current stage, its
+    // ordering is authoritative; only the immediate next stage (plus the
+    // terminal rejection paths) can be selected. The canonical map remains
+    // the fallback for legacy records without a matching pipeline stage.
+    const allowed = ALLOWED_STAGE_TRANSITIONS[application.stage] ?? [];
+    const workspace = await this.getWorkspace(organizationId, id, user);
+    const configuredNextAllowed = workspace.stages.some(
+      (stage) => stage.isNext && stage.name === dto.stage,
+    );
+    const hasPersistedCurrentStage = workspace.stages.some((stage) => stage.isCurrent);
+    const isTerminalEscape = dto.stage === 'Rejected' || dto.stage === 'Withdrawn';
+    const transitionAllowed = hasPersistedCurrentStage
+      ? configuredNextAllowed || isTerminalEscape
+      : allowed.includes(dto.stage);
+    if (!transitionAllowed) {
       throw new BadRequestException(
         `Cannot transition application from ${application.stage} to ${dto.stage}. Allowed transitions: ${allowed.join(', ')}.`,
       );
+    }
+
+    const gateRequirements = workspace.nextStage === dto.stage
+      ? workspace.nextStageRequirements
+      : workspace.stages.find((stage) => stage.name === dto.stage)?.requirements ?? [];
+    const blockingRequirements = gateRequirements.filter((requirement) => requirement.blocking);
+    if (blockingRequirements.length > 0) {
+      throw new BadRequestException({
+        code: 'STAGE_GATE_BLOCKED',
+        message: `Cannot move to ${dto.stage} until all required stage requirements are complete.`,
+        details: { targetStage: dto.stage, requirements: blockingRequirements },
+      });
     }
 
     if (dto.stage === 'Joined') {
@@ -576,6 +839,91 @@ export class ApplicationsService {
   private maskPhone(phone: string | null | undefined): string {
     if (!phone) return '***';
     return phone.length > 4 ? `${phone.slice(0, 4)}****${phone.slice(-2)}` : '****';
+  }
+
+  private buildGateRequirements(
+    stageId: string,
+    rawGate: string | null | undefined,
+    kind: 'entry' | 'exit',
+    stageRequired: boolean,
+    context: GateContext,
+  ): ApplicationStageRequirement[] {
+    if (!rawGate?.trim()) return [];
+
+    return rawGate
+      .split(/[;,|]/)
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .map((label, index) => {
+        const code = normalizeGateCode(label);
+        const complete = this.evaluateGate(code, context);
+        const required = stageRequired;
+        const isKnown = KNOWN_GATE_CODES.has(code);
+        return {
+          id: `${stageId}:${kind}:${index}`,
+          code,
+          label,
+          kind,
+          required,
+          complete,
+          blocking: required && !complete,
+          reason: complete
+            ? null
+            : isKnown
+              ? gateIncompleteReason(code)
+              : 'This custom requirement needs a supported completion signal.',
+          actionLabel: complete ? null : gateActionLabel(code),
+          actionTab: complete ? null : gateActionTab(code),
+        } satisfies ApplicationStageRequirement;
+      });
+  }
+
+  private evaluateGate(code: string, context: GateContext): boolean {
+    switch (code) {
+      case 'candidate':
+      case 'identity':
+        return Boolean(
+          context.application.candidate?.firstName &&
+            context.application.candidate?.lastName &&
+            (context.application.candidate.email || context.application.candidate.phone),
+        );
+      case 'cv':
+      case 'document':
+        return context.documentCount > 0;
+      case 'assignment':
+      case 'owner':
+        return Boolean(context.application.primaryRecruiterId || context.application.taskOwnerId);
+      case 'screening':
+        return context.screeningOutcome === 'Passed';
+      case 'interview':
+        return context.interviews.some(
+          (interview) =>
+            interview.status === 'Completed' ||
+            interview.scorecards.some((scorecard) => scorecard.isLocked),
+        );
+      case 'feedback':
+      case 'scorecard':
+        return context.interviews.some((interview) =>
+          interview.scorecards.some((scorecard) => scorecard.isLocked && Boolean(scorecard.notes?.trim())),
+        );
+      case 'offer':
+        return Boolean(context.offerStatus && context.offerStatus !== 'Rejected');
+      case 'prehire':
+      case 'compliance':
+      case 'license':
+        return (
+          context.hiringStatus === 'Pending Final Approval' ||
+          context.hiringStatus === 'Awaiting Joining' ||
+          context.hiringStatus === 'Joined'
+        ) &&
+          context.complianceRequirements.every(
+            (requirement) => !requirement.isRequired || requirement.status === 'Verified' || requirement.status === 'Not Required',
+          );
+      case 'joined':
+        return context.hiringStatus === 'Joined' || Boolean(context.actualJoiningDate);
+      default:
+        return false;
+    }
   }
 
   private toApplication(

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
@@ -20,7 +20,7 @@ vi.mock('../../auth/AuthContext', () => ({
       displayName: 'Fatima Al-Zahrani',
       email: 'fatima@hospital.sa',
       roles: [{ id: 'r1', name: 'RECRUITER', code: 'RECRUITER' }],
-      permissions: ['APPLICATION_VIEW', 'APPLICATION_STAGE_MOVE'],
+      permissions: ['APPLICATION_VIEW', 'APPLICATION_MOVE_STAGE', 'CANDIDATE_EDIT', 'VACANCY_VIEW'],
     },
   }),
 }));
@@ -110,6 +110,92 @@ describe('ApplicationDetailPage — stage transitions', () => {
     expect(screen.queryAllByText(/Screening/i).length).toBeGreaterThan(0);
   });
 
+  it('renders persisted workspace stages and actionable transition requirements', async () => {
+    const workspace = {
+      application: baseApplication,
+      templateId: 'pipeline-default',
+      templateName: 'Default hiring track',
+      stages: [
+        {
+          id: 'stage-applied',
+          name: 'Applied',
+          stageType: 'Screening',
+          sortOrder: 0,
+          required: false,
+          isCurrent: true,
+          isCompleted: false,
+          isNext: false,
+          isAvailable: true,
+          requirements: [],
+        },
+        {
+          id: 'stage-screening',
+          name: 'Screening',
+          stageType: 'Screening',
+          sortOrder: 1,
+          required: true,
+          isCurrent: false,
+          isCompleted: false,
+          isNext: true,
+          isAvailable: true,
+          requirements: [
+            {
+              id: 'stage-screening:entry:0',
+              code: 'screening',
+              label: 'Passed screening',
+              kind: 'entry',
+              required: true,
+              complete: false,
+              blocking: true,
+              reason: 'Save a Passed screening result.',
+              actionLabel: 'Open Screening',
+              actionTab: 'Screening',
+            },
+          ],
+        },
+      ],
+      nextStage: 'Screening',
+      nextStageRequirements: [
+        {
+          id: 'stage-screening:entry:0',
+          code: 'screening',
+          label: 'Passed screening',
+          kind: 'entry',
+          required: true,
+          complete: false,
+          blocking: true,
+          reason: 'Save a Passed screening result.',
+          actionLabel: 'Open Screening',
+          actionTab: 'Screening',
+        },
+      ],
+      canAdvance: false,
+      summary: {
+        screeningOutcome: null,
+        interviewCount: 0,
+        completedInterviewCount: 0,
+        offerStatus: null,
+        hiringStatus: null,
+        actualJoiningDate: null,
+        documentCount: 0,
+      },
+    };
+    mockGetApi.mockImplementation((url: string) => {
+      if (url === `/applications/${baseApplication.id}`) return Promise.resolve(baseApplication);
+      if (url.endsWith('/workspace')) return Promise.resolve(workspace);
+      if (url.includes('/history') || url.includes('/notes') || url.includes('/screening') || url.includes('/interviews')) return Promise.resolve([]);
+      if (url.includes('candidateId=')) return Promise.resolve({ data: [], total: 0 });
+      return Promise.resolve(null);
+    });
+
+    renderPage();
+    await waitFor(() => expect(screen.getByRole('region', { name: /Applicant pipeline stages/i })).toBeInTheDocument());
+    expect(within(screen.getByRole('region', { name: /Applicant pipeline stages/i })).getByRole('tab', { name: /Screening/ })).toBeInTheDocument();
+    expect(screen.getByText('Next')).toBeInTheDocument();
+    expect(screen.getByText(/Complete required items before advancing/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Open Screening/i })).toBeInTheDocument();
+  });
+
   it('sends PATCH /applications/:id/stage with optimistic lock fields on stage move', async () => {
     const user = userEvent.setup();
     const updatedApp = { ...baseApplication, stage: 'Interview', version: 3 };
@@ -118,25 +204,18 @@ describe('ApplicationDetailPage — stage transitions', () => {
     renderPage();
     await waitFor(() => expect(screen.queryAllByText(/Mona AlHarbi/i).length).toBeGreaterThan(0));
 
-    const moveBtn = screen.queryAllByRole('button', { name: /Move Stage/i })[0];
-    if (moveBtn) {
-      await user.click(moveBtn);
-      const confirmBtn = screen.queryAllByRole('button', {
-        name: /confirm|move|update stage/i,
-      })[0];
-      if (confirmBtn) {
-        await user.click(confirmBtn);
-        await waitFor(() => {
-          expect(mockPatchApi).toHaveBeenCalledWith(
-            expect.stringContaining('/stage'),
-            expect.objectContaining({
-              expectedStage: 'Screening',
-              expectedVersion: 2,
-            })
-          );
-        });
-      }
-    }
+    const workspace = screen.getByRole('region', { name: 'Unified applicant stage workspace' });
+    await user.click(within(workspace).getByRole('button', { name: 'Advance Stage' }));
+    await user.click(screen.getByRole('button', { name: 'Confirm Move' }));
+    await waitFor(() => {
+      expect(mockPatchApi).toHaveBeenCalledWith(
+        expect.stringContaining('/stage'),
+        expect.objectContaining({
+          expectedStage: 'Screening',
+          expectedVersion: 2,
+        })
+      );
+    });
   });
 
   it('shows conflict alert and re-fetches application on 409 response', async () => {
@@ -157,20 +236,12 @@ describe('ApplicationDetailPage — stage transitions', () => {
     renderPage();
     await waitFor(() => expect(screen.queryAllByText(/Mona AlHarbi/i).length).toBeGreaterThan(0));
 
-    const moveBtn = screen.queryAllByRole('button', { name: /Move Stage/i })[0];
-    if (moveBtn) {
-      await user.click(moveBtn);
-      const confirmBtn = screen.queryAllByRole('button', {
-        name: /confirm|move|update stage/i,
-      })[0];
-      if (confirmBtn) {
-        await user.click(confirmBtn);
-        await waitFor(() => {
-          const conflict = screen.queryByText(/updated by someone else/i);
-          if (conflict) expect(conflict).toBeInTheDocument();
-        });
-      }
-    }
+    const workspace = screen.getByRole('region', { name: 'Unified applicant stage workspace' });
+    await user.click(within(workspace).getByRole('button', { name: 'Advance Stage' }));
+    await user.click(screen.getByRole('button', { name: 'Confirm Move' }));
+    await waitFor(() => {
+      expect(screen.getByText(/updated by someone else/i)).toBeInTheDocument();
+    });
   });
 
   it('renders an error/not-found state when API returns a rejection', async () => {
@@ -195,36 +266,16 @@ describe('ApplicationDetailPage — stage transitions', () => {
     renderPage();
     await waitFor(() => expect(screen.queryAllByText(/Mona AlHarbi/i).length).toBeGreaterThan(0));
 
-    // Navigate to the activity tab where Add Note lives
-    const activityTab = screen.queryAllByRole('button', { name: /activity/i })[0];
-    if (activityTab) {
-      await user.click(activityTab);
-    }
-
-    const noteBtn = screen.queryAllByRole('button', { name: /add note/i })[0];
-    if (!noteBtn) {
-      // Add Note button not accessible in current tab context — test guards pass
-      expect(true).toBe(true);
-      return;
-    }
-
-    await user.click(noteBtn);
-    const textareas = screen.queryAllByRole('textbox');
-    const textarea = textareas[0];
-    if (textarea) {
-      await user.type(textarea, 'SCFHS verification pending');
-      const saveBtn = screen
-        .queryAllByRole('button', { name: /save|add/i })
-        .find((b) => b !== noteBtn);
-      if (saveBtn) {
-        await user.click(saveBtn);
-        await waitFor(() => {
-          expect(mockPostApi).toHaveBeenCalledWith(
-            expect.stringContaining('/notes'),
-            expect.objectContaining({ content: expect.stringContaining('SCFHS') })
-          );
-        });
-      }
-    }
+    const workspace = screen.getByRole('region', { name: 'Unified applicant stage workspace' });
+    await user.click(within(workspace).getByRole('button', { name: 'Add Note' }));
+    const textarea = screen.getByPlaceholderText('Type candidate observations...');
+    await user.type(textarea, 'SCFHS verification pending');
+    await user.click(screen.getByRole('button', { name: 'Save Note' }));
+    await waitFor(() => {
+      expect(mockPostApi).toHaveBeenCalledWith(
+        expect.stringContaining('/notes'),
+        expect.objectContaining({ content: 'SCFHS verification pending' })
+      );
+    });
   });
 });

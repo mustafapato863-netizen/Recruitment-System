@@ -109,6 +109,7 @@ export class PipelineSettingsService {
             defaultOwner: stage.defaultOwner,
             entryGate: stage.entryGate,
             exitGate: stage.exitGate,
+            required: stage.required,
             status: stage.status,
             // Phase C — Stage Automation
             emailTemplateId: stage.emailTemplateId,
@@ -144,6 +145,7 @@ export class PipelineSettingsService {
         defaultOwner: dto.defaultOwner ?? null,
         entryGate: dto.entryGate ?? null,
         exitGate: dto.exitGate ?? null,
+        required: dto.required ?? false,
         // Phase C — Stage Automation
         emailTemplateId: dto.emailTemplateId ?? null,
         folded: dto.folded ?? false,
@@ -185,6 +187,7 @@ export class PipelineSettingsService {
         ...(dto.defaultOwner !== undefined && { defaultOwner: dto.defaultOwner }),
         ...(dto.entryGate !== undefined && { entryGate: dto.entryGate }),
         ...(dto.exitGate !== undefined && { exitGate: dto.exitGate }),
+        ...(dto.required !== undefined && { required: dto.required }),
         // Phase C — Stage Automation
         ...(dto.emailTemplateId !== undefined && { emailTemplateId: dto.emailTemplateId }),
         ...(dto.folded !== undefined && { folded: dto.folded }),
