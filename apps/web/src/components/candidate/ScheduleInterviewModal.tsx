@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Modal } from '../Modal';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
@@ -11,8 +11,8 @@ interface ScheduleInterviewModalProps {
   setInterviewerName: (v: string) => void;
   interviewerJobTitle: string;
   setInterviewerJobTitle: (v: string) => void;
-  interviewType: 'Screening' | 'Technical' | 'Behavioral' | 'Managerial' | 'Executive';
-  setInterviewType: (v: 'Screening' | 'Technical' | 'Behavioral' | 'Managerial' | 'Executive') => void;
+  interviewType: string;
+  setInterviewType: (v: string) => void;
   scheduledDateTime: string;
   setScheduledDateTime: (v: string) => void;
   meetingLink: string;
@@ -38,6 +38,12 @@ export const ScheduleInterviewModal: React.FC<ScheduleInterviewModalProps> = ({
   onSubmit,
 }) => {
   const { options: interviewTypeOptions, isLoading: isLoadingInterviewTypes } = useInterviewTypeOptions();
+
+  useEffect(() => {
+    if (interviewTypeOptions.length === 0) return;
+    if (interviewTypeOptions.some((opt) => opt.code === interviewType)) return;
+    setInterviewType(interviewTypeOptions[0].code);
+  }, [interviewType, interviewTypeOptions, setInterviewType]);
 
   return (
     <Modal
@@ -74,11 +80,7 @@ export const ScheduleInterviewModal: React.FC<ScheduleInterviewModalProps> = ({
           <label className="font-bold block mb-1">Interview Type</label>
           <Select
             value={interviewType}
-            onChange={(e) =>
-              setInterviewType(
-                e.target.value as 'Screening' | 'Technical' | 'Behavioral' | 'Managerial' | 'Executive'
-              )
-            }
+            onChange={(e) => setInterviewType(e.target.value)}
             disabled={isSubmitting}
           >
             {interviewTypeOptions.map((option) => (

@@ -98,9 +98,7 @@ export function ApplicationDetailPage() {
   // Scheduling modal state
   const [schedInterviewerJobTitle, setSchedInterviewerJobTitle] = useState('');
   const [schedInterviewerName, setSchedInterviewerName] = useState('');
-  const [schedInterviewType, setSchedInterviewType] = useState<
-    'Screening' | 'Technical' | 'Behavioral' | 'Managerial' | 'Executive'
-  >('Technical');
+  const [schedInterviewType, setSchedInterviewType] = useState('Technical');
   const [schedDateTime, setSchedDateTime] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() + 1);

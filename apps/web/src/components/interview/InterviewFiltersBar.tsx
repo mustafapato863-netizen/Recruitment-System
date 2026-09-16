@@ -1,5 +1,6 @@
 import React from 'react';
 import { Icon } from '../Icon';
+import { useInterviewTypeOptions } from '../../hooks/useInterviewTypeOptions';
 
 interface InterviewFiltersBarProps {
   dateRange: string;
@@ -28,6 +29,8 @@ export const InterviewFiltersBar: React.FC<InterviewFiltersBarProps> = ({
   isMoreFiltersOpen,
   setIsMoreFiltersOpen,
 }) => {
+  const { options: interviewTypeOptions } = useInterviewTypeOptions();
+
   return (
     <div className="space-y-3">
       {/* Filter controls row */}
@@ -58,11 +61,9 @@ export const InterviewFiltersBar: React.FC<InterviewFiltersBarProps> = ({
             className="appearance-none bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2 pr-8 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 cursor-pointer shadow-xs"
           >
             <option value="ALL">All Interview Types</option>
-            <option value="Screening">Screening Round</option>
-            <option value="Technical">Technical Interview</option>
-            <option value="Behavioral">Behavioral / Leadership</option>
-            <option value="Managerial">Managerial Round</option>
-            <option value="Executive">Executive Board</option>
+            {interviewTypeOptions.map((opt) => (
+              <option key={opt.code} value={opt.code}>{opt.name}</option>
+            ))}
           </select>
           <Icon
             name="chevron-down"

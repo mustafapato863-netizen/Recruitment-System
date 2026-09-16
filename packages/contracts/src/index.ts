@@ -871,7 +871,7 @@ export interface CreateScreeningLogInput {
   salaryCurrency?: string | undefined;
 }
 
-export type InterviewType = 'Screening' | 'Technical' | 'Behavioral' | 'Managerial' | 'Executive';
+export type InterviewType = 'Screening' | 'Technical' | 'Behavioral' | 'Managerial' | 'Executive' | (string & {});
 export type InterviewStatus = 'Scheduled' | 'Completed' | 'Cancelled' | 'Rescheduled';
 
 export interface InterviewAttendeeItem {

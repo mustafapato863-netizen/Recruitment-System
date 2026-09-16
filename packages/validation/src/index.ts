@@ -178,13 +178,7 @@ export const createScreeningLogSchema = z.object({
   notes: z.string().trim().max(5_000).optional(),
 });
 
-export const interviewTypeEnum = z.enum([
-  'Screening',
-  'Technical',
-  'Behavioral',
-  'Managerial',
-  'Executive',
-]);
+export const interviewTypeEnum = z.string().trim().min(1).max(60);
 
 export const interviewStatusEnum = z.enum([
   'Scheduled',

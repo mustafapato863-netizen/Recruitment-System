@@ -35,6 +35,12 @@ export function SelfScheduleModal({
   const [availableUsers, setAvailableUsers] = useState<OrganizationUser[]>([]);
   const { options: interviewTypeOptions, isLoading: isLoadingInterviewTypes } = useInterviewTypeOptions();
 
+  useEffect(() => {
+    if (interviewTypeOptions.length === 0) return;
+    if (interviewTypeOptions.some((option) => option.code === interviewType)) return;
+    setInterviewType(interviewTypeOptions[0].code);
+  }, [interviewType, interviewTypeOptions]);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [generatedLink, setGeneratedLink] = useState<GenerateSelfScheduleResult | null>(null);

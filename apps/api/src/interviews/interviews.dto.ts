@@ -40,7 +40,8 @@ export class CreateInterviewDto {
   @IsObject()
   attendeeJobTitles?: Record<string, string>;
 
-  @IsEnum(['Screening', 'Technical', 'Behavioral', 'Managerial', 'Executive'])
+  @IsString()
+  @MaxLength(60)
   interviewType!: InterviewType;
 
   @IsISO8601()
@@ -186,7 +187,8 @@ export class GenerateSelfScheduleDto {
   @MaxLength(200)
   title!: string;
 
-  @IsEnum(['Screening', 'Technical', 'Behavioral', 'Managerial', 'Executive'])
+  @IsString()
+  @MaxLength(60)
   interviewType!: InterviewType;
 
   @IsOptional()

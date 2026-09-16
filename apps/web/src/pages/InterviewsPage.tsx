@@ -78,7 +78,7 @@ export function InterviewsPage() {
 
   // Scheduling Form State
   const [selectedAppId, setSelectedAppId] = useState('');
-  const [interviewType, setInterviewType] = useState<'Screening' | 'Technical' | 'Behavioral' | 'Managerial' | 'Executive'>('Technical');
+  const [interviewType, setInterviewType] = useState<InterviewType>('Technical');
   const [scheduledDateTime, setScheduledDateTime] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() + 1);
