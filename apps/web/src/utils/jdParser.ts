@@ -99,7 +99,13 @@ function cleanLine(line: string): string {
  * Derive title from filename as fallback or initial guess
  */
 function titleFromFileName(fileName: string): string {
-  const base = fileName.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+  let base = fileName.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+  const cvMatch = base.match(/\b(?:cv|resume)\b\s*(.*)/i);
+  if (cvMatch?.[1] && cvMatch[1].trim().length > 2) {
+    base = cvMatch[1].trim();
+  } else {
+    base = base.replace(/\b(?:cv|resume)\b/gi, '').trim();
+  }
   return base
     .split(' ')
     .filter(Boolean)
@@ -121,14 +127,15 @@ export function parseJobDescriptionText(text: string, fileName?: string): Parsed
   if (titleMatch?.[1]?.trim() && titleMatch[1].trim().length < 80) {
     title = cleanLine(titleMatch[1].trim());
   }
+  title = title.replace(/\b(?:cv|resume)\b/gi, '').trim().slice(0, 120);
 
-  // 2. Location Extraction
+  // 2. Location Extraction (Sanitized and capped to 80 chars)
   let location = 'SGH Hospital';
   const locationMatch = normalized.match(
     /(?:Location|Work Location|Hospital Branch|Branch)\s*[:\t]?\s*([^\n\r]+)/i,
   );
   if (locationMatch?.[1]?.trim()) {
-    location = cleanLine(locationMatch[1].trim());
+    location = cleanLine(locationMatch[1].trim()).slice(0, 80);
   }
 
   // 3. Department Extraction

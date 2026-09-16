@@ -1,10 +1,10 @@
 import { useState, useRef, type ChangeEvent } from 'react';
-import { patchApi, postApi, getApi } from '../../api/client';
-import { Icon } from '../Icon';
 import { Modal } from '../Modal';
 import { Button } from '../ui/Button';
 import { Select } from '../ui/Select';
+import { Icon } from '../Icon';
 import { parseJobDescriptionFile, type ParsedJobDescription } from '../../utils/jdParser';
+import { patchApi, postApi, getApi } from '../../api/client';
 
 export interface ImportJobDescriptionModalProps {
   isOpen: boolean;
@@ -42,16 +42,19 @@ export function ImportJobDescriptionModal({
   const [isParsing, setIsParsing] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
 
-  // Parsed Form State
+  // Parsed Form State (Enhanced based on SGH Specification Template)
   const [parsedData, setParsedData] = useState<ParsedJobDescription | null>(null);
   const [title, setTitle] = useState('');
   const [department, setDepartment] = useState('');
-  const [location, setLocation] = useState('');
   const [minExp, setMinExp] = useState(3);
+  const [approvedHeadcount, setApprovedHeadcount] = useState(1);
   const [jobSummary, setJobSummary] = useState('');
+  const [qualifications, setQualifications] = useState('');
+  const [responsibilities, setResponsibilities] = useState('');
   const [skills, setSkills] = useState<string[]>([]);
   const [skillInput, setSkillInput] = useState('');
-  const [qualifications, setQualifications] = useState('');
+  const [languages, setLanguages] = useState<string[]>(['English', 'Arabic']);
+  const [languageInput, setLanguageInput] = useState('');
 
   // Target Mode
   const [targetMode, setTargetMode] = useState<'existing' | 'new'>(
@@ -75,12 +78,15 @@ export function ImportJobDescriptionModal({
     setParsedData(null);
     setTitle('');
     setDepartment('');
-    setLocation('');
     setMinExp(3);
+    setApprovedHeadcount(1);
     setJobSummary('');
+    setQualifications('');
+    setResponsibilities('');
     setSkills([]);
     setSkillInput('');
-    setQualifications('');
+    setLanguages(['English', 'Arabic']);
+    setLanguageInput('');
     setSubmitError(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
@@ -104,13 +110,18 @@ export function ImportJobDescriptionModal({
     try {
       const parsed = await parseJobDescriptionFile(file);
       setParsedData(parsed);
-      setTitle(parsed.title);
-      setDepartment(parsed.department);
-      setLocation(parsed.location);
-      setMinExp(parsed.minExperienceYears);
-      setJobSummary(parsed.jobSummary);
+      setTitle(parsed.title.slice(0, 120));
+      setDepartment(parsed.department.slice(0, 120));
+      setMinExp(parsed.minExperienceYears || 3);
+      setJobSummary(parsed.jobSummary.slice(0, 500));
       setSkills(parsed.requiredSkills);
-      setQualifications(parsed.qualifications);
+      setQualifications(parsed.qualifications.slice(0, 4000));
+      setResponsibilities(parsed.responsibilities.slice(0, 4000));
+      if (parsed.languages && parsed.languages.length > 0) {
+        setLanguages(parsed.languages);
+      } else {
+        setLanguages(['English', 'Arabic']);
+      }
     } catch (err: unknown) {
       setParseError(err instanceof Error ? err.message : 'Failed to parse document. Please check file format.');
     } finally {
@@ -129,6 +140,19 @@ export function ImportJobDescriptionModal({
 
   const handleRemoveSkill = (skillToRemove: string) => {
     setSkills((prev) => prev.filter((s) => s !== skillToRemove));
+  };
+
+  const handleAddLanguage = () => {
+    const lang = languageInput.trim();
+    if (!lang) return;
+    if (!languages.some((existing) => existing.toLowerCase() === lang.toLowerCase())) {
+      setLanguages((prev) => [...prev, lang]);
+    }
+    setLanguageInput('');
+  };
+
+  const handleRemoveLanguage = (langToRemove: string) => {
+    setLanguages((prev) => prev.filter((l) => l !== langToRemove));
   };
 
   const handleCommit = async () => {
@@ -166,7 +190,7 @@ export function ImportJobDescriptionModal({
       if (syncDepartmentToMasterData && department.trim()) {
         try {
           await postApi('/master-data/catalog/departments/batch', {
-            rows: [{ name: department.trim(), status: 'Active' }],
+            rows: [{ name: department.trim().slice(0, 120), status: 'Active' }],
           });
         } catch {
           // Ignore if exists
@@ -177,12 +201,15 @@ export function ImportJobDescriptionModal({
       if (syncPositionToMasterData) {
         try {
           await postApi('/positions', {
-            title: title.trim(),
-            description: jobSummary.trim(),
+            title: title.trim().slice(0, 120),
+            description: jobSummary.trim().slice(0, 500),
             metadata: {
-              department: department.trim(),
+              department: department.trim().slice(0, 120),
               minExperienceYears: minExp,
               requiredSkills: skills,
+              qualifications: qualifications.trim().slice(0, 4000),
+              responsibilities: responsibilities.trim().slice(0, 4000),
+              languages,
             },
           });
         } catch {
@@ -190,19 +217,20 @@ export function ImportJobDescriptionModal({
         }
       }
 
-      // 4. Apply to Vacancy
+      // 4. Apply to Vacancy (Note: Location parameter is intentionally omitted as it is configured via database droplist)
       const targetId = targetVacancy?.id || (targetMode === 'existing' ? selectedVacancyId : null);
 
       if (targetId) {
         // Update existing vacancy
         await patchApi(`/vacancies/${targetId}`, {
-          title: title.trim(),
-          jobSummary: jobSummary.trim(),
-          department: department.trim(),
-          location: location.trim(),
+          title: title.trim().slice(0, 120),
+          jobSummary: jobSummary.trim().slice(0, 500),
+          department: department.trim().slice(0, 120),
           minExperienceYears: minExp,
+          approvedHeadcount: Math.max(1, approvedHeadcount || 1),
           requiredSkills: skills,
-          qualifications: qualifications.trim(),
+          qualifications: qualifications.trim().slice(0, 4000),
+          responsibilities: responsibilities.trim().slice(0, 4000),
         });
 
         onSuccess({
@@ -214,14 +242,14 @@ export function ImportJobDescriptionModal({
       } else {
         // Create new requisition
         const newVac = await postApi<{ id: string }>('/vacancies', {
-          title: title.trim(),
-          jobSummary: jobSummary.trim(),
-          department: department.trim(),
-          location: location.trim(),
+          title: title.trim().slice(0, 120),
+          jobSummary: jobSummary.trim().slice(0, 500),
+          department: department.trim().slice(0, 120),
           minExperienceYears: minExp,
+          approvedHeadcount: Math.max(1, approvedHeadcount || 1),
           requiredSkills: skills,
-          qualifications: qualifications.trim(),
-          approvedHeadcount: 1,
+          qualifications: qualifications.trim().slice(0, 4000),
+          responsibilities: responsibilities.trim().slice(0, 4000),
         });
 
         onSuccess({
@@ -281,22 +309,26 @@ export function ImportJobDescriptionModal({
 
         {/* Loading Spinner during document parsing */}
         {isParsing && (
-          <div className="p-8 text-center space-y-2">
-            <div className="inline-block w-8 h-8 border-3 border-cyan-500 border-t-transparent rounded-full animate-spin" />
-            <p className="text-xs font-bold text-slate-700 dark:text-slate-300">
-              Parsing sections, skills, and requirements from {selectedFile?.name}…
+          <div className="p-8 text-center space-y-3">
+            <div className="w-8 h-8 mx-auto border-3 border-cyan-500 border-t-transparent rounded-full animate-spin" />
+            <p className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+              Extracting clinical &amp; technical competencies from document...
             </p>
           </div>
         )}
 
-        {/* Parsing Error */}
+        {/* Parsing Error Banner */}
         {parseError && (
-          <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs flex items-center justify-between">
-            <span>{parseError}</span>
+          <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs space-y-2">
+            <div className="flex items-center gap-2 font-bold">
+              <Icon name="alert-circle" size={16} className="text-rose-500" />
+              <span>Document Processing Error</span>
+            </div>
+            <p>{parseError}</p>
             <button
               type="button"
               onClick={() => resetState()}
-              className="text-xs font-bold underline cursor-pointer"
+              className="text-xs font-bold text-rose-600 dark:text-rose-400 underline cursor-pointer"
             >
               Try another file
             </button>
@@ -350,6 +382,7 @@ export function ImportJobDescriptionModal({
                       <input
                         type="radio"
                         name="targetMode"
+                        value="existing"
                         checked={targetMode === 'existing'}
                         onChange={() => setTargetMode('existing')}
                         className="text-blue-600"
@@ -360,6 +393,7 @@ export function ImportJobDescriptionModal({
                       <input
                         type="radio"
                         name="targetMode"
+                        value="new"
                         checked={targetMode === 'new'}
                         onChange={() => setTargetMode('new')}
                         className="text-blue-600"
@@ -373,11 +407,12 @@ export function ImportJobDescriptionModal({
                       aria-label="Select target vacancy"
                       value={selectedVacancyId}
                       onChange={(e) => setSelectedVacancyId(e.target.value)}
+                      className="text-xs"
                     >
-                      <option value="">Select a vacancy to auto-fill...</option>
+                      <option value="">Select target vacancy requisition...</option>
                       {availableVacancies.map((v) => (
                         <option key={v.id} value={v.id}>
-                          {v.title} ({v.department || 'No dept'}) • {v.status}
+                          {v.title} ({v.department || 'No dept'}) &bull; {v.status}
                         </option>
                       ))}
                     </Select>
@@ -394,8 +429,10 @@ export function ImportJobDescriptionModal({
                 </label>
                 <input
                   type="text"
+                  maxLength={120}
                   value={title}
-                  onChange={(e) => setTitle(e.target.value)}
+                  onChange={(e) => setTitle(e.target.value.slice(0, 120))}
+                  placeholder="e.g. HRIS Performance Specialist"
                   className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
                 />
               </div>
@@ -406,27 +443,17 @@ export function ImportJobDescriptionModal({
                 </label>
                 <input
                   type="text"
+                  maxLength={120}
                   value={department}
-                  onChange={(e) => setDepartment(e.target.value)}
+                  onChange={(e) => setDepartment(e.target.value.slice(0, 120))}
+                  placeholder="e.g. Human Resources"
                   className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
                 />
               </div>
             </div>
 
-            {/* Location & Min Experience Grid */}
+            {/* Min Experience & Approved Headcount Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
-                  Work Location / Branch
-                </label>
-                <input
-                  type="text"
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
-                />
-              </div>
-
               <div>
                 <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
                   Min Experience (Years)
@@ -440,22 +467,83 @@ export function ImportJobDescriptionModal({
                   className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
                 />
               </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Approved Headcount
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="100"
+                  value={approvedHeadcount}
+                  onChange={(e) => setApprovedHeadcount(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+              </div>
             </div>
 
-            {/* Job Summary */}
+            {/* Job Summary / Core Purpose */}
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="font-bold text-slate-700 dark:text-slate-300">
                   Job Summary &bull; Core Purpose
                 </label>
-                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">
-                  ✓ Clears activation blocker
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    {jobSummary.length}/500 chars
+                  </span>
+                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                    ✓ Clears activation blocker
+                  </span>
+                </div>
+              </div>
+              <textarea
+                rows={3}
+                maxLength={500}
+                value={jobSummary}
+                onChange={(e) => setJobSummary(e.target.value.slice(0, 500))}
+                placeholder="Core role purpose, main contributions, and mission..."
+                className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+              />
+            </div>
+
+            {/* Key Duties & Responsibilities */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="font-bold text-slate-700 dark:text-slate-300">
+                  Key Duties &amp; Responsibilities
+                </label>
+                <span className="text-[10px] text-slate-400 font-mono">
+                  {responsibilities.length}/4000 chars
                 </span>
               </div>
               <textarea
                 rows={3}
-                value={jobSummary}
-                onChange={(e) => setJobSummary(e.target.value)}
+                maxLength={4000}
+                value={responsibilities}
+                onChange={(e) => setResponsibilities(e.target.value.slice(0, 4000))}
+                placeholder="Core operational duties, portal maintenance, automated workflows..."
+                className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+              />
+            </div>
+
+            {/* Education & Qualifications */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="font-bold text-slate-700 dark:text-slate-300">
+                  Education &amp; Qualifications
+                </label>
+                <span className="text-[10px] text-slate-400 font-mono">
+                  {qualifications.length}/4000 chars
+                </span>
+              </div>
+              <textarea
+                rows={2}
+                maxLength={4000}
+                value={qualifications}
+                onChange={(e) => setQualifications(e.target.value.slice(0, 4000))}
+                placeholder="e.g. Bachelor's degree in Computer Science, Software Engineering, or related field"
                 className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none resize-none"
               />
             </div>
@@ -516,6 +604,56 @@ export function ImportJobDescriptionModal({
                     </span>
                   ))
                 )}
+              </div>
+            </div>
+
+            {/* Languages Tag Chips */}
+            <div className="space-y-2">
+              <label className="font-bold text-slate-700 dark:text-slate-300 block">
+                Required Languages ({languages.length})
+              </label>
+
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={languageInput}
+                  onChange={(e) => setLanguageInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddLanguage();
+                    }
+                  }}
+                  placeholder="e.g. English, Arabic..."
+                  className="flex-1 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500 text-xs"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddLanguage}
+                  disabled={!languageInput.trim()}
+                  className="px-3 py-1.5 rounded-lg font-bold bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs hover:opacity-90 disabled:opacity-40 cursor-pointer"
+                >
+                  Add
+                </button>
+              </div>
+
+              <div className="flex flex-wrap gap-1.5 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 min-h-[36px] items-center">
+                {languages.map((lang) => (
+                  <span
+                    key={lang}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-teal-50 dark:bg-teal-950/40 text-teal-800 dark:text-teal-300 border border-teal-200 dark:border-teal-800 shadow-2xs"
+                  >
+                    <span>{lang}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveLanguage(lang)}
+                      className="text-teal-500 hover:text-rose-500 transition cursor-pointer"
+                      title={`Remove ${lang}`}
+                    >
+                      <Icon name="close" size={12} />
+                    </button>
+                  </span>
+                ))}
               </div>
             </div>
 
