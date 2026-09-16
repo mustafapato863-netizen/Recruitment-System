@@ -4,6 +4,7 @@ import {
   Get,
   Param,
   Put,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 /* eslint-disable @typescript-eslint/consistent-type-imports */
@@ -28,8 +29,26 @@ export class AccessControlController {
 
   /** Navigation metadata is safe for every authenticated user; visibility is not access control. */
   @Get('navigation')
-  getNavigation(@CurrentUser() user: AuthUser) {
-    return this.accessControlService.getNavigationSettings(user.organizationId, user.roleCodes);
+  getNavigation(
+    @CurrentUser() user: AuthUser,
+    @Query('roleCode') roleCode?: string,
+  ) {
+    let targetRoleCodes = user.roleCodes;
+    if (roleCode !== undefined) {
+      const trimmed = roleCode.trim().toUpperCase();
+      targetRoleCodes = trimmed && trimmed !== 'ALL' && trimmed !== 'GLOBAL' ? [trimmed] : [];
+    }
+
+    return this.accessControlService.getNavigationSettings(user.organizationId, targetRoleCodes);
+  }
+
+  @Get('navigation/roles/:roleCode')
+  @RequirePermissions('ROLES_VIEW')
+  getRoleNavigation(
+    @CurrentUser() user: AuthUser,
+    @Param('roleCode') roleCode: string,
+  ) {
+    return this.accessControlService.getNavigationSettings(user.organizationId, [roleCode.trim().toUpperCase()]);
   }
 
   @Put('navigation')

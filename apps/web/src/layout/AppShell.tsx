@@ -66,7 +66,14 @@ export function NavigationItem({
     : requiredAnyPermissions && requiredAnyPermissions.length > 0
       ? requiredAnyPermissions.some((permission) => Boolean(user?.permissions?.includes(permission)))
       : true;
-  const hasAccess = hasRoleAccess && hasNaturalAccess && navigationSetting?.visible !== false;
+  const isAdministrator = Boolean(
+    user?.roles?.some((r) => r.code === 'ADMINISTRATOR') ||
+    (user?.permissions?.includes('USERS_MANAGE') && user?.permissions?.includes('ROLES_MANAGE'))
+  );
+  const isSettingVisible = isAdministrator
+    ? (navigationSetting?.visible ?? true)
+    : navigationSetting?.visible !== false;
+  const hasAccess = hasRoleAccess && hasNaturalAccess && isSettingVisible;
 
   if (!hasAccess) return null;
 
@@ -369,7 +376,10 @@ export function AppShellInner() {
               </div>
             )}
             <div className="space-y-0.5">
-              <NavigationItem icon="database" label="Candidates / CV Bank" to="/candidates" navigationKey="candidates" requiredPermission="CANDIDATE_VIEW" isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+              <NavigationItem icon="database" label="Candidates" to="/candidates" navigationKey="candidates" requiredPermission="CANDIDATE_VIEW" isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+              <NavigationItem icon="file-text" label="CV Bank" to="/cv-bank" navigationKey="cv-bank" requiredPermission="CANDIDATE_VIEW" isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+              <NavigationItem icon="upload" label="CV Intake" to="/cv-intake" navigationKey="cv-intake" requiredPermission="CANDIDATE_CREATE" isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+              <NavigationItem icon="sparkles" label="Talent Pool & Match" to="/sourcing-match" navigationKey="sourcing-match" requiredPermission="CANDIDATE_VIEW" isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
             </div>
           </div>
           )}

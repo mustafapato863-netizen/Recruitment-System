@@ -14,6 +14,7 @@ export const NAVIGATION_CATALOG: NavigationItemRecord[] = [
   { key: 'interviews', route: '/interviews', label: 'Interviews', icon: 'calendar', group: 'Recruitment', sortOrder: 60, visible: true, requiredPermission: 'VACANCY_VIEW' },
   { key: 'offers', route: '/offers', label: 'Offers', icon: 'offer', group: 'Recruitment', sortOrder: 70, visible: true, requiredPermission: 'APPLICATION_VIEW' },
   { key: 'candidates', route: '/candidates', label: 'Candidates DB', icon: 'database', group: 'Sourcing & Talent', sortOrder: 80, visible: true, requiredPermission: 'CANDIDATE_VIEW' },
+  { key: 'cv-bank', route: '/cv-bank', label: 'CV Bank', icon: 'file-text', group: 'Sourcing & Talent', sortOrder: 85, visible: true, requiredPermission: 'CANDIDATE_VIEW' },
   { key: 'cv-intake', route: '/cv-intake', label: 'CV Intake', icon: 'upload', group: 'Sourcing & Talent', sortOrder: 90, visible: true, requiredPermission: 'CANDIDATE_CREATE' },
   { key: 'sourcing-match', route: '/sourcing-match', label: 'Smart Sourcing & Match', icon: 'sparkles', group: 'Sourcing & Talent', sortOrder: 100, visible: true, requiredPermission: 'CANDIDATE_VIEW' },
   { key: 'joinings', route: '/joinings', label: 'Hires & Joining', icon: 'user-check', group: 'Compliance & Hires', sortOrder: 110, visible: true, requiredPermission: 'APPLICATION_VIEW' },

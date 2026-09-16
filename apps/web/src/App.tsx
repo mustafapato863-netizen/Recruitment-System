@@ -32,6 +32,7 @@ const VacantListPage = lazy(() => import('./pages/VacantListPage').then((m) => (
 const VacancyOverviewPage = lazy(() => import('./pages/VacancyOverviewPage').then((m) => ({ default: m.VacancyOverviewPage })));
 const JobAnalyticsPage = lazy(() => import('./pages/JobAnalyticsPage').then((m) => ({ default: m.JobAnalyticsPage })));
 const CandidatesPage = lazy(() => import('./pages/CandidatesPage').then((m) => ({ default: m.CandidatesPage })));
+const CVBankPage = lazy(() => import('./pages/CVBankPage').then((m) => ({ default: m.CVBankPage })));
 const CandidateDetailPage = lazy(() => import('./pages/CandidateDetailPage').then((m) => ({ default: m.CandidateDetailPage })));
 const CandidateDocumentsPage = lazy(() => import('./pages/CandidateDocumentsPage').then((m) => ({ default: m.CandidateDocumentsPage })));
 const ApplicationsPage = lazy(() => import('./pages/ApplicationsPage').then((m) => ({ default: m.ApplicationsPage })));
@@ -138,7 +139,7 @@ function App() {
                   <Route path="/candidates/compare" element={<PermissionGate requiredPermission="CANDIDATE_VIEW"><CandidateComparisonPage /></PermissionGate>} />
                   <Route path="/candidates/:id" element={<PermissionGate requiredPermission="CANDIDATE_VIEW"><CandidateDetailPage /></PermissionGate>} />
                   <Route path="/candidates/:id/documents" element={<PermissionGate requiredPermission="CANDIDATE_VIEW"><CandidateDocumentsPage /></PermissionGate>} />
-                  <Route path="/cv-bank" element={<Navigate to="/candidates" replace />} />
+                  <Route path="/cv-bank" element={<PermissionGate requiredPermission="CANDIDATE_VIEW"><CVBankPage /></PermissionGate>} />
                   <Route path="/sourcing-match" element={<PermissionGate requiredPermission="CANDIDATE_VIEW"><TalentPoolPage /></PermissionGate>} />
                   <Route path="/talent-pool" element={<Navigate to="/sourcing-match" replace />} />
                   <Route path="/talent-pools" element={<Navigate to="/sourcing-match" replace />} />

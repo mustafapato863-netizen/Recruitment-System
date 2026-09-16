@@ -331,13 +331,22 @@ export class AccessControlService {
       select: { configJson: true },
     });
     const config = integration?.configJson as NavigationSettingsConfig | null | undefined;
+    const isAdmin = roleCodes.includes('ADMINISTRATOR');
 
     return NAVIGATION_CATALOG.map((item) => {
       const override = config?.items?.[item.key] || {};
       const roleVisibility = roleCodes
         .map((code) => config?.roleVisibility?.[code]?.[item.key])
         .filter((value): value is boolean => typeof value === 'boolean');
-      const visible = roleVisibility.length > 0 ? roleVisibility.some(Boolean) : (override.visible ?? item.visible);
+
+      let visible = override.visible ?? item.visible;
+      if (roleVisibility.length > 0) {
+        visible = roleVisibility.some(Boolean);
+      } else if (isAdmin) {
+        // Administrator always retains visibility unless an explicit override was saved for ADMINISTRATOR
+        visible = config?.roleVisibility?.['ADMINISTRATOR']?.[item.key] ?? true;
+      }
+
       return {
         ...item,
         ...override,
