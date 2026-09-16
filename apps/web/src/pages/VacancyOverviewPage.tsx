@@ -12,7 +12,6 @@ import { Select } from '../components/ui/Select';
 import { Textarea } from '../components/ui/Textarea';
 import { PageState } from '../components/ui/PageState';
 import { useSetBreadcrumbTitle } from '../context/BreadcrumbContext';
-import { QuickGuideTrigger } from '../quickguide';
 import { getVacancyBlockingReasons } from '../utils/vacancyActivation';
 import { ImportJobDescriptionModal } from '../components/vacancy/ImportJobDescriptionModal';
 
@@ -43,7 +42,6 @@ export function VacancyOverviewPage() {
   const [interviewers, setInterviewers] = useState<InterviewerUser[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'applications' | 'pipeline' | 'interviews' | 'posting' | 'activity' | 'settings'>('overview');
-  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isAddApplicantModalOpen, setIsAddApplicantModalOpen] = useState(false);
   const [assignRecruiterOpen, setAssignRecruiterOpen] = useState(false);
@@ -439,7 +437,6 @@ export function VacancyOverviewPage() {
             <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
               {statusLabel}
             </span>
-            <QuickGuideTrigger />
           </div>
           <p className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">
             {departmentName} &bull; {locationText} &bull; {vacancy?.vacancyRequest?.employmentType || 'Full-time'} &bull; Created {vacancy?.createdAt ? new Date(vacancy.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}
@@ -504,17 +501,6 @@ export function VacancyOverviewPage() {
         </div>
 
         <div className="flex items-center gap-2.5">
-          <a
-            href={`/careers/${encodeURIComponent(vacancy?.organizationCode || '')}/jobs/${encodeURIComponent(vacancy?.vacancyCode || id || '')}`}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 rounded-xl text-xs font-bold hover:bg-emerald-100 dark:hover:bg-emerald-900/50 transition shadow-xs cursor-pointer"
-            title="Preview live public career application page"
-          >
-            <Icon name="external-link" size={13} />
-            <span>Public Preview</span>
-          </a>
-
           {canAssignRecruiter && (
             <Button
               variant={isRecruiterAssigned ? 'secondary' : 'primary'}
@@ -535,15 +521,6 @@ export function VacancyOverviewPage() {
           >
             <Icon name="plus" size={14} />
             <span>Add Candidate</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setIsShareModalOpen(true)}
-            className="inline-flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs cursor-pointer"
-          >
-            <span>Share</span>
-            <Icon name="share" size={13} className="text-slate-400" />
           </button>
 
           <button
@@ -1448,14 +1425,6 @@ export function VacancyOverviewPage() {
                 {departmentName} &bull; {locationText} &bull; Requisition Code: {vacancy?.vacancyCode || '—'}
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => setIsShareModalOpen(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer shrink-0"
-            >
-              <Icon name="share" size={13} />
-              <span>Share Job Link</span>
-            </button>
           </div>
 
           <div className="space-y-4">
@@ -1552,50 +1521,6 @@ export function VacancyOverviewPage() {
           </div>
         </div>
       )}
-
-      {/* ── Share Modal ── */}
-      <Modal
-        isOpen={isShareModalOpen}
-        onClose={() => setIsShareModalOpen(false)}
-        title="Share Job Position"
-        maxWidthClass="max-w-md"
-      >
-        <div className="space-y-4">
-          <p className="text-xs text-slate-500">
-            Share this live career portal link with candidates or publish directly to external job boards.
-          </p>
-          <div className="flex items-center gap-2">
-            <Input
-              readOnly
-              value={`${typeof window !== 'undefined' ? window.location.origin : ''}/careers/${encodeURIComponent(vacancy?.organizationCode || '')}/jobs/${encodeURIComponent(vacancy?.vacancyCode || id || '')}`}
-              className="text-xs font-mono select-all"
-            />
-            <button
-              type="button"
-              onClick={() => {
-                const url = `${window.location.origin}/careers/${encodeURIComponent(vacancy?.organizationCode || '')}/jobs/${encodeURIComponent(vacancy?.vacancyCode || id || '')}`;
-                void navigator.clipboard?.writeText(url);
-                showToast('Link copied to clipboard!');
-                setIsShareModalOpen(false);
-              }}
-              className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition cursor-pointer shrink-0"
-            >
-              Copy
-            </button>
-          </div>
-          <div className="pt-2 flex justify-end">
-            <a
-              href={`/careers/${encodeURIComponent(vacancy?.organizationCode || '')}/jobs/${encodeURIComponent(vacancy?.vacancyCode || id || '')}`}
-              target="_blank"
-              rel="noreferrer"
-              className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline"
-            >
-              <span>Open career page in new tab</span>
-              <Icon name="external-link" size={13} />
-            </a>
-          </div>
-        </div>
-      </Modal>
 
       {/* ── Real Vacancy Edit Modal (E9.6) ── */}
       <Modal
