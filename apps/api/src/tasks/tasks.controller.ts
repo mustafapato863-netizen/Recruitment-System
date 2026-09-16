@@ -19,7 +19,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { TenantScopedGuard } from '../common/guards/tenant-scoped.guard';
 import { TenantResource } from '../common/decorators/tenant-resource.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { RequirePermissions } from '../common/decorators/require-permissions.decorator';
+import { RequirePermissions, RequireAnyPermissions } from '../common/decorators/require-permissions.decorator';
 import type { AuthUser } from '@recruitflow/contracts';
 
 @UseGuards(JwtAuthGuard)
@@ -66,9 +66,9 @@ export class TasksController {
     return this.tasksService.getOne(user.organizationId, user.userId, id);
   }
 
-  /** POST /tasks — create and assign a new task (Managers / Admins only; Recruiters are restricted) */
+  /** POST /tasks — create and assign a new task (Managers / Team Leads / Admins; Recruiters are restricted) */
   @Post()
-  @RequirePermissions('VACANCY_MANAGE')
+  @RequireAnyPermissions('VACANCY_MANAGE', 'VACANCY_ASSIGN', 'VACANCY_REASSIGN')
   create(@CurrentUser() user: AuthUser, @Body() dto: CreateTaskDto) {
     return this.tasksService.create(user.organizationId, user.userId, dto, user);
   }

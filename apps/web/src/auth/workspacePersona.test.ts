@@ -23,6 +23,7 @@ describe('isEmployeeWorkspaceUser', () => {
 
   it('keeps operational recruitment roles in the full workspace', () => {
     expect(isEmployeeWorkspaceUser(makeUser('RECRUITER', 'Recruiter', ['VACANCY_VIEW', 'APPLICATION_VIEW']))).toBe(false);
+    expect(isEmployeeWorkspaceUser(makeUser('TEAM_LEADER', 'Recruitment Team Leader', ['VACANCY_VIEW', 'VACANCY_ASSIGN']))).toBe(false);
   });
 
   it('does not let an added employee role hide administrator navigation', () => {
