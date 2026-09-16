@@ -168,8 +168,11 @@ export function parseJobDescriptionText(text: string, fileName?: string): Parsed
     /(?:Location|Work Location|Hospital Branch|Branch)\s*[:\t]?\s*([^\n\r]+)/i,
   );
   if (locationMatch?.[1]?.trim()) {
-    location = cleanLine(locationMatch[1].trim()).slice(0, 80);
+    location = cleanLine(locationMatch[1].trim())
+      .replace(/\boffshore\b/gi, 'Cairo')
+      .slice(0, 80);
   }
+
 
   // 3. Department Extraction
   let department = 'Clinical Services';

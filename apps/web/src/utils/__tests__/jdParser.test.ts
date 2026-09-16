@@ -43,7 +43,7 @@ Arabic (Mandatory)
     const parsed = parseJobDescriptionText(sampleSghJdText, 'HRIS performance Specialist.docx');
 
     expect(parsed.title).toBe('HRIS Performance Specialist');
-    expect(parsed.location).toBe('SGH, UAE, offshore');
+    expect(parsed.location).toBe('SGH, UAE, Cairo');
     expect(parsed.department).toBe('Human Resources');
     expect(parsed.minExperienceYears).toBe(3);
     expect(parsed.jobSummary).toContain('Develop, maintain, and enhance HR systems and digital solutions');
