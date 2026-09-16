@@ -1,16 +1,18 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import type { Candidate, CandidateMetrics, PaginatedResult } from '@recruitflow/contracts';
-import { downloadApi, fetchApi, postApi } from '../api/client';
+import type { Candidate, CandidateMetrics, PaginatedResult, Vacancy } from '@recruitflow/contracts';
+import { downloadApi, fetchApi, postApi, patchApi, deleteApi, getApi } from '../api/client';
 import { getInitials } from '../utils/format';
 import { saveBlob } from '../utils/download';
 import {
   Alert,
   Button,
+  ConfirmDialog,
   FormField,
   Input,
   Modal,
   Select,
+  Textarea,
 } from '../components/ui';
 import { Icon } from '../components/Icon';
 import { useAuth } from '../auth/AuthContext';
@@ -19,6 +21,21 @@ import { useMasterDataOptions } from '../hooks/useMasterDataOptions';
 import { CANDIDATE_SOURCE_FALLBACK } from '../data/masterDataDefaults';
 import { QuickGuideTrigger } from '../quickguide';
 import './PageEnhancementsV2.css';
+
+interface EditCandidateForm {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  currentTitle: string;
+  currentCompany: string;
+  experienceYears: number | string;
+  location: string;
+  status: 'Active' | 'Blacklisted' | 'Archived';
+  source: string;
+  skills: string[];
+  summary: string;
+}
 
 interface CandidateForm {
   firstName: string;
@@ -69,6 +86,53 @@ export function CandidatesPage() {
   const [error, setError] = useState('');
   const [selectedCandidateIds, setSelectedCandidateIds] = useState<string[]>([]);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  // Active row action menu
+  const [activeMenuCandidateId, setActiveMenuCandidateId] = useState<string | null>(null);
+
+  // Assign to Vacancy Modal state
+  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [assignCandidate, setAssignCandidate] = useState<Candidate | null>(null);
+  const [assignCandidateIds, setAssignCandidateIds] = useState<string[]>([]);
+  const [vacancies, setVacancies] = useState<Vacancy[]>([]);
+  const [vacanciesLoading, setVacanciesLoading] = useState(false);
+  const [selectedVacancyId, setSelectedVacancyId] = useState('');
+  const [assignSubmitting, setAssignSubmitting] = useState(false);
+  const [assignError, setAssignError] = useState<string | null>(null);
+  const [vacancySearch, setVacancySearch] = useState('');
+
+  // Edit Candidate Modal state
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editCandidate, setEditCandidate] = useState<Candidate | null>(null);
+  const [editForm, setEditForm] = useState<EditCandidateForm>({
+    firstName: '',
+    lastName: '',
+    email: '',
+    phone: '',
+    currentTitle: '',
+    currentCompany: '',
+    experienceYears: '',
+    location: '',
+    status: 'Active',
+    source: 'Direct Sourcing',
+    skills: [],
+    summary: '',
+  });
+  const [editSkillInput, setEditSkillInput] = useState('');
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
+  // Delete Candidate state
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [deleteCandidate, setDeleteCandidate] = useState<Candidate | null>(null);
+  const [deleteSubmitting, setDeleteSubmitting] = useState(false);
+
+  // Bulk Delete state
+  const [isBulkDeleteDialogOpen, setIsBulkDeleteDialogOpen] = useState(false);
+  const [bulkDeleteSubmitting, setBulkDeleteSubmitting] = useState(false);
+
+  // Downloading CV state
+  const [downloadingCandidateId, setDownloadingCandidateId] = useState<string | null>(null);
 
   // Add Candidate Modal state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -174,6 +238,290 @@ export function CandidatesPage() {
     e.preventDefault();
     setPage(1);
     void load(1);
+  };
+
+  // Close row action menu on outside click or escape
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target?.closest('.rf-row-action-menu-container')) {
+        setActiveMenuCandidateId(null);
+      }
+    };
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setActiveMenuCandidateId(null);
+      }
+    };
+    document.addEventListener('click', handleOutsideClick);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('click', handleOutsideClick);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
+  // 1. Assign to Vacancy
+  const openAssignModal = async (candidate?: Candidate) => {
+    setActiveMenuCandidateId(null);
+    setAssignError(null);
+    setVacancySearch('');
+    if (candidate) {
+      setAssignCandidate(candidate);
+      setAssignCandidateIds([candidate.id]);
+    } else {
+      setAssignCandidate(null);
+      setAssignCandidateIds(selectedCandidateIds);
+    }
+    setIsAssignModalOpen(true);
+
+    if (vacancies.length === 0) {
+      setVacanciesLoading(true);
+      try {
+        const res = await getApi<Vacancy[] | { data: Vacancy[] }>('/vacancies?pageSize=100');
+        const list = Array.isArray(res) ? res : res.data ?? [];
+        setVacancies(list);
+        if (list.length > 0) {
+          setSelectedVacancyId((prev) => prev || list[0].id);
+        }
+      } catch (err: unknown) {
+        setAssignError((err as Error).message || 'Failed to load vacancies list.');
+      } finally {
+        setVacanciesLoading(false);
+      }
+    }
+  };
+
+  const handleConfirmAssign = async () => {
+    if (!selectedVacancyId) {
+      setAssignError('Please select a target job requisition.');
+      return;
+    }
+    setAssignSubmitting(true);
+    setAssignError(null);
+    try {
+      const targetIds = assignCandidate ? [assignCandidate.id] : assignCandidateIds;
+      const results = await Promise.allSettled(
+        targetIds.map((cId) =>
+          postApi('/applications', {
+            candidateId: cId,
+            vacancyId: selectedVacancyId,
+          }),
+        ),
+      );
+      const successCount = results.filter((r) => r.status === 'fulfilled').length;
+      const failedCount = results.filter((r) => r.status === 'rejected').length;
+
+      const targetVacancy = vacancies.find((v) => v.id === selectedVacancyId);
+      const vacTitle = targetVacancy?.title || targetVacancy?.position?.title || 'Requisition';
+
+      if (successCount > 0) {
+        showToast(
+          `✓ Successfully assigned ${
+            assignCandidate
+              ? `${assignCandidate.firstName} ${assignCandidate.lastName}`
+              : `${successCount} candidate${successCount > 1 ? 's' : ''}`
+          } to ${vacTitle}${failedCount > 0 ? ` (${failedCount} already applied)` : ''}`,
+        );
+        setIsAssignModalOpen(false);
+      } else {
+        throw new Error(
+          failedCount > 0
+            ? 'Selected candidate(s) already have an active application for this requisition.'
+            : 'Failed to assign candidate.',
+        );
+      }
+    } catch (err: unknown) {
+      setAssignError((err as Error).message || 'Failed to assign candidate to requisition.');
+    } finally {
+      setAssignSubmitting(false);
+    }
+  };
+
+  // 2. Download CV
+  const handleDownloadCv = async (c: Candidate) => {
+    setActiveMenuCandidateId(null);
+    setDownloadingCandidateId(c.id);
+    showToast(`Locating CV document for ${c.firstName} ${c.lastName}...`);
+
+    try {
+      let downloaded = false;
+      try {
+        const docs = await getApi<Array<{ id: string; fileName: string; documentType?: string }>>(
+          `/documents/candidate/${c.id}`,
+        );
+        if (Array.isArray(docs) && docs.length > 0) {
+          const cvDoc = docs.find((d) => d.documentType === 'CV') || docs[0];
+          const blob = await downloadApi(`/documents/${cvDoc.id}/download`);
+          saveBlob(blob, cvDoc.fileName || `${c.firstName}_${c.lastName}_CV.pdf`);
+          downloaded = true;
+          showToast(`✓ Downloaded ${cvDoc.fileName}`);
+        }
+      } catch {
+        // Fall back to generating clean formatted profile CV text if no physical file on server
+      }
+
+      if (!downloaded) {
+        const cvLines = [
+          '================================================================================',
+          `                     ${c.firstName.toUpperCase()} ${c.lastName.toUpperCase()} — CURRICULUM VITAE`,
+          '================================================================================',
+          `Candidate Code: ${c.candidateCode || 'N/A'}`,
+          `Email:          ${c.email || 'N/A'}`,
+          `Phone:          ${c.phone || 'N/A'}`,
+          `Current Title:  ${c.currentTitle || 'Not recorded'}`,
+          `Company:        ${c.currentCompany || 'Not recorded'}`,
+          `Experience:     ${c.experienceYears ? `${c.experienceYears} Years` : 'Not specified'}`,
+          `Location:       ${c.location || 'Not specified'}`,
+          `Status:         ${c.status || 'Active'}`,
+          `Source:         ${c.source || 'Direct Intake'}`,
+          '',
+          '--------------------------------------------------------------------------------',
+          'PROFESSIONAL SUMMARY',
+          '--------------------------------------------------------------------------------',
+          c.summary?.trim() || 'No professional summary recorded.',
+          '',
+          '--------------------------------------------------------------------------------',
+          'SKILLS & COMPETENCIES',
+          '--------------------------------------------------------------------------------',
+          c.skills && c.skills.length > 0
+            ? c.skills.map((s) => `• ${s}`).join('\n')
+            : 'No skills recorded.',
+          '',
+          '--------------------------------------------------------------------------------',
+          'LANGUAGES',
+          '--------------------------------------------------------------------------------',
+          c.languages && c.languages.length > 0 ? c.languages.join(', ') : 'Not specified',
+          '',
+          '--------------------------------------------------------------------------------',
+          'CERTIFICATIONS & LICENSES',
+          '--------------------------------------------------------------------------------',
+          c.certifications && c.certifications.length > 0
+            ? c.certifications.map((cert) => `• ${cert}`).join('\n')
+            : 'None recorded',
+          '',
+          '================================================================================',
+          `RecruitFlow ATS • Saudi German Health • Generated ${new Date().toLocaleDateString()}`,
+          '================================================================================',
+        ];
+
+        const blob = new Blob([cvLines.join('\n')], { type: 'text/plain;charset=utf-8' });
+        saveBlob(blob, `${c.firstName}_${c.lastName}_Profile_CV.txt`);
+        showToast(`✓ Downloaded CV profile document for ${c.firstName} ${c.lastName}`);
+      }
+    } catch (err: unknown) {
+      showToast(`Failed to download CV: ${(err as Error).message}`);
+    } finally {
+      setDownloadingCandidateId(null);
+    }
+  };
+
+  // 3. Edit Candidate
+  const openEditModal = (c: Candidate) => {
+    setActiveMenuCandidateId(null);
+    setEditCandidate(c);
+    setEditForm({
+      firstName: c.firstName || '',
+      lastName: c.lastName || '',
+      email: c.email || '',
+      phone: c.phone || '',
+      currentTitle: c.currentTitle || '',
+      currentCompany: c.currentCompany || '',
+      experienceYears: c.experienceYears ?? '',
+      location: c.location || '',
+      status: c.status || 'Active',
+      source: c.source || 'Direct Sourcing',
+      skills: Array.isArray(c.skills) ? [...c.skills] : [],
+      summary: c.summary || '',
+    });
+    setEditSkillInput('');
+    setEditError(null);
+    setIsEditModalOpen(true);
+  };
+
+  const handleSaveEdit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!editCandidate) return;
+    if (!editForm.firstName.trim() || !editForm.lastName.trim()) {
+      setEditError('First and last name are required.');
+      return;
+    }
+
+    setEditSubmitting(true);
+    setEditError(null);
+
+    try {
+      const payload: Partial<Candidate> = {
+        firstName: editForm.firstName.trim(),
+        lastName: editForm.lastName.trim(),
+        email: editForm.email.trim() || null,
+        phone: editForm.phone.trim() || null,
+        currentTitle: editForm.currentTitle.trim() || null,
+        currentCompany: editForm.currentCompany.trim() || null,
+        experienceYears: editForm.experienceYears !== '' ? Number(editForm.experienceYears) : null,
+        location: editForm.location.trim() || null,
+        status: editForm.status,
+        source: editForm.source.trim() || null,
+        skills: editForm.skills,
+        summary: editForm.summary.trim() || null,
+      };
+
+      const updated = await patchApi<Candidate>(`/candidates/${editCandidate.id}`, payload);
+      setCandidates((prev) =>
+        prev.map((item) => (item.id === updated.id ? { ...item, ...updated } : item)),
+      );
+      setIsEditModalOpen(false);
+      showToast(`✓ Candidate ${updated.firstName} ${updated.lastName} updated successfully`);
+    } catch (err: unknown) {
+      setEditError((err as Error).message || 'Failed to update candidate record.');
+    } finally {
+      setEditSubmitting(false);
+    }
+  };
+
+  // 4. Delete Candidate
+  const openDeleteDialog = (c: Candidate) => {
+    setActiveMenuCandidateId(null);
+    setDeleteCandidate(c);
+    setIsDeleteDialogOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteCandidate) return;
+    setDeleteSubmitting(true);
+    try {
+      await deleteApi(`/candidates/${deleteCandidate.id}`);
+      setCandidates((prev) => prev.filter((item) => item.id !== deleteCandidate.id));
+      setSelectedCandidateIds((prev) => prev.filter((id) => id !== deleteCandidate.id));
+      setTotalCount((prev) => Math.max(0, prev - 1));
+      setIsDeleteDialogOpen(false);
+      showToast(`✓ Candidate ${deleteCandidate.firstName} ${deleteCandidate.lastName} deleted successfully`);
+    } catch (err: unknown) {
+      showToast(`Failed to delete candidate: ${(err as Error).message}`);
+      setIsDeleteDialogOpen(false);
+    } finally {
+      setDeleteSubmitting(false);
+    }
+  };
+
+  // 5. Bulk Delete
+  const handleConfirmBulkDelete = async () => {
+    if (selectedCandidateIds.length === 0) return;
+    setBulkDeleteSubmitting(true);
+    try {
+      const count = selectedCandidateIds.length;
+      await Promise.allSettled(selectedCandidateIds.map((id) => deleteApi(`/candidates/${id}`)));
+      setCandidates((prev) => prev.filter((item) => !selectedCandidateIds.includes(item.id)));
+      setTotalCount((prev) => Math.max(0, prev - count));
+      setSelectedCandidateIds([]);
+      setIsBulkDeleteDialogOpen(false);
+      showToast(`✓ Deleted ${count} candidate records successfully`);
+    } catch (err: unknown) {
+      showToast(`Failed to delete candidates: ${(err as Error).message}`);
+      setIsBulkDeleteDialogOpen(false);
+    } finally {
+      setBulkDeleteSubmitting(false);
+    }
   };
 
   const handleCreateCandidate = async (e: FormEvent) => {
@@ -500,8 +848,17 @@ export function CandidatesPage() {
         </div>
 
         {selectedCandidateIds.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2.5 bg-blue-50 dark:bg-blue-950/40 px-3.5 py-1.5 rounded-xl text-xs text-blue-700 dark:text-blue-300 font-bold animate-fade-in border border-blue-200 dark:border-blue-900/60">
+          <div className="flex flex-wrap items-center gap-2.5 bg-blue-50 dark:bg-blue-950/40 px-3.5 py-2 rounded-xl text-xs text-blue-700 dark:text-blue-300 font-bold animate-fade-in border border-blue-200 dark:border-blue-900/60">
             <span>{selectedCandidateIds.length} candidate{selectedCandidateIds.length !== 1 ? 's' : ''} selected</span>
+            <button
+              type="button"
+              onClick={() => void openAssignModal()}
+              className="inline-flex items-center gap-1.5 px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition shadow-xs cursor-pointer"
+              title="Assign selected candidates to a job vacancy"
+            >
+              <Icon name="briefcase" size={12} />
+              <span>Assign to Vacancy</span>
+            </button>
             <button
               type="button"
               onClick={() => navigate(`/candidates/compare?ids=${selectedCandidateIds.join(',')}`)}
@@ -509,7 +866,16 @@ export function CandidatesPage() {
               title="Compare selected candidates side-by-side"
             >
               <Icon name="grid-squares" size={12} />
-              <span>Compare Selected ({selectedCandidateIds.length})</span>
+              <span>Compare Selected</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsBulkDeleteDialogOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition shadow-xs cursor-pointer"
+              title="Delete selected candidates"
+            >
+              <Icon name="trash-2" size={12} />
+              <span>Delete Selected</span>
             </button>
             <button
               type="button"
@@ -518,7 +884,7 @@ export function CandidatesPage() {
             >
               Add to Pool
             </button>
-            <span>&bull;</span>
+            <span>•</span>
             <button
               type="button"
               onClick={() => setSelectedCandidateIds([])}
@@ -675,7 +1041,7 @@ export function CandidatesPage() {
                               {c.firstName} {c.lastName}
                             </span>
                             <span className="block text-[11px] text-slate-600 dark:text-slate-400 truncate mt-0.5">
-                              {c.email} {c.phone ? `&bull; ${c.phone}` : ''}
+                              {c.email} {c.phone ? ` • ${c.phone}` : ''}
                             </span>
                           </div>
                         </div>
@@ -739,21 +1105,92 @@ export function CandidatesPage() {
 
                       {/* Actions */}
                       <td className="py-3.5 pr-4 text-right" onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center justify-end gap-1.5">
+                        <div className="flex items-center justify-end gap-1.5 rf-row-action-menu-container relative">
                           <Link
                             to={`/candidates/${c.id}`}
                             className="px-3 py-1 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-950/50 dark:hover:text-blue-400 transition"
                           >
                             Open
                           </Link>
-                          <button
-                            type="button"
-                            onClick={() => showToast(`Options for ${c.firstName} ${c.lastName}`)}
-                            aria-label={`More options for ${c.firstName} ${c.lastName}`}
-                            className="p-1 rounded-lg text-slate-600 dark:text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
-                          >
-                            <Icon name="more-horizontal" size={14} />
-                          </button>
+                          <div className="relative">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setActiveMenuCandidateId((prev) => (prev === c.id ? null : c.id));
+                              }}
+                              aria-label={`More options for ${c.firstName} ${c.lastName}`}
+                              aria-expanded={activeMenuCandidateId === c.id}
+                              className={`p-1.5 rounded-lg transition cursor-pointer ${
+                                activeMenuCandidateId === c.id
+                                  ? 'bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400 ring-2 ring-blue-500/20'
+                                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
+                              }`}
+                            >
+                              <Icon name="more-horizontal" size={15} />
+                            </button>
+
+                            {/* Floating Action Menu Popover */}
+                            {activeMenuCandidateId === c.id && (
+                              <div
+                                onClick={(e) => e.stopPropagation()}
+                                className={`absolute right-0 w-52 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-2xl z-50 py-1.5 text-xs animate-fade-in divide-y divide-slate-100 dark:divide-slate-800 text-left ${
+                                  idx >= candidates.length - 1 && candidates.length >= 3
+                                    ? 'bottom-full mb-1.5'
+                                    : 'top-full mt-1.5'
+                                }`}
+                              >
+                                <div className="py-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => void openAssignModal(c)}
+                                    className="w-full px-3.5 py-2 text-left flex items-center gap-2.5 text-slate-700 dark:text-slate-200 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-950/40 dark:hover:text-blue-400 font-semibold transition cursor-pointer"
+                                  >
+                                    <Icon name="briefcase" size={14} className="text-blue-500 shrink-0" />
+                                    <span>Assign to Vacancy</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={downloadingCandidateId === c.id}
+                                    onClick={() => void handleDownloadCv(c)}
+                                    className="w-full px-3.5 py-2 text-left flex items-center gap-2.5 text-slate-700 dark:text-slate-200 hover:bg-emerald-50 hover:text-emerald-600 dark:hover:bg-emerald-950/40 dark:hover:text-emerald-400 font-semibold transition cursor-pointer disabled:opacity-50"
+                                  >
+                                    <Icon
+                                      name={downloadingCandidateId === c.id ? 'refresh-cw' : 'download'}
+                                      size={14}
+                                      className={`text-emerald-500 shrink-0 ${downloadingCandidateId === c.id ? 'animate-spin' : ''}`}
+                                    />
+                                    <span>{downloadingCandidateId === c.id ? 'Downloading CV...' : 'Download CV'}</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => openEditModal(c)}
+                                    className="w-full px-3.5 py-2 text-left flex items-center gap-2.5 text-slate-700 dark:text-slate-200 hover:bg-amber-50 hover:text-amber-600 dark:hover:bg-amber-950/40 dark:hover:text-amber-400 font-semibold transition cursor-pointer"
+                                  >
+                                    <Icon name="edit" size={14} className="text-amber-500 shrink-0" />
+                                    <span>Edit Details</span>
+                                  </button>
+                                  <Link
+                                    to={`/candidates/${c.id}`}
+                                    className="w-full px-3.5 py-2 text-left flex items-center gap-2.5 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 font-semibold transition"
+                                  >
+                                    <Icon name="external-link" size={14} className="text-slate-400 shrink-0" />
+                                    <span>Full 360° Profile</span>
+                                  </Link>
+                                </div>
+                                <div className="py-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => openDeleteDialog(c)}
+                                    className="w-full px-3.5 py-2 text-left flex items-center gap-2.5 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 font-semibold transition cursor-pointer"
+                                  >
+                                    <Icon name="trash-2" size={14} className="text-rose-500 shrink-0" />
+                                    <span>Delete Candidate</span>
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         </div>
                       </td>
                     </tr>
@@ -921,6 +1358,430 @@ export function CandidatesPage() {
             </form>
           </div>
         </Modal>
+      )}
+
+      {/* ── Assign to Vacancy Modal ── */}
+      {isAssignModalOpen && (
+        <Modal
+          isOpen={isAssignModalOpen}
+          title={
+            assignCandidate
+              ? `Assign Candidate — ${assignCandidate.firstName} ${assignCandidate.lastName}`
+              : `Assign ${assignCandidateIds.length} Candidates to Requisition`
+          }
+          onClose={() => setIsAssignModalOpen(false)}
+          maxWidthClass="max-w-xl"
+        >
+          <div className="p-2 space-y-4">
+            <div className="flex items-center gap-3 p-3.5 rounded-xl bg-blue-50/50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900/40">
+              <div className="w-9 h-9 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0">
+                <Icon name="briefcase" size={18} />
+              </div>
+              <div className="min-w-0">
+                <h4 className="text-xs font-bold text-slate-900 dark:text-white">
+                  {assignCandidate
+                    ? `Assign ${assignCandidate.firstName} ${assignCandidate.lastName} (${assignCandidate.candidateCode || 'Candidate'})`
+                    : `Assign ${assignCandidateIds.length} Selected Candidates`}
+                </h4>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                  An active application record will be generated in the selected requisition pipeline.
+                </p>
+              </div>
+            </div>
+
+            {assignError && (
+              <Alert tone="danger" title="Assignment Error">
+                {assignError}
+              </Alert>
+            )}
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                Target Requisition / Vacancy *
+              </label>
+              <div className="relative mb-2.5">
+                <Icon
+                  name="search"
+                  size={14}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+                />
+                <input
+                  type="text"
+                  placeholder="Search by role title, code, or department..."
+                  value={vacancySearch}
+                  onChange={(e) => setVacancySearch(e.target.value)}
+                  className="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white"
+                />
+              </div>
+
+              {vacanciesLoading ? (
+                <div className="p-8 text-center text-xs text-slate-500">
+                  <Icon name="refresh-cw" size={18} className="animate-spin mx-auto mb-2 text-blue-600" />
+                  <span>Loading open requisitions...</span>
+                </div>
+              ) : vacancies.length === 0 ? (
+                <div className="p-6 text-center text-xs text-slate-500 border border-dashed rounded-xl">
+                  No active requisitions found. Please verify open vacancies exist.
+                </div>
+              ) : (
+                <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
+                  {vacancies
+                    .filter((v) => {
+                      if (!vacancySearch.trim()) return true;
+                      const q = vacancySearch.toLowerCase();
+                      const t = (v.title || v.position?.title || '').toLowerCase();
+                      const d = (v.department || '').toLowerCase();
+                      const c = (v.vacancyCode || v.position?.code || '').toLowerCase();
+                      return t.includes(q) || d.includes(q) || c.includes(q);
+                    })
+                    .map((v) => {
+                      const isSelected = selectedVacancyId === v.id;
+                      const title = v.title || v.position?.title || 'Open Requisition';
+                      const code = v.vacancyCode || v.position?.code || 'VAC';
+
+                      return (
+                        <div
+                          key={v.id}
+                          onClick={() => setSelectedVacancyId(v.id)}
+                          className={`p-3 rounded-xl border transition cursor-pointer flex items-center justify-between gap-3 ${
+                            isSelected
+                              ? 'border-blue-500 bg-blue-50/70 dark:bg-blue-950/40 dark:border-blue-500'
+                              : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900'
+                          }`}
+                        >
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2">
+                              <strong className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                                {title}
+                              </strong>
+                              <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 shrink-0">
+                                {code}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 flex items-center gap-2 flex-wrap">
+                              <span>{v.department || 'Clinical Services'}</span>
+                              <span>•</span>
+                              <span>{v.location || 'Hospital'}</span>
+                              <span>•</span>
+                              <span className="text-emerald-600 dark:text-emerald-400 font-semibold">{v.status}</span>
+                            </div>
+                          </div>
+                          <div
+                            className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 ${
+                              isSelected
+                                ? 'border-blue-600 bg-blue-600 text-white'
+                                : 'border-slate-300 dark:border-slate-600'
+                            }`}
+                          >
+                            {isSelected && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-slate-100 dark:border-slate-800">
+              <Button
+                variant="ghost"
+                size="sm"
+                type="button"
+                disabled={assignSubmitting}
+                onClick={() => setIsAssignModalOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                size="sm"
+                type="button"
+                disabled={!selectedVacancyId || assignSubmitting}
+                loading={assignSubmitting}
+                loadingLabel="Assigning..."
+                onClick={() => void handleConfirmAssign()}
+              >
+                Confirm Assignment
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── Edit Candidate Modal ── */}
+      {isEditModalOpen && editCandidate && (
+        <Modal
+          isOpen={isEditModalOpen}
+          title={`Edit Candidate — ${editCandidate.firstName} ${editCandidate.lastName}`}
+          onClose={() => setIsEditModalOpen(false)}
+          maxWidthClass="max-w-2xl"
+        >
+          <div className="p-2 space-y-4">
+            <div className="flex items-center gap-3 p-3.5 rounded-xl bg-amber-50/50 dark:bg-amber-950/30 border border-amber-100 dark:border-amber-900/40">
+              <div className="w-9 h-9 rounded-xl bg-amber-600 text-white flex items-center justify-center shrink-0">
+                <Icon name="edit" size={18} />
+              </div>
+              <div className="min-w-0">
+                <h4 className="text-xs font-bold text-slate-900 dark:text-white">
+                  Update Candidate Identity Details
+                </h4>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                  Changes will sync across matching scorecards, talent pool records, and active pipeline applications.
+                </p>
+              </div>
+            </div>
+
+            {editError && (
+              <Alert tone="danger" title="Validation Error">
+                {editError}
+              </Alert>
+            )}
+
+            <form className="space-y-3.5" onSubmit={(e) => void handleSaveEdit(e)}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <FormField id="edit-cand-fname" label="First Name" required>
+                  <Input
+                    id="edit-cand-fname"
+                    required
+                    placeholder="First Name"
+                    value={editForm.firstName}
+                    onChange={(e) => setEditForm({ ...editForm, firstName: e.target.value })}
+                  />
+                </FormField>
+
+                <FormField id="edit-cand-lname" label="Last Name" required>
+                  <Input
+                    id="edit-cand-lname"
+                    required
+                    placeholder="Last Name"
+                    value={editForm.lastName}
+                    onChange={(e) => setEditForm({ ...editForm, lastName: e.target.value })}
+                  />
+                </FormField>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <FormField id="edit-cand-email" label="Email Address">
+                  <Input
+                    id="edit-cand-email"
+                    type="email"
+                    placeholder="e.g. candidate@example.com"
+                    value={editForm.email}
+                    onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                  />
+                </FormField>
+
+                <FormField id="edit-cand-phone" label="Phone Number">
+                  <Input
+                    id="edit-cand-phone"
+                    placeholder="e.g. +966 50 000 0000"
+                    value={editForm.phone}
+                    onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                  />
+                </FormField>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <FormField id="edit-cand-title" label="Current Job Title">
+                  <Input
+                    id="edit-cand-title"
+                    placeholder="e.g. HRIS Performance Specialist"
+                    value={editForm.currentTitle}
+                    onChange={(e) => setEditForm({ ...editForm, currentTitle: e.target.value })}
+                  />
+                </FormField>
+
+                <FormField id="edit-cand-company" label="Current Company">
+                  <Input
+                    id="edit-cand-company"
+                    placeholder="e.g. Saudi German Health"
+                    value={editForm.currentCompany}
+                    onChange={(e) => setEditForm({ ...editForm, currentCompany: e.target.value })}
+                  />
+                </FormField>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <FormField id="edit-cand-exp" label="Total Experience (Years)">
+                  <Input
+                    id="edit-cand-exp"
+                    type="number"
+                    min={0}
+                    max={60}
+                    placeholder="e.g. 5"
+                    value={editForm.experienceYears}
+                    onChange={(e) => setEditForm({ ...editForm, experienceYears: e.target.value })}
+                  />
+                </FormField>
+
+                <FormField id="edit-cand-loc" label="Location / City">
+                  <Input
+                    id="edit-cand-loc"
+                    placeholder="e.g. Riyadh, KSA"
+                    value={editForm.location}
+                    onChange={(e) => setEditForm({ ...editForm, location: e.target.value })}
+                  />
+                </FormField>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <FormField id="edit-cand-status" label="Record Status">
+                  <Select
+                    id="edit-cand-status"
+                    value={editForm.status}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, status: e.target.value as 'Active' | 'Blacklisted' | 'Archived' })
+                    }
+                  >
+                    <option value="Active">Active</option>
+                    <option value="Blacklisted">Blacklisted / Disqualified</option>
+                    <option value="Archived">Archived</option>
+                  </Select>
+                </FormField>
+
+                <FormField id="edit-cand-source" label="Candidate Source">
+                  <Select
+                    id="edit-cand-source"
+                    value={editForm.source}
+                    onChange={(e) => setEditForm({ ...editForm, source: e.target.value })}
+                  >
+                    {candidateSourceOptions.map((opt) => (
+                      <option key={opt.id} value={opt.name}>
+                        {opt.name}
+                      </option>
+                    ))}
+                  </Select>
+                </FormField>
+              </div>
+
+              {/* Skills Tags Manager */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
+                  Skills & Technical Competencies ({editForm.skills.length})
+                </label>
+                <div className="flex flex-wrap gap-1.5 p-2 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 mb-2 min-h-11">
+                  {editForm.skills.map((skill) => (
+                    <span
+                      key={skill}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-100/70 dark:bg-blue-950 border border-blue-200 dark:border-blue-900 text-xs font-bold text-blue-700 dark:text-blue-300"
+                    >
+                      <span>{skill}</span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setEditForm({
+                            ...editForm,
+                            skills: editForm.skills.filter((s) => s !== skill),
+                          })
+                        }
+                        className="hover:text-rose-600 transition cursor-pointer"
+                        title="Remove skill"
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  ))}
+                  {editForm.skills.length === 0 && (
+                    <span className="text-xs text-slate-400 italic py-1">No skills registered yet.</span>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Type a skill and press Enter..."
+                    value={editSkillInput}
+                    onChange={(e) => setEditSkillInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        const s = editSkillInput.trim();
+                        if (s && !editForm.skills.some((existing) => existing.toLowerCase() === s.toLowerCase())) {
+                          setEditForm({ ...editForm, skills: [...editForm.skills, s] });
+                          setEditSkillInput('');
+                        }
+                      }
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => {
+                      const s = editSkillInput.trim();
+                      if (s && !editForm.skills.some((existing) => existing.toLowerCase() === s.toLowerCase())) {
+                        setEditForm({ ...editForm, skills: [...editForm.skills, s] });
+                        setEditSkillInput('');
+                      }
+                    }}
+                  >
+                    Add
+                  </Button>
+                </div>
+              </div>
+
+              {/* Summary Textarea */}
+              <FormField id="edit-cand-summary" label="Professional Summary & Highlights">
+                <Textarea
+                  id="edit-cand-summary"
+                  rows={3}
+                  placeholder="Candidate profile summary, clinical specialties, achievements..."
+                  value={editForm.summary}
+                  onChange={(e) => setEditForm({ ...editForm, summary: e.target.value })}
+                />
+              </FormField>
+
+              <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-slate-100 dark:border-slate-800">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  type="button"
+                  disabled={editSubmitting}
+                  onClick={() => setIsEditModalOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  type="submit"
+                  loading={editSubmitting}
+                  loadingLabel="Saving..."
+                >
+                  Save Changes
+                </Button>
+              </div>
+            </form>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── Single Candidate Delete Confirmation Dialog ── */}
+      {isDeleteDialogOpen && deleteCandidate && (
+        <ConfirmDialog
+          isOpen={isDeleteDialogOpen}
+          onClose={() => setIsDeleteDialogOpen(false)}
+          onConfirm={handleConfirmDelete}
+          title="Delete Candidate Record"
+          description={`Are you sure you want to delete ${deleteCandidate.firstName} ${deleteCandidate.lastName} (${deleteCandidate.candidateCode || 'Record'})? All associated applications, interview records, and CV documents will be permanently removed.`}
+          confirmLabel="Delete Candidate"
+          cancelLabel="Cancel"
+          tone="danger"
+          isLoading={deleteSubmitting}
+        />
+      )}
+
+      {/* ── Bulk Delete Confirmation Dialog ── */}
+      {isBulkDeleteDialogOpen && (
+        <ConfirmDialog
+          isOpen={isBulkDeleteDialogOpen}
+          onClose={() => setIsBulkDeleteDialogOpen(false)}
+          onConfirm={handleConfirmBulkDelete}
+          title="Delete Selected Candidates"
+          description={`Are you sure you want to permanently delete ${selectedCandidateIds.length} candidate record(s)? This action cannot be undone.`}
+          confirmLabel={`Delete ${selectedCandidateIds.length} Candidates`}
+          cancelLabel="Cancel"
+          tone="danger"
+          isLoading={bulkDeleteSubmitting}
+        />
       )}
     </div>
   );
