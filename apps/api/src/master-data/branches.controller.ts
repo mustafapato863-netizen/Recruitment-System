@@ -7,7 +7,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { TenantScopedGuard } from '../common/guards/tenant-scoped.guard';
 import { TenantResource } from '../common/decorators/tenant-resource.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { RequirePermissions } from '../common/decorators/require-permissions.decorator';
+import { RequireAnyPermissions, RequirePermissions } from '../common/decorators/require-permissions.decorator';
 import { AuditAction } from '../common/decorators/audit-action.decorator';
 import type { AuthUser } from '@recruitflow/contracts';
 
@@ -17,13 +17,13 @@ export class BranchesController {
   constructor(private readonly masterDataService: MasterDataService) {}
 
   @Get()
-  @RequirePermissions('MASTER_DATA_VIEW')
+  @RequireAnyPermissions('MASTER_DATA_VIEW', 'VACANCY_VIEW', 'VACANCY_REQUEST_VIEW', 'CANDIDATE_VIEW', 'APPLICATION_VIEW')
   list(@CurrentUser() user: AuthUser) {
     return this.masterDataService.listBranches(user.organizationId);
   }
 
   @Get(':id')
-  @RequirePermissions('MASTER_DATA_VIEW')
+  @RequireAnyPermissions('MASTER_DATA_VIEW', 'VACANCY_VIEW', 'VACANCY_REQUEST_VIEW', 'CANDIDATE_VIEW', 'APPLICATION_VIEW')
   @UseGuards(TenantScopedGuard)
   @TenantResource({ resource: 'branch', param: 'id' })
   getById(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {

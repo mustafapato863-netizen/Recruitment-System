@@ -3,6 +3,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type { VacancyDetailView, Application, PaginatedResult, Interview, Offer, VacancyStatus } from '@recruitflow/contracts';
 import { fetchApi, getApi, patchApi, postApi } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
+import { isTeamLeaderOrAdmin } from '../auth/workspacePersona';
 import { Icon } from '../components/Icon';
 import { Modal } from '../components/Modal';
 import { AddApplicationModal } from '../components/candidate/AddApplicationModal';
@@ -208,7 +209,8 @@ export function VacancyOverviewPage() {
   const jobTitle = vacancy?.position?.title || vacancy?.title || 'No position';
   useSetBreadcrumbTitle(jobTitle && jobTitle !== 'No position' ? jobTitle : 'Job Requisition');
   const departmentName = vacancy?.department || vacancy?.branch?.name || '—';
-  const locationText = vacancy?.location || vacancy?.branch?.name || '—';
+  const rawLocation = vacancy?.location || vacancy?.branch?.name || '—';
+  const locationText = /offshore/i.test(rawLocation) ? 'Cairo' : rawLocation;
   const statusLabel = vacancy?.status || '—';
   const hasPrimaryAssignment = Boolean(vacancy?.assignments?.some((assignment) =>
     assignment.isActive && (assignment.assignmentKind ?? 'PRIMARY') === 'PRIMARY',
@@ -219,13 +221,13 @@ export function VacancyOverviewPage() {
     user?.roles?.some((r) => ['ADMINISTRATOR', 'ADMIN'].includes(r.code) || r.name?.toLowerCase() === 'administrator'),
   );
 
-  const canAssignInitial = isAdministrator || Boolean(
+  const canAssignInitial = isAdministrator || (isTeamLeaderOrAdmin(user) && Boolean(
     user?.permissions?.some((p) => ['VACANCY_ASSIGN', 'VACANCY_MANAGE'].includes(p)),
-  );
+  ));
 
-  const canReassignRecruiter = isAdministrator || Boolean(
+  const canReassignRecruiter = isAdministrator || (isTeamLeaderOrAdmin(user) && Boolean(
     user?.permissions?.includes('VACANCY_REASSIGN'),
-  );
+  ));
 
   const currentRecruiterAssignment = vacancy?.assignments?.find(
     (a) => a.isActive && (a.roleCode === 'RECRUITER' || a.roleCode === 'LEAD_RECRUITER' || (a.assignmentKind ?? 'PRIMARY') === 'PRIMARY'),

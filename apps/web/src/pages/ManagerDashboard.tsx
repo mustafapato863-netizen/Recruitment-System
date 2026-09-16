@@ -11,6 +11,8 @@ import { Select } from '../components/ui/Select';
 import { PageState } from '../components/ui/PageState';
 import { QuickGuideTrigger } from '../quickguide';
 import { RecruiterTargetsSection } from '../components/RecruiterTargetsSection';
+import { MyTargetsWidget } from '../components/MyTargetsWidget';
+import { isTeamLeaderOrAdmin } from '../auth/workspacePersona';
 
 export interface OpenVacancyOption {
   id: string;
@@ -72,10 +74,8 @@ export function ManagerDashboard() {
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   const isManagerOrAdmin = useMemo(() => {
-    return Boolean(user?.permissions?.some((permission) =>
-      ['VACANCY_MANAGE', 'VACANCY_ASSIGN', 'VACANCY_REASSIGN'].includes(permission),
-    ));
-  }, [user?.permissions]);
+    return isTeamLeaderOrAdmin(user);
+  }, [user]);
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
@@ -232,7 +232,8 @@ export function ManagerDashboard() {
         .map((v) => {
         const title = v.title || v.position?.title || 'No position';
         const department = (v as unknown as { department?: string }).department || v.branch?.name || 'Operations';
-        const location = v.location || v.branch?.name || '—';
+        const rawLoc = v.location || v.branch?.name || '—';
+        const location = /offshore/i.test(rawLoc) ? 'Cairo' : rawLoc;
         const recruiter = (v.assignments?.[0] as unknown as { user?: { displayName?: string } } | undefined)?.user?.displayName || 'Unassigned';
         const recruiterId = v.assignments?.[0]?.userId || '';
         const targetHires = Math.max(1, (v.approvedHeadcount || 1) - (v.joinedHeadcount || 0));
@@ -661,13 +662,16 @@ export function ManagerDashboard() {
         )}
       </div>
 
-      {/* ── Recruiter Activity Targets Management (Team Lead) ── */}
-      {isManagerOrAdmin && (
+      {/* ── Recruiter Activity Targets: Management (Team Lead) vs My Targets (Recruiter) ── */}
+      {isManagerOrAdmin ? (
         <RecruiterTargetsSection
           recruiterOptions={recruiterOptions}
           showToast={showToast}
         />
+      ) : (
+        <MyTargetsWidget />
       )}
+
 
       {/* ── Middle Row: 2 Big Columns (My Priorities & Open Jobs) ── */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">

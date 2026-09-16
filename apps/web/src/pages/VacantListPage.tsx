@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { downloadApi, getApi, postApi } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
+import { isTeamLeaderOrAdmin } from '../auth/workspacePersona';
 import { Icon } from '../components/Icon';
 import { Modal } from '../components/Modal';
 import { Alert } from '../components/ui';
@@ -86,16 +87,16 @@ export function VacantListPage() {
   }, [user?.roles]);
 
   const canAssignInitial = useMemo(() => {
-    return isAdministrator || Boolean(
+    return isAdministrator || (isTeamLeaderOrAdmin(user) && Boolean(
       user?.permissions?.some((p) => ['VACANCY_ASSIGN', 'VACANCY_MANAGE'].includes(p)),
-    );
-  }, [isAdministrator, user?.permissions]);
+    ));
+  }, [isAdministrator, user]);
 
   const canReassignRecruiter = useMemo(() => {
-    return isAdministrator || Boolean(
+    return isAdministrator || (isTeamLeaderOrAdmin(user) && Boolean(
       user?.permissions?.includes('VACANCY_REASSIGN'),
-    );
-  }, [isAdministrator, user?.permissions]);
+    ));
+  }, [isAdministrator, user]);
 
   // Active section tab: 'catalog' (Full Positions & Requirements Directory) vs 'requisitions' (Work Queue)
   const activeSection = searchParams.get('tab') === 'requisitions' ? 'requisitions' : 'catalog';
@@ -253,7 +254,7 @@ export function VacantListPage() {
           approvedHeadcount: v.approvedHeadcount ?? 1,
           joinedHeadcount: v.joinedHeadcount ?? 0,
           title: v.title || v.position?.title || v.positionTitle || 'No position',
-          location: v.location || v.branch?.name || 'SGH Riyadh Hospital',
+          location: (/offshore/i.test(v.location || '') ? 'Cairo' : (v.location || v.branch?.name || 'Cairo')),
           branchId: v.branchId || v.branch?.id,
           workType: v.workType || 'Full-Time',
           department: v.department || v.position?.department || 'Clinical Services',

@@ -5,7 +5,7 @@ import { MasterDataService } from './master-data.service';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { RequirePermissions } from '../common/decorators/require-permissions.decorator';
+import { RequireAnyPermissions, RequirePermissions } from '../common/decorators/require-permissions.decorator';
 import { AuditAction } from '../common/decorators/audit-action.decorator';
 import type { AuthUser } from '@recruitflow/contracts';
 
@@ -15,7 +15,7 @@ export class MasterDataCatalogController {
   constructor(private readonly masterDataService: MasterDataService) {}
 
   @Get(':category')
-  @RequirePermissions('MASTER_DATA_VIEW')
+  @RequireAnyPermissions('MASTER_DATA_VIEW', 'VACANCY_VIEW', 'VACANCY_REQUEST_VIEW', 'CANDIDATE_VIEW', 'APPLICATION_VIEW')
   list(@CurrentUser() user: AuthUser, @Param('category') category: string) {
     return this.masterDataService.listCatalog(user.organizationId, category);
   }

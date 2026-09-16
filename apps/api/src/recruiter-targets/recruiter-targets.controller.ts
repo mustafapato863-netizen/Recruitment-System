@@ -26,7 +26,7 @@ export class RecruiterTargetsController {
 
   /** GET /recruiter-targets — List all targets (Team Lead / Manager view) */
   @Get()
-  @RequireAnyPermissions('VACANCY_MANAGE', 'VACANCY_ASSIGN')
+  @RequirePermissions('VACANCY_MANAGE')
   list(
     @CurrentUser() user: AuthUser,
     @Query('period') period?: string,
@@ -43,7 +43,7 @@ export class RecruiterTargetsController {
 
   /** POST /recruiter-targets — Create or update a recruiter's target */
   @Post()
-  @RequireAnyPermissions('VACANCY_MANAGE', 'VACANCY_ASSIGN')
+  @RequirePermissions('VACANCY_MANAGE')
   upsert(
     @CurrentUser() user: AuthUser,
     @Body() dto: UpsertRecruiterTargetDto,
@@ -53,7 +53,7 @@ export class RecruiterTargetsController {
 
   /** PATCH /recruiter-targets/:id — Update existing target */
   @Patch(':id')
-  @RequireAnyPermissions('VACANCY_MANAGE', 'VACANCY_ASSIGN')
+  @RequirePermissions('VACANCY_MANAGE')
   update(
     @CurrentUser() user: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,

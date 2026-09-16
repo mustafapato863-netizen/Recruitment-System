@@ -1,8 +1,35 @@
-import { useState, useEffect, useRef, type KeyboardEvent } from 'react';
+import { useState, useEffect, useMemo, useRef, type KeyboardEvent } from 'react';
 import { patchApi } from '../../api/client';
 import { Icon } from '../Icon';
 import { Modal } from '../Modal';
 import { useMasterDataOptions } from '../../hooks/useMasterDataOptions';
+
+function normalizeLocation(loc?: string | null): string {
+  if (!loc) return 'Cairo';
+  if (/offshore/i.test(loc)) return 'Cairo';
+  return loc;
+}
+
+const CANONICAL_LOCATIONS = [
+  { value: 'Cairo', label: 'Cairo (Head Office · Egypt)' },
+  { value: 'Dubai', label: 'Dubai (SGH Dubai Hospital · UAE)' },
+  { value: 'Ajman', label: 'Ajman (SGH Ajman Hospital · UAE)' },
+  { value: 'Sharjah', label: 'Sharjah (SGH Sharjah Hospital · UAE)' },
+  { value: 'Ras Al Khaimah', label: 'Ras Al Khaimah (SGH Clinic RAK · UAE)' },
+];
+
+const FALLBACK_SKILLS = [
+  'Patient Care',
+  'Clinical Documentation',
+  'ICD-10 / Medical Coding',
+  'Healthcare Quality & JCI',
+  'Infection Control',
+  'Emergency Response (BLS/ACLS)',
+  'Communication & Empathy',
+  'Electronic Health Records (EHR)',
+  'Team Collaboration',
+  'Critical Thinking',
+];
 
 interface EditPositionRequirementsModalProps {
   isOpen: boolean;
@@ -35,7 +62,7 @@ export function EditPositionRequirementsModal({
   positionCode,
   initialSkills = [],
   initialMinExp = 3,
-  initialLocation = 'SGH Riyadh Hospital',
+  initialLocation = 'Cairo',
   initialDepartment = 'Clinical Services',
   initialQualifications = '',
   initialJobSummary = '',
@@ -45,7 +72,7 @@ export function EditPositionRequirementsModal({
   const [skills, setSkills] = useState<string[]>(initialSkills);
   const [skillInput, setSkillInput] = useState('');
   const [minExp, setMinExp] = useState<number>(initialMinExp ?? 3);
-  const [location, setLocation] = useState(initialLocation);
+  const [location, setLocation] = useState(() => normalizeLocation(initialLocation));
   const [department, setDepartment] = useState(initialDepartment);
   const [qualifications, setQualifications] = useState(initialQualifications ?? '');
   const [jobSummary, setJobSummary] = useState(initialJobSummary ?? '');
@@ -63,7 +90,7 @@ export function EditPositionRequirementsModal({
     if (isOpen) {
       setSkills(initialSkills || []);
       setMinExp(initialMinExp ?? 3);
-      setLocation(initialLocation || 'SGH Riyadh Hospital');
+      setLocation(normalizeLocation(initialLocation));
       setDepartment(initialDepartment || 'Clinical Services');
       setQualifications(initialQualifications ?? '');
       setJobSummary(initialJobSummary ?? '');
@@ -80,6 +107,35 @@ export function EditPositionRequirementsModal({
       }
     }
   }, [isOpen, initialSkills, initialMinExp, initialLocation, initialDepartment, initialQualifications, initialJobSummary, initialFocusSection]);
+
+  const availableLocationOptions = useMemo(() => {
+    const list: { value: string; label: string }[] = [...CANONICAL_LOCATIONS];
+    const seenValues = new Set(list.map((l) => l.value.toLowerCase()));
+
+    for (const b of branchOptions) {
+      if (/offshore/i.test(b.name)) continue;
+      // Add city if present and not already added
+      if (b.city && !seenValues.has(b.city.toLowerCase()) && !/offshore/i.test(b.city)) {
+        list.push({ value: b.city, label: `${b.city}${b.country ? ` (${b.country})` : ''}` });
+        seenValues.add(b.city.toLowerCase());
+      }
+      // Add branch name if not already in set
+      if (!seenValues.has(b.name.toLowerCase())) {
+        list.push({
+          value: b.name,
+          label: `${b.name}${b.city ? ` · ${b.city}` : ''}${b.country ? ` (${b.country})` : ''}`,
+        });
+        seenValues.add(b.name.toLowerCase());
+      }
+    }
+
+    if (location && !seenValues.has(location.toLowerCase()) && !/offshore/i.test(location)) {
+      list.push({ value: location, label: location });
+    }
+
+    return list;
+  }, [branchOptions, location]);
+
 
   const handleAddSkill = (skillToAdd?: string) => {
     const s = (skillToAdd || skillInput).trim();
@@ -237,13 +293,14 @@ export function EditPositionRequirementsModal({
 
           {/* Suggested Skills Chips */}
           <div className="pt-1">
-              <span className="text-[11px] font-semibold text-slate-400 block mb-1">
-                {isLoadingSkills ? 'Loading skills from Master Data…' : 'Quick add skills from Master Data:'}
-              </span>
-              <div className="flex flex-wrap gap-1">
-              {skillOptions.filter(
-                (option) => !skills.some((existing) => existing.toLowerCase() === option.name.toLowerCase())
-              ).slice(0, 8).map((suggestion) => (
+            <span className="text-[11px] font-semibold text-slate-400 block mb-1">
+              {isLoadingSkills ? 'Loading skills from Master Data…' : 'Quick add skills from Master Data:'}
+            </span>
+            <div className="flex flex-wrap gap-1">
+              {(skillOptions.length > 0
+                ? skillOptions.filter((option) => !skills.some((existing) => existing.toLowerCase() === option.name.toLowerCase())).slice(0, 8)
+                : FALLBACK_SKILLS.filter((s) => !skills.some((existing) => existing.toLowerCase() === s.toLowerCase())).slice(0, 8).map((name, i) => ({ id: `fallback-${i}`, name }))
+              ).map((suggestion) => (
                 <button
                   key={suggestion.id}
                   type="button"
@@ -253,9 +310,6 @@ export function EditPositionRequirementsModal({
                   + {suggestion.name}
                 </button>
               ))}
-              {!isLoadingSkills && skillOptions.length === 0 && (
-                <span className="text-[10px] text-slate-400 italic">No skills configured yet. You can add a new skill above.</span>
-              )}
             </div>
           </div>
         </div>
@@ -288,18 +342,18 @@ export function EditPositionRequirementsModal({
             <select
               ref={locationRef}
               value={location}
-              onChange={(e) => setLocation(e.target.value)}
+              onChange={(e) => setLocation(normalizeLocation(e.target.value))}
               className="w-full px-3.5 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500"
             >
-              {branchOptions.length === 0 && <option value={location}>{location || 'No branches configured'}</option>}
-              {branchOptions.map((branch) => (
-                <option key={branch.id} value={branch.name}>
-                  {branch.name}{branch.city ? ` · ${branch.city}` : ''}{branch.country ? ` (${branch.country})` : ''}
+              {availableLocationOptions.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
                 </option>
               ))}
             </select>
           </div>
         </div>
+
 
         {/* Department & Qualifications */}
         <div className="space-y-3">

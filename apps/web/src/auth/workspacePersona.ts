@@ -60,3 +60,51 @@ export function isEmployeeWorkspaceUser(user: UserProfile | null | undefined): b
 
   return !permissions.some((permission) => MANAGER_PERMISSIONS.has(permission));
 }
+
+const TEAM_LEADER_ROLE_CODES = new Set([
+  'ADMINISTRATOR',
+  'SYSADMINISTRATOR',
+  'HR_MANAGER',
+  'TALENT_MANAGER',
+  'TEAM_LEADER',
+  'TEAM_LEAD',
+  'RECRUITMENT_LEAD',
+  'LEAD_RECRUITER',
+]);
+const TEAM_LEADER_ROLE_REGEX = /\b(team[_\s-]?lead|leader|manager|director|supervisor|admin)\b/i;
+
+const OPERATIONAL_RECRUITER_REGEX = /\brecruiter\b/i;
+const LEADERSHIP_KEYWORD_REGEX = /\b(team[_\s-]?lead|lead|leader|manager|director|supervisor|head|admin)\b/i;
+
+/**
+ * Determine if a user has leadership / management authority (Team Leader, HR Manager, Admin).
+ * Standard Recruiters (including RECRUITER, RECRUITER-OFFSHORE) are operational team members
+ * and cannot assign targets or vacancies to other recruiters.
+ */
+export function isTeamLeaderOrAdmin(user: UserProfile | null | undefined): boolean {
+  if (!user) return false;
+  const roles = Array.isArray(user.roles) ? user.roles : [];
+  const permissions = Array.isArray(user.permissions) ? user.permissions : [];
+
+  // 1. Check known team leader / management role codes
+  if (roles.some((r) => TEAM_LEADER_ROLE_CODES.has(r.code.trim().toUpperCase()))) {
+    return true;
+  }
+
+  // 2. Check role code or name pattern (e.g. "Recruitment Team Leader", "Operations Supervisor")
+  if (roles.some((r) => TEAM_LEADER_ROLE_REGEX.test(r.code) || TEAM_LEADER_ROLE_REGEX.test(r.name))) {
+    return true;
+  }
+
+  // 3. Operational recruiters (e.g. "RECRUITER", "RECRUITER-OFFSHORE") are never team leaders
+  const isPureRecruiter = roles.length > 0 && roles.every((r) =>
+    OPERATIONAL_RECRUITER_REGEX.test(r.code) && !LEADERSHIP_KEYWORD_REGEX.test(r.code) && !LEADERSHIP_KEYWORD_REGEX.test(r.name)
+  );
+  if (isPureRecruiter) {
+    return false;
+  }
+
+  // 4. Check management permissions (VACANCY_MANAGE or USERS_MANAGE — strictly NOT VACANCY_ASSIGN)
+  return permissions.includes('VACANCY_MANAGE') || permissions.includes('USERS_MANAGE');
+}
+

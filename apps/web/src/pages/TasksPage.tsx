@@ -6,6 +6,7 @@ import { Modal } from '../components/Modal';
 import { PageState } from '../components/ui/PageState';
 import { getApi, postApi } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
+import { isTeamLeaderOrAdmin } from '../auth/workspacePersona';
 import { QuickGuideTrigger } from '../quickguide';
 import './PageEnhancementsV2.css';
 
@@ -109,10 +110,8 @@ export function TasksPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const isManagerOrAdmin = useMemo(() => {
-    return Boolean(user?.permissions?.some((permission) =>
-      ['VACANCY_MANAGE', 'VACANCY_ASSIGN', 'VACANCY_REASSIGN'].includes(permission),
-    ));
-  }, [user?.permissions]);
+    return isTeamLeaderOrAdmin(user);
+  }, [user]);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
