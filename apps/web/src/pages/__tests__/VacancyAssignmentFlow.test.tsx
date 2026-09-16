@@ -449,5 +449,103 @@ describe('Vacancy Assignment and Activation Flow', () => {
       expect(screen.queryByRole('button', { name: /assign recruiter & start/i })).toBeNull();
       expect(screen.queryByRole('button', { name: /change recruiter/i })).toBeNull();
     });
+
+    it('allows initial assignment but hides Change Recruiter / Reassign when user has VACANCY_ASSIGN but lacks VACANCY_REASSIGN', async () => {
+      mockPermissions = ['VACANCY_VIEW', 'VACANCY_ASSIGN']; // Has assign, but lacks reassign
+      mockGetApi.mockImplementation((url: string) => {
+        if (url === '/vacancies') {
+          return Promise.resolve([
+            {
+              id: 'vac-1',
+              vacancyCode: 'VAC-001',
+              title: 'Senior Frontend Engineer',
+              department: 'Engineering',
+              location: 'Riyadh',
+              status: 'Open',
+              approvedHeadcount: 1,
+              joinedHeadcount: 0,
+              recruiter: { displayName: null, name: 'Unassigned' },
+              assignments: [],
+            },
+            {
+              id: 'vac-2',
+              vacancyCode: 'VAC-002',
+              title: 'ICU Charge Nurse',
+              department: 'Nursing',
+              location: 'Riyadh',
+              status: 'Open',
+              approvedHeadcount: 1,
+              joinedHeadcount: 0,
+              recruiter: { displayName: 'Sarah Ahmed', name: 'Sarah Ahmed' },
+              assignments: [
+                {
+                  id: 'asg-1',
+                  userId: 'rec-1',
+                  roleCode: 'RECRUITER',
+                  assignmentKind: 'PRIMARY',
+                  isActive: true,
+                  user: { id: 'rec-1', displayName: 'Sarah Ahmed' },
+                },
+              ],
+            },
+          ] as any);
+        }
+        if (url.includes('/applications')) return Promise.resolve({ data: [] } as any);
+        if (url.includes('/interviews')) return Promise.resolve([] as any);
+        if (url.includes('/offers')) return Promise.resolve([] as any);
+        return Promise.resolve([] as any);
+      });
+
+      // 1. VacantListPage: Should show "Assign recruiter" for unassigned, but NOT "Reassign" for assigned
+      const { unmount } = render(
+        <MemoryRouter initialEntries={['/vacancies?tab=requisitions']}>
+          <Routes>
+            <Route path="/vacancies" element={<VacantListPage />} />
+          </Routes>
+        </MemoryRouter>,
+      );
+
+      await screen.findByText('Senior Frontend Engineer');
+      expect(screen.getByRole('button', { name: /assign recruiter/i })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^reassign$/i })).toBeNull();
+      unmount();
+
+      // 2. VacancyOverviewPage for assigned vacancy: "Change Recruiter" must NOT be rendered
+      mockFetchApi.mockResolvedValueOnce(mockVacancyAssigned as any);
+      render(
+        <MemoryRouter initialEntries={['/vacancies/vac-2']}>
+          <Routes>
+            <Route path="/vacancies/:id" element={<VacancyOverviewPage />} />
+          </Routes>
+        </MemoryRouter>,
+      );
+
+      await screen.findByText('Senior Frontend Engineer');
+      expect(screen.queryByRole('button', { name: /change recruiter/i })).toBeNull();
+    });
+
+    it('shows Change Recruiter when user has VACANCY_REASSIGN', async () => {
+      mockPermissions = ['VACANCY_VIEW', 'VACANCY_REASSIGN'];
+      mockFetchApi.mockResolvedValueOnce(mockVacancyAssigned as any);
+      mockGetApi.mockImplementation((url: string) => {
+        if (url.includes('/applications')) return Promise.resolve({ data: [] } as any);
+        if (url.includes('/interviews')) return Promise.resolve([] as any);
+        if (url.includes('/offers')) return Promise.resolve([] as any);
+        if (url.includes('/users/interviewers')) return Promise.resolve(mockInterviewers as any);
+        return Promise.resolve([] as any);
+      });
+
+      render(
+        <MemoryRouter initialEntries={['/vacancies/vac-2']}>
+          <Routes>
+            <Route path="/vacancies/:id" element={<VacancyOverviewPage />} />
+          </Routes>
+        </MemoryRouter>,
+      );
+
+      const changeBtn = await screen.findByRole('button', { name: /change recruiter/i });
+      expect(changeBtn).toBeInTheDocument();
+    });
   });
 });
+

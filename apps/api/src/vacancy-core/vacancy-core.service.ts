@@ -792,14 +792,15 @@ export class VacancyCoreService {
         userRole.role.permissions.map((rolePermission) => rolePermission.permission.code),
       ) ?? [],
     );
+    const isAdmin = actor?.userRoles.some((ur) => ur.role.code === 'ADMINISTRATOR');
     const canManage = permissionCodes.has('VACANCY_MANAGE');
     const canAssign = permissionCodes.has('VACANCY_ASSIGN');
     const canReassign = permissionCodes.has('VACANCY_REASSIGN');
 
-    if (canManage) return;
+    if (isAdmin) return;
 
     if (assignmentKind !== 'PRIMARY') {
-      if (!canAssign) {
+      if (!canAssign && !canManage) {
         throw new ForbiddenException('Assigning supporting vacancy members requires VACANCY_ASSIGN permission.');
       }
       return;
@@ -818,7 +819,7 @@ export class VacancyCoreService {
     if (isReassignment && !canReassign) {
       throw new ForbiddenException('Reassigning a primary vacancy owner requires VACANCY_REASSIGN permission.');
     }
-    if (!isReassignment && !canAssign) {
+    if (!isReassignment && !canAssign && !canManage) {
       throw new ForbiddenException('Assigning a vacancy owner requires VACANCY_ASSIGN permission.');
     }
   }

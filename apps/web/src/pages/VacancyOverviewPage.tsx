@@ -215,10 +215,16 @@ export function VacancyOverviewPage() {
   ));
   const isOpenWithoutAssignment = vacancy?.status === 'Open' && !hasPrimaryAssignment;
 
-  const canAssignRecruiter = Boolean(
-    user?.permissions?.some((permission) =>
-      ['VACANCY_MANAGE', 'VACANCY_ASSIGN', 'VACANCY_REASSIGN'].includes(permission),
-    ),
+  const isAdministrator = Boolean(
+    user?.roles?.some((r) => ['ADMINISTRATOR', 'ADMIN'].includes(r.code) || r.name?.toLowerCase() === 'administrator'),
+  );
+
+  const canAssignInitial = isAdministrator || Boolean(
+    user?.permissions?.some((p) => ['VACANCY_ASSIGN', 'VACANCY_MANAGE'].includes(p)),
+  );
+
+  const canReassignRecruiter = isAdministrator || Boolean(
+    user?.permissions?.includes('VACANCY_REASSIGN'),
   );
 
   const currentRecruiterAssignment = vacancy?.assignments?.find(
@@ -231,14 +237,20 @@ export function VacancyOverviewPage() {
     : null;
   const currentRecruiterName = currentRecruiterUser?.displayName || (currentRecruiterUser as unknown as { name?: string })?.name || 'Unassigned';
 
+  const canPerformRecruiterAction = isRecruiterAssigned
+    ? canReassignRecruiter
+    : canAssignInitial;
+
   useEffect(() => {
     if (searchParams.get('assignRecruiter') === 'true') {
-      setAssignRecruiterOpen(true);
+      if (canPerformRecruiterAction) {
+        setAssignRecruiterOpen(true);
+      }
       const nextParams = new URLSearchParams(searchParams);
       nextParams.delete('assignRecruiter');
       setSearchParams(nextParams, { replace: true });
     }
-  }, [searchParams, setSearchParams]);
+  }, [searchParams, setSearchParams, canPerformRecruiterAction]);
 
   useEffect(() => {
     let isMounted = true;
@@ -501,7 +513,7 @@ export function VacancyOverviewPage() {
         </div>
 
         <div className="flex items-center gap-2.5">
-          {canAssignRecruiter && (
+          {canPerformRecruiterAction && (
             <Button
               variant={isRecruiterAssigned ? 'secondary' : 'primary'}
               onClick={() => setAssignRecruiterOpen(true)}

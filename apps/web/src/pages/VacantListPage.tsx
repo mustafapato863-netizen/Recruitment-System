@@ -79,13 +79,23 @@ export function VacantListPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
-  const canAssignRecruiter = useMemo(() => {
+  const isAdministrator = useMemo(() => {
     return Boolean(
-      user?.permissions?.some((permission) =>
-        ['VACANCY_MANAGE', 'VACANCY_ASSIGN', 'VACANCY_REASSIGN'].includes(permission),
-      ),
+      user?.roles?.some((r) => ['ADMINISTRATOR', 'ADMIN'].includes(r.code) || r.name?.toLowerCase() === 'administrator'),
     );
-  }, [user?.permissions]);
+  }, [user?.roles]);
+
+  const canAssignInitial = useMemo(() => {
+    return isAdministrator || Boolean(
+      user?.permissions?.some((p) => ['VACANCY_ASSIGN', 'VACANCY_MANAGE'].includes(p)),
+    );
+  }, [isAdministrator, user?.permissions]);
+
+  const canReassignRecruiter = useMemo(() => {
+    return isAdministrator || Boolean(
+      user?.permissions?.includes('VACANCY_REASSIGN'),
+    );
+  }, [isAdministrator, user?.permissions]);
 
   // Active section tab: 'catalog' (Full Positions & Requirements Directory) vs 'requisitions' (Work Queue)
   const activeSection = searchParams.get('tab') === 'requisitions' ? 'requisitions' : 'catalog';
@@ -1227,18 +1237,31 @@ export function VacantListPage() {
                             <span>⚡ Match Sourcing</span>
                           </button>
                           <div className="flex items-center gap-2">
-                            {canAssignRecruiter && (
-                              <Button
-                                size="sm"
-                                variant={pos.recruiter.name === 'Unassigned' ? 'primary' : 'secondary'}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  openAssignModal(pos);
-                                }}
-                              >
-                                {pos.recruiter.name === 'Unassigned' ? 'Assign recruiter' : 'Reassign'}
-                              </Button>
-                            )}
+                            {pos.recruiter.name === 'Unassigned'
+                              ? canAssignInitial && (
+                                  <Button
+                                    size="sm"
+                                    variant="primary"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openAssignModal(pos);
+                                    }}
+                                  >
+                                    Assign recruiter
+                                  </Button>
+                                )
+                              : canReassignRecruiter && (
+                                  <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openAssignModal(pos);
+                                    }}
+                                  >
+                                    Reassign
+                                  </Button>
+                                )}
                             <span className="text-slate-400 text-[11px] group-hover:text-blue-600">
                               View details &rarr;
                             </span>
@@ -1371,15 +1394,25 @@ export function VacantListPage() {
                                     </button>
                                   </>
                                 )}
-                                {canAssignRecruiter && (
-                                  <Button
-                                    size="sm"
-                                    variant={pos.recruiter.name === 'Unassigned' ? 'primary' : 'secondary'}
-                                    onClick={() => openAssignModal(pos)}
-                                  >
-                                    {pos.recruiter.name === 'Unassigned' ? 'Assign recruiter' : 'Reassign'}
-                                  </Button>
-                                )}
+                                {pos.recruiter.name === 'Unassigned'
+                                  ? canAssignInitial && (
+                                      <Button
+                                        size="sm"
+                                        variant="primary"
+                                        onClick={() => openAssignModal(pos)}
+                                      >
+                                        Assign recruiter
+                                      </Button>
+                                    )
+                                  : canReassignRecruiter && (
+                                      <Button
+                                        size="sm"
+                                        variant="secondary"
+                                        onClick={() => openAssignModal(pos)}
+                                      >
+                                        Reassign
+                                      </Button>
+                                    )}
                                 <button
                                   type="button"
                                   onClick={() => navigate(`/sourcing-match?vacancyId=${pos.id}`)}

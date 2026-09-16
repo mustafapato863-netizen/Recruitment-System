@@ -40,17 +40,23 @@ describe('role selection', () => {
     expect(dialog.getByRole('button', { name: 'Create role' })).toBeVisible();
   });
 
-  it('hides vacancy assignment permissions when the role is named Recruiter', async () => {
+  it('allows vacancy assignment and reassignment permissions to be configured for roles', async () => {
     const user = userEvent.setup();
     render(<UsersRolesPage />);
     await user.click(await screen.findByRole('button', { name: /create role/i }));
     const dialog = within(screen.getByRole('dialog', { name: 'Create role and access' }));
 
-    expect(dialog.getByRole('checkbox', { name: /Assign vacancy team/ })).toBeVisible();
+    const assignCheckbox = dialog.getByRole('checkbox', { name: /Assign vacancy team/ });
+    const reassignCheckbox = dialog.getByRole('checkbox', { name: /Reassign vacancy team/ });
+
+    expect(assignCheckbox).toBeVisible();
+    expect(reassignCheckbox).toBeVisible();
+
     await user.type(dialog.getByRole('textbox', { name: /Role Name/ }), 'Recruiter');
 
-    expect(dialog.queryByRole('checkbox', { name: /Assign vacancy team/ })).not.toBeInTheDocument();
-    expect(dialog.queryByRole('checkbox', { name: /Reassign vacancy team/ })).not.toBeInTheDocument();
-    expect(dialog.getByText(/assignment and reassignment are hidden/i)).toBeVisible();
+    // Both permissions remain configurable so the admin can enable or disable them in settings
+    expect(assignCheckbox).toBeVisible();
+    expect(reassignCheckbox).toBeVisible();
+    expect(reassignCheckbox).not.toBeChecked();
   });
 });

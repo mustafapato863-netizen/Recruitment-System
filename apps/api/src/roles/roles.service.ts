@@ -30,6 +30,37 @@ const ROLE_SEQUENCE_KEY = 'ROLE';
 const ROLE_CODE_PREFIX = 'ROLE_';
 const MAX_ROLE_CODE_RETRIES = 3;
 
+const SYSTEM_PERMISSION_METADATA: Record<string, { name: string; description: string }> = {
+  VACANCY_ASSIGN: {
+    name: 'Assign Vacancy Recruiter',
+    description: 'Assign a primary or supporting recruiter to start a new vacancy.',
+  },
+  VACANCY_REASSIGN: {
+    name: 'Change / Reassign Recruiter (تبديل مسؤول الوظيفة)',
+    description: 'Allow changing, swapping, or reassigning the primary recruiter on an active vacancy.',
+  },
+  VACANCY_MANAGE: {
+    name: 'Manage Vacancies',
+    description: 'Create, update, hold, or cancel job vacancies.',
+  },
+  VACANCY_VIEW: {
+    name: 'View Vacancies',
+    description: 'View vacancies and job requisitions.',
+  },
+  VACANCY_REQUEST_VIEW: {
+    name: 'View Vacancy Requests',
+    description: 'View requisition approval requests.',
+  },
+  VACANCY_REQUEST_CREATE: {
+    name: 'Create Vacancy Requests',
+    description: 'Submit new requisition requests.',
+  },
+  VACANCY_REQUEST_APPROVE: {
+    name: 'Approve Vacancy Requests',
+    description: 'Approve or reject vacancy requisition requests.',
+  },
+};
+
 @Injectable()
 export class RolesService {
   constructor(private prisma: PrismaService) {}
@@ -115,13 +146,16 @@ export class RolesService {
       orderBy: { code: 'asc' },
     });
 
-    return perms.map((p) => ({
-      id: p.id,
-      code: p.code,
-      name: p.name?.trim() || p.code,
-      description: p.description,
-      scope: p.organizationId === null ? 'system' : 'organization',
-    }));
+    return perms.map((p) => {
+      const meta = SYSTEM_PERMISSION_METADATA[p.code];
+      return {
+        id: p.id,
+        code: p.code,
+        name: (p.name && p.name.trim().length > 0 && p.name !== p.code ? p.name.trim() : meta?.name) || p.code,
+        description: p.description?.trim() || meta?.description || null,
+        scope: p.organizationId === null ? 'system' : 'organization',
+      };
+    });
   }
 
   async createPermission(organizationId: string, data: CreatePermissionDto): Promise<PermissionRecord> {

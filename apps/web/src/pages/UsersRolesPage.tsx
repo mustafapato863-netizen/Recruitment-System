@@ -57,11 +57,6 @@ export interface RlsGovernanceResponse {
 const emptyUserForm = { email: '', displayName: '', password: '', roles: [] as string[] };
 const emptyRoleForm = { name: '', permissionIds: [] as string[], pageKeys: [] as string[] };
 const USER_STATUS_FILTERS = ['', 'Active', 'Suspended'] as const;
-const RECRUITER_HIDDEN_PERMISSION_CODES = new Set(['VACANCY_ASSIGN', 'VACANCY_REASSIGN']);
-
-function isRecruiterRoleName(name: string): boolean {
-  return /\brecruiter\b/i.test(name.trim());
-}
 
 function responseList<T>(response: T[] | { data?: T[] }): T[] {
   return Array.isArray(response) ? response : response.data || [];
@@ -285,31 +280,8 @@ export function UsersRolesPage() {
     return matchesSearch && matchesRole && matchesStatus;
   }), [roleFilter, search, statusFilter, users]);
 
-  const recruiterRoleName = isRecruiterRoleName(roleForm.name);
-  const availableRolePermissions = useMemo(
-    () => rolePermissions.filter((permission) => !(
-      recruiterRoleName && RECRUITER_HIDDEN_PERMISSION_CODES.has(permission.code)
-    )),
-    [recruiterRoleName, rolePermissions],
-  );
-  const availableRolePermissionIds = useMemo(
-    () => new Set(availableRolePermissions.map((permission) => permission.id)),
-    [availableRolePermissions],
-  );
-  const selectedRolePermissionIds = useMemo(
-    () => roleForm.permissionIds.filter((id) => availableRolePermissionIds.has(id)),
-    [availableRolePermissionIds, roleForm.permissionIds],
-  );
-
-  useEffect(() => {
-    if (!recruiterRoleName) return;
-    setRoleForm((current) => {
-      const nextPermissionIds = current.permissionIds.filter((id) => availableRolePermissionIds.has(id));
-      return nextPermissionIds.length === current.permissionIds.length
-        ? current
-        : { ...current, permissionIds: nextPermissionIds };
-    });
-  }, [availableRolePermissionIds, recruiterRoleName]);
+  const availableRolePermissions = rolePermissions;
+  const selectedRolePermissionIds = roleForm.permissionIds;
 
   const filteredRolePermissions = useMemo(() => {
     const query = permissionSearch.trim().toLowerCase();
@@ -1114,11 +1086,6 @@ export function UsersRolesPage() {
                   {selectedRolePermissionIds.length === availableRolePermissions.length && availableRolePermissions.length > 0 ? 'Clear all' : 'Select all'}
                 </button>
               </div>
-              {recruiterRoleName && (
-                <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
-                  Vacancy assignment and reassignment are hidden for recruiter roles. Use a manager role when the user must own or reassign vacancies.
-                </div>
-              )}
               <div className="mt-4">
                 <Input
                   aria-label="Search permissions"
