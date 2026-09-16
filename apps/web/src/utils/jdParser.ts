@@ -17,19 +17,52 @@ export interface ParsedJobDescription {
 }
 
 /**
- * Extract raw text from Word (.docx) ArrayBuffer using mammoth
+ * Extract raw text from Word (.docx) ArrayBuffer using JSZip with mammoth fallback
  */
 async function extractTextFromDocx(arrayBuffer: ArrayBuffer): Promise<string> {
+  try {
+    const JSZipModule = await import('jszip');
+    const JSZip = JSZipModule.default ?? JSZipModule;
+    const zip = await JSZip.loadAsync(arrayBuffer);
+    const docXmlFile = zip.file('word/document.xml');
+    if (docXmlFile) {
+      const xml = await docXmlFile.async('string');
+      const formatted = xml
+        .replace(/<w:tab\s*\/?>/g, '\t')
+        .replace(/<w:br\s*\/?>/g, '\n')
+        .replace(/<\/w:tc>\s*<w:tc[^>]*>/g, ': ')
+        .replace(/<\/w:tr>/g, '\n')
+        .replace(/<\/w:p>/g, '\n')
+        .replace(/<[^>]+>/g, '')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&apos;/g, "'")
+        .replace(/&#160;|&nbsp;/g, ' ')
+        .replace(/\n\s*\n+/g, '\n\n')
+        .trim();
+      if (formatted.length > 50) {
+        return formatted;
+      }
+    }
+  } catch (error) {
+    console.warn('JSZip docx extraction failed, trying mammoth fallback:', error);
+  }
+
   try {
     const mammothModule = await import('mammoth');
     const mammoth = mammothModule.default ?? mammothModule;
     const result = await mammoth.extractRawText({ arrayBuffer });
-    return result.value;
+    if (result.value?.trim()) {
+      return result.value;
+    }
   } catch (error) {
     console.warn('Mammoth docx extraction failed, using fallback stream decode:', error);
-    const decoder = new TextDecoder('utf-8', { fatal: false });
-    return decoder.decode(arrayBuffer).replace(/[^\x20-\x7E\n\r]/g, ' ');
   }
+
+  const decoder = new TextDecoder('utf-8', { fatal: false });
+  return decoder.decode(arrayBuffer).replace(/[^\x20-\x7E\n\r]/g, ' ');
 }
 
 /**
@@ -162,7 +195,7 @@ export function parseJobDescriptionText(text: string, fileName?: string): Parsed
   // 4. Job Summary Extraction
   let jobSummary = '';
   const summaryRegex =
-    /(?:Job Summary|Position Summary|Core Purpose|Role Overview|Job Purpose|Summary)\s*[:\t]?\s*([\s\S]*?)(?=(?:Job Duties|Duties & Responsibilities|Responsibilities|Key Responsibilities|Job Requirements|Requirements|Education|Experience|Qualifications|$))/i;
+    /(?:Job Summary|Position Summary|Core Purpose|Role Overview|Job Purpose|Summary)\s*[:\t]?\s*([\s\S]*?)(?=(?:(?:\n\s*(?:Job Duties|Duties & Responsibilities|Key Duties|Responsibilities|Key Responsibilities|Job Requirements|Requirements|Education|Qualifications|Experience))|$))/i;
   const summaryMatch = normalized.match(summaryRegex);
   if (summaryMatch?.[1]?.trim()) {
     jobSummary = summaryMatch[1]
@@ -253,7 +286,7 @@ export function parseJobDescriptionText(text: string, fileName?: string): Parsed
   // 7. Qualifications / Education Extraction
   let qualifications = '';
   const eduRegex =
-    /(?:Education|Qualifications|Academic Requirements|Licensure)\s*[:\t]?\s*([\s\S]*?)(?=(?:Professional Training|Experience|Skills|Licenses|$))/i;
+    /(?:Education|Qualifications|Academic Requirements|Licensure)\s*[:\t]?\s*([\s\S]*?)(?=(?:(?:\n\s*(?:Professional Training|Experience|Skills|Licenses))|$))/i;
   const eduMatch = normalized.match(eduRegex);
   if (eduMatch?.[1]?.trim()) {
     qualifications = eduMatch[1]
@@ -266,7 +299,7 @@ export function parseJobDescriptionText(text: string, fileName?: string): Parsed
   // 8. Duties & Responsibilities Extraction
   let responsibilities = '';
   const respRegex =
-    /(?:Job Duties & Responsibilities|Responsibilities|Key Duties|Main Responsibilities)\s*[:\t]?\s*([\s\S]*?)(?=(?:Job Requirements|Requirements|Education|Experience|Skills|$))/i;
+    /(?:Job Duties & Responsibilities|Responsibilities|Key Duties|Main Responsibilities)\s*[:\t]?\s*([\s\S]*?)(?=(?:(?:\n\s*(?:Job Requirements|Requirements|Education|Qualifications|Experience|Skills & Knowledge|Skills|Competencies))|$))/i;
   const respMatch = normalized.match(respRegex);
   if (respMatch?.[1]?.trim()) {
     responsibilities = respMatch[1]

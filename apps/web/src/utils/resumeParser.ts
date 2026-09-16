@@ -339,19 +339,52 @@ async function extractTextFromPdf(arrayBuffer: ArrayBuffer): Promise<string> {
 }
 
 /**
- * Extract raw text from Word (.docx) ArrayBuffer
+ * Extract raw text from Word (.docx) ArrayBuffer using JSZip with mammoth fallback
  */
 async function extractTextFromDocx(arrayBuffer: ArrayBuffer): Promise<string> {
+  try {
+    const JSZipModule = await import('jszip');
+    const JSZip = JSZipModule.default ?? JSZipModule;
+    const zip = await JSZip.loadAsync(arrayBuffer);
+    const docXmlFile = zip.file('word/document.xml');
+    if (docXmlFile) {
+      const xml = await docXmlFile.async('string');
+      const formatted = xml
+        .replace(/<w:tab\s*\/?>/g, '\t')
+        .replace(/<w:br\s*\/?>/g, '\n')
+        .replace(/<\/w:tc>\s*<w:tc[^>]*>/g, ': ')
+        .replace(/<\/w:tr>/g, '\n')
+        .replace(/<\/w:p>/g, '\n')
+        .replace(/<[^>]+>/g, '')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&apos;/g, "'")
+        .replace(/&#160;|&nbsp;/g, ' ')
+        .replace(/\n\s*\n+/g, '\n\n')
+        .trim();
+      if (formatted.length > 50) {
+        return formatted;
+      }
+    }
+  } catch (error) {
+    console.warn('JSZip docx extraction failed, trying mammoth fallback:', error);
+  }
+
   try {
     const mammothModule = await import('mammoth');
     const mammoth = mammothModule.default ?? mammothModule;
     const result = await mammoth.extractRawText({ arrayBuffer });
-    return result.value;
+    if (result.value?.trim()) {
+      return result.value;
+    }
   } catch (error) {
     console.warn('Mammoth docx extraction failed:', error);
-    const decoder = new TextDecoder('utf-8', { fatal: false });
-    return decoder.decode(arrayBuffer).replace(/[^\x20-\x7E\n\r]/g, ' ');
   }
+
+  const decoder = new TextDecoder('utf-8', { fatal: false });
+  return decoder.decode(arrayBuffer).replace(/[^\x20-\x7E\n\r]/g, ' ');
 }
 
 /**

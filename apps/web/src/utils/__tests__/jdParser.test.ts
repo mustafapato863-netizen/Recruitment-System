@@ -111,4 +111,60 @@ Monitor vital signs, administer intensive medications, and coordinate multidisci
     expect(parsed.requiredSkills).toContain('BLS and ACLS');
     expect(parsed.qualifications).toContain('Bachelor of Science in Nursing');
   });
+
+  it('extracts and parses directly from a .docx binary file using JSZip', async () => {
+    const JSZip = (await import('jszip')).default;
+    const zip = new JSZip();
+
+    const sampleDocXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    <w:p><w:r><w:t>Job Specifications</w:t></w:r></w:p>
+    <w:tbl>
+      <w:tr>
+        <w:tc><w:p><w:r><w:t>Job Title</w:t></w:r></w:p></w:tc>
+        <w:tc><w:p><w:r><w:t>HRIS Performance Specialist</w:t></w:r></w:p></w:tc>
+      </w:tr>
+      <w:tr>
+        <w:tc><w:p><w:r><w:t>Department</w:t></w:r></w:p></w:tc>
+        <w:tc><w:p><w:r><w:t>Human Resources</w:t></w:r></w:p></w:tc>
+      </w:tr>
+      <w:tr>
+        <w:tc><w:p><w:r><w:t>Location</w:t></w:r></w:p></w:tc>
+        <w:tc><w:p><w:r><w:t>SGH Cairo Hospital</w:t></w:r></w:p></w:tc>
+      </w:tr>
+    </w:tbl>
+    <w:p><w:r><w:t>Job Summary</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Develop and maintain HR systems and digital solutions to improve operational efficiency and user experience.</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Job Duties &amp; Responsibilities</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Develop and maintain HR portals and business process automations.</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Design and optimize SQL databases for reporting.</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Skills &amp; Knowledge</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Full-Stack Web Development</w:t></w:r></w:p>
+    <w:p><w:r><w:t>SQL Database Administration</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Education</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Bachelor of Computer Science</w:t></w:r></w:p>
+  </w:body>
+</w:document>`;
+
+    zip.file('word/document.xml', sampleDocXml);
+    const docxBuffer = await zip.generateAsync({ type: 'arraybuffer' });
+    const mockFile = new File([docxBuffer], 'HRIS_Performance_Specialist.docx', {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    });
+
+    const { parseJobDescriptionFile } = await import('../jdParser');
+    const parsed = await parseJobDescriptionFile(mockFile);
+
+    expect(parsed.title).toBe('HRIS Performance Specialist');
+    expect(parsed.department).toBe('Human Resources');
+    expect(parsed.location).toBe('SGH Cairo Hospital');
+    expect(parsed.jobSummary).toContain('improve operational efficiency and user experience.');
+    expect(parsed.responsibilities).toContain('Develop and maintain HR portals');
+    expect(parsed.responsibilities).toContain('Design and optimize SQL databases');
+    expect(parsed.requiredSkills).toContain('Full-Stack Web Development');
+    expect(parsed.requiredSkills).toContain('SQL Database Administration');
+    expect(parsed.qualifications).toContain('Bachelor of Computer Science');
+  });
 });
+
