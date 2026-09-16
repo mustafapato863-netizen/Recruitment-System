@@ -32,6 +32,7 @@ Table organizations {
   emailOutbox email_outbox [not null]
   emailTemplates email_templates [not null]
   masterDataValues master_data_values [not null]
+  recruiterTargets recruiter_targets [not null]
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [not null]
 }
@@ -126,6 +127,8 @@ Table users {
   createdTasks tasks [not null]
   completedTasks tasks [not null]
   createdCandidates candidates [not null]
+  recruiterTargetsReceived recruiter_targets [not null]
+  recruiterTargetsSet recruiter_targets [not null]
 
   indexes {
     (organizationId, emailNormalized) [unique]
@@ -867,6 +870,32 @@ Table master_data_values {
   }
 }
 
+Table recruiter_targets {
+  id String [pk]
+  organizationId String [not null]
+  organization organizations [not null]
+  recruiterId String [not null]
+  recruiter users [not null]
+  setById String [not null]
+  setBy users [not null]
+  period String [not null]
+  month String
+  calls Int [not null, default: 0]
+  screenings Int [not null, default: 0]
+  interviews Int [not null, default: 0]
+  offers Int [not null, default: 0]
+  hires Int [not null, default: 0]
+  cvSourced Int [not null, default: 0]
+  notes String
+  isActive Boolean [not null, default: true]
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+
+  indexes {
+    (organizationId, recruiterId, period, month) [unique]
+  }
+}
+
 Ref: branches.organizationId > organizations.id [delete: Restrict]
 
 Ref: positions.organizationId > organizations.id [delete: Restrict]
@@ -1030,3 +1059,9 @@ Ref: tasks.createdById > users.id [delete: Restrict]
 Ref: tasks.completedById > users.id [delete: Restrict]
 
 Ref: master_data_values.organizationId > organizations.id [delete: Restrict]
+
+Ref: recruiter_targets.organizationId > organizations.id [delete: Restrict]
+
+Ref: recruiter_targets.recruiterId > users.id [delete: Restrict]
+
+Ref: recruiter_targets.setById > users.id [delete: Restrict]

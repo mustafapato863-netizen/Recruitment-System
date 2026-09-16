@@ -29,6 +29,7 @@ import { SearchModule } from './search/search.module';
 import { PublicJobsModule } from './public-jobs/public-jobs.module';
 import { EmailTemplatesModule } from './email-templates/email-templates.module';
 import { AccessControlModule } from './access-control/access-control.module';
+import { RecruiterTargetsModule } from './recruiter-targets/recruiter-targets.module';
 import { CorrelationIdMiddleware, TenantContextMiddleware } from './common/middleware';
 
 @Module({
@@ -64,6 +65,7 @@ import { CorrelationIdMiddleware, TenantContextMiddleware } from './common/middl
     SearchModule,
     PublicJobsModule,
     EmailTemplatesModule,
+    RecruiterTargetsModule,
   ],
   controllers: [HealthController],
 })

@@ -43,6 +43,7 @@ model Organization {
   emailOutbox         EmailOutbox[]
   emailTemplates      EmailTemplate[]
   masterDataValues    MasterDataValue[]
+  recruiterTargets    RecruiterTarget[]
   createdAt           DateTime             @default(now()) @db.Timestamptz(6)
   updatedAt           DateTime             @updatedAt @db.Timestamptz(6)
 
@@ -140,6 +141,8 @@ model User {
   createdTasks            Task[]                     @relation("TaskCreator")
   completedTasks          Task[]                     @relation("TaskCompleter")
   createdCandidates       Candidate[]                @relation("CandidateCreator")
+  recruiterTargetsReceived RecruiterTarget[]          @relation("RecruiterTargetAssignee")
+  recruiterTargetsSet      RecruiterTarget[]          @relation("RecruiterTargetSetter")
 
   @@unique([organizationId, emailNormalized])
   @@index([status])
@@ -1016,4 +1019,30 @@ model MasterDataValue {
   @@unique([organizationId, category, name])
   @@index([organizationId, category, status])
   @@map("master_data_values")
+}
+
+model RecruiterTarget {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  recruiterId    String       @db.Uuid
+  recruiter      User         @relation("RecruiterTargetAssignee", fields: [recruiterId], references: [id], onDelete: Restrict)
+  setById        String       @db.Uuid
+  setBy          User         @relation("RecruiterTargetSetter", fields: [setById], references: [id], onDelete: Restrict)
+  period         String       @db.VarChar(10) // "daily" | "monthly"
+  month          String?      @db.VarChar(7)  // "2026-09" for monthly; null for daily defaults
+  calls          Int          @default(0)
+  screenings     Int          @default(0)
+  interviews     Int          @default(0)
+  offers         Int          @default(0)
+  hires          Int          @default(0)
+  cvSourced      Int          @default(0)
+  notes          String?      @db.Text
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime     @updatedAt @db.Timestamptz(6)
+
+  @@unique([organizationId, recruiterId, period, month])
+  @@index([organizationId, recruiterId, isActive])
+  @@map("recruiter_targets")
 }

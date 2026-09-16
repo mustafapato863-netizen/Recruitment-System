@@ -783,7 +783,7 @@ export class VacancyCoreService {
       select: {
         userRoles: {
           where: { role: { status: 'Active' } },
-          select: { role: { select: { permissions: { select: { permission: { select: { code: true } } } } } } },
+          select: { role: { select: { code: true, permissions: { select: { permission: { select: { code: true } } } } } } },
         },
       },
     });

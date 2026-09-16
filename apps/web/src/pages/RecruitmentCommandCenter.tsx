@@ -5,6 +5,7 @@ import { useAuth } from '../auth/AuthContext';
 import { Icon } from '../components/Icon';
 import { PageState } from '../components/ui/PageState';
 import { QuickGuideTrigger } from '../quickguide';
+import { MyTargetsWidget } from '../components/MyTargetsWidget';
 
 interface CommandCenterPosition {
   id: string;
@@ -359,6 +360,9 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
           <Icon name="chevron-right" size={16} className="text-slate-300 dark:text-slate-600 group-hover:translate-x-0.5 transition" />
         </div>
       </div>
+
+      {/* ── My Activity Targets Widget (Recruiter View) ── */}
+      <MyTargetsWidget />
 
       {/* ── Toolbar: Search & View Switcher ── */}
       <div className="flex flex-wrap items-center justify-between gap-3 bg-white dark:bg-slate-900 p-3 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs">

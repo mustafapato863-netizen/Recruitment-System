@@ -10,6 +10,7 @@ import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { PageState } from '../components/ui/PageState';
 import { QuickGuideTrigger } from '../quickguide';
+import { RecruiterTargetsSection } from '../components/RecruiterTargetsSection';
 
 export interface OpenVacancyOption {
   id: string;
@@ -659,6 +660,14 @@ export function ManagerDashboard() {
           </div>
         )}
       </div>
+
+      {/* ── Recruiter Activity Targets Management (Team Lead) ── */}
+      {isManagerOrAdmin && (
+        <RecruiterTargetsSection
+          recruiterOptions={recruiterOptions}
+          showToast={showToast}
+        />
+      )}
 
       {/* ── Middle Row: 2 Big Columns (My Priorities & Open Jobs) ── */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">

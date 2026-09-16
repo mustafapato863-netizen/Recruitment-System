@@ -1578,5 +1578,9 @@ export type {
   TaskRecord,
   UpdateTaskStatusInput,
   TaskFilterInput,
+  TargetPeriod,
+  RecruiterTargetRecord,
+  RecruiterTargetActual,
+  RecruiterTargetProgressRecord,
 } from './notifications-tasks';
 

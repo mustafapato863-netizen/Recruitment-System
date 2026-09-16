@@ -59,3 +59,42 @@ export interface TaskFilterInput {
   page?: number;
   pageSize?: number;
 }
+
+// ── Recruiter Activity Targets ──
+
+export type TargetPeriod = 'daily' | 'monthly';
+
+export interface RecruiterTargetRecord {
+  id: string;
+  recruiterId: string;
+  recruiterName: string;
+  setById: string;
+  setByName: string;
+  period: TargetPeriod;
+  month: string | null;
+  calls: number;
+  screenings: number;
+  interviews: number;
+  offers: number;
+  hires: number;
+  cvSourced: number;
+  notes: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RecruiterTargetActual {
+  calls: number;
+  screenings: number;
+  interviews: number;
+  offers: number;
+  hires: number;
+  cvSourced: number;
+}
+
+export interface RecruiterTargetProgressRecord {
+  target: RecruiterTargetRecord;
+  actual: RecruiterTargetActual;
+}
+
