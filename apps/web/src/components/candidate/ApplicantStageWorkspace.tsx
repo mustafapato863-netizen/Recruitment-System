@@ -58,6 +58,7 @@ interface ApplicantStageWorkspaceProps {
   isScreeningDirty: boolean;
   onSaveScreening: () => Promise<void>;
   isSavingScreening: boolean;
+  screeningError?: string | null;
 }
 
 const STANDARD_STAGE_NAMES = new Set(['Applied', 'Screening', 'Interview', 'Offer', 'Pre-Hire', 'Joined']);
@@ -81,7 +82,7 @@ const emptyOfferDraft = (location: string): OfferDraft => ({
   workLocation: location,
   workingSchedule: 'Full-time (Standard)',
   amount: '',
-  currency: 'SAR',
+  currency: 'AED',
 });
 
 function errorMessage(error: unknown): string {
@@ -186,6 +187,7 @@ export function ApplicantStageWorkspace({
   isScreeningDirty,
   onSaveScreening,
   isSavingScreening,
+  screeningError,
 }: ApplicantStageWorkspaceProps) {
   const [offer, setOffer] = useState<Offer | null>(null);
   const [hiringCase, setHiringCase] = useState<HiringCase | null>(null);
@@ -322,7 +324,7 @@ export function ApplicantStageWorkspace({
       type: 'Salary',
       name: 'Base Salary',
       amount,
-      currency: offerDraft.currency.trim().toUpperCase() || 'SAR',
+      currency: offerDraft.currency.trim().toUpperCase() || 'AED',
       frequency: 'Monthly',
       isTaxable: true,
     };
@@ -567,23 +569,41 @@ export function ApplicantStageWorkspace({
 
             {effectiveStage === 'Screening' && (
               <div className="space-y-4">
+                {screeningError && (
+                  <Alert tone="danger" role="alert">
+                    {screeningError}
+                  </Alert>
+                )}
                 <div className="grid gap-3 text-xs sm:grid-cols-2">
                   <label className="font-semibold text-slate-700 dark:text-slate-300">Screening result
                     <Select aria-label="Workspace screening result" value={screeningOutcome} onChange={(event) => setScreeningOutcome(event.target.value as ScreeningOutcome)} disabled={!canEdit || isSavingScreening} className="mt-1">
                       <option value="On Hold">On Hold</option><option value="Passed">Passed</option><option value="Failed">Failed</option>
                     </Select>
                   </label>
-                  <label className="font-semibold text-slate-700 dark:text-slate-300">Notice period (days)
-                    <Input aria-label="Workspace notice period" type="number" min="0" max="3650" value={noticePeriodDays} onChange={(event) => setNoticePeriodDays(event.target.value)} disabled={!canEdit || isSavingScreening} className="mt-1" />
+                  <label className="font-semibold text-slate-700 dark:text-slate-300">Notice period (days) <span className="text-rose-500">*</span>
+                    <Input aria-label="Workspace notice period" type="number" min="0" max="3650" required value={noticePeriodDays} onChange={(event) => setNoticePeriodDays(event.target.value)} disabled={!canEdit || isSavingScreening} className="mt-1" />
                   </label>
-                  <label className="font-semibold text-slate-700 dark:text-slate-300">Expected salary
-                    <Input aria-label="Workspace expected salary" type="number" min="0" step="0.01" value={showSensitiveOffer ? expectedSalary : ''} placeholder={showSensitiveOffer ? undefined : 'Restricted'} onChange={(event) => setExpectedSalary(event.target.value)} disabled={!canEdit || !showSensitiveOffer || isSavingScreening} className="mt-1" />
+                  <label className="font-semibold text-slate-700 dark:text-slate-300">Expected salary {showSensitiveOffer && <span className="text-rose-500">*</span>}
+                    <Input aria-label="Workspace expected salary" type="number" min="0" step="0.01" required={showSensitiveOffer} value={showSensitiveOffer ? expectedSalary : ''} placeholder={showSensitiveOffer ? undefined : 'Restricted'} onChange={(event) => setExpectedSalary(event.target.value)} disabled={!canEdit || !showSensitiveOffer || isSavingScreening} className="mt-1" />
                   </label>
-                  <label className="font-semibold text-slate-700 dark:text-slate-300">Current salary
-                    <Input aria-label="Workspace current salary" type="number" min="0" step="0.01" value={showSensitiveOffer ? currentSalary : ''} placeholder={showSensitiveOffer ? undefined : 'Restricted'} onChange={(event) => setCurrentSalary(event.target.value)} disabled={!canEdit || !showSensitiveOffer || isSavingScreening} className="mt-1" />
+                  <label className="font-semibold text-slate-700 dark:text-slate-300">Current salary {showSensitiveOffer && <span className="text-rose-500">*</span>}
+                    <Input aria-label="Workspace current salary" type="number" min="0" step="0.01" required={showSensitiveOffer} value={showSensitiveOffer ? currentSalary : ''} placeholder={showSensitiveOffer ? undefined : 'Restricted'} onChange={(event) => setCurrentSalary(event.target.value)} disabled={!canEdit || !showSensitiveOffer || isSavingScreening} className="mt-1" />
                   </label>
-                  <label className="font-semibold text-slate-700 dark:text-slate-300">Currency
-                    <Input aria-label="Workspace salary currency" value={showSensitiveOffer ? salaryCurrency : ''} placeholder={showSensitiveOffer ? undefined : 'Restricted'} onChange={(event) => setSalaryCurrency(event.target.value.toUpperCase())} disabled={!canEdit || !showSensitiveOffer || isSavingScreening} className="mt-1" />
+                  <label className="font-semibold text-slate-700 dark:text-slate-300">Currency {showSensitiveOffer && <span className="text-rose-500">*</span>}
+                    {showSensitiveOffer ? (
+                      <Select
+                        aria-label="Workspace salary currency"
+                        value={salaryCurrency === 'EGP' || salaryCurrency === 'EGY' ? 'EGP' : 'AED'}
+                        onChange={(event) => setSalaryCurrency(event.target.value)}
+                        disabled={!canEdit || isSavingScreening}
+                        className="mt-1"
+                      >
+                        <option value="AED">AED (UAE Dirham)</option>
+                        <option value="EGP">EGP (Egyptian Pound)</option>
+                      </Select>
+                    ) : (
+                      <Input aria-label="Workspace salary currency" value="" placeholder="Restricted" disabled className="mt-1" />
+                    )}
                   </label>
                 </div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">Employee notes
@@ -634,7 +654,7 @@ export function ApplicantStageWorkspace({
                 ) : (
                   <form onSubmit={(event) => void handleSaveOffer(event)} className="space-y-4 rounded-xl border border-slate-200 bg-white/80 p-4 text-xs dark:border-slate-800 dark:bg-slate-900/80">
                     <div><h3 className="font-bold text-slate-900 dark:text-white">Create offer details</h3><p className="mt-1 text-slate-500">The job location is inherited automatically from the requisition.</p></div>
-                    <div className="grid gap-3 sm:grid-cols-2"><label className="font-semibold">Contract type<Input value={offerDraft.contractType} onChange={(event) => setOfferDraft({ ...offerDraft, contractType: event.target.value })} disabled={!canMoveStage || Boolean(busyAction)} className="mt-1" /></label><label className="font-semibold">Probation period<Input value={offerDraft.probationPeriod} onChange={(event) => setOfferDraft({ ...offerDraft, probationPeriod: event.target.value })} disabled={!canMoveStage || Boolean(busyAction)} className="mt-1" /></label><label className="font-semibold">Monthly salary{showSensitiveOffer ? <Input required type="number" min="0.01" step="0.01" value={offerDraft.amount} onChange={(event) => setOfferDraft({ ...offerDraft, amount: event.target.value })} disabled={!canMoveStage || Boolean(busyAction)} className="mt-1" /> : <span className="mt-1 block rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-slate-500">Restricted</span>}</label><label className="font-semibold">Currency<Input value={offerDraft.currency} onChange={(event) => setOfferDraft({ ...offerDraft, currency: event.target.value.toUpperCase() })} disabled={!canMoveStage || Boolean(busyAction) || !showSensitiveOffer} className="mt-1" /></label><label className="font-semibold">Proposed joining date<Input type="date" value={offerDraft.proposedJoiningDate} onChange={(event) => setOfferDraft({ ...offerDraft, proposedJoiningDate: event.target.value })} disabled={!canMoveStage || Boolean(busyAction)} className="mt-1" /></label><label className="font-semibold">Work location<Input value={offerDraft.workLocation || inheritedLocation} readOnly className="mt-1 bg-slate-50 dark:bg-slate-800" /></label></div>
+                    <div className="grid gap-3 sm:grid-cols-2"><label className="font-semibold">Contract type<Input value={offerDraft.contractType} onChange={(event) => setOfferDraft({ ...offerDraft, contractType: event.target.value })} disabled={!canMoveStage || Boolean(busyAction)} className="mt-1" /></label><label className="font-semibold">Probation period<Input value={offerDraft.probationPeriod} onChange={(event) => setOfferDraft({ ...offerDraft, probationPeriod: event.target.value })} disabled={!canMoveStage || Boolean(busyAction)} className="mt-1" /></label><label className="font-semibold">Monthly salary{showSensitiveOffer ? <Input required type="number" min="0.01" step="0.01" value={offerDraft.amount} onChange={(event) => setOfferDraft({ ...offerDraft, amount: event.target.value })} disabled={!canMoveStage || Boolean(busyAction)} className="mt-1" /> : <span className="mt-1 block rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-slate-500">Restricted</span>}</label><label className="font-semibold">Currency<Select aria-label="Offer currency" value={offerDraft.currency === 'EGP' || offerDraft.currency === 'EGY' ? 'EGP' : 'AED'} onChange={(event) => setOfferDraft({ ...offerDraft, currency: event.target.value })} disabled={!canMoveStage || Boolean(busyAction) || !showSensitiveOffer} className="mt-1"><option value="AED">AED (UAE Dirham)</option><option value="EGP">EGP (Egyptian Pound)</option></Select></label><label className="font-semibold">Proposed joining date<Input type="date" value={offerDraft.proposedJoiningDate} onChange={(event) => setOfferDraft({ ...offerDraft, proposedJoiningDate: event.target.value })} disabled={!canMoveStage || Boolean(busyAction)} className="mt-1" /></label><label className="font-semibold">Work location<Input value={offerDraft.workLocation || inheritedLocation} readOnly className="mt-1 bg-slate-50 dark:bg-slate-800" /></label></div>
                     <Button type="submit" size="sm" variant="primary" loading={busyAction === 'offer-save'} disabled={!canMoveStage || !showSensitiveOffer || Boolean(busyAction)}>Save offer</Button>
                   </form>
                 )}

@@ -36,7 +36,6 @@ export class CreateScreeningLogDto {
   currentSalary?: number;
 
   @IsOptional()
-  @IsString()
-  @MaxLength(10)
+  @IsEnum(['AED', 'EGP', 'EGY'], { message: 'Currency must be either AED or EGP' })
   salaryCurrency?: string;
 }

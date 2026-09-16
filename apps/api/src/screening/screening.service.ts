@@ -60,6 +60,9 @@ export class ScreeningService {
       throw new NotFoundException(`Application ${dto.applicationId} was not found.`);
     }
 
+    const rawCurrency = dto.salaryCurrency?.trim().toUpperCase();
+    const normalizedCurrency = rawCurrency === 'EGP' || rawCurrency === 'EGY' ? 'EGP' : 'AED';
+
     const created = await this.prisma.screeningLog.create({
       data: {
         organizationId,
@@ -70,7 +73,7 @@ export class ScreeningService {
         noticePeriodDays: dto.noticePeriodDays ?? null,
         expectedSalary: options.viewSalary ? (dto.expectedSalary ?? null) : null,
         currentSalary: options.viewSalary ? (dto.currentSalary ?? null) : null,
-        salaryCurrency: options.viewSalary ? (dto.salaryCurrency?.trim().toUpperCase() || 'SAR') : 'SAR',
+        salaryCurrency: options.viewSalary ? normalizedCurrency : 'AED',
       },
       include: { screener: true },
     });

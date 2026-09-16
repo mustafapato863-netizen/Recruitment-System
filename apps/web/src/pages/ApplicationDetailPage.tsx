@@ -64,7 +64,7 @@ export function ApplicationDetailPage() {
   const [noticePeriodDays, setNoticePeriodDays] = useState('');
   const [expectedSalary, setExpectedSalary] = useState('');
   const [currentSalary, setCurrentSalary] = useState('');
-  const [salaryCurrency, setSalaryCurrency] = useState('SAR');
+  const [salaryCurrency, setSalaryCurrency] = useState('AED');
   const [isSavingScreening, setIsSavingScreening] = useState(false);
   const [screeningError, setScreeningError] = useState<string | null>(null);
   const [interviews, setInterviews] = useState<Interview[]>([]);
@@ -145,7 +145,7 @@ export function ApplicationDetailPage() {
     setNoticePeriodDays('');
     setExpectedSalary('');
     setCurrentSalary('');
-    setSalaryCurrency('SAR');
+    setSalaryCurrency('AED');
     setScreeningError(null);
   }, [id, requestedStage]);
 
@@ -240,7 +240,7 @@ export function ApplicationDetailPage() {
           setNoticePeriodDays(latest.noticePeriodDays == null ? '' : String(latest.noticePeriodDays));
           setExpectedSalary(latest.expectedSalary == null ? '' : String(latest.expectedSalary));
           setCurrentSalary(latest.currentSalary == null ? '' : String(latest.currentSalary));
-          setSalaryCurrency(latest.salaryCurrency || 'SAR');
+          setSalaryCurrency(latest.salaryCurrency === 'EGP' || latest.salaryCurrency === 'EGY' ? 'EGP' : 'AED');
         }
       }
       if (notesRes.status === 'fulfilled' && notesRes.value) {
@@ -359,7 +359,7 @@ export function ApplicationDetailPage() {
     noticePeriodDays !== (latestScreening?.noticePeriodDays == null ? '' : String(latestScreening.noticePeriodDays)) ||
     expectedSalary !== (latestScreening?.expectedSalary == null ? '' : String(latestScreening.expectedSalary)) ||
     currentSalary !== (latestScreening?.currentSalary == null ? '' : String(latestScreening.currentSalary)) ||
-    salaryCurrency !== (latestScreening?.salaryCurrency ?? 'SAR')
+    salaryCurrency !== (latestScreening?.salaryCurrency === 'EGP' || latestScreening?.salaryCurrency === 'EGY' ? 'EGP' : 'AED')
   );
   useUnsavedChanges(isScreeningDirty && !isSavingScreening);
   const navigateWithUnsavedChanges = useCallback((to: string) => {
@@ -371,17 +371,40 @@ export function ApplicationDetailPage() {
 
   const handleSaveScreening = async () => {
     if (!id || !canSubmitScreening || isSavingScreening) return;
+
+    if (!noticePeriodDays.trim() || Number.isNaN(Number(noticePeriodDays)) || Number(noticePeriodDays) < 0) {
+      setScreeningError('Notice period (days) is required and must be 0 or greater.');
+      return;
+    }
+
+    if (canViewSalary) {
+      if (!expectedSalary.trim() || Number.isNaN(Number(expectedSalary)) || Number(expectedSalary) < 0) {
+        setScreeningError('Expected salary is required.');
+        return;
+      }
+      if (!currentSalary.trim() || Number.isNaN(Number(currentSalary)) || Number(currentSalary) < 0) {
+        setScreeningError('Current salary is required.');
+        return;
+      }
+      const normalizedCurrency = salaryCurrency === 'EGP' || salaryCurrency === 'EGY' ? 'EGP' : salaryCurrency === 'AED' ? 'AED' : '';
+      if (!normalizedCurrency) {
+        setScreeningError('Currency is required. Please select AED or EGP.');
+        return;
+      }
+    }
+
     setIsSavingScreening(true);
     setScreeningError(null);
     try {
+      const normalizedCurrency = salaryCurrency === 'EGP' || salaryCurrency === 'EGY' ? 'EGP' : 'AED';
       await postApi<ScreeningLog>('/screening', {
         applicationId: id,
         outcome: screeningOutcome,
         notes: screeningNotes.trim() || undefined,
-        noticePeriodDays: noticePeriodDays === '' ? undefined : Number(noticePeriodDays),
-        expectedSalary: canViewSalary && expectedSalary !== '' ? Number(expectedSalary) : undefined,
-        currentSalary: canViewSalary && currentSalary !== '' ? Number(currentSalary) : undefined,
-        salaryCurrency: canViewSalary ? salaryCurrency.trim().toUpperCase() || 'SAR' : undefined,
+        noticePeriodDays: Number(noticePeriodDays),
+        expectedSalary: canViewSalary ? Number(expectedSalary) : undefined,
+        currentSalary: canViewSalary ? Number(currentSalary) : undefined,
+        salaryCurrency: canViewSalary ? normalizedCurrency : undefined,
       });
       showToast('Screening details saved');
       await refetchApplication();
@@ -1060,6 +1083,7 @@ export function ApplicationDetailPage() {
         isScreeningDirty={isScreeningDirty}
         onSaveScreening={handleSaveScreening}
         isSavingScreening={isSavingScreening}
+        screeningError={screeningError}
       />
 
       {/* ── Horizontal Navigation Tabs (Overview, Resume, Interviews, Activity, Tasks) ── */}
@@ -1497,12 +1521,13 @@ export function ApplicationDetailPage() {
                         </Select>
                       </label>
                       <label className="font-semibold text-slate-700 dark:text-slate-300">
-                        Notice period (days)
+                        Notice period (days) <span className="text-rose-500">*</span>
                         <Input
                           aria-label="Notice period in days"
                           type="number"
                           min="0"
                           max="3650"
+                          required
                           value={noticePeriodDays}
                           onChange={(event) => setNoticePeriodDays(event.target.value)}
                           disabled={!canSubmitScreening || isSavingScreening}
@@ -1510,12 +1535,13 @@ export function ApplicationDetailPage() {
                         />
                       </label>
                       <label className="font-semibold text-slate-700 dark:text-slate-300">
-                        Expected salary
+                        Expected salary {canViewSalary && <span className="text-rose-500">*</span>}
                         <Input
                           aria-label="Expected salary"
                           type="number"
                           min="0"
                           step="0.01"
+                          required={canViewSalary}
                           value={expectedSalary}
                           onChange={(event) => setExpectedSalary(event.target.value)}
                           disabled={!canSubmitScreening || !canViewSalary || isSavingScreening}
@@ -1523,12 +1549,13 @@ export function ApplicationDetailPage() {
                         />
                       </label>
                       <label className="font-semibold text-slate-700 dark:text-slate-300">
-                        Current salary
+                        Current salary {canViewSalary && <span className="text-rose-500">*</span>}
                         <Input
                           aria-label="Current salary"
                           type="number"
                           min="0"
                           step="0.01"
+                          required={canViewSalary}
                           value={currentSalary}
                           onChange={(event) => setCurrentSalary(event.target.value)}
                           disabled={!canSubmitScreening || !canViewSalary || isSavingScreening}
@@ -1536,15 +1563,21 @@ export function ApplicationDetailPage() {
                         />
                       </label>
                       <label className="font-semibold text-slate-700 dark:text-slate-300">
-                        Currency
-                        <Input
-                          aria-label="Salary currency"
-                          value={salaryCurrency}
-                          maxLength={10}
-                          onChange={(event) => setSalaryCurrency(event.target.value.toUpperCase())}
-                          disabled={!canSubmitScreening || !canViewSalary || isSavingScreening}
-                          className="mt-1"
-                        />
+                        Currency {canViewSalary && <span className="text-rose-500">*</span>}
+                        {canViewSalary ? (
+                          <Select
+                            aria-label="Salary currency"
+                            value={salaryCurrency === 'EGP' || salaryCurrency === 'EGY' ? 'EGP' : 'AED'}
+                            onChange={(event) => setSalaryCurrency(event.target.value)}
+                            disabled={!canSubmitScreening || isSavingScreening}
+                            className="mt-1"
+                          >
+                            <option value="AED">AED (UAE Dirham)</option>
+                            <option value="EGP">EGP (Egyptian Pound)</option>
+                          </Select>
+                        ) : (
+                          <Input aria-label="Salary currency" value="" placeholder="Restricted" disabled className="mt-1" />
+                        )}
                       </label>
                       <div className="text-[11px] text-slate-500 dark:text-slate-400 flex items-end">
                         {canViewSalary ? 'Salary values are visible to your role.' : 'Salary values are restricted by your role.'}
