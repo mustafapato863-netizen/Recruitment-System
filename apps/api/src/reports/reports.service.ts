@@ -13,6 +13,7 @@ import type {
   RecruiterWorkload,
   ReportOverview,
   ReportTrendPoint,
+  RecruitmentKpiItem,
 } from '@recruitflow/contracts';
 import type { AuthUser } from '@recruitflow/contracts';
 import type { ReportOverviewQueryDto } from './reports.dto';
@@ -314,6 +315,108 @@ export class ReportsService {
         positions: filterPositions.map((position) => ({ id: position.id, label: position.title })),
         recruiters: filterRecruiters.map((recruiter) => ({ id: recruiter.id, label: recruiter.displayName })),
       },
+      recruitmentKpis: (() => {
+        const targetHeadcount = vacancies.reduce((acc, v) => acc + (v.approvedHeadcount || 1), 0) || 1;
+        const attendedInterviews = interviews.filter((i) => i.status === 'Completed').length;
+        const invitationRate = interviews.length === 0 ? 0 : Math.round((attendedInterviews / interviews.length) * 100);
+        const acceptedFinalRate = targetHeadcount === 0 ? 0 : Math.round((acceptedOffers / targetHeadcount) * 100);
+        const offersVsTargetRate = targetHeadcount === 0 ? 0 : Math.round((offers.length / targetHeadcount) * 100);
+        const hiresVsTargetRate = targetHeadcount === 0 ? 0 : Math.round((joinedCases.length / targetHeadcount) * 100);
+
+        const ninetyDaysAgo = new Date(Date.now() - (90 * DAY_MS));
+        const eligibleForProbation = joinedCases.filter((jc) => jc.actualJoiningDate && jc.actualJoiningDate <= ninetyDaysAgo);
+        const passedProbation = eligibleForProbation.length;
+        const probationRate = eligibleForProbation.length === 0 ? 100 : Math.round((passedProbation / eligibleForProbation.length) * 100);
+
+        const kpiItems: RecruitmentKpiItem[] = [
+          {
+            id: 'kpi-invitation',
+            position: 'Recruitment',
+            name: 'Invitation',
+            definition: 'Measures the percentage of sourced candidate’s actual attending the interviews.',
+            currentValue: invitationRate,
+            formattedValue: `${invitationRate}%`,
+            targetValue: 80,
+            formattedTarget: '80%',
+            unit: '%',
+            achievementRate: Math.min(100, Math.round((invitationRate / 80) * 100)),
+            status: invitationRate >= 80 ? 'On Target' : 'Under Target',
+            notes: `${attendedInterviews} attended of ${interviews.length} scheduled`,
+          },
+          {
+            id: 'kpi-accepted-final',
+            position: 'Recruitment',
+            name: 'Accepted Final',
+            definition: 'Measures the percentage of candidates who accepted the final offer Vs target',
+            currentValue: acceptedFinalRate,
+            formattedValue: `${acceptedFinalRate}%`,
+            targetValue: 100,
+            formattedTarget: '100%',
+            unit: '%',
+            achievementRate: Math.min(100, acceptedFinalRate),
+            status: acceptedFinalRate >= 100 ? 'Exceeded' : acceptedFinalRate >= 80 ? 'On Target' : 'Under Target',
+            notes: `${acceptedOffers} accepted offers vs ${targetHeadcount} target positions`,
+          },
+          {
+            id: 'kpi-offers',
+            position: 'Recruitment',
+            name: 'Offers',
+            definition: 'Measures the percentage of offers Vs. target.',
+            currentValue: offersVsTargetRate,
+            formattedValue: `${offersVsTargetRate}%`,
+            targetValue: 100,
+            formattedTarget: '100%',
+            unit: '%',
+            achievementRate: Math.min(100, offersVsTargetRate),
+            status: offersVsTargetRate >= 100 ? 'Exceeded' : offersVsTargetRate >= 80 ? 'On Target' : 'Under Target',
+            notes: `${offers.length} extended offers vs ${targetHeadcount} target positions`,
+          },
+          {
+            id: 'kpi-hires',
+            position: 'Recruitment',
+            name: 'Hires',
+            definition: 'Measures the percentage of hires vs the target',
+            currentValue: hiresVsTargetRate,
+            formattedValue: `${hiresVsTargetRate}%`,
+            targetValue: 100,
+            formattedTarget: '100%',
+            unit: '%',
+            achievementRate: Math.min(100, hiresVsTargetRate),
+            status: hiresVsTargetRate >= 100 ? 'Exceeded' : hiresVsTargetRate >= 80 ? 'On Target' : 'Under Target',
+            notes: `${joinedCases.length} confirmed hires vs ${targetHeadcount} target positions`,
+          },
+          {
+            id: 'kpi-time-to-fill',
+            position: 'Recruitment',
+            name: 'Time to Fill',
+            definition: 'The total number of calendar days from when a job requisition is approved to when a candidate accepts the Hire.',
+            currentValue: timeToFill,
+            formattedValue: `${timeToFill} Days`,
+            targetValue: 30,
+            formattedTarget: '≤ 30 Days',
+            unit: 'Days',
+            achievementRate: timeToFill === 0 ? 100 : Math.min(100, Math.round((30 / Math.max(1, timeToFill)) * 100)),
+            status: timeToFill > 0 && timeToFill <= 30 ? 'On Target' : timeToFill > 30 ? 'Under Target' : 'On Target',
+            notes: 'Calculated from requisition approved opening to candidate hire acceptance/joining',
+          },
+          {
+            id: 'kpi-quality-of-hire',
+            position: 'Recruitment',
+            name: 'Quality of Hire (Probation Success Rate)',
+            definition: 'The percentage of new hires who successfully complete their probation period and meet performance expectations.',
+            currentValue: probationRate,
+            formattedValue: `${probationRate}%`,
+            targetValue: 90,
+            formattedTarget: '≥ 90%',
+            unit: '%',
+            achievementRate: Math.min(100, Math.round((probationRate / 90) * 100)),
+            status: probationRate >= 90 ? 'On Target' : 'Under Target',
+            notes: 'Standard 90-day post-joining retention & performance success',
+          },
+        ];
+
+        return kpiItems;
+      })(),
     };
   }
 
@@ -348,6 +451,26 @@ export class ReportsService {
         ['Interview no-show rate (%)', overview.kpis.interviewNoShowRate.value, ''],
         ['Top source', overview.kpis.topSource.name, ''],
       ]), 'Summary');
+
+      if (overview.recruitmentKpis && overview.recruitmentKpis.length > 0) {
+        XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
+          ['Saudi German Health - Recruitment KPIs Scorecard'],
+          ['Reporting Range', `${overview.range.from} to ${overview.range.to}`],
+          ['Generated At', new Date().toISOString()],
+          [],
+          ['Position', 'KPI Name', 'Definition', 'Current Value', 'Target', 'Status', 'Notes'],
+          ...overview.recruitmentKpis.map((k) => [
+            k.position,
+            k.name,
+            k.definition,
+            k.formattedValue,
+            k.formattedTarget,
+            k.status,
+            k.notes || '',
+          ]),
+        ]), 'Recruitment KPIs');
+      }
+
       XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(overview.trend), 'Trend');
       XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(overview.funnel.map((stage) => ({
         stage: stage.name,

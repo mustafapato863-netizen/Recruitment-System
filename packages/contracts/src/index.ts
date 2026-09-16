@@ -1456,6 +1456,21 @@ export interface ReportFilterOption {
   label: string;
 }
 
+export interface RecruitmentKpiItem {
+  id: string;
+  position: string; // 'Recruitment'
+  name: string;
+  definition: string;
+  currentValue: number;
+  formattedValue: string;
+  targetValue: number;
+  formattedTarget: string;
+  unit: '%' | 'Days';
+  achievementRate: number;
+  status: 'Exceeded' | 'On Target' | 'Under Target';
+  notes?: string;
+}
+
 export interface ReportOverview {
   range: ReportRange;
   comparisonRange: ReportRange;
@@ -1476,6 +1491,7 @@ export interface ReportOverview {
     positions: ReportFilterOption[];
     recruiters: ReportFilterOption[];
   };
+  recruitmentKpis?: RecruitmentKpiItem[];
 }
 
 export type GlobalSearchEntityType = 'candidate' | 'vacancy' | 'application' | 'task' | 'interview' | 'offer' | 'approval' | 'notification' | 'cv' | 'talent-pool' | 'master-data';
