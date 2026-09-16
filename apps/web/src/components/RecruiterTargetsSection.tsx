@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { RecruiterTargetRecord } from '@recruitflow/contracts';
 import { getApi, postApi, patchApi } from '../api/client';
+import { useAuth } from '../auth/AuthContext';
+import { isTeamLeaderOrAdmin } from '../auth/workspacePersona';
 import { Icon } from './Icon';
 import { Modal } from './Modal';
 import { Button } from './ui/Button';
@@ -15,6 +17,7 @@ interface RecruiterOption {
 interface Props {
   recruiterOptions: RecruiterOption[];
   showToast: (msg: string) => void;
+  canManage?: boolean;
 }
 
 const TARGET_FIELDS = [
@@ -48,12 +51,23 @@ const EMPTY_FORM: TargetFormState = {
   notes: '',
 };
 
-export function RecruiterTargetsSection({ recruiterOptions, showToast }: Props) {
+export function RecruiterTargetsSection({ recruiterOptions, showToast, canManage }: Props) {
+  const { user } = useAuth();
   const [targets, setTargets] = useState<RecruiterTargetRecord[]>([]);
   const [activeTab, setActiveTab] = useState<'daily' | 'monthly'>('daily');
   const [isLoading, setIsLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  const effectiveCanManage = useMemo(() => {
+    if (canManage !== undefined) return canManage;
+    const isAdministrator = Boolean(
+      user?.roles?.some((role) => role.code?.toUpperCase() === 'ADMIN' || role.code?.toUpperCase() === 'ADMINISTRATOR')
+    );
+    return isAdministrator || (isTeamLeaderOrAdmin(user) && Boolean(
+      user?.permissions?.includes('VACANCY_MANAGE') || user?.permissions?.includes('VACANCY_ASSIGN')
+    ));
+  }, [canManage, user]);
 
   // Modal form state
   const [selectedRecruiterId, setSelectedRecruiterId] = useState('');
@@ -79,6 +93,10 @@ export function RecruiterTargetsSection({ recruiterOptions, showToast }: Props) 
   }, [loadTargets]);
 
   const openCreateModal = () => {
+    if (!effectiveCanManage) {
+      showToast('You do not have permission to set targets.');
+      return;
+    }
     setEditingId(null);
     setForm({ ...EMPTY_FORM });
     setSelectedRecruiterId(recruiterOptions[0]?.id ?? '');
@@ -88,6 +106,10 @@ export function RecruiterTargetsSection({ recruiterOptions, showToast }: Props) 
   };
 
   const openEditModal = (target: RecruiterTargetRecord) => {
+    if (!effectiveCanManage) {
+      showToast('You do not have permission to edit targets.');
+      return;
+    }
     setEditingId(target.id);
     setSelectedRecruiterId(target.recruiterId);
     setModalPeriod(target.period);
@@ -105,6 +127,10 @@ export function RecruiterTargetsSection({ recruiterOptions, showToast }: Props) 
   };
 
   const handleSave = async () => {
+    if (!effectiveCanManage) {
+      showToast('You do not have permission to set targets.');
+      return;
+    }
     setIsSaving(true);
     try {
       if (editingId) {
@@ -192,14 +218,16 @@ export function RecruiterTargetsSection({ recruiterOptions, showToast }: Props) 
             </button>
           </div>
 
-          <button
-            type="button"
-            onClick={openCreateModal}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
-          >
-            <Icon name="plus" size={13} />
-            <span>Set Target</span>
-          </button>
+          {effectiveCanManage && (
+            <button
+              type="button"
+              onClick={openCreateModal}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+            >
+              <Icon name="plus" size={13} />
+              <span>Set Target</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -215,7 +243,9 @@ export function RecruiterTargetsSection({ recruiterOptions, showToast }: Props) 
             No {activeTab} targets set yet
           </p>
           <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
-            Click &ldquo;Set Target&rdquo; to assign activity goals to your recruiters.
+            {effectiveCanManage
+              ? 'Click "Set Target" to assign activity goals to your recruiters.'
+              : 'No activity targets currently configured.'}
           </p>
         </div>
       ) : (
@@ -231,9 +261,11 @@ export function RecruiterTargetsSection({ recruiterOptions, showToast }: Props) 
                     <span className="mr-1">{f.icon}</span>{f.label}
                   </th>
                 ))}
-                <th className="text-center py-2.5 px-2 font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-[10px]">
-                  Actions
-                </th>
+                {effectiveCanManage && (
+                  <th className="text-center py-2.5 px-2 font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider text-[10px]">
+                    Actions
+                  </th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -277,16 +309,18 @@ export function RecruiterTargetsSection({ recruiterOptions, showToast }: Props) 
                         </td>
                       );
                     })}
-                    <td className="text-center py-3 px-2">
-                      <button
-                        type="button"
-                        onClick={() => openEditModal(target)}
-                        className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-bold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded-lg transition cursor-pointer"
-                      >
-                        <Icon name="edit" size={11} />
-                        Edit
-                      </button>
-                    </td>
+                    {effectiveCanManage && (
+                      <td className="text-center py-3 px-2">
+                        <button
+                          type="button"
+                          onClick={() => openEditModal(target)}
+                          className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-bold text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded-lg transition cursor-pointer"
+                        >
+                          <Icon name="edit" size={11} />
+                          Edit
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 );
               })}
@@ -297,7 +331,7 @@ export function RecruiterTargetsSection({ recruiterOptions, showToast }: Props) 
 
       {/* Set / Edit Target Modal */}
       <Modal
-        isOpen={isModalOpen}
+        isOpen={isModalOpen && effectiveCanManage}
         onClose={() => setIsModalOpen(false)}
         title={editingId ? 'Edit Recruiter Target' : 'Set Recruiter Activity Target'}
       >

@@ -109,9 +109,18 @@ export function TasksPage() {
   const [instructions, setInstructions] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const isManagerOrAdmin = useMemo(() => {
-    return isTeamLeaderOrAdmin(user);
+  const isAdministrator = useMemo(() => {
+    return Boolean(
+      user?.roles?.some((role) => role.code?.toUpperCase() === 'ADMIN' || role.code?.toUpperCase() === 'ADMINISTRATOR')
+    );
   }, [user]);
+
+
+  const canAssignTasks = useMemo(() => {
+    return isAdministrator || (isTeamLeaderOrAdmin(user) && Boolean(
+      user?.permissions?.includes('VACANCY_ASSIGN') || user?.permissions?.includes('VACANCY_MANAGE'),
+    ));
+  }, [user, isAdministrator]);
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -257,7 +266,7 @@ export function TasksPage() {
 
   const handleAssignTask = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isManagerOrAdmin) {
+    if (!canAssignTasks) {
       showToast('Recruiters are not authorized to assign or reassign tasks.');
       return;
     }
@@ -423,7 +432,7 @@ export function TasksPage() {
           </p>
         </div>
 
-        {isManagerOrAdmin && (
+        {canAssignTasks && (
           <button
             type="button"
             onClick={() => setIsAssignModalOpen(true)}
@@ -691,7 +700,7 @@ export function TasksPage() {
                   ? 'Try adjusting your search terms or active filters.'
                   : 'Your recruitment task queue is currently empty.'
               }
-              actionLabel={searchQuery || activeFilterTab !== 'All Tasks' ? 'Reset filters' : 'Assign task'}
+              actionLabel={searchQuery || activeFilterTab !== 'All Tasks' ? 'Reset filters' : (canAssignTasks ? 'Assign task' : undefined)}
               onAction={
                 searchQuery || activeFilterTab !== 'All Tasks'
                   ? () => {
@@ -702,7 +711,7 @@ export function TasksPage() {
                       setSelectedPriorityFilter('ALL');
                       setSelectedDepartmentFilter('ALL');
                     }
-                  : () => setIsAssignModalOpen(true)
+                  : (canAssignTasks ? () => setIsAssignModalOpen(true) : undefined)
               }
             />
           </div>
@@ -924,7 +933,7 @@ export function TasksPage() {
 
       {/* Assign Open Vacancy & Target Modal */}
       <Modal
-        isOpen={isAssignModalOpen && isManagerOrAdmin}
+        isOpen={isAssignModalOpen && canAssignTasks}
         onClose={() => setIsAssignModalOpen(false)}
         title="Assign Open Vacancy & Target to Recruiter"
         maxWidthClass="max-w-lg"

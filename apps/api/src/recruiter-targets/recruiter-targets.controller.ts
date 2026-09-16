@@ -26,7 +26,7 @@ export class RecruiterTargetsController {
 
   /** GET /recruiter-targets — List all targets (Team Lead / Manager view) */
   @Get()
-  @RequirePermissions('VACANCY_MANAGE')
+  @RequireAnyPermissions('VACANCY_MANAGE', 'VACANCY_ASSIGN')
   list(
     @CurrentUser() user: AuthUser,
     @Query('period') period?: string,
@@ -43,7 +43,7 @@ export class RecruiterTargetsController {
 
   /** POST /recruiter-targets — Create or update a recruiter's target */
   @Post()
-  @RequirePermissions('VACANCY_MANAGE')
+  @RequireAnyPermissions('VACANCY_MANAGE', 'VACANCY_ASSIGN')
   upsert(
     @CurrentUser() user: AuthUser,
     @Body() dto: UpsertRecruiterTargetDto,
@@ -53,7 +53,7 @@ export class RecruiterTargetsController {
 
   /** PATCH /recruiter-targets/:id — Update existing target */
   @Patch(':id')
-  @RequirePermissions('VACANCY_MANAGE')
+  @RequireAnyPermissions('VACANCY_MANAGE', 'VACANCY_ASSIGN')
   update(
     @CurrentUser() user: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,
@@ -64,7 +64,7 @@ export class RecruiterTargetsController {
 
   /** DELETE /recruiter-targets/:id — Deactivate a target */
   @Delete(':id')
-  @RequireAnyPermissions('VACANCY_MANAGE')
+  @RequireAnyPermissions('VACANCY_MANAGE', 'VACANCY_ASSIGN')
   deactivate(
     @CurrentUser() user: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,

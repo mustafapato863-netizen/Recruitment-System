@@ -73,9 +73,40 @@ export function ManagerDashboard() {
   const [isAssigning, setIsAssigning] = useState(false);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
-  const isManagerOrAdmin = useMemo(() => {
-    return isTeamLeaderOrAdmin(user);
+  const isAdministrator = useMemo(() => {
+    return Boolean(
+      user?.roles?.some((role) => role.code?.toUpperCase() === 'ADMIN' || role.code?.toUpperCase() === 'ADMINISTRATOR')
+    );
   }, [user]);
+
+
+  const canAssignInitial = useMemo(() => {
+    return isAdministrator || (isTeamLeaderOrAdmin(user) && Boolean(
+      user?.permissions?.includes('VACANCY_ASSIGN'),
+    ));
+  }, [user, isAdministrator]);
+
+  const canReassignRecruiter = useMemo(() => {
+    return isAdministrator || (isTeamLeaderOrAdmin(user) && Boolean(
+      user?.permissions?.includes('VACANCY_REASSIGN'),
+    ));
+  }, [user, isAdministrator]);
+
+  const canManageTargets = useMemo(() => {
+    return isAdministrator || (isTeamLeaderOrAdmin(user) && Boolean(
+      user?.permissions?.includes('VACANCY_MANAGE') || user?.permissions?.includes('VACANCY_ASSIGN'),
+    ));
+  }, [user, isAdministrator]);
+
+  const availableModalVacancies = useMemo(() => {
+    return openVacanciesList.filter((vac) => {
+      const isAssigned = vac.currentRecruiter !== 'Unassigned';
+      if (isAssigned) {
+        return canReassignRecruiter;
+      }
+      return canAssignInitial;
+    });
+  }, [openVacanciesList, canAssignInitial, canReassignRecruiter]);
 
   const showToast = (msg: string) => {
     setToastMsg(msg);
@@ -83,8 +114,15 @@ export function ManagerDashboard() {
   };
 
   const openAssignModalForVacancy = (vacId?: string) => {
-    if (!isManagerOrAdmin) {
-      showToast('Recruiters are not authorized to assign or reassign tasks.');
+    const targetVac = vacId ? openVacanciesList.find((v) => v.id === vacId) : availableModalVacancies[0];
+    const isReassign = Boolean(targetVac && targetVac.currentRecruiter !== 'Unassigned');
+
+    if (isReassign ? !canReassignRecruiter : !canAssignInitial) {
+      showToast(
+        isReassign
+          ? 'You do not have permission to reassign vacancies.'
+          : 'You do not have permission to assign vacancies or targets.'
+      );
       return;
     }
     if (vacId) {
@@ -93,20 +131,31 @@ export function ManagerDashboard() {
       if (found && found.currentRecruiterId) {
         setSelectedRecruiterId(found.currentRecruiterId);
       }
+    } else if (availableModalVacancies[0]) {
+      setSelectedVacancyId(availableModalVacancies[0].id);
+      if (availableModalVacancies[0].currentRecruiterId) {
+        setSelectedRecruiterId(availableModalVacancies[0].currentRecruiterId);
+      }
     }
     setIsAssignTaskModalOpen(true);
   };
 
   const handleAssignTaskSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isManagerOrAdmin) {
-      showToast('Recruiters are not authorized to assign or reassign tasks.');
-      return;
-    }
-    const vacancy = openVacanciesList.find((v) => v.id === selectedVacancyId) || openVacanciesList[0];
+    const vacancy = openVacanciesList.find((v) => v.id === selectedVacancyId) || availableModalVacancies[0];
     const recruiter = recruiterOptions.find((r) => r.id === selectedRecruiterId) || recruiterOptions[0];
 
     if (!vacancy || !recruiter) return;
+
+    const isReassign = vacancy.currentRecruiter !== 'Unassigned' && vacancy.currentRecruiter !== recruiter.name;
+    if (isReassign ? !canReassignRecruiter : !canAssignInitial) {
+      showToast(
+        isReassign
+          ? 'You do not have permission to reassign vacancies.'
+          : 'You do not have permission to assign vacancies or targets.'
+      );
+      return;
+    }
 
     setIsAssigning(true);
     try {
@@ -331,7 +380,7 @@ export function ManagerDashboard() {
             <Icon name="users" size={14} className="text-slate-500" />
           </button>
 
-          {isManagerOrAdmin && (
+          {(canAssignInitial || canReassignRecruiter) && (
             <button
               type="button"
               onClick={() => openAssignModalForVacancy()}
@@ -487,7 +536,7 @@ export function ManagerDashboard() {
               </button>
             </div>
 
-            {isManagerOrAdmin && (
+            {(canAssignInitial || canManageTargets) && (
               <button
                 type="button"
                 onClick={() => openAssignModalForVacancy()}
@@ -663,10 +712,11 @@ export function ManagerDashboard() {
       </div>
 
       {/* ── Recruiter Activity Targets: Management (Team Lead) vs My Targets (Recruiter) ── */}
-      {isManagerOrAdmin ? (
+      {canManageTargets ? (
         <RecruiterTargetsSection
           recruiterOptions={recruiterOptions}
           showToast={showToast}
+          canManage={canManageTargets}
         />
       ) : (
         <MyTargetsWidget />
@@ -790,7 +840,8 @@ export function ManagerDashboard() {
                   </div>
 
                   <div className="flex items-center gap-2 shrink-0">
-                    {isManagerOrAdmin && (
+                    {((job.currentRecruiter === 'Unassigned' && canAssignInitial) ||
+                      (job.currentRecruiter !== 'Unassigned' && canReassignRecruiter)) && (
                       <button
                         type="button"
                         onClick={(e) => {
@@ -1108,7 +1159,7 @@ export function ManagerDashboard() {
 
       {/* Assign Open Vacancy & Target Modal */}
       <Modal
-        isOpen={isAssignTaskModalOpen && isManagerOrAdmin}
+        isOpen={isAssignTaskModalOpen && (canAssignInitial || canReassignRecruiter)}
         onClose={() => setIsAssignTaskModalOpen(false)}
         title="Assign Vacancy & Target to Recruiter"
         maxWidthClass="max-w-lg"
@@ -1118,9 +1169,9 @@ export function ManagerDashboard() {
             Select an open or pending vacancy, delegate it to a recruiter, and establish hiring &amp; screening targets with SLAs.
           </p>
 
-          {openVacanciesList.length === 0 ? (
+          {availableModalVacancies.length === 0 ? (
             <div className="p-4 bg-slate-50 dark:bg-slate-800 rounded-xl text-center text-slate-500">
-              No active vacancies found. Create a vacancy first.
+              No active vacancies available for your assignment permissions.
             </div>
           ) : (
             <>
@@ -1134,14 +1185,14 @@ export function ManagerDashboard() {
                   onChange={(e) => {
                     const id = e.target.value;
                     setSelectedVacancyId(id);
-                    const vac = openVacanciesList.find((v) => v.id === id);
+                    const vac = availableModalVacancies.find((v) => v.id === id);
                     if (vac && vac.currentRecruiterId) {
                       setSelectedRecruiterId(vac.currentRecruiterId);
                     }
                   }}
                   className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-semibold cursor-pointer"
                 >
-                  {openVacanciesList.map((vac) => (
+                  {availableModalVacancies.map((vac) => (
                     <option key={vac.id} value={vac.id}>
                       {vac.title} — {vac.department} ({vac.location}) [{vac.status}] [Current: {vac.currentRecruiter}]
                     </option>
@@ -1151,7 +1202,7 @@ export function ManagerDashboard() {
 
               {/* Vacancy Details Card */}
               {(() => {
-                const currentVac = openVacanciesList.find((v) => v.id === selectedVacancyId) || openVacanciesList[0];
+                const currentVac = availableModalVacancies.find((v) => v.id === selectedVacancyId) || availableModalVacancies[0];
                 const selectedRecruiter = recruiterOptions.find((r) => r.id === selectedRecruiterId) || recruiterOptions[0];
                 const isReassignment =
                   currentVac &&
@@ -1356,7 +1407,7 @@ export function ManagerDashboard() {
             </button>
             <button
               type="submit"
-              disabled={isAssigning || openVacanciesList.length === 0}
+              disabled={isAssigning || availableModalVacancies.length === 0}
               className="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold transition shadow-xs cursor-pointer disabled:opacity-50"
             >
               {isAssigning ? 'Assigning...' : 'Assign Vacancy & Target'}
