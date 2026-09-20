@@ -1,0 +1,1768 @@
+{
+  "data": {
+    "achievements": [
+      "HRIS Performance Specialist"
+    ],
+    "associations": [],
+    "certifications": [],
+    "contact": {
+      "emails": [],
+      "phoneNumbers": [],
+      "websites": []
+    },
+    "education": [
+      {
+        "dateRange": {
+          "durationMonths": 46,
+          "end": {
+            "date": "2019-06-01",
+            "precision": "month"
+          },
+          "start": {
+            "date": "2015-09-01",
+            "precision": "month"
+          }
+        },
+        "fieldsOfStudy": [],
+        "institution": "Cairo University",
+        "level": "bachelor",
+        "location": {
+          "city": "Cairo",
+          "coordinates": {
+            "latitude": 30.06263,
+            "longitude": 31.24967
+          },
+          "country": "Egypt",
+          "countryCode": "EG",
+          "formatted": "Cairo, Cairo, Egypt",
+          "raw": "Cairo, Egypt",
+          "state": "Cairo"
+        },
+        "minors": [],
+        "qualification": "Bachelor's Degree"
+      }
+    ],
+    "employmentMetrics": {
+      "totalExperienceMonths": null
+    },
+    "interests": [],
+    "languages": [
+      {
+        "name": "English"
+      },
+      {
+        "name": "Arabic"
+      }
+    ],
+    "patents": [],
+    "person": {
+      "location": {
+        "city": "Cairo",
+        "coordinates": {
+          "latitude": 30.06263,
+          "longitude": 31.24967
+        },
+        "country": "Egypt",
+        "countryCode": "EG",
+        "formatted": "Cairo, Cairo, Egypt",
+        "raw": "Cairo, Egypt",
+        "state": "Cairo"
+      },
+      "name": {
+        "family": "Smith",
+        "given": "Jane",
+        "middle": null
+      },
+      "nationalities": []
+    },
+    "preferredWorkLocations": [],
+    "projects": [],
+    "publications": [],
+    "rawText": "Alex Morgan\nHRIS Developer | HR Systems, Automation & Data Analytics\nCairo, Egypt\nSUMMARY\nHRIS Developer with hands-on experience designing, building, and maintaining full-stack HR systems — from SQL databases and\nbackend services to automated workflows and performance dashboards. Combines strong software development skills (React,\nNext.js, .NET, Python, Node.js) with deep HR domain knowledge to translate business requirements into scalable, data-driven\nsolutions that improve operational efficiency and decision-making.\nEXPERIENCE\nHRIS Developer | Saudi German Health May 2026 – Present\nCairo, Egypt | Official internal title: HRIS Performance Specialist\n● Design, develop, and maintain full-stack HR web applications and portals integrated with enterprise HR systems and\nSQL databases.\n● Build and administer SQL databases, ensuring data integrity, security, and performance in line with IT governance\nstandards.\n● Develop automated workflows and system integrations to streamline HR processes and reduce manual activities across\ndepartments.\n● Design HR dashboards, reports, and data visualization tools to support performance management and operational\ndecision-making.\n● Analyze HR and business requirements and translate them into system enhancements and technical solutions.\n● Collaborate with HR and business functions on workflow automation, system integration, and digital transformation\ninitiatives.\nHR Performance Analyst | Andalusia Hospitals May 2025 – Apr 2026\nCairo, Egypt\n● Designed and maintained performance dashboards to monitor workforce KPIs.\n● Collected, cleaned, and analyzed large HR datasets to evaluate productivity and efficiency.\n● Automated reporting processes, reducing manual workload and improving accuracy.\n● Delivered data-driven recommendations to improve performance management systems.\n● Collaborated with department heads to optimize workforce planning and resource allocation.\nSales Analyst & Planning | Fambeef Company Jan 2023 – Apr 2025\nCairo, Egypt\n● Analyzed sales and production data to generate actionable business insights.\n● Built and maintained Excel-based systems to automate inventory tracking and reporting.\n● Created performance dashboards to monitor KPIs and improve operational efficiency.\n● Developed forecasting models and strategies to support planning decisions.\nData Entry | Mass Company Feb 2022 – Apr 2022\nCairo, Egypt\n● Entered and organized daily reports with a focus on accuracy and timeliness.\nTechnical Support | WE Company For Internet Services Jan 2020 – Dec 2021\nCairo, Egypt\n● Resolved technical issues and provided solutions to enhance customer satisfaction.\nEDUCATION\nBachelor's Degree | Cairo University\nSep 2015 – Jun 2019 | Cairo, Egypt\nSKILLS\n• Frontend: HTML, CSS, JavaScript, React.js, Next.js, Node.js\n• Backend: C# / .NET, Python (FastAPI, Django), Node.js (NestJS)\n• Software Engineering: Object-Oriented Programming (OOP), SOLID Principles, Design Patterns\n• DevOps: Docker, Kubernetes\n• Data & Systems: SQL (database development, administration, queries, joins, data extraction), HR Information Systems (HRIS)\nDevelopment & Maintenance, Business Process Automation & Workflow Design\n• Analytics & BI: Microsoft Power BI (DAX, data modeling, data visualization), Excel (advanced formulas, Power Query, dashboards),\nPython (pandas, data cleaning, automation)\nLANGUAGES\nArabic | English",
+    "redactedText": "******* **** *******\nHRIS Developer | HR Systems, Automation & Data Analytics\n****** *****\nSUMMARY\nHRIS Developer with hands-on experience designing, building, and maintaining full-stack HR systems — from SQL databases and\nbackend services to automated workflows and performance dashboards. Combines strong software development skills (React,\nNext.js, .NET, Python, Node.js) with deep HR domain knowledge to translate business requirements into scalable, data-driven\nsolutions that improve operational efficiency and decision-making.\nEXPERIENCE\nHRIS Developer | Saudi German Health May 2026 – Present\n****** ***** | Official internal title: HRIS Performance Specialist\n● Design, develop, and maintain full-stack HR web applications and portals integrated with enterprise HR systems and\nSQL databases.\n● Build and administer SQL databases, ensuring data integrity, security, and performance in line with IT governance\nstandards.\n● Develop automated workflows and system integrations to streamline HR processes and reduce manual activities across\ndepartments.\n● Design HR dashboards, reports, and data visualization tools to support performance management and operational\ndecision-making.\n● Analyze HR and business requirements and translate them into system enhancements and technical solutions.\n● Collaborate with HR and business functions on workflow automation, system integration, and digital transformation\ninitiatives.\nHR Performance Analyst | Andalusia Hospitals May 2025 – Apr 2026\n****** *****\n● Designed and maintained performance dashboards to monitor workforce KPIs.\n● Collected, cleaned, and analyzed large HR datasets to evaluate productivity and efficiency.\n● Automated reporting processes, reducing manual workload and improving accuracy.\n● Delivered data-driven recommendations to improve performance management systems.\n● Collaborated with department heads to optimize workforce planning and resource allocation.\nSales Analyst & Planning | Fambeef Company Jan 2023 – Apr 2025\n****** *****\n● Analyzed sales and production data to generate actionable business insights.\n● Built and maintained Excel-based systems to automate inventory tracking and reporting.\n● Created performance dashboards to monitor KPIs and improve operational efficiency.\n● Developed forecasting models and strategies to support planning decisions.\nData Entry | Mass Company Feb 2022 – Apr 2022\n****** *****\n● Entered and organized daily reports with a focus on accuracy and timeliness.\nTechnical Support | WE Company For Internet Services Jan 2020 – Dec 2021\n****** *****\n● Resolved technical issues and provided solutions to enhance customer satisfaction.\nEDUCATION\nBachelor's Degree | Cairo University\nSep 2015 – Jun 2019 | ****** *****\nSKILLS\n• Frontend: HTML, CSS, JavaScript, React.js, Next.js, Node.js\n• Backend: C# / .NET, Python (FastAPI, Django), Node.js (NestJS)\n• Software Engineering: Object-Oriented Programming (OOP), SOLID Principles, Design Patterns\n• DevOps: Docker, Kubernetes\n• Data & Systems: SQL (database development, administration, queries, joins, data extraction), HR Information Systems (HRIS)\nDevelopment & Maintenance, Business Process Automation & Workflow Design\n• Analytics & BI: Microsoft Power BI (DAX, data modeling, data visualization), Excel (advanced formulas, Power Query, dashboards),\nPython (pandas, data cleaning, automation)\nLANGUAGES\nArabic | English",
+    "referees": [],
+    "skills": [
+      {
+        "name": "Analytics",
+        "sources": [
+          {
+            "section": "skills_interests_languages"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_pwsfwfazx2",
+          "isLanguage": false,
+          "isSoftware": false,
+          "type": "specialized_skill"
+        },
+        "text": "Analytics"
+      },
+      {
+        "name": "Back End (Software Engineering)",
+        "sources": [
+          {
+            "section": "skills_interests_languages"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_jc3tr7c2pm",
+          "isLanguage": false,
+          "isSoftware": false,
+          "type": "specialized_skill"
+        },
+        "text": "backend services"
+      },
+      {
+        "name": "Business Process Automation",
+        "sources": [
+          {
+            "section": "skills_interests_languages"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_cvafth3afk",
+          "isLanguage": false,
+          "isSoftware": false,
+          "type": "specialized_skill"
+        },
+        "text": "Business Process Automation"
+      },
+      {
+        "name": "Business Process Modeling",
+        "sources": [
+          {
+            "section": "skills_interests_languages"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_d2js62yq9k",
+          "isLanguage": false,
+          "isSoftware": false,
+          "type": "specialized_skill"
+        },
+        "text": "Business Process"
+      },
+      {
+        "name": "Cascading Style Sheets (CSS)",
+        "sources": [
+          {
+            "section": "skills_interests_languages"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_45bnby2mty",
+          "isLanguage": false,
+          "isSoftware": true,
+          "type": "specialized_skill"
+        },
+        "text": "CSS"
+      },
+      {
+        "name": "Data Cleansing",
+        "sources": [
+          {
+            "section": "skills_interests_languages"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_jm87j2259h",
+          "isLanguage": false,
+          "isSoftware": false,
+          "type": "specialized_skill"
+        },
+        "text": "data cleaning"
+      },
+      {
+        "name": "Data Extraction",
+        "sources": [
+          {
+            "section": "skills_interests_languages"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_69mpzy2rvy",
+          "isLanguage": false,
+          "isSoftware": false,
+          "type": "specialized_skill"
+        },
+        "text": "data extraction"
+      },
+      {
+        "name": "Data Modeling",
+        "sources": [
+          {
+            "section": "skills_interests_languages"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_ch8y8g7xa5",
+          "isLanguage": false,
+          "isSoftware": false,
+          "type": "specialized_skill"
+        },
+        "text": "data modeling"
+      },
+      {
+        "name": "DevOps",
+        "sources": [
+          {
+            "section": "skills_interests_languages"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_dtnjx3dffa",
+          "isLanguage": false,
+          "isSoftware": false,
+          "type": "specialized_skill"
+        },
+        "text": "DevOps"
+      },
+      {
+        "name": "Django (Web Framework)",
+        "sources": [
+          {
+            "section": "skills_interests_languages"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_d2cvg3xsyt",
+          "isLanguage": false,
+          "isSoftware": true,
+          "type": "specialized_skill"
+        },
+        "text": "Django"
+      },
+      {
+        "name": "Docker (Software)",
+        "sources": [
+          {
+            "section": "skills_interests_languages"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_5z6g6h78dk",
+          "isLanguage": false,
+          "isSoftware": true,
+          "type": "specialized_skill"
+        },
+        "text": "Docker"
+      },
+      {
+        "name": "FastAPI",
+        "sources": [
+          {
+            "section": "skills_interests_languages"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_khhxky4xb8",
+          "isLanguage": false,
+          "isSoftware": true,
+          "type": "specialized_skill"
+        },
+        "text": "FastAPI"
+      },
+      {
+        "name": "Front End (Software Engineering)",
+        "sources": [
+          {
+            "section": "skills_interests_languages"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_n22485nm2y",
+          "isLanguage": false,
+          "isSoftware": false,
+          "type": "specialized_skill"
+        },
+        "text": "Frontend"
+      },
+      {
+        "experienceMonths": 5,
+        "lastUsed": {
+          "date": "2026-09-01",
+          "precision": "month"
+        },
+        "name": "Human Resources Information System (HRIS)",
+        "sources": [
+          {
+            "section": "skills_interests_languages"
+          },
+          {
+            "recordIndex": 0,
+            "section": "workexperience"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_s3j3ybkc5e",
+          "isLanguage": false,
+          "isSoftware": true,
+          "type": "specialized_skill"
+        },
+        "text": "HRIS"
+      },
+      {
+        "name": "HyperText Markup Language (HTML)",
+        "sources": [
+          {
+            "section": "skills_interests_languages"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_zkas8ad39a",
+          "isLanguage": false,
+          "isSoftware": true,
+          "type": "specialized_skill"
+        },
+        "text": "HTML"
+      },
+      {
+        "name": "Information Systems",
+        "sources": [
+          {
+            "section": "skills_interests_languages"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_5mk3xdk7fx",
+          "isLanguage": false,
+          "isSoftware": false,
+          "type": "specialized_skill"
+        },
+        "text": "Information Systems"
+      },
+      {
+        "name": "JavaScript (Programming Language)",
+        "sources": [
+          {
+            "section": "skills_interests_languages"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_nb3p6pg564",
+          "isLanguage": false,
+          "isSoftware": true,
+          "type": "specialized_skill"
+        },
+        "text": "JavaScript"
+      },
+      {
+        "name": "Kubernetes",
+        "sources": [
+          {
+            "section": "skills_interests_languages"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_ankhyctvxc",
+          "isLanguage": false,
+          "isSoftware": true,
+          "type": "specialized_skill"
+        },
+        "text": "Kubernetes"
+      },
+      {
+        "name": "Next.js (Javascript Library)",
+        "sources": [
+          {
+            "section": "skills_interests_languages"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_ddz7fpckx7",
+          "isLanguage": false,
+          "isSoftware": true,
+          "type": "specialized_skill"
+        },
+        "text": "Next.js"
+      },
+      {
+        "name": "Node.js (Javascript Library)",
+        "sources": [
+          {
+            "section": "skills_interests_languages"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_ymwp4qz2d7",
+          "isLanguage": false,
+          "isSoftware": true,
+          "type": "specialized_skill"
+        },
+        "text": "Node.js"
+      },
+      {
+        "name": "Object-Oriented Programming (OOP)",
+        "sources": [
+          {
+            "section": "skills_interests_languages"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_kjbgbf6x6q",
+          "isLanguage": false,
+          "isSoftware": false,
+          "type": "specialized_skill"
+        },
+        "text": "Object-Oriented Programming (OOP"
+      },
+      {
+        "name": "Power BI",
+        "sources": [
+          {
+            "section": "skills_interests_languages"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_3zv8e6tcqx",
+          "isLanguage": false,
+          "isSoftware": true,
+          "type": "specialized_skill"
+        },
+        "text": "Microsoft Power BI (DAX"
+      },
+      {
+        "name": "Python (Programming Language)",
+        "sources": [
+          {
+            "section": "skills_interests_languages"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_zfg3qpjq2c",
+          "isLanguage": false,
+          "isSoftware": true,
+          "type": "specialized_skill"
+        },
+        "text": "Python"
+      },
+      {
+        "name": "React.js (Javascript Library)",
+        "sources": [
+          {
+            "section": "skills_interests_languages"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_mvrf4ykx7e",
+          "isLanguage": false,
+          "isSoftware": true,
+          "type": "specialized_skill"
+        },
+        "text": "React"
+      },
+      {
+        "name": "Software Design Patterns",
+        "sources": [
+          {
+            "section": "skills_interests_languages"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_j9ana6rbbp",
+          "isLanguage": false,
+          "isSoftware": false,
+          "type": "specialized_skill"
+        },
+        "text": "Design Patterns"
+      },
+      {
+        "name": "Software Development",
+        "sources": [
+          {
+            "section": "skills_interests_languages"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_9hgr8b6tfg",
+          "isLanguage": false,
+          "isSoftware": false,
+          "type": "specialized_skill"
+        },
+        "text": "software development skills"
+      },
+      {
+        "name": "Software Engineering",
+        "sources": [
+          {
+            "section": "skills_interests_languages"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_8pmcfphq5p",
+          "isLanguage": false,
+          "isSoftware": false,
+          "type": "specialized_skill"
+        },
+        "text": "Software Engineering"
+      },
+      {
+        "name": "Solid Principles",
+        "sources": [
+          {
+            "section": "skills_interests_languages"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_h2pzd5fb29",
+          "isLanguage": false,
+          "isSoftware": false,
+          "type": "specialized_skill"
+        },
+        "text": "SOLID Principles"
+      },
+      {
+        "experienceMonths": 5,
+        "lastUsed": {
+          "date": "2026-09-01",
+          "precision": "month"
+        },
+        "name": "Automation",
+        "sources": [
+          {
+            "recordIndex": 0,
+            "section": "workexperience"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_r36n7gy99d",
+          "isLanguage": false,
+          "isSoftware": false,
+          "type": "specialized_skill"
+        },
+        "text": "Automation"
+      },
+      {
+        "experienceMonths": 28,
+        "lastUsed": {
+          "date": "2025-04-01",
+          "precision": "month"
+        },
+        "name": "Business Intelligence",
+        "sources": [
+          {
+            "recordIndex": 2,
+            "section": "workexperience"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_8tmdsawwnp",
+          "isLanguage": false,
+          "isSoftware": false,
+          "type": "specialized_skill"
+        },
+        "text": "business insights"
+      },
+      {
+        "experienceMonths": 5,
+        "lastUsed": {
+          "date": "2026-09-01",
+          "precision": "month"
+        },
+        "name": "Business Requirements",
+        "sources": [
+          {
+            "recordIndex": 0,
+            "section": "workexperience"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_ej5z5762er",
+          "isLanguage": false,
+          "isSoftware": false,
+          "type": "specialized_skill"
+        },
+        "text": "business requirements"
+      },
+      {
+        "experienceMonths": 72,
+        "lastUsed": {
+          "date": "2026-09-01",
+          "precision": "month"
+        },
+        "name": "C# (Programming Language)",
+        "sources": [
+          {
+            "recordIndex": 0,
+            "section": "workexperience"
+          },
+          {
+            "recordIndex": 1,
+            "section": "workexperience"
+          },
+          {
+            "recordIndex": 2,
+            "section": "workexperience"
+          },
+          {
+            "recordIndex": 3,
+            "section": "workexperience"
+          },
+          {
+            "recordIndex": 4,
+            "section": "workexperience"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_hvpkbzj36w",
+          "isLanguage": false,
+          "isSoftware": true,
+          "type": "specialized_skill"
+        },
+        "text": "C#"
+      },
+      {
+        "experienceMonths": 40,
+        "lastUsed": {
+          "date": "2026-04-01",
+          "precision": "month"
+        },
+        "name": "Dashboard",
+        "sources": [
+          {
+            "recordIndex": 1,
+            "section": "workexperience"
+          },
+          {
+            "recordIndex": 2,
+            "section": "workexperience"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_4jqv5q7rsj",
+          "isLanguage": false,
+          "isSoftware": true,
+          "type": "specialized_skill"
+        },
+        "text": "performance dashboards"
+      },
+      {
+        "experienceMonths": 3,
+        "lastUsed": {
+          "date": "2022-04-01",
+          "precision": "month"
+        },
+        "name": "Data Entry",
+        "sources": [
+          {
+            "recordIndex": 3,
+            "section": "workexperience"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_rdf49ce7xa",
+          "isLanguage": false,
+          "isSoftware": false,
+          "type": "specialized_skill"
+        },
+        "text": "Data Entry"
+      },
+      {
+        "experienceMonths": 5,
+        "lastUsed": {
+          "date": "2026-09-01",
+          "precision": "month"
+        },
+        "name": "Data Integrity",
+        "sources": [
+          {
+            "recordIndex": 0,
+            "section": "workexperience"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_98dq95pq92",
+          "isLanguage": false,
+          "isSoftware": false,
+          "type": "specialized_skill"
+        },
+        "text": "data integrity"
+      },
+      {
+        "experienceMonths": 5,
+        "lastUsed": {
+          "date": "2026-09-01",
+          "precision": "month"
+        },
+        "name": "Data Visualization",
+        "sources": [
+          {
+            "recordIndex": 0,
+            "section": "workexperience"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_75khn77t73",
+          "isLanguage": false,
+          "isSoftware": false,
+          "type": "specialized_skill"
+        },
+        "text": "data visualization tools"
+      },
+      {
+        "experienceMonths": 5,
+        "lastUsed": {
+          "date": "2026-09-01",
+          "precision": "month"
+        },
+        "name": "Digital Transformation",
+        "sources": [
+          {
+            "recordIndex": 0,
+            "section": "workexperience"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_a5fkjym2jq",
+          "isLanguage": false,
+          "isSoftware": false,
+          "type": "specialized_skill"
+        },
+        "text": "digital transformation initiatives"
+      },
+      {
+        "experienceMonths": 5,
+        "lastUsed": {
+          "date": "2026-09-01",
+          "precision": "month"
+        },
+        "name": "IT Governance",
+        "sources": [
+          {
+            "recordIndex": 0,
+            "section": "workexperience"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_n65ecfasfx",
+          "isLanguage": false,
+          "isSoftware": false,
+          "type": "specialized_skill"
+        },
+        "text": "IT governance"
+      },
+      {
+        "experienceMonths": 40,
+        "lastUsed": {
+          "date": "2026-04-01",
+          "precision": "month"
+        },
+        "name": "Key Performance Indicators (KPIs)",
+        "sources": [
+          {
+            "recordIndex": 1,
+            "section": "workexperience"
+          },
+          {
+            "recordIndex": 2,
+            "section": "workexperience"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_jjzee436k7",
+          "isLanguage": false,
+          "isSoftware": false,
+          "type": "specialized_skill"
+        },
+        "text": "KPIs"
+      },
+      {
+        "experienceMonths": 24,
+        "lastUsed": {
+          "date": "2021-12-01",
+          "precision": "month"
+        },
+        "name": ".NET Framework",
+        "sources": [
+          {
+            "recordIndex": 4,
+            "section": "workexperience"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_23cfafy2fb",
+          "isLanguage": false,
+          "isSoftware": true,
+          "type": "specialized_skill"
+        },
+        "text": ".NET"
+      },
+      {
+        "experienceMonths": 28,
+        "lastUsed": {
+          "date": "2025-04-01",
+          "precision": "month"
+        },
+        "name": "Operational Efficiency",
+        "sources": [
+          {
+            "recordIndex": 2,
+            "section": "workexperience"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_kcthernyj3",
+          "isLanguage": false,
+          "isSoftware": false,
+          "type": "specialized_skill"
+        },
+        "text": "operational efficiency"
+      },
+      {
+        "experienceMonths": 17,
+        "lastUsed": {
+          "date": "2026-09-01",
+          "precision": "month"
+        },
+        "name": "Performance Management",
+        "sources": [
+          {
+            "recordIndex": 0,
+            "section": "workexperience"
+          },
+          {
+            "recordIndex": 1,
+            "section": "workexperience"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_4f6pnstwm8",
+          "isLanguage": false,
+          "isSoftware": false,
+          "type": "specialized_skill"
+        },
+        "text": "performance management"
+      },
+      {
+        "experienceMonths": 12,
+        "lastUsed": {
+          "date": "2026-04-01",
+          "precision": "month"
+        },
+        "name": "Resource Allocation",
+        "sources": [
+          {
+            "recordIndex": 1,
+            "section": "workexperience"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_vyf6d3kz9k",
+          "isLanguage": false,
+          "isSoftware": false,
+          "type": "specialized_skill"
+        },
+        "text": "resource allocation"
+      },
+      {
+        "experienceMonths": 24,
+        "lastUsed": {
+          "date": "2021-12-01",
+          "precision": "month"
+        },
+        "name": "Technical Support",
+        "sources": [
+          {
+            "recordIndex": 4,
+            "section": "workexperience"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_ywp2ns4ywe",
+          "isLanguage": false,
+          "isSoftware": false,
+          "type": "specialized_skill"
+        },
+        "text": "Technical Support"
+      },
+      {
+        "experienceMonths": 5,
+        "lastUsed": {
+          "date": "2026-09-01",
+          "precision": "month"
+        },
+        "name": "Visualization",
+        "sources": [
+          {
+            "recordIndex": 0,
+            "section": "workexperience"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_kcamsnqtq8",
+          "isLanguage": false,
+          "isSoftware": false,
+          "type": "specialized_skill"
+        },
+        "text": "visualization"
+      },
+      {
+        "experienceMonths": 5,
+        "lastUsed": {
+          "date": "2026-09-01",
+          "precision": "month"
+        },
+        "name": "Web Applications",
+        "sources": [
+          {
+            "recordIndex": 0,
+            "section": "workexperience"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_m4zwcp62pw",
+          "isLanguage": false,
+          "isSoftware": true,
+          "type": "specialized_skill"
+        },
+        "text": "web applications"
+      },
+      {
+        "experienceMonths": 5,
+        "lastUsed": {
+          "date": "2026-09-01",
+          "precision": "month"
+        },
+        "name": "Workflow Automation",
+        "sources": [
+          {
+            "recordIndex": 0,
+            "section": "workexperience"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_dczbrcb4y8",
+          "isLanguage": false,
+          "isSoftware": false,
+          "type": "specialized_skill"
+        },
+        "text": "automated workflows"
+      },
+      {
+        "experienceMonths": 12,
+        "lastUsed": {
+          "date": "2026-04-01",
+          "precision": "month"
+        },
+        "name": "Workforce Planning",
+        "sources": [
+          {
+            "recordIndex": 1,
+            "section": "workexperience"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_8jwb9t9wsp",
+          "isLanguage": false,
+          "isSoftware": false,
+          "type": "specialized_skill"
+        },
+        "text": "workforce planning"
+      },
+      {
+        "name": "Collaboration",
+        "sources": [
+          {
+            "section": "skills_interests_languages"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_w8j2frybr7",
+          "isLanguage": false,
+          "isSoftware": false,
+          "type": "common_skill"
+        },
+        "text": "Collaborate"
+      },
+      {
+        "experienceMonths": 12,
+        "lastUsed": {
+          "date": "2026-04-01",
+          "precision": "month"
+        },
+        "name": "Data Reporting",
+        "sources": [
+          {
+            "recordIndex": 1,
+            "section": "workexperience"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_qs95pnbg4x",
+          "isLanguage": false,
+          "isSoftware": false,
+          "type": "common_skill"
+        },
+        "text": "Automated reporting processes"
+      },
+      {
+        "experienceMonths": 5,
+        "lastUsed": {
+          "date": "2026-09-01",
+          "precision": "month"
+        },
+        "name": "Decision Making",
+        "sources": [
+          {
+            "recordIndex": 0,
+            "section": "workexperience"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_t7b2ckr6s5",
+          "isLanguage": false,
+          "isSoftware": false,
+          "type": "common_skill"
+        },
+        "text": "decision-making"
+      },
+      {
+        "experienceMonths": 28,
+        "lastUsed": {
+          "date": "2025-04-01",
+          "precision": "month"
+        },
+        "name": "Forecasting",
+        "sources": [
+          {
+            "recordIndex": 2,
+            "section": "workexperience"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_jgs6av8xkp",
+          "isLanguage": false,
+          "isSoftware": false,
+          "type": "common_skill"
+        },
+        "text": "forecasting"
+      },
+      {
+        "experienceMonths": 5,
+        "lastUsed": {
+          "date": "2026-09-01",
+          "precision": "month"
+        },
+        "name": "Governance",
+        "sources": [
+          {
+            "recordIndex": 0,
+            "section": "workexperience"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_z4vq7jne5c",
+          "isLanguage": false,
+          "isSoftware": false,
+          "type": "common_skill"
+        },
+        "text": "governance"
+      },
+      {
+        "experienceMonths": 17,
+        "lastUsed": {
+          "date": "2026-09-01",
+          "precision": "month"
+        },
+        "name": "Management",
+        "sources": [
+          {
+            "recordIndex": 0,
+            "section": "workexperience"
+          },
+          {
+            "recordIndex": 1,
+            "section": "workexperience"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_a62nh48yfv",
+          "isLanguage": false,
+          "isSoftware": false,
+          "type": "common_skill"
+        },
+        "text": "management"
+      },
+      {
+        "experienceMonths": 40,
+        "lastUsed": {
+          "date": "2026-04-01",
+          "precision": "month"
+        },
+        "name": "Planning",
+        "sources": [
+          {
+            "recordIndex": 1,
+            "section": "workexperience"
+          },
+          {
+            "recordIndex": 2,
+            "section": "workexperience"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_gbccjwwke5",
+          "isLanguage": false,
+          "isSoftware": false,
+          "type": "common_skill"
+        },
+        "text": "planning"
+      },
+      {
+        "experienceMonths": 28,
+        "lastUsed": {
+          "date": "2025-04-01",
+          "precision": "month"
+        },
+        "name": "Sales",
+        "sources": [
+          {
+            "recordIndex": 2,
+            "section": "workexperience"
+          }
+        ],
+        "taxonomy": {
+          "affindaId": "af_2h2q6bpaaq",
+          "isLanguage": false,
+          "isSoftware": false,
+          "type": "common_skill"
+        },
+        "text": "Sales"
+      },
+      {
+        "experienceMonths": 3,
+        "lastUsed": {
+          "date": "2022-04-01",
+          "precision": "month"
+        },
+        "name": "accuracy and timeliness",
+        "sources": [
+          {
+            "recordIndex": 3,
+            "section": "workexperience"
+          }
+        ],
+        "text": "accuracy and timeliness"
+      },
+      {
+        "name": "Analytics & BI",
+        "sources": [
+          {
+            "section": "skills_interests_languages"
+          }
+        ],
+        "text": "Analytics & BI"
+      },
+      {
+        "experienceMonths": 5,
+        "lastUsed": {
+          "date": "2026-09-01",
+          "precision": "month"
+        },
+        "name": "and business requirements",
+        "sources": [
+          {
+            "recordIndex": 0,
+            "section": "workexperience"
+          }
+        ],
+        "text": "and business requirements"
+      },
+      {
+        "experienceMonths": 5,
+        "lastUsed": {
+          "date": "2026-09-01",
+          "precision": "month"
+        },
+        "name": "automated workflows and system integrations",
+        "sources": [
+          {
+            "recordIndex": 0,
+            "section": "workexperience"
+          }
+        ],
+        "text": "automated workflows and system integrations"
+      },
+      {
+        "name": "Business Process Automation & Workflow Design",
+        "sources": [
+          {
+            "section": "skills_interests_languages"
+          }
+        ],
+        "text": "Business Process Automation & Workflow Design"
+      },
+      {
+        "name": "C# / .NET",
+        "sources": [
+          {
+            "section": "skills_interests_languages"
+          }
+        ],
+        "text": "C# / .NET"
+      },
+      {
+        "experienceMonths": 3,
+        "lastUsed": {
+          "date": "2022-04-01",
+          "precision": "month"
+        },
+        "name": "daily reports",
+        "sources": [
+          {
+            "recordIndex": 3,
+            "section": "workexperience"
+          }
+        ],
+        "text": "daily reports"
+      },
+      {
+        "experienceMonths": 12,
+        "lastUsed": {
+          "date": "2026-04-01",
+          "precision": "month"
+        },
+        "name": "data-driven recommendations",
+        "sources": [
+          {
+            "recordIndex": 1,
+            "section": "workexperience"
+          }
+        ],
+        "text": "data-driven recommendations"
+      },
+      {
+        "name": "Data & Systems",
+        "sources": [
+          {
+            "section": "skills_interests_languages"
+          }
+        ],
+        "text": "Data & Systems"
+      },
+      {
+        "experienceMonths": 5,
+        "lastUsed": {
+          "date": "2026-09-01",
+          "precision": "month"
+        },
+        "name": "enterprise HR systems",
+        "sources": [
+          {
+            "recordIndex": 0,
+            "section": "workexperience"
+          }
+        ],
+        "text": "enterprise HR systems"
+      },
+      {
+        "name": "Excel (advanced formulas",
+        "sources": [
+          {
+            "section": "skills_interests_languages"
+          }
+        ],
+        "text": "Excel (advanced formulas"
+      },
+      {
+        "experienceMonths": 28,
+        "lastUsed": {
+          "date": "2025-04-01",
+          "precision": "month"
+        },
+        "name": "Excel-based systems",
+        "sources": [
+          {
+            "recordIndex": 2,
+            "section": "workexperience"
+          }
+        ],
+        "text": "Excel-based systems"
+      },
+      {
+        "experienceMonths": 28,
+        "lastUsed": {
+          "date": "2025-04-01",
+          "precision": "month"
+        },
+        "name": "forecasting models and strategies",
+        "sources": [
+          {
+            "recordIndex": 2,
+            "section": "workexperience"
+          }
+        ],
+        "text": "forecasting models and strategies"
+      },
+      {
+        "name": "full-stack HR systems",
+        "sources": [
+          {
+            "section": "skills_interests_languages"
+          }
+        ],
+        "text": "full-stack HR systems"
+      },
+      {
+        "experienceMonths": 5,
+        "lastUsed": {
+          "date": "2026-09-01",
+          "precision": "month"
+        },
+        "name": "full-stack HR web applications and portals",
+        "sources": [
+          {
+            "recordIndex": 0,
+            "section": "workexperience"
+          }
+        ],
+        "text": "full-stack HR web applications and portals"
+      },
+      {
+        "name": "HR domain knowledge",
+        "sources": [
+          {
+            "section": "skills_interests_languages"
+          }
+        ],
+        "text": "HR domain knowledge"
+      },
+      {
+        "name": "HR Information Systems (HRIS) Development & Maintenance",
+        "sources": [
+          {
+            "section": "skills_interests_languages"
+          }
+        ],
+        "text": "HR Information Systems (HRIS) Development & Maintenance"
+      },
+      {
+        "experienceMonths": 28,
+        "lastUsed": {
+          "date": "2025-04-01",
+          "precision": "month"
+        },
+        "name": "inventory tracking and reporting",
+        "sources": [
+          {
+            "recordIndex": 2,
+            "section": "workexperience"
+          }
+        ],
+        "text": "inventory tracking and reporting"
+      },
+      {
+        "experienceMonths": 5,
+        "lastUsed": {
+          "date": "2026-09-01",
+          "precision": "month"
+        },
+        "name": "IT governance standards",
+        "sources": [
+          {
+            "recordIndex": 0,
+            "section": "workexperience"
+          }
+        ],
+        "text": "IT governance standards"
+      },
+      {
+        "experienceMonths": 12,
+        "lastUsed": {
+          "date": "2026-04-01",
+          "precision": "month"
+        },
+        "name": "large HR datasets",
+        "sources": [
+          {
+            "recordIndex": 1,
+            "section": "workexperience"
+          }
+        ],
+        "text": "large HR datasets"
+      },
+      {
+        "name": "Node.js (NestJS",
+        "sources": [
+          {
+            "section": "skills_interests_languages"
+          }
+        ],
+        "text": "Node.js (NestJS"
+      },
+      {
+        "experienceMonths": 5,
+        "lastUsed": {
+          "date": "2026-09-01",
+          "precision": "month"
+        },
+        "name": "operational decision-making",
+        "sources": [
+          {
+            "recordIndex": 0,
+            "section": "workexperience"
+          }
+        ],
+        "text": "operational decision-making"
+      },
+      {
+        "name": "operational efficiency and",
+        "sources": [
+          {
+            "section": "skills_interests_languages"
+          }
+        ],
+        "text": "operational efficiency and"
+      },
+      {
+        "experienceMonths": 28,
+        "lastUsed": {
+          "date": "2025-04-01",
+          "precision": "month"
+        },
+        "name": "planning decisions",
+        "sources": [
+          {
+            "recordIndex": 2,
+            "section": "workexperience"
+          }
+        ],
+        "text": "planning decisions"
+      },
+      {
+        "name": "Programming",
+        "sources": [
+          {
+            "section": "skills_interests_languages"
+          }
+        ],
+        "text": "Programming"
+      },
+      {
+        "experienceMonths": 28,
+        "lastUsed": {
+          "date": "2025-04-01",
+          "precision": "month"
+        },
+        "name": "sales and production data",
+        "sources": [
+          {
+            "recordIndex": 2,
+            "section": "workexperience"
+          }
+        ],
+        "text": "sales and production data"
+      },
+      {
+        "experienceMonths": 5,
+        "lastUsed": {
+          "date": "2026-09-01",
+          "precision": "month"
+        },
+        "name": "SQL databases",
+        "sources": [
+          {
+            "recordIndex": 0,
+            "section": "workexperience"
+          }
+        ],
+        "text": "SQL databases"
+      },
+      {
+        "experienceMonths": 24,
+        "lastUsed": {
+          "date": "2021-12-01",
+          "precision": "month"
+        },
+        "name": "technical issues",
+        "sources": [
+          {
+            "recordIndex": 4,
+            "section": "workexperience"
+          }
+        ],
+        "text": "technical issues"
+      },
+      {
+        "experienceMonths": 12,
+        "lastUsed": {
+          "date": "2026-04-01",
+          "precision": "month"
+        },
+        "name": "workforce KPIs",
+        "sources": [
+          {
+            "recordIndex": 1,
+            "section": "workexperience"
+          }
+        ],
+        "text": "workforce KPIs"
+      },
+      {
+        "experienceMonths": 12,
+        "lastUsed": {
+          "date": "2026-04-01",
+          "precision": "month"
+        },
+        "name": "workforce planning and resource allocation",
+        "sources": [
+          {
+            "recordIndex": 1,
+            "section": "workexperience"
+          }
+        ],
+        "text": "workforce planning and resource allocation"
+      }
+    ],
+    "summary": "HRIS Developer with hands-on experience designing, building, and maintaining full-stack HR systems — from SQL databases and backend services to automated workflows and performance dashboards. Combines strong software development skills (React, Next.js, .NET, Python, Node.js) with deep HR domain knowledge to translate business requirements into scalable, data-driven solutions that improve operational efficiency and decision-making.",
+    "workExperience": [
+      {
+        "dateRange": {
+          "durationMonths": 5,
+          "end": {
+            "current": true
+          },
+          "start": {
+            "date": "2026-05-01",
+            "precision": "month"
+          }
+        },
+        "description": "• Design, develop, and maintain full-stack HR web applications and portals integrated with enterprise HR systems and SQL databases.\n• Build and administer SQL databases, ensuring data integrity, security, and performance in line with IT governance standards.\n• Develop automated workflows and system integrations to streamline HR processes and reduce manual activities across departments.\n• Design HR dashboards, reports, and data visualization tools to support performance management and operational decision-making.\n• Analyze HR and business requirements and translate them into system enhancements and technical solutions.\n• Collaborate with HR and business functions on workflow automation, system integration, and digital transformation initiatives.",
+        "employmentType": "full_time",
+        "jobTitle": "HRIS Developer",
+        "location": {
+          "city": "Cairo",
+          "coordinates": {
+            "latitude": 30.06263,
+            "longitude": 31.24967
+          },
+          "country": "Egypt",
+          "countryCode": "EG",
+          "formatted": "Cairo, Cairo, Egypt",
+          "raw": "Cairo, Egypt",
+          "state": "Cairo"
+        },
+        "occupation": {
+          "classification": {
+            "code": "2134",
+            "majorGroup": {
+              "code": "2",
+              "name": "PROFESSIONAL OCCUPATIONS"
+            },
+            "minorGroup": {
+              "code": "213",
+              "name": "Information Technology Professionals"
+            },
+            "subMajorGroup": {
+              "code": "21",
+              "name": "SCIENCE, RESEARCH, ENGINEERING AND TECHNOLOGY PROFESSIONALS"
+            },
+            "system": "SOC",
+            "title": "Programmers and software development professionals "
+          },
+          "managementLevel": "low",
+          "normalizedTitle": "Developer"
+        },
+        "organization": "Saudi German Health"
+      },
+      {
+        "dateRange": {
+          "durationMonths": 12,
+          "end": {
+            "date": "2026-04-01",
+            "precision": "month"
+          },
+          "start": {
+            "date": "2025-05-01",
+            "precision": "month"
+          }
+        },
+        "description": "• Designed and maintained performance dashboards to monitor workforce KPIs.\n• Collected, cleaned, and analyzed large HR datasets to evaluate productivity and efficiency.\n• Automated reporting processes, reducing manual workload and improving accuracy.\n• Delivered data-driven recommendations to improve performance management systems.\n• Collaborated with department heads to optimize workforce planning and resource allocation.",
+        "employmentType": "full_time",
+        "jobTitle": "HR Performance Analyst",
+        "location": {
+          "city": "Cairo",
+          "coordinates": {
+            "latitude": 30.06263,
+            "longitude": 31.24967
+          },
+          "country": "Egypt",
+          "countryCode": "EG",
+          "formatted": "Cairo, Cairo, Egypt",
+          "raw": "Cairo, Egypt",
+          "state": "Cairo"
+        },
+        "occupation": {
+          "classification": {
+            "code": "3544",
+            "majorGroup": {
+              "code": "3",
+              "name": "ASSOCIATE PROFESSIONAL OCCUPATIONS"
+            },
+            "minorGroup": {
+              "code": "354",
+              "name": "Business Associate Professionals"
+            },
+            "subMajorGroup": {
+              "code": "35",
+              "name": "BUSINESS AND PUBLIC SERVICE ASSOCIATE PROFESSIONALS"
+            },
+            "system": "SOC",
+            "title": "Data analysts"
+          },
+          "managementLevel": "low",
+          "normalizedTitle": "Performance Analyst"
+        },
+        "organization": "Andalusia Hospitals"
+      },
+      {
+        "dateRange": {
+          "durationMonths": 28,
+          "end": {
+            "date": "2025-04-01",
+            "precision": "month"
+          },
+          "start": {
+            "date": "2023-01-01",
+            "precision": "month"
+          }
+        },
+        "description": "• Analyzed sales and production data to generate actionable business insights.\n• Built and maintained Excel-based systems to automate inventory tracking and reporting.\n• Created performance dashboards to monitor KPIs and improve operational efficiency.\n• Developed forecasting models and strategies to support planning decisions.",
+        "employmentType": "full_time",
+        "jobTitle": "Sales Analyst & Planning",
+        "location": {
+          "city": "Cairo",
+          "coordinates": {
+            "latitude": 30.06263,
+            "longitude": 31.24967
+          },
+          "country": "Egypt",
+          "countryCode": "EG",
+          "formatted": "Cairo, Cairo, Egypt",
+          "raw": "Cairo, Egypt",
+          "state": "Cairo"
+        },
+        "occupation": {
+          "normalizedTitle": "Sales Analyst & Planning"
+        },
+        "organization": "Fambeef Company"
+      },
+      {
+        "dateRange": {
+          "durationMonths": 3,
+          "end": {
+            "date": "2022-04-01",
+            "precision": "month"
+          },
+          "start": {
+            "date": "2022-02-01",
+            "precision": "month"
+          }
+        },
+        "description": "• Entered and organized daily reports with a focus on accuracy and timeliness.",
+        "employmentType": "full_time",
+        "jobTitle": "Data Entry",
+        "location": {
+          "city": "Cairo",
+          "coordinates": {
+            "latitude": 30.06263,
+            "longitude": 31.24967
+          },
+          "country": "Egypt",
+          "countryCode": "EG",
+          "formatted": "Cairo, Cairo, Egypt",
+          "raw": "Cairo, Egypt",
+          "state": "Cairo"
+        },
+        "occupation": {
+          "classification": {
+            "code": "4159",
+            "majorGroup": {
+              "code": "4",
+              "name": "ADMINISTRATIVE AND SECRETARIAL OCCUPATIONS"
+            },
+            "minorGroup": {
+              "code": "415",
+              "name": "Other Administrative Occupations"
+            },
+            "subMajorGroup": {
+              "code": "41",
+              "name": "ADMINISTRATIVE OCCUPATIONS"
+            },
+            "system": "SOC",
+            "title": "Other administrative occupations n.e.c."
+          },
+          "normalizedTitle": "Administrative Assistant/Data Entry"
+        },
+        "organization": "Mass Company"
+      },
+      {
+        "dateRange": {
+          "durationMonths": 24,
+          "end": {
+            "date": "2021-12-01",
+            "precision": "month"
+          },
+          "start": {
+            "date": "2020-01-01",
+            "precision": "month"
+          }
+        },
+        "description": "• Resolved technical issues and provided solutions to enhance customer satisfaction.",
+        "employmentType": "full_time",
+        "jobTitle": "Technical Support",
+        "location": {
+          "city": "Cairo",
+          "coordinates": {
+            "latitude": 30.06263,
+            "longitude": 31.24967
+          },
+          "country": "Egypt",
+          "countryCode": "EG",
+          "formatted": "Cairo, Cairo, Egypt",
+          "raw": "Cairo, Egypt",
+          "state": "Cairo"
+        },
+        "occupation": {
+          "classification": {
+            "code": "2132",
+            "majorGroup": {
+              "code": "2",
+              "name": "PROFESSIONAL OCCUPATIONS"
+            },
+            "minorGroup": {
+              "code": "213",
+              "name": "Information Technology Professionals"
+            },
+            "subMajorGroup": {
+              "code": "21",
+              "name": "SCIENCE, RESEARCH, ENGINEERING AND TECHNOLOGY PROFESSIONALS"
+            },
+            "system": "SOC",
+            "title": "IT managers"
+          },
+          "managementLevel": "upper",
+          "normalizedTitle": "Director of Technical Support"
+        },
+        "organization": "WE Company For Internet Services"
+      }
+    ]
+  },
+  "meta": {
+    "document": {
+      "classification": {
+        "confidence": 0.5226,
+        "label": "resume",
+        "modelVersion": "document-domain-p1b-r2-clean-20260728"
+      },
+      "extractionQuality": {
+        "band": "high",
+        "score": 0.9596
+      }
+    },
+    "schemaVersion": "1.0",
+    "timing": {
+      "totalMs": 130.935609
+    }
+  }
+}

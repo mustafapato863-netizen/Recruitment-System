@@ -64,6 +64,7 @@ export function CandidateFitScorecard({
   showBreakdownInitially = true,
 }: CandidateFitScorecardProps) {
   const [isExpanded, setIsExpanded] = useState(showBreakdownInitially);
+  const [expandedSkillEvidence, setExpandedSkillEvidence] = useState<string | null>(null);
 
   const result: CriteriaBreakdown =
     providedBreakdown ||
@@ -180,41 +181,129 @@ export function CandidateFitScorecard({
                 />
               </div>
 
-              {/* Matched Skills */}
-              <div className="space-y-1.5">
-                {skills.matched.length > 0 && (
-                  <div className="flex flex-wrap gap-1">
-                    {skills.matched.map((skill) => (
-                      <span
-                        key={skill}
-                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 text-[10.5px] font-semibold"
-                      >
-                        <Icon name="check" size={10} />
-                        {skill}
-                      </span>
-                    ))}
-                  </div>
-                )}
+              {/* Matched & Evidence Skills */}
+              {skills.evidenceItems && skills.evidenceItems.length > 0 ? (
+                <div className="space-y-2">
+                  {skills.evidenceItems.map((item) => {
+                    const isExpanded = expandedSkillEvidence === item.skill;
+                    const isPositive = item.score >= 0.5;
+                    const isPartial = item.confidence === 'partial' || item.matchLevel === 'PARTIAL_MATCH';
 
-                {/* Missing Skills */}
-                {skills.missing.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {skills.missing.map((skill) => (
-                      <span
-                        key={skill}
-                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 text-[10.5px] font-semibold"
-                        title="Skill gap identified"
+                    let badgeClasses = 'bg-rose-50 dark:bg-rose-950/50 text-rose-800 dark:text-rose-300 border-rose-300 dark:border-rose-800';
+                    if (item.confidence === 'strong' || item.matchLevel === 'STRONG_MATCH') {
+                      badgeClasses = 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800';
+                    } else if (item.confidence === 'match' || item.matchLevel === 'MATCH') {
+                      badgeClasses = 'bg-teal-50 dark:bg-teal-950/50 text-teal-800 dark:text-teal-300 border-teal-300 dark:border-teal-800';
+                    } else if (isPartial) {
+                      badgeClasses = 'bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 border-amber-300 dark:border-amber-800';
+                    } else if (item.matchLevel === 'WEAK_EVIDENCE') {
+                      badgeClasses = 'bg-orange-50 dark:bg-orange-950/50 text-orange-800 dark:text-orange-300 border-orange-300 dark:border-orange-800';
+                    }
+
+                    return (
+                      <div
+                        key={item.skill}
+                        className="rounded-lg border border-slate-200/90 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 p-2 text-xs shadow-2xs transition-all"
                       >
-                        <span className="font-mono text-[9px]">⚠️</span>
-                        Missing: {skill}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                {skills.matched.length === 0 && skills.missing.length === 0 && (
-                  <span className="text-[11px] text-slate-500 dark:text-slate-400">General role intake (no mandatory skills).</span>
-                )}
-              </div>
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md border text-[10.5px] font-bold ${badgeClasses}`}>
+                              {isPositive ? <Icon name="check" size={10} /> : <span className="font-mono text-[9px]">⚠️</span>}
+                              {item.confidenceLabel || item.matchLevel}
+                            </span>
+                            <span className="font-bold text-slate-800 dark:text-slate-200 text-xs">
+                              {item.skill}
+                            </span>
+                            {item.category === 'preferred' && (
+                              <span className="px-1.5 py-0.2 rounded text-[9.5px] font-semibold bg-sky-100 dark:bg-sky-950/40 text-sky-800 dark:text-sky-300 border border-sky-200 dark:border-sky-800">
+                                Preferred
+                              </span>
+                            )}
+                            {item.category === 'hard_gate' && (
+                              <span className="px-1.5 py-0.2 rounded text-[9.5px] font-semibold bg-purple-100 dark:bg-purple-950/40 text-purple-800 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                                Hard Gate
+                              </span>
+                            )}
+                          </div>
+
+                          {item.evidence.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setExpandedSkillEvidence(isExpanded ? null : item.skill)}
+                              className="text-[11px] font-semibold text-sky-600 dark:text-cyan-400 hover:underline flex items-center gap-0.5 cursor-pointer"
+                            >
+                              <span>{isExpanded ? 'Hide Evidence' : `Evidence (${item.evidence.length})`}</span>
+                              <Icon name={isExpanded ? 'chevron-down' : 'chevron-right'} size={11} />
+                            </button>
+                          )}
+                        </div>
+
+                        {isExpanded && item.evidence.length > 0 && (
+                          <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800 space-y-1.5">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400 block">
+                                CV Evidence:
+                              </span>
+                              {item.source && (
+                                <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500">
+                                  Source: {item.source}
+                                </span>
+                              )}
+                            </div>
+                            {item.evidence.map((ev, idx) => (
+                              <p
+                                key={idx}
+                                className="text-[11px] text-slate-700 dark:text-slate-300 italic bg-slate-50 dark:bg-slate-800/60 p-2 rounded-md border border-slate-200/70 dark:border-slate-700/60 m-0"
+                              >
+                                {ev}
+                              </p>
+                            ))}
+                            {item.reason && (
+                              <p className="text-[10.5px] text-slate-500 dark:text-slate-400 font-medium m-0 pt-0.5">
+                                Assessment: {item.reason}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  {skills.matched.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {skills.matched.map((skill) => (
+                        <span
+                          key={skill}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 text-[10.5px] font-semibold"
+                        >
+                          <Icon name="check" size={10} />
+                          {skill}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {skills.missing.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {skills.missing.map((skill) => (
+                        <span
+                          key={skill}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-800 text-[10.5px] font-semibold"
+                          title="Skill gap identified"
+                        >
+                          <span className="font-mono text-[9px]">⚠️</span>
+                          Missing: {skill}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {skills.matched.length === 0 && skills.missing.length === 0 && (
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400">General role intake (no mandatory skills).</span>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 

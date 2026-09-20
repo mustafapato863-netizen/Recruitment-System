@@ -1,0 +1,26 @@
+{
+  "meta": {
+    "document": {
+      "classification": {
+        "label": "profile"
+      },
+      "extractionQuality": {
+        "score": 0.3,
+        "band": "low"
+      }
+    }
+  },
+  "data": {
+    "person": {
+      "name": {
+        "raw": "Only A Name"
+      }
+    },
+    "workExperience": [],
+    "education": [],
+    "skills": [
+      "Communication"
+    ],
+    "contact": {}
+  }
+}

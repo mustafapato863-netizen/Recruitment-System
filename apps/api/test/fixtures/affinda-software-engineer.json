@@ -1,0 +1,135 @@
+{
+  "meta": {
+    "rawText": "Alex Chen, Senior Full Stack Developer. Email: alex.chen@example.com Phone: +14155552671. Location: San Francisco, CA, USA.",
+    "document": {
+      "classification": "resume",
+      "extractionQuality": 0.88
+    }
+  },
+  "data": {
+    "person": {
+      "name": {
+        "given": "Alex",
+        "middle": null,
+        "family": "Chen",
+        "raw": "Alex Chen"
+      },
+      "location": {
+        "formatted": "San Francisco, CA, USA",
+        "city": "San Francisco",
+        "state": "CA",
+        "country": "USA"
+      }
+    },
+    "contact": {
+      "emails": [
+        "alex.chen@example.com"
+      ],
+      "phoneNumbers": [
+        {
+          "formatted": "+14155552671"
+        }
+      ]
+    },
+    "profession": "Senior Full Stack Developer",
+    "employmentMetrics": {
+      "totalExperienceMonths": 84
+    },
+    "workExperience": [
+      {
+        "jobTitle": "Senior Full Stack Engineer",
+        "organization": "CloudScale Inc",
+        "isCurrent": true,
+        "jobDescription": "Architecting distributed TypeScript and Nest.js microservices.\nDesigning React dashboards with real-time WebSocket telemetry.\nMaintaining PostgreSQL databases and Redis caching layers.",
+        "dates": {
+          "startDate": "2021-04-01",
+          "endDate": "present",
+          "isCurrent": true
+        },
+        "dateRange": {
+          "start": {
+            "date": "2021-04-01"
+          },
+          "end": {
+            "current": true
+          }
+        }
+      },
+      {
+        "jobTitle": "Software Engineer",
+        "organization": "AppVentures Labs",
+        "isCurrent": false,
+        "jobDescription": "Developed REST APIs using Node.js and Docker.\nAutomated CI/CD pipelines using GitHub Actions.",
+        "dates": {
+          "startDate": "2017-06-01",
+          "endDate": "2021-03-31",
+          "isCurrent": false
+        },
+        "dateRange": {
+          "start": {
+            "date": "2017-06-01"
+          },
+          "end": {
+            "date": "2021-03-31"
+          }
+        }
+      }
+    ],
+    "education": [
+      {
+        "accreditation": {
+          "education": "B.Sc. in Computer Science"
+        },
+        "organization": "UC Berkeley",
+        "major": "Computer Science",
+        "dates": {
+          "startDate": "2013-09-01",
+          "endDate": "2017-05-15"
+        }
+      }
+    ],
+    "skills": [
+      {
+        "name": "TypeScript"
+      },
+      {
+        "name": "React"
+      },
+      {
+        "name": "Nest.js"
+      },
+      {
+        "name": "PostgreSQL"
+      },
+      {
+        "name": "Docker"
+      },
+      {
+        "name": "Kubernetes"
+      },
+      {
+        "name": "AWS"
+      }
+    ],
+    "certifications": [
+      {
+        "name": "AWS Certified Solutions Architect"
+      }
+    ],
+    "languages": [
+      {
+        "name": "English"
+      },
+      {
+        "name": "Mandarin"
+      }
+    ],
+    "projects": [
+      {
+        "title": "Open Source Distributed Cache",
+        "description": "High performance in-memory key-value cache built in Go and TypeScript."
+      }
+    ],
+    "summary": "Senior Full Stack Engineer with 7 years specializing in scalable distributed microservices, React frontends, and cloud native architectures."
+  }
+}

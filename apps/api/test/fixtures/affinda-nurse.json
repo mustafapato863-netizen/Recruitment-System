@@ -1,0 +1,114 @@
+{
+  "meta": {
+    "rawText": "Sarah Jenkins, Head Nurse at King Faisal Specialist Hospital. Email: sarah.jenkins@example.org Phone: +966540099881. 8 years nursing experience.",
+    "document": {
+      "classification": "cv",
+      "extractionQuality": 0.91
+    }
+  },
+  "data": {
+    "person": {
+      "name": {
+        "given": "Sarah",
+        "middle": "Ann",
+        "family": "Jenkins",
+        "raw": "Sarah Ann Jenkins"
+      },
+      "location": {
+        "formatted": "Riyadh, Saudi Arabia",
+        "city": "Riyadh",
+        "country": "Saudi Arabia"
+      }
+    },
+    "contact": {
+      "emails": [
+        {
+          "value": "sarah.jenkins@example.org"
+        }
+      ],
+      "phoneNumbers": [
+        "+966540099881"
+      ]
+    },
+    "profession": "Head Nurse - Intensive Care",
+    "employmentMetrics": {
+      "totalExperienceMonths": 96
+    },
+    "workExperience": [
+      {
+        "jobTitle": "Head Nurse (ICU)",
+        "organization": "King Faisal Specialist Hospital",
+        "isCurrent": true,
+        "jobDescription": "Supervising 35 ICU nursing staff.\nEnsuring JCI compliance and medication safety standards.\nConducting monthly clinical audit.",
+        "dates": {
+          "startDate": "2020-03-01",
+          "endDate": null,
+          "isCurrent": true
+        },
+        "dateRange": {
+          "start": {
+            "date": "2020-03-01"
+          },
+          "end": {
+            "current": true
+          }
+        }
+      },
+      {
+        "jobTitle": "Staff Nurse (ICU)",
+        "organization": "Al Hammadi Hospital",
+        "isCurrent": false,
+        "jobDescription": "Direct bedside critical care and arterial line maintenance.",
+        "dates": {
+          "startDate": "2016-01-01",
+          "endDate": "2020-02-28",
+          "isCurrent": false
+        },
+        "dateRange": {
+          "start": {
+            "date": "2016-01-01"
+          },
+          "end": {
+            "date": "2020-02-28"
+          }
+        }
+      }
+    ],
+    "education": [
+      {
+        "accreditation": {
+          "education": "Bachelor of Science in Nursing (BSN)"
+        },
+        "organization": "King Saud University",
+        "major": "Nursing",
+        "dates": {
+          "startDate": "2011-09-01",
+          "endDate": "2015-06-30"
+        }
+      }
+    ],
+    "skills": [
+      "Intensive Care Unit",
+      "Ventilator Management",
+      "Patient Safety Goals",
+      "JCI Accreditation",
+      "Infection Control"
+    ],
+    "certifications": [
+      "SCFHS Registered Nurse",
+      "Basic Life Support (BLS)",
+      "Pediatric Advanced Life Support (PALS)"
+    ],
+    "languages": [
+      "English",
+      "Arabic"
+    ],
+    "projects": [
+      {
+        "title": "Central Line Infection Reduction Initiative",
+        "description": "Implemented sterile barrier precaution checklist decreasing CLABSI rate by 40%."
+      }
+    ],
+    "summary": "Dedicated Head Nurse with 8 years of intensive care leadership, accreditation adherence, and patient safety management."
+  }
+}

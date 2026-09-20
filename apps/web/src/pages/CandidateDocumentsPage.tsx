@@ -12,8 +12,9 @@ import { Input } from '../components/ui/Input';
 import { MetricCard } from '../components/ui/MetricCard';
 import { Select } from '../components/ui/Select';
 import { Textarea } from '../components/ui/Textarea';
-import { getApi, postApi, postFormDataApi } from '../api/client';
-import type { Candidate, CandidateDocument } from '@recruitflow/contracts';
+import { getApi, postApi, postFormDataApi, patchApi } from '../api/client';
+import type { Candidate, CandidateDocument, ExtractedCandidate } from '@recruitflow/contracts';
+import { parseResumeFile } from '../utils/resumeParser';
 import { Icon } from '../components/Icon';
 import './PageEnhancementsV2.css';
 
@@ -62,7 +63,7 @@ export function CandidateDocumentsPage() {
 
   const handleUpload = async (e: FormEvent) => {
     e.preventDefault();
-    if (!id || (!fileName && !selectedFile)) return;
+    if (!id || !candidate || (!fileName && !selectedFile)) return;
     setSubmitting(true);
     setUploadError(null);
 
@@ -73,7 +74,75 @@ export function CandidateDocumentsPage() {
         body.append('documentType', documentType);
         if (extractionText.trim()) body.append('extractionText', extractionText.trim());
         body.append('file', selectedFile);
-        await postFormDataApi('/documents/upload', body);
+        const uploadedDoc = await postFormDataApi<CandidateDocument>('/documents/upload', body);
+
+        if (documentType === 'CV' && uploadedDoc?.id) {
+          // Re-parse the newly uploaded CV and update candidate record
+          try {
+            let extracted: ExtractedCandidate;
+            try {
+              const parseForm = new FormData();
+              parseForm.append('file', selectedFile);
+              extracted = await postFormDataApi<ExtractedCandidate>('/resume/parse', parseForm);
+              extracted.parserSource = 'affinda';
+            } catch {
+              extracted = await parseResumeFile(selectedFile);
+              extracted.parserSource = 'legacy';
+            }
+
+            const candidatePatch: Record<string, unknown> = {
+              firstName: extracted.firstName?.trim() || candidate.firstName,
+              lastName: extracted.lastName?.trim() || candidate.lastName,
+              currentTitle: extracted.title?.trim() || candidate.currentTitle,
+              currentCompany: extracted.currentCompany?.trim() || candidate.currentCompany,
+              experienceYears:
+                extracted.experienceYears != null
+                  ? Math.round(Number(extracted.experienceYears))
+                  : candidate.experienceYears,
+              location: extracted.location?.trim() || candidate.location,
+              skills:
+                extracted.skills && extracted.skills.length > 0
+                  ? extracted.skills
+                  : candidate.skills,
+              certifications:
+                extracted.certifications && extracted.certifications.length > 0
+                  ? extracted.certifications
+                  : candidate.certifications,
+              languages:
+                extracted.languages && extracted.languages.length > 0
+                  ? extracted.languages
+                  : candidate.languages,
+              summary: extracted.summary?.trim() || candidate.summary,
+              metadata: {
+                ...((candidate.metadata as Record<string, unknown>) || {}),
+                workHistory: extracted.workHistory || [],
+                educationHistory: extracted.educationHistory || [],
+                projectHistory: extracted.projectHistory || [],
+                evidenceChunks: extracted.evidenceChunks || [],
+                education: extracted.education || null,
+                certifications: extracted.certifications || [],
+                languages: extracted.languages || [],
+                responsibilities: extracted.responsibilities || [],
+                clinicalDomain: extracted.clinicalDomain || null,
+                subspecialties: extracted.subspecialties || [],
+                parserSource: extracted.parserSource,
+                parsedAt: new Date().toISOString(),
+                activeDocument: {
+                  candidateId: id,
+                  documentId: uploadedDoc.id,
+                  fileName: uploadedDoc.fileName || selectedFile.name,
+                  uploadedAt: uploadedDoc.createdAt || new Date().toISOString(),
+                  parserSource: extracted.parserSource,
+                  parsedAt: new Date().toISOString(),
+                },
+              },
+            };
+
+            await patchApi(`/candidates/${id}`, candidatePatch);
+          } catch (parseErr) {
+            console.warn('Could not automatically re-parse uploaded CV:', parseErr);
+          }
+        }
       } else {
         await postApi('/documents', {
           candidateId: id,

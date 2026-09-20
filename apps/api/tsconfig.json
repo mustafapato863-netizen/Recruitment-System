@@ -14,10 +14,12 @@
     "baseUrl": "./",
     "paths": {
       "@recruitflow/contracts": ["../../packages/contracts/src/index.ts"],
-      "@recruitflow/database": ["../../database/generated/client/index.d.ts"]
+      "@recruitflow/database": ["../../database/generated/client/index.d.ts"],
+      "@recruitflow/validation": ["../../packages/validation/src/index.ts"]
     },
     "incremental": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "rewriteRelativeImportExtensions": true
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist", "src/**/*.spec.ts", "src/**/*.test.ts"]

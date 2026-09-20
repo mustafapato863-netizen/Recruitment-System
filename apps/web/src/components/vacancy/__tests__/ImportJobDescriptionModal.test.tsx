@@ -124,8 +124,8 @@ describe('ImportJobDescriptionModal', () => {
       languages: ['English'],
     });
 
-    mockPatchApi.mockResolvedValueOnce({ id: 'vac-101', status: 'Pending Activation' } as any);
-    mockPostApi.mockResolvedValue({ success: true } as any);
+    mockPatchApi.mockResolvedValueOnce({ id: 'vac-101', status: 'Pending Activation' });
+    mockPostApi.mockResolvedValue({ success: true });
 
     render(
       <ImportJobDescriptionModal

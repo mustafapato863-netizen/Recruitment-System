@@ -164,7 +164,7 @@ export interface Vacancy {
   updatedAt: string;
 }
 
-export * from './candidate-activity';
+export * from './candidate-activity.ts';
 
 export interface VacancyAssignment {
   id: string;
@@ -440,6 +440,8 @@ export interface UserRecord {
   jobTitle?: string | null;
   status: string;
   organizationId: string;
+  /** Direct manager (reports-to) link; null means top of the reporting tree. */
+  managerId: string | null;
   roles: RoleSummary[];
   lastLoginAt: string | null;
   createdAt: string;
@@ -458,6 +460,8 @@ export interface UpdateUserInput {
   displayName?: string;
   jobTitle?: string | null;
   status?: string;
+  /** Set the reports-to manager (admin only); null clears the link. */
+  managerId?: string | null;
 }
 
 // ─── Roles & Permissions ────────────────────────────────────
@@ -605,6 +609,7 @@ export interface Candidate {
   certifications?: string[];
   languages?: string[];
   availability?: string | null;
+  metadata?: Record<string, unknown> | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -633,6 +638,7 @@ export interface CreateCandidateInput {
   certifications?: string[];
   languages?: string[];
   availability?: string | null;
+  metadata?: Record<string, unknown> | null;
 }
 
 export interface UpdateCandidateInput {
@@ -651,6 +657,7 @@ export interface UpdateCandidateInput {
   certifications?: string[];
   languages?: string[];
   availability?: string | null;
+  metadata?: Record<string, unknown> | null;
 }
 
 export interface CandidateFilterInput {
@@ -1566,8 +1573,6 @@ export interface EmailTemplateItem {
   updatedAt: string;
 }
 
-export type EmailTemplateDetail = EmailTemplateItem;
-
 // ─── Phase 10 Notifications & Tasks ───────────────────────────
 export type {
   NotificationRecord,
@@ -1582,5 +1587,65 @@ export type {
   RecruiterTargetRecord,
   RecruiterTargetActual,
   RecruiterTargetProgressRecord,
-} from './notifications-tasks';
+} from './notifications-tasks.ts';
+
+export interface CandidateWorkExperienceItem {
+  jobTitle?: string | undefined;
+  organization?: string | undefined;
+  description?: string | undefined;
+  isCurrent?: boolean | undefined;
+  startDate?: string | undefined;
+  endDate?: string | undefined;
+}
+
+export interface CandidateEducationItem {
+  degree?: string | undefined;
+  major?: string | undefined;
+  organization?: string | undefined;
+  startDate?: string | undefined;
+  endDate?: string | undefined;
+}
+
+export interface CandidateProjectItem {
+  title?: string | undefined;
+  description?: string | undefined;
+}
+
+export interface CandidateEvidenceChunk {
+  text: string;
+  source: 'Work Experience' | 'Skills' | 'Projects' | 'Education' | 'Certifications' | 'Summary' | 'Document';
+  jobTitle?: string | undefined;
+  organization?: string | undefined;
+}
+
+export interface ExtractedCandidate {
+  firstName?: string | undefined;
+  lastName?: string | undefined;
+  email?: string | undefined;
+  phone?: string | undefined;
+  title?: string | undefined;
+  currentCompany?: string | undefined;
+  rawText?: string | undefined;
+  skills?: string[] | undefined;
+  experienceYears?: number | undefined;
+  location?: string | undefined;
+  education?: string | undefined;
+  certifications?: string[] | undefined;
+  languages?: string[] | undefined;
+  summary?: string | undefined;
+  clinicalDomain?: string | undefined;
+  subspecialties?: string[] | undefined;
+  aiSummaryConfidence?: number | undefined;
+  keyHighlights?: string[] | undefined;
+  responsibilities?: string[] | undefined;
+  projects?: string[] | undefined;
+  workHistory?: CandidateWorkExperienceItem[] | undefined;
+  educationHistory?: CandidateEducationItem[] | undefined;
+  projectHistory?: CandidateProjectItem[] | undefined;
+  evidenceChunks?: CandidateEvidenceChunk[] | undefined;
+  parserSource?: 'affinda' | 'legacy' | undefined;
+  parsingQuality?: 'high' | 'medium' | 'low' | undefined;
+}
+
+export * from './resume/index.ts';
 

@@ -1,4 +1,4 @@
-﻿{
+{
   "name": "@recruitflow/api",
   "private": true,
   "version": "0.1.0",
@@ -19,12 +19,16 @@
     "@nestjs/platform-express": "^11.1.6",
     "@recruitflow/contracts": "workspace:*",
     "@recruitflow/database": "workspace:*",
+    "@recruitflow/validation": "workspace:*",
     "bcryptjs": "^3.0.3",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.2",
     "cookie-parser": "^1.4.7",
+    "jszip": "^3.10.2",
+    "mammoth": "^1.12.1",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
+    "pdfjs-dist": "^6.2.108",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz"

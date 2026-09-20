@@ -88,20 +88,46 @@ async function extractTextFromPdf(arrayBuffer: ArrayBuffer): Promise<string> {
     for (let pageNum = 1; pageNum <= pdf.numPages; pageNum += 1) {
       const page = await pdf.getPage(pageNum);
       const textContent = await page.getTextContent();
-      const pageStrings: string[] = [];
+      let pageText = '';
+      let lastY: number | null = null;
+
       for (const item of textContent.items) {
-        if ('str' in item && typeof (item as { str: unknown }).str === 'string') {
-          pageStrings.push((item as { str: string }).str);
+        if (!('str' in item) || typeof (item as { str: unknown }).str !== 'string') continue;
+        const textItem = item as { str: string; transform?: number[]; hasEOL?: boolean };
+        const currentY = textItem.transform ? textItem.transform[5] : null;
+
+        if (lastY !== null && currentY !== null && Math.abs(currentY - lastY) > 3) {
+          pageText += '\n';
+        } else if (textItem.hasEOL) {
+          pageText += '\n';
+        } else if (
+          pageText.length > 0 &&
+          !pageText.endsWith('\n') &&
+          !pageText.endsWith(' ') &&
+          !textItem.str.startsWith(' ')
+        ) {
+          pageText += ' ';
+        }
+
+        pageText += textItem.str;
+        if (textItem.hasEOL && !pageText.endsWith('\n')) {
+          pageText += '\n';
+        }
+
+        if (currentY !== null) {
+          lastY = currentY;
         }
       }
-      textPieces.push(pageStrings.join(' '));
+
+      textPieces.push(pageText);
     }
 
-    return textPieces.join('\n');
+    return textPieces.join('\n\n');
   } catch (error) {
     console.warn('PDF.js extraction failed, falling back to stream decode:', error);
     const decoder = new TextDecoder('utf-8', { fatal: false });
-    return decoder.decode(arrayBuffer).replace(/[^\x20-\x7E\n\r]/g, ' ');
+    const text = decoder.decode(arrayBuffer);
+    return text.replace(/[^\x20-\x7E\n\r]/g, ' ');
   }
 }
 
@@ -125,7 +151,7 @@ export async function extractRawTextFromFile(file: File): Promise<string> {
  * Helper to clean extracted text lines
  */
 function cleanLine(line: string): string {
-  return line.replace(/^[\s•\-\*–\d\.\)]+/, '').trim();
+  return line.replace(/^[\s•\-*–\d.)]+/, '').trim();
 }
 
 /**

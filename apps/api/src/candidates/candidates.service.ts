@@ -9,7 +9,7 @@ import {
   Optional,
 } from '@nestjs/common';
 import * as XLSX from 'xlsx';
-import type { Prisma } from '@recruitflow/database';
+import { Prisma } from '@recruitflow/database';
 import type { AuthUser, Candidate, CandidateMetrics, PaginatedResult } from '@recruitflow/contracts';
 import { PrismaService } from '../database/prisma.service';
 import { AccessControlService } from '../access-control/access-control.service';
@@ -332,6 +332,9 @@ export class CandidatesService {
         certifications: dto.certifications ?? [],
         languages: dto.languages ?? [],
         availability: dto.availability?.trim() ?? null,
+        ...(dto.metadata !== undefined && dto.metadata !== null
+          ? { metadata: dto.metadata as Prisma.InputJsonValue }
+          : {}),
       },
     });
 
@@ -378,6 +381,9 @@ export class CandidatesService {
     if (dto.certifications !== undefined) dataToUpdate.certifications = dto.certifications;
     if (dto.languages !== undefined) dataToUpdate.languages = dto.languages;
     if (dto.availability !== undefined) dataToUpdate.availability = dto.availability?.trim() ?? null;
+    if (dto.metadata !== undefined) {
+      dataToUpdate.metadata = dto.metadata !== null ? (dto.metadata as Prisma.InputJsonValue) : Prisma.DbNull;
+    }
 
     const updated = await this.prisma.candidate.update({
       where: { id },
@@ -527,6 +533,7 @@ export class CandidatesService {
       certifications: record.certifications,
       languages: record.languages,
       availability: record.availability,
+      metadata: (record as { metadata?: Record<string, unknown> | null }).metadata ?? null,
       createdAt: record.createdAt.toISOString(),
       updatedAt: record.updatedAt.toISOString(),
     };

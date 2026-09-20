@@ -338,4 +338,10 @@ export const updateIntegrationConfigSchema = z.object({
 });
 
 // ─── Candidate Position Fit Matching ────────────────────────
-export * from './matching';
+export * from './matching.ts';
+export * from './skill-taxonomy.ts';
+export * from './evidence-ranker.ts';
+export * from './hard-gates.ts';
+export * from './sgh-enrichment.ts';
+export * from './resume-parser.ts';
+

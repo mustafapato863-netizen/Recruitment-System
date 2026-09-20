@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, useDeferredValue } from 'react';
 import type { ImportJobSummary, PaginatedResult, Vacancy } from '@recruitflow/contracts';
 import { calculateCandidateFitScore, type CriteriaBreakdown } from '@recruitflow/validation';
 import { getApi, postApi, postFormDataApi, patchApi, ApiError } from '../api/client';
-import { parseResumeFile, type ExtractedCandidate } from '../utils/resumeParser';
+import { type ExtractedCandidate } from '../utils/resumeParser';
 import { useMasterDataOptions } from './useMasterDataOptions';
 import { CANDIDATE_SOURCE_FALLBACK } from '../data/masterDataDefaults';
 
@@ -28,6 +28,23 @@ const ALLOWED_MIMES = [
   'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ];
+
+const SCORING_FIELDS = [
+  'title',
+  'experienceYears',
+  'location',
+  'summary',
+  'skills',
+  'certifications',
+  'workHistory',
+  'responsibilities',
+  'projects',
+  'education',
+  'rawText',
+  'educationHistory',
+  'projectHistory',
+  'evidenceChunks',
+] as const;
 
 export function useCVIntakeFlow(initialTargetVacancy?: string | null) {
   const [currentStep, setCurrentStep] = useState<number>(0);
@@ -139,19 +156,60 @@ export function useCVIntakeFlow(initialTargetVacancy?: string | null) {
     setCandidateSource(candidateSourceOptions[0]);
   }, [candidateSource, candidateSourceOptions]);
 
+  // Debounce profile updates for heavy scoring calculations (300ms)
+  // Only scoring-relevant fields trigger recalculation; editing name/email/phone/company will not trigger vacancy scoring.
+  const [scoringProfile, setScoringProfile] = useState<ExtractedCandidate | null>(profile);
+
+  // Build a stable key from the scoring fields so we don't have to spread a dynamic array in useEffect dependencies
+  const scoringKey = useMemo(() => {
+    if (!profile) return null;
+    return JSON.stringify(SCORING_FIELDS.reduce((acc, field) => {
+      acc[field] = profile[field];
+      return acc;
+    }, {} as Record<string, unknown>));
+  }, [profile]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setScoringProfile((prev) => {
+        if (!profile) return null;
+        
+        const isUnchanged = prev && SCORING_FIELDS.every(field => prev[field] === profile[field]);
+        if (isUnchanged) return prev;
+        
+        return profile;
+      });
+    }, 300);
+
+    return () => clearTimeout(timer);
+    // We intentionally only depend on scoringKey to trigger the debounce, not the entire profile,
+    // to avoid recalculating on non-scoring field changes (e.g., name, contact info).
+  }, [scoringKey]);
+
+  const deferredProfile = useDeferredValue(scoringProfile);
+
   // Compute real-time fit scores for all vacancies against the candidate profile
   const scoredVacancies = useMemo<ScoredVacancy[]>(() => {
-    if (!profile || vacancies.length === 0) return [];
+    if (!deferredProfile || vacancies.length === 0) return [];
 
     const scored = vacancies.map((v) => {
       const positionTitle = v.position?.title || v.title || '';
       const fitResult = calculateCandidateFitScore(
         {
-          skills: profile.skills,
-          experienceYears: profile.experienceYears,
-          location: profile.location,
-          certifications: profile.certifications,
-          currentTitle: profile.title,
+          skills: deferredProfile.skills,
+          experienceYears: deferredProfile.experienceYears,
+          location: deferredProfile.location,
+          certifications: deferredProfile.certifications,
+          currentTitle: deferredProfile.title,
+          summary: deferredProfile.summary,
+          rawText: deferredProfile.rawText,
+          responsibilities: deferredProfile.responsibilities,
+          projects: deferredProfile.projects,
+          workHistory: deferredProfile.workHistory,
+          education: deferredProfile.education,
+          educationHistory: deferredProfile.educationHistory,
+          projectHistory: deferredProfile.projectHistory,
+          evidenceChunks: deferredProfile.evidenceChunks,
         },
         {
           requiredSkills: v.requiredSkills || [],
@@ -167,7 +225,7 @@ export function useCVIntakeFlow(initialTargetVacancy?: string | null) {
     // Sort descending: highest match score first
     scored.sort((a, b) => b.fitResult.score - a.fitResult.score);
     return scored;
-  }, [profile, vacancies]);
+  }, [deferredProfile, vacancies]);
 
   // Auto-select the top recommended vacancy
   useEffect(() => {
@@ -209,19 +267,20 @@ export function useCVIntakeFlow(initialTargetVacancy?: string | null) {
     setUploadedFileName(file.name);
     setUploadedFile(file);
     setParsingFile(true);
-    setParsingStep('Reading document binary structure...');
+    setParsingStep('Parsing document via Affinda Resume Engine...');
 
     try {
-      await new Promise((r) => setTimeout(r, 400));
-      setParsingStep('Running clinical entity extraction & OCR tokenization...');
-      const extracted = await parseResumeFile(file);
-      setParsingStep('Normalizing candidate profile...');
-      await new Promise((r) => setTimeout(r, 350));
+      const formData = new FormData();
+      formData.append('file', file);
+      const extracted = await postFormDataApi<ExtractedCandidate>('/resume/parse', formData);
 
       setProfile(extracted);
       setInitialProfile(JSON.parse(JSON.stringify(extracted)));
       setCurrentStep(1);
-      showToast(`✓ Successfully extracted profile for ${extracted.firstName} ${extracted.lastName}`);
+
+      const sourceLabel = extracted.parserSource === 'affinda' ? 'Affinda' : 'Fallback Parser';
+      const qualityLabel = extracted.parsingQuality ? ` · ${extracted.parsingQuality.toUpperCase()} Quality` : '';
+      showToast(`✓ Successfully extracted profile for ${extracted.firstName || 'Candidate'} ${extracted.lastName || ''} (${sourceLabel}${qualityLabel})`);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Unable to parse document.');
     } finally {
@@ -270,6 +329,22 @@ export function useCVIntakeFlow(initialTargetVacancy?: string | null) {
           ? Math.max(0, Math.round(Number(profile.experienceYears)))
           : undefined;
 
+      const metadataPayload: Record<string, unknown> = {
+        workHistory: profile.workHistory || [],
+        educationHistory: profile.educationHistory || [],
+        projectHistory: profile.projectHistory || [],
+        evidenceChunks: profile.evidenceChunks || [],
+        education: profile.education || null,
+        certifications: profile.certifications || [],
+        languages: profile.languages || [],
+        responsibilities: profile.responsibilities || [],
+        clinicalDomain: profile.clinicalDomain || null,
+        subspecialties: profile.subspecialties || [],
+        parserSource: profile.parserSource || 'legacy',
+        parsedAt: new Date().toISOString(),
+        fileName: uploadedFileName || null,
+      };
+
       // Defensive length bounds and sanitization matching CreateCandidateDto constraints
       const candidatePayload = {
         firstName: profile.firstName?.trim().slice(0, 80) || '',
@@ -283,8 +358,15 @@ export function useCVIntakeFlow(initialTargetVacancy?: string | null) {
         skills: Array.isArray(profile.skills)
           ? profile.skills.map((s) => String(s).trim().slice(0, 100)).filter(Boolean)
           : [],
+        certifications: Array.isArray(profile.certifications)
+          ? profile.certifications.map((c) => String(c).trim().slice(0, 100)).filter(Boolean)
+          : [],
+        languages: Array.isArray(profile.languages)
+          ? profile.languages.map((l) => String(l).trim().slice(0, 60)).filter(Boolean)
+          : [],
         summary: profile.summary?.trim() ? profile.summary.trim().slice(0, 5000) : undefined,
         source: candidateSource ? candidateSource.slice(0, 80) : undefined,
+        metadata: metadataPayload,
       };
 
       let candId: string | null = null;
@@ -380,7 +462,20 @@ export function useCVIntakeFlow(initialTargetVacancy?: string | null) {
         if (profile.rawText?.trim()) {
           documentForm.append('extractionText', profile.rawText.trim().slice(0, 50000));
         }
-        await postFormDataApi('/documents/upload', documentForm);
+        const uploadedDoc = await postFormDataApi<{ id: string; fileName: string; createdAt: string }>('/documents/upload', documentForm);
+        if (uploadedDoc?.id) {
+          metadataPayload.activeDocument = {
+            candidateId: candId,
+            documentId: uploadedDoc.id,
+            fileName: uploadedDoc.fileName || uploadedFileName,
+            uploadedAt: uploadedDoc.createdAt || new Date().toISOString(),
+            parserSource: profile.parserSource || 'legacy',
+            parsedAt: new Date().toISOString(),
+          };
+          await patchApi(`/candidates/${candId}`, {
+            metadata: metadataPayload,
+          });
+        }
       }
 
       setConfirmedCandidateId(candId);

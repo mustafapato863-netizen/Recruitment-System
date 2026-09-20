@@ -77,6 +77,9 @@ export class CreateCandidateDto {
   @IsString()
   @MaxLength(60)
   availability?: string | null;
+
+  @IsOptional()
+  metadata?: Record<string, unknown> | null;
 }
 
 export class UpdateCandidateDto {
@@ -149,6 +152,9 @@ export class UpdateCandidateDto {
   @IsString()
   @MaxLength(60)
   availability?: string | null;
+
+  @IsOptional()
+  metadata?: Record<string, unknown> | null;
 }
 
 export class CandidateQueryDto {

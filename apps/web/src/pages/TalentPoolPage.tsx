@@ -115,6 +115,14 @@ export function TalentPoolPage() {
           experienceYears: c.experienceYears ?? undefined,
           location: c.location || undefined,
           certifications: c.certifications || [],
+          currentTitle: c.currentTitle || undefined,
+          summary: c.summary || (c.metadata as Record<string, unknown> | undefined)?.summary as string | undefined,
+          rawText: (c as { rawText?: string }).rawText || c.summary || undefined,
+          workHistory: (c.metadata as Record<string, unknown> | undefined)?.workHistory as Parameters<typeof calculateCandidateFitScore>[0]['workHistory'],
+          educationHistory: (c.metadata as Record<string, unknown> | undefined)?.educationHistory as Parameters<typeof calculateCandidateFitScore>[0]['educationHistory'],
+          projectHistory: (c.metadata as Record<string, unknown> | undefined)?.projectHistory as Parameters<typeof calculateCandidateFitScore>[0]['projectHistory'],
+          evidenceChunks: (c.metadata as Record<string, unknown> | undefined)?.evidenceChunks as Parameters<typeof calculateCandidateFitScore>[0]['evidenceChunks'],
+          responsibilities: (c.metadata as Record<string, unknown> | undefined)?.responsibilities as Parameters<typeof calculateCandidateFitScore>[0]['responsibilities'],
         };
         const fit = calculateCandidateFitScore(candidateInput, requirementsInput);
         return { candidate: c, fit };

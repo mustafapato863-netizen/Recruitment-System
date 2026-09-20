@@ -95,14 +95,16 @@ describe('Vacancy Assignment and Activation Flow', () => {
 
   describe('VacancyOverviewPage - Inline Assign and Activation', () => {
     it('renders "Assign Recruiter & Start" when vacancy has no primary recruiter', async () => {
-      mockFetchApi.mockResolvedValueOnce(mockVacancyUnassigned as any);
-      mockGetApi.mockImplementation((url: string) => {
-        if (url.includes('/applications')) return Promise.resolve({ data: [] } as any);
-        if (url.includes('/interviews')) return Promise.resolve([] as any);
-        if (url.includes('/offers')) return Promise.resolve([] as any);
-        if (url.includes('/users/interviewers')) return Promise.resolve(mockInterviewers as any);
-        return Promise.resolve([] as any);
-      });
+      mockFetchApi.mockResolvedValueOnce(mockVacancyUnassigned);
+      mockGetApi.mockImplementation(
+        ((url: string) => {
+          if (url.includes('/applications')) return Promise.resolve({ data: [] });
+          if (url.includes('/interviews')) return Promise.resolve([]);
+          if (url.includes('/offers')) return Promise.resolve([]);
+          if (url.includes('/users/interviewers')) return Promise.resolve(mockInterviewers);
+          return Promise.resolve([]);
+        }) as unknown as typeof getApi,
+      );
 
       render(
         <MemoryRouter initialEntries={['/vacancies/vac-1']}>
@@ -117,14 +119,16 @@ describe('Vacancy Assignment and Activation Flow', () => {
     });
 
     it('renders "Change Recruiter" when recruiter is already assigned', async () => {
-      mockFetchApi.mockResolvedValueOnce(mockVacancyAssigned as any);
-      mockGetApi.mockImplementation((url: string) => {
-        if (url.includes('/applications')) return Promise.resolve({ data: [] } as any);
-        if (url.includes('/interviews')) return Promise.resolve([] as any);
-        if (url.includes('/offers')) return Promise.resolve([] as any);
-        if (url.includes('/users/interviewers')) return Promise.resolve(mockInterviewers as any);
-        return Promise.resolve([] as any);
-      });
+      mockFetchApi.mockResolvedValueOnce(mockVacancyAssigned);
+      mockGetApi.mockImplementation(
+        ((url: string) => {
+          if (url.includes('/applications')) return Promise.resolve({ data: [] });
+          if (url.includes('/interviews')) return Promise.resolve([]);
+          if (url.includes('/offers')) return Promise.resolve([]);
+          if (url.includes('/users/interviewers')) return Promise.resolve(mockInterviewers);
+          return Promise.resolve([]);
+        }) as unknown as typeof getApi,
+      );
 
       render(
         <MemoryRouter initialEntries={['/vacancies/vac-2']}>
@@ -139,14 +143,16 @@ describe('Vacancy Assignment and Activation Flow', () => {
     });
 
     it('displays blocking reasons banner when vacancy is Pending Activation', async () => {
-      mockFetchApi.mockResolvedValueOnce(mockVacancyPendingActivation as any);
-      mockGetApi.mockImplementation((url: string) => {
-        if (url.includes('/applications')) return Promise.resolve({ data: [] } as any);
-        if (url.includes('/interviews')) return Promise.resolve([] as any);
-        if (url.includes('/offers')) return Promise.resolve([] as any);
-        if (url.includes('/users/interviewers')) return Promise.resolve(mockInterviewers as any);
-        return Promise.resolve([] as any);
-      });
+      mockFetchApi.mockResolvedValueOnce(mockVacancyPendingActivation);
+      mockGetApi.mockImplementation(
+        ((url: string) => {
+          if (url.includes('/applications')) return Promise.resolve({ data: [] });
+          if (url.includes('/interviews')) return Promise.resolve([]);
+          if (url.includes('/offers')) return Promise.resolve([]);
+          if (url.includes('/users/interviewers')) return Promise.resolve(mockInterviewers);
+          return Promise.resolve([]);
+        }) as unknown as typeof getApi,
+      );
 
       render(
         <MemoryRouter initialEntries={['/vacancies/vac-pending']}>
@@ -164,15 +170,17 @@ describe('Vacancy Assignment and Activation Flow', () => {
 
     it('auto-opens modal when ?assignRecruiter=true is passed, assigns recruiter, and navigates to applications', async () => {
       const user = userEvent.setup();
-      mockFetchApi.mockResolvedValueOnce(mockVacancyUnassigned as any);
-      mockGetApi.mockImplementation((url: string) => {
-        if (url.includes('/applications')) return Promise.resolve({ data: [] } as any);
-        if (url.includes('/interviews')) return Promise.resolve([] as any);
-        if (url.includes('/offers')) return Promise.resolve([] as any);
-        if (url.includes('/users/interviewers')) return Promise.resolve(mockInterviewers as any);
-        return Promise.resolve([] as any);
-      });
-      mockPostApi.mockResolvedValueOnce({ id: 'asg-new', status: 'Open' } as any);
+      mockFetchApi.mockResolvedValueOnce(mockVacancyUnassigned);
+      mockGetApi.mockImplementation(
+        ((url: string) => {
+          if (url.includes('/applications')) return Promise.resolve({ data: [] });
+          if (url.includes('/interviews')) return Promise.resolve([]);
+          if (url.includes('/offers')) return Promise.resolve([]);
+          if (url.includes('/users/interviewers')) return Promise.resolve(mockInterviewers);
+          return Promise.resolve([]);
+        }) as unknown as typeof getApi,
+      );
+      mockPostApi.mockResolvedValueOnce({ id: 'asg-new', status: 'Open' });
 
       render(
         <MemoryRouter initialEntries={['/vacancies/vac-1?assignRecruiter=true']}>
@@ -207,30 +215,32 @@ describe('Vacancy Assignment and Activation Flow', () => {
 
   describe('VacantListPage - Card Blocking Reasons & Direct Assignment', () => {
     it('shows Pending Activation badge and blocking reasons on cards with direct action buttons', async () => {
-      mockGetApi.mockImplementation((url: string) => {
-        if (url === '/vacancies') {
-          return Promise.resolve([
-            {
-              id: 'vac-p1',
-              vacancyCode: 'VAC-001',
-              title: 'Senior Clinical Pharmacist',
-              department: 'Pharmacy',
-              location: 'Riyadh',
-              status: 'Pending Activation',
-              approvedHeadcount: 1,
-              joinedHeadcount: 0,
-              jobSummary: '',
-              requiredSkills: [],
-              recruiter: { displayName: null },
-              assignments: [],
-            },
-          ] as any);
-        }
-        if (url.includes('/users/interviewers')) {
-          return Promise.resolve(mockInterviewers as any);
-        }
-        return Promise.resolve([] as any);
-      });
+      mockGetApi.mockImplementation(
+        ((url: string) => {
+          if (url === '/vacancies') {
+            return Promise.resolve([
+              {
+                id: 'vac-p1',
+                vacancyCode: 'VAC-001',
+                title: 'Senior Clinical Pharmacist',
+                department: 'Pharmacy',
+                location: 'Riyadh',
+                status: 'Pending Activation',
+                approvedHeadcount: 1,
+                joinedHeadcount: 0,
+                jobSummary: '',
+                requiredSkills: [],
+                recruiter: { displayName: null },
+                assignments: [],
+              },
+            ]);
+          }
+          if (url.includes('/users/interviewers')) {
+            return Promise.resolve(mockInterviewers);
+          }
+          return Promise.resolve([]);
+        }) as unknown as typeof getApi,
+      );
 
       render(
         <MemoryRouter initialEntries={['/vacancies?tab=requisitions']}>
@@ -249,31 +259,33 @@ describe('Vacancy Assignment and Activation Flow', () => {
 
     it('assigns recruiter directly from card modal and displays activation confirmation toast', async () => {
       const user = userEvent.setup();
-      mockGetApi.mockImplementation((url: string) => {
-        if (url === '/vacancies') {
-          return Promise.resolve([
-            {
-              id: 'vac-p1',
-              vacancyCode: 'VAC-001',
-              title: 'Senior Clinical Pharmacist',
-              department: 'Pharmacy',
-              location: 'Riyadh',
-              status: 'Pending Activation',
-              approvedHeadcount: 1,
-              joinedHeadcount: 0,
-              jobSummary: 'Lead hospital pharmacy dispensing and inpatient safety.',
-              requiredSkills: ['Pharmacology'],
-              recruiter: { displayName: null },
-              assignments: [],
-            },
-          ] as any);
-        }
-        if (url.includes('/users/interviewers')) {
-          return Promise.resolve(mockInterviewers as any);
-        }
-        return Promise.resolve([] as any);
-      });
-      mockPostApi.mockResolvedValueOnce({ id: 'asg-1', status: 'Open' } as any);
+      mockGetApi.mockImplementation(
+        ((url: string) => {
+          if (url === '/vacancies') {
+            return Promise.resolve([
+              {
+                id: 'vac-p1',
+                vacancyCode: 'VAC-001',
+                title: 'Senior Clinical Pharmacist',
+                department: 'Pharmacy',
+                location: 'Riyadh',
+                status: 'Pending Activation',
+                approvedHeadcount: 1,
+                joinedHeadcount: 0,
+                jobSummary: 'Lead hospital pharmacy dispensing and inpatient safety.',
+                requiredSkills: ['Pharmacology'],
+                recruiter: { displayName: null },
+                assignments: [],
+              },
+            ]);
+          }
+          if (url.includes('/users/interviewers')) {
+            return Promise.resolve(mockInterviewers);
+          }
+          return Promise.resolve([]);
+        }) as unknown as typeof getApi,
+      );
+      mockPostApi.mockResolvedValueOnce({ id: 'asg-1', status: 'Open' });
 
       render(
         <MemoryRouter initialEntries={['/vacancies?tab=requisitions']}>
@@ -315,41 +327,43 @@ describe('Vacancy Assignment and Activation Flow', () => {
 
     it('supports reassign flow with transfer notice from current recruiter to newly selected recruiter', async () => {
       const user = userEvent.setup();
-      mockGetApi.mockImplementation((url: string) => {
-        if (url === '/vacancies') {
-          return Promise.resolve([
-            {
-              id: 'vac-assigned-1',
-              vacancyCode: 'VAC-099',
-              title: 'ICU Charge Nurse',
-              department: 'Nursing',
-              location: 'Riyadh Hospital',
-              status: 'Open',
-              approvedHeadcount: 2,
-              joinedHeadcount: 0,
-              jobSummary: 'Lead intensive care unit nursing operations.',
-              requiredSkills: ['ICU', 'Critical Care'],
-              primaryRecruiterId: 'rec-1',
-              recruiter: { displayName: 'Sarah Ahmed', name: 'Sarah Ahmed' },
-              assignments: [
-                {
-                  id: 'asg-1',
-                  userId: 'rec-1',
-                  roleCode: 'RECRUITER',
-                  assignmentKind: 'PRIMARY',
-                  isActive: true,
-                  user: { id: 'rec-1', displayName: 'Sarah Ahmed' },
-                },
-              ],
-            },
-          ] as any);
-        }
-        if (url.includes('/users/interviewers')) {
-          return Promise.resolve(mockInterviewers as any);
-        }
-        return Promise.resolve([] as any);
-      });
-      mockPostApi.mockResolvedValueOnce({ id: 'asg-2', status: 'Open' } as any);
+      mockGetApi.mockImplementation(
+        ((url: string) => {
+          if (url === '/vacancies') {
+            return Promise.resolve([
+              {
+                id: 'vac-assigned-1',
+                vacancyCode: 'VAC-099',
+                title: 'ICU Charge Nurse',
+                department: 'Nursing',
+                location: 'Riyadh Hospital',
+                status: 'Open',
+                approvedHeadcount: 2,
+                joinedHeadcount: 0,
+                jobSummary: 'Lead intensive care unit nursing operations.',
+                requiredSkills: ['ICU', 'Critical Care'],
+                primaryRecruiterId: 'rec-1',
+                recruiter: { displayName: 'Sarah Ahmed', name: 'Sarah Ahmed' },
+                assignments: [
+                  {
+                    id: 'asg-1',
+                    userId: 'rec-1',
+                    roleCode: 'RECRUITER',
+                    assignmentKind: 'PRIMARY',
+                    isActive: true,
+                    user: { id: 'rec-1', displayName: 'Sarah Ahmed' },
+                  },
+                ],
+              },
+            ]);
+          }
+          if (url.includes('/users/interviewers')) {
+            return Promise.resolve(mockInterviewers);
+          }
+          return Promise.resolve([]);
+        }) as unknown as typeof getApi,
+      );
+      mockPostApi.mockResolvedValueOnce({ id: 'asg-2', status: 'Open' });
 
       render(
         <MemoryRouter initialEntries={['/vacancies?tab=requisitions']}>
@@ -398,29 +412,31 @@ describe('Vacancy Assignment and Activation Flow', () => {
 
     it('hides assign/reassign actions on both pages when user lacks assignment permission', async () => {
       mockPermissions = ['VACANCY_VIEW']; // No assignment permissions
-      mockGetApi.mockImplementation((url: string) => {
-        if (url === '/vacancies') {
-          return Promise.resolve([
-            {
-              id: 'vac-1',
-              vacancyCode: 'VAC-001',
-              title: 'Senior Frontend Engineer',
-              department: 'Engineering',
-              location: 'Riyadh',
-              status: 'Open',
-              approvedHeadcount: 1,
-              joinedHeadcount: 0,
-              recruiter: { displayName: null },
-              assignments: [],
-            },
-          ] as any);
-        }
-        if (url.includes('/applications')) return Promise.resolve({ data: [] } as any);
-        if (url.includes('/interviews')) return Promise.resolve([] as any);
-        if (url.includes('/offers')) return Promise.resolve([] as any);
-        return Promise.resolve([] as any);
-      });
-      mockFetchApi.mockResolvedValueOnce(mockVacancyUnassigned as any);
+      mockGetApi.mockImplementation(
+        ((url: string) => {
+          if (url === '/vacancies') {
+            return Promise.resolve([
+              {
+                id: 'vac-1',
+                vacancyCode: 'VAC-001',
+                title: 'Senior Frontend Engineer',
+                department: 'Engineering',
+                location: 'Riyadh',
+                status: 'Open',
+                approvedHeadcount: 1,
+                joinedHeadcount: 0,
+                recruiter: { displayName: null },
+                assignments: [],
+              },
+            ]);
+          }
+          if (url.includes('/applications')) return Promise.resolve({ data: [] });
+          if (url.includes('/interviews')) return Promise.resolve([]);
+          if (url.includes('/offers')) return Promise.resolve([]);
+          return Promise.resolve([]);
+        }) as unknown as typeof getApi,
+      );
+      mockFetchApi.mockResolvedValueOnce(mockVacancyUnassigned);
 
       // 1. VacantListPage check
       const { unmount } = render(
@@ -452,49 +468,51 @@ describe('Vacancy Assignment and Activation Flow', () => {
 
     it('allows initial assignment but hides Change Recruiter / Reassign when user has VACANCY_ASSIGN but lacks VACANCY_REASSIGN', async () => {
       mockPermissions = ['VACANCY_VIEW', 'VACANCY_ASSIGN']; // Has assign, but lacks reassign
-      mockGetApi.mockImplementation((url: string) => {
-        if (url === '/vacancies') {
-          return Promise.resolve([
-            {
-              id: 'vac-1',
-              vacancyCode: 'VAC-001',
-              title: 'Senior Frontend Engineer',
-              department: 'Engineering',
-              location: 'Riyadh',
-              status: 'Open',
-              approvedHeadcount: 1,
-              joinedHeadcount: 0,
-              recruiter: { displayName: null, name: 'Unassigned' },
-              assignments: [],
-            },
-            {
-              id: 'vac-2',
-              vacancyCode: 'VAC-002',
-              title: 'ICU Charge Nurse',
-              department: 'Nursing',
-              location: 'Riyadh',
-              status: 'Open',
-              approvedHeadcount: 1,
-              joinedHeadcount: 0,
-              recruiter: { displayName: 'Sarah Ahmed', name: 'Sarah Ahmed' },
-              assignments: [
-                {
-                  id: 'asg-1',
-                  userId: 'rec-1',
-                  roleCode: 'RECRUITER',
-                  assignmentKind: 'PRIMARY',
-                  isActive: true,
-                  user: { id: 'rec-1', displayName: 'Sarah Ahmed' },
-                },
-              ],
-            },
-          ] as any);
-        }
-        if (url.includes('/applications')) return Promise.resolve({ data: [] } as any);
-        if (url.includes('/interviews')) return Promise.resolve([] as any);
-        if (url.includes('/offers')) return Promise.resolve([] as any);
-        return Promise.resolve([] as any);
-      });
+      mockGetApi.mockImplementation(
+        ((url: string) => {
+          if (url === '/vacancies') {
+            return Promise.resolve([
+              {
+                id: 'vac-1',
+                vacancyCode: 'VAC-001',
+                title: 'Senior Frontend Engineer',
+                department: 'Engineering',
+                location: 'Riyadh',
+                status: 'Open',
+                approvedHeadcount: 1,
+                joinedHeadcount: 0,
+                recruiter: { displayName: null, name: 'Unassigned' },
+                assignments: [],
+              },
+              {
+                id: 'vac-2',
+                vacancyCode: 'VAC-002',
+                title: 'ICU Charge Nurse',
+                department: 'Nursing',
+                location: 'Riyadh',
+                status: 'Open',
+                approvedHeadcount: 1,
+                joinedHeadcount: 0,
+                recruiter: { displayName: 'Sarah Ahmed', name: 'Sarah Ahmed' },
+                assignments: [
+                  {
+                    id: 'asg-1',
+                    userId: 'rec-1',
+                    roleCode: 'RECRUITER',
+                    assignmentKind: 'PRIMARY',
+                    isActive: true,
+                    user: { id: 'rec-1', displayName: 'Sarah Ahmed' },
+                  },
+                ],
+              },
+            ]);
+          }
+          if (url.includes('/applications')) return Promise.resolve({ data: [] });
+          if (url.includes('/interviews')) return Promise.resolve([]);
+          if (url.includes('/offers')) return Promise.resolve([]);
+          return Promise.resolve([]);
+        }) as unknown as typeof getApi,
+      );
 
       // 1. VacantListPage: Should show "Assign recruiter" for unassigned, but NOT "Reassign" for assigned
       const { unmount } = render(
@@ -511,7 +529,7 @@ describe('Vacancy Assignment and Activation Flow', () => {
       unmount();
 
       // 2. VacancyOverviewPage for assigned vacancy: "Change Recruiter" must NOT be rendered
-      mockFetchApi.mockResolvedValueOnce(mockVacancyAssigned as any);
+      mockFetchApi.mockResolvedValueOnce(mockVacancyAssigned);
       render(
         <MemoryRouter initialEntries={['/vacancies/vac-2']}>
           <Routes>
@@ -526,14 +544,16 @@ describe('Vacancy Assignment and Activation Flow', () => {
 
     it('shows Change Recruiter when user has VACANCY_REASSIGN', async () => {
       mockPermissions = ['VACANCY_VIEW', 'VACANCY_REASSIGN'];
-      mockFetchApi.mockResolvedValueOnce(mockVacancyAssigned as any);
-      mockGetApi.mockImplementation((url: string) => {
-        if (url.includes('/applications')) return Promise.resolve({ data: [] } as any);
-        if (url.includes('/interviews')) return Promise.resolve([] as any);
-        if (url.includes('/offers')) return Promise.resolve([] as any);
-        if (url.includes('/users/interviewers')) return Promise.resolve(mockInterviewers as any);
-        return Promise.resolve([] as any);
-      });
+      mockFetchApi.mockResolvedValueOnce(mockVacancyAssigned);
+      mockGetApi.mockImplementation(
+        ((url: string) => {
+          if (url.includes('/applications')) return Promise.resolve({ data: [] });
+          if (url.includes('/interviews')) return Promise.resolve([]);
+          if (url.includes('/offers')) return Promise.resolve([]);
+          if (url.includes('/users/interviewers')) return Promise.resolve(mockInterviewers);
+          return Promise.resolve([]);
+        }) as unknown as typeof getApi,
+      );
 
       render(
         <MemoryRouter initialEntries={['/vacancies/vac-2']}>

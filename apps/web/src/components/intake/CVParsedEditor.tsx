@@ -144,6 +144,20 @@ export const CVParsedEditor: React.FC<CVParsedEditorProps> = ({
                 <Icon name="check" size={12} />
                 Parsed from {uploadedFileName || 'Uploaded Document'}
               </span>
+              {profile.parserSource && (
+                <span
+                  data-testid="parser-source-badge"
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold ${
+                    profile.parserSource === 'affinda'
+                      ? 'bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300'
+                      : 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300'
+                  }`}
+                >
+                  <Icon name={profile.parserSource === 'affinda' ? 'sparkles' : 'activity'} size={12} />
+                  {profile.parserSource === 'affinda' ? 'Affinda Engine' : 'Legacy Fallback'}
+                  {profile.parsingQuality && ` · ${profile.parsingQuality.toUpperCase()} Quality`}
+                </span>
+              )}
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
               Stage 2 of 4: Validate and adjust extracted fields before duplicate resolution and vacancy matching.

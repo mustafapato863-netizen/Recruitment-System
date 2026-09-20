@@ -1,0 +1,132 @@
+{
+  "meta": {
+    "rawText": "Dr. Tariq Hassan MD, Consultant Cardiologist at Saudi German Hospital Jeddah. Email: tariq.hassan@example.com Phone: +966551122334. 12 years experience.",
+    "document": {
+      "classification": "resume",
+      "extractionQuality": 0.95
+    }
+  },
+  "data": {
+    "person": {
+      "name": {
+        "given": "Tariq",
+        "middle": null,
+        "family": "Hassan",
+        "raw": "Dr. Tariq Hassan"
+      },
+      "location": {
+        "formatted": "Jeddah, Saudi Arabia",
+        "city": "Jeddah",
+        "country": "Saudi Arabia"
+      }
+    },
+    "contact": {
+      "emails": [
+        "tariq.hassan@example.com"
+      ],
+      "phoneNumbers": [
+        {
+          "formatted": "+966551122334",
+          "raw": "+966551122334"
+        }
+      ]
+    },
+    "profession": "Consultant Cardiologist",
+    "employmentMetrics": {
+      "totalExperienceMonths": 144
+    },
+    "workExperience": [
+      {
+        "jobTitle": "Consultant Cardiologist",
+        "organization": "Saudi German Hospital",
+        "isCurrent": true,
+        "jobDescription": "Leading cardiac catheterization unit.\nPerforming complex coronary angioplasty and stenting.\nConducting adult echocardiography.",
+        "dates": {
+          "startDate": "2018-01-01",
+          "endDate": "present",
+          "isCurrent": true
+        },
+        "dateRange": {
+          "start": {
+            "date": "2018-01-01"
+          },
+          "end": {
+            "current": true
+          }
+        }
+      },
+      {
+        "jobTitle": "Specialist Cardiologist",
+        "organization": "Cairo University Hospitals",
+        "isCurrent": false,
+        "jobDescription": "Outpatient cardiac clinics.\nCCU patient management and emergency resuscitation.",
+        "dates": {
+          "startDate": "2012-01-01",
+          "endDate": "2017-12-31",
+          "isCurrent": false
+        },
+        "dateRange": {
+          "start": {
+            "date": "2012-01-01"
+          },
+          "end": {
+            "date": "2017-12-31"
+          }
+        }
+      }
+    ],
+    "education": [
+      {
+        "accreditation": {
+          "education": "Doctor of Medicine (MD) in Cardiology"
+        },
+        "organization": "Cairo University Faculty of Medicine",
+        "major": "Cardiovascular Medicine",
+        "dates": {
+          "startDate": "2008-09-01",
+          "endDate": "2011-11-30"
+        }
+      }
+    ],
+    "skills": [
+      {
+        "name": "Cardiology"
+      },
+      {
+        "name": "Echocardiography"
+      },
+      {
+        "name": "Cardiac Catheterization"
+      },
+      {
+        "name": "Angioplasty"
+      },
+      {
+        "name": "Critical Care"
+      }
+    ],
+    "certifications": [
+      {
+        "name": "SCFHS Consultant License"
+      },
+      {
+        "name": "Advanced Cardiac Life Support (ACLS)"
+      }
+    ],
+    "languages": [
+      {
+        "name": "Arabic"
+      },
+      {
+        "name": "English"
+      }
+    ],
+    "projects": [
+      {
+        "title": "Primary PCI Fast-Track Registry",
+        "description": "Quality improvement protocol reducing door-to-balloon time to under 60 minutes."
+      }
+    ],
+    "summary": "Seasoned Consultant Cardiologist with 12 years of specialized clinical and interventional practice across KSA and Egypt."
+  }
+}

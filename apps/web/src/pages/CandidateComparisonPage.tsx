@@ -73,7 +73,7 @@ export function CandidateComparisonPage() {
             const skills = cand?.skills || [];
             const expYears = cand?.experienceYears ?? 0;
             const fitResult = calculateCandidateFitScore(
-              { skills, experienceYears: expYears, location: cand?.location, certifications: cand?.certifications, currentTitle: cand?.currentTitle },
+              { skills, experienceYears: expYears, location: cand?.location, certifications: cand?.certifications, currentTitle: cand?.currentTitle, summary: cand?.summary, rawText: cand?.summary },
               { requiredSkills: selectedVacancy?.requiredSkills || [], minExperienceYears: selectedVacancy?.minExperienceYears || 0, location: selectedVacancy?.location || selectedVacancy?.branch?.name || '', qualifications: selectedVacancy?.qualifications || '', department: selectedVacancy?.department || '' },
             );
             const score = fitResult.score;

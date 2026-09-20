@@ -1,0 +1,39 @@
+{
+  "meta": {
+    "rawText": "Candidate without contact info. Only name Robert Taylor.",
+    "document": {
+      "classification": "document",
+      "extractionQuality": 0.35
+    }
+  },
+  "data": {
+    "person": {
+      "name": {
+        "given": "Robert",
+        "middle": null,
+        "family": "Taylor",
+        "raw": "Robert Taylor"
+      },
+      "location": null
+    },
+    "contact": {
+      "emails": [],
+      "phoneNumbers": []
+    },
+    "profession": null,
+    "employmentMetrics": {
+      "totalExperienceMonths": null
+    },
+    "workExperience": [],
+    "education": [],
+    "skills": [
+      {
+        "name": "Teamwork"
+      }
+    ],
+    "certifications": [],
+    "languages": [],
+    "projects": [],
+    "summary": null
+  }
+}
