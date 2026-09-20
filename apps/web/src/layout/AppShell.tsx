@@ -411,6 +411,7 @@ export function AppShellInner() {
               <NavigationItem icon="mail" label="Email Templates" to="/email-templates" navigationKey="email-templates" requiredPermission="MASTER_DATA_MANAGE" isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
               <NavigationItem icon="settings" label="Settings" to="/settings" navigationKey="settings" requiredAnyPermissions={['USERS_VIEW', 'MASTER_DATA_VIEW', 'OVERRIDE_WORKFLOW', 'AUDIT_VIEW']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
               <NavigationItem icon="user-cog" label="Users & Roles" to="/users" navigationKey="users" requiredPermission="USERS_VIEW" isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+              <NavigationItem icon="pipeline" label="Reporting Tree" to="/reporting-tree" navigationKey="reporting-tree" requiredPermission="USERS_VIEW" isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
               <NavigationItem icon="list" label="Master Data" to="/master-data" navigationKey="master-data" requiredPermission="MASTER_DATA_VIEW" isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
               <NavigationItem icon="history" label="Audit Log" to="/audit-log" navigationKey="audit-log" requiredPermission="AUDIT_VIEW" isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
             </div>

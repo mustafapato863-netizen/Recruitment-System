@@ -42,6 +42,10 @@ export class UpdateUserDto implements UpdateUserInput {
   @IsOptional()
   @IsIn(['Active', 'Inactive'])
   status?: string;
+
+  @IsOptional()
+  @IsUUID()
+  managerId?: string | null;
 }
 
 export class CreateInvitationDto implements CreateInvitationInput {

@@ -1,5 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+/* eslint-disable @typescript-eslint/consistent-type-imports */
 import { PrismaService } from '../database/prisma.service';
+/* eslint-enable @typescript-eslint/consistent-type-imports */
 import type { UpsertRecruiterTargetDto, UpdateRecruiterTargetDto } from './recruiter-targets.dto';
 import type { RecruiterTargetRecord, RecruiterTargetProgressRecord, RecruiterTargetActual } from '@recruitflow/contracts';
 

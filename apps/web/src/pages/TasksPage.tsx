@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { TaskRecord, Vacancy } from '@recruitflow/contracts';
+import type { TaskRecord, UserRecord, Vacancy } from '@recruitflow/contracts';
 import { Icon } from '../components/Icon';
 import { Modal } from '../components/Modal';
 import { PageState } from '../components/ui/PageState';
@@ -218,7 +218,8 @@ export function TasksPage() {
       const [tasksRes, vacRes, recRes] = await Promise.allSettled([
         getApi<{ data?: TaskRecord[] } | TaskRecord[]>('/tasks?pageSize=100'),
         getApi<Vacancy[]>('/vacancies'),
-        getApi<{ id: string; displayName?: string; name?: string; roleCode?: string }[]>('/users/interviewers'),
+        // Team-scoped: admins see everyone, others see themselves + direct reports.
+        getApi<UserRecord[] | { data?: UserRecord[] }>('/users/assignable'),
       ]);
 
       const currentUserName = user?.displayName || 'You';
@@ -239,11 +240,12 @@ export function TasksPage() {
         }
       }
 
-      if (recRes.status === 'fulfilled' && Array.isArray(recRes.value)) {
-        const mapped = recRes.value.map((r) => ({
+      if (recRes.status === 'fulfilled' && recRes.value) {
+        const raw = Array.isArray(recRes.value) ? recRes.value : recRes.value.data || [];
+        const mapped = raw.map((r) => ({
           id: r.id,
-          name: r.displayName || r.name || 'Recruiter',
-          role: r.roleCode || 'Recruiter',
+          name: r.displayName || 'Team Member',
+          role: r.roles?.[0]?.name || 'Team Member',
         }));
         setApiRecruiters(mapped);
         if (mapped.length > 0 && !selectedRecruiterId) {
@@ -972,10 +974,10 @@ export function TasksPage() {
                 </select>
               </div>
 
-              {/* Recruiter Selector */}
+              {/* Recruiter Selector (team-scoped via reporting tree) */}
               <div>
                 <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">
-                  Assign To Recruiter
+                  Assign To {isAdministrator ? 'Team Member' : 'My Team Member'}
                 </label>
                 <select
                   value={selectedRecruiterId}

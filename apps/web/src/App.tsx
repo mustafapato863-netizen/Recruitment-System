@@ -22,6 +22,7 @@ import './styles/v2-parity.css';
 const DashboardPage = lazy(() => import('./pages/DashboardPage').then((m) => ({ default: m.DashboardPage })));
 const MyWorkPage = lazy(() => import('./pages/MyWorkPage').then((m) => ({ default: m.MyWorkPage })));
 const UsersRolesPage = lazy(() => import('./pages/UsersRolesPage').then((m) => ({ default: m.UsersRolesPage })));
+const ReportingTreePage = lazy(() => import('./pages/ReportingTreePage').then((m) => ({ default: m.ReportingTreePage })));
 const MasterDataPage = lazy(() => import('./pages/MasterDataPage').then((m) => ({ default: m.MasterDataPage })));
 const AuditLogPage = lazy(() => import('./pages/AuditLogPage').then((m) => ({ default: m.AuditLogPage })));
 const VacancyRequestsPage = lazy(() => import('./pages/VacancyRequestsPage').then((m) => ({ default: m.VacancyRequestsPage })));
@@ -104,6 +105,14 @@ function App() {
                     element={
                       <PermissionGate requiredPermission="USERS_VIEW">
                         <UsersRolesPage />
+                      </PermissionGate>
+                    }
+                  />
+                  <Route
+                    path="/reporting-tree"
+                    element={
+                      <PermissionGate requiredPermission="USERS_VIEW">
+                        <ReportingTreePage />
                       </PermissionGate>
                     }
                   />

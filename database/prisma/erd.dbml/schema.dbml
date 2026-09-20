@@ -87,6 +87,9 @@ Table users {
   displayName String [not null]
   jobTitle String
   status String [not null, default: 'Active']
+  managerId String
+  manager users
+  directReports users [not null]
   emailVerifiedAt DateTime
   invitationAcceptedAt DateTime
   tokenVersion Int [not null, default: 0]
@@ -901,6 +904,8 @@ Ref: branches.organizationId > organizations.id [delete: Restrict]
 Ref: positions.organizationId > organizations.id [delete: Restrict]
 
 Ref: users.organizationId > organizations.id [delete: Restrict]
+
+Ref: users.managerId - users.id [delete: Set Null]
 
 Ref: auth_tokens.organizationId > organizations.id [delete: Cascade]
 

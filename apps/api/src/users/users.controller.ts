@@ -8,7 +8,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { TenantScopedGuard } from '../common/guards/tenant-scoped.guard';
 import { TenantResource } from '../common/decorators/tenant-resource.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { RequirePermissions } from '../common/decorators/require-permissions.decorator';
+import { RequirePermissions, RequireAnyPermissions } from '../common/decorators/require-permissions.decorator';
 import { AuditAction } from '../common/decorators/audit-action.decorator';
 import type { AuthUser } from '@recruitflow/contracts';
 
@@ -30,6 +30,12 @@ export class UsersController {
   @RequirePermissions('USERS_VIEW')
   list(@CurrentUser() user: AuthUser) {
     return this.usersService.list(user.organizationId);
+  }
+
+  @Get('assignable')
+  @RequireAnyPermissions('VACANCY_MANAGE', 'VACANCY_ASSIGN', 'VACANCY_REASSIGN')
+  listAssignable(@CurrentUser() user: AuthUser) {
+    return this.usersService.listAssignable(user.organizationId, user.userId);
   }
 
   @Get(':id')

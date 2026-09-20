@@ -64,32 +64,32 @@ describe('ManagerDashboard Permission Gating for Reassign and Targets', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetApi.mockImplementation((url: string) => {
-      if (url.startsWith('/vacancies')) {
-        return Promise.resolve(mockVacancies) as any;
-      }
-      if (url.startsWith('/applications')) {
-        return Promise.resolve({ data: [] }) as any;
-      }
-      if (url.startsWith('/reports/overview')) {
-        return Promise.resolve({ kpis: {} }) as any;
-      }
-      if (url.startsWith('/interviews')) {
-        return Promise.resolve([]) as any;
-      }
-      if (url.startsWith('/users/interviewers')) {
-        return Promise.resolve([
-          { id: 'rec-1', displayName: 'Ganna Farid', roleCode: 'RECRUITER' },
-        ]) as any;
-      }
-      if (url.startsWith('/recruiter-targets/my')) {
-        return Promise.resolve([]) as any;
-      }
-      if (url.startsWith('/recruiter-targets')) {
-        return Promise.resolve([]) as any;
-      }
-      return Promise.resolve([]) as any;
-    });
+    mockGetApi.mockImplementation(
+      ((url: string) => {
+        if (url.startsWith('/vacancies')) {
+          return Promise.resolve(mockVacancies);
+        }
+        if (url.startsWith('/applications')) {
+          return Promise.resolve({ data: [] });
+        }
+        if (url.startsWith('/reports/overview')) {
+          return Promise.resolve({ kpis: {} });
+        }
+        if (url.startsWith('/interviews')) {
+          return Promise.resolve([]);
+        }
+        if (url.startsWith('/users/interviewers')) {
+          return Promise.resolve([{ id: 'rec-1', displayName: 'Ganna Farid', roleCode: 'RECRUITER' }]);
+        }
+        if (url.startsWith('/recruiter-targets/my')) {
+          return Promise.resolve([]);
+        }
+        if (url.startsWith('/recruiter-targets')) {
+          return Promise.resolve([]);
+        }
+        return Promise.resolve([]);
+      }) as unknown as typeof getApi,
+    );
   });
 
   it('hides all reassignment and target buttons for standard recruiters', async () => {

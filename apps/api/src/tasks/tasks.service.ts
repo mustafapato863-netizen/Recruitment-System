@@ -6,12 +6,14 @@ import { CreateTaskDto } from './tasks.dto';
 import type { TaskRecord, PaginatedResult } from '@recruitflow/contracts';
 import type { AuthUser } from '@recruitflow/contracts';
 import { AccessControlService } from '../access-control/access-control.service';
+import { UserPermissionsService } from '../common/user-permissions.service';
 
 @Injectable()
 export class TasksService {
   constructor(
     private readonly prisma: PrismaService,
     @Optional() @Inject(AccessControlService) private readonly accessControl?: AccessControlService,
+    @Optional() @Inject(UserPermissionsService) private readonly userPermissions?: UserPermissionsService,
   ) {}
 
   async list(
@@ -100,12 +102,13 @@ export class TasksService {
 
   async create(organizationId: string, createdById: string, dto: CreateTaskDto, user?: AuthUser): Promise<TaskRecord> {
     const [assignee, reference] = await Promise.all([
-      this.prisma.user.findFirst({ where: { id: dto.assigneeUserId, organizationId, status: 'Active' }, select: { id: true } }),
+      this.prisma.user.findFirst({ where: { id: dto.assigneeUserId, organizationId, status: 'Active' }, select: { id: true, managerId: true } }),
       this.resolveReference(organizationId, dto.entityType, dto.entityId, user),
     ]);
     if (!assignee) throw new NotFoundException('Task assignee is not an active user in this organization.');
     if (dto.entityType && !dto.entityId) throw new NotFoundException('A linked task entity must include an identifier.');
     if (dto.entityId && !reference) throw new NotFoundException('The linked task entity was not found in this organization.');
+    await this.assertCanAssign(organizationId, createdById, assignee);
 
     const now = new Date();
     const task = await this.prisma.$transaction(async (tx) => {
@@ -139,6 +142,26 @@ export class TasksService {
     });
 
     return this.toRecord(task, now);
+  }
+
+  /**
+   * Team-scoped assignment: anyone may assign tasks to themselves, admins
+   * (USERS_MANAGE / VACANCY_MANAGE) may assign to anyone, and everyone else
+   * may only assign to their direct reports from the reporting tree.
+   */
+  private async assertCanAssign(
+    organizationId: string,
+    createdById: string,
+    assignee: { id: string; managerId: string | null },
+  ): Promise<void> {
+    if (assignee.id === createdById) return;
+    const permissions = this.userPermissions
+      ? await this.userPermissions.getPermissionSet(createdById, organizationId)
+      : new Set<string>();
+    if (permissions.has('USERS_MANAGE') || permissions.has('VACANCY_MANAGE')) return;
+    if (assignee.managerId !== createdById) {
+      throw new ForbiddenException('Access denied: you can only assign tasks to yourself or your direct reports.');
+    }
   }
 
   private async resolveReference(organizationId: string, entityType?: string, entityId?: string, user?: AuthUser) {
