@@ -23,9 +23,7 @@ export function SghAnimatedLoader({
   className = "",
   isDark: propIsDark,
 }: SghAnimatedLoaderProps) {
-  const [displayText, setDisplayText] = React.useState("");
   const [progress, setProgress] = React.useState(0);
-  const [isFinished, setIsFinished] = React.useState(false);
   const [detectedDark, setDetectedDark] = React.useState(true);
 
   React.useEffect(() => {
@@ -48,17 +46,10 @@ export function SghAnimatedLoader({
       const pct = Math.min(100, Math.round((elapsed / durationMs) * 100));
       setProgress(pct);
 
-      // Typewriter calculation
-      const textProgress = Math.min(1, elapsed / (durationMs * 0.75));
-      const charCount = Math.floor(textProgress * textSequence.length);
-      setDisplayText(textSequence.slice(0, charCount));
-
       if (elapsed < durationMs) {
         frameId = requestAnimationFrame(animate);
       } else {
-        setDisplayText(textSequence);
         setProgress(100);
-        setIsFinished(true);
         if (onComplete) {
           setTimeout(onComplete, 300);
         }
@@ -71,9 +62,9 @@ export function SghAnimatedLoader({
   }, [durationMs, textSequence, onComplete]);
 
   const loaderContent = (
-    <div className={`flex flex-col items-center justify-center p-8 select-none text-center ${className}`.trim()}>
+    <div className={`flex w-full max-w-[380px] flex-col items-center justify-center px-6 py-7 text-center select-none sm:px-8 sm:py-8 ${className}`.trim()}>
       {/* 1. Animated Dual-Wing SGH Heart Emblem with Glowing Ring */}
-      <div className="relative mb-8 flex items-center justify-center">
+      <div className="relative mb-6 flex items-center justify-center">
         {/* Ambient Halo Glow */}
         <motion.div
           animate={{
@@ -85,7 +76,7 @@ export function SghAnimatedLoader({
             repeat: Infinity,
             ease: "easeInOut",
           }}
-          className="absolute -inset-6 rounded-full bg-gradient-to-tr from-[#00A3E0]/30 to-[#00A859]/30 blur-2xl pointer-events-none"
+          className="pointer-events-none absolute -inset-4 rounded-full bg-gradient-to-tr from-[#00A3E0]/30 to-[#00A859]/30 blur-2xl"
         />
 
         {/* Floating Heart Icon */}
@@ -101,27 +92,18 @@ export function SghAnimatedLoader({
           }}
           className="relative z-10 drop-shadow-[0_12px_28px_rgba(0,163,224,0.35)]"
         >
-          <SghHeartSvg size={130} glow={true} />
+          <SghHeartSvg size={92} glow={true} />
         </motion.div>
       </div>
 
-      {/* 2. Storyboard Typewriter Text: "Saudi German Health" */}
-      <div className="mb-2 flex items-center justify-center min-h-[36px]">
+      {/* 2. Stable brand name: the progress and emblem carry the motion */}
+      <div className="mb-2 flex min-h-[34px] w-full items-center justify-center">
         <h2
-          className={`text-2xl sm:text-3xl font-extrabold tracking-tight flex items-center gap-1 transition-colors ${
+          className={`flex items-center gap-1 whitespace-nowrap text-xl font-extrabold tracking-tight transition-colors sm:text-2xl ${
             isDark ? "text-white" : "text-slate-900"
           }`}
         >
-          <span>{displayText}</span>
-          {!isFinished && (
-            <motion.span
-              animate={{ opacity: [1, 0, 1] }}
-              transition={{ duration: 0.8, repeat: Infinity }}
-              className={`inline-block w-1 h-7 rounded-full ms-0.5 ${
-                isDark ? "bg-[#38BDF8]" : "bg-[#0084CE]"
-              }`}
-            />
-          )}
+          <span>{textSequence}</span>
         </h2>
       </div>
 
@@ -131,7 +113,7 @@ export function SghAnimatedLoader({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.2 }}
-          className={`text-xs sm:text-sm font-medium max-w-sm mb-8 transition-colors ${
+          className={`mb-6 max-w-[300px] text-xs font-medium leading-5 transition-colors sm:text-sm ${
             isDark ? "text-slate-300" : "text-slate-600"
           }`}
         >
@@ -140,7 +122,7 @@ export function SghAnimatedLoader({
       )}
 
       {/* 3. Multi-stop SGH Gradient Progress Bar */}
-      <div className="w-64 sm:w-80 space-y-2.5">
+      <div className="w-full max-w-[300px] space-y-2.5">
         <div
           className={`relative h-2.5 w-full overflow-hidden rounded-full p-[1px] transition-colors ${
             isDark
@@ -183,19 +165,40 @@ export function SghAnimatedLoader({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.4 }}
-          className={`fixed inset-0 z-50 flex items-center justify-center backdrop-blur-3xl transition-colors duration-300 ${
-            isDark ? "bg-[#0B132B]/95 text-white" : "bg-[#F8FAFC]/95 text-slate-900"
+          className={`fixed inset-0 z-[100] isolate flex items-center justify-center p-4 transition-colors duration-300 sm:p-6 ${
+            isDark ? "text-white" : "text-slate-900"
           }`}
+          role="status"
+          aria-live="polite"
+          aria-label="Signing in"
         >
-          {/* Subtle Ambient Radial Spotlight */}
           <div
-            className={`absolute inset-0 pointer-events-none transition-opacity ${
-              isDark
-                ? "bg-[radial-gradient(circle_at_center,rgba(0,163,224,0.20)_0%,transparent_70%)]"
-                : "bg-[radial-gradient(circle_at_center,rgba(0,163,224,0.12)_0%,transparent_70%)]"
-            }`}
+            className="pointer-events-none absolute inset-0 backdrop-blur-md"
+            style={{
+              backgroundColor: isDark ? "rgba(8, 19, 43, 0.88)" : "rgba(244, 250, 252, 0.94)",
+            }}
           />
-          {loaderContent}
+          <div
+            className="pointer-events-none absolute inset-0 opacity-70"
+            style={{
+              background: isDark
+                ? "radial-gradient(circle at 50% 38%, rgba(0,163,224,0.18), transparent 48%)"
+                : "radial-gradient(circle at 50% 38%, rgba(0,163,224,0.13), transparent 48%)",
+            }}
+          />
+          <div
+            className="relative z-10 w-full max-w-[420px] overflow-hidden rounded-[28px] border shadow-2xl"
+            style={{
+              backgroundColor: isDark ? "rgba(15, 23, 42, 0.98)" : "rgba(255, 255, 255, 0.98)",
+              borderColor: isDark ? "rgba(148, 163, 184, 0.22)" : "rgba(148, 163, 184, 0.28)",
+              boxShadow: isDark
+                ? "0 24px 80px rgba(0, 0, 0, 0.42)"
+                : "0 24px 80px rgba(15, 67, 91, 0.16)",
+            }}
+          >
+            <div className="h-1 w-full bg-gradient-to-r from-[#0084CE] via-[#00A3E0] to-[#00A859]" aria-hidden="true" />
+            {loaderContent}
+          </div>
         </motion.div>
       </AnimatePresence>
     );
