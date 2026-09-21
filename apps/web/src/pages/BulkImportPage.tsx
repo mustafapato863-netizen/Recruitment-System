@@ -387,6 +387,19 @@ function BulkImportReviewPage({ dataset, jobId }: { dataset: BulkImportDataset; 
         <MetricCard label="Invalid" value={summary?.invalidRows ?? 0} tone="danger" />
         <MetricCard label="Duplicates" value={summary?.duplicateRows ?? 0} tone="warning" />
       </div>
+      {confirmed && (
+        <Alert
+          tone={(summary?.invalidRows ?? 0) > 0 ? 'warning' : 'success'}
+          title="Import outcome summary"
+        >
+          {`Processed ${summary?.totalRows ?? 0} row(s): ${summary?.validRows ?? 0} valid, ${summary?.invalidRows ?? 0} invalid, ${summary?.duplicateRows ?? 0} duplicate. Open the Result column below for per-row success or failure details.`}
+        </Alert>
+      )}
+      {!confirmed && (
+        <Alert tone="info" title="Per-row review">
+          Use the Result and Details columns for each row. Invalid rows stay out of the confirmed import; resolve duplicates before confirming.
+        </Alert>
+      )}
       {unresolved > 0 && <Alert tone="warning" title={`${unresolved} duplicate row(s) need a decision`}>Resolve each duplicate before confirming the import.</Alert>}
       <section className="rf-table-shell overflow-hidden rounded-2xl border border-rf-border bg-rf-surface shadow-xs">
         <DataTable role="region" aria-label="Bulk import rows" tabIndex={0}>

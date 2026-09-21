@@ -1,3 +1,4 @@
+import { getPermissionLabel } from '@recruitflow/contracts';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import type {
   Application,
@@ -636,7 +637,7 @@ export function ApplicantStageWorkspace({
 
             {effectiveStage === 'Interview' && !canViewInterviews && (
               <Alert tone="warning" title="Interview access restricted" role="status">
-                Your role does not include permission to view interview details or evaluations.
+                {`Your role does not include ${getPermissionLabel('VACANCY_VIEW')} (VACANCY_VIEW), which is required to see interview details and evaluations. Ask an administrator if you need access.`}
               </Alert>
             )}
 

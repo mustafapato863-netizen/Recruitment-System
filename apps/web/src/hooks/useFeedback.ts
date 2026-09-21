@@ -8,11 +8,11 @@ import {
 } from '../api/errors';
 import { useToast } from '../components/ui/ToastContext';
 
-/** Strip legacy success prefixes (checkmark and common mojibake variants). */
+/** Strip legacy success prefixes (checkmark glyphs and UTF-8 replacement junk). */
 function stripLegacyPrefix(message: string): string {
   return message
     .replace(/^[\u2713\u2714\u2705]\s*/u, '')
-    .replace(/^\u00ef\u00bf\u00bd+\s*/u, '')
+    .replace(/^[\uFFFD]+\s*/u, '')
     .trim();
 }
 

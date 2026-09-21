@@ -282,9 +282,20 @@ export function useCVIntakeFlow(initialTargetVacancy?: string | null) {
       const qualityLabel = extracted.parsingQuality ? ` · ${extracted.parsingQuality.toUpperCase()} Quality` : '';
       showToast(`Successfully extracted profile for ${extracted.firstName || 'Candidate'} ${extracted.lastName || ''} (${sourceLabel}${qualityLabel})`);
     } catch (err: unknown) {
-      const message = getErrorMessage(err, 'Unable to parse document.');
+      const raw = getErrorMessage(err, 'Unable to parse document.');
+      const lower = raw.toLowerCase();
+      let message = raw;
+      if (lower.includes('affinda') || lower.includes('resume engine') || lower.includes('parser')) {
+        message = `${raw} Affinda could not read this CV — try a text-based PDF or DOCX (not a scanned image), or enter key fields manually in the editor.`;
+      } else if (lower.includes('timeout') || lower.includes('timed out')) {
+        message = 'CV parsing timed out. Wait a moment and retry, or use a smaller PDF/DOCX.';
+      } else if (lower.includes('unsupported') || lower.includes('invalid file') || lower.includes('mime')) {
+        message = 'This file type is not supported for CV parsing. Upload a PDF or Word (.doc/.docx) document.';
+      } else if (!raw || raw === 'Unable to parse document.') {
+        message = 'Unable to parse this document. Check the file is a readable PDF/DOCX, then retry. You can still enter candidate details manually if parsing keeps failing.';
+      }
       setError(message);
-      toastError(err, 'Unable to parse document');
+      toastError(err, 'CV parsing failed');
     } finally {
       setParsingFile(false);
       setParsingStep('');

@@ -491,7 +491,7 @@ export function CreateVacancyRequestPage() {
                     <FormField id="req-budget-max" label="Monthly Budget To" hint="Must be at least the minimum">
                       <Input id="req-budget-max" type="number" min="1" max="2147483647" step="1" value={form.budgetMax} onChange={(event) => setForm({ ...form, budgetMax: event.target.value })} />
                     </FormField>
-                    <FormField id="req-budget-currency" label="Budget Currency">
+                    <FormField id="req-budget-currency" label="Budget Currency" hint="Allowed currencies: AED (UAE dirham) or EGP (Egyptian pound) only.">
                       <Select id="req-budget-currency" value={form.budgetCurrency} onChange={(event) => setForm({ ...form, budgetCurrency: event.target.value as 'AED' | 'EGP' })}>
                         <option value="EGP">Egyptian pound (EGP)</option>
                         <option value="AED">UAE dirham (AED)</option>
@@ -500,7 +500,7 @@ export function CreateVacancyRequestPage() {
                   </div>
                   
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-                    <FormField id="req-recruitment-timing" label="Recruitment Plan" hint="Approval status is tracked separately">
+                    <FormField id="req-recruitment-timing" label="Recruitment Plan" hint="After Approval starts recruiting once approved. Deferred creates an On Hold vacancy until the planned opening date.">
                       <Select id="req-recruitment-timing" value={form.recruitmentTiming} onChange={(event) => setForm({ ...form, recruitmentTiming: event.target.value as FormState['recruitmentTiming'], plannedOpenDate: '' })}>
                         <option value="After Approval">Start recruitment after approval</option>
                         <option value="Deferred">Deferred — do not recruit yet</option>
