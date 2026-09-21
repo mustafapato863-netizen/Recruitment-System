@@ -230,7 +230,9 @@ export function useCVIntakeFlow(initialTargetVacancy?: string | null) {
   // Auto-select the top recommended vacancy
   useEffect(() => {
     if (scoredVacancies.length > 0) {
-      if (!targetVacancy || !vacancies.some((v) => v.id === targetVacancy)) {
+      // "pool" is a valid intentional destination without a vacancy. Do not
+      // replace it with the top recommendation after the user selects it.
+      if (targetVacancy !== 'pool' && (!targetVacancy || !vacancies.some((v) => v.id === targetVacancy))) {
         setTargetVacancy(scoredVacancies[0].vacancy.id);
       }
     } else if (vacancies.length > 0 && !targetVacancy) {

@@ -233,8 +233,14 @@ Table vacancy_requests {
   employmentType String
   reason String
   budgetStatus String
+  budgetMin Int
+  budgetMax Int
+  budgetCurrency String
   criticality String
   targetStartDate DateTime
+  targetFillDate DateTime
+  recruitmentTiming String
+  plannedOpenDate DateTime
   justification String
   jobSummary String
   description String
@@ -376,6 +382,7 @@ Table candidates {
   certifications String[] [not null]
   languages String[] [not null]
   availability String
+  metadata Json
   applications applications [not null]
   createdById String
   createdBy users

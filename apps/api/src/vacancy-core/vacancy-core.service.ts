@@ -293,8 +293,14 @@ export class VacancyCoreService {
       employmentType: input.employmentType ?? null,
       reason: input.reason ?? null,
       budgetStatus: input.budgetStatus ?? null,
+      budgetMin: input.budgetMin ?? null,
+      budgetMax: input.budgetMax ?? null,
+      budgetCurrency: input.budgetCurrency ?? null,
       criticality: input.criticality ?? null,
       targetStartDate: input.targetStartDate ?? null,
+      targetFillDate: input.targetFillDate ?? null,
+      recruitmentTiming: input.recruitmentTiming ?? null,
+      plannedOpenDate: input.plannedOpenDate ?? null,
       justification: input.justification ?? null,
       jobSummary: input.jobSummary ?? null,
       description: input.description ?? null,
@@ -303,7 +309,32 @@ export class VacancyCoreService {
       benefits: input.benefits ?? null,
     };
 
+    this.validateRequestPlan(payload, false);
     return this.repository.createRequest(payload);
+  }
+
+  private validateRequestPlan(
+    request: Partial<Pick<VacancyRequest, 'budgetMin' | 'budgetMax' | 'budgetCurrency' | 'recruitmentTiming' | 'plannedOpenDate' | 'targetFillDate'>>,
+    required: boolean,
+  ): void {
+    const hasAnyBudgetValue = request.budgetMin != null || request.budgetMax != null || Boolean(request.budgetCurrency);
+    if ((required || hasAnyBudgetValue) &&
+      (request.budgetMin == null || request.budgetMax == null || !request.budgetCurrency ||
+        request.budgetMin <= 0 || request.budgetMax < request.budgetMin)) {
+      throw new BadRequestException('Enter a valid budget range from minimum to maximum and select AED or EGP.');
+    }
+    if (required && (!request.recruitmentTiming || !request.targetFillDate)) {
+      throw new BadRequestException('Choose when recruitment starts and a target fill date before submitting.');
+    }
+    if (request.recruitmentTiming === 'Deferred' && !request.plannedOpenDate) {
+      throw new BadRequestException('A deferred request needs a planned opening date.');
+    }
+    if (request.recruitmentTiming !== 'Deferred' && request.plannedOpenDate) {
+      throw new BadRequestException('A planned opening date is only valid for deferred recruitment.');
+    }
+    if (request.plannedOpenDate && request.targetFillDate && request.targetFillDate < request.plannedOpenDate) {
+      throw new BadRequestException('Target fill date must be on or after the planned opening date.');
+    }
   }
 
   async updateRequest(
@@ -322,14 +353,21 @@ export class VacancyCoreService {
     if (input.employmentType !== undefined) request.employmentType = input.employmentType;
     if (input.reason !== undefined) request.reason = input.reason;
     if (input.budgetStatus !== undefined) request.budgetStatus = input.budgetStatus;
+    if (input.budgetMin !== undefined) request.budgetMin = input.budgetMin;
+    if (input.budgetMax !== undefined) request.budgetMax = input.budgetMax;
+    if (input.budgetCurrency !== undefined) request.budgetCurrency = input.budgetCurrency;
     if (input.criticality !== undefined) request.criticality = input.criticality;
     if (input.targetStartDate !== undefined) request.targetStartDate = input.targetStartDate;
+    if (input.targetFillDate !== undefined) request.targetFillDate = input.targetFillDate;
+    if (input.recruitmentTiming !== undefined) request.recruitmentTiming = input.recruitmentTiming;
+    if (input.plannedOpenDate !== undefined) request.plannedOpenDate = input.plannedOpenDate;
     if (input.justification !== undefined) request.justification = input.justification;
     if (input.jobSummary !== undefined) request.jobSummary = input.jobSummary;
     if (input.description !== undefined) request.description = input.description;
     if (input.responsibilities !== undefined) request.responsibilities = input.responsibilities;
     if (input.qualifications !== undefined) request.qualifications = input.qualifications;
     if (input.benefits !== undefined) request.benefits = input.benefits;
+    this.validateRequestPlan(request, false);
     request.updatedAt = new Date().toISOString();
 
     return this.repository.saveRequest(request);
@@ -348,6 +386,8 @@ export class VacancyCoreService {
         `Request ${request.requestCode} cannot be submitted from ${request.status}.`,
       );
     }
+
+    this.validateRequestPlan(request, true);
 
     const now = new Date().toISOString();
     const revision =
@@ -474,7 +514,7 @@ export class VacancyCoreService {
       positionId: request.positionId,
       vacancyRequestId: request.id,
       vacancyCode: await this.repository.nextVacancyCode(),
-      status: 'Pending Activation',
+      status: request.recruitmentTiming === 'Deferred' ? 'On Hold' : 'Pending Activation',
       approvedHeadcount: request.requestedHeadcount,
       joinedHeadcount: 0,
       openedAt: null,
@@ -894,6 +934,57 @@ export class VacancyCoreService {
 
     const detail = await this.getVacancyDetail(organizationId, id, user);
     return detail!;
+  }
+
+  async deleteVacancy(
+    id: string,
+    organizationId: string,
+    user?: AuthUser,
+  ): Promise<{ deleted: true; id: string }> {
+    if (!user) {
+      throw new ForbiddenException('Only administrators can delete vacancies.');
+    }
+
+    // Keep this check server-side and authoritative. The UI hides the action for
+    // non-admins, but the role guard must still protect direct API requests.
+    const administrator = await this.prisma.user.findFirst({
+      where: {
+        id: user.userId,
+        organizationId,
+        status: 'Active',
+        userRoles: {
+          some: { role: { code: 'ADMINISTRATOR', status: 'Active' } },
+        },
+      },
+      select: { id: true },
+    });
+    if (!administrator) {
+      throw new ForbiddenException('Only administrators can delete vacancies.');
+    }
+
+    const vacancy = await this.prisma.vacancy.findFirst({
+      where: { id, organizationId },
+      select: { id: true, vacancyRequestId: true },
+    });
+    if (!vacancy) {
+      throw new NotFoundException(`Vacancy ${id} was not found.`);
+    }
+
+    const applicationCount = await this.prisma.application.count({ where: { vacancyId: id } });
+    if (applicationCount > 0) {
+      throw new ConflictException(
+        'This vacancy has applications and cannot be deleted. Cancel or archive it instead.',
+      );
+    }
+
+    await this.prisma.$transaction(async (transaction) => {
+      await transaction.vacancyAssignment.deleteMany({ where: { vacancyId: id } });
+      await transaction.vacancyRequestApproval.deleteMany({ where: { vacancyRequestId: vacancy.vacancyRequestId } });
+      await transaction.vacancy.delete({ where: { id } });
+      await transaction.vacancyRequest.delete({ where: { id: vacancy.vacancyRequestId } });
+    });
+
+    return { deleted: true, id };
   }
 
   private async assertVacancyVisible(organizationId: string, id: string, user?: AuthUser): Promise<void> {

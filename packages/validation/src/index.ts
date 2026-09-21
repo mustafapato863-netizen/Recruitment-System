@@ -26,7 +26,13 @@ export const createVacancyRequestSchema = z.object({
   employmentType: optionalText(60),
   reason: optionalText(120),
   budgetStatus: optionalText(60),
+  budgetMin: z.number().int().positive().nullable().optional(),
+  budgetMax: z.number().int().positive().nullable().optional(),
+  budgetCurrency: z.enum(['AED', 'EGP']).nullable().optional(),
   criticality: optionalText(40),
+  targetFillDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  recruitmentTiming: z.enum(['After Approval', 'Deferred']).nullable().optional(),
+  plannedOpenDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   targetStartDate: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -47,7 +53,13 @@ export const updateVacancyRequestSchema = z.object({
   employmentType: optionalText(60),
   reason: optionalText(120),
   budgetStatus: optionalText(60),
+  budgetMin: z.number().int().positive().nullable().optional(),
+  budgetMax: z.number().int().positive().nullable().optional(),
+  budgetCurrency: z.enum(['AED', 'EGP']).nullable().optional(),
   criticality: optionalText(40),
+  targetFillDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  recruitmentTiming: z.enum(['After Approval', 'Deferred']).nullable().optional(),
+  plannedOpenDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
   targetStartDate: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/)
@@ -344,4 +356,3 @@ export * from './evidence-ranker.ts';
 export * from './hard-gates.ts';
 export * from './sgh-enrichment.ts';
 export * from './resume-parser.ts';
-

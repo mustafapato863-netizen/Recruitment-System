@@ -44,6 +44,20 @@ describe('BreadcrumbsBar Component', () => {
     expect(mockNavigate).toHaveBeenCalledWith(-1);
   });
 
+  it('returns to Job Positions from a vacancy detail route', async () => {
+    mockNavigate.mockClear();
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={['/vacancies/vac-123']}>
+        <BreadcrumbsBar />
+      </MemoryRouter>
+    );
+
+    const backBtn = screen.getByRole('button', { name: /back to job positions/i });
+    await user.click(backBtn);
+    expect(mockNavigate).toHaveBeenCalledWith('/vacancies');
+  });
+
   it('handles deep paths such as /offers/new with friendly names', () => {
     render(
       <MemoryRouter initialEntries={['/offers/new']}>

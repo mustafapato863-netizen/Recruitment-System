@@ -1,11 +1,12 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type { VacancyDetailView, Application, PaginatedResult, Interview, Offer, VacancyStatus } from '@recruitflow/contracts';
-import { fetchApi, getApi, patchApi, postApi } from '../api/client';
+import { deleteApi, fetchApi, getApi, patchApi, postApi } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { isTeamLeaderOrAdmin } from '../auth/workspacePersona';
 import { Icon } from '../components/Icon';
 import { Modal } from '../components/Modal';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { AddApplicationModal } from '../components/candidate/AddApplicationModal';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -51,6 +52,9 @@ export function VacancyOverviewPage() {
   const [isAssigningRecruiter, setIsAssigningRecruiter] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isJdModalOpen, setIsJdModalOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isRoleDetailsExpanded, setIsRoleDetailsExpanded] = useState(false);
 
   const [editFormData, setEditFormData] = useState<{
     title: string;
@@ -120,6 +124,20 @@ export function VacancyOverviewPage() {
       void loadAllData();
     } catch (err: unknown) {
       showToast(err instanceof Error ? err.message : 'Failed to update status');
+    }
+  };
+
+  const handleDeleteVacancy = async () => {
+    if (!vacancy || !isAdministrator) return;
+    setIsDeleting(true);
+    try {
+      await deleteApi(`/vacancies/${vacancy.id}`);
+      navigate('/vacancies', { replace: true });
+    } catch (err: unknown) {
+      showToast(err instanceof Error ? err.message : 'Failed to delete vacancy');
+      setIsDeleteDialogOpen(false);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -463,52 +481,53 @@ export function VacancyOverviewPage() {
           )}
           {vacancy?.status === 'Pending Activation' && (() => {
             const blockingReasons = getVacancyBlockingReasons(vacancy);
+            const hasDetailsIssue = blockingReasons.some((reason) => !reason.isRecruiterAction);
             return (
-              <div className="mt-3 rounded-xl border border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40 p-3 text-xs">
-                <div className="flex items-center justify-between text-amber-900 dark:text-amber-300 font-bold mb-1.5">
+              <div className="mt-3 rounded-2xl border border-amber-300 bg-amber-50/80 p-3.5 text-xs dark:border-amber-800 dark:bg-amber-950/30">
+                <div className="flex flex-col gap-1.5 text-amber-900 dark:text-amber-300 sm:flex-row sm:items-center sm:justify-between">
                   <span className="flex items-center gap-1.5">
                     <Icon name="alert-triangle" size={14} className="text-amber-600 dark:text-amber-400" />
-                    <span>Pending Activation &bull; {blockingReasons.length} blocking issue(s)</span>
+                    <span>Pending activation &bull; {blockingReasons.length} setup item{blockingReasons.length === 1 ? '' : 's'} remaining</span>
                   </span>
-                  <span className="text-[11px] font-normal text-amber-700 dark:text-amber-400">Resolve to open requisition</span>
+                  <span className="text-[11px] font-medium text-amber-700 dark:text-amber-400">Complete setup to open requisition</span>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+                <div className="mt-3 grid grid-cols-1 gap-2 lg:grid-cols-3">
                   {blockingReasons.map((reason) => (
                     <div
                       key={reason.key}
-                      className="flex items-center justify-between p-2 rounded-lg bg-white/80 dark:bg-slate-900/80 border border-amber-200/80 dark:border-amber-900/60"
+                      className="flex min-h-10 items-center justify-between gap-2 rounded-xl border border-amber-200/80 bg-white/80 px-2.5 py-2 dark:border-amber-900/60 dark:bg-slate-900/60"
                     >
-                      <span className="text-slate-700 dark:text-slate-300 font-medium truncate">&bull; {reason.label}</span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (reason.isRecruiterAction) {
-                            setAssignRecruiterOpen(true);
-                          } else {
-                            openEditModal();
-                          }
-                        }}
-                        className="shrink-0 text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer ml-2"
-                      >
-                        {reason.actionLabel} &rarr;
-                      </button>
+                      <span className="min-w-0 truncate font-semibold text-slate-700 dark:text-slate-300">{reason.label}</span>
+                      {reason.isRecruiterAction ? (
+                        <span className="shrink-0 text-[10px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-400">Required</span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={openEditModal}
+                          className="min-h-8 shrink-0 rounded-lg px-1.5 text-[11px] font-bold text-blue-600 hover:bg-blue-50 hover:underline dark:text-blue-400 dark:hover:bg-blue-950/30"
+                        >
+                          {reason.actionLabel}<span aria-hidden="true"> &rarr;</span>
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
 
-                <div className="mt-3 pt-2.5 border-t border-amber-200/80 dark:border-amber-900/60 flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-[11px] text-amber-800 dark:text-amber-300 font-medium">
-                    Have an official Job Description (.docx, .pdf)? Auto-extract requirements &amp; sync Master Data.
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setIsJdModalOpen(true)}
-                    className="inline-flex items-center gap-1.5 px-3 py-1 bg-white dark:bg-slate-900 border border-teal-300 dark:border-teal-700 text-teal-700 dark:text-teal-300 rounded-lg text-xs font-bold hover:bg-teal-50 dark:hover:bg-teal-950/40 transition shadow-xs cursor-pointer"
-                  >
-                    <Icon name="file-text" size={13} className="text-teal-600 dark:text-teal-400" />
-                    <span>⚡ Upload JD to Auto-Fill Specs</span>
-                  </button>
-                </div>
+                {hasDetailsIssue && (
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-amber-200/80 pt-2.5 dark:border-amber-900/60">
+                    <span className="text-[11px] font-medium text-amber-800 dark:text-amber-300">
+                      Have a job description? Use it to fill the missing requirements.
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setIsJdModalOpen(true)}
+                      className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-teal-300 bg-white px-3 text-xs font-bold text-teal-700 shadow-xs transition hover:bg-teal-50 dark:border-teal-700 dark:bg-slate-900 dark:text-teal-300 dark:hover:bg-teal-950/40"
+                    >
+                      <Icon name="file-text" size={13} className="text-teal-600 dark:text-teal-400" />
+                      <span>Upload JD</span>
+                    </button>
+                  </div>
+                )}
               </div>
             );
           })()}
@@ -537,37 +556,44 @@ export function VacancyOverviewPage() {
             <span>Add Candidate</span>
           </button>
 
-          <button
-            type="button"
-            onClick={openEditModal}
-            className="inline-flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs cursor-pointer"
-          >
-            <span>Edit</span>
-            <Icon name="edit" size={13} className="text-slate-400" />
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setIsJdModalOpen(true)}
-            className="inline-flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs cursor-pointer"
-            title="Import official Job Description (.docx, .pdf) to auto-fill specs"
-          >
-            <Icon name="file-text" size={13} className="text-teal-600 dark:text-teal-400" />
-            <span>Import JD</span>
-          </button>
-
           <div className="relative">
             <button
               type="button"
               onClick={() => setIsActionsDropdownOpen((prev) => !prev)}
-              className="p-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-50 transition shadow-xs cursor-pointer"
-              title="Position actions"
+              aria-expanded={isActionsDropdownOpen}
+              aria-haspopup="menu"
+              className="inline-flex h-10 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-700 shadow-xs transition hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+              title="More position actions"
             >
-              <Icon name="more-vertical" size={15} />
+              <span>More</span>
+              <Icon name="chevron-down" size={14} />
             </button>
 
             {isActionsDropdownOpen && (
-              <div className="absolute right-0 mt-1.5 w-52 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-lg z-30 py-1 text-xs">
+              <div role="menu" className="absolute right-0 z-30 mt-1.5 w-56 rounded-xl border border-slate-200 bg-white py-1 text-xs shadow-lg dark:border-slate-800 dark:bg-slate-900">
+                <button
+                  type="button"
+                  onClick={() => {
+                    openEditModal();
+                    setIsActionsDropdownOpen(false);
+                  }}
+                  className="flex w-full cursor-pointer items-center gap-2 px-3.5 py-2.5 text-left font-semibold text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
+                >
+                  <Icon name="edit" size={13} className="text-slate-400" />
+                  <span>Edit position</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsJdModalOpen(true);
+                    setIsActionsDropdownOpen(false);
+                  }}
+                  className="flex w-full cursor-pointer items-center gap-2 px-3.5 py-2.5 text-left font-semibold text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
+                >
+                  <Icon name="file-text" size={13} className="text-teal-600 dark:text-teal-400" />
+                  <span>Import job description</span>
+                </button>
+                <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
                 <button
                   type="button"
                   onClick={() => navigate(`/applications?vacancyId=${id}`)}
@@ -593,6 +619,22 @@ export function VacancyOverviewPage() {
                   <Icon name="copy" size={13} className="text-emerald-500" />
                   <span>{isCloning ? 'Cloning...' : 'Clone Requisition'}</span>
                 </button>
+                {isAdministrator && (
+                  <>
+                    <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsActionsDropdownOpen(false);
+                        setIsDeleteDialogOpen(true);
+                      }}
+                      className="flex w-full cursor-pointer items-center gap-2 px-3.5 py-2.5 text-left font-semibold text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/30"
+                    >
+                      <Icon name="trash" size={13} />
+                      <span>Delete requisition</span>
+                    </button>
+                  </>
+                )}
                 <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
                 <div className="px-3.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
                   Change Status
@@ -620,20 +662,20 @@ export function VacancyOverviewPage() {
       </div>
 
       {/* ── Persistent RecruitFlow Smart Stat Buttons (E9.2) ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {/* Card 1: Applications */}
         <div
           onClick={() => navigate(`/applications?vacancyId=${id || ''}`)}
-          className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs hover:shadow-md hover:border-blue-300 dark:hover:border-blue-800 transition cursor-pointer flex items-center justify-between group"
+          className="group flex cursor-pointer items-center justify-between rounded-2xl border border-slate-200/80 bg-white p-3.5 shadow-xs transition hover:border-blue-300 hover:shadow-md dark:border-slate-800 dark:bg-slate-900 dark:hover:border-blue-800 sm:p-4"
           title="View candidate pipeline for this position"
         >
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
-              <Icon name="users" size={22} />
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400">
+              <Icon name="users" size={19} />
             </div>
             <div>
               <span className="block text-xs font-semibold text-slate-500 dark:text-slate-400">Applications</span>
-              <span className="block text-2xl font-black text-slate-900 dark:text-white mt-0.5">{applicationsCount}</span>
+              <span className="mt-0.5 block text-xl font-black text-slate-900 dark:text-white">{applicationsCount}</span>
               <span className="block text-xs font-bold text-blue-600 dark:text-blue-400 mt-0.5">
                 {appsThisWeek > 0 ? `+${appsThisWeek} this week` : '0 this week'}
               </span>
@@ -645,16 +687,16 @@ export function VacancyOverviewPage() {
         {/* Card 2: Interviews */}
         <div
           onClick={() => navigate(`/interviews?vacancyId=${id || ''}`)}
-          className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs hover:shadow-md hover:border-emerald-300 dark:hover:border-emerald-800 transition cursor-pointer flex items-center justify-between group"
+          className="group flex cursor-pointer items-center justify-between rounded-2xl border border-slate-200/80 bg-white p-3.5 shadow-xs transition hover:border-emerald-300 hover:shadow-md dark:border-slate-800 dark:bg-slate-900 dark:hover:border-emerald-800 sm:p-4"
           title="View scheduled interviews for this position"
         >
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
-              <Icon name="calendar" size={22} />
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400">
+              <Icon name="calendar" size={19} />
             </div>
             <div>
               <span className="block text-xs font-semibold text-slate-500 dark:text-slate-400">Interviews</span>
-              <span className="block text-2xl font-black text-slate-900 dark:text-white mt-0.5">{interviewsCount}</span>
+              <span className="mt-0.5 block text-xl font-black text-slate-900 dark:text-white">{interviewsCount}</span>
               <span className="block text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
                 {intsThisWeek > 0 ? `${intsThisWeek} this week` : '0 this week'}
               </span>
@@ -666,16 +708,16 @@ export function VacancyOverviewPage() {
         {/* Card 3: Offers */}
         <div
           onClick={() => navigate(`/offers?vacancyId=${id || ''}`)}
-          className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs hover:shadow-md hover:border-purple-300 dark:hover:border-purple-800 transition cursor-pointer flex items-center justify-between group"
+          className="group flex cursor-pointer items-center justify-between rounded-2xl border border-slate-200/80 bg-white p-3.5 shadow-xs transition hover:border-purple-300 hover:shadow-md dark:border-slate-800 dark:bg-slate-900 dark:hover:border-purple-800 sm:p-4"
           title="View offers for this position"
         >
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
-              <Icon name="offer" size={22} />
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-purple-50 text-purple-600 dark:bg-purple-950/40 dark:text-purple-400">
+              <Icon name="offer" size={19} />
             </div>
             <div>
               <span className="block text-xs font-semibold text-slate-500 dark:text-slate-400">Offers</span>
-              <span className="block text-2xl font-black text-slate-900 dark:text-white mt-0.5">{offersCount}</span>
+              <span className="mt-0.5 block text-xl font-black text-slate-900 dark:text-white">{offersCount}</span>
               <span className="block text-xs font-bold text-purple-600 dark:text-purple-400 mt-0.5">
                 {offersThisWeek > 0 ? `${offersThisWeek} this week` : '0 this week'}
               </span>
@@ -687,16 +729,16 @@ export function VacancyOverviewPage() {
         {/* Card 4: Headcount Fulfillment & Hires */}
         <div
           onClick={() => navigate(`/applications?vacancyId=${id || ''}&stage=Joined`)}
-          className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs hover:shadow-md hover:border-orange-300 dark:hover:border-orange-800 transition cursor-pointer flex items-center justify-between group"
+          className="group flex cursor-pointer items-center justify-between rounded-2xl border border-slate-200/80 bg-white p-3.5 shadow-xs transition hover:border-orange-300 hover:shadow-md dark:border-slate-800 dark:bg-slate-900 dark:hover:border-orange-800 sm:p-4"
           title="View joined candidates & headcount fulfillment"
         >
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-xl bg-orange-50 dark:bg-orange-950/40 text-orange-600 dark:text-orange-400 flex items-center justify-center shrink-0">
-              <Icon name="user-check" size={22} />
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-600 dark:bg-orange-950/40 dark:text-orange-400">
+              <Icon name="user-check" size={19} />
             </div>
             <div>
               <span className="block text-xs font-semibold text-slate-500 dark:text-slate-400">Headcount Joined</span>
-              <span className="block text-2xl font-black text-slate-900 dark:text-white mt-0.5">
+              <span className="mt-0.5 block text-xl font-black text-slate-900 dark:text-white">
                 {hiresCount} / {vacancy?.approvedHeadcount ?? 1}
               </span>
               <span className="block text-xs font-bold text-orange-600 dark:text-orange-400 mt-0.5">
@@ -1033,52 +1075,67 @@ export function VacancyOverviewPage() {
               <div className="pt-2 space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-xs font-bold text-slate-900 dark:text-white">Role Requirements</h3>
-                  {!vacancy?.description && !vacancy?.responsibilities && !vacancy?.qualifications && !vacancy?.benefits && (
+                  <div className="flex items-center gap-3">
+                    {!vacancy?.description && !vacancy?.responsibilities && !vacancy?.qualifications && !vacancy?.benefits && (
+                      <button
+                        type="button"
+                        onClick={() => setIsEditModalOpen(true)}
+                        className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                      >
+                        Add requirements
+                      </button>
+                    )}
                     <button
                       type="button"
-                      onClick={() => setIsEditModalOpen(true)}
-                      className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                      onClick={() => setIsRoleDetailsExpanded((expanded) => !expanded)}
+                      aria-expanded={isRoleDetailsExpanded}
+                      className="inline-flex min-h-8 items-center gap-1 rounded-lg px-2 text-[11px] font-bold text-blue-600 hover:bg-blue-50 hover:underline dark:text-blue-400 dark:hover:bg-blue-950/30"
                     >
-                      Add requirements
+                      {isRoleDetailsExpanded ? 'Hide details' : 'Show details'}
+                      <Icon name="chevron-down" size={12} className={isRoleDetailsExpanded ? 'rotate-180' : ''} />
                     </button>
-                  )}
+                  </div>
                 </div>
-                {vacancy?.description && (
-                  <div>
-                    <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">About the role</h4>
-                    <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-line">
-                      {vacancy.description}
-                    </p>
+                {isRoleDetailsExpanded && (
+                  <div className="space-y-4">
+                    {vacancy?.description && (
+                      <div>
+                        <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">About the role</h4>
+                        <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-line">
+                          {vacancy.description}
+                        </p>
+                      </div>
+                    )}
+                    {vacancy?.responsibilities && (
+                      <div>
+                        <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">Key responsibilities</h4>
+                        <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-line">
+                          {vacancy.responsibilities}
+                        </p>
+                      </div>
+                    )}
+                    {vacancy?.qualifications && (
+                      <div>
+                        <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">Required qualifications</h4>
+                        <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-line">
+                          {vacancy.qualifications}
+                        </p>
+                      </div>
+                    )}
+                    {vacancy?.benefits && (
+                      <div>
+                        <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">Benefits & highlights</h4>
+                        <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-line">
+                          {vacancy.benefits}
+                        </p>
+                      </div>
+                    )}
+                    {!vacancy?.description && !vacancy?.responsibilities && !vacancy?.qualifications && !vacancy?.benefits && (
+                      <p className="text-xs text-slate-400 dark:text-slate-500 leading-relaxed">
+                        No role requirements yet. They are drafted on the vacancy request and can be edited here at any time.
+                      </p>
+                    )}
                   </div>
-                )}
-                {vacancy?.responsibilities && (
-                  <div>
-                    <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">Key responsibilities</h4>
-                    <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-line">
-                      {vacancy.responsibilities}
-                    </p>
-                  </div>
-                )}
-                {vacancy?.qualifications && (
-                  <div>
-                    <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">Required qualifications</h4>
-                    <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-line">
-                      {vacancy.qualifications}
-                    </p>
-                  </div>
-                )}
-                {vacancy?.benefits && (
-                  <div>
-                    <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">Benefits & highlights</h4>
-                    <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-line">
-                      {vacancy.benefits}
-                    </p>
-                  </div>
-                )}
-                {!vacancy?.description && !vacancy?.responsibilities && !vacancy?.qualifications && !vacancy?.benefits && (
-                  <p className="text-xs text-slate-400 dark:text-slate-500 leading-relaxed">
-                    No role requirements yet. They are drafted on the vacancy request and can be edited here at any time.
-                  </p>
                 )}
               </div>
             </div>
@@ -1093,6 +1150,10 @@ export function VacancyOverviewPage() {
                     `Branch: ${vacancy?.branch?.name || 'Main Branch'}`,
                     `Type: ${vacancy?.vacancyRequest?.employmentType || 'Full-time'}`,
                     `Budget: ${vacancy?.vacancyRequest?.budgetStatus || 'Approved'}`,
+                    ...(vacancy?.vacancyRequest?.budgetMin != null && vacancy?.vacancyRequest?.budgetMax != null && vacancy?.vacancyRequest?.budgetCurrency
+                      ? [`Monthly range: ${vacancy.vacancyRequest.budgetMin.toLocaleString()}–${vacancy.vacancyRequest.budgetMax.toLocaleString()} ${vacancy.vacancyRequest.budgetCurrency}`]
+                      : []),
+                    ...(vacancy?.vacancyRequest?.recruitmentTiming ? [`Recruitment: ${vacancy.vacancyRequest.recruitmentTiming}`] : []),
                     `Priority: ${vacancy?.vacancyRequest?.criticality || 'Standard'}`,
                     `Headcount: ${vacancy?.approvedHeadcount || 1}`,
                     ...(vacancy?.position?.code ? [`Code: ${vacancy.position.code}`] : []),
@@ -1178,6 +1239,29 @@ export function VacancyOverviewPage() {
               <span className="font-bold text-slate-900 dark:text-white">
                 {vacancy?.vacancyRequest?.budgetStatus || 'Approved'}
               </span>
+            </div>
+
+            <div className="flex items-center justify-between gap-3 py-1 border-b border-slate-100/60 dark:border-slate-800/60">
+              <span className="text-slate-500 dark:text-slate-400">Monthly Budget</span>
+              <span className="font-bold text-slate-900 dark:text-white text-right">
+                {vacancy?.vacancyRequest?.budgetMin != null && vacancy?.vacancyRequest?.budgetMax != null && vacancy?.vacancyRequest?.budgetCurrency
+                  ? `${vacancy.vacancyRequest.budgetMin.toLocaleString()}–${vacancy.vacancyRequest.budgetMax.toLocaleString()} ${vacancy.vacancyRequest.budgetCurrency}`
+                  : 'Not set'}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between gap-3 py-1 border-b border-slate-100/60 dark:border-slate-800/60">
+              <span className="text-slate-500 dark:text-slate-400">Recruitment Plan</span>
+              <span className="font-bold text-slate-900 dark:text-white text-right">
+                {vacancy?.vacancyRequest?.recruitmentTiming === 'Deferred'
+                  ? `Deferred until ${vacancy.vacancyRequest.plannedOpenDate?.slice(0, 10) || 'planned date'}`
+                  : vacancy?.vacancyRequest?.recruitmentTiming || 'Not set'}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between gap-3 py-1 border-b border-slate-100/60 dark:border-slate-800/60">
+              <span className="text-slate-500 dark:text-slate-400">Target Fill Date</span>
+              <span className="font-bold text-slate-900 dark:text-white">{vacancy?.vacancyRequest?.targetFillDate?.slice(0, 10) || 'Not set'}</span>
             </div>
 
             <div className="flex items-center justify-between gap-3 py-1 border-b border-slate-100/60 dark:border-slate-800/60">
@@ -1789,6 +1873,20 @@ export function VacancyOverviewPage() {
           showToast('Job Description ingested and position requirements updated successfully');
           void loadAllData();
         }}
+      />
+
+      <ConfirmDialog
+        isOpen={isDeleteDialogOpen}
+        onClose={() => {
+          if (!isDeleting) setIsDeleteDialogOpen(false);
+        }}
+        onConfirm={handleDeleteVacancy}
+        title="Delete requisition permanently?"
+        description="This removes the requisition and its setup records permanently. Requisitions with applications cannot be deleted and must be cancelled instead."
+        confirmLabel="Delete permanently"
+        tone="danger"
+        icon="trash"
+        isLoading={isDeleting}
       />
 
       {/* Toast Notification */}

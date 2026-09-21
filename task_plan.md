@@ -1,5 +1,16 @@
 # Unified Applicant Stage Workspace
 
+## Current task — Requisition planning fields (2026-09-21)
+
+- [x] Audit request and vacancy schema, API validation/mapping, create form, detail and overview display.
+- [x] Add budget minimum/maximum, target fill date, and actionable opening state while preserving existing records.
+- [x] Update request creation and detail UI so the plan is explicit and useful.
+- [x] Verify schema/migration, API and UI tests, typechecks, build, and relevant browser flow.
+
+Working interpretation: a request can recruit after approval or be deferred until a planned opening date; target fill date says when the approved headcount should be filled. The request records a numeric monthly budget range per position and an explicit currency.
+
+---
+
 ## Goal
 
 Keep Applicant Profile as the recruiter’s single stage-aware workspace for the persisted pipeline. Each stage exposes its data and actions in place, while stage movement remains protected by server-side gates, permissions, and optimistic concurrency.

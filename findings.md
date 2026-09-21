@@ -1,5 +1,15 @@
 # Findings
 
+## Current task — Requisition planning fields (2026-09-21)
+
+- Screenshot shows pending approval request details with Budget Allocation as only `Budgeted` and Target Start as `Flexible`; user needs monetary range, a target fill date, and whether recruitment should start or stay deferred.
+- Existing Prisma `VacancyRequest` has `budgetStatus` and `targetStartDate`, but no range or explicit deferred/open plan fields. Existing planning files below refer to a previous task and are preserved.
+- Create form posts directly to vacancy request API. Service and both Prisma/in-memory repositories map request fields; request conversion explicitly creates a vacancy with `Pending Activation` status. Detail UI uses four top summary cards and repeated status-only budget text.
+- New plan: optional persisted `budgetMin`, `budgetMax`, `budgetCurrency`, `targetFillDate`, `recruitmentTiming`, `plannedOpenDate` on request. New submitted requests require the planning values; old records remain nullable. Deferred conversion will create an `On Hold` vacancy, so recruitment does not start by accident.
+- User clarified allowed currencies: AED (UAE dirham) or EGP (Egyptian pound) only.
+
+---
+
 ## Audit
 
 - Applicant Profile already owned the candidate summary, history, screening, interviews, notes, and legacy quick actions. The old Stage Transition page duplicated movement work and was suitable for a compatibility redirect.

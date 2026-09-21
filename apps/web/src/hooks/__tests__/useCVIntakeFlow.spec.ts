@@ -70,4 +70,29 @@ describe('useCVIntakeFlow', () => {
       expect(callArgs.educationHistory).toEqual([{ organization: 'MIT', degree: 'BSc' }]);
     });
   });
+
+  it('keeps the General Talent Pool selection when vacancies are scored', async () => {
+    const { result } = renderHook(() => useCVIntakeFlow());
+
+    act(() => {
+      result.current.setProfile({
+        firstName: 'John',
+        lastName: 'Doe',
+        skills: ['React'],
+        experienceYears: 3,
+      });
+    });
+
+    await waitFor(() => {
+      expect(result.current.scoredVacancies.length).toBeGreaterThan(0);
+    });
+
+    act(() => {
+      result.current.setTargetVacancy('pool');
+    });
+
+    await waitFor(() => {
+      expect(result.current.targetVacancy).toBe('pool');
+    });
+  });
 });

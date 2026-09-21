@@ -154,6 +154,17 @@ export function VacantListPage() {
   const [isSubmittingAssign, setIsSubmittingAssign] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const applicantFileInputRef = useRef<HTMLInputElement>(null);
+  const pageActionsRef = useRef<HTMLDetailsElement>(null);
+
+  useEffect(() => {
+    const closeActionsOnOutsideClick = (event: PointerEvent) => {
+      if (!pageActionsRef.current?.contains(event.target as Node)) {
+        pageActionsRef.current?.removeAttribute('open');
+      }
+    };
+    document.addEventListener('pointerdown', closeActionsOnOutsideClick);
+    return () => document.removeEventListener('pointerdown', closeActionsOnOutsideClick);
+  }, []);
 
   // JD Ingestion & Master Data Auto-Sync Modal
   const [isJdModalOpen, setIsJdModalOpen] = useState(false);
@@ -488,63 +499,24 @@ export function VacantListPage() {
   return (
     <div className="flex w-full flex-col p-4 sm:p-6 lg:p-7 max-w-[1720px] mx-auto space-y-5">
       {/* ── Page Header: Title & Action Buttons ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-              Job Positions &amp; Requirements
-            </h1>
-          </div>
-          <p className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">
-            Clinical position specifications, structured skills benchmarks, and active hospital recruitment requisitions.
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-rf-ink tracking-tight">
+            Job Positions &amp; Requirements
+          </h1>
+          <p className="mt-1 text-sm text-rf-ink-muted">
+            Manage position requirements and recruitment requests.
           </p>
         </div>
-
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => void handleExportExcel()}
-            disabled={isExporting}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs cursor-pointer disabled:opacity-50"
-            aria-label="Export vacancies to Excel"
-            title="Export vacancies as XLSX workbook"
-          >
-            <Icon name={isExporting ? 'refresh-cw' : 'download'} size={14} className={`text-emerald-600 dark:text-emerald-400 ${isExporting ? 'animate-spin' : ''}`} />
-            <span>{isExporting ? 'Exporting...' : 'Export XLSX'}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setJdTargetVacancy(null);
-              setIsJdModalOpen(true);
-            }}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-700 hover:to-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-md shadow-teal-500/20 cursor-pointer"
-            title="Upload a Job Description (.docx, .pdf) to auto-extract specs and sync Master Data"
-          >
-            <Icon name="file-text" size={14} />
-            <span>📄 Upload JD (.docx)</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setIsImportModalOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs cursor-pointer"
-          >
-            <Icon name="upload" size={14} className="text-slate-500" />
-            <span>Import applicants</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => navigate('/vacancy-requests/create')}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-[#006ea8] hover:bg-[#005b8c] text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
-            title="Submit a new budgeted headcount request for executive approval"
-          >
-            <Icon name="plus" size={14} />
-            <span>New Vacancy Requisition</span>
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => navigate('/vacancy-requests/create')}
+          className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 self-start rounded-xl bg-rf-action px-4 text-sm font-bold text-rf-on-action transition hover:bg-rf-action-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rf-action"
+          title="Submit a new budgeted headcount request for executive approval"
+        >
+          <Icon name="plus" size={16} />
+          <span>New requisition</span>
+        </button>
       </div>
 
       {exportError && (
@@ -554,42 +526,89 @@ export function VacantListPage() {
       )}
 
       {/* ── Top-Level View Switcher: Full Positions Directory vs Active Requisitions ── */}
-      <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-3">
-        <button
-          type="button"
-          onClick={() => setActiveSection('catalog')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-extrabold transition cursor-pointer ${
-            activeSection === 'catalog'
-              ? 'bg-gradient-to-r from-sky-600 via-teal-600 to-emerald-600 text-white shadow-md shadow-teal-500/20'
-              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/80'
-          }`}
-        >
-          <Icon name="briefcase" size={14} />
-          <span>Full Positions &amp; Requirements Directory</span>
-          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-            activeSection === 'catalog' ? 'bg-white/25 text-white' : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
-          }`}>
-            {uniqueCatalogPositions.length} Active in DB
-          </span>
-        </button>
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-rf-border">
+        <nav aria-label="Position views" className="flex flex-wrap gap-1">
+          <button
+            type="button"
+            onClick={() => setActiveSection('catalog')}
+            aria-current={activeSection === 'catalog' ? 'page' : undefined}
+            className={`inline-flex min-h-11 items-center gap-2 border-b-2 px-3 text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-rf-action ${
+              activeSection === 'catalog'
+                ? 'border-rf-action text-rf-action'
+                : 'border-transparent text-rf-ink-muted hover:text-rf-ink'
+            }`}
+          >
+            <span>Position directory</span>
+            <span className="rounded-full bg-rf-surface-muted px-2 py-0.5 text-xs font-bold text-rf-ink-muted">
+              {uniqueCatalogPositions.length}
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveSection('requisitions')}
+            aria-current={activeSection === 'requisitions' ? 'page' : undefined}
+            className={`inline-flex min-h-11 items-center gap-2 border-b-2 px-3 text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-rf-action ${
+              activeSection === 'requisitions'
+                ? 'border-rf-action text-rf-action'
+                : 'border-transparent text-rf-ink-muted hover:text-rf-ink'
+            }`}
+          >
+            <span>Requisitions</span>
+            <span className="rounded-full bg-rf-surface-muted px-2 py-0.5 text-xs font-bold text-rf-ink-muted">
+              {openCount}
+            </span>
+          </button>
+        </nav>
 
-        <button
-          type="button"
-          onClick={() => setActiveSection('requisitions')}
-          className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-extrabold transition cursor-pointer ${
-            activeSection === 'requisitions'
-              ? 'bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-md'
-              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/80'
-          }`}
+        <details
+          ref={pageActionsRef}
+          className="relative ml-auto self-center pb-1"
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              pageActionsRef.current?.removeAttribute('open');
+              pageActionsRef.current?.querySelector('summary')?.focus();
+            }
+          }}
         >
-          <Icon name="file-text" size={14} />
-          <span>Requisition Vacancies (Work Queue)</span>
-          <span className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
-            activeSection === 'requisitions' ? 'bg-white/20 dark:bg-black/20 text-white dark:text-slate-900' : 'bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
-          }`}>
-            {openCount} Open
-          </span>
-        </button>
+          <summary className="flex min-h-10 cursor-pointer list-none items-center gap-1.5 rounded-lg px-3 text-sm font-semibold text-rf-ink-muted marker:hidden hover:bg-rf-surface-hover hover:text-rf-ink focus-visible:outline-2 focus-visible:outline-rf-action">
+            More actions
+            <Icon name="chevron-down" size={14} />
+          </summary>
+          <div className="absolute right-0 z-20 mt-2 w-56 rounded-xl border border-rf-border bg-rf-surface p-1.5 shadow-lg">
+            <button
+              type="button"
+              onClick={() => {
+                pageActionsRef.current?.removeAttribute('open');
+                setJdTargetVacancy(null);
+                setIsJdModalOpen(true);
+              }}
+              className="flex min-h-10 w-full items-center gap-2 rounded-lg px-3 text-left text-sm font-medium text-rf-ink hover:bg-rf-surface-hover focus-visible:outline-2 focus-visible:outline-rf-action"
+            >
+              <Icon name="file-text" size={16} /> Upload job description
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                pageActionsRef.current?.removeAttribute('open');
+                setIsImportModalOpen(true);
+              }}
+              className="flex min-h-10 w-full items-center gap-2 rounded-lg px-3 text-left text-sm font-medium text-rf-ink hover:bg-rf-surface-hover focus-visible:outline-2 focus-visible:outline-rf-action"
+            >
+              <Icon name="upload" size={16} /> Import applicants
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                pageActionsRef.current?.removeAttribute('open');
+                void handleExportExcel();
+              }}
+              disabled={isExporting}
+              className="flex min-h-10 w-full items-center gap-2 rounded-lg px-3 text-left text-sm font-medium text-rf-ink hover:bg-rf-surface-hover focus-visible:outline-2 focus-visible:outline-rf-action disabled:opacity-50"
+            >
+              <Icon name={isExporting ? 'refresh-cw' : 'download'} size={16} className={isExporting ? 'animate-spin' : ''} /> {isExporting ? 'Exporting...' : 'Export XLSX'}
+            </button>
+          </div>
+        </details>
       </div>
 
       {/* ─────────────────────────────────────────────────────────────
@@ -1700,7 +1719,12 @@ export function VacantListPage() {
           location: p.location,
           status: p.status,
         }))}
-        onSuccess={() => {
+        onSuccess={(result) => {
+          if (result.vacancyRequestId) {
+            showToast('Job Description imported into a draft requisition');
+            navigate(`/vacancy-requests/${result.vacancyRequestId}`);
+            return;
+          }
           showToast('Job Description ingested and Master Data synchronized successfully');
           void loadVacancies();
         }}

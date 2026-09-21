@@ -264,8 +264,14 @@ model VacancyRequest {
   employmentType     String?                  @db.VarChar(60)
   reason             String?                  @db.VarChar(120)
   budgetStatus       String?                  @db.VarChar(60)
+  budgetMin          Int?
+  budgetMax          Int?
+  budgetCurrency     String?                  @db.VarChar(3)
   criticality        String?                  @db.VarChar(40)
   targetStartDate    DateTime?                @db.Date
+  targetFillDate     DateTime?                @db.Date
+  recruitmentTiming  String?                  @db.VarChar(20)
+  plannedOpenDate    DateTime?                @db.Date
   justification      String?
   jobSummary         String?
   description        String?

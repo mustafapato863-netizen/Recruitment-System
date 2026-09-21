@@ -2,7 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { ImportJobDescriptionModal } from '../ImportJobDescriptionModal';
-import { patchApi, postApi } from '../../../api/client';
+import { getApi, patchApi, postApi } from '../../../api/client';
 import * as jdParser from '../../../utils/jdParser';
 
 vi.mock('../../../api/client', () => ({
@@ -16,6 +16,7 @@ vi.mock('../../../api/client', () => ({
 describe('ImportJobDescriptionModal', () => {
   const mockPostApi = vi.mocked(postApi);
   const mockPatchApi = vi.mocked(patchApi);
+  const mockGetApi = vi.mocked(getApi);
   const mockOnClose = vi.fn();
   const mockOnSuccess = vi.fn();
 
@@ -181,6 +182,68 @@ describe('ImportJobDescriptionModal', () => {
         isNewRequisition: false,
       }));
       expect(mockOnClose).toHaveBeenCalled();
+    });
+  });
+
+  it('creates a draft vacancy request for a new JD instead of calling the read-only vacancies route', async () => {
+    const user = userEvent.setup();
+
+    vi.spyOn(jdParser, 'parseJobDescriptionFile').mockResolvedValueOnce({
+      title: 'New Clinical Informatics Specialist',
+      department: 'Clinical Informatics',
+      location: 'Cairo',
+      minExperienceYears: 4,
+      jobSummary: 'Own clinical systems improvement initiatives.',
+      requiredSkills: ['SQL'],
+      qualifications: 'Bachelor degree',
+      rawText: 'Mock raw text',
+      responsibilities: 'Improve clinical workflows',
+      languages: ['English'],
+    });
+
+    mockGetApi.mockImplementation(async (path) => {
+      if (path === '/master-data/catalog/skills' || path === '/master-data/catalog/departments') return [] as never;
+      if (path === '/vacancy-requests/context') {
+        return {
+          organization: { id: 'org-1', name: 'Local' },
+          branch: { id: 'branch-1', name: 'Local Hospital' },
+          position: null,
+          requester: { id: 'user-1', displayName: 'Admin' },
+          branches: [{ id: 'branch-1', name: 'Local Hospital' }],
+          positions: [],
+        } as never;
+      }
+      return [] as never;
+    });
+    mockPostApi.mockImplementation(async (path) => {
+      if (path === '/positions') return { id: 'position-1' } as never;
+      if (path === '/vacancy-requests') return { id: 'request-1' } as never;
+      return { success: true } as never;
+    });
+
+    render(
+      <ImportJobDescriptionModal isOpen onClose={mockOnClose} onSuccess={mockOnSuccess} />,
+    );
+
+    const file = new File(['fake docx content'], 'clinical-informatics.docx', {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    });
+    await user.upload(document.querySelector('input[type="file"]') as HTMLInputElement, file);
+    await waitFor(() => expect(screen.getByDisplayValue('New Clinical Informatics Specialist')).toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: /Create Requisition & Sync Master Data/i }));
+
+    await waitFor(() => {
+      expect(mockPostApi).toHaveBeenCalledWith('/vacancy-requests', expect.objectContaining({
+        branchId: 'branch-1',
+        positionId: 'position-1',
+        requestedHeadcount: 1,
+      }));
+      expect(mockPostApi).not.toHaveBeenCalledWith('/vacancies', expect.anything());
+      expect(mockOnSuccess).toHaveBeenCalledWith(expect.objectContaining({
+        vacancyRequestId: 'request-1',
+        isNewRequisition: true,
+      }));
     });
   });
 });

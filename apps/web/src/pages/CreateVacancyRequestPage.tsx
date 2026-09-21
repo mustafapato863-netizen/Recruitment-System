@@ -21,8 +21,14 @@ type FormState = {
   employmentType: string;
   reason: string;
   budgetStatus: string;
+  budgetMin: string;
+  budgetMax: string;
+  budgetCurrency: 'AED' | 'EGP';
   criticality: string;
   targetStartDate: string;
+  targetFillDate: string;
+  recruitmentTiming: 'After Approval' | 'Deferred';
+  plannedOpenDate: string;
   justification: string;
   jobSummary: string;
   description: string;
@@ -36,8 +42,14 @@ const initialForm: FormState = {
   employmentType: 'Full-time',
   reason: 'New position',
   budgetStatus: 'Budgeted',
+  budgetMin: '',
+  budgetMax: '',
+  budgetCurrency: 'EGP',
   criticality: 'Normal',
   targetStartDate: '',
+  targetFillDate: '',
+  recruitmentTiming: 'After Approval',
+  plannedOpenDate: '',
   justification: '',
   jobSummary: '',
   description: '',
@@ -77,6 +89,29 @@ export function CreateVacancyRequestPage() {
       setError('Select an active branch and position before saving this vacancy request.');
       return;
     }
+    const budgetMin = form.budgetMin === '' ? null : Number(form.budgetMin);
+    const budgetMax = form.budgetMax === '' ? null : Number(form.budgetMax);
+    if ((budgetMin !== null || budgetMax !== null) &&
+      (!Number.isInteger(budgetMin) || !Number.isInteger(budgetMax) || budgetMin! <= 0 || budgetMax! < budgetMin!)) {
+      setError('Enter a valid monthly budget range: From must be greater than zero and To must be at least From.');
+      setShowAllSteps(true);
+      return;
+    }
+    if (mode === 'submit' && (budgetMin === null || budgetMax === null || !form.targetFillDate)) {
+      setError('Add the monthly budget range and target fill date before submitting.');
+      setShowAllSteps(true);
+      return;
+    }
+    if (form.recruitmentTiming === 'Deferred' && !form.plannedOpenDate) {
+      setError('Choose when the deferred vacancy should open for recruitment.');
+      setShowAllSteps(true);
+      return;
+    }
+    if (form.plannedOpenDate && form.targetFillDate && form.targetFillDate < form.plannedOpenDate) {
+      setError('Target fill date must be on or after the planned opening date.');
+      setShowAllSteps(true);
+      return;
+    }
     setError('');
     setIsSubmitting(mode);
     try {
@@ -89,8 +124,14 @@ export function CreateVacancyRequestPage() {
           employmentType: form.employmentType,
           reason: form.reason,
           budgetStatus: form.budgetStatus,
+          budgetMin,
+          budgetMax,
+          budgetCurrency: budgetMin !== null && budgetMax !== null ? form.budgetCurrency : null,
           criticality: form.criticality,
           targetStartDate: form.targetStartDate || undefined,
+          targetFillDate: form.targetFillDate || null,
+          recruitmentTiming: form.recruitmentTiming,
+          plannedOpenDate: form.recruitmentTiming === 'Deferred' ? form.plannedOpenDate : null,
           justification: form.justification || undefined,
           jobSummary: form.jobSummary.trim() || undefined,
           description: form.description.trim() || undefined,
@@ -170,8 +211,10 @@ export function CreateVacancyRequestPage() {
 
   const isHeadcountValid = Number(form.requestedHeadcount) > 0;
   const isJustificationValid = form.justification.trim().length > 0;
-  const readinessCount = [context !== null, isHeadcountValid, isJustificationValid, Boolean(form.budgetStatus)].filter(Boolean).length;
-  const readinessPct = Math.round((readinessCount / 4) * 100);
+  const isBudgetValid = Number(form.budgetMin) > 0 && Number(form.budgetMax) >= Number(form.budgetMin);
+  const isTimelineValid = Boolean(form.targetFillDate) && (form.recruitmentTiming !== 'Deferred' || Boolean(form.plannedOpenDate));
+  const readinessCount = [context !== null, isHeadcountValid, isJustificationValid, isBudgetValid, isTimelineValid].filter(Boolean).length;
+  const readinessPct = Math.round((readinessCount / 5) * 100);
 
   return (
     <PageFrame
@@ -332,12 +375,12 @@ export function CreateVacancyRequestPage() {
                       onChange={(event) => setForm({ ...form, requestedHeadcount: event.target.value })}
                     />
                   </FormField>
-                  <FormField id="req-target-date" label="Target Start Date">
+                  <FormField id="req-target-fill" label="Target Fill Date" hint="When should the approved position be filled?">
                     <Input
-                      id="req-target-date"
+                      id="req-target-fill"
                       type="date"
-                      value={form.targetStartDate}
-                      onChange={(event) => setForm({ ...form, targetStartDate: event.target.value })}
+                      value={form.targetFillDate}
+                      onChange={(event) => setForm({ ...form, targetFillDate: event.target.value })}
                     />
                   </FormField>
                   <FormField id="req-employment" label="Employment Type">
@@ -362,7 +405,7 @@ export function CreateVacancyRequestPage() {
                   className="rf-request-form-section"
                   eyebrow="Step 2 · Demand Specifications & Budget"
                   title="Operational & Financial Parameters"
-                  description="Specify requisition reason, budget allocation status, and priority criticality."
+                  description="Set the recruitment timing, target dates, and monthly budget range per position."
                 >
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <FormField id="req-reason" label="Requisition Reason" required>
@@ -396,6 +439,36 @@ export function CreateVacancyRequestPage() {
                         <option value="Budgeted">Budgeted</option>
                         <option value="Unbudgeted">Unbudgeted</option>
                       </Select>
+                    </FormField>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
+                    <FormField id="req-budget-min" label="Monthly Budget From" hint="Per position, whole amount">
+                      <Input id="req-budget-min" type="number" min="1" max="2147483647" step="1" value={form.budgetMin} onChange={(event) => setForm({ ...form, budgetMin: event.target.value })} />
+                    </FormField>
+                    <FormField id="req-budget-max" label="Monthly Budget To" hint="Must be at least the minimum">
+                      <Input id="req-budget-max" type="number" min="1" max="2147483647" step="1" value={form.budgetMax} onChange={(event) => setForm({ ...form, budgetMax: event.target.value })} />
+                    </FormField>
+                    <FormField id="req-budget-currency" label="Budget Currency">
+                      <Select id="req-budget-currency" value={form.budgetCurrency} onChange={(event) => setForm({ ...form, budgetCurrency: event.target.value as 'AED' | 'EGP' })}>
+                        <option value="EGP">Egyptian pound (EGP)</option>
+                        <option value="AED">UAE dirham (AED)</option>
+                      </Select>
+                    </FormField>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
+                    <FormField id="req-recruitment-timing" label="Recruitment Plan" hint="Approval status is tracked separately">
+                      <Select id="req-recruitment-timing" value={form.recruitmentTiming} onChange={(event) => setForm({ ...form, recruitmentTiming: event.target.value as FormState['recruitmentTiming'], plannedOpenDate: '' })}>
+                        <option value="After Approval">Start recruitment after approval</option>
+                        <option value="Deferred">Deferred — do not recruit yet</option>
+                      </Select>
+                    </FormField>
+                    {form.recruitmentTiming === 'Deferred' && (
+                      <FormField id="req-planned-open" label="Planned Recruitment Opening" hint="When should work on this position begin?">
+                        <Input id="req-planned-open" type="date" value={form.plannedOpenDate} onChange={(event) => setForm({ ...form, plannedOpenDate: event.target.value })} />
+                      </FormField>
+                    )}
+                    <FormField id="req-target-date" label="Expected Start Date" hint="Optional first day after hiring">
+                      <Input id="req-target-date" type="date" value={form.targetStartDate} onChange={(event) => setForm({ ...form, targetStartDate: event.target.value })} />
                     </FormField>
                   </div>
                 </FormSection>
@@ -593,10 +666,14 @@ export function CreateVacancyRequestPage() {
                 </div>
 
                 <div className="p-3 rounded-xl bg-rf-surface-subtle border border-rf-border-subtle">
-                  <span className="text-[10px] font-bold text-rf-ink-muted uppercase block">Timeline & Type</span>
+                  <span className="text-[10px] font-bold text-rf-ink-muted uppercase block">Recruitment & Fill Plan</span>
                   <span className="text-xs font-bold text-rf-ink block mt-0.5">
-                    {form.employmentType} · {form.targetStartDate ? new Date(form.targetStartDate).toLocaleDateString() : 'Flexible Start'}
+                    {form.recruitmentTiming === 'Deferred' ? `Deferred until ${form.plannedOpenDate || 'date needed'}` : 'Recruit after approval'} · Fill by {form.targetFillDate || 'date needed'}
                   </span>
+                </div>
+                <div className="p-3 rounded-xl bg-rf-surface-subtle border border-rf-border-subtle">
+                  <span className="text-[10px] font-bold text-rf-ink-muted uppercase block">Monthly Budget / Position</span>
+                  <span className="text-xs font-bold text-rf-ink block mt-0.5">{form.budgetMin || '—'} – {form.budgetMax || '—'} {form.budgetCurrency}</span>
                 </div>
               </div>
             </section>
@@ -636,11 +713,15 @@ export function CreateVacancyRequestPage() {
                   </div>
                   <div className="flex items-center gap-2 text-rf-ink font-medium">
                     <Icon
-                      name={form.budgetStatus ? 'check-circle' : 'circle'}
+                      name={isBudgetValid ? 'check-circle' : 'circle'}
                       size={14}
-                      className={form.budgetStatus ? 'text-rf-success' : 'text-rf-ink-muted'}
+                      className={isBudgetValid ? 'text-rf-success' : 'text-rf-ink-muted'}
                     />
-                    Budget Status Confirmed
+                    Monthly Budget Range Confirmed
+                  </div>
+                  <div className="flex items-center gap-2 text-rf-ink font-medium">
+                    <Icon name={isTimelineValid ? 'check-circle' : 'circle'} size={14} className={isTimelineValid ? 'text-rf-success' : 'text-rf-ink-muted'} />
+                    Recruitment & Fill Dates Confirmed
                   </div>
                 </div>
               </div>

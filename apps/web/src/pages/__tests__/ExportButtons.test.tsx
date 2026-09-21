@@ -84,7 +84,8 @@ describe('Export XLSX Buttons', () => {
         </MemoryRouter>,
       );
 
-      const exportButton = await screen.findByRole('button', { name: /export vacancies to excel/i });
+      await user.click(screen.getByText('More actions'));
+      const exportButton = await screen.findByRole('button', { name: /export xlsx/i });
       expect(exportButton).toBeInTheDocument();
 
       await user.click(exportButton);

@@ -994,22 +994,45 @@
 .is-sidebar-collapsed .sidebar .nav {
   display: flex !important;
   flex-direction: column !important;
-  align-items: center !important;
-  overflow: visible !important;
-  padding: 8px 6px !important;
+  align-items: stretch !important;
+  min-height: 0 !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  padding: 12px 8px 16px !important;
+  gap: 0 !important;
+  scrollbar-gutter: stable;
   visibility: visible !important;
   opacity: 1 !important;
 }
 
+.is-sidebar-collapsed .sidebar .nav > div {
+  width: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.is-sidebar-collapsed .sidebar .nav > div + div {
+  margin-top: 10px !important;
+}
+
+.is-sidebar-collapsed .sidebar .nav > div > div {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px !important;
+}
+
 .is-sidebar-collapsed .sidebar .nav a,
-.is-sidebar-collapsed .sidebar .nav a.nav-item {
+.is-sidebar-collapsed .sidebar .nav a.nav-item,
+.is-sidebar-collapsed .sidebar .nav .nav-item-disabled {
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
   padding: 0 !important;
-  width: 44px !important;
-  height: 44px !important;
-  margin: 4px auto !important;
+  width: 48px !important;
+  min-width: 48px !important;
+  height: 48px !important;
+  min-height: 48px !important;
+  margin: 0 auto !important;
   border-radius: 12px !important;
   visibility: visible !important;
   opacity: 1 !important;
@@ -1020,8 +1043,8 @@
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
-  width: 22px !important;
-  height: 22px !important;
+  width: 26px !important;
+  height: 26px !important;
   margin: 0 !important;
   visibility: visible !important;
   opacity: 1 !important;
@@ -1029,8 +1052,8 @@
 
 .is-sidebar-collapsed .sidebar .nav a .ico svg {
   display: block !important;
-  width: 20px !important;
-  height: 20px !important;
+  width: 19px !important;
+  height: 19px !important;
   visibility: visible !important;
   opacity: 1 !important;
 }
@@ -1044,17 +1067,36 @@
 
 .is-sidebar-collapsed .sidebar > .user {
   display: flex;
+  flex: 0 0 auto;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  padding: 12px 6px !important;
+  min-height: 0 !important;
+  padding: 10px 8px 12px !important;
 }
 
 .is-sidebar-collapsed .sidebar .user-profile-link {
-  flex: 0 0 auto;
+  width: 48px;
+  min-height: 48px;
+  flex: 0 0 48px;
   justify-content: center;
-  padding-inline: 0;
+  margin: 0 auto;
+  padding: 0;
+}
+
+.is-sidebar-collapsed .sidebar .account-actions {
+  width: 48px;
+  justify-content: center;
+  gap: 0 !important;
+}
+
+.is-sidebar-collapsed .sidebar .theme-toggle-sm {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  justify-content: center;
+  padding: 0;
 }
 
 .is-sidebar-collapsed .sidebar .account-copy,

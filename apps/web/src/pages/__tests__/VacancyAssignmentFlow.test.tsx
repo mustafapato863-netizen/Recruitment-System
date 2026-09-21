@@ -4,7 +4,7 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { VacancyOverviewPage } from '../VacancyOverviewPage';
 import { VacantListPage } from '../VacantListPage';
-import { fetchApi, getApi, postApi } from '../../api/client';
+import { fetchApi, getApi, postApi, deleteApi } from '../../api/client';
 
 const mockNavigate = vi.fn();
 
@@ -17,6 +17,7 @@ vi.mock('react-router-dom', async () => {
 });
 
 let mockPermissions: string[] = ['VACANCY_VIEW', 'VACANCY_ASSIGN', 'VACANCY_REASSIGN'];
+let mockIsAdministrator = false;
 
 vi.mock('../../auth/AuthContext', () => ({
   useAuth: () => ({
@@ -24,7 +25,9 @@ vi.mock('../../auth/AuthContext', () => ({
       id: 'manager-1',
       displayName: 'Lead Manager',
       email: 'manager@hospital.sa',
-      roles: [{ id: 'r1', name: 'MANAGER', code: 'MANAGER' }],
+      roles: mockIsAdministrator
+        ? [{ id: 'r-admin', name: 'ADMINISTRATOR', code: 'ADMINISTRATOR' }]
+        : [{ id: 'r1', name: 'MANAGER', code: 'MANAGER' }],
       permissions: mockPermissions,
     },
   }),
@@ -34,6 +37,7 @@ vi.mock('../../api/client', () => ({
   fetchApi: vi.fn(),
   getApi: vi.fn(),
   postApi: vi.fn(),
+  deleteApi: vi.fn(),
   patchApi: vi.fn(),
   downloadApi: vi.fn(),
   ApiError: class ApiError extends Error {},
@@ -43,10 +47,12 @@ describe('Vacancy Assignment and Activation Flow', () => {
   const mockGetApi = vi.mocked(getApi);
   const mockFetchApi = vi.mocked(fetchApi);
   const mockPostApi = vi.mocked(postApi);
+  const mockDeleteApi = vi.mocked(deleteApi);
 
   beforeEach(() => {
     vi.clearAllMocks();
     mockPermissions = ['VACANCY_VIEW', 'VACANCY_ASSIGN', 'VACANCY_REASSIGN'];
+    mockIsAdministrator = false;
   });
 
   const mockVacancyUnassigned = {
@@ -140,6 +146,63 @@ describe('Vacancy Assignment and Activation Flow', () => {
 
       const changeBtn = await screen.findByRole('button', { name: /change recruiter/i });
       expect(changeBtn).toBeInTheDocument();
+    });
+
+    it('shows permanent deletion only to administrators', async () => {
+      const user = userEvent.setup();
+      mockIsAdministrator = true;
+      mockPermissions = ['VACANCY_VIEW', 'VACANCY_MANAGE'];
+      mockFetchApi.mockResolvedValueOnce(mockVacancyAssigned);
+      mockGetApi.mockImplementation(
+        ((url: string) => {
+          if (url.includes('/applications')) return Promise.resolve({ data: [] });
+          if (url.includes('/interviews')) return Promise.resolve([]);
+          if (url.includes('/offers')) return Promise.resolve([]);
+          if (url.includes('/users/interviewers')) return Promise.resolve(mockInterviewers);
+          return Promise.resolve([]);
+        }) as unknown as typeof getApi,
+      );
+      mockDeleteApi.mockResolvedValueOnce({ deleted: true });
+
+      render(
+        <MemoryRouter initialEntries={['/vacancies/vac-2']}>
+          <Routes>
+            <Route path="/vacancies/:id" element={<VacancyOverviewPage />} />
+          </Routes>
+        </MemoryRouter>,
+      );
+
+      await user.click(await screen.findByRole('button', { name: /^More$/ }));
+      await user.click(screen.getByRole('button', { name: /delete requisition/i }));
+      expect(screen.getByRole('button', { name: /delete permanently/i })).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: /delete permanently/i }));
+      await waitFor(() => expect(mockDeleteApi).toHaveBeenCalledWith('/vacancies/vac-2'));
+    });
+
+    it('does not expose permanent deletion to non-administrators', async () => {
+      const user = userEvent.setup();
+      mockFetchApi.mockResolvedValueOnce(mockVacancyAssigned);
+      mockGetApi.mockImplementation(
+        ((url: string) => {
+          if (url.includes('/applications')) return Promise.resolve({ data: [] });
+          if (url.includes('/interviews')) return Promise.resolve([]);
+          if (url.includes('/offers')) return Promise.resolve([]);
+          if (url.includes('/users/interviewers')) return Promise.resolve(mockInterviewers);
+          return Promise.resolve([]);
+        }) as unknown as typeof getApi,
+      );
+
+      render(
+        <MemoryRouter initialEntries={['/vacancies/vac-2']}>
+          <Routes>
+            <Route path="/vacancies/:id" element={<VacancyOverviewPage />} />
+          </Routes>
+        </MemoryRouter>,
+      );
+
+      await user.click(await screen.findByRole('button', { name: /^More$/ }));
+      expect(screen.queryByRole('button', { name: /delete requisition/i })).not.toBeInTheDocument();
     });
 
     it('displays blocking reasons banner when vacancy is Pending Activation', async () => {
@@ -568,4 +631,3 @@ describe('Vacancy Assignment and Activation Flow', () => {
     });
   });
 });
-

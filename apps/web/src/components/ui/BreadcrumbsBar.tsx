@@ -54,6 +54,18 @@ export function BreadcrumbsBar() {
     return location.pathname.split('/').filter(Boolean);
   }, [location.pathname]);
 
+  // Vacancy detail pages have a stable parent list. Keep the breadcrumb back
+  // action aligned with the page-level "Back to Job Positions" action even
+  // when the detail page was opened directly or from another workflow.
+  const isVacancyDetailRoute = pathnames[0] === 'vacancies' && pathnames.length === 2;
+  const handleBack = () => {
+    if (isVacancyDetailRoute) {
+      navigate('/vacancies');
+      return;
+    }
+    navigate(-1);
+  };
+
   // Don't render empty breadcrumb bar on root dashboard if user doesn't need navigation
   if (location.pathname === '/') {
     return null;
@@ -109,9 +121,10 @@ export function BreadcrumbsBar() {
           {/* Back Navigation Button */}
           <button
             type="button"
-            onClick={() => navigate(-1)}
+            onClick={handleBack}
             className="h-7 inline-flex items-center gap-1.5 px-2.5 rounded-lg bg-slate-100 hover:bg-slate-200/80 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold transition-all border border-slate-200/80 dark:border-slate-700/80 shadow-2xs shrink-0 cursor-pointer group leading-none"
-            title="Go back to previous page"
+            aria-label={isVacancyDetailRoute ? 'Back to Job Positions' : 'Go back'}
+            title={isVacancyDetailRoute ? 'Back to Job Positions' : 'Go back to previous page'}
           >
             <Icon name="arrow-left" size={12} className="text-slate-500 dark:text-slate-400 group-hover:-translate-x-0.5 transition" />
             <span>Back</span>

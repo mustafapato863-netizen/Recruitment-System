@@ -1,5 +1,15 @@
 # Progress Log
 
+## 2026-09-21 — Requisition planning fields
+
+- Started schema/API/UI audit. Current screenshot and user wording recorded in findings.md; existing prior-task notes preserved.
+- Added nullable requisition planning fields, server validation, Prisma persistence, and a local migration. Currency is restricted to AED or EGP.
+- Updated create, request-detail, and vacancy-overview screens with budget range, currency, target fill date, and After Approval/Deferred timing. Deferred conversions start On Hold.
+- Added API coverage for incomplete plans, AED/EGP updates, deferred conversion, and successful submission.
+- Verification: Prisma generate/validate/migrate deploy/status passed; API planning tests passed (4/4); API/web typechecks passed; production build passed; focused lint passed; git diff check passed. Repository-wide lint still has two pre-existing errors in packages/validation.
+
+---
+
 - Final permission audit: users without `VACANCY_VIEW` no longer trigger interview list requests and see a restricted-state message in the Interview stage instead of interview records. Focused Applicant Profile tests (6/6), workspace type checks, and lint passed after this fix.
 - Preserved in-progress offer drafts while switching workspace stages; saved server offer versions still refresh the form. Focused UI, API, and workspace type checks passed again afterward.
 

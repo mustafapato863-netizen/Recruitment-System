@@ -5,6 +5,7 @@ import { Select } from '../ui/Select';
 import { Icon } from '../Icon';
 import { parseJobDescriptionFile, type ParsedJobDescription } from '../../utils/jdParser';
 import { patchApi, postApi, getApi } from '../../api/client';
+import type { VacancyCoreContext, VacancyRequest } from '@recruitflow/contracts';
 
 export interface ImportJobDescriptionModalProps {
   isOpen: boolean;
@@ -24,6 +25,7 @@ export interface ImportJobDescriptionModalProps {
   }>;
   onSuccess: (result: {
     vacancyId?: string;
+    vacancyRequestId?: string;
     updatedTitle: string;
     skillsCount: number;
     isNewRequisition: boolean;
@@ -165,6 +167,8 @@ export function ImportJobDescriptionModal({
     setSubmitError(null);
 
     try {
+      let resolvedPositionId: string | undefined;
+
       // 1. Sync Skills to Master Data Catalog (if enabled)
       if (syncSkillsToMasterData && skills.length > 0) {
         try {
@@ -189,31 +193,60 @@ export function ImportJobDescriptionModal({
       // 2. Sync Department to Master Data Catalog (if enabled)
       if (syncDepartmentToMasterData && department.trim()) {
         try {
-          await postApi('/master-data/catalog/departments/batch', {
-            rows: [{ name: department.trim().slice(0, 120), status: 'Active' }],
-          });
+          const departmentName = department.trim().slice(0, 120);
+          const existingDepartments = await getApi<Array<{ name?: string }>>('/master-data/catalog/departments');
+          const normalizedName = departmentName.toLowerCase().replace(/\s+/g, ' ');
+          const alreadyExists = Array.isArray(existingDepartments) && existingDepartments.some(
+            (item) => item.name?.trim().toLowerCase().replace(/\s+/g, ' ') === normalizedName,
+          );
+          if (!alreadyExists) {
+            await postApi('/master-data/catalog/departments/batch', {
+              rows: [{ name: departmentName, status: 'Active' }],
+            });
+          }
         } catch {
-          // Ignore if exists
+          // Master Data sync is best-effort; the requisition can still be saved.
         }
       }
 
       // 3. Sync Position to Master Data Positions (if enabled)
       if (syncPositionToMasterData) {
         try {
-          await postApi('/positions', {
-            title: title.trim().slice(0, 120),
-            description: jobSummary.trim().slice(0, 500),
-            metadata: {
-              department: department.trim().slice(0, 120),
-              minExperienceYears: minExp,
-              requiredSkills: skills,
-              qualifications: qualifications.trim().slice(0, 4000),
-              responsibilities: responsibilities.trim().slice(0, 4000),
-              languages,
-            },
-          });
+          const existingPositions = await getApi<Array<{ id: string; title?: string }>>('/positions');
+          const normalizedTitle = title.trim().toLowerCase().replace(/\s+/g, ' ');
+          resolvedPositionId = (Array.isArray(existingPositions) ? existingPositions : []).find(
+            (position) => position.title?.trim().toLowerCase().replace(/\s+/g, ' ') === normalizedTitle,
+          )?.id;
         } catch {
-          // Ignore if position code or title already exists
+          // Continue with creation when the catalog lookup is unavailable.
+        }
+        if (!resolvedPositionId) {
+          try {
+            const position = await postApi<{ id?: string }>('/positions', {
+              title: title.trim().slice(0, 120),
+              description: jobSummary.trim().slice(0, 500),
+              metadata: {
+                department: department.trim().slice(0, 120),
+                minExperienceYears: minExp,
+                requiredSkills: skills,
+                qualifications: qualifications.trim().slice(0, 4000),
+                responsibilities: responsibilities.trim().slice(0, 4000),
+                languages,
+              },
+            });
+            resolvedPositionId = position?.id;
+          } catch {
+            // A concurrent import may have created it; resolve it once more.
+            try {
+              const positions = await getApi<Array<{ id: string; title?: string }>>('/positions');
+              const normalizedTitle = title.trim().toLowerCase().replace(/\s+/g, ' ');
+              resolvedPositionId = (Array.isArray(positions) ? positions : []).find(
+                (position) => position.title?.trim().toLowerCase().replace(/\s+/g, ' ') === normalizedTitle,
+              )?.id;
+            } catch {
+              // The create request below will provide the actionable error.
+            }
+          }
         }
       }
 
@@ -240,20 +273,38 @@ export function ImportJobDescriptionModal({
           isNewRequisition: false,
         });
       } else {
-        // Create new requisition
-        const newVac = await postApi<{ id: string }>('/vacancies', {
-          title: title.trim().slice(0, 120),
+        // Create a draft requisition through the vacancy-request workflow.
+        // `/vacancies` only exposes read/update operations; a new vacancy is
+        // created after its request is approved and converted.
+        const context = await getApi<VacancyCoreContext>('/vacancy-requests/context');
+        const branchId = context.branch?.id || context.branches?.[0]?.id;
+        if (!branchId) {
+          throw new Error('Create an active branch in Master Data before importing a new Job Description.');
+        }
+        if (!resolvedPositionId) {
+          resolvedPositionId = context.positions?.find(
+            (position) => position.title.trim().toLowerCase().replace(/\s+/g, ' ') === title.trim().toLowerCase().replace(/\s+/g, ' '),
+          )?.id;
+        }
+        if (!resolvedPositionId) {
+          throw new Error('The position could not be created. Check Position permissions and try again.');
+        }
+        const request = await postApi<VacancyRequest>('/vacancy-requests', {
+          branchId,
+          positionId: resolvedPositionId,
+          requestedHeadcount: Math.max(1, approvedHeadcount || 1),
+          employmentType: 'Full-time',
+          reason: 'New position',
+          budgetStatus: 'Budgeted',
+          criticality: 'Normal',
           jobSummary: jobSummary.trim().slice(0, 500),
-          department: department.trim().slice(0, 120),
-          minExperienceYears: minExp,
-          approvedHeadcount: Math.max(1, approvedHeadcount || 1),
-          requiredSkills: skills,
+          description: jobSummary.trim().slice(0, 500),
           qualifications: qualifications.trim().slice(0, 4000),
           responsibilities: responsibilities.trim().slice(0, 4000),
         });
 
         onSuccess({
-          vacancyId: newVac?.id,
+          vacancyRequestId: request?.id,
           updatedTitle: title.trim(),
           skillsCount: skills.length,
           isNewRequisition: true,

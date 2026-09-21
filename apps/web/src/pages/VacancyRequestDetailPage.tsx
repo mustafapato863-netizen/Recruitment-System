@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useCallback, useEffect, useState, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import type { VacancyCoreContext, VacancyRequest } from '@recruitflow/contracts';
 import { fetchApi } from '../api/client';
@@ -12,6 +12,7 @@ import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ActivityTimeline } from '../components/ui/ActivityTimeline';
 import { BorderGlow } from '../components/ui/BorderGlow';
 import { useSetBreadcrumbTitle } from '../context/BreadcrumbContext';
+import { useAuth } from '../auth/AuthContext';
 import './PageEnhancementsV2.css';
 
 interface ConfirmState {
@@ -36,7 +37,16 @@ const initialConfirmState: ConfirmState = {
   action: async () => {},
 };
 
+const displayDate = (value: string | null | undefined) =>
+  value ? new Date(`${value.slice(0, 10)}T12:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Not set';
+
+const displayBudget = (request: VacancyRequest) =>
+  request.budgetMin != null && request.budgetMax != null && request.budgetCurrency
+    ? `${new Intl.NumberFormat('en-US').format(request.budgetMin)}–${new Intl.NumberFormat('en-US').format(request.budgetMax)} ${request.budgetCurrency}`
+    : 'Not set';
+
 export function VacancyRequestDetailPage() {
+  const { user } = useAuth();
   const { id } = useParams<{ id: string }>();
   const [request, setRequest] = useState<VacancyRequest | null>(null);
   const [context, setContext] = useState<VacancyCoreContext | null>(null);
@@ -45,6 +55,8 @@ export function VacancyRequestDetailPage() {
   const [feedback, setFeedback] = useState('');
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmState>(initialConfirmState);
+  const [editingPlan, setEditingPlan] = useState(false);
+  const [plan, setPlan] = useState({ budgetMin: '', budgetMax: '', budgetCurrency: 'EGP' as 'AED' | 'EGP', targetFillDate: '', recruitmentTiming: 'After Approval' as 'After Approval' | 'Deferred', plannedOpenDate: '' });
 
   useSetBreadcrumbTitle(
     request?.requestCode
@@ -52,7 +64,7 @@ export function VacancyRequestDetailPage() {
       : 'Requisition Request'
   );
 
-  const load = async () => {
+  const load = useCallback(async () => {
     if (!id) return;
     setIsLoading(true);
     setError('');
@@ -64,6 +76,14 @@ export function VacancyRequestDetailPage() {
 
       if (reqData.status === 'fulfilled') {
         setRequest(reqData.value);
+        setPlan({
+          budgetMin: reqData.value.budgetMin?.toString() ?? '',
+          budgetMax: reqData.value.budgetMax?.toString() ?? '',
+          budgetCurrency: reqData.value.budgetCurrency ?? 'EGP',
+          targetFillDate: reqData.value.targetFillDate?.slice(0, 10) ?? '',
+          recruitmentTiming: reqData.value.recruitmentTiming ?? 'After Approval',
+          plannedOpenDate: reqData.value.plannedOpenDate?.slice(0, 10) ?? '',
+        });
       } else {
         throw reqData.reason;
       }
@@ -76,11 +96,11 @@ export function VacancyRequestDetailPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [id]);
 
   useEffect(() => {
     void load();
-  }, [id]);
+  }, [load]);
 
   const positionTitle = useMemo(() => {
     if (!request) return 'Position';
@@ -204,10 +224,41 @@ export function VacancyRequestDetailPage() {
         method: 'POST',
         body: JSON.stringify({}),
       });
-      setFeedback(`Requisition converted to active vacancy ${res.vacancy?.vacancyCode ?? ''}.`);
+      setFeedback(`Requisition converted to ${request?.recruitmentTiming === 'Deferred' ? 'deferred' : 'pending activation'} vacancy ${res.vacancy?.vacancyCode ?? ''}.`);
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to convert request to vacancy');
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const savePlan = async () => {
+    if (!id) return;
+    const min = Number(plan.budgetMin);
+    const max = Number(plan.budgetMax);
+    if (!Number.isInteger(min) || min < 1 || !Number.isInteger(max) || max < min || max > 2147483647) {
+      setError('Enter a valid monthly budget range. The maximum must be at least the minimum.');
+      return;
+    }
+    if (!plan.targetFillDate || (plan.recruitmentTiming === 'Deferred' && !plan.plannedOpenDate) || (plan.plannedOpenDate && plan.targetFillDate < plan.plannedOpenDate)) {
+      setError('Set a target fill date, and for deferred recruitment choose an opening date no later than the fill date.');
+      return;
+    }
+    setBusyAction('save-plan');
+    setError('');
+    try {
+      await fetchApi(`/vacancy-requests/${id}`, { method: 'PATCH', body: JSON.stringify({
+        budgetMin: min, budgetMax: max, budgetCurrency: plan.budgetCurrency,
+        targetFillDate: plan.targetFillDate,
+        recruitmentTiming: plan.recruitmentTiming,
+        plannedOpenDate: plan.recruitmentTiming === 'Deferred' ? plan.plannedOpenDate : null,
+      }) });
+      setEditingPlan(false);
+      setFeedback('Budget and recruitment plan saved.');
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to save recruitment plan');
     } finally {
       setBusyAction(null);
     }
@@ -238,6 +289,7 @@ export function VacancyRequestDetailPage() {
   if (!request) return null;
 
   const canSubmit = request.status === 'Draft' || request.status === 'Changes Requested';
+  const canEditPlan = canSubmit && Boolean(user?.permissions.includes('VACANCY_REQUEST_CREATE'));
   const canDecide = request.status === 'Pending Approval';
   const canCancel = request.status === 'Draft' || request.status === 'Pending Approval' || request.status === 'Changes Requested';
   const canConvert = request.status === 'Approved';
@@ -289,7 +341,7 @@ export function VacancyRequestDetailPage() {
               onClick={() => void convertToVacancy()}
             >
               <Icon name="check-circle" size={14} />
-              Convert to Active Vacancy
+              {request.recruitmentTiming === 'Deferred' ? 'Create Deferred Vacancy' : 'Create Vacancy'}
             </Button>
           )}
         </div>
@@ -336,7 +388,7 @@ export function VacancyRequestDetailPage() {
           </div>
         </BorderGlow>
 
-        {/* Card 2: Employment Type */}
+        {/* Card 2: Monthly budget range */}
         <BorderGlow
           borderRadius={16}
           colors={['var(--color-info)', 'var(--color-action)', 'var(--color-info-focus)']}
@@ -345,7 +397,7 @@ export function VacancyRequestDetailPage() {
           <div className="p-5 flex flex-col justify-between h-full bg-rf-surface rounded-2xl">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold uppercase tracking-wider text-rf-ink-muted">
-                Employment
+                Monthly Budget
               </span>
               <div className="w-9 h-9 rounded-xl bg-rf-info-soft text-rf-info flex items-center justify-center shadow-2xs">
                 <Icon name="briefcase" size={17} />
@@ -353,17 +405,17 @@ export function VacancyRequestDetailPage() {
             </div>
             <div className="mt-3">
               <span className="text-2xl font-rf-heading font-black text-rf-ink leading-tight block">
-                {request.employmentType || 'Full-time'}
+                {displayBudget(request)}
               </span>
               <span className="text-[11px] font-medium text-rf-ink-muted mt-1 inline-flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-rf-info inline-block" />
-                Standard corporate terms
+                Budget range per month
               </span>
             </div>
           </div>
         </BorderGlow>
 
-        {/* Card 3: Priority */}
+        {/* Card 3: Recruitment timing */}
         <BorderGlow
           borderRadius={16}
           colors={['var(--color-warning)', 'var(--color-warning-strong)', 'var(--color-warning-soft)']}
@@ -372,7 +424,7 @@ export function VacancyRequestDetailPage() {
           <div className="p-5 flex flex-col justify-between h-full bg-rf-surface rounded-2xl">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold uppercase tracking-wider text-rf-ink-muted">
-                Priority
+                Recruitment Plan
               </span>
               <div className="w-9 h-9 rounded-xl bg-rf-warning-soft text-rf-warning flex items-center justify-center shadow-2xs">
                 <Icon name="alert-triangle" size={17} />
@@ -380,17 +432,17 @@ export function VacancyRequestDetailPage() {
             </div>
             <div className="mt-3">
               <span className="text-2xl font-rf-heading font-black text-rf-ink leading-tight block">
-                {request.criticality || 'Normal'}
+                {request.recruitmentTiming || 'Not planned'}
               </span>
               <span className="text-[11px] font-medium text-rf-warning mt-1 inline-flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-rf-warning inline-block" />
-                {request.criticality === 'Critical' ? 'Immediate SLA priority' : 'Standard 30d SLA'}
+                {request.recruitmentTiming === 'Deferred' ? `Open on ${displayDate(request.plannedOpenDate)}` : request.recruitmentTiming === 'After Approval' ? 'Start after approval and activation' : 'Set timing before submission'}
               </span>
             </div>
           </div>
         </BorderGlow>
 
-        {/* Card 4: Target Start Date */}
+        {/* Card 4: Target fill date */}
         <BorderGlow
           borderRadius={16}
           colors={['var(--color-success)', 'var(--color-success-strong)', 'var(--color-success-soft)']}
@@ -399,7 +451,7 @@ export function VacancyRequestDetailPage() {
           <div className="p-5 flex flex-col justify-between h-full bg-rf-surface rounded-2xl">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold uppercase tracking-wider text-rf-ink-muted">
-                Target Start
+                Target Fill
               </span>
               <div className="w-9 h-9 rounded-xl bg-rf-success-soft text-rf-success flex items-center justify-center shadow-2xs">
                 <Icon name="calendar" size={17} />
@@ -407,11 +459,11 @@ export function VacancyRequestDetailPage() {
             </div>
             <div className="mt-3">
               <span className="text-2xl font-rf-heading font-black text-rf-ink leading-tight block truncate">
-                {request.targetStartDate ? new Date(request.targetStartDate).toLocaleDateString() : 'Flexible'}
+                {displayDate(request.targetFillDate)}
               </span>
               <span className="text-[11px] font-medium text-rf-success mt-1 inline-flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full bg-rf-success inline-block" />
-                Expected onboarding
+                Planned date to fill the position
               </span>
             </div>
           </div>
@@ -430,10 +482,44 @@ export function VacancyRequestDetailPage() {
                   Detailed workforce demand specifications and business context.
                 </p>
               </div>
-              <span className="text-[11px] font-black text-rf-action bg-rf-action-soft px-3 py-1 rounded-full border border-rf-action/20">
-                {request.budgetStatus || 'Budgeted'}
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-black text-rf-action bg-rf-action-soft px-3 py-1 rounded-full border border-rf-action/20">
+                  {request.budgetStatus || 'Not specified'}
+                </span>
+                {canEditPlan && <Button variant="secondary" size="sm" onClick={() => setEditingPlan((value) => !value)}>{editingPlan ? 'Close' : 'Edit plan'}</Button>}
+              </div>
             </div>
+
+            {editingPlan && canEditPlan && (
+              <div className="mb-5 rounded-xl border border-rf-border-subtle bg-rf-surface-subtle/50 p-4">
+                <h4 className="text-sm font-bold text-rf-ink mt-0 mb-3">Budget and recruitment plan</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <label className="text-xs font-semibold text-rf-ink">Monthly budget from
+                    <input className="mt-1 w-full rounded-lg border border-rf-border-subtle bg-rf-surface p-2" type="number" min="1" max="2147483647" value={plan.budgetMin} onChange={(event) => setPlan({ ...plan, budgetMin: event.target.value })} />
+                  </label>
+                  <label className="text-xs font-semibold text-rf-ink">Monthly budget to
+                    <input className="mt-1 w-full rounded-lg border border-rf-border-subtle bg-rf-surface p-2" type="number" min="1" max="2147483647" value={plan.budgetMax} onChange={(event) => setPlan({ ...plan, budgetMax: event.target.value })} />
+                  </label>
+                  <label className="text-xs font-semibold text-rf-ink">Currency
+                    <select className="mt-1 w-full rounded-lg border border-rf-border-subtle bg-rf-surface p-2" value={plan.budgetCurrency} onChange={(event) => setPlan({ ...plan, budgetCurrency: event.target.value as 'AED' | 'EGP' })}>
+                      <option value="AED">AED — UAE dirham</option><option value="EGP">EGP — Egyptian pound</option>
+                    </select>
+                  </label>
+                  <label className="text-xs font-semibold text-rf-ink">Target fill date
+                    <input className="mt-1 w-full rounded-lg border border-rf-border-subtle bg-rf-surface p-2" type="date" value={plan.targetFillDate} onChange={(event) => setPlan({ ...plan, targetFillDate: event.target.value })} />
+                  </label>
+                  <label className="text-xs font-semibold text-rf-ink">Recruitment timing
+                    <select className="mt-1 w-full rounded-lg border border-rf-border-subtle bg-rf-surface p-2" value={plan.recruitmentTiming} onChange={(event) => setPlan({ ...plan, recruitmentTiming: event.target.value as 'After Approval' | 'Deferred', plannedOpenDate: event.target.value === 'Deferred' ? plan.plannedOpenDate : '' })}>
+                      <option value="After Approval">Start after approval</option><option value="Deferred">Deferred until planned opening</option>
+                    </select>
+                  </label>
+                  {plan.recruitmentTiming === 'Deferred' && <label className="text-xs font-semibold text-rf-ink">Planned opening date
+                    <input className="mt-1 w-full rounded-lg border border-rf-border-subtle bg-rf-surface p-2" type="date" value={plan.plannedOpenDate} onChange={(event) => setPlan({ ...plan, plannedOpenDate: event.target.value })} />
+                  </label>}
+                </div>
+                <div className="mt-4"><Button variant="primary" size="sm" loading={busyAction === 'save-plan'} onClick={() => void savePlan()}>Save plan</Button></div>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="p-3.5 rounded-xl border border-rf-border-subtle bg-rf-surface-subtle/30">
@@ -453,7 +539,17 @@ export function VacancyRequestDetailPage() {
 
               <div className="p-3.5 rounded-xl border border-rf-border-subtle bg-rf-surface-subtle/30">
                 <span className="text-[10px] font-bold uppercase tracking-wider text-rf-ink-muted block">Budget Allocation</span>
-                <span className="text-sm font-bold text-rf-ink mt-1 block">{request.budgetStatus || 'Budgeted'}</span>
+                <span className="text-sm font-bold text-rf-ink mt-1 block">{request.budgetStatus || 'Not specified'}</span>
+              </div>
+
+              <div className="p-3.5 rounded-xl border border-rf-border-subtle bg-rf-surface-subtle/30">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-rf-ink-muted block">Employment / Priority</span>
+                <span className="text-sm font-bold text-rf-ink mt-1 block">{request.employmentType || 'Not specified'} · {request.criticality || 'Not specified'}</span>
+              </div>
+
+              <div className="p-3.5 rounded-xl border border-rf-border-subtle bg-rf-surface-subtle/30">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-rf-ink-muted block">Expected onboarding</span>
+                <span className="text-sm font-bold text-rf-ink mt-1 block">{displayDate(request.targetStartDate)}</span>
               </div>
 
               <div className="sm:col-span-2 pt-2">

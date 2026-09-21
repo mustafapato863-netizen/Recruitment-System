@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
@@ -87,6 +88,17 @@ export class VacanciesController {
     @Body() body: UpdateVacancyDto,
   ) {
     return this.vacancyCoreService.updateVacancy(id, user.organizationId, body, user);
+  }
+
+  @Delete(':id')
+  @AuditAction('VACANCY_DELETE')
+  @UseGuards(TenantScopedGuard)
+  @TenantResource({ resource: 'vacancy', param: 'id' })
+  deleteVacancy(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.vacancyCoreService.deleteVacancy(id, user.organizationId, user);
   }
 
   @Post(':id/assignments')

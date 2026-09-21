@@ -10,6 +10,7 @@ import {
   Min,
   IsUUID,
   IsEnum,
+  IsIn,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -49,6 +50,23 @@ export class CreateVacancyRequestDto {
   budgetStatus?: string | null;
 
   @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(2147483647)
+  budgetMin?: number | null;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(2147483647)
+  budgetMax?: number | null;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['AED', 'EGP'])
+  budgetCurrency?: 'AED' | 'EGP' | null;
+
+  @IsOptional()
   @IsString()
   @MaxLength(40)
   criticality?: string | null;
@@ -57,6 +75,20 @@ export class CreateVacancyRequestDto {
   @IsDateString()
   @Matches(/^\d{4}-\d{2}-\d{2}$/)
   targetStartDate?: string | null;
+
+  @IsOptional()
+  @IsDateString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  targetFillDate?: string | null;
+
+  @IsOptional()
+  @IsIn(['After Approval', 'Deferred'])
+  recruitmentTiming?: 'After Approval' | 'Deferred' | null;
+
+  @IsOptional()
+  @IsDateString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  plannedOpenDate?: string | null;
 
   @IsOptional()
   @IsString()
@@ -120,6 +152,23 @@ export class UpdateVacancyRequestDto {
   budgetStatus?: string | null;
 
   @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(2147483647)
+  budgetMin?: number | null;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(2147483647)
+  budgetMax?: number | null;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(['AED', 'EGP'])
+  budgetCurrency?: 'AED' | 'EGP' | null;
+
+  @IsOptional()
   @IsString()
   @MaxLength(40)
   criticality?: string | null;
@@ -128,6 +177,20 @@ export class UpdateVacancyRequestDto {
   @IsDateString()
   @Matches(/^\d{4}-\d{2}-\d{2}$/)
   targetStartDate?: string | null;
+
+  @IsOptional()
+  @IsDateString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  targetFillDate?: string | null;
+
+  @IsOptional()
+  @IsIn(['After Approval', 'Deferred'])
+  recruitmentTiming?: 'After Approval' | 'Deferred' | null;
+
+  @IsOptional()
+  @IsDateString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  plannedOpenDate?: string | null;
 
   @IsOptional()
   @IsString()
