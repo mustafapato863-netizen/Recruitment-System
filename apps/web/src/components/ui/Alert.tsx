@@ -24,7 +24,7 @@ const toneClasses: Record<AlertTone, string> = {
   info: 'border-rf-info/15 bg-rf-info-soft/75 text-rf-info-strong',
   success: 'border-rf-success/15 bg-rf-success-soft/75 text-rf-success-strong',
   warning: 'border-rf-warning/20 bg-rf-warning-soft/80 text-rf-warning-strong',
-  danger: 'border-rf-danger/15 bg-rf-danger-soft/80 text-rf-danger-strong',
+  danger: 'border-rf-danger/35 bg-rf-danger-soft text-rf-danger-strong',
 };
 
 export function Alert({ tone = 'info', title, children, action, role, className = '' }: AlertProps) {

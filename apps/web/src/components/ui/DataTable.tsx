@@ -17,16 +17,24 @@ interface DataTableProps extends HTMLAttributes<HTMLDivElement> {
 }
 
 export function DataTable({ children, className = '', tableClassName = '', dense = false, ...props }: DataTableProps) {
+  const { 'aria-label': ariaLabel, ...rest } = props;
   return (
     <div
-      {...props}
+      {...rest}
+      aria-label={ariaLabel}
       className={[
         'rf-scrollbar overflow-x-auto rounded-[10px] border border-rf-border dark:border-slate-800 bg-rf-surface dark:bg-slate-900 shadow-[var(--shadow-2xs)]',
         dense ? '[&_th]:py-1.5 [&_th]:px-2.5 [&_td]:py-1.5 [&_td]:px-2.5' : '',
         className,
       ].filter(Boolean).join(' ')}
     >
-      <table className={[dataTableClasses.table, tableClassName].filter(Boolean).join(' ')}>{children}</table>
+      <table
+        className={[dataTableClasses.table, tableClassName].filter(Boolean).join(' ')}
+        aria-label={typeof ariaLabel === 'string' ? ariaLabel : undefined}
+      >
+        {typeof ariaLabel === 'string' ? <caption className="sr-only">{ariaLabel}</caption> : null}
+        {children}
+      </table>
     </div>
   );
 }

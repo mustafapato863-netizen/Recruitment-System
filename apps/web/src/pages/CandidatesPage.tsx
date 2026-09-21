@@ -973,7 +973,8 @@ export function CandidatesPage() {
       {/* ── High-Density Enterprise Candidate Table ── */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-xs">
+          <table className="w-full text-xs" aria-label="Candidates">
+            <caption className="sr-only">Candidates</caption>
             <thead>
               <tr className="border-b border-slate-200 dark:border-slate-800 text-[11px] font-semibold text-slate-600 dark:text-slate-300 bg-slate-50/60 dark:bg-slate-800/40 text-left">
                 <th className="p-3.5 pl-4 w-10">

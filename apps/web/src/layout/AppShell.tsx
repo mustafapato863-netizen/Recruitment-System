@@ -107,18 +107,20 @@ export function NavigationItem({
     if (unavailableMode === 'hide') return null;
     return (
       <span
-        className="nav-item-disabled relative nav-item opacity-55 cursor-not-allowed"
+        className="nav-item-disabled relative nav-item opacity-60 cursor-not-allowed"
         aria-disabled="true"
+        aria-label={`${displayLabel}. Locked. ${deniedTitle}`}
         title={deniedTitle}
+        tabIndex={0}
       >
-        <span className="ico"><Icon name={icon} size={18} /></span>
+        <span className="ico" aria-hidden="true"><Icon name={icon} size={18} /></span>
         {!isCollapsed ? (
           <span className="nav-label flex items-center justify-between gap-2">
             <span>{displayLabel}</span>
-            <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Locked</span>
+            <span className="rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-rf-ink-muted ring-1 ring-rf-border">Locked</span>
           </span>
         ) : (
-          <span className="sr-only">{displayLabel}. {deniedTitle}</span>
+          <span className="sr-only">{displayLabel}. Locked. {deniedTitle}</span>
         )}
         {isCollapsed && (
           <span
@@ -134,8 +136,8 @@ export function NavigationItem({
 
   if (!to) {
     return (
-      <span className="nav-item-disabled relative nav-item" aria-disabled="true">
-        <span className="ico"><Icon name={icon} size={18} /></span>
+      <span className="nav-item-disabled relative nav-item" aria-disabled="true" aria-label={displayLabel} tabIndex={0}>
+        <span className="ico" aria-hidden="true"><Icon name={icon} size={18} /></span>
         {!isCollapsed ? (
           <span className="nav-label">{displayLabel}</span>
         ) : (
@@ -388,7 +390,7 @@ export function AppShellInner() {
           {/* Workspace */}
           <div>
             {!isSidebarCollapsed && (
-              <div className="px-3 pt-1 pb-0.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-600 dark:text-slate-500 select-none">
+              <div className="px-3 pt-1 pb-0.5 text-[10px] font-extrabold uppercase tracking-wider text-rf-ink-muted select-none">
                 Workspace
               </div>
             )}
@@ -409,7 +411,7 @@ export function AppShellInner() {
           {!isEmployeeWorkspace && (
           <div>
             {!isSidebarCollapsed && (
-              <div className="px-3 pt-1 pb-0.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-600 dark:text-slate-500 select-none">
+              <div className="px-3 pt-1 pb-0.5 text-[10px] font-extrabold uppercase tracking-wider text-rf-ink-muted select-none">
                 Recruitment
               </div>
             )}
@@ -426,7 +428,7 @@ export function AppShellInner() {
           {!isEmployeeWorkspace && (
           <div>
             {!isSidebarCollapsed && (
-              <div className="px-3 pt-1 pb-0.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-600 dark:text-slate-500 select-none">
+              <div className="px-3 pt-1 pb-0.5 text-[10px] font-extrabold uppercase tracking-wider text-rf-ink-muted select-none">
                 Sourcing &amp; Talent
               </div>
             )}
@@ -443,7 +445,7 @@ export function AppShellInner() {
           {!isEmployeeWorkspace && (
           <div>
             {!isSidebarCollapsed && (
-              <div className="px-3 pt-1 pb-0.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-600 dark:text-slate-500 select-none">
+              <div className="px-3 pt-1 pb-0.5 text-[10px] font-extrabold uppercase tracking-wider text-rf-ink-muted select-none">
                 Compliance &amp; Hires
               </div>
             )}
@@ -458,7 +460,7 @@ export function AppShellInner() {
           {!isEmployeeWorkspace && (
           <div>
             {!isSidebarCollapsed && (
-              <div className="px-3 pt-1 pb-0.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-600 dark:text-slate-500 select-none">
+              <div className="px-3 pt-1 pb-0.5 text-[10px] font-extrabold uppercase tracking-wider text-rf-ink-muted select-none">
                 Governance
               </div>
             )}

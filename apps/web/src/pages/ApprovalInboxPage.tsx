@@ -467,7 +467,7 @@ export function ApprovalInboxPage() {
               description={searchQuery ? 'Try adjusting your search terms.' : 'Your vacancy request approval inbox is clear.'}
             />
           ) : (
-            <div className="rf-approval-list grid grid-cols-1 gap-4">
+            <div className="rf-approval-list grid grid-cols-1 gap-4" role="list" aria-label="Pending vacancy approval requests">
               {filteredRequests.map((request) => {
                 const approval = currentApproval(request);
                 const isCritical = request.criticality === 'High' || request.criticality === 'Urgent';
@@ -575,7 +575,7 @@ export function ApprovalInboxPage() {
               description={searchQuery ? 'Try adjusting your search terms.' : 'All offer packages have been actioned.'}
             />
           ) : (
-            <div className="rf-approval-list grid grid-cols-1 gap-4">
+            <div className="rf-approval-list grid grid-cols-1 gap-4" role="list" aria-label="Pending offer approval packages">
               {filteredOffers.map((oa, index) => (
                 <div
                   key={oa.id ? `${oa.id}-${oa.step ?? index}` : index}
@@ -688,7 +688,7 @@ export function ApprovalInboxPage() {
               description={searchQuery ? 'Try adjusting your search terms.' : 'No hiring cases currently require executive signoff.'}
             />
           ) : (
-            <div className="rf-approval-list grid grid-cols-1 gap-4">
+            <div className="rf-approval-list grid grid-cols-1 gap-4" role="list" aria-label="Pending final hiring approval cases">
               {filteredHires.map((hc, index) => (
                 <div
                   key={hc.id ? `${hc.id}-${index}` : index}

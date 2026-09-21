@@ -54,3 +54,15 @@ describe('Modal', () => {
     expect(input).toHaveValue('QA_ROLE');
   });
 });
+
+describe('Modal description', () => {
+  it('exposes aria-describedby when descriptionId is provided', () => {
+    render(
+      <Modal isOpen onClose={() => undefined} title="Named dialog" descriptionId="dlg-desc">
+        <p id="dlg-desc">Supporting detail for screen readers.</p>
+      </Modal>,
+    );
+    expect(screen.getByRole('dialog')).toHaveAttribute('aria-describedby', 'dlg-desc');
+  });
+});
+

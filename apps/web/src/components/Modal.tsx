@@ -10,11 +10,13 @@ interface ModalProps {
   children: ReactNode;
   footer?: ReactNode;
   maxWidthClass?: string;
+  /** Optional id of an element that describes the dialog (aria-describedby). */
+  descriptionId?: string;
 }
 
 const FOCUSABLE_SELECTOR = 'button, input, select, textarea, [href], [tabindex]:not([tabindex="-1"])';
 
-export function Modal({ isOpen, onClose, title, children, footer, maxWidthClass = 'max-w-xl' }: ModalProps) {
+export function Modal({ isOpen, onClose, title, children, footer, maxWidthClass = 'max-w-xl', descriptionId }: ModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const onCloseRef = useRef(onClose);
@@ -80,6 +82,7 @@ export function Modal({ isOpen, onClose, title, children, footer, maxWidthClass 
     >
       <div
         aria-labelledby={titleId}
+        aria-describedby={descriptionId}
         aria-modal="true"
         className={[
           'relative flex max-h-[90vh] w-full flex-col overflow-hidden rounded-[18px] border border-rf-border-subtle bg-rf-surface shadow-[var(--shadow-float)] animate-in zoom-in-95 duration-150',

@@ -94,6 +94,7 @@ describe('NavigationItem Component', () => {
     const locked = screen.getByText('CV Intake').closest('[aria-disabled="true"]');
     expect(locked).toBeTruthy();
     expect(locked).toHaveAttribute('title', expect.stringContaining('CANDIDATE_CREATE'));
+    expect(locked).toHaveAttribute('aria-label', expect.stringMatching(/Locked/i));
     expect(screen.getByText('Locked')).toBeInTheDocument();
   });
 });
