@@ -1,9 +1,11 @@
 import { useState, useEffect, type FormEvent } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { getApi, postApi } from '../api/client';
+import { getErrorMessage } from '../api/errors';
 import type { Application } from '@recruitflow/contracts';
 import { PageFrame } from '../components/ui/PageFrame';
 import { Alert } from '../components/ui/Alert';
+import { PageState } from '../components/ui/PageState';
 import { Button } from '../components/ui/Button';
 import { FormField } from '../components/ui/FormField';
 import { FormSection } from '../components/ui/FormSection';
@@ -27,10 +29,6 @@ type OfferComponentField = keyof OfferComponentDraft;
 
 const OFFER_STEPS = ['Candidate & Role', 'Compensation Package', 'Terms & Sign-Off'];
 
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : 'An unexpected error occurred.';
-}
-
 export function CreateOfferPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -43,6 +41,8 @@ export function CreateOfferPage() {
   const [selectedAppId, setSelectedAppId] = useState(applicationId || '');
   const [application, setApplication] = useState<Application | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadingApplications, setLoadingApplications] = useState(false);
+  const [applicationsLoadError, setApplicationsLoadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
@@ -69,13 +69,16 @@ export function CreateOfferPage() {
   }, [selectedAppId]);
 
   async function loadApplications() {
+    setLoadingApplications(true);
+    setApplicationsLoadError(null);
     try {
       const res = await getApi<{ data: Application[] }>('/applications');
-      if (res.data && res.data.length > 0) {
-        setAvailableApplications(res.data);
-      }
-    } catch {
-      // Ignored
+      setAvailableApplications(res.data ?? []);
+    } catch (err: unknown) {
+      setApplicationsLoadError(getErrorMessage(err, 'Could not load applications for this offer.'));
+      setAvailableApplications([]);
+    } finally {
+      setLoadingApplications(false);
     }
   }
 
@@ -215,8 +218,8 @@ export function CreateOfferPage() {
       )}
 
       <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard label="Monthly Total" value={`AED ${calculateMonthlyTotal().toLocaleString()}`} detail="Gross compensation" tone="action" icon={<Icon name="offer" size={14} />} />
-        <MetricCard label="Annual Value" value={`AED ${calculateAnnualTotal().toLocaleString()}`} detail="Base + Allowances" tone="info" icon={<Icon name="grid-squares" size={14} />} />
+        <MetricCard label="Monthly Total" value={`SAR ${calculateMonthlyTotal().toLocaleString()}`} detail="Gross compensation" tone="action" icon={<Icon name="offer" size={14} />} />
+        <MetricCard label="Annual Value" value={`SAR ${calculateAnnualTotal().toLocaleString()}`} detail="Base + Allowances" tone="info" icon={<Icon name="grid-squares" size={14} />} />
         <MetricCard label="Contract Type" value={formData.contractType} detail={formData.probationPeriod} tone="neutral" icon={<Icon name="briefcase" size={14} />} />
         <MetricCard label="Salary Band" value="Within Range" detail="Grade 7 approved" tone="success" icon={<Icon name="check-circle" size={14} />} />
       </div>
@@ -229,25 +232,50 @@ export function CreateOfferPage() {
                 title="Candidate Application"
                 description="Select candidate application for this compensation package."
               >
-                <FormField id="offer-app-select" label="Target Application" required>
-                  <Select
+                {loadingApplications ? (
+                  <PageState kind="loading" title="Loading applications" description="Fetching candidates eligible for an offer package." />
+                ) : applicationsLoadError ? (
+                  <PageState
+                    kind="error"
+                    title="Could not load applications"
+                    description={applicationsLoadError}
+                    actionLabel="Retry"
+                    onAction={() => void loadApplications()}
+                  />
+                ) : !selectedAppId && availableApplications.length === 0 ? (
+                  <PageState
+                    kind="empty"
+                    title="No applications available"
+                    description="There are no candidate applications to attach an offer to yet. Open Applications or resume sourcing, then return here."
+                    actionLabel="Browse applications"
+                    actionHref="/applications"
+                  />
+                ) : (
+                  <FormField
                     id="offer-app-select"
-                    value={selectedAppId}
-                    onChange={(e) => setSelectedAppId(e.target.value)}
+                    label="Target Application"
+                    required
+                    hint="Choose the application this offer package will be issued against."
                   >
-                    <option value="">Choose an application</option>
-                    {availableApplications.length === 0 && (
-                      <option value={selectedAppId || ''}>
-                        {candidateName} {application?.positionTitle ? `— ${application.positionTitle}` : ''}
-                      </option>
-                    )}
-                    {availableApplications.map((app) => (
-                      <option key={app.id} value={app.id}>
-                        {app.candidate ? `${app.candidate.firstName} ${app.candidate.lastName}` : 'Candidate'} — {app.positionTitle || 'Position'} ({app.stage})
-                      </option>
-                    ))}
-                  </Select>
-                </FormField>
+                    <Select
+                      id="offer-app-select"
+                      value={selectedAppId}
+                      onChange={(e) => setSelectedAppId(e.target.value)}
+                    >
+                      <option value="">Choose an application</option>
+                      {availableApplications.length === 0 && (
+                        <option value={selectedAppId || ''}>
+                          {candidateName}{application?.positionTitle ? ` — ${application.positionTitle}` : ''}
+                        </option>
+                      )}
+                      {availableApplications.map((app) => (
+                        <option key={app.id} value={app.id}>
+                          {app.candidate ? `${app.candidate.firstName} ${app.candidate.lastName}` : 'Candidate'} — {app.positionTitle || 'Position'} ({app.stage})
+                        </option>
+                      ))}
+                    </Select>
+                  </FormField>
+                )}
               </FormSection>
             )}
 
@@ -367,7 +395,11 @@ export function CreateOfferPage() {
               description="Probation, schedule, location and offer validity."
             >
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <FormField id="offer-contract" label="Contract Type">
+                <FormField
+                  id="offer-contract"
+                  label="Contract Type"
+                  hint="Employment classification that appears on the offer letter and approval routing."
+                >
                   <Select
                     id="offer-contract"
                     value={formData.contractType}
@@ -379,7 +411,11 @@ export function CreateOfferPage() {
                   </Select>
                 </FormField>
 
-                <FormField id="offer-probation" label="Probation Period">
+                <FormField
+                  id="offer-probation"
+                  label="Probation Period"
+                  hint="Saudi Labor Law default is commonly 90 days; extend only when the role warrants it."
+                >
                   <Select
                     id="offer-probation"
                     value={formData.probationPeriod}
@@ -391,7 +427,7 @@ export function CreateOfferPage() {
                   </Select>
                 </FormField>
 
-                <FormField id="offer-join" label="Proposed Joining Date">
+                <FormField id="offer-join" label="Proposed Joining Date" hint="Expected first working day if the candidate accepts. Use the calendar picker (YYYY-MM-DD).">
                   <Input
                     id="offer-join"
                     type="date"
@@ -400,7 +436,7 @@ export function CreateOfferPage() {
                   />
                 </FormField>
 
-                <FormField id="offer-expiry" label="Offer Acceptance Expiry">
+                <FormField id="offer-expiry" label="Offer Acceptance Expiry" hint="Last day the candidate can accept this package. Must be on or after today.">
                   <Input
                     id="offer-expiry"
                     type="date"
@@ -409,19 +445,20 @@ export function CreateOfferPage() {
                   />
                 </FormField>
 
-                <FormField id="offer-loc" label="Work Location">
+                <FormField
+                  id="offer-loc"
+                  label="Work Location"
+                  hint="Loaded from the selected position vacancy. Adjust only when this offer differs from the vacancy location."
+                >
                   <Input
                     id="offer-loc"
                     value={formData.workLocation}
                     onChange={(e) => setFormData({ ...formData, workLocation: e.target.value })}
                     placeholder="Automatically loaded from the vacancy"
                   />
-                  <p className="mt-1 text-[11px] text-slate-500">
-                    Loaded from the selected position vacancy. You can adjust it for this offer if needed.
-                  </p>
                 </FormField>
 
-                <FormField id="offer-sched" label="Working Schedule">
+                <FormField id="offer-sched" label="Working Schedule" hint="Hours and pattern shown on the offer (for example Full-time standard week).">
                   <Input
                     id="offer-sched"
                     value={formData.workingSchedule}
@@ -450,7 +487,7 @@ export function CreateOfferPage() {
             </section>
 
             <Alert tone="info" title="Approval requirement">
-              Compensation packages above AED 20,000/mo require secondary approval by the HR Director.
+              Compensation packages above SAR 20,000/mo require secondary approval by the HR Director.
             </Alert>
           </aside>
         </div>
