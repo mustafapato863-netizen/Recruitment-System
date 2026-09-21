@@ -139,19 +139,6 @@ export class ApplicationsService {
     private readonly accessControl: AccessControlService,
   ) {}
 
-  async listApplications(
-    organizationId: string,
-    query: ApplicationQueryDto,
-    user?: AuthUser,
-  ): Promise<PaginatedResult<Application>> {
-    const page = query.page && query.page > 0 ? query.page : 1;
-    const pageSize = query.pageSize && query.pageSize > 0 ? query.pageSize : 20;
-    const skip = (page - 1) * pageSize;
-
-    const where: Prisma.ApplicationWhereInput = { organizationId };
-
-    let canViewPii = true;
-
     if (user) {
       const policy = await this.accessControl.getUserEffectiveScope(
         organizationId,

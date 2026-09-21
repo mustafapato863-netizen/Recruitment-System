@@ -178,8 +178,8 @@ export class VacancyCoreService {
     query: VacancyWorkQueueQueryDto,
     user?: AuthUser,
   ): Promise<PaginatedResult<JobWorkQueueItem>> {
-    const page = query.page ?? 1;
-    const pageSize = query.pageSize ?? 20;
+    const page = Number(query.page) > 0 ? Number(query.page) : 1;
+    const pageSize = Number(query.pageSize) > 0 ? Number(query.pageSize) : 20;
     const where: Prisma.VacancyWhereInput = user && this.accessControl
       ? await this.accessControl.getVacancyVisibilityWhere(user)
       : { organizationId };

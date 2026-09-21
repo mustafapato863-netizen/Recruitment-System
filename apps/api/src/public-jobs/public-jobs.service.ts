@@ -49,8 +49,8 @@ export class PublicJobsService {
 
   async listJobs(organizationCode: string, query: PublicJobQueryDto): Promise<PublicJobsResponse> {
     const organization = await this.findOrganization(organizationCode);
-    const page = query.page && query.page > 0 ? query.page : 1;
-    const pageSize = query.pageSize && query.pageSize > 0 ? query.pageSize : 20;
+    const page = Number(query.page) > 0 ? Number(query.page) : 1;
+    const pageSize = Number(query.pageSize) > 0 ? Number(query.pageSize) : 20;
     const search = query.search?.trim();
     const now = new Date();
     const where: Prisma.VacancyWhereInput = {
