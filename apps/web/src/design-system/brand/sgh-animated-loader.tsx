@@ -122,36 +122,61 @@ export function SghAnimatedLoader({
       )}
 
       {/* 3. Multi-stop SGH Gradient Progress Bar */}
-      <div className="w-full max-w-[300px] space-y-2.5">
-        <div
-          className={`relative h-2.5 w-full overflow-hidden rounded-full p-[1px] transition-colors ${
-            isDark
-              ? "bg-slate-800/90 border border-white/15"
-              : "bg-slate-200/90 border border-slate-300/80"
-          }`}
-        >
-          <motion.div
-            className="h-full rounded-full bg-gradient-to-r from-[#0084CE] via-[#00A3E0] to-[#00A859] shadow-[0_0_12px_rgba(0,163,224,0.5)]"
-            style={{ width: `${progress}%` }}
-            transition={{ ease: "linear" }}
-          />
+      <div className="w-full max-w-[300px] space-y-3" aria-label="Loading progress">
+        <div className="flex items-center justify-between gap-3 px-0.5">
+          <span className={`text-[10px] font-bold uppercase tracking-[0.12em] ${isDark ? "text-slate-400" : "text-slate-500"}`}>
+            Preparing workspace
+          </span>
+          <span
+            className={`rounded-full border px-2 py-0.5 font-mono text-[10px] font-bold tabular-nums ${
+              isDark
+                ? "border-[#38BDF8]/25 bg-[#38BDF8]/10 text-[#7DD3FC]"
+                : "border-[#0084CE]/20 bg-[#0084CE]/8 text-[#0076B8]"
+            }`}
+          >
+            {progress}%
+          </span>
         </div>
 
         <div
-          className={`flex items-center justify-between text-[11px] font-semibold px-1 transition-colors ${
-            isDark ? "text-slate-300" : "text-slate-700"
+          className={`relative h-3.5 w-full overflow-hidden rounded-full border p-[2px] shadow-inner ${
+            isDark
+              ? "border-white/15 bg-slate-800"
+              : "border-slate-300 bg-slate-200"
           }`}
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={progress}
+          aria-label={`Loading progress ${progress}%`}
         >
+          <motion.div
+            className="relative h-full min-w-1 overflow-hidden rounded-full shadow-[0_0_16px_rgba(0,163,224,0.65)] will-change-[width]"
+            style={{
+              width: `${progress}%`,
+              background: "linear-gradient(90deg, #0076B8 0%, #00A3E0 55%, #00A859 100%)",
+            }}
+            transition={{ ease: "linear" }}
+          >
+            <motion.span
+              className="absolute inset-y-0 -left-1/2 w-1/2 bg-gradient-to-r from-transparent via-white/45 to-transparent"
+              animate={{ x: [0, 300] }}
+              transition={{ duration: 1.2, repeat: Infinity, ease: "linear" }}
+              aria-hidden="true"
+            />
+            <span className="absolute -right-0.5 top-1/2 h-2.5 w-2.5 -translate-y-1/2 rounded-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.95)]" aria-hidden="true" />
+          </motion.div>
+        </div>
+
+        <div className={`flex items-center justify-between gap-3 px-0.5 text-[10px] font-medium ${isDark ? "text-slate-400" : "text-slate-500"}`}>
           <span className="flex items-center gap-1.5">
-            <span className="relative flex h-2 w-2">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#00A3E0] opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-[#00A3E0]"></span>
+            <span className="relative flex h-2 w-2" aria-hidden="true">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#00A3E0] opacity-60" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-[#00A3E0]" />
             </span>
-            Initializing Services
+            Initializing secure session
           </span>
-          <span className={`font-mono font-bold ${isDark ? "text-[#38BDF8]" : "text-[#0084CE]"}`}>
-            {progress}%
-          </span>
+          <span>Almost ready</span>
         </div>
       </div>
     </div>
