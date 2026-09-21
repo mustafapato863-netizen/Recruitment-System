@@ -71,6 +71,11 @@ API startup validates runtime configuration, runs `prisma migrate deploy`, then
 starts Nest. Failed validation/migration prevents startup. There is no schema
 push, reset, demo seed, automatic account creation or deletion.
 
+The migration step retries transient database-startup failures six times by
+default (`MIGRATION_MAX_ATTEMPTS=6`, `MIGRATION_RETRY_DELAY_SECONDS=5`).
+Override those values in the API and worker environment only when the database
+startup window requires it; migration errors that persist still stop the API.
+
 Before first launch, restore a verified backup of the intended RecruitFlow
 database (including admin, permissions and reference data) into the dedicated
 production PostgreSQL service, and copy private document binaries into the volume.
