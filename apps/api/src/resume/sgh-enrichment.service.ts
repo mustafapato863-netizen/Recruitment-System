@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import type { ExtractedCandidate } from '@recruitflow/contracts';
-import { detectClinicalDomain, generateAISummary } from '@recruitflow/validation';
+import { detectClinicalDomain, generateAISummary } from '../../../../packages/validation/src/sgh-enrichment';
 
 @Injectable()
 export class SghEnrichmentService {

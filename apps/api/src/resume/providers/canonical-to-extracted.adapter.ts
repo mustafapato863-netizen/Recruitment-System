@@ -6,8 +6,8 @@ import {
   type CandidateEducationItem,
   type CandidateProjectItem,
   type CandidateEvidenceChunk,
-  unwrapFieldValue,
 } from '@recruitflow/contracts';
+import { unwrapFieldValue } from '../../../../../packages/contracts/src/resume/index';
 
 export interface CanonicalAdaptOptions {
   parserSource?: 'affinda' | 'legacy' | undefined;

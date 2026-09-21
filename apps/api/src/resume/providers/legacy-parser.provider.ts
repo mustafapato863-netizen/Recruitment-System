@@ -9,7 +9,7 @@ import type {
 } from '@recruitflow/contracts';
 import type { ResumeParserProvider } from './resume-parser-provider.interface';
 import type { ResumeSource } from '../source/resume-source.interface';
-import { extractCandidateFromText } from '@recruitflow/validation';
+import { extractCandidateFromText } from '../../../../../packages/validation/src/resume-parser';
 import { DocumentExtractionError } from '../extraction/document-extractor.interface';
 import * as crypto from 'crypto';
 
