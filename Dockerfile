@@ -33,7 +33,9 @@ ENV VACANCY_CORE_ADAPTER=prisma
 RUN mkdir -p /data/documents && chown node:node /data/documents \
     && chmod +x /app/deploy/start-api.sh
 USER node
-RUN node /app/deploy/check-api-runtime.cjs
+# This imports modules only; production secrets are supplied at container start,
+# never baked into an image. NODE_ENV remains production for the running service.
+RUN NODE_ENV=test node /app/deploy/check-api-runtime.cjs
 
 FROM runtime AS worker
 WORKDIR /app/apps/worker
