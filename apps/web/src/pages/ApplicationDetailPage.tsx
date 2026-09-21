@@ -28,7 +28,8 @@ import { StatusBadge } from '../components/StatusBadge';
 import { ActivityFeed, type FeedEntry } from '../components/candidate/ActivityFeed';
 import { CandidateActivityPanel } from '../components/candidate/CandidateActivityPanel';
 import { SmartActionBar, getDefaultActions } from '../components/candidate/SmartActionBar';
-import { useAuth } from '../auth/AuthContext';
+import { useFeedback } from '../hooks/useFeedback';
+import { usePermissions } from '../hooks/usePermissions';
 import { QuickGuideTrigger } from '../quickguide';
 import { computeInterviewsStats } from '../components/candidate/ScorecardSummary';
 import { ScheduleInterviewModal } from '../components/candidate/ScheduleInterviewModal';
@@ -52,8 +53,8 @@ export function ApplicationDetailPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const requestedStage = searchParams.get('stage');
-  const { user } = useAuth();
-  const canViewInterviews = Boolean(user?.permissions.includes('VACANCY_VIEW'));
+  const { hasPermission } = usePermissions();
+  const canViewInterviews = hasPermission('VACANCY_VIEW');
   const [application, setApplication] = useState<Application | null>(null);
   const [vacancy, setVacancy] = useState<Vacancy | null>(null);
   const [history, setHistory] = useState<ApplicationStatusHistoryItem[]>([]);
@@ -90,7 +91,6 @@ export function ApplicationDetailPage() {
   const [isAddTagModalOpen, setIsAddTagModalOpen] = useState(false);
   const [tags, setTags] = useState<string[]>([]);
   const [newTagInput, setNewTagInput] = useState('');
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Sibling applications for fast sequential candidate review
   const [siblingApplications, setSiblingApplications] = useState<Application[]>([]);
@@ -113,10 +113,8 @@ export function ApplicationDetailPage() {
   const [rejectNote, setRejectNote] = useState('');
   const [isSubmittingRejection, setIsSubmittingRejection] = useState(false);
 
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3000);
-  };
+  const { notify, error: toastError, getErrorMessage } = useFeedback();
+  const showToast = (msg: string) => notify(msg);
 
   // Move stage selection & optimistic locking states
   const [selectedNextStage, setSelectedNextStage] = useState<ApplicationStage>('Screening');
@@ -260,12 +258,12 @@ export function ApplicationDetailPage() {
         setWorkspace(workspaceRes.value);
         setWorkspaceStage((current) => current ?? workspaceRes.value.application.stage);
       }
-    } catch {
-      // ignore
+    } catch (err: unknown) {
+      toastError(err, 'Unable to refresh applicant activity');
     } finally {
       setIsFeedLoading(false);
     }
-  }, [id, canViewInterviews]);
+  }, [id, canViewInterviews, toastError]);
 
   const refetchAll = refetchApplication;
 
@@ -316,8 +314,8 @@ export function ApplicationDetailPage() {
       setIsAddNoteModalOpen(false);
       showToast('Note added successfully');
       await refetchAll();
-    } catch {
-      showToast('Failed to save note');
+    } catch (err: unknown) {
+      toastError(err, 'Failed to save note');
     } finally {
       setIsSavingNote(false);
     }
@@ -345,12 +343,12 @@ export function ApplicationDetailPage() {
   const cleanAppId = rawAppId.replace(/^app[-_]?/i, '');
   const appIdDisplay = rawAppId ? `APP-${(cleanAppId || rawAppId).slice(0, 8).toUpperCase()}` : '';
   const latestScreening = screeningLogs[0] ?? null;
-  const canEditApplicant = Boolean(user?.permissions.includes('CANDIDATE_EDIT'));
-  const canMoveStage = Boolean(user?.permissions.includes('APPLICATION_MOVE_STAGE'));
+  const canEditApplicant = hasPermission('CANDIDATE_EDIT');
+  const canMoveStage = hasPermission('APPLICATION_MOVE_STAGE');
   const canSubmitScreening = canEditApplicant;
-  const canApproveOffers = Boolean(user?.permissions.includes('APPROVE_OFFERS'));
-  const canApproveHiring = Boolean(user?.permissions.includes('FINAL_HIRING_APPROVAL'));
-  const canViewSalary = Boolean(user?.permissions.includes('VIEW_CURRENT_SALARY'));
+  const canApproveOffers = hasPermission('APPROVE_OFFERS');
+  const canApproveHiring = hasPermission('FINAL_HIRING_APPROVAL');
+  const canViewSalary = hasPermission('VIEW_CURRENT_SALARY');
   const isScreeningDirty = Boolean(application) && (
     screeningOutcome !== (latestScreening?.outcome ?? 'On Hold') ||
     screeningNotes !== (latestScreening?.notes ?? '') ||
@@ -407,7 +405,9 @@ export function ApplicationDetailPage() {
       showToast('Screening details saved');
       await refetchApplication();
     } catch (err) {
-      setScreeningError(err instanceof Error ? err.message : 'Unable to save screening details.');
+      const message = getErrorMessage(err, 'Unable to save screening details.');
+      setScreeningError(message);
+      toastError(err, 'Unable to save screening details');
     } finally {
       setIsSavingScreening(false);
     }
@@ -494,14 +494,14 @@ export function ApplicationDetailPage() {
       if (created) {
         setInterviews((prev) => [created, ...prev]);
       }
-      showToast(`✓ ${schedInterviewType} interview scheduled successfully.`);
+      showToast(`${schedInterviewType} interview scheduled successfully.`);
       setIsScheduleModalOpen(false);
       setSchedInterviewerName('');
       setSchedInterviewerJobTitle('');
       setSchedMeetingLink('');
       void refetchAll();
     } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : 'Failed to schedule interview');
+      toastError(err, 'Failed to schedule interview');
     } finally {
       setIsSchedulingInterview(false);
     }
@@ -537,11 +537,11 @@ export function ApplicationDetailPage() {
       if (updated) {
         setApplication(updated);
       }
-      showToast(`✓ Candidate moved to Rejected (${selectedRejectReason})`);
+      showToast(`Candidate moved to Rejected (${selectedRejectReason})`);
       setIsRejectModalOpen(false);
       void refetchAll();
     } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : 'Failed to reject applicant');
+      toastError(err, 'Failed to reject applicant');
     } finally {
       setIsSubmittingRejection(false);
     }
@@ -594,6 +594,7 @@ export function ApplicationDetailPage() {
 
       if (isConflict) {
         setConflictAlert('This application was updated by someone else. Refreshing...');
+        notify('This application was updated by someone else. Refreshing...', 'warning');
         try {
           // Refresh the application, workspace requirements, timeline, and
           // related stage records together so the user can retry against the
@@ -770,7 +771,7 @@ export function ApplicationDetailPage() {
             type="button"
             onClick={() => {
               navigator.clipboard.writeText(window.location.href);
-              showToast('✓ Profile link copied to clipboard');
+              showToast('Profile link copied to clipboard');
             }}
             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-700 text-xs font-semibold transition shadow-2xs cursor-pointer"
             title="Copy direct URL"
@@ -1695,6 +1696,7 @@ export function ApplicationDetailPage() {
                         setIsAddNoteModalOpen(true);
                       }}
                       aria-disabled={!canEditApplicant}
+                      title={!canEditApplicant ? 'Needs Edit Candidates (CANDIDATE_EDIT)' : undefined}
                       className="p-2.5 rounded-xl border border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 transition cursor-pointer flex items-center justify-between group disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       <div className="flex items-center gap-3">
@@ -1716,6 +1718,7 @@ export function ApplicationDetailPage() {
                     <div
                       onClick={() => canMoveStage && setIsRejectModalOpen(true)}
                       aria-disabled={!canMoveStage}
+                      title={!canMoveStage ? 'Needs Move Application Stage (APPLICATION_MOVE_STAGE)' : undefined}
                       className="p-2.5 rounded-xl border border-slate-100 dark:border-slate-800 hover:bg-red-50/50 dark:hover:bg-red-950/20 transition cursor-pointer flex items-center justify-between group"
                     >
                       <div className="flex items-center gap-3">
@@ -2335,12 +2338,6 @@ export function ApplicationDetailPage() {
       </Modal>
 
       {/* Toast Notification */}
-      {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-xl text-xs font-bold flex items-center gap-2 border border-slate-700 animate-fade-in">
-          <Icon name="check-circle" size={14} className="text-emerald-400" />
-          <span>{toastMessage}</span>
-        </div>
-      )}
     </div>
   );
 }

@@ -3,7 +3,6 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { PageFrame } from '../components/ui/PageFrame';
 import { PipelineStepper } from '../components/PipelineStepper';
 import { Alert } from '../components/ui/Alert';
-import { Toast } from '../components/ui/Toast';
 import { Icon } from '../components/Icon';
 import { Spinner } from '../components/Spinner';
 
@@ -47,7 +46,6 @@ export const CVIntakePage: React.FC = () => {
     parsingStep,
     submitting,
     error,
-    successToast,
     showToast,
     handleFile,
     proceedToResolve,
@@ -76,12 +74,6 @@ export const CVIntakePage: React.FC = () => {
         </button>
       }
     >
-      {/* Toast Notification */}
-      {successToast && (
-        <div className="fixed bottom-6 right-6 z-50 animate-bounce-short">
-          <Toast tone="success" title={successToast} />
-        </div>
-      )}
 
       {/* Connected 4-Stage Stepper */}
       <PipelineStepper steps={INTAKE_STEPS} currentStep={currentStep} />
@@ -160,7 +152,6 @@ export const CVIntakePage: React.FC = () => {
               </div>
             </div>
           </div>
-        </div>
       )}
 
       {/* ── STAGE 1: VALIDATE & EDIT ── */}

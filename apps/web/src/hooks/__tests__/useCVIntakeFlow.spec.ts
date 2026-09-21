@@ -4,6 +4,7 @@ import { useCVIntakeFlow } from '../useCVIntakeFlow';
 import * as apiClient from '../../api/client';
 import { calculateCandidateFitScore } from '@recruitflow/validation';
 import type * as ValidationModule from '@recruitflow/validation';
+import { ToastProvider } from '../../components/ui/ToastContext';
 
 vi.mock('../../api/client', () => ({
   getApi: vi.fn(),
@@ -35,7 +36,7 @@ describe('useCVIntakeFlow', () => {
   });
 
   it('updates scoredVacancies when educationHistory is edited', async () => {
-    const { result } = renderHook(() => useCVIntakeFlow());
+    const { result } = renderHook(() => useCVIntakeFlow(), { wrapper: ToastProvider });
 
     // Set initial profile
     act(() => {
@@ -72,7 +73,7 @@ describe('useCVIntakeFlow', () => {
   });
 
   it('keeps the General Talent Pool selection when vacancies are scored', async () => {
-    const { result } = renderHook(() => useCVIntakeFlow());
+    const { result } = renderHook(() => useCVIntakeFlow(), { wrapper: ToastProvider });
 
     act(() => {
       result.current.setProfile({

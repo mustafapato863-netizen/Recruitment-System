@@ -16,6 +16,7 @@ import {
 } from '../components/ui';
 import { Icon } from '../components/Icon';
 import { useAuth } from '../auth/AuthContext';
+import { useFeedback } from '../hooks/useFeedback';
 import { confirmDiscardChanges, useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import { useMasterDataOptions } from '../hooks/useMasterDataOptions';
 import { CANDIDATE_SOURCE_FALLBACK } from '../data/masterDataDefaults';
@@ -85,7 +86,6 @@ export function CandidatesPage() {
   const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState('');
   const [selectedCandidateIds, setSelectedCandidateIds] = useState<string[]>([]);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   // Active row action menu
   const [activeMenuCandidateId, setActiveMenuCandidateId] = useState<string | null>(null);
@@ -172,10 +172,8 @@ export function CandidatesPage() {
     setFormError('');
   };
 
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => setToastMessage(null), 3000);
-  };
+  const { notify, error: toastError, getErrorMessage } = useFeedback();
+  const showToast = (msg: string) => notify(msg);
 
   const handleExportExcel = async () => {
     setIsExporting(true);
@@ -190,6 +188,7 @@ export function CandidatesPage() {
       showToast('Candidate export downloaded successfully.');
     } catch {
       setError('Failed to export candidates to Excel.');
+      toastError(new Error('Failed to export candidates to Excel.'), 'Export failed');
     } finally {
       setIsExporting(false);
     }
@@ -198,7 +197,7 @@ export function CandidatesPage() {
   const copyCode = (e: React.MouseEvent, code: string) => {
     e.stopPropagation();
     navigator.clipboard.writeText(code);
-    showToast(`✓ Copied ${code} to clipboard`);
+    showToast(`Copied ${code} to clipboard`);
   };
 
   const load = async (requestedPage = page) => {
@@ -224,7 +223,9 @@ export function CandidatesPage() {
         setMetrics(null);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to load candidates');
+      const message = getErrorMessage(err, 'Unable to load candidates');
+      setError(message);
+      toastError(err, 'Unable to load candidates');
     } finally {
       setIsLoading(false);
     }
@@ -285,7 +286,9 @@ export function CandidatesPage() {
           setSelectedVacancyId((prev) => prev || list[0].id);
         }
       } catch (err: unknown) {
-        setAssignError((err as Error).message || 'Failed to load vacancies list.');
+        const message = getErrorMessage(err, 'Failed to load vacancies list.');
+        setAssignError(message);
+        toastError(err, 'Unable to load vacancies');
       } finally {
         setVacanciesLoading(false);
       }
@@ -332,7 +335,9 @@ export function CandidatesPage() {
         );
       }
     } catch (err: unknown) {
-      setAssignError((err as Error).message || 'Failed to assign candidate to requisition.');
+      const message = getErrorMessage(err, 'Failed to assign candidate to requisition.');
+      setAssignError(message);
+      toastError(err, 'Assignment failed');
     } finally {
       setAssignSubmitting(false);
     }
@@ -355,7 +360,7 @@ export function CandidatesPage() {
           const blob = await downloadApi(`/documents/${cvDoc.id}/download`);
           saveBlob(blob, cvDoc.fileName || `${c.firstName}_${c.lastName}_CV.pdf`);
           downloaded = true;
-          showToast(`✓ Downloaded ${cvDoc.fileName}`);
+          showToast(`Downloaded ${cvDoc.fileName}`);
         }
       } catch {
         // Fall back to generating clean formatted profile CV text if no physical file on server
@@ -407,10 +412,10 @@ export function CandidatesPage() {
 
         const blob = new Blob([cvLines.join('\n')], { type: 'text/plain;charset=utf-8' });
         saveBlob(blob, `${c.firstName}_${c.lastName}_Profile_CV.txt`);
-        showToast(`✓ Downloaded CV profile document for ${c.firstName} ${c.lastName}`);
+        showToast(`Downloaded CV profile document for ${c.firstName} ${c.lastName}`);
       }
     } catch (err: unknown) {
-      showToast(`Failed to download CV: ${(err as Error).message}`);
+      toastError(err, 'CV download failed');
     } finally {
       setDownloadingCandidateId(null);
     }
@@ -471,9 +476,11 @@ export function CandidatesPage() {
         prev.map((item) => (item.id === updated.id ? { ...item, ...updated } : item)),
       );
       setIsEditModalOpen(false);
-      showToast(`✓ Candidate ${updated.firstName} ${updated.lastName} updated successfully`);
+      showToast(`Candidate ${updated.firstName} ${updated.lastName} updated successfully`);
     } catch (err: unknown) {
-      setEditError((err as Error).message || 'Failed to update candidate record.');
+      const message = getErrorMessage(err, 'Failed to update candidate record.');
+      setEditError(message);
+      toastError(err, 'Update failed');
     } finally {
       setEditSubmitting(false);
     }
@@ -495,9 +502,9 @@ export function CandidatesPage() {
       setSelectedCandidateIds((prev) => prev.filter((id) => id !== deleteCandidate.id));
       setTotalCount((prev) => Math.max(0, prev - 1));
       setIsDeleteDialogOpen(false);
-      showToast(`✓ Candidate ${deleteCandidate.firstName} ${deleteCandidate.lastName} deleted successfully`);
+      showToast(`Candidate ${deleteCandidate.firstName} ${deleteCandidate.lastName} deleted successfully`);
     } catch (err: unknown) {
-      showToast(`Failed to delete candidate: ${(err as Error).message}`);
+      toastError(err, 'Delete failed');
       setIsDeleteDialogOpen(false);
     } finally {
       setDeleteSubmitting(false);
@@ -515,9 +522,9 @@ export function CandidatesPage() {
       setTotalCount((prev) => Math.max(0, prev - count));
       setSelectedCandidateIds([]);
       setIsBulkDeleteDialogOpen(false);
-      showToast(`✓ Deleted ${count} candidate records successfully`);
+      showToast(`Deleted ${count} candidate records successfully`);
     } catch (err: unknown) {
-      showToast(`Failed to delete candidates: ${(err as Error).message}`);
+      toastError(err, 'Bulk delete failed');
       setIsBulkDeleteDialogOpen(false);
     } finally {
       setBulkDeleteSubmitting(false);
@@ -557,11 +564,13 @@ export function CandidatesPage() {
       setTimeout(() => setSuccessFeedback(''), 4000);
       await load();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to create candidate.';
+      const msg = getErrorMessage(err, 'Failed to create candidate.');
       if (msg.includes('already exists') || msg.includes('Conflict')) {
         setFormError(`A candidate with email ${form.email} already exists in your organization.`);
+        toastError(err, 'Candidate already exists');
       } else {
         setFormError(msg);
+        toastError(err, 'Unable to create candidate');
       }
     } finally {
       setIsSubmitting(false);
@@ -599,12 +608,6 @@ export function CandidatesPage() {
 
   return (
     <div className="flex w-full flex-col p-4 sm:p-6 lg:p-7 max-w-[1720px] mx-auto space-y-6">
-      {/* ── Toast Notification ── */}
-      {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-xl text-xs font-bold flex items-center gap-2 border border-slate-700 animate-fade-in">
-          <span>{toastMessage}</span>
-        </div>
-      )}
 
       {/* ── Page Header matching Enterprise System ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -879,7 +882,7 @@ export function CandidatesPage() {
             </button>
             <button
               type="button"
-              onClick={() => showToast(`✓ Added ${selectedCandidateIds.length} candidates to Talent Pool`)}
+              onClick={() => showToast(`Added ${selectedCandidateIds.length} candidates to Talent Pool`)}
               className="text-xs text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
             >
               Add to Pool
@@ -992,12 +995,18 @@ export function CandidatesPage() {
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {isLoading ? (
-                <tr>
-                  <td colSpan={8} className="p-8 text-center text-slate-600 dark:text-slate-300">
-                    <Icon name="refresh-cw" size={20} className="animate-spin mx-auto mb-2 text-blue-600" />
-                    <span>Loading verified candidates...</span>
-                  </td>
-                </tr>
+                Array.from({ length: 6 }).map((_, rowIdx) => (
+                  <tr key={`candidate-skeleton-${rowIdx}`} className="animate-pulse">
+                    <td className="p-3.5 pl-4"><div className="h-4 w-4 rounded bg-slate-200 dark:bg-slate-700" /></td>
+                    <td className="p-3.5"><div className="h-4 w-28 rounded bg-slate-200 dark:bg-slate-700" /></td>
+                    <td className="p-3.5"><div className="h-4 w-40 rounded bg-slate-200 dark:bg-slate-700" /></td>
+                    <td className="p-3.5"><div className="h-4 w-24 rounded bg-slate-200 dark:bg-slate-700" /></td>
+                    <td className="p-3.5"><div className="h-4 w-20 rounded bg-slate-200 dark:bg-slate-700" /></td>
+                    <td className="p-3.5"><div className="h-4 w-16 rounded bg-slate-200 dark:bg-slate-700" /></td>
+                    <td className="p-3.5"><div className="h-4 w-16 rounded bg-slate-200 dark:bg-slate-700" /></td>
+                    <td className="p-3.5"><div className="h-4 w-12 rounded bg-slate-200 dark:bg-slate-700" /></td>
+                  </tr>
+                ))
               ) : candidates.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="p-12 text-center text-slate-600 dark:text-slate-300">

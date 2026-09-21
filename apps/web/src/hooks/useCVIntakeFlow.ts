@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useMemo, useRef, useDeferredValue } f
 import type { ImportJobSummary, PaginatedResult, Vacancy } from '@recruitflow/contracts';
 import { calculateCandidateFitScore, type CriteriaBreakdown } from '@recruitflow/validation';
 import { getApi, postApi, postFormDataApi, patchApi, ApiError } from '../api/client';
+import { getErrorMessage } from '../api/errors';
+import { useFeedback } from './useFeedback';
 import { type ExtractedCandidate } from '../utils/resumeParser';
 import { useMasterDataOptions } from './useMasterDataOptions';
 import { CANDIDATE_SOURCE_FALLBACK } from '../data/masterDataDefaults';
@@ -47,6 +49,7 @@ const SCORING_FIELDS = [
 ] as const;
 
 export function useCVIntakeFlow(initialTargetVacancy?: string | null) {
+  const { notify, error: toastError } = useFeedback();
   const [currentStep, setCurrentStep] = useState<number>(0);
   const [jobs, setJobs] = useState<ImportJobSummary[]>([]);
   const [loadingJobs, setLoadingJobs] = useState(true);
@@ -80,12 +83,7 @@ export function useCVIntakeFlow(initialTargetVacancy?: string | null) {
   const [parsingStep, setParsingStep] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [successToast, setSuccessToast] = useState<string | null>(null);
-
-  const showToast = useCallback((msg: string) => {
-    setSuccessToast(msg);
-    setTimeout(() => setSuccessToast(null), 4000);
-  }, []);
+  const showToast = useCallback((msg: string) => notify(msg), [notify]);
 
   const lookupDuplicateCandidates = useCallback(async (candidate: ExtractedCandidate) => {
     const requestVersion = ++duplicateLookupVersion.current;
@@ -282,9 +280,11 @@ export function useCVIntakeFlow(initialTargetVacancy?: string | null) {
 
       const sourceLabel = extracted.parserSource === 'affinda' ? 'Affinda' : 'Fallback Parser';
       const qualityLabel = extracted.parsingQuality ? ` · ${extracted.parsingQuality.toUpperCase()} Quality` : '';
-      showToast(`✓ Successfully extracted profile for ${extracted.firstName || 'Candidate'} ${extracted.lastName || ''} (${sourceLabel}${qualityLabel})`);
+      showToast(`Successfully extracted profile for ${extracted.firstName || 'Candidate'} ${extracted.lastName || ''} (${sourceLabel}${qualityLabel})`);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Unable to parse document.');
+      const message = getErrorMessage(err, 'Unable to parse document.');
+      setError(message);
+      toastError(err, 'Unable to parse document');
     } finally {
       setParsingFile(false);
       setParsingStep('');
@@ -522,7 +522,9 @@ export function useCVIntakeFlow(initialTargetVacancy?: string | null) {
       showToast('✓ Candidate & application confirmed and ingested into talent database!');
       return true;
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Unable to save candidate and application.');
+      const message = getErrorMessage(err, 'Unable to save candidate and application.');
+      setError(message);
+      toastError(err, 'Unable to save candidate');
       return false;
     } finally {
       setSubmitting(false);
@@ -580,7 +582,6 @@ export function useCVIntakeFlow(initialTargetVacancy?: string | null) {
     submitting,
     error,
     setError,
-    successToast,
     showToast,
     handleFile,
     proceedToResolve,

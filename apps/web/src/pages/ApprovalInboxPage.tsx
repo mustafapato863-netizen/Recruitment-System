@@ -14,7 +14,9 @@ import { Input } from '../components/ui/Input';
 import { Icon, type IconName } from '../components/Icon';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { Tabs } from '../components/ui/Tabs';
-import { useAuth } from '../auth/AuthContext';
+import { useFeedback } from '../hooks/useFeedback';
+import { usePermissions } from '../hooks/usePermissions';
+import { getErrorMessage } from '../api/errors';
 import './PageEnhancementsV2.css';
 
 interface FinalHiringInboxItem {
@@ -70,13 +72,14 @@ function formatApprovalDate(value?: string) {
 type TabType = 'vacancy-requests' | 'offers' | 'final-hires';
 
 export function ApprovalInboxPage() {
-  const { user } = useAuth();
+  const { success: toastSuccess, error: toastError } = useFeedback();
+  const { hasPermission } = usePermissions();
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get('tab') as TabType | null;
 
-  const canApproveVacancies = Boolean(user?.permissions.includes('VACANCY_REQUEST_APPROVE'));
-  const canApproveOffers = Boolean(user?.permissions.includes('APPROVE_OFFERS'));
-  const canApproveFinalHires = Boolean(user?.permissions.includes('FINAL_HIRING_APPROVAL'));
+  const canApproveVacancies = hasPermission('VACANCY_REQUEST_APPROVE');
+  const canApproveOffers = hasPermission('APPROVE_OFFERS');
+  const canApproveFinalHires = hasPermission('FINAL_HIRING_APPROVAL');
 
   const [activeTab, setActiveTab] = useState<TabType>(() => {
     if (tabParam && ['vacancy-requests', 'offers', 'final-hires'].includes(tabParam)) {
@@ -143,11 +146,13 @@ export function ApprovalInboxPage() {
         }
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to load the approval inbox');
+      const message = getErrorMessage(err, 'Unable to load the approval inbox');
+      setError(message);
+      toastError(err, 'Unable to load approval inbox');
     } finally {
       setIsLoading(false);
     }
-  }, [canApproveFinalHires, canApproveOffers, canApproveVacancies]);
+  }, [canApproveFinalHires, canApproveOffers, canApproveVacancies, toastError]);
 
   useEffect(() => {
     void loadAll();
@@ -225,9 +230,12 @@ export function ApprovalInboxPage() {
         try {
           await postApi(`/vacancy-requests/${request.id}/approve`, { comment });
           setFeedback(`Vacancy request ${request.requestCode} approved successfully.`);
+          toastSuccess('Request approved', `Vacancy request ${request.requestCode} advanced successfully.`);
           await loadAll();
         } catch (err) {
-          setError(err instanceof Error ? err.message : 'Unable to approve this request');
+          const message = getErrorMessage(err, 'Unable to approve this request');
+          setError(message);
+          toastError(err, 'Unable to approve request');
         } finally {
           setBusyId(null);
           setConfirmDialog(initialConfirmState);
@@ -259,9 +267,12 @@ export function ApprovalInboxPage() {
             comment: comment || (isApproval ? 'Approved in workflow inbox' : 'Rejected in workflow inbox'),
           });
           setFeedback(`Offer package decision recorded as ${decision}.`);
+          toastSuccess('Offer decision recorded', `Package marked as ${decision}.`);
           await loadAll();
         } catch (err) {
-          setError(err instanceof Error ? err.message : `Unable to record ${decision.toLowerCase()} decision`);
+          const message = getErrorMessage(err, `Unable to record ${decision.toLowerCase()} decision`);
+          setError(message);
+          toastError(err, 'Unable to record offer decision');
         } finally {
           setBusyId(null);
           setConfirmDialog(initialConfirmState);
@@ -290,9 +301,12 @@ export function ApprovalInboxPage() {
             comment: comment?.trim() || undefined,
           });
           setFeedback(`Final executive approval granted for ${hc.candidateName}.`);
+          toastSuccess('Final approval granted', `${hc.candidateName} is authorized for onboarding.`);
           await loadAll();
         } catch (err) {
-          setError(err instanceof Error ? err.message : 'Unable to grant final approval');
+          const message = getErrorMessage(err, 'Unable to grant final approval');
+          setError(message);
+          toastError(err, 'Unable to grant final approval');
         } finally {
           setBusyId(null);
           setConfirmDialog(initialConfirmState);

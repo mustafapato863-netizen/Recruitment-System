@@ -37,3 +37,54 @@ export function retryAfterMs(error: unknown): number | undefined {
   }
   return undefined;
 }
+
+export function getErrorMessage(
+  error: unknown,
+  fallback = 'Something went wrong. Please try again.',
+): string {
+  if (isApiError(error)) {
+    const message = error.message?.trim();
+    if (message) return message;
+  }
+  if (error instanceof Error) {
+    const message = error.message?.trim();
+    if (message) return message;
+  }
+  if (typeof error === 'string' && error.trim()) {
+    return error.trim();
+  }
+  return fallback;
+}
+
+export type FeedbackToastTone = 'success' | 'error' | 'info' | 'warning';
+
+export interface FeedbackToast {
+  tone: FeedbackToastTone;
+  title: string;
+  message?: string;
+  duration?: number;
+}
+
+export function toErrorToast(error: unknown, title = 'Request failed'): FeedbackToast {
+  const message = getErrorMessage(error);
+  const requestId = getRequestId(error);
+  return {
+    tone: 'error',
+    title,
+    message: requestId ? `${message} (ref ${requestId})` : message,
+    duration: isRetryable(error) ? 8000 : 6000,
+  };
+}
+
+export function toSuccessToast(title: string, message?: string): FeedbackToast {
+  return { tone: 'success', title, message };
+}
+
+export function toWarningToast(title: string, message?: string): FeedbackToast {
+  return { tone: 'warning', title, message };
+}
+
+export function toInfoToast(title: string, message?: string): FeedbackToast {
+  return { tone: 'info', title, message };
+}
+
