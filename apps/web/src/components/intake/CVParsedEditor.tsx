@@ -123,11 +123,11 @@ export const CVParsedEditor: React.FC<CVParsedEditorProps> = ({
   };
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs overflow-hidden animate-fade-in">
+    <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-slate-200/50 dark:border-slate-700/50 shadow-md hover:shadow-lg transition-shadow duration-300 overflow-hidden animate-fade-in">
       {/* Header Bar */}
-      <div className="p-5 sm:p-6 border-b border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="p-5 sm:p-6 border-b border-slate-200/50 dark:border-slate-700/50 bg-gradient-to-r from-slate-50/80 to-blue-50/30 dark:from-slate-800/60 dark:to-blue-900/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-2xl bg-blue-600 text-white font-black text-base flex items-center justify-center shadow-sm shrink-0">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 text-white font-black text-base flex items-center justify-center shadow-md shadow-blue-500/20 shrink-0 transform hover:scale-105 transition-transform">
             {`${(profile.firstName || 'C')[0]}${(profile.lastName || 'P')[0]}`.toUpperCase()}
           </div>
           <div>
@@ -169,7 +169,7 @@ export const CVParsedEditor: React.FC<CVParsedEditorProps> = ({
           <button
             type="button"
             onClick={onReset}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 hover:shadow-sm hover:-translate-y-0.5 transition-all duration-200 cursor-pointer"
           >
             <Icon name="refresh-cw" size={13} />
             <span>Reset</span>
@@ -177,7 +177,7 @@ export const CVParsedEditor: React.FC<CVParsedEditorProps> = ({
           <button
             type="button"
             onClick={onBack}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 hover:shadow-sm hover:-translate-y-0.5 transition-all duration-200 cursor-pointer"
           >
             <Icon name="arrow-left" size={13} />
             <span>Back to Upload</span>
@@ -185,7 +185,7 @@ export const CVParsedEditor: React.FC<CVParsedEditorProps> = ({
           <button
             type="button"
             onClick={onProceed}
-            className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-sm cursor-pointer shadow-blue-500/20"
+            className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl text-xs font-bold transition-all duration-300 shadow-md shadow-blue-500/30 hover:shadow-lg hover:shadow-blue-500/40 hover:-translate-y-0.5 cursor-pointer"
           >
             <span>Next: Resolve & Match</span>
             <Icon name="arrow-right" size={14} />
@@ -196,7 +196,7 @@ export const CVParsedEditor: React.FC<CVParsedEditorProps> = ({
       <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column: Extraction Card */}
         <div className="space-y-4">
-          <div className="bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-200 dark:border-slate-700/80 space-y-4">
+          <div className="bg-slate-50/50 dark:bg-slate-800/30 p-4 rounded-2xl border border-slate-200/60 dark:border-slate-700/60 space-y-4 hover:shadow-md transition-shadow duration-300">
             {/* Clinical Domain Badge */}
             <div className="p-3.5 rounded-xl bg-gradient-to-r from-blue-500/10 via-emerald-500/10 to-indigo-500/10 dark:from-blue-950/50 dark:via-emerald-950/50 dark:to-indigo-950/50 border border-blue-200/80 dark:border-blue-800/60 space-y-1.5">
               <div className="flex items-center justify-between">

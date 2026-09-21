@@ -59,6 +59,7 @@ export const CVIntakePage: React.FC = () => {
   const selectedVacancyLabel = vacancies.find((vacancy) => vacancy.id === targetVacancy)?.position?.title
     || vacancies.find((vacancy) => vacancy.id === targetVacancy)?.title;
 
+
   return (
     <PageFrame
       eyebrow="AI Clinical Intake Engine • Saudi German Health RecruitFlow"
@@ -68,7 +69,7 @@ export const CVIntakePage: React.FC = () => {
         <button
           type="button"
           onClick={() => navigate('/candidates')}
-          className="flex items-center gap-1.5 px-3.5 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs cursor-pointer"
+          className="flex items-center gap-1.5 px-3.5 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 hover:-translate-y-0.5 transition-all duration-200 shadow-xs cursor-pointer"
         >
           <Icon name="arrow-left" size={13} />
           <span>Candidate Directory</span>
@@ -111,8 +112,9 @@ export const CVIntakePage: React.FC = () => {
 
           {/* Right Column: Batch Info & Accepted Formats */}
           <div className="space-y-6">
-            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs">
-              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white mb-3">
+            <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-slate-200/60 dark:border-slate-700/60 p-5 shadow-sm hover:shadow-md transition-shadow duration-300">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+                <Icon name="clock" size={14} className="text-blue-500" />
                 Recent Intake Batches
               </h2>
               {loadingJobs ? (
@@ -124,10 +126,10 @@ export const CVIntakePage: React.FC = () => {
                   {jobs.slice(0, 4).map((job) => (
                     <div
                       key={job.id}
-                      className="p-2.5 rounded-xl border border-slate-100 dark:border-slate-800/60 bg-slate-50/50 dark:bg-slate-800/30 text-xs"
+                      className="p-3 rounded-xl border border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-800/40 text-xs hover:bg-white dark:hover:bg-slate-800 hover:shadow-sm hover:border-slate-200 dark:hover:border-slate-700 transition-all duration-200 group cursor-default"
                     >
                       <div className="flex items-center justify-between font-semibold text-slate-800 dark:text-slate-200">
-                        <span className="truncate max-w-[160px] text-[11px]">{job.fileName}</span>
+                        <span className="truncate max-w-[160px] text-[11px] group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">{job.fileName}</span>
                         <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300">
                           {job.status}
                         </span>
@@ -142,14 +144,11 @@ export const CVIntakePage: React.FC = () => {
               )}
             </div>
 
-            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-3">
-              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">
+            <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-2xl border border-slate-200/60 dark:border-slate-700/60 p-5 shadow-sm hover:shadow-md transition-shadow duration-300 space-y-3">
+              <h2 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-2">
+                <Icon name="info" size={14} className="text-emerald-500" />
                 Intake Guidelines
               </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Accepted file formats and parsing capabilities:
-              </p>
-              <div className="space-y-2 text-xs">
                 <div className="flex items-center gap-2 p-2 rounded-lg bg-slate-50 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
                   <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 font-extrabold text-[10px]">PDF</span>
                   <span className="font-semibold text-slate-700 dark:text-slate-300">Adobe PDF (.pdf)</span>

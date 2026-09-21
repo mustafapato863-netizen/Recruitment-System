@@ -58,7 +58,7 @@ const initialForm: FormState = {
   benefits: '',
 };
 
-const WIZARD_STEPS = ['Requisition Basics', 'Specifications & Budget', 'Review & Submit'];
+const WIZARD_STEPS = ['The Basics', 'Business Case', 'Job Details & Budget'];
 
 export function CreateVacancyRequestPage() {
   const navigate = useNavigate();
@@ -97,8 +97,8 @@ export function CreateVacancyRequestPage() {
       setShowAllSteps(true);
       return;
     }
-    if (mode === 'submit' && (budgetMin === null || budgetMax === null || !form.targetFillDate)) {
-      setError('Add the monthly budget range and target fill date before submitting.');
+    if (mode === 'submit' && !form.targetFillDate) {
+      setError('Add the target fill date before submitting.');
       setShowAllSteps(true);
       return;
     }
@@ -210,10 +210,10 @@ export function CreateVacancyRequestPage() {
   }
 
   const isHeadcountValid = Number(form.requestedHeadcount) > 0;
+  const isReasonValid = Boolean(form.reason);
   const isJustificationValid = form.justification.trim().length > 0;
-  const isBudgetValid = Number(form.budgetMin) > 0 && Number(form.budgetMax) >= Number(form.budgetMin);
   const isTimelineValid = Boolean(form.targetFillDate) && (form.recruitmentTiming !== 'Deferred' || Boolean(form.plannedOpenDate));
-  const readinessCount = [context !== null, isHeadcountValid, isJustificationValid, isBudgetValid, isTimelineValid].filter(Boolean).length;
+  const readinessCount = [context !== null, isHeadcountValid, isReasonValid, isJustificationValid, isTimelineValid].filter(Boolean).length;
   const readinessPct = Math.round((readinessCount / 5) * 100);
 
   return (
@@ -315,13 +315,13 @@ export function CreateVacancyRequestPage() {
         <div className="rf-create-vacancy-layout grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           {/* Main Form Fields (8 cols) */}
           <div className="rf-create-vacancy-main lg:col-span-8 flex flex-col gap-6">
-            {/* Step 1: Requisition Basics */}
+            {/* Step 1: The Basics */}
             {(showAllSteps || activeStep === 0) && (
               <FormSection
                 className="rf-request-form-section"
                 eyebrow="Step 1 · Structure & Basics"
-                title="Organization & Role Context"
-                description="Select organizational branch, target position title, and initial headcount requirements."
+                title="The Basics"
+                description="Select organizational branch, target position title, headcount, and reason for requisition."
               >
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <FormField id="ctx-org" label="Organization">
@@ -375,15 +375,7 @@ export function CreateVacancyRequestPage() {
                       onChange={(event) => setForm({ ...form, requestedHeadcount: event.target.value })}
                     />
                   </FormField>
-                  <FormField id="req-target-fill" label="Target Fill Date" hint="When should the approved position be filled?">
-                    <Input
-                      id="req-target-fill"
-                      type="date"
-                      value={form.targetFillDate}
-                      onChange={(event) => setForm({ ...form, targetFillDate: event.target.value })}
-                    />
-                  </FormField>
-                  <FormField id="req-employment" label="Employment Type">
+                  <FormField id="req-employment" label="Employment Type" required>
                     <Select
                       id="req-employment"
                       value={form.employmentType}
@@ -392,31 +384,91 @@ export function CreateVacancyRequestPage() {
                       <option value="Full-time">Full-time</option>
                       <option value="Part-time">Part-time</option>
                       <option value="Contract">Contract</option>
+                      <option value="Locum">Locum</option>
+                    </Select>
+                  </FormField>
+                  <FormField id="req-reason" label="Requisition Reason" required>
+                    <Select
+                      id="req-reason"
+                      value={form.reason}
+                      onChange={(event) => setForm({ ...form, reason: event.target.value })}
+                    >
+                      <option value="New position">New Position</option>
+                      <option value="Replacement">Replacement</option>
+                      <option value="Expansion">Expansion / Growth</option>
                     </Select>
                   </FormField>
                 </div>
               </FormSection>
             )}
 
-            {/* Step 2: Specifications & Budget */}
+            {/* Step 2: Business Case */}
             {(showAllSteps || activeStep === 1) && (
+              <FormSection
+                className="rf-request-form-section"
+                eyebrow="Step 2 · Business Case & Timelines"
+                title="Business Case"
+                description="Provide business justification and target dates for this role."
+              >
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <FormField id="req-target-fill" label="Target Fill Date" required hint="When should the approved position be filled?">
+                    <Input
+                      id="req-target-fill"
+                      type="date"
+                      required
+                      value={form.targetFillDate}
+                      onChange={(event) => setForm({ ...form, targetFillDate: event.target.value })}
+                    />
+                  </FormField>
+                  <FormField id="req-target-date" label="Expected Start Date" required hint="Expected first day after hiring">
+                    <Input 
+                      id="req-target-date" 
+                      type="date" 
+                      required
+                      value={form.targetStartDate} 
+                      onChange={(event) => setForm({ ...form, targetStartDate: event.target.value })} 
+                    />
+                  </FormField>
+                </div>
+
+                <div className="grid grid-cols-1 gap-4 mt-4">
+                  <FormField
+                    id="req-justification"
+                    label="Business Justification & Operational Impact"
+                    required
+                    hint="Explain why this role is needed and what operational impact it will deliver."
+                  >
+                    <Textarea
+                      id="req-justification"
+                      required
+                      rows={4}
+                      value={form.justification}
+                      onChange={(event) => setForm({ ...form, justification: event.target.value })}
+                      placeholder="Detail the operational demand, business necessity, and patient care impact for this requisition..."
+                    />
+                  </FormField>
+                </div>
+              </FormSection>
+            )}
+
+            {/* Step 3: Job Details & Budget */}
+            {(showAllSteps || activeStep === 2) && (
               <>
                 <FormSection
                   className="rf-request-form-section"
-                  eyebrow="Step 2 · Demand Specifications & Budget"
-                  title="Operational & Financial Parameters"
-                  description="Set the recruitment timing, target dates, and monthly budget range per position."
+                  eyebrow="Step 3 · Operational Parameters"
+                  title="Job Details & Budget"
+                  description="Set the monthly budget range, criticality, and public-facing job posting details."
                 >
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <FormField id="req-reason" label="Requisition Reason" required>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <FormField id="req-budget" label="Budget Status">
                       <Select
-                        id="req-reason"
-                        value={form.reason}
-                        onChange={(event) => setForm({ ...form, reason: event.target.value })}
+                        id="req-budget"
+                        value={form.budgetStatus}
+                        onChange={(event) => setForm({ ...form, budgetStatus: event.target.value })}
                       >
-                        <option value="New position">New Position</option>
-                        <option value="Replacement">Replacement</option>
-                        <option value="Expansion">Expansion / Growth</option>
+                        <option value="Budgeted">Budgeted</option>
+                        <option value="Unbudgeted">Unbudgeted</option>
                       </Select>
                     </FormField>
                     <FormField id="req-criticality" label="Criticality">
@@ -430,17 +482,8 @@ export function CreateVacancyRequestPage() {
                         <option value="Critical">Critical</option>
                       </Select>
                     </FormField>
-                    <FormField id="req-budget" label="Budget Status">
-                      <Select
-                        id="req-budget"
-                        value={form.budgetStatus}
-                        onChange={(event) => setForm({ ...form, budgetStatus: event.target.value })}
-                      >
-                        <option value="Budgeted">Budgeted</option>
-                        <option value="Unbudgeted">Unbudgeted</option>
-                      </Select>
-                    </FormField>
                   </div>
+
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
                     <FormField id="req-budget-min" label="Monthly Budget From" hint="Per position, whole amount">
                       <Input id="req-budget-min" type="number" min="1" max="2147483647" step="1" value={form.budgetMin} onChange={(event) => setForm({ ...form, budgetMin: event.target.value })} />
@@ -455,7 +498,8 @@ export function CreateVacancyRequestPage() {
                       </Select>
                     </FormField>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
                     <FormField id="req-recruitment-timing" label="Recruitment Plan" hint="Approval status is tracked separately">
                       <Select id="req-recruitment-timing" value={form.recruitmentTiming} onChange={(event) => setForm({ ...form, recruitmentTiming: event.target.value as FormState['recruitmentTiming'], plannedOpenDate: '' })}>
                         <option value="After Approval">Start recruitment after approval</option>
@@ -467,23 +511,20 @@ export function CreateVacancyRequestPage() {
                         <Input id="req-planned-open" type="date" value={form.plannedOpenDate} onChange={(event) => setForm({ ...form, plannedOpenDate: event.target.value })} />
                       </FormField>
                     )}
-                    <FormField id="req-target-date" label="Expected Start Date" hint="Optional first day after hiring">
-                      <Input id="req-target-date" type="date" value={form.targetStartDate} onChange={(event) => setForm({ ...form, targetStartDate: event.target.value })} />
-                    </FormField>
                   </div>
                 </FormSection>
 
                 <FormSection
                   className="rf-request-form-section"
                   eyebrow="Posting Specifications"
-                  title="Job Description & Responsibilities"
-                  description="Public-facing content that will become the active vacancy posting on approval."
+                  title="Job Description & Responsibilities (Optional)"
+                  description="Public-facing content that will become the active vacancy posting on approval. Leave blank to pre-fill from position defaults."
                 >
                   <div className="grid grid-cols-1 gap-4">
                     <FormField
                       id="req-job-summary"
                       label="Short Summary / Teaser"
-                      hint="One or two lines shown on job listings. Required before vacancy publishing."
+                      hint="One or two lines shown on job listings."
                     >
                       <Input
                         id="req-job-summary"
@@ -549,34 +590,6 @@ export function CreateVacancyRequestPage() {
                   </div>
                 </FormSection>
               </>
-            )}
-
-            {/* Step 3: Review & Submit */}
-            {(showAllSteps || activeStep === 2) && (
-              <FormSection
-                className="rf-request-form-section"
-                eyebrow="Step 3 · Business Justification & Review"
-                title="Justification & Sign-Off"
-                description="Provide business justification and verify requisition readiness before routing to approvals."
-              >
-                <div className="grid grid-cols-1 gap-4">
-                  <FormField
-                    id="req-justification"
-                    label="Business Justification & Operational Impact"
-                    required
-                    hint="Explain why this role is needed and what operational impact it will deliver."
-                  >
-                    <Textarea
-                      id="req-justification"
-                      required
-                      rows={4}
-                      value={form.justification}
-                      onChange={(event) => setForm({ ...form, justification: event.target.value })}
-                      placeholder="Detail the operational demand, business necessity, and patient care impact for this requisition..."
-                    />
-                  </FormField>
-                </div>
-              </FormSection>
             )}
 
             {/* In-Wizard Step Navigation Bar */}
@@ -705,6 +718,14 @@ export function CreateVacancyRequestPage() {
                   </div>
                   <div className="flex items-center gap-2 text-rf-ink font-medium">
                     <Icon
+                      name={isReasonValid ? 'check-circle' : 'circle'}
+                      size={14}
+                      className={isReasonValid ? 'text-rf-success' : 'text-rf-ink-muted'}
+                    />
+                    Requisition Reason
+                  </div>
+                  <div className="flex items-center gap-2 text-rf-ink font-medium">
+                    <Icon
                       name={isJustificationValid ? 'check-circle' : 'circle'}
                       size={14}
                       className={isJustificationValid ? 'text-rf-success' : 'text-rf-ink-muted'}
@@ -712,16 +733,8 @@ export function CreateVacancyRequestPage() {
                     Business Justification Provided
                   </div>
                   <div className="flex items-center gap-2 text-rf-ink font-medium">
-                    <Icon
-                      name={isBudgetValid ? 'check-circle' : 'circle'}
-                      size={14}
-                      className={isBudgetValid ? 'text-rf-success' : 'text-rf-ink-muted'}
-                    />
-                    Monthly Budget Range Confirmed
-                  </div>
-                  <div className="flex items-center gap-2 text-rf-ink font-medium">
                     <Icon name={isTimelineValid ? 'check-circle' : 'circle'} size={14} className={isTimelineValid ? 'text-rf-success' : 'text-rf-ink-muted'} />
-                    Recruitment & Fill Dates Confirmed
+                    Target Fill Date Confirmed
                   </div>
                 </div>
               </div>

@@ -90,11 +90,11 @@ export function PipelineStepper({
         compact ? 'min-w-[320px]' : stageList.length <= 4 ? 'min-w-0 sm:min-w-[380px]' : 'min-w-[520px]'
       }`}>
         {/* Background track line */}
-        <div className="absolute top-[26px] left-12 right-12 h-0.5 bg-slate-200 dark:bg-slate-800 rf-pipeline-stepper__track" aria-hidden="true" />
+        <div className="absolute top-[26px] left-12 right-12 h-0.5 bg-slate-200/60 dark:bg-slate-800/60 rf-pipeline-stepper__track" aria-hidden="true" />
 
         {/* Active progress fill */}
         <div
-          className="absolute top-[26px] left-12 h-0.5 bg-blue-600 dark:bg-blue-500 transition-all duration-300 rf-pipeline-stepper__progress"
+          className="absolute top-[26px] left-12 h-0.5 bg-gradient-to-r from-blue-500 to-indigo-500 dark:from-blue-400 dark:to-indigo-400 shadow-[0_0_8px_rgba(59,130,246,0.5)] transition-all duration-500 ease-out rf-pipeline-stepper__progress"
           style={{ width: `calc((${progressPct} / 100) * (100% - 6rem))` }}
           aria-hidden="true"
         />
@@ -115,14 +115,14 @@ export function PipelineStepper({
                 aria-current={isCurrent ? 'step' : undefined}
               >
                 <span
-                  className={`w-9 h-9 rounded-full flex items-center justify-center transition-all shadow-xs rf-pipeline-stepper__marker ${
+                  className={`w-9 h-9 rounded-full flex items-center justify-center transition-all duration-300 shadow-sm rf-pipeline-stepper__marker ${
                     isCompleted
-                      ? 'bg-emerald-600 text-white shadow-emerald-500/20'
+                      ? 'bg-emerald-500 text-white shadow-emerald-500/30 ring-4 ring-emerald-50 dark:ring-emerald-900/20'
                       : isCurrent
-                      ? 'bg-blue-600 text-white ring-4 ring-blue-100 dark:ring-blue-900/40 shadow-blue-500/25'
+                      ? 'bg-gradient-to-br from-blue-500 to-indigo-600 text-white ring-4 ring-blue-100 dark:ring-blue-900/40 shadow-lg shadow-blue-500/40 scale-110'
                       : isRejected
-                      ? 'bg-rose-600 text-white shadow-rose-500/20'
-                      : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border border-slate-200 dark:border-slate-700'
+                      ? 'bg-rose-500 text-white shadow-rose-500/30 ring-4 ring-rose-50 dark:ring-rose-900/20'
+                      : 'bg-white dark:bg-slate-900 text-slate-400 dark:text-slate-500 border-2 border-slate-200 dark:border-slate-700 hover:border-blue-200 dark:hover:border-blue-800'
                   }`}
                   aria-hidden="true"
                 >
