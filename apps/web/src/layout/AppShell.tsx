@@ -1,7 +1,9 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import type { NavigationItemRecord } from '@recruitflow/contracts';
+import { getNavigationCatalogItem } from '@recruitflow/contracts';
 import { useAuth } from '../auth/AuthContext';
+import { usePermissions } from '../hooks/usePermissions';
 import { isEmployeeWorkspaceUser } from '../auth/workspacePersona';
 import { Icon, type IconName } from '../components/Icon';
 import { IconButton } from '../components/ui/IconButton';
@@ -31,6 +33,8 @@ type NavigationItemProps = {
   onNavigate?: () => void;
   badge?: number | string;
   badgeTone?: 'blue' | 'amber' | 'emerald' | 'red';
+  /** When the user lacks permission: hide the item, or show it disabled with a tooltip. */
+  unavailableMode?: 'hide' | 'disable';
 };
 
 const NavigationSettingsContext = createContext<Record<string, NavigationItemRecord>>({});
@@ -49,23 +53,40 @@ export function NavigationItem({
   onNavigate,
   badge,
   badgeTone = 'blue',
+  unavailableMode = 'disable',
 }: NavigationItemProps) {
   const { user } = useAuth();
+  const { canAccess, describeRequirement } = usePermissions();
   const navigationSettings = useContext(NavigationSettingsContext);
   const navigationSetting = navigationKey ? navigationSettings[navigationKey] : undefined;
+  const catalogItem = navigationKey ? getNavigationCatalogItem(navigationKey) : undefined;
   const displayLabel = (isEmployeeWorkspaceUser(user) && labelWhenEmployee?.trim())
     || navigationSetting?.label?.trim()
     || label;
-  
-  // Navigation visibility is configured by the administrator and checked by
-  // permissions. Keep the legacy prop for callers, but never infer access
-  // from mutable role names on the client.
+
+  // Prefer live API navigation settings, then shared catalog, then explicit props.
+  // Explicit undefined props still allow catalog/settings to supply requirements;
+  // pass an empty requiredAnyPermissions array only when a surface is intentionally open.
+  const effectiveRequiredPermission =
+    navigationSetting?.requiredPermission
+    ?? catalogItem?.requiredPermission
+    ?? requiredPermission;
+  const effectiveRequiredAny =
+    navigationSetting?.requiredAnyPermissions
+    ?? catalogItem?.requiredAnyPermissions
+    ?? requiredAnyPermissions;
+
   const hasRoleAccess = allowedRoles ? allowedRoles.length > 0 : true;
-  const hasNaturalAccess = requiredPermission
-    ? Boolean(user?.permissions?.includes(requiredPermission))
-    : requiredAnyPermissions && requiredAnyPermissions.length > 0
-      ? requiredAnyPermissions.some((permission) => Boolean(user?.permissions?.includes(permission)))
-      : true;
+  const propsExplicitlyOpen =
+    requiredPermission === undefined
+    && requiredAnyPermissions !== undefined
+    && requiredAnyPermissions.length === 0;
+  const hasNaturalAccess = propsExplicitlyOpen
+    ? true
+    : canAccess({
+        requiredPermission: effectiveRequiredPermission,
+        requiredAnyPermissions: effectiveRequiredAny,
+      });
   const isAdministrator = Boolean(
     user?.roles?.some((r) => r.code === 'ADMINISTRATOR') ||
     (user?.permissions?.includes('USERS_MANAGE') && user?.permissions?.includes('ROLES_MANAGE'))
@@ -73,9 +94,43 @@ export function NavigationItem({
   const isSettingVisible = isAdministrator
     ? (navigationSetting?.visible ?? true)
     : navigationSetting?.visible !== false;
-  const hasAccess = hasRoleAccess && hasNaturalAccess && isSettingVisible;
 
-  if (!hasAccess) return null;
+  if (!hasRoleAccess || !isSettingVisible) return null;
+
+  const requirementText = describeRequirement({
+    requiredPermission: effectiveRequiredPermission,
+    requiredAnyPermissions: effectiveRequiredAny,
+  });
+  const deniedTitle = `Needs ${requirementText}`;
+
+  if (!hasNaturalAccess) {
+    if (unavailableMode === 'hide') return null;
+    return (
+      <span
+        className="nav-item-disabled relative nav-item opacity-55 cursor-not-allowed"
+        aria-disabled="true"
+        title={deniedTitle}
+      >
+        <span className="ico"><Icon name={icon} size={18} /></span>
+        {!isCollapsed ? (
+          <span className="nav-label flex items-center justify-between gap-2">
+            <span>{displayLabel}</span>
+            <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Locked</span>
+          </span>
+        ) : (
+          <span className="sr-only">{displayLabel}. {deniedTitle}</span>
+        )}
+        {isCollapsed && (
+          <span
+            role="tooltip"
+            className="nav-tooltip absolute left-full ml-3 top-1/2 -translate-y-1/2 px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-semibold whitespace-nowrap opacity-0 pointer-events-none transition-all duration-150 z-50 shadow-xl border border-slate-700/60"
+          >
+            {displayLabel} — {deniedTitle}
+          </span>
+        )}
+      </span>
+    );
+  }
 
   if (!to) {
     return (
@@ -339,9 +394,9 @@ export function AppShellInner() {
             )}
             <div className="space-y-0.5">
               {isEmployeeWorkspace ? (
-                <NavigationItem end icon="dashboard" label="Command Center" labelWhenEmployee="My Work" to="/" navigationKey="dashboard" isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+                <NavigationItem end icon="dashboard" label="Command Center" labelWhenEmployee="My Work" to="/" navigationKey="dashboard" requiredAnyPermissions={[]} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
               ) : (
-                <NavigationItem end icon="dashboard" label="Command Center" to="/" navigationKey="dashboard" requiredAnyPermissions={['VACANCY_REQUEST_APPROVE', 'USERS_MANAGE', 'VACANCY_MANAGE', 'VACANCY_ASSIGN', 'VACANCY_REASSIGN', 'MASTER_DATA_VIEW']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+                <NavigationItem end icon="dashboard" label="Command Center" to="/" navigationKey="dashboard" requiredAnyPermissions={['VACANCY_REQUEST_APPROVE', 'USERS_MANAGE', 'VACANCY_MANAGE', 'MASTER_DATA_VIEW']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
               )}
               <NavigationItem icon="file-text" label="Requisitions" to="/vacancy-requests" navigationKey="vacancy-requests" requiredPermission="VACANCY_REQUEST_VIEW" isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
               {!isEmployeeWorkspace && (
@@ -408,7 +463,7 @@ export function AppShellInner() {
               </div>
             )}
             <div className="space-y-0.5">
-              <NavigationItem icon="mail" label="Email Templates" to="/email-templates" navigationKey="email-templates" requiredPermission="MASTER_DATA_MANAGE" isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+              <NavigationItem icon="mail" label="Email Templates" to="/email-templates" navigationKey="email-templates" isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
               <NavigationItem icon="settings" label="Settings" to="/settings" navigationKey="settings" requiredAnyPermissions={['USERS_VIEW', 'MASTER_DATA_VIEW', 'OVERRIDE_WORKFLOW', 'AUDIT_VIEW']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
               <NavigationItem icon="user-cog" label="Users & Roles" to="/users" navigationKey="users" requiredPermission="USERS_VIEW" isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
               <NavigationItem icon="pipeline" label="Reporting Tree" to="/reporting-tree" navigationKey="reporting-tree" requiredPermission="USERS_VIEW" isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />

@@ -516,6 +516,14 @@ export interface UpdatePermissionInput {
   description?: string;
 }
 
+export {
+  NAVIGATION_CATALOG,
+  PERMISSION_LABELS,
+  formatPermissionRequirement,
+  getNavigationCatalogItem,
+  getPermissionLabel,
+} from './access-control';
+
 export interface NavigationItemRecord {
   key: string;
   route: string;

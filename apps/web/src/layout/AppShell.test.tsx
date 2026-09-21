@@ -3,14 +3,19 @@ import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { NavigationItem } from './AppShell';
 
+const authState = vi.hoisted(() => ({
+  user: {
+    id: 'emp-1',
+    displayName: 'Employee User',
+    email: 'e@test.com',
+    roles: [{ id: 'r-recruiter', name: 'RECRUITER', code: 'RECRUITER' }],
+    permissions: ['VACANCY_VIEW', 'APPLICATION_VIEW'] as string[],
+  },
+}));
+
 vi.mock('../auth/AuthContext', () => ({
   useAuth: () => ({
-    user: {
-      id: 'emp-1',
-      displayName: 'Employee User',
-      email: 'e@test.com',
-      roles: [{ id: 'r-recruiter', name: 'RECRUITER', code: 'RECRUITER' }],
-    },
+    user: authState.user,
   }),
 }));
 
@@ -22,6 +27,7 @@ describe('NavigationItem Component', () => {
           icon="briefcase"
           label="Job Positions"
           to="/vacancies"
+          navigationKey="vacancies"
           isCollapsed={false}
           allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']}
         />
@@ -41,6 +47,7 @@ describe('NavigationItem Component', () => {
           icon="users"
           label="Applications"
           to="/applications"
+          navigationKey="applications"
           isCollapsed={true}
           allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']}
         />
@@ -60,6 +67,7 @@ describe('NavigationItem Component', () => {
           icon="offer"
           label="Offers"
           to="/offers"
+          navigationKey="offers"
           isCollapsed={true}
           allowedRoles={['ADMIN', 'MANAGER', 'EMPLOYEE']}
         />
@@ -67,5 +75,25 @@ describe('NavigationItem Component', () => {
     );
 
     expect(screen.getByRole('link', { name: 'Offers' })).toBeInTheDocument();
+  });
+
+  it('disables items the user cannot access and explains the required permission', () => {
+    render(
+      <MemoryRouter>
+        <NavigationItem
+          icon="upload"
+          label="CV Intake"
+          to="/cv-intake"
+          navigationKey="cv-intake"
+          isCollapsed={false}
+        />
+      </MemoryRouter>
+    );
+
+    expect(screen.queryByRole('link', { name: 'CV Intake' })).not.toBeInTheDocument();
+    const locked = screen.getByText('CV Intake').closest('[aria-disabled="true"]');
+    expect(locked).toBeTruthy();
+    expect(locked).toHaveAttribute('title', expect.stringContaining('CANDIDATE_CREATE'));
+    expect(screen.getByText('Locked')).toBeInTheDocument();
   });
 });
