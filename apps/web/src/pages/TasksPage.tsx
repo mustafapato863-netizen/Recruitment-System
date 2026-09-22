@@ -425,12 +425,12 @@ export function TasksPage() {
         <div>
           <div className="flex items-center gap-2.5 flex-wrap">
             <h1 className="rf-page-title">
-              My Work &mdash; Full Task Queue
+              My work
             </h1>
             <QuickGuideTrigger />
           </div>
           <p className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">
-            All your recruitment tasks in one place. Stay on top of every action that moves hiring forward.
+            The tasks that move hiring forward.
           </p>
         </div>
 
@@ -444,81 +444,6 @@ export function TasksPage() {
             <span>Assign Task</span>
           </button>
         )}
-      </div>
-
-      {/* ── 5 Metric Cards ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        {/* Card 1: All Tasks */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs space-y-2">
-          <div className="rf-metric-icon-box rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 flex items-center justify-center">
-            <Icon name="check-circle" size={18} />
-          </div>
-          <div>
-            <span className="text-xs font-semibold text-slate-400 block">All Tasks</span>
-            <span className="rf-metric-value block mt-0.5">
-              {metrics.all}
-            </span>
-            <span className="text-xs font-bold text-slate-500 block mt-1">Active queue</span>
-          </div>
-        </div>
-
-        {/* Card 2: Overdue */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs space-y-2">
-          <div className="rf-metric-icon-box rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 flex items-center justify-center">
-            <Icon name="alert-triangle" size={18} />
-          </div>
-          <div>
-            <span className="text-xs font-semibold text-slate-400 block">Overdue</span>
-            <span className="rf-metric-value block mt-0.5">
-              {metrics.overdue}
-            </span>
-            <span className="text-xs font-bold text-rose-600 block mt-1">
-              {metrics.overdue > 0 ? 'Requires attention' : 'Zero overdue'}
-            </span>
-          </div>
-        </div>
-
-        {/* Card 3: Due Today */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs space-y-2">
-          <div className="rf-metric-icon-box rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 flex items-center justify-center">
-            <Icon name="calendar" size={18} />
-          </div>
-          <div>
-            <span className="text-xs font-semibold text-slate-400 block">Due Today</span>
-            <span className="rf-metric-value block mt-0.5">
-              {metrics.dueToday}
-            </span>
-            <span className="text-xs font-bold text-amber-600 block mt-1">Scheduled today</span>
-          </div>
-        </div>
-
-        {/* Card 4: Upcoming */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs space-y-2">
-          <div className="rf-metric-icon-box rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 flex items-center justify-center">
-            <Icon name="clock" size={18} />
-          </div>
-          <div>
-            <span className="text-xs font-semibold text-slate-400 block">Upcoming</span>
-            <span className="rf-metric-value block mt-0.5">
-              {metrics.upcoming}
-            </span>
-            <span className="text-xs font-bold text-emerald-600 block mt-1">Within SLA</span>
-          </div>
-        </div>
-
-        {/* Card 5: Completed */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs space-y-2">
-          <div className="rf-metric-icon-box rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 flex items-center justify-center">
-            <Icon name="check" size={18} />
-          </div>
-          <div>
-            <span className="text-xs font-semibold text-slate-400 block">Completed</span>
-            <span className="rf-metric-value block mt-0.5">
-              {metrics.completed}
-            </span>
-            <span className="text-xs font-bold text-purple-600 block mt-1">Closed items</span>
-          </div>
-        </div>
       </div>
 
       {/* ── Filter Tabs & Search ── */}
