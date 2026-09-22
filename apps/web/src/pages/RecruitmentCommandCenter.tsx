@@ -58,6 +58,39 @@ interface InboxItem {
   id: string;
 }
 
+function getPositionNextAction(pos: CommandCenterPosition) {
+  if (pos.recruiter.name === 'Unassigned') {
+    return { label: 'Assign recruiter', hint: 'No owner yet', to: `/vacancies/${pos.id}` };
+  }
+  if (pos.needActionCount > 0) {
+    return {
+      label: pos.needActionCount === 1 ? 'Review 1 candidate' : `Review ${pos.needActionCount} candidates`,
+      hint: 'Waiting on a recruiter decision',
+      to: `/applications?vacancyId=${pos.id}`,
+    };
+  }
+  if (pos.applicationsCount === 0 && pos.status === 'Open') {
+    return { label: 'Add candidates', hint: 'No applicants yet', to: '/cv-intake' };
+  }
+  if (pos.isOverdue) {
+    return { label: 'Review overdue job', hint: 'SLA is at risk', to: `/vacancies/${pos.id}` };
+  }
+  return {
+    label: 'Open pipeline',
+    hint: `${pos.applicationsCount} candidate${pos.applicationsCount === 1 ? '' : 's'}`,
+    to: `/applications?vacancyId=${pos.id}`,
+  };
+}
+
+function positionUrgency(pos: CommandCenterPosition) {
+  if (pos.recruiter.name === 'Unassigned') return 0;
+  if (pos.needActionCount > 0) return 1;
+  if (pos.isOverdue) return 2;
+  if (pos.applicationsCount === 0) return 3;
+  return 4;
+}
+
+
 export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalytics?: () => void }) {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -69,6 +102,7 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
   const [selectedDept, setSelectedDept] = useState('ALL');
   const [onlyMyPositions, setOnlyMyPositions] = useState(false);
   const [viewMode, setViewMode] = useState<'cards' | 'list'>('cards');
+  const [onlyNeedAction, setOnlyNeedAction] = useState(false);
 
   // Pending inbox counters
   const [pendingApprovalsCount, setPendingApprovalsCount] = useState(0);
@@ -130,7 +164,7 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
             vacancyCode: v.vacancyCode || `VAC-${v.id.slice(0, 6).toUpperCase()}`,
             title: v.title || v.position?.title || v.positionTitle || 'Requisition',
             department: v.department || v.position?.department || v.branch?.name || 'General',
-            location: v.location || v.branch?.name || 'Riyadh Hospital',
+            location: v.location || v.branch?.name || '—',
             workType: v.workType || 'Full-time',
             status: (v.status && statusMap[v.status]) ? statusMap[v.status] : 'Pending Activation',
             approvedHeadcount: v.approvedHeadcount ?? 1,
@@ -177,6 +211,7 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
   const filteredPositions = useMemo(() => {
     return positions.filter((p) => {
       if (statusFilter !== 'ALL' && p.status !== statusFilter) return false;
+      if (onlyNeedAction && !(p.needActionCount > 0 || p.recruiter.name === 'Unassigned' || p.isOverdue)) return false;
       if (selectedDept !== 'ALL' && p.department !== selectedDept) return false;
       if (onlyMyPositions && p.primaryRecruiterId && user?.id && p.primaryRecruiterId !== user.id) return false;
 
@@ -190,8 +225,13 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
       }
 
       return true;
-    });
-  }, [positions, statusFilter, selectedDept, onlyMyPositions, search, user?.id]);
+    }).sort((a, b) => positionUrgency(a) - positionUrgency(b) || a.title.localeCompare(b.title));
+  }, [positions, statusFilter, selectedDept, onlyMyPositions, onlyNeedAction, search, user?.id]);
+
+  const needActionJobs = useMemo(
+    () => positions.filter((p) => p.status === 'Open' && (p.needActionCount > 0 || p.recruiter.name === 'Unassigned' || p.isOverdue)).length,
+    [positions],
+  );
 
   // Top KPIs
   const totalOpen = useMemo(() => positions.filter((p) => p.status === 'Open').length, [positions]);
@@ -248,15 +288,19 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
               aria-label="Create new requisition"
           >
             <Icon name="plus" size={14} />
-            <span>New Requisition</span>
+            <span>New job</span>
           </button>
         </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <button type="button" onClick={() => setStatusFilter('Open')} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
+        <button type="button" onClick={() => { setOnlyNeedAction(false); setStatusFilter('Open'); }} className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold ${!onlyNeedAction && statusFilter === 'Open' ? 'border-blue-300 bg-blue-50 text-blue-800 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300' : 'border-slate-200 bg-white text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300'}`}>
           Open
           <span className="text-slate-900 dark:text-white">{totalOpen}</span>
+        </button>
+        <button type="button" onClick={() => { setOnlyNeedAction(true); setStatusFilter('Open'); }} className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold ${onlyNeedAction ? 'border-blue-300 bg-blue-50 text-blue-800 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300' : 'border-slate-200 bg-white text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300'}`}>
+          Need action
+          <span className="text-slate-900 dark:text-white">{needActionJobs}</span>
         </button>
         <button type="button" onClick={() => navigate('/applications')} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
           Candidates
@@ -290,7 +334,7 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
                   : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200/60'
               }`}
             >
-              {st === 'ALL' ? 'All Requisitions' : st}
+              {st === 'ALL' ? 'All' : st}
             </button>
           ))}
 
@@ -320,7 +364,7 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
                 : 'bg-transparent text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50'
             }`}
           >
-            My Assigned Positions
+            Mine
           </button>
         </div>
 
@@ -372,18 +416,19 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
 
       {/* ── Main Content: Cards Grid or Table ── */}
       {isLoading ? (
-        <PageState kind="loading" title="Loading recruitment command center..." description="Fetching live requisitions and SLAs." />
+        <PageState kind="loading" title="Loading jobs" description="Fetching open requisitions." />
       ) : filteredPositions.length === 0 ? (
         <PageState
           kind="empty"
-          title="No matching requisitions"
-          description="Try clearing your filters or search terms."
-          actionLabel="Reset Filters"
+          title="No jobs"
+          description="Try another filter or search."
+          actionLabel="Reset"
           onAction={() => {
             setSearch('');
             setStatusFilter('ALL');
             setSelectedDept('ALL');
             setOnlyMyPositions(false);
+            setOnlyNeedAction(false);
           }}
         />
       ) : viewMode === 'cards' ? (
@@ -405,11 +450,6 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
                     </span>
 
                     <div className="flex items-center gap-1.5">
-                      {pos.needActionCount > 0 && (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 border border-rose-200 dark:border-rose-800 ">
-                          {pos.needActionCount} Action Needed
-                        </span>
-                      )}
 
                       <span
                         className={`px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize ${
@@ -462,26 +502,17 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
                   </div>
                 </div>
 
-                {/* Card Footer: Recruiter & 1-Click Pipeline Button */}
                 <div className="pt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-3">
-                  {/* Recruiter Avatar */}
-                  <div className="flex items-center gap-2 shrink-0">
-                    <div className="w-7 h-7 rounded-full bg-slate-700 text-white text-[10px] font-semibold flex items-center justify-center shadow-2xs">
-                      {pos.recruiter.initials}
-                    </div>
-                    <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 max-w-[90px] truncate" title={pos.recruiter.name}>
-                      {pos.recruiter.name}
-                    </span>
+                  <div className="min-w-0">
+                    <p className="truncate text-[11px] text-slate-500">{pos.recruiter.name} · {pos.applicationsCount} candidate{pos.applicationsCount === 1 ? '' : 's'}</p>
+                    <p className="truncate text-[11px] text-slate-500">{getPositionNextAction(pos).hint}</p>
                   </div>
-
-                  {/* 1-Click Pipeline Jump Button */}
                   <button
                     type="button"
-                    onClick={() => navigate(`/applications?vacancyId=${pos.id}`)}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 rounded-xl text-xs font-semibold transition cursor-pointer border border-blue-200 dark:border-blue-900"
+                    onClick={() => navigate(getPositionNextAction(pos).to)}
+                    className="inline-flex min-h-8 shrink-0 items-center rounded-lg bg-blue-600 px-2.5 text-[11px] font-semibold text-white hover:bg-blue-700"
                   >
-                    <span>{pos.applicationsCount} Applications</span>
-                    <Icon name="chevron-right" size={13} />
+                    {getPositionNextAction(pos).label}
                   </button>
                 </div>
               </div>
@@ -502,7 +533,7 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
                   <th className="py-3 px-4 text-left">Recruiter</th>
                   <th className="py-3 px-4 text-left">Headcount</th>
                   <th className="py-3 px-4 text-left">Applications</th>
-                  <th className="py-3 pr-4 text-right">Actions</th>
+                  <th className="py-3 pr-4 text-right">Next</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -534,11 +565,10 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
                     <td className="py-3.5 pr-4 text-right" onClick={(e) => e.stopPropagation()}>
                       <button
                         type="button"
-                        onClick={() => navigate(`/applications?vacancyId=${pos.id}`)}
-                        className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 rounded-lg text-xs font-bold hover:bg-blue-600 hover:text-white transition"
+                        onClick={() => navigate(getPositionNextAction(pos).to)}
+                        className="inline-flex min-h-7 items-center rounded-lg bg-blue-600 px-2.5 text-[11px] font-semibold text-white hover:bg-blue-700"
                       >
-                        <span>Pipeline</span>
-                        <Icon name="chevron-right" size={11} />
+                        {getPositionNextAction(pos).label}
                       </button>
                     </td>
                   </tr>
