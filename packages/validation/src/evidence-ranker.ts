@@ -120,7 +120,7 @@ export function extractSnippets(
 
   // Split raw text into bullets/sentences
   if (rawText) {
-    const bullets = rawText.split(/(?:\r?\n|[•▪▸◦●○■□►▻–—\-])+/);
+    const bullets = rawText.split(/(?:\r?\n|[•▪▸◦●○■□►▻–—-])+/);
     for (const bullet of bullets) {
       addSnippet(bullet, 'raw');
     }
