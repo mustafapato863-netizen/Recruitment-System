@@ -145,7 +145,6 @@ export class WhatsAppTemplatesService {
     return templates.map((row) => this.toItem(row));
   }
 
-  /** Recruiter send picker — filters by interview type (Any always included). */
   async listForSend(
     organizationId: string,
     interviewType?: string,
@@ -199,11 +198,6 @@ export class WhatsAppTemplatesService {
       where: { id, organizationId, status: { not: 'Archived' } },
     });
     if (!template) throw new NotFoundException('WhatsApp template not found');
-    if (template.isDefault) {
-      throw new ConflictException(
-        'Default templates cannot be edited. Duplicate this template to customise it.',
-      );
-    }
 
     const updated = await this.prisma.whatsAppTemplate.update({
       where: { id },
@@ -245,12 +239,10 @@ export class WhatsAppTemplatesService {
     return this.toItem(created);
   }
 
-  /** Substitute {{placeholders}}. Pure — no I/O. */
   static render(bodyTemplate: string, vars: Record<string, string>): string {
     return bodyTemplate.replace(/\{\{(\w+)\}\}/g, (_, key: string) => vars[key] ?? `{{${key}}}`);
   }
 
-  /** Digits-only E.164-ish phone for wa.me (no +). */
   static normalizePhone(phone: string): string {
     return phone.replace(/[^\d]/g, '');
   }
