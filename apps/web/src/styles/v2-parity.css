@@ -620,11 +620,11 @@
 .brand {
   position: relative;
   display: flex;
-  min-height: 64px;
-  height: 64px !important;
+  min-height: var(--rf-brand-height, 54px);
+  height: var(--rf-brand-height, 54px) !important;
   align-items: center;
-  gap: 12px;
-  padding: 16px 14px 16px 16px !important;
+  gap: 10px;
+  padding: 8px 12px 8px 14px !important;
   border-bottom: 1px solid var(--color-border-subtle) !important;
 }
 
@@ -654,22 +654,22 @@
 
 .brand .mark {
   display: grid;
-  width: 40px !important;
-  height: 40px !important;
-  flex: 0 0 40px;
+  width: var(--rf-brand-mark, 28px) !important;
+  height: var(--rf-brand-mark, 28px) !important;
+  flex: 0 0 var(--rf-brand-mark, 28px);
   place-items: center;
-  border-radius: 12px;
+  border-radius: 9px;
   background: var(--color-surface-elevated) !important;
   border: 1px solid color-mix(in srgb, var(--color-action) 22%, var(--color-border-subtle));
   color: var(--color-action);
-  font-size: 18px;
-  font-weight: 850;
+  font-size: 14px;
+  font-weight: 800;
   box-shadow: 0 6px 16px -9px rgba(0, 105, 180, 0.65);
 }
 
 .brand .mark svg {
   display: block;
-  width: 34px;
+  width: calc(var(--rf-brand-mark, 28px) - 2px);
   height: auto;
 }
 
@@ -681,10 +681,10 @@
   display: block;
   overflow: hidden;
   color: var(--color-ink-950);
-  font-size: 15px;
-  font-weight: 800;
+  font-size: var(--rf-type-brand, 13px);
+  font-weight: var(--rf-type-brand-weight, 750);
   line-height: 1.15;
-  letter-spacing: -0.025em;
+  letter-spacing: -0.02em;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -702,11 +702,12 @@
 
 .sidebar .sidebar-collapse {
   position: absolute;
-  top: 21px;
-  right: 14px;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
   display: grid;
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   place-items: center;
   padding: 0;
   border: 1px solid var(--color-border) !important;
@@ -721,13 +722,13 @@
   border-color: color-mix(in srgb, var(--color-action) 35%, var(--color-border)) !important;
   background: var(--color-action-soft) !important;
   color: var(--color-action);
-  transform: translateX(-1px);
+  transform: translateY(-50%) translateX(-1px);
 }
 
 .sidebar .sidebar-collapse:active {
   background: var(--color-action) !important;
   color: var(--color-on-action);
-  transform: translateY(1px);
+  transform: translateY(calc(-50% + 1px));
 }
 
 .sidebar .sidebar-collapse:focus-visible,
@@ -859,10 +860,10 @@
 
 .sidebar > .user {
   display: flex;
-  min-height: 74px;
+  min-height: 56px;
   align-items: center;
   gap: 8px;
-  padding: 11px 12px !important;
+  padding: 8px 10px !important;
   border-top: 1px solid var(--color-border-subtle);
   background: var(--color-surface);
 }
@@ -888,15 +889,15 @@
 
 .sidebar > .user .avatar {
   display: grid;
-  width: 36px;
-  height: 36px;
-  flex: 0 0 36px;
+  width: var(--rf-user-avatar, 30px);
+  height: var(--rf-user-avatar, 30px);
+  flex: 0 0 var(--rf-user-avatar, 30px);
   place-items: center;
   border-radius: 50%;
   background: linear-gradient(135deg, #fb923c, #ea580c);
   color: #ffffff;
-  font-size: 11px;
-  font-weight: 850;
+  font-size: 10px;
+  font-weight: var(--rf-type-user-name-weight, 650);
   letter-spacing: 0.02em;
   box-shadow: 0 6px 14px -8px rgba(194, 65, 12, 0.7);
 }
@@ -918,14 +919,14 @@
 
 .account-copy b {
   color: var(--color-ink-950);
-  font-size: 11px;
-  font-weight: 800;
+  font-size: var(--rf-type-user-name, 12px);
+  font-weight: var(--rf-type-user-name-weight, 650);
   line-height: 1.2;
 }
 
 .account-copy small {
   color: var(--color-ink-500);
-  font-size: 9px;
+  font-size: var(--rf-type-user-role, 10px);
   font-weight: 600;
   line-height: 1.2;
 }
@@ -969,7 +970,8 @@
 
 .is-sidebar-collapsed .sidebar .sidebar-collapse {
   position: absolute;
-  top: 18px;
+  top: 50%;
+  transform: translateY(-50%);
   right: -13px;
   z-index: 60;
   width: 26px;

@@ -36,26 +36,26 @@
 
 /* Brand Header */
 .brand {
-  height: 64px;
+  height: var(--rf-brand-height, 54px);
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 0 16px;
+  gap: 10px;
+  padding: 0 14px;
   border-bottom: 1px solid var(--color-border-subtle);
   position: relative;
 }
 
 .brand .mark {
-  width: 34px;
-  height: 34px;
-  border-radius: 9px;
+  width: var(--rf-brand-mark, 28px);
+  height: var(--rf-brand-mark, 28px);
+  border-radius: 8px;
   background: var(--color-action);
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--color-on-action);
   font-family: var(--font-heading);
-  font-size: 18px;
+  font-size: 14px;
   font-weight: 800;
   flex-shrink: 0;
   box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25);
@@ -68,8 +68,8 @@
 }
 
 .brand-copy b {
-  font-size: 15px;
-  font-weight: 800;
+  font-size: var(--rf-type-brand, 13px);
+  font-weight: var(--rf-type-brand-weight, 750);
   color: var(--color-ink-950);
   line-height: 1.15;
   letter-spacing: -0.01em;
@@ -88,7 +88,8 @@
 .top-toggle {
   position: absolute;
   right: 12px;
-  top: 18px;
+  top: 50%;
+  transform: translateY(-50%);
   width: 26px;
   height: 26px;
   border-radius: 6px;
@@ -593,13 +594,13 @@
 }
 
 .header .avatar {
-  width: 34px;
-  height: 34px;
+  width: var(--rf-user-avatar, 30px);
+  height: var(--rf-user-avatar, 30px);
   border-radius: 8px;
   background: linear-gradient(135deg, #fb923c, #f97316);
   color: #ffffff;
-  font-weight: 750;
-  font-size: 12px;
+  font-weight: var(--rf-type-user-name-weight, 650);
+  font-size: 11px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -874,8 +875,8 @@
   }
 
   .header .avatar {
-    width: 32px;
-    height: 32px;
+    width: var(--rf-user-avatar, 30px);
+    height: var(--rf-user-avatar, 30px);
   }
 
   .notification-popover {

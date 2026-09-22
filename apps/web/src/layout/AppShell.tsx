@@ -366,7 +366,7 @@ export function AppShellInner() {
         <div className="brand">
           <Link className="brand-home" to="/" aria-label="Saudi German Health — RecruitFlow" onClick={closeMobileDrawer}>
             <div className="mark brand-mark" aria-hidden="true">
-              <SghHeartSvg size={34} glow />
+              <SghHeartSvg size={28} glow />
             </div>
             {!isSidebarCollapsed && (
               <div className="brand-copy min-w-0 overflow-hidden">
