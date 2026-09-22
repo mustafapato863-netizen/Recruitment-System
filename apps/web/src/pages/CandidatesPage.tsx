@@ -602,9 +602,6 @@ export function CandidatesPage() {
   const totalDisplayCount = metrics?.totalCandidates ?? totalCount;
   const activeInPipelineCount = metrics?.activeInPipeline ?? 0;
   const talentPoolCount = metrics?.talentPool ?? 0;
-  const organicSourcePct = metrics?.directReferralPercentage === null || metrics === null
-    ? '—'
-    : `${metrics.directReferralPercentage}%`;
 
   return (
     <div className="flex w-full flex-col p-3 sm:p-4 lg:p-5 max-w-[1720px] mx-auto space-y-5">
