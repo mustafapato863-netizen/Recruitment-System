@@ -8,12 +8,10 @@ import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { PageFrame } from '../components/ui/PageFrame';
 import { PageState } from '../components/ui/PageState';
-import { MetricCard } from '../components/ui/MetricCard';
 import { DataToolbar } from '../components/ui/DataToolbar';
 import { Input } from '../components/ui/Input';
 import { Icon, type IconName } from '../components/Icon';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { Tabs } from '../components/ui/Tabs';
 import { useFeedback } from '../hooks/useFeedback';
 import { usePermissions } from '../hooks/usePermissions';
 import { getErrorMessage } from '../api/errors';
@@ -286,7 +284,7 @@ export function ApprovalInboxPage() {
       isOpen: true,
       title: `Executive Final Hiring Signoff — ${hc.candidateName}`,
       description: `Grant final hiring authorization for ${hc.candidateName} for the position ${hc.positionTitle} at ${hc.branchName}. This authorizes candidate onboarding and locks the hiring case.`,
-      confirmLabel: 'Grant Final Signoff',
+      confirmLabel: 'Grant Approve',
       tone: 'success',
       icon: 'check-circle',
       withComment: true,
@@ -318,9 +316,8 @@ export function ApprovalInboxPage() {
   return (
     <PageFrame
       className="approval-inbox-page rf-approval-inbox-page"
-      eyebrow="Workflow Operations"
-      title="Universal Approval Inbox"
-      description="Review the pending approval queues authorized for your active profile."
+      title="Approvals"
+      description="Items waiting on your decision."
       actions={
         <Button variant="ghost" size="sm" onClick={() => void loadAll()}>
           <Icon name="refresh-cw" size={13} className={isLoading ? 'animate-spin' : ''} />
@@ -349,105 +346,33 @@ export function ApprovalInboxPage() {
         </Alert>
       )}
 
-      <section className="rf-approval-overview" aria-labelledby="rf-approval-overview-title">
-        <div className="rf-approval-overview__header">
-          <div>
-            <div className="rf-approval-overview__eyebrow">Decision control</div>
-            <h2 id="rf-approval-overview-title">What needs your authority</h2>
-            <p>Prioritize the work waiting on your approval, then open the full record only when context is needed.</p>
-          </div>
-          <div className={['rf-approval-overview__signal', totalPending === 0 ? 'is-clear' : ''].filter(Boolean).join(' ')}>
-            <span className="rf-approval-overview__signal-dot" aria-hidden="true" />
-            <span>{totalPending === 0 ? 'Queue is clear' : `${totalPending} pending ${totalPending === 1 ? 'decision' : 'decisions'}`}</span>
-          </div>
-        </div>
-
-        <div className="rf-approval-metrics">
-        <MetricCard
-          label="Total Pending Action"
-          value={totalPending}
-          detail="Queued authorizations"
-          tone="action"
-          icon={<Icon name="inbox" size={15} />}
-        />
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={() => handleTabChange('vacancy-requests')}
-          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleTabChange('vacancy-requests'); }}
-          className={`cursor-pointer transition hover:scale-[1.01] rounded-2xl ${activeTab === 'vacancy-requests' ? 'ring-2 ring-blue-500' : ''}`}
-          title="Filter to Vacancy Requests"
-        >
-          <MetricCard
-            label="Vacancy Requests"
-            value={requests.length}
-            detail="Requisition signoffs"
-            tone="info"
-            icon={<Icon name="vacancy" size={15} />}
-          />
-        </div>
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={() => handleTabChange('offers')}
-          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleTabChange('offers'); }}
-          className={`cursor-pointer transition hover:scale-[1.01] rounded-2xl ${activeTab === 'offers' ? 'ring-2 ring-emerald-500' : ''}`}
-          title="Filter to Offer Signoffs"
-        >
-          <MetricCard
-            label="Offer Signoffs"
-            value={offerApprovals.length}
-            detail="Compensation packages"
-            tone="success"
-            icon={<Icon name="offer" size={15} />}
-          />
-        </div>
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={() => handleTabChange('final-hires')}
-          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleTabChange('final-hires'); }}
-          className={`cursor-pointer transition hover:scale-[1.01] rounded-2xl ${activeTab === 'final-hires' ? 'ring-2 ring-amber-500' : ''}`}
-          title="Filter to Executive Clearances"
-        >
-          <MetricCard
-            label="Executive Clearances"
-            value={finalHires.length}
-            detail="Final hiring gates"
-            tone="warning"
-            icon={<Icon name="hire" size={15} />}
-          />
-        </div>
-        </div>
-      </section>
-
-      <section className="rf-approval-workspace" aria-labelledby="rf-approval-workspace-title">
-        <header className="rf-approval-workspace__header">
-          <div>
-            <div className="rf-approval-workspace__eyebrow">Your decision queue</div>
-            <h2 id="rf-approval-workspace-title">Pending approvals</h2>
-            <p>Review requests in the order they require your attention.</p>
-          </div>
-          <span className="rf-approval-workspace__count">{totalPending} pending</span>
-        </header>
-
-      <Tabs
-        className="rf-approval-tabs"
-        ariaLabel="Inbox Tabs"
-        activeKey={activeTab}
-        onChange={(key) => handleTabChange(key as TabType)}
-        items={[
-          ...(canApproveVacancies ? [{ key: 'vacancy-requests', label: `Vacancy Requests (${requests.length})` }] : []),
-          ...(canApproveOffers ? [{ key: 'offers', label: `Offer Approvals (${offerApprovals.length})` }] : []),
-          ...(canApproveFinalHires ? [{ key: 'final-hires', label: `Final Hires (${finalHires.length})` }] : []),
-        ]}
-      />
+      <div className="flex flex-wrap items-center gap-2">
+        {canApproveVacancies && (
+          <button type="button" onClick={() => handleTabChange('vacancy-requests')} className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold ${activeTab === 'vacancy-requests' ? 'border-blue-300 bg-blue-50 text-blue-800 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300' : 'border-slate-200 bg-white text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300'}`}>
+            Vacancies
+            <span className="text-slate-900 dark:text-white">{requests.length}</span>
+          </button>
+        )}
+        {canApproveOffers && (
+          <button type="button" onClick={() => handleTabChange('offers')} className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold ${activeTab === 'offers' ? 'border-blue-300 bg-blue-50 text-blue-800 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300' : 'border-slate-200 bg-white text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300'}`}>
+            Offers
+            <span className="text-slate-900 dark:text-white">{offerApprovals.length}</span>
+          </button>
+        )}
+        {canApproveFinalHires && (
+          <button type="button" onClick={() => handleTabChange('final-hires')} className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold ${activeTab === 'final-hires' ? 'border-blue-300 bg-blue-50 text-blue-800 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300' : 'border-slate-200 bg-white text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300'}`}>
+            Hires
+            <span className="text-slate-900 dark:text-white">{finalHires.length}</span>
+          </button>
+        )}
+        <span className="text-xs text-slate-500">{totalPending} pending</span>
+      </div>
 
       <DataToolbar
         className="rf-approval-toolbar"
         search={
           <Input
-            placeholder="Search this queue by code, role, candidate, or branch..."
+            placeholder="Search code, role, or candidate"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full"
@@ -474,7 +399,7 @@ export function ApprovalInboxPage() {
                 return (
                   <div
                     key={request.id}
-                    className="rf-approval-card rf-approval-card--vacancy relative overflow-hidden rounded-2xl border border-rf-border-subtle bg-rf-surface p-5 shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:border-rf-action/40 hover:shadow-md group"
+                    className="rf-approval-card rf-approval-card--vacancy relative overflow-hidden rounded-2xl border border-rf-border-subtle bg-rf-surface p-5 shadow-xs transition-all duration-200 hover:border-rf-action/40 hover:shadow-md group"
                   >
                     {/* Left Accent Gradient Strip */}
                     <div className="rf-approval-card__accent absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-rf-action to-blue-600 rounded-l-2xl" />
@@ -502,7 +427,7 @@ export function ApprovalInboxPage() {
 
                         {/* Step Pill */}
                         <div className="rf-approval-card__step inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rf-surface-subtle border border-rf-border-subtle text-[11.5px] font-bold text-rf-ink shadow-2xs">
-                          <span className="rf-approval-card__step-dot h-2 w-2 rounded-full bg-rf-action animate-pulse" />
+                          <span className="rf-approval-card__step-dot h-2 w-2 rounded-full bg-rf-action " />
                           <span>Step {approval?.step || 1} · {formatApprovalRole(approval?.roleCode)}</span>
                         </div>
                       </div>
@@ -538,7 +463,7 @@ export function ApprovalInboxPage() {
                           <Button variant="secondary" size="sm" asChild>
                             <Link to={`/vacancy-requests/${request.id}`}>
                               <Icon name="eye" size={13} />
-                              Review Details
+                              Review
                             </Link>
                           </Button>
                           <Button
@@ -550,7 +475,7 @@ export function ApprovalInboxPage() {
                             onClick={() => triggerApproveVacancy(request)}
                           >
                             <Icon name="check-circle" size={13} />
-                            Approve Requisition
+                            Approve
                           </Button>
                         </div>
                       </div>
@@ -579,7 +504,7 @@ export function ApprovalInboxPage() {
               {filteredOffers.map((oa, index) => (
                 <div
                   key={oa.id ? `${oa.id}-${oa.step ?? index}` : index}
-                  className="rf-approval-card rf-approval-card--offer relative overflow-hidden rounded-2xl border border-rf-border-subtle bg-rf-surface p-5 shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:border-emerald-500/40 hover:shadow-md group"
+                  className="rf-approval-card rf-approval-card--offer relative overflow-hidden rounded-2xl border border-rf-border-subtle bg-rf-surface p-5 shadow-xs transition-all duration-200 hover:border-emerald-500/40 hover:shadow-md group"
                 >
                   {/* Left Accent Gradient Strip */}
                   <div className="rf-approval-card__accent absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-emerald-500 to-teal-600 rounded-l-2xl" />
@@ -602,14 +527,14 @@ export function ApprovalInboxPage() {
                             </Badge>
                           </div>
                           <h3 className="text-sm font-bold text-rf-ink m-0 mt-1">
-                            {oa.candidateName ? `Offer Package for ${oa.candidateName}` : 'Compensation Signoff'}
+                            {oa.candidateName || 'Offer'}
                           </h3>
                         </div>
                       </div>
 
                       {/* Step Pill */}
                       <div className="rf-approval-card__step inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rf-surface-subtle border border-rf-border-subtle text-[11.5px] font-bold text-rf-ink shadow-2xs">
-                        <span className="rf-approval-card__step-dot h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                        <span className="rf-approval-card__step-dot h-2 w-2 rounded-full bg-emerald-500 " />
                         <span>Step {oa.step} · {formatApprovalRole(oa.roleCode, 'Signoff')}</span>
                       </div>
                     </div>
@@ -642,7 +567,7 @@ export function ApprovalInboxPage() {
                           <Button variant="secondary" size="sm" asChild>
                             <Link to={`/offers/${oa.offerId}`}>
                               <Icon name="eye" size={13} />
-                              Review Offer
+                              Review
                             </Link>
                           </Button>
                         )}
@@ -664,7 +589,7 @@ export function ApprovalInboxPage() {
                           onClick={() => triggerDecideOffer(oa, 'Approved')}
                         >
                           <Icon name="check-circle" size={13} />
-                          Approve Package
+                          Approve
                         </Button>
                       </div>
                     </div>
@@ -692,7 +617,7 @@ export function ApprovalInboxPage() {
               {filteredHires.map((hc, index) => (
                 <div
                   key={hc.id ? `${hc.id}-${index}` : index}
-                  className="rf-approval-card rf-approval-card--hire relative overflow-hidden rounded-2xl border border-rf-border-subtle bg-rf-surface p-5 shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:border-amber-500/40 hover:shadow-md group"
+                  className="rf-approval-card rf-approval-card--hire relative overflow-hidden rounded-2xl border border-rf-border-subtle bg-rf-surface p-5 shadow-xs transition-all duration-200 hover:border-amber-500/40 hover:shadow-md group"
                 >
                   {/* Left Accent Gradient Strip */}
                   <div className="rf-approval-card__accent absolute left-0 top-0 bottom-0 w-1.5 bg-gradient-to-b from-amber-500 to-yellow-600 rounded-l-2xl" />
@@ -708,7 +633,7 @@ export function ApprovalInboxPage() {
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="font-bold text-sm text-rf-ink">{hc.candidateName}</span>
                             <StatusBadge status={hc.status} />
-                            <Badge variant="success">Compliance Verified</Badge>
+                            
                           </div>
                           <h3 className="text-xs font-semibold text-rf-ink-muted m-0 mt-0.5">
                             {hc.positionTitle} · {hc.branchName}
@@ -718,8 +643,8 @@ export function ApprovalInboxPage() {
 
                       {/* Step Pill */}
                       <div className="rf-approval-card__step inline-flex items-center gap-2 px-3 py-1 rounded-full bg-rf-surface-subtle border border-rf-border-subtle text-[11.5px] font-bold text-rf-ink shadow-2xs">
-                        <span className="rf-approval-card__step-dot h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
-                        <span>Executive Hiring Gate</span>
+                        <span className="rf-approval-card__step-dot h-2 w-2 rounded-full bg-amber-500 " />
+                        <span>Final hire</span>
                       </div>
                     </div>
 
@@ -750,7 +675,7 @@ export function ApprovalInboxPage() {
                         <Button variant="secondary" size="sm" asChild>
                           <Link to={`/hires/${hc.id}`}>
                             <Icon name="eye" size={13} />
-                            View Full Case
+                            Review
                           </Link>
                         </Button>
                         <Button
@@ -762,7 +687,7 @@ export function ApprovalInboxPage() {
                           onClick={() => triggerFinalApproval(hc)}
                         >
                           <Icon name="check-circle" size={13} />
-                          Final Signoff
+                          Approve
                         </Button>
                       </div>
                     </div>
