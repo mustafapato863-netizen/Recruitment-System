@@ -44,7 +44,7 @@ import { useSetBreadcrumbTitle } from '../context/BreadcrumbContext';
 import { useAuth } from '../auth/AuthContext';
 import './PageEnhancementsV2.css';
 
-type TabKey = 'overview' | 'applications' | 'interviews' | 'offers' | 'timeline';
+type TabKey = 'overview' | 'applications' | 'interviews' | 'offers';
 
 export function CandidateDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -64,7 +64,7 @@ export function CandidateDetailPage() {
     ? [candidate.firstName, candidate.lastName].filter(Boolean).join(' ').trim() || 'Candidate'
     : 'Candidate';
 
-  useSetBreadcrumbTitle(candidateDisplayName !== 'Candidate' ? `${candidateDisplayName} (360° Profile)` : 'Candidate 360° Profile');
+  useSetBreadcrumbTitle(candidateDisplayName);
 
   // Sub-resource states per tab
   const [applications, setApplications] = useState<Application[]>([]);
@@ -299,8 +299,8 @@ export function CandidateDetailPage() {
 
   if (candidateLoading) {
     return (
-      <PageFrame eyebrow="Talent Operations" title="Candidate Profile" description="Candidate identity directory.">
-        <PageState kind="loading" title="Loading candidate" description="Fetching candidate profile and records." />
+      <PageFrame title="Candidate">
+        <PageState kind="loading" title="Loading candidate" />
       </PageFrame>
     );
   }
@@ -312,7 +312,7 @@ export function CandidateDetailPage() {
 
   if (candidateError || !candidate) {
     return (
-      <PageFrame eyebrow="Talent Operations" title="Candidate Profile" description="Candidate identity directory.">
+      <PageFrame title="Candidate">
         {isForbidden ? (
           <PageState
             kind="forbidden"
@@ -351,7 +351,6 @@ export function CandidateDetailPage() {
     { key: 'applications', label: 'Applications', count: applications.length, controls: 'tabpanel-applications' },
     { key: 'interviews', label: 'Interviews', count: interviews.length, controls: 'tabpanel-interviews' },
     { key: 'offers', label: 'Offers', count: offers.length, controls: 'tabpanel-offers' },
-    { key: 'timeline', label: 'Timeline', controls: 'tabpanel-timeline' },
   ];
 
   // ─── Overview Details (P0.2: Null fields hidden, not fallback strings) ───
@@ -452,23 +451,18 @@ export function CandidateDetailPage() {
 
   return (
     <PageFrame
-      eyebrow={`Candidate 360° Profile • ${candidate.candidateCode || ''}`}
       title={fullName}
       description={
-        candidate.currentTitle
-          ? `${candidate.currentTitle}${candidate.currentCompany ? ` at ${candidate.currentCompany}` : ''}`
-          : undefined
+        [candidate.candidateCode, candidate.currentTitle, candidate.currentCompany]
+          .filter(Boolean)
+          .join(' · ') || undefined
       }
       actions={
         <>
-          <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-black bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-800">
-            <Icon name="user" size={12} />
-            <span>Candidate 360°</span>
-          </span>
           <StatusBadge status={candidate.status} />
           <Button variant="primary" size="sm" onClick={() => setIsApplyModalOpen(true)}>
             <Icon name="plus" size={13} />
-            Assign to Vacancy
+            Assign to job
           </Button>
           <Button variant="secondary" size="sm" asChild>
             <Link to={`/candidates/${candidate.id}/documents`}>
@@ -513,11 +507,23 @@ export function CandidateDetailPage() {
         onAddTag={() => setIsTagModalOpen(true)}
       />
 
+      {activeApplication ? (
+        <p className="text-xs text-slate-600 dark:text-slate-300">
+          Next:{' '}
+          <Link className="font-semibold text-blue-700 hover:underline dark:text-blue-300" to={`/applications/${activeApplication.id}`}>
+            Review application
+          </Link>
+          {activeApplication.stage ? ` · ${activeApplication.stage}` : ''}
+        </p>
+      ) : (
+        <p className="text-xs text-slate-600 dark:text-slate-300">Next: assign this person to a job.</p>
+      )}
+
       {/* Tabs Navigation */}
       <CandidateActivityPanel key={candidate.id} candidateId={candidate.id} />
 
       <Tabs
-        ariaLabel="Candidate 360 view sections"
+        ariaLabel="Candidate sections"
         items={tabItems}
         activeKey={activeTab}
         onChange={(key) => setActiveTab(key as TabKey)}
@@ -549,20 +555,9 @@ export function CandidateDetailPage() {
             />
           ) : (
             <div className="flex flex-col gap-6">
-              {candidate.currentTitle && (
-                <div className="rf-panel rounded-2xl border border-rf-border-subtle bg-rf-surface p-5 shadow-xs">
-                  <div className="pb-3 border-b border-rf-border-subtle mb-3">
-                    <h3 className="text-xs font-bold text-rf-ink m-0">Professional Summary</h3>
-                  </div>
-                  <p className="text-xs text-rf-ink leading-relaxed m-0">
-                    {candidate.currentTitle}
-                    {candidate.currentCompany ? ` at ${candidate.currentCompany}` : ''}
-                  </p>
-                </div>
-              )}
               <DetailSummary
-                title="Contact & Profile Information"
-                description="Sensitive contact details, acquisition channel, and data consent status."
+                title="Contact"
+                description="Source and consent are included when they are on file."
                 items={contactItems}
               />
             </div>
@@ -589,22 +584,19 @@ export function CandidateDetailPage() {
             <PageState
               kind="empty"
               title="No applications"
-              description="This candidate has not applied to any vacancies yet."
-              actionLabel="Assign to Vacancy"
+              description="This person is not on a job yet."
+              actionLabel="Assign to job"
               onAction={() => setIsApplyModalOpen(true)}
             />
           ) : (
             <div className="rf-table-shell overflow-hidden rounded-2xl border border-rf-border-subtle bg-white shadow-xs">
               <div className="p-4 border-b border-rf-border-subtle bg-rf-surface-subtle flex items-center justify-between">
                 <div>
-                  <h3 className="text-xs font-bold text-rf-ink m-0">Applications ({applications.length})</h3>
-                  <p className="text-[11px] text-rf-ink-muted font-medium m-0 mt-0.5">
-                    Complete application history across all vacancies.
-                  </p>
+                  <h3 className="text-xs font-semibold text-rf-ink m-0">Applications ({applications.length})</h3>
                 </div>
                 <Button variant="primary" size="sm" onClick={() => setIsApplyModalOpen(true)}>
                   <Icon name="plus" size={13} />
-                  Assign to Vacancy
+                  Assign to job
                 </Button>
               </div>
               <ResponsiveDataView
@@ -646,10 +638,7 @@ export function CandidateDetailPage() {
             <div className="flex flex-col gap-4">
               <div className="p-4 rounded-2xl border border-rf-border-subtle bg-rf-surface-subtle flex flex-wrap items-center justify-between gap-3 shadow-xs">
                 <div>
-                  <h3 className="text-xs font-bold text-rf-ink m-0">Interviews ({interviews.length})</h3>
-                  <p className="text-[11px] text-rf-ink-muted font-medium m-0 mt-0.5">
-                    Recorded interview rounds and scorecard evaluations.
-                  </p>
+                  <h3 className="text-xs font-semibold text-rf-ink m-0">Interviews ({interviews.length})</h3>
                 </div>
                 {/* Tab header shows Strong Hire/Hire/No Hire counts */}
                 <div className="flex flex-wrap items-center gap-2">
@@ -764,7 +753,7 @@ export function CandidateDetailPage() {
                   </div>
                   <div className="flex items-center gap-2 self-end sm:self-center">
                     <Button variant="secondary" size="sm" asChild>
-                      <Link to={`/offers/${offer.id}`}>View Offer</Link>
+                      <Link to={`/offers/${offer.id}`}>View offer</Link>
                     </Button>
                   </div>
                 </div>
@@ -774,17 +763,9 @@ export function CandidateDetailPage() {
         </TabPanel>
 
         {/* Timeline Tab */}
-        <TabPanel id="timeline" activeKey={activeTab}>
-          <PageState
-            kind="empty"
-            title="Activity Timeline"
-            description="Activity feed coming in Phase 2"
-          />
-        </TabPanel>
       </div>
 
-      {/* Assign to Vacancy Modal */}
-      <Modal isOpen={isApplyModalOpen} onClose={() => setIsApplyModalOpen(false)} title="Assign Candidate to Vacancy">
+      <Modal isOpen={isApplyModalOpen} onClose={() => setIsApplyModalOpen(false)} title="Assign to job">
         <form onSubmit={(e) => void handleApply(e)}>
           {applyError && (
             <div className="mb-4">
@@ -793,7 +774,7 @@ export function CandidateDetailPage() {
               </Alert>
             </div>
           )}
-          <FormField id="apply-vacancy" label="Select Vacancy" required hint="Choose an open vacancy to link this candidate.">
+          <FormField id="apply-vacancy" label="Job" required hint="Choose an open job.">
             <Select
               id="apply-vacancy"
               required
@@ -801,7 +782,7 @@ export function CandidateDetailPage() {
               onChange={(e) => setSelectedVacancyId(e.target.value)}
             >
               {vacancies.length === 0 ? (
-                <option value="">No open vacancies available</option>
+                <option value="">No open jobs</option>
               ) : (
                 vacancies.map((v) => (
                   <option key={v.id} value={v.id}>
@@ -822,14 +803,14 @@ export function CandidateDetailPage() {
               type="submit"
               disabled={vacancies.length === 0}
             >
-              Link application
+              Add to job
             </Button>
           </div>
         </form>
       </Modal>
 
       {/* Add Tag Modal */}
-      <Modal isOpen={isTagModalOpen} onClose={() => setIsTagModalOpen(false)} title="Add Candidate Tag">
+      <Modal isOpen={isTagModalOpen} onClose={() => setIsTagModalOpen(false)} title="Add skill">
         <form onSubmit={(e) => void handleAddTag(e)}>
           {tagError && (
             <div className="mb-4">
@@ -838,7 +819,7 @@ export function CandidateDetailPage() {
               </Alert>
             </div>
           )}
-          <FormField id="candidate-tag" label="Tag / Skill" required hint="Add a skill or tag for candidate search and filtering.">
+          <FormField id="candidate-tag" label="Skill" required hint="Used for search and matching.">
             <Input
               id="candidate-tag"
               type="text"
@@ -854,7 +835,7 @@ export function CandidateDetailPage() {
               Cancel
             </Button>
             <Button variant="primary" loading={tagSubmitting} loadingLabel="Adding tag" type="submit">
-              Add Tag
+              Add skill
             </Button>
           </div>
         </form>

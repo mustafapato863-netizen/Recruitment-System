@@ -92,17 +92,22 @@ export function CandidateActivityPanel({ candidateId, refreshKey = 0, initialKin
   return (
     <section aria-label="Candidate activity" className="rounded-xl border border-rf-border bg-rf-surface p-4 space-y-4 text-rf-ink">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="text-sm font-bold">Candidate activity</h2>
-        <Button variant="secondary" size="sm" onClick={() => void load()} disabled={loading || busy}>Refresh activities</Button>
+        <h2 className="text-sm font-semibold">Activity</h2>
+        <Button variant="secondary" size="sm" onClick={() => void load()} disabled={loading || busy}>Refresh</Button>
       </div>
-      <p className="text-xs text-rf-ink-muted">Recorded work across this candidate’s accessible applications. Calls, notes and screenings count once per saved record. Scheduled interviews and stage changes are timeline events, not completed work. Shared candidate activities are visible to the team; other tasks remain private to their assignee.</p>
+      <p className="text-xs text-rf-ink-muted">Calls, notes, interviews, and follow-ups for this person.</p>
       {error && <p role="alert" className="text-sm text-red-700 dark:text-red-300">{error}</p>}
       {notice && <p role="status" className="text-sm text-rf-ink">{notice}</p>}
       {loading && <p role="status" className="text-xs text-rf-ink-muted">Loading activities…</p>}
       {data && !loading && <>
-        <dl className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          {([['Completed', data.completed], ['By me', data.completedByMe], ['Follow-ups open', data.pending], ['Overdue', data.overdue]] as const).map(([label, value]) => <div key={label} className="rounded-lg bg-rf-surface-subtle p-3"><dt className="text-xs text-rf-ink-muted">{label}</dt><dd className="text-xl font-bold">{value}</dd></div>)}
-        </dl>
+        <div className="flex flex-wrap gap-2 text-xs">
+          {([['Completed', data.completed], ['By me', data.completedByMe], ['Follow-ups', data.pending], ['Overdue', data.overdue]] as const).map(([label, value]) => (
+            <span key={label} className="inline-flex items-baseline gap-1.5 rounded-lg border border-rf-border bg-rf-surface px-2.5 py-1.5">
+              <span className="text-rf-ink-muted">{label}</span>
+              <span className="font-semibold">{value}</span>
+            </span>
+          ))}
+        </div>
         <div className="text-xs space-y-1"><p>Last completed activity: {dateLabel(data.lastActivityAt)}</p><p>Next follow-up: {dateLabel(data.nextFollowUpAt)}</p></div>
         <div className="flex flex-wrap gap-2 text-xs" aria-label="Completed activity breakdown">{Object.entries(data.byKind).map(([label, value]) => <span className="rounded-lg border border-rf-border px-2 py-1" key={label}>{label}: {value}</span>)}</div>
         {data.byRecruiter.length > 0 && <details className="text-xs"><summary className="cursor-pointer font-semibold">Completed by recruiter</summary><ul className="mt-2 space-y-1">{data.byRecruiter.map((row) => <li key={row.userId}>{row.name}: {row.completed}</li>)}</ul></details>}

@@ -118,9 +118,9 @@ export function CandidateWorkspace({
 
         <div className="flex-1 min-w-0 space-y-1.5">
           <div className="flex flex-wrap items-center gap-2.5">
-            <h1 className="text-base sm:text-lg font-bold text-rf-ink truncate leading-tight">
+            <p className="text-base sm:text-lg font-bold text-rf-ink truncate leading-tight">
               {candidateName}
-            </h1>
+            </p>
             {slaDeadline && <SLAIndicator {...getSlaProps(slaDeadline)} />}
           </div>
 
