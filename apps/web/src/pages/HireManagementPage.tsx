@@ -5,12 +5,10 @@ import { PageFrame } from '../components/ui/PageFrame';
 import { PageState } from '../components/ui/PageState';
 import { Alert } from '../components/ui/Alert';
 import { Avatar } from '../components/ui/Avatar';
-import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { DataToolbar } from '../components/ui/DataToolbar';
 import { FilterChip } from '../components/ui/FilterChips';
 import { Input } from '../components/ui/Input';
-import { MetricCard } from '../components/ui/MetricCard';
 import { StatusBadge } from '../components/StatusBadge';
 import { ResponsiveDataView, type ResponsiveDataColumn } from '../components/ui/ResponsiveDataView';
 import { TableSkeleton } from '../components/ui/Skeleton';
@@ -38,13 +36,22 @@ const STATUSES = [
   'Withdrawn',
 ] as const;
 
+function hireNextAction(status: string) {
+  switch (status) {
+    case 'Pending Compliance':
+      return { label: 'Complete checks', to: (id: string) => `/hires/${id}` };
+    case 'Pending Final Approval':
+      return { label: 'Open approval', to: (id: string) => `/hires/${id}` };
+    case 'Awaiting Joining':
+      return { label: 'Confirm joining', to: (id: string) => `/hires/${id}#checklist` };
+    case 'Joined':
+      return { label: 'View case', to: (id: string) => `/hires/${id}` };
+    default:
+      return { label: 'Open case', to: (id: string) => `/hires/${id}` };
+  }
+}
+
 const hiringCaseColumns: ResponsiveDataColumn<HiringCaseRow>[] = [
-  {
-    key: 'case',
-    header: 'Case ID',
-    priority: 'secondary',
-    render: (item) => <Badge variant="neutral">{item.id.slice(0, 8).toUpperCase()}</Badge>,
-  },
   {
     key: 'candidate',
     header: 'Candidate',
@@ -52,7 +59,7 @@ const hiringCaseColumns: ResponsiveDataColumn<HiringCaseRow>[] = [
     render: (item) => (
       <div className="flex items-center gap-2.5">
         <Avatar initials={item.candidateName ? item.candidateName.slice(0, 2).toUpperCase() : 'CP'} size="sm" />
-        <span className="min-w-0 truncate font-bold text-rf-ink">{item.candidateName}</span>
+        <span className="min-w-0 truncate font-semibold text-rf-ink">{item.candidateName}</span>
       </div>
     ),
   },
@@ -60,19 +67,22 @@ const hiringCaseColumns: ResponsiveDataColumn<HiringCaseRow>[] = [
     key: 'position',
     header: 'Position',
     priority: 'secondary',
-    render: (item) => <span className="font-medium text-rf-ink">{item.positionTitle}</span>,
-  },
-  {
-    key: 'branch',
-    header: 'Branch',
-    priority: 'tertiary',
-    render: (item) => <span className="font-medium text-rf-ink-muted">{item.branchName}</span>,
+    render: (item) => (
+      <div>
+        <span className="block font-medium text-rf-ink">{item.positionTitle}</span>
+        <span className="block text-[11px] text-rf-ink-muted">{item.branchName}</span>
+      </div>
+    ),
   },
   {
     key: 'joining',
-    header: 'Planned joining',
+    header: 'Joining',
     priority: 'secondary',
-    render: (item) => <span className="font-medium text-rf-ink-muted">{item.plannedJoiningDate ? new Date(item.plannedJoiningDate).toLocaleDateString() : 'Pending'}</span>,
+    render: (item) => (
+      <span className="font-medium text-rf-ink-muted">
+        {item.plannedJoiningDate ? new Date(item.plannedJoiningDate).toLocaleDateString('en-GB') : 'Not set'}
+      </span>
+    ),
   },
   {
     key: 'status',
@@ -126,26 +136,13 @@ export function HireManagementPage() {
 
   return (
     <PageFrame
-      eyebrow="Joining &amp; Compliance"
-      title="Hire Management"
-      description="Control pre-hire readiness after offer acceptance through documents, licenses, final approvals and joining execution."
+      title="Hires"
+      description="Checks, approvals, and joining after offer acceptance."
       actions={
-        <>
-          <Button variant="ghost" size="sm" onClick={() => void loadCases()}>
-            <Icon name="refresh-cw" size={13} className={loading ? 'animate-spin' : ''} />
-            Refresh
-          </Button>
-          <Button variant="secondary" size="sm" asChild>
-            <Link to="/hires/approvals/inbox">
-              Final approvals ({pendingApprovalCount})
-            </Link>
-          </Button>
-          <Button variant="primary" size="sm" asChild>
-            <Link to="/joinings">
-              Joining management
-            </Link>
-          </Button>
-        </>
+        <Button variant="ghost" size="sm" onClick={() => void loadCases()}>
+          <Icon name="refresh-cw" size={13} className={loading ? 'animate-spin' : ''} />
+          Refresh
+        </Button>
       }
     >
       {error && (
@@ -154,11 +151,23 @@ export function HireManagementPage() {
         </Alert>
       )}
 
-      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard label="Active Pre-Hire Cases" value={cases.length} detail="Across all pre-hire cases" tone="action" icon={<Icon name="briefcase" size={14} />} />
-        <MetricCard label="Compliance Checks" value={pendingComplianceCount} detail="Pending readiness verification" tone="warning" icon={<Icon name="document" size={14} />} />
-        <MetricCard label="Final Approval" value={pendingApprovalCount} detail="Awaiting executive authorization" tone="info" icon={<Icon name="check-circle" size={14} />} />
-        <MetricCard label="Awaiting Joining" value={awaitingJoiningCount} detail="Cleared for commencement" tone="success" icon={<Icon name="clock" size={14} />} />
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" onClick={() => setStatusFilter('')} className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold ${statusFilter === '' ? 'border-blue-300 bg-blue-50 text-blue-800 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300' : 'border-slate-200 bg-white text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300'}`}>
+          All
+          <span className="text-slate-900 dark:text-white">{cases.length}</span>
+        </button>
+        <button type="button" onClick={() => setStatusFilter('Pending Compliance')} className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold ${statusFilter === 'Pending Compliance' ? 'border-blue-300 bg-blue-50 text-blue-800 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300' : 'border-slate-200 bg-white text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300'}`}>
+          Checks
+          <span className="text-slate-900 dark:text-white">{pendingComplianceCount}</span>
+        </button>
+        <button type="button" onClick={() => setStatusFilter('Pending Final Approval')} className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold ${statusFilter === 'Pending Final Approval' ? 'border-blue-300 bg-blue-50 text-blue-800 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300' : 'border-slate-200 bg-white text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300'}`}>
+          Approvals
+          <span className="text-slate-900 dark:text-white">{pendingApprovalCount}</span>
+        </button>
+        <button type="button" onClick={() => setStatusFilter('Awaiting Joining')} className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold ${statusFilter === 'Awaiting Joining' ? 'border-blue-300 bg-blue-50 text-blue-800 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300' : 'border-slate-200 bg-white text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300'}`}>
+          Joining
+          <span className="text-slate-900 dark:text-white">{awaitingJoiningCount}</span>
+        </button>
       </div>
 
       <section className="rf-table-shell overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-xs">
@@ -166,7 +175,7 @@ export function HireManagementPage() {
           search={(
             <Input
               aria-label="Search hiring cases"
-              placeholder="Search by candidate, position or branch..."
+              placeholder="Search candidate or role"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -174,20 +183,20 @@ export function HireManagementPage() {
           filters={(
             <div className="flex flex-wrap gap-1.5" aria-label="Filter hiring cases by status">
               {STATUSES.map((status) => (
-                <FilterChip key={status || 'all'} label={status || 'All statuses'} isActive={statusFilter === status} onClick={() => setStatusFilter(status)} />
+                <FilterChip key={status || 'all'} label={status || 'All'} isActive={statusFilter === status} onClick={() => setStatusFilter(status)} />
               ))}
             </div>
           )}
-          activeFilters={statusFilter ? <FilterChip label={`Status: ${statusFilter}`} onRemove={() => setStatusFilter('')} /> : undefined}
+          activeFilters={statusFilter ? <FilterChip label={statusFilter} onRemove={() => setStatusFilter('')} /> : undefined}
         />
 
         {loading ? (
-          <TableSkeleton columns={7} rows={6} />
+          <TableSkeleton columns={5} rows={6} />
         ) : filteredCases.length === 0 ? (
           <PageState
             kind="empty"
-            title="No matching hiring cases"
-            description="Adjust your search filters or wait for candidates to accept offers."
+            title="No hiring cases"
+            description="Cases appear here after a candidate accepts an offer."
           />
         ) : (
           <ResponsiveDataView
@@ -196,11 +205,14 @@ export function HireManagementPage() {
             rowKey={(item) => item.id}
             label="Hiring cases"
             className="px-4 pb-4 sm:px-5 sm:pb-5"
-            renderActions={(item) => (
-              <Button variant="secondary" size="sm" asChild>
-                <Link to={`/hires/${item.id}`}>Open case</Link>
-              </Button>
-            )}
+            renderActions={(item) => {
+              const action = hireNextAction(item.status);
+              return (
+                <Button variant="primary" size="sm" asChild>
+                  <Link to={action.to(item.id)}>{action.label}</Link>
+                </Button>
+              );
+            }}
           />
         )}
       </section>
