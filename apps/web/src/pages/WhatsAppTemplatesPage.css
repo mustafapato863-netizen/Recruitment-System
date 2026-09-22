@@ -1,16 +1,17 @@
 /* WhatsApp Templates — scoped visual system */
 .wa-page {
-  --wa-bubble: #dcf8c6;
-  --wa-bubble-ink: #0b132b;
-  --wa-chrome: #075e54;
-  --wa-chrome-soft: #128c7e;
+  --wa-bubble: #d9fdd3;
+  --wa-bubble-ink: #111b21;
+  --wa-chrome: #008069;
+  --wa-chrome-soft: #00a884;
   --wa-accent: #25d366;
+  --wa-chat-bg: #efe7dd;
 }
 
 .wa-hero {
   background:
-    radial-gradient(circle at 12% 20%, color-mix(in srgb, var(--wa-accent) 28%, transparent), transparent 42%),
-    radial-gradient(circle at 88% 0%, color-mix(in srgb, var(--wa-chrome-soft) 22%, transparent), transparent 38%),
+    radial-gradient(circle at 12% 20%, color-mix(in srgb, var(--wa-accent) 22%, transparent), transparent 42%),
+    radial-gradient(circle at 88% 0%, color-mix(in srgb, var(--wa-chrome-soft) 16%, transparent), transparent 38%),
     var(--color-surface);
   border: 1px solid var(--color-border-subtle);
 }
@@ -18,7 +19,8 @@
 .wa-phone {
   overflow: hidden;
   border-radius: 1.25rem;
-  border: 1px solid color-mix(in srgb, var(--wa-chrome) 35%, transparent);
+  border: 1px solid #d8d0c8;
+  background: #fff;
 }
 
 .wa-phone-bar {
@@ -26,7 +28,7 @@
   align-items: center;
   gap: 0.65rem;
   padding: 0.7rem 0.9rem;
-  background: linear-gradient(180deg, var(--wa-chrome) 0%, #064c44 100%);
+  background: linear-gradient(180deg, #008069 0%, #006d5b 100%);
 }
 
 .wa-phone-dot {
@@ -34,16 +36,16 @@
   height: 2rem;
   flex-shrink: 0;
   border-radius: 999px;
-  background: color-mix(in srgb, #fff 18%, var(--wa-chrome-soft));
+  background: #dce8e4;
 }
 
 .wa-preview-shell {
-  background:
-    linear-gradient(180deg, #0b141a 0%, #0b141a 40%, #0e1c24 100%);
+  background: #efe7dd;
   border-radius: 1.25rem;
   min-height: 280px;
   position: relative;
   overflow: hidden;
+  color: #111b21;
 }
 
 .wa-preview-shell-full {
@@ -58,17 +60,19 @@
   content: "";
   position: absolute;
   inset: 0;
-  opacity: 0.08;
-  background-image: radial-gradient(#fff 0.6px, transparent 0.6px);
-  background-size: 14px 14px;
+  opacity: 0.18;
+  background-image: radial-gradient(#cbbba8 0.7px, transparent 0.7px);
+  background-size: 16px 16px;
   pointer-events: none;
 }
 
 .wa-bubble {
-  background: var(--wa-bubble);
-  color: var(--wa-bubble-ink);
+  position: relative;
+  z-index: 1;
+  background: #d9fdd3;
+  color: #111b21;
   border-radius: 12px 12px 4px 12px;
-  box-shadow: 0 1px 0.5px rgba(0, 0, 0, 0.13);
+  box-shadow: 0 1px 0.5px rgba(11, 20, 26, 0.18);
   white-space: pre-wrap;
   word-break: break-word;
 }
