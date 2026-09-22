@@ -547,7 +547,7 @@ export function ReportsPage() {
             className={`px-1.5 py-0.5 text-[10px] font-black rounded-md ${
               reportViewMode === 'kpis'
                 ? 'bg-white/20 text-white'
-                : 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30'
+                : 'bg-emerald-100 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
             }`}
           >
             6 KPIs

@@ -69,7 +69,7 @@ thead th {
   font-weight: 700 !important;
   text-transform: none !important;
   letter-spacing: 0 !important;
-  color: rgb(100 116 139) !important;
+  color: var(--color-ink-500) !important;
 }
 
 tbody td {
@@ -106,7 +106,7 @@ tbody td {
 .cursor-grab.group .text-xs.font-semibold {
   text-transform: none !important;
   font-weight: 500 !important;
-  color: rgb(71 85 105) !important;
+  color: var(--color-ink-700) !important;
 }
 
 .cursor-grab.group button[title^="Status:"] {

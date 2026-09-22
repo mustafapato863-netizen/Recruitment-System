@@ -418,7 +418,7 @@ function mapApplicationToKanbanCard(
     owner: {
       name: ownerName,
       initials: ownerInitials,
-      color: 'bg-teal-600',
+      color: 'bg-teal-800',
     },
     nextAction,
     nextDueTone: a.nextFollowUpAt ? 'amber' : 'gray',

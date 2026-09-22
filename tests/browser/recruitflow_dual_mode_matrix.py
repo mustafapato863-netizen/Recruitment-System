@@ -199,7 +199,7 @@ def run() -> int:
                         entry["issues"].append(str(error))
                     results.append(entry)
                     if entry["result"] == "FAIL":
-                        print(f"[FAIL] {theme} {width} {route} {json.dumps(entry['issues'], default=str)[:1200]}", flush=True)
+                        print(f"[FAIL] {theme} {width} {route} {json.dumps(entry['issues'], default=str)[:4000]}", flush=True)
                     else:
                         print(f"[PASS] {theme} {width} {route}", flush=True)
 
