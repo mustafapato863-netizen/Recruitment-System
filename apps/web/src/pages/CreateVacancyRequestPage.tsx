@@ -260,7 +260,7 @@ export function CreateVacancyRequestPage() {
           <div>
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-bold uppercase tracking-wider text-rf-action block">Requisition Workflow</span>
-              <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300">
+              <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-rf-info-soft text-rf-info">
                 {showAllSteps ? 'All-in-One View' : `Step ${activeStep + 1} of 3`}
               </span>
             </div>
@@ -275,7 +275,7 @@ export function CreateVacancyRequestPage() {
             <button
               type="button"
               onClick={() => setShowAllSteps((prev) => !prev)}
-              className="text-xs font-bold text-blue-600 dark:text-sky-400 hover:underline cursor-pointer flex items-center gap-1"
+              className="text-xs font-bold text-rf-action hover:underline cursor-pointer flex items-center gap-1"
             >
               <Icon name={showAllSteps ? 'layout' : 'menu'} size={12} />
               <span>{showAllSteps ? 'Switch to 3-Step Wizard' : 'Show All Sections'}</span>

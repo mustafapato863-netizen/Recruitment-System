@@ -63,8 +63,8 @@ export function EmployeeDashboard() {
       {/* Hero Welcome Header */}
       <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5 bg-gradient-to-r from-blue-600/10 via-indigo-500/5 to-transparent p-3 sm:p-4 rounded-2xl border border-rf-border-subtle bg-rf-surface">
         <div>
-          <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-[11px] font-bold text-blue-700 dark:text-blue-300 mb-2">
-            <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+          <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-rf-info-soft border border-rf-info-border text-[11px] font-bold text-rf-info mb-2">
+            <span className="w-2 h-2 rounded-full bg-rf-info animate-pulse" />
             Employee Workspace
           </div>
           <div className="flex items-center gap-2.5 flex-wrap">
@@ -102,7 +102,7 @@ export function EmployeeDashboard() {
       {/* Summary KPI Pills */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-7">
         <div className="flex items-center gap-4 p-4 rounded-xl border border-rf-border-subtle bg-rf-surface shadow-2xs">
-          <div className="rf-metric-icon-box rounded-xl bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+          <div className="rf-metric-icon-box rounded-xl bg-rf-warning-soft text-rf-warning flex items-center justify-center shrink-0">
             <Icon name="clock" size={20} />
           </div>
           <div>
@@ -112,7 +112,7 @@ export function EmployeeDashboard() {
         </div>
 
         <div className="flex items-center gap-4 p-4 rounded-xl border border-rf-border-subtle bg-rf-surface shadow-2xs">
-          <div className="rf-metric-icon-box rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+          <div className="rf-metric-icon-box rounded-xl bg-rf-success-soft text-rf-success flex items-center justify-center shrink-0">
             <Icon name="check-circle" size={20} />
           </div>
           <div>
@@ -122,7 +122,7 @@ export function EmployeeDashboard() {
         </div>
 
         <div className="flex items-center gap-4 p-4 rounded-xl border border-rf-border-subtle bg-rf-surface shadow-2xs">
-          <div className="rf-metric-icon-box rounded-xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+          <div className="rf-metric-icon-box rounded-xl bg-rf-info-soft text-rf-info flex items-center justify-center shrink-0">
             <Icon name="tasks" size={20} />
           </div>
           <div>
@@ -234,7 +234,7 @@ export function EmployeeDashboard() {
               </div>
             ) : tasks.length === 0 ? (
               <div className="py-6 text-center text-xs text-rf-ink-muted">
-                <Icon name="check" size={20} className="mx-auto text-emerald-500 mb-1" />
+                <Icon name="check" size={20} className="mx-auto text-rf-success mb-1" />
                 No pending tasks right now. You are all caught up!
               </div>
             ) : (
@@ -244,7 +244,7 @@ export function EmployeeDashboard() {
                     key={task.id}
                     className="p-3 rounded-xl border border-rf-border-subtle bg-rf-surface-subtle/40 flex items-start gap-2.5"
                   >
-                    <Icon name="alert-circle" size={15} className="text-amber-500 mt-0.5 shrink-0" />
+                    <Icon name="alert-circle" size={15} className="text-rf-warning mt-0.5 shrink-0" />
                     <div className="min-w-0 flex-1">
                       <div className="text-xs font-bold text-rf-ink truncate">{task.title}</div>
                       <div className="text-[11px] text-rf-ink-muted mt-0.5">

@@ -164,7 +164,7 @@ export function OfferApprovalInboxPage() {
     >
       {error && <Alert tone="danger" title="Unable to load approvals">{error}</Alert>}
 
-      <section className="rf-table-shell rf-long-content overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-xs">
+      <section className="rf-table-shell rf-long-content overflow-hidden rounded-2xl border border-rf-border/90 bg-white shadow-xs">
         <SectionHeader
           title="Pending offer approvals"
           description="Review package details and authorize offer distribution."

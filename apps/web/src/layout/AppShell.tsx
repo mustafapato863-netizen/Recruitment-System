@@ -125,7 +125,7 @@ export function NavigationItem({
         {isCollapsed && (
           <span
             role="tooltip"
-            className="nav-tooltip absolute left-full ml-3 top-1/2 -translate-y-1/2 px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-semibold whitespace-nowrap opacity-0 pointer-events-none transition-all duration-150 z-50 shadow-xl border border-slate-700/60"
+            className="nav-tooltip absolute left-full ml-3 top-1/2 -translate-y-1/2 px-3 py-1.5 rounded-lg bg-rf-ink text-rf-on-action text-xs font-semibold whitespace-nowrap opacity-0 pointer-events-none transition-all duration-150 z-50 shadow-xl border border-rf-border-strong/60"
           >
             {displayLabel} — {deniedTitle}
           </span>
@@ -164,12 +164,12 @@ export function NavigationItem({
             <span
               className={`ml-auto px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
                 badgeTone === 'amber'
-                  ? 'bg-amber-500/20 text-amber-500 dark:text-amber-400'
+                  ? 'bg-rf-warning-soft text-rf-warning'
                   : badgeTone === 'red'
-                  ? 'bg-rose-500/20 text-rose-500 dark:text-rose-400'
+                  ? 'bg-rf-danger-soft text-rf-danger'
                   : badgeTone === 'emerald'
-                  ? 'bg-emerald-500/20 text-emerald-500 dark:text-emerald-400'
-                  : 'bg-blue-500/20 text-blue-500 dark:text-blue-400'
+                  ? 'bg-rf-success-soft text-rf-success'
+                  : 'bg-rf-info-soft text-rf-info'
               }`}
             >
               {badge}
@@ -180,7 +180,7 @@ export function NavigationItem({
       {isCollapsed && (
         <span
           role="tooltip"
-          className="nav-tooltip absolute left-full ml-3 top-1/2 -translate-y-1/2 px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-semibold whitespace-nowrap opacity-0 pointer-events-none transition-all duration-150 z-50 shadow-xl border border-slate-700/60"
+          className="nav-tooltip absolute left-full ml-3 top-1/2 -translate-y-1/2 px-3 py-1.5 rounded-lg bg-rf-ink text-rf-on-action text-xs font-semibold whitespace-nowrap opacity-0 pointer-events-none transition-all duration-150 z-50 shadow-xl border border-rf-border-strong/60"
         >
           {displayLabel}
         </span>
@@ -531,15 +531,15 @@ export function AppShellInner() {
             <button
               ref={searchTriggerRef}
               type="button"
-              className="search-bar-unified flex items-center gap-2 px-3 sm:px-4 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs text-slate-600 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700 transition flex-1 min-w-[120px] max-w-[460px] shadow-2xs cursor-text"
+              className="search-bar-unified flex items-center gap-2 px-3 sm:px-4 py-2 bg-rf-surface-subtle border border-rf-border rounded-xl text-xs text-rf-ink-muted hover:border-rf-border-strong transition flex-1 min-w-[120px] max-w-[460px] shadow-2xs cursor-text"
               onClick={() => setIsCommandPaletteOpen(true)}
               aria-haspopup="dialog"
               aria-expanded={isCommandPaletteOpen}
               aria-label="Search job positions, applicants, activities, notes..."
             >
-              <Icon name="search" size={14} className="text-slate-600 dark:text-slate-400 shrink-0" />
+              <Icon name="search" size={14} className="text-rf-ink-muted shrink-0" />
               <span className="truncate flex-1 text-left">Search job positions, applicants, activities...</span>
-              <kbd className="hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-mono bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-slate-500">
+              <kbd className="hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-mono bg-rf-surface border border-rf-border rounded text-rf-ink-muted">
                 ⌘ K
               </kbd>
             </button>
@@ -550,7 +550,7 @@ export function AppShellInner() {
             <button
               type="button"
               onClick={openGuide}
-              className="hidden md:flex w-9 h-9 items-center justify-center rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs text-xs font-bold cursor-pointer"
+              className="hidden md:flex w-9 h-9 items-center justify-center rounded-xl bg-rf-surface border border-rf-border text-rf-ink-muted hover:text-rf-ink hover:bg-rf-surface-hover transition shadow-xs text-xs font-bold cursor-pointer"
               title="Page guide"
             >
               ?
@@ -560,7 +560,7 @@ export function AppShellInner() {
             <button
               type="button"
               onClick={() => navigate('/my-work')}
-              className="hidden md:flex w-9 h-9 items-center justify-center rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs cursor-pointer"
+              className="hidden md:flex w-9 h-9 items-center justify-center rounded-xl bg-rf-surface border border-rf-border text-rf-ink-muted hover:text-rf-ink hover:bg-rf-surface-hover transition shadow-xs cursor-pointer"
               title={canViewTasks ? 'Recent Activity & Task Queue' : 'Open My Work'}
               aria-label={canViewTasks ? 'Recent Activity and Task Queue' : 'Open My Work'}
             >
@@ -574,7 +574,7 @@ export function AppShellInner() {
 
             <ThemeToggle className="hidden sm:flex" />
 
-            <div className="h-6 w-px bg-slate-200 dark:bg-slate-800 mx-0.5 hidden sm:block" aria-hidden="true" />
+            <div className="h-6 w-px bg-rf-border mx-0.5 hidden sm:block" aria-hidden="true" />
             <UserProfileDropdown />
           </div>
         </div>

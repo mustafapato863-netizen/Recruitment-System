@@ -207,7 +207,7 @@ export function CreateOfferPage() {
         </>
       }
     >
-      <div className="bg-white p-4 rounded-2xl border border-slate-200/90 shadow-xs">
+      <div className="bg-white p-4 rounded-2xl border border-rf-border/90 shadow-xs">
         <PipelineStepper steps={OFFER_STEPS} currentStep={1} />
       </div>
 
@@ -290,18 +290,18 @@ export function CreateOfferPage() {
               }
             >
               {/* Saudi Standard 1-Click Calculator Helper */}
-              <div className="p-3.5 rounded-xl bg-gradient-to-r from-blue-50/80 via-emerald-50/60 to-white dark:from-slate-800/80 dark:via-slate-800/40 dark:to-slate-900 border border-blue-200/80 dark:border-blue-900/50 mb-3 space-y-2.5">
+              <div className="p-3.5 rounded-xl bg-gradient-to-r from-blue-50/80 via-emerald-50/60 to-white dark:from-slate-800/80 dark:via-slate-800/40 dark:to-slate-900 border border-rf-info-border/80 dark:border-blue-900/50 mb-3 space-y-2.5">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <div className="flex items-center gap-2">
-                    <span className="text-amber-500 font-bold">⚡</span>
-                    <strong className="text-xs font-bold text-slate-900 dark:text-white">
+                    <span className="text-rf-warning font-bold">⚡</span>
+                    <strong className="text-xs font-bold text-rf-ink">
                       Saudi Labor Law Standard Package Calculator
                     </strong>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rf-info-soft text-rf-info">
                       SAR Currency
                     </span>
                   </div>
-                  <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                  <span className="text-[11px] text-rf-ink-muted">
                     Auto-split: 60% Basic • 25% Housing • 10% Transport • 5% Other
                   </span>
                 </div>
@@ -324,7 +324,7 @@ export function CreateOfferPage() {
                   >
                     Apply 1-Click Saudi Breakdown
                   </Button>
-                  <div className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 ml-auto">
+                  <div className="flex items-center gap-1.5 text-[11px] text-rf-ink-muted ml-auto">
                     <span>Presets:</span>
                     {[15000, 25000, 45000, 60000].map((amt) => (
                       <button
@@ -334,7 +334,7 @@ export function CreateOfferPage() {
                           setTargetGrossSalary(amt);
                           applySaudiStandardPackage(amt);
                         }}
-                        className="px-2 py-0.5 rounded bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:border-blue-500 transition text-[10px] font-bold cursor-pointer"
+                        className="px-2 py-0.5 rounded bg-white dark:bg-rf-surface-muted border border-rf-border dark:border-rf-border-strong text-rf-ink hover:border-rf-action transition text-[10px] font-bold cursor-pointer"
                       >
                         {amt.toLocaleString()} SAR
                       </button>
@@ -347,7 +347,7 @@ export function CreateOfferPage() {
                 {components.map((comp, idx) => (
                   <div
                     key={idx}
-                    className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-center p-3 rounded-xl bg-slate-50/70 border border-slate-100"
+                    className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-center p-3 rounded-xl bg-rf-surface-subtle/70 border border-rf-border-subtle"
                   >
                     <div className="sm:col-span-3">
                       <Select

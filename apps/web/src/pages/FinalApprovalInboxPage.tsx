@@ -180,7 +180,7 @@ export function FinalApprovalInboxPage() {
         </Alert>
       )}
 
-      <section className="rf-table-shell rf-long-content overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-xs">
+      <section className="rf-table-shell rf-long-content overflow-hidden rounded-2xl border border-rf-border/90 bg-white shadow-xs">
         <SectionHeader
           title="Pending final approvals"
           description="Verify compliance checklist clearance before authorizing employment commencement."
