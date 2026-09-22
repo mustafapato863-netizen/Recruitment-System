@@ -59,7 +59,6 @@ export function OffersPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [activePill, setActivePill] = useState('ALL');
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isCreateOfferModalOpen, setIsCreateOfferModalOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -196,22 +195,22 @@ export function OffersPage() {
           let nextActionSub = '';
           const st = o.status || 'Draft';
           if (st === 'Draft') {
-            nextAction = 'Submit for Approval';
+            nextAction = 'Submit approval';
           } else if (st === 'Pending Approval') {
-            nextAction = 'Review & Approve';
-            nextActionSub = 'Awaiting decision';
+            nextAction = 'Approve offer';
+            nextActionSub = 'Waiting for a decision';
           } else if (st === 'Approved') {
-            nextAction = 'Send to Candidate';
+            nextAction = 'Send offer';
           } else if (st === 'Sent') {
-            nextAction = 'Follow up';
+            nextAction = 'Record reply';
             if (daysLeftTone === 'amber') nextActionSub = 'Expiring soon';
           } else if (st === 'Accepted') {
-            nextAction = 'Start Onboarding';
-            nextActionSub = 'Ready to hire';
+            nextAction = 'Start joining';
+            nextActionSub = 'Candidate accepted';
           } else if (st === 'Declined') {
-            nextAction = 'Review Feedback';
+            nextAction = 'Review decline';
           } else if (st === 'Expired') {
-            nextAction = 'Create Revision';
+            nextAction = 'Revise offer';
           }
 
           const updatedAtTime = o.updatedAt
@@ -292,6 +291,18 @@ export function OffersPage() {
         );
       }
       return true;
+    }).sort((a, b) => {
+      const rank = (status: string) => ({
+        Draft: 0,
+        'Pending Approval': 1,
+        Approval: 1,
+        Approved: 2,
+        Sent: 3,
+        Accepted: 4,
+        Declined: 5,
+        Expired: 6,
+      }[status] ?? 7);
+      return rank(a.status) - rank(b.status);
     });
   }, [apiOffers, activePill, searchQuery]);
 
@@ -302,20 +313,6 @@ export function OffersPage() {
     const start = (safePage - 1) * pageSize;
     return filteredOffers.slice(start, start + pageSize);
   }, [filteredOffers, safePage, pageSize]);
-
-  const toggleSelectAll = () => {
-    if (selectedIds.length === paginatedOffers.length && paginatedOffers.length > 0) {
-      setSelectedIds([]);
-    } else {
-      setSelectedIds(paginatedOffers.map((o) => o.id));
-    }
-  };
-
-  const toggleSelectOne = (id: string) => {
-    setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
-    );
-  };
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -363,7 +360,7 @@ export function OffersPage() {
             className="inline-flex min-h-10 items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
           >
             <Icon name="plus" size={14} />
-            <span>Create Offer</span>
+            <span>Create</span>
           </button>
         </div>
       </div>
@@ -375,7 +372,7 @@ export function OffersPage() {
             <div className="flex items-center gap-2">
               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-blue-600 text-white shadow-2xs">
                 <Icon name="lock" size={10} />
-                Position Offers
+                This job
               </span>
               <span className="text-xs font-mono font-bold text-slate-500 dark:text-slate-400">
                 {currentVacancy.vacancyCode}
@@ -402,7 +399,7 @@ export function OffersPage() {
               className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 transition shadow-xs cursor-pointer"
             >
               <Icon name="arrow-left" size={13} />
-              <span>Back to Overview</span>
+              <span>Back</span>
             </button>
             <button
               type="button"
@@ -410,7 +407,7 @@ export function OffersPage() {
               className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-500 hover:text-slate-900 dark:hover:text-white transition cursor-pointer"
               title="View all offers across all vacancies"
             >
-              <span>View All Offers</span>
+              <span>All offers</span>
             </button>
           </div>
         </div>
@@ -420,7 +417,7 @@ export function OffersPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-2">
         <div className="flex items-center gap-2 overflow-x-auto text-xs font-semibold pb-1">
           {[
-            { key: 'ALL', label: 'All Offers', count: statusCounts.ALL },
+            { key: 'ALL', label: 'All', count: statusCounts.ALL },
             { key: 'Draft', label: 'Draft', count: statusCounts.Draft },
             { key: 'Pending Approval', label: 'Approval', count: statusCounts['Pending Approval'] },
             { key: 'Approved', label: 'Approved', count: statusCounts.Approved },
@@ -469,7 +466,7 @@ export function OffersPage() {
           <div className="p-8">
             <PageState
               kind="loading"
-              title="Loading offers..."
+              title="Loading offers"
               description="Fetching offer records from server."
             />
           </div>
@@ -483,7 +480,7 @@ export function OffersPage() {
                   ? 'No job offers have been created yet. Create a new offer to get started.'
                   : 'No offers match your current filter and search criteria.'
               }
-              actionLabel={apiOffers.length === 0 ? 'Create Offer' : 'Reset Filters'}
+              actionLabel={apiOffers.length === 0 ? 'Create' : 'Reset'}
               onAction={() => {
                 if (apiOffers.length === 0) {
                   navigate('/offers/create');
@@ -500,27 +497,11 @@ export function OffersPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
-                  <tr className="border-b border-slate-200 dark:border-slate-800 text-[11px] font-semibold text-slate-400 bg-slate-50/50 dark:bg-slate-800/30 text-left">
-                    <th className="p-3.5 pl-4 w-10">
-                      <input
-                        type="checkbox"
-                        checked={selectedIds.length === paginatedOffers.length && paginatedOffers.length > 0}
-                        onChange={toggleSelectAll}
-                        className="rounded border-slate-300 text-blue-600 cursor-pointer"
-                      />
-                    </th>
-                    <th className="py-3.5 px-3">Candidate</th>
-                    <th className="py-3.5 px-3">Position</th>
-                    <th className="py-3.5 px-3">Owner</th>
-                    <th className="py-3.5 px-3">Compensation</th>
-                    <th className="py-3.5 px-3">Approver</th>
-                    <th className="py-3.5 px-3">Expiry Date</th>
-                    <th className="py-3.5 px-3">Last Activity</th>
-                    <th className="py-3.5 px-3">Next Action</th>
-                    <th className="py-3.5 px-3">Status</th>
-                    <th className="py-3.5 pr-4 text-right">
-                      <Icon name="settings" size={13} className="text-slate-400 inline" />
-                    </th>
+                  <tr className="border-b border-slate-200 dark:border-slate-800 text-[11px] font-semibold text-slate-500 bg-slate-50/50 dark:bg-slate-800/30 text-left">
+                    <th className="py-3 px-4">Candidate</th>
+                    <th className="py-3 px-3">Role</th>
+                    <th className="py-3 px-3">Status</th>
+                    <th className="py-3 pr-4 text-right">Next</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -530,163 +511,26 @@ export function OffersPage() {
                       onClick={() => navigate(`/offers/${offer.id}`)}
                       className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition cursor-pointer group"
                     >
-                      {/* Checkbox */}
-                      <td className="p-3.5 pl-4" onClick={(e) => e.stopPropagation()}>
-                        <input
-                          type="checkbox"
-                          checked={selectedIds.includes(offer.id)}
-                          onChange={() => toggleSelectOne(offer.id)}
-                          className="rounded border-slate-300 text-blue-600 cursor-pointer"
-                        />
+                      <td className="py-3 px-4">
+                        <p className="font-semibold text-slate-900 dark:text-white">{offer.candidateName}</p>
+                        <p className="text-[11px] text-slate-500">{offer.offerCode} · {offer.monthlySalary}</p>
                       </td>
-
-                      {/* Candidate */}
-                      <td className="py-3.5 px-3">
-                        <div className="flex items-center gap-2.5">
-                          <div className="w-8 h-8 rounded-full bg-teal-600 text-white font-black text-xs flex items-center justify-center shrink-0">
-                            {offer.candidateAvatar}
-                          </div>
-                          <div>
-                            <span className="block font-bold text-slate-900 dark:text-white group-hover:text-blue-600 transition">
-                              {offer.candidateName}
-                            </span>
-                            <span className="block text-[10.5px] text-slate-400 font-mono">
-                              {offer.offerCode}
-                            </span>
-                          </div>
-                        </div>
+                      <td className="py-3 px-3">
+                        <p className="font-medium text-slate-800 dark:text-slate-200">{offer.positionTitle}</p>
+                        <p className="text-[11px] text-slate-500">{offer.expiryDate}{offer.daysLeft !== '—' ? ` · ${offer.daysLeft}` : ''}</p>
                       </td>
-
-                      {/* Position */}
-                      <td className="py-3.5 px-3">
-                        <div>
-                          <span className="block font-bold text-slate-800 dark:text-slate-200">
-                            {offer.positionTitle}
-                          </span>
-                          <span className="block text-[10.5px] text-slate-400">
-                            {offer.department !== '—' && offer.location !== '—'
-                              ? `${offer.department} • ${offer.location}`
-                              : offer.department !== '—'
-                              ? offer.department
-                              : offer.location !== '—'
-                              ? offer.location
-                              : '—'}
-                          </span>
-                        </div>
-                      </td>
-
-                      {/* Owner */}
-                      <td className="py-3.5 px-3">
-                        <div className="flex items-center gap-2">
-                          <div className="w-5 h-5 rounded-full bg-teal-600 text-white text-[9px] font-extrabold flex items-center justify-center shrink-0">
-                            {offer.ownerAvatar}
-                          </div>
-                          <div>
-                            <span className="block font-bold text-slate-900 dark:text-white leading-tight">
-                              {offer.ownerName}
-                            </span>
-                            <span className="block text-[10px] text-slate-400">
-                              {offer.ownerRole}
-                            </span>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Compensation */}
-                      <td className="py-3.5 px-3">
-                        <div>
-                          <span className="block font-bold text-slate-900 dark:text-white">
-                            {offer.monthlySalary}
-                          </span>
-                          {offer.bonus ? (
-                            <span className="block text-[10.5px] text-slate-400">
-                              {offer.bonus}
-                            </span>
-                          ) : null}
-                        </div>
-                      </td>
-
-                      {/* Approver */}
-                      <td className="py-3.5 px-3">
-                        <div className="flex items-center gap-2">
-                          <div className="w-5 h-5 rounded-full bg-teal-700 text-white text-[9px] font-extrabold flex items-center justify-center shrink-0">
-                            {offer.approverAvatar}
-                          </div>
-                          <div>
-                            <span className="block font-bold text-slate-900 dark:text-white leading-tight">
-                              {offer.approverName}
-                            </span>
-                            <span className="block text-[10px] text-slate-400">
-                              {offer.approverRole}
-                            </span>
-                          </div>
-                        </div>
-                      </td>
-
-                      {/* Expiry Date */}
-                      <td className="py-3.5 px-3">
-                        <div>
-                          <span className="block font-bold text-slate-800 dark:text-slate-200">
-                            {offer.expiryDate}
-                          </span>
-                          {offer.daysLeft !== '—' && (
-                            <span
-                              className={`block text-[10.5px] font-bold ${
-                                offer.daysLeftTone === 'red'
-                                  ? 'text-rose-600'
-                                  : offer.daysLeftTone === 'amber'
-                                  ? 'text-amber-600'
-                                  : 'text-emerald-600'
-                              }`}
-                            >
-                              {offer.daysLeft}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* Last Activity */}
-                      <td className="py-3.5 px-3">
-                        <div>
-                          <span className="block font-bold text-slate-800 dark:text-slate-200">
-                            {offer.lastActivity}
-                          </span>
-                          <span className="block text-[10.5px] text-slate-400">
-                            {offer.lastActivityTime}
-                          </span>
-                        </div>
-                      </td>
-
-                      {/* Next Action */}
-                      <td className="py-3.5 px-3">
-                        <div>
-                          <span className="block font-bold text-blue-600 dark:text-blue-400 hover:underline">
-                            {offer.nextAction}
-                          </span>
-                          {offer.nextActionSub && (
-                            <span className="block text-[10.5px] text-amber-600 font-semibold">
-                              {offer.nextActionSub}
-                            </span>
-                          )}
-                        </div>
-                      </td>
-
-                      {/* Status */}
-                      <td className="py-3.5 px-3">
-                        <span className={`px-2.5 py-0.5 rounded-full text-[10.5px] font-bold ${getStatusBadge(offer.status)}`}>
+                      <td className="py-3 px-3">
+                        <span className={`px-2 py-0.5 rounded-md text-[11px] font-semibold ${getStatusBadge(offer.status)}`}>
                           {offer.status}
                         </span>
                       </td>
-
-                      {/* Row Menu */}
-                      <td className="py-3.5 pr-4 text-right" onClick={(e) => e.stopPropagation()}>
+                      <td className="py-3 pr-4 text-right" onClick={(e) => e.stopPropagation()}>
                         <button
                           type="button"
                           onClick={() => navigate(`/offers/${offer.id}`)}
-                          className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg text-slate-400 hover:text-blue-600 transition cursor-pointer"
-                          title="View offer details"
+                          className="inline-flex min-h-7 items-center rounded-lg bg-blue-600 px-2.5 text-[11px] font-semibold text-white hover:bg-blue-700"
                         >
-                          <Icon name="more-horizontal" size={14} />
+                          {offer.nextAction}
                         </button>
                       </td>
                     </tr>
