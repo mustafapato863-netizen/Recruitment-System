@@ -15,7 +15,6 @@ import { Textarea } from '../components/ui/Textarea';
 import { PageState } from '../components/ui/PageState';
 import { useSetBreadcrumbTitle } from '../context/BreadcrumbContext';
 import { getVacancyBlockingReasons } from '../utils/vacancyActivation';
-import { ImportJobDescriptionModal } from '../components/vacancy/ImportJobDescriptionModal';
 
 interface InterviewerUser {
   id: string;
@@ -51,7 +50,6 @@ export function VacancyOverviewPage() {
   const [recruiters, setRecruiters] = useState<Array<{ id: string; name: string }>>([]);
   const [isAssigningRecruiter, setIsAssigningRecruiter] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const [isJdModalOpen, setIsJdModalOpen] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isRoleDetailsExpanded, setIsRoleDetailsExpanded] = useState(false);
@@ -481,7 +479,6 @@ export function VacancyOverviewPage() {
           )}
           {vacancy?.status === 'Pending Activation' && (() => {
             const blockingReasons = getVacancyBlockingReasons(vacancy);
-            const hasDetailsIssue = blockingReasons.some((reason) => !reason.isRecruiterAction);
             return (
               <div className="mt-3 rounded-2xl border border-amber-300 bg-amber-50/80 p-3.5 text-xs dark:border-amber-800 dark:bg-amber-950/30">
                 <div className="flex flex-col gap-1.5 text-amber-900 dark:text-amber-300 sm:flex-row sm:items-center sm:justify-between">
@@ -513,21 +510,6 @@ export function VacancyOverviewPage() {
                   ))}
                 </div>
 
-                {hasDetailsIssue && (
-                  <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-amber-200/80 pt-2.5 dark:border-amber-900/60">
-                    <span className="text-[11px] font-medium text-amber-800 dark:text-amber-300">
-                      Have a job description? Use it to fill the missing requirements.
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => setIsJdModalOpen(true)}
-                      className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-teal-300 bg-white px-3 text-xs font-bold text-teal-700 shadow-xs transition hover:bg-teal-50 dark:border-teal-700 dark:bg-slate-900 dark:text-teal-300 dark:hover:bg-teal-950/40"
-                    >
-                      <Icon name="file-text" size={13} className="text-teal-600 dark:text-teal-400" />
-                      <span>Upload JD</span>
-                    </button>
-                  </div>
-                )}
               </div>
             );
           })()}
@@ -581,17 +563,6 @@ export function VacancyOverviewPage() {
                 >
                   <Icon name="edit" size={13} className="text-slate-400" />
                   <span>Edit position</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsJdModalOpen(true);
-                    setIsActionsDropdownOpen(false);
-                  }}
-                  className="flex w-full cursor-pointer items-center gap-2 px-3.5 py-2.5 text-left font-semibold text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
-                >
-                  <Icon name="file-text" size={13} className="text-teal-600 dark:text-teal-400" />
-                  <span>Import job description</span>
                 </button>
                 <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
                 <button
@@ -1850,27 +1821,6 @@ export function VacancyOverviewPage() {
         preselectedVacancyTitle={jobTitle}
         onSuccess={() => {
           showToast('Candidate added to requisition pipeline successfully');
-          void loadAllData();
-        }}
-      />
-
-      {/* Import Job Description & Auto-Sync Modal */}
-      <ImportJobDescriptionModal
-        isOpen={isJdModalOpen}
-        onClose={() => setIsJdModalOpen(false)}
-        targetVacancy={
-          vacancy
-            ? {
-                id: vacancy.id,
-                title: jobTitle,
-                department: departmentName !== '—' ? departmentName : undefined,
-                location: locationText !== '—' ? locationText : undefined,
-                status: vacancy.status,
-              }
-            : null
-        }
-        onSuccess={() => {
-          showToast('Job Description ingested and position requirements updated successfully');
           void loadAllData();
         }}
       />
