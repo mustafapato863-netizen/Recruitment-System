@@ -13,6 +13,7 @@ import { Icon } from '../components/Icon';
 import { Modal } from '../components/Modal';
 import { useSetBreadcrumbTitle } from '../context/BreadcrumbContext';
 import { QuickGuideTrigger } from '../quickguide';
+import { SendWhatsAppDialog } from '../components/whatsapp/SendWhatsAppDialog';
 import './PageEnhancementsV2.css';
 
 interface Interview extends BaseInterview {
@@ -181,6 +182,7 @@ export function InterviewDetailPage() {
   const [rescheduleDateTime, setRescheduleDateTime] = useState('');
   const [isSubmittingReschedule, setIsSubmittingReschedule] = useState(false);
   const [isActionsDropdownOpen, setIsActionsDropdownOpen] = useState(false);
+  const [isWhatsAppOpen, setIsWhatsAppOpen] = useState(false);
   const [isResponseModalOpen, setIsResponseModalOpen] = useState(false);
   const [responseNote, setResponseNote] = useState('');
   const [isSubmittingResponse, setIsSubmittingResponse] = useState(false);
@@ -721,6 +723,14 @@ export function InterviewDetailPage() {
                     <Icon name="phone" size={12} />
                   </button>
                 ) : null}
+                <button
+                  type="button"
+                  onClick={() => setIsWhatsAppOpen(true)}
+                  className="p-1.5 rounded-lg border border-slate-200 hover:border-emerald-600 text-slate-500 hover:text-emerald-700 cursor-pointer transition"
+                  title="Send WhatsApp"
+                >
+                  <Icon name="chat" size={12} />
+                </button>
                 <button
                   type="button"
                   onClick={() => {
@@ -1714,6 +1724,23 @@ export function InterviewDetailPage() {
           <span>{toastMessage}</span>
         </div>
       )}
+
+      <SendWhatsAppDialog
+        isOpen={isWhatsAppOpen}
+        onClose={() => setIsWhatsAppOpen(false)}
+        context={{
+          phone: candidatePhone,
+          candidateName: candidateDisplayName,
+          positionTitle: positionDisplayName,
+          organizationName: user?.organizationName,
+          interviewType: interview?.interviewType,
+          interviewDate: interview?.scheduledStart
+            ? new Date(interview.scheduledStart).toLocaleString()
+            : undefined,
+          recruiterName: user?.displayName,
+        }}
+      />
+
     </div>
   );
 }

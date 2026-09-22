@@ -42,6 +42,7 @@ model Organization {
   customRoles         Role[]
   emailOutbox         EmailOutbox[]
   emailTemplates      EmailTemplate[]
+  whatsappTemplates   WhatsAppTemplate[]
   masterDataValues    MasterDataValue[]
   recruiterTargets    RecruiterTarget[]
   createdAt           DateTime             @default(now()) @db.Timestamptz(6)
@@ -883,6 +884,26 @@ model EmailTemplate {
   @@index([organizationId, status])
   @@index([organizationId, category])
   @@map("email_templates")
+}
+
+
+model WhatsAppTemplate {
+  id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organizationId String       @db.Uuid
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  name           String       @db.VarChar(200)
+  category       String       @default("misc") @db.VarChar(50)
+  interviewType  String       @default("Any") @db.VarChar(60)
+  bodyTemplate   String
+  isDefault      Boolean      @default(false)
+  status         String       @default("Active") @db.VarChar(30)
+  createdAt      DateTime     @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime     @updatedAt @db.Timestamptz(6)
+
+  @@index([organizationId, status])
+  @@index([organizationId, category])
+  @@index([organizationId, interviewType])
+  @@map("whatsapp_templates")
 }
 
 model PipelineTemplate {

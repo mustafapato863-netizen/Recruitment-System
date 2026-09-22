@@ -16,6 +16,8 @@ import type {
 } from '@recruitflow/contracts';
 import { CandidateFitScorecard } from '../components/candidate/CandidateFitScorecard';
 import { Icon } from '../components/Icon';
+import { SendWhatsAppDialog } from '../components/whatsapp/SendWhatsAppDialog';
+import { useAuth } from '../auth/AuthContext';
 import { Modal } from '../components/Modal';
 import { Alert } from '../components/ui/Alert';
 import { Badge } from '../components/ui/Badge';
@@ -49,12 +51,14 @@ function getInitials(name?: string | null): string {
 }
 
 export function ApplicationDetailPage() {
+  const { user } = useAuth();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const requestedStage = searchParams.get('stage');
   const { hasPermission } = usePermissions();
   const canViewInterviews = hasPermission('VACANCY_VIEW');
+  const [isWhatsAppOpen, setIsWhatsAppOpen] = useState(false);
   const [application, setApplication] = useState<Application | null>(null);
   const [vacancy, setVacancy] = useState<Vacancy | null>(null);
   const [history, setHistory] = useState<ApplicationStatusHistoryItem[]>([]);
@@ -1176,6 +1180,15 @@ export function ApplicationDetailPage() {
                     <span>{candidatePhone}</span>
                   </div>
                 )}
+                <button
+                  type="button"
+                  onClick={() => setIsWhatsAppOpen(true)}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-rf-border bg-rf-surface px-2.5 py-1.5 text-xs font-bold text-rf-ink hover:bg-rf-surface-hover"
+                  title="Send WhatsApp"
+                >
+                  <Icon name="chat" size={14} />
+                  WhatsApp
+                </button>
                 {candidateLocation && (
                   <div className="flex items-center gap-3 text-slate-600 dark:text-slate-300">
                     <Icon name="map-pin" size={14} className="text-slate-400 shrink-0" />
@@ -2338,6 +2351,19 @@ export function ApplicationDetailPage() {
       </Modal>
 
       {/* Toast Notification */}
+
+      <SendWhatsAppDialog
+        isOpen={isWhatsAppOpen}
+        onClose={() => setIsWhatsAppOpen(false)}
+        context={{
+          phone: candidatePhone,
+          candidateName,
+          positionTitle: application?.positionTitle,
+          organizationName: user?.organizationName,
+          recruiterName: user?.displayName,
+        }}
+      />
+
     </div>
   );
 }

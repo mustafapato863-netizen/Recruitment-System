@@ -59,6 +59,7 @@ const CVIntakePage = lazy(() => import('./pages/CVIntakePage').then((m) => ({ de
 const ReportsPage = lazy(() => import('./pages/ReportsPage').then((m) => ({ default: m.ReportsPage })));
 const PipelineSettingsPage = lazy(() => import('./pages/PipelineSettingsPage').then((m) => ({ default: m.PipelineSettingsPage })));
 const EmailTemplatesPage = lazy(() => import('./pages/EmailTemplatesPage').then((m) => ({ default: m.EmailTemplatesPage })));
+const WhatsAppTemplatesPage = lazy(() => import('./pages/WhatsAppTemplatesPage').then((m) => ({ default: m.WhatsAppTemplatesPage })));
 const PositionLevelTargetSettingsPage = lazy(() => import('./pages/PositionLevelTargetSettingsPage').then((m) => ({ default: m.PositionLevelTargetSettingsPage })));
 const IntegrationsPage = lazy(() => import('./pages/IntegrationsPage').then((m) => ({ default: m.IntegrationsPage })));
 const NotificationsPage = lazy(() => import('./pages/NotificationsPage').then((m) => ({ default: m.NotificationsPage })));
@@ -204,6 +205,14 @@ function App() {
                     element={
                       <PermissionGate requiredPermission="MASTER_DATA_MANAGE">
                         <EmailTemplatesPage />
+                      </PermissionGate>
+                    }
+                  />
+                  <Route
+                    path="/whatsapp-templates"
+                    element={
+                      <PermissionGate requiredPermission="MASTER_DATA_MANAGE">
+                        <WhatsAppTemplatesPage />
                       </PermissionGate>
                     }
                   />

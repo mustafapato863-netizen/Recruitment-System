@@ -1586,6 +1586,27 @@ export interface IntegrationItem {
 }
 
 // ─── Phase C: Stage Automation — Email Templates ────────────────
+
+export interface WhatsAppTemplateItem {
+  id: string;
+  organizationId: string;
+  name: string;
+  category: string;
+  interviewType: string;
+  bodyTemplate: string;
+  isDefault: boolean;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type WhatsAppTemplateCategory =
+  | 'ack'
+  | 'interview_invite'
+  | 'offer_next_step'
+  | 'rejection'
+  | 'misc';
+
 export interface EmailTemplateItem {
   id: string;
   organizationId: string;

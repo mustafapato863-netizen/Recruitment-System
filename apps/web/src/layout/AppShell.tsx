@@ -469,6 +469,7 @@ export function AppShellInner() {
             )}
             <div className="space-y-0.5">
               <NavigationItem icon="mail" label="Email Templates" to="/email-templates" navigationKey="email-templates" isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+              <NavigationItem icon="chat" label="WhatsApp Templates" to="/whatsapp-templates" navigationKey="whatsapp-templates" isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
               <NavigationItem icon="settings" label="Settings" to="/settings" navigationKey="settings" requiredAnyPermissions={['USERS_VIEW', 'MASTER_DATA_VIEW', 'OVERRIDE_WORKFLOW', 'AUDIT_VIEW']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
               <NavigationItem icon="user-cog" label="Users & Roles" to="/users" navigationKey="users" requiredPermission="USERS_VIEW" isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
               <NavigationItem icon="pipeline" label="Reporting Tree" to="/reporting-tree" navigationKey="reporting-tree" requiredPermission="USERS_VIEW" isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />

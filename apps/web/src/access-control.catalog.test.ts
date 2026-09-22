@@ -24,6 +24,10 @@ describe('NAVIGATION_CATALOG', () => {
     expect(getNavigationCatalogItem('email-templates')?.requiredPermission).toBe('MASTER_DATA_MANAGE');
   });
 
+  it('keeps whatsapp-templates on MASTER_DATA_MANAGE', () => {
+    expect(getNavigationCatalogItem('whatsapp-templates')?.requiredPermission).toBe('MASTER_DATA_MANAGE');
+  });
+
   it('has unique keys and routes', () => {
     const keys = NAVIGATION_CATALOG.map((item) => item.key);
     const routes = NAVIGATION_CATALOG.map((item) => item.route);
