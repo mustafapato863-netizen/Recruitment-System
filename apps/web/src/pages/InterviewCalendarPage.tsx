@@ -490,9 +490,9 @@ export function InterviewCalendarPage() {
 
   return (
     <PageFrame
-      eyebrow="Recruitment Operations"
+      eyebrow=""
       title="Interview Calendar"
-      description={`${viewMode === 'week' ? 'Week' : 'Day'} view · ${rangeLabel} · local timezone.`}
+      description={`${viewMode === 'week' ? 'Week' : 'Day'} · ${rangeLabel}`}
     >
       {error && (
         <Alert
@@ -717,11 +717,8 @@ export function InterviewCalendarPage() {
                               const candidateDisplay = cleanDisplayName(
                                 event.candidateName || event.title || 'Candidate'
                               );
-                              const attendeeText = cleanDisplayName(
-                                event.attendees?.[0]?.userName || 'Interviewer'
-                              );
                               const timeStr = formatSlotTime(event.scheduledStart);
-                              const roundType = (event.interviewType || 'INTERVIEW').toUpperCase();
+                              const roundType = (event.interviewType || 'Interview').replace(/_/g, ' ');
 
                               return (
                                 <button
@@ -729,24 +726,17 @@ export function InterviewCalendarPage() {
                                   type="button"
                                   onClick={() => setSelectedEvent(event)}
                                   className={`rf-outlook-event-card ${theme.colorClass}`}
-                                  title={`${event.title || 'Interview'} • Click to preview details`}
+                                  title={`${candidateDisplay} at ${timeStr}`}
                                 >
-                                  <div className="rf-outlook-event-card__header">
-                                    <span className="rf-outlook-event-card__type-tag" title={roundType}>
-                                      {roundType}
-                                    </span>
-                                    <span className="rf-outlook-event-card__time-pill">{timeStr}</span>
-                                  </div>
-
                                   <div className="rf-outlook-event-card__title" title={candidateDisplay}>
                                     {candidateDisplay}
                                   </div>
-
-                                  <div className="rf-outlook-event-card__candidate" title={attendeeText}>
-                                    <Icon name="user" size={10} className="shrink-0 opacity-70" />
-                                    <span className="truncate">{attendeeText}</span>
+                                  <div className="rf-outlook-event-card__header">
+                                    <span className="rf-outlook-event-card__time-pill">{timeStr}</span>
+                                    <span className="rf-outlook-event-card__type-tag" title={roundType}>
+                                      {roundType}
+                                    </span>
                                   </div>
-
                                   <div className="rf-outlook-event-card__footer">
                                     <span className="rf-outlook-event-card__platform-badge">
                                       <Icon name={platform.icon} size={9} className="shrink-0" />
@@ -800,7 +790,7 @@ export function InterviewCalendarPage() {
         <Modal
           isOpen={Boolean(selectedEvent)}
           onClose={() => setSelectedEvent(null)}
-          title="Interview Dossier & Meeting"
+          title="Interview"
           maxWidthClass="max-w-xl"
         >
           <div className="space-y-4 text-xs">
@@ -817,14 +807,14 @@ export function InterviewCalendarPage() {
                   <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200/80 dark:border-slate-700/80 flex items-start justify-between gap-3">
                     <div>
                       <div className="flex items-center gap-2 mb-1">
-                        <span className={`px-2 py-0.5 rounded-md font-extrabold text-[10px] tracking-wider uppercase border ${theme.badgeTone}`}>
-                          {selectedEvent.interviewType || 'INTERVIEW'}
+                        <span className={`px-2 py-0.5 rounded-md text-[10px] font-semibold border ${theme.badgeTone}`}>
+                          {selectedEvent.interviewType || 'Interview'}
                         </span>
-                        <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold text-[10px]">
+                        <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-medium text-[10px]">
                           {selectedEvent.status}
                         </span>
                       </div>
-                      <h3 className="font-extrabold text-slate-900 dark:text-white text-base leading-tight">
+                      <h3 className="font-bold text-slate-900 dark:text-white text-base leading-tight">
                         {candidateName}
                       </h3>
                       <p className="text-slate-500 dark:text-slate-400 text-xs mt-0.5 flex items-center gap-1.5">
@@ -1012,12 +1002,12 @@ export function InterviewCalendarPage() {
                   >
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className={`px-2 py-0.5 rounded font-extrabold text-[10px] tracking-wider uppercase border ${theme.badgeTone}`}>
-                          {event.interviewType || 'INTERVIEW'}
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${theme.badgeTone}`}>
+                          {event.interviewType || 'Interview'}
                         </span>
                         <span className="text-slate-500 font-bold text-[11px]">{timeStr}</span>
                       </div>
-                      <h4 className="font-extrabold text-slate-900 dark:text-white text-xs truncate">
+                      <h4 className="font-semibold text-slate-900 dark:text-white text-xs truncate">
                         {candidateName}
                       </h4>
                       <div className="flex items-center gap-2 text-slate-500 text-[11px] mt-0.5">
