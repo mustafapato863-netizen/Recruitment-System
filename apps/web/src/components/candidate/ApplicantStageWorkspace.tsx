@@ -1,1 +1,1 @@
-PLACEHOLDER_USE_LOCAL
+SEE_FILE_/tmp/ApplicantStageWorkspace.tsx
