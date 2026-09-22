@@ -113,7 +113,7 @@ const DEFAULT_STAGES: StageSetting[] = [
     iconTone: 'text-purple-600 bg-purple-50 dark:bg-purple-950/40 dark:text-purple-300',
     category: 'Offer',
     categoryTone: 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300',
-    requiredAction: 'Executive offer approval',
+    requiredAction: 'Offer approval',
     slaDays: '2 days',
     enabled: true,
   },
@@ -132,131 +132,85 @@ const DEFAULT_STAGES: StageSetting[] = [
   },
 ];
 
-const SLA_RULES_DATA = [
-  { roleLevel: 'Consultant Physician', timeToHire: '45 Days', screeningSla: '24 Hours', interviewSla: '3 Days', offerSla: '48 Hours', status: 'Active' },
-  { roleLevel: 'Specialist Physician', timeToHire: '35 Days', screeningSla: '24 Hours', interviewSla: '3 Days', offerSla: '48 Hours', status: 'Active' },
-  { roleLevel: 'Nursing Staff (ICU/ER/OR)', timeToHire: '25 Days', screeningSla: '12 Hours', interviewSla: '2 Days', offerSla: '24 Hours', status: 'Active' },
-  { roleLevel: 'Allied Healthcare & Tech', timeToHire: '28 Days', screeningSla: '24 Hours', interviewSla: '3 Days', offerSla: '48 Hours', status: 'Active' },
-  { roleLevel: 'Administrative & Ops', timeToHire: '21 Days', screeningSla: '24 Hours', interviewSla: '2 Days', offerSla: '24 Hours', status: 'Active' },
-];
-
-const INTERVIEW_TEMPLATES_DATA = [
-  {
-    id: 'it-1',
-    title: 'Clinical Physician Assessment',
-    department: 'Medical Operations',
-    duration: '60 mins',
-    rounds: 4,
-    rubrics: ['Diagnostic Acumen & Clinical Judgment', 'Patient Safety & Ethical Protocols', 'SCFHS / International Board Competency', 'Interprofessional Communication'],
-    scoreWeight: '100 pts total',
-  },
-  {
-    id: 'it-2',
-    title: 'Critical Care Nursing Assessment',
-    department: 'Nursing',
-    duration: '45 mins',
-    rounds: 3,
-    rubrics: ['Emergency Protocol Execution', 'Medication Administration & Safety', 'Patient Charting & EHR Workflow', 'Compassionate Care & Teamwork'],
-    scoreWeight: '100 pts total',
-  },
-  {
-    id: 'it-3',
-    title: 'Hospital Administration & Finance',
-    department: 'Operations',
-    duration: '45 mins',
-    rounds: 3,
-    rubrics: ['Healthcare Regulations & Compliance', 'Budgeting & Resource Optimization', 'Leadership & Cross-functional Alignment'],
-    scoreWeight: '100 pts total',
-  },
-];
-
-const REJECTION_REASONS_DATA = [
-  { code: 'REJ-LIC', label: 'SCFHS / Clinical License Not Verified', category: 'Regulatory Compliance', autoEmail: true, coolDown: '90 Days' },
-  { code: 'REJ-EXP', label: 'Clinical Subspecialty Experience Mismatch', category: 'Qualifications', autoEmail: true, coolDown: '180 Days' },
-  { code: 'REJ-SAL', label: 'Compensation Expectation Above Band', category: 'Compensation', autoEmail: false, coolDown: '30 Days' },
-  { code: 'REJ-WTH', label: 'Candidate Withdrew Application', category: 'Candidate Initiated', autoEmail: false, coolDown: 'None' },
-  { code: 'REJ-OFR', label: 'Candidate Accepted Competing Hospital Offer', category: 'Market Competition', autoEmail: false, coolDown: '60 Days' },
-];
-
 const RESPONSIBILITY_DEFINITIONS: Record<
   string,
   { label: string; desc: string; icon: string; category: string; color: string; badgeTone: string }
 > = {
   REQUISITIONS: {
-    label: 'Requisitions & Vacancies',
-    desc: 'Create and authorize clinical and operational vacancy requisitions.',
+    label: 'Jobs',
+    desc: 'Create and approve open jobs.',
     icon: 'file-text',
-    category: 'Intake & Governance',
+    category: 'Intake',
     color: 'border-blue-500 bg-blue-50/70 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300',
     badgeTone: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200/80 dark:border-blue-800',
   },
   SOURCING: {
-    label: 'Fast Sourcing Intake',
-    desc: 'Direct resume ingestion, batch CV intake, and talent pipeline parsing.',
+    label: 'Sourcing',
+    desc: 'Add CVs and people to the pool.',
     icon: 'users',
-    category: 'Intake & Governance',
+    category: 'Intake',
     color: 'border-cyan-500 bg-cyan-50/70 text-cyan-700 dark:bg-cyan-950/40 dark:text-cyan-300',
     badgeTone: 'bg-cyan-50 dark:bg-cyan-950/40 text-cyan-700 dark:text-cyan-300 border border-cyan-200/80 dark:border-cyan-800',
   },
   PRE_SCREENING: {
-    label: 'Clinical Pre-Screening',
-    desc: 'Conduct initial candidate qualification screening, phone triage, and baseline assessments.',
+    label: 'Screening',
+    desc: 'First review and phone screen.',
     icon: 'clipboard',
-    category: 'Clinical Assessment',
+    category: 'Assessment',
     color: 'border-emerald-500 bg-emerald-50/70 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300',
     badgeTone: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800',
   },
   INTERVIEWS: {
-    label: 'Interview Panel & Scorecards',
-    desc: 'Schedule clinical panels, evaluate peer competencies, and submit scorecards.',
+    label: 'Interviews',
+    desc: 'Schedule interviews and submit scorecards.',
     icon: 'calendar',
-    category: 'Clinical Assessment',
+    category: 'Assessment',
     color: 'border-purple-500 bg-purple-50/70 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300',
     badgeTone: 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200/80 dark:border-purple-800',
   },
   COMPENSATION: {
-    label: 'Salary Structuring & Packages',
-    desc: 'Structure base remuneration, housing, transport allowances, and executive bands.',
+    label: 'Pay',
+    desc: 'Set salary and allowances.',
     icon: 'offer',
-    category: 'Offers & Legal',
+    category: 'Offers',
     color: 'border-amber-500 bg-amber-50/70 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300',
     badgeTone: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200/80 dark:border-amber-800',
   },
   OFFER_SIGNOFF: {
-    label: 'Offer Approval Authority',
-    desc: 'Final authorization to sign off, seal, and issue official hospital employment offers.',
+    label: 'Offer approval',
+    desc: 'Approve and send the offer.',
     icon: 'check-circle',
-    category: 'Offers & Legal',
+    category: 'Offers',
     color: 'border-rose-500 bg-rose-50/70 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300',
     badgeTone: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200/80 dark:border-rose-800',
   },
   CREDENTIALING: {
-    label: 'Medical Credentialing & SCFHS',
-    desc: 'Audit Saudi Commission for Health Specialties licenses, DataFlow, and primary source docs.',
+    label: 'Licenses',
+    desc: 'Check licenses and source documents.',
     icon: 'shield',
-    category: 'Compliance & Verification',
+    category: 'Checks',
     color: 'border-indigo-500 bg-indigo-50/70 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300',
     badgeTone: 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800',
   },
   ONBOARDING: {
-    label: 'Onboarding & Clinical Induction',
-    desc: 'Coordinate medical examinations, visa stamping, ERP handoff, and hospital orientation.',
+    label: 'Joining',
+    desc: 'Medical checks, visa, and first day.',
     icon: 'users',
-    category: 'Compliance & Verification',
+    category: 'Checks',
     color: 'border-teal-500 bg-teal-50/70 text-teal-700 dark:bg-teal-950/40 dark:text-teal-300',
     badgeTone: 'bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 border border-teal-200/80 dark:border-teal-800',
   },
 };
 
 export function SettingsPage() {
-  const [activeSubTab, setActiveSubTab] = useState('Pipeline Stages');
+  const [activeSubTab, setActiveSubTab] = useState('Pipeline');
   const [templates, setTemplates] = useState<PipelineTemplateSummary[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
   const [stages, setStages] = useState<StageSetting[]>(DEFAULT_STAGES);
   const [users, setUsers] = useState<UserSummary[]>([]);
   const [roles, setRoles] = useState<RoleSummary[]>([]);
   const [isSavedToast, setIsSavedToast] = useState(false);
-  const [toastMessage, setToastMessage] = useState('Recruitment settings updated successfully!');
+  const [toastMessage, setToastMessage] = useState('Saved.');
   const [isAddStageModalOpen, setIsAddStageModalOpen] = useState(false);
   const [newStageName, setNewStageName] = useState('');
   const [newStageCategory, setNewStageCategory] = useState('Interview');
@@ -400,10 +354,6 @@ export function SettingsPage() {
     setTimeout(() => setIsSavedToast(false), 3000);
   };
 
-  const handleSave = () => {
-    showToast('Recruitment settings & pipeline governance configuration updated in database!');
-  };
-
   const toggleStage = async (id: string) => {
     const stageToToggle = stages.find((s) => s.id === id);
     if (!stageToToggle) return;
@@ -486,62 +436,31 @@ export function SettingsPage() {
       {/* ── Top Action Bar ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-            Recruitment Settings
-          </h1>
-
-          <p className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 mt-0.5">
-            Configure recruitment pipelines, SLAs, scoring rubrics, compensation policies, and access controls.
+          <h1 className="rf-page-title">Settings</h1>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            Pipeline stages and who can do what. Other setup lives on its own page.
           </p>
         </div>
-
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-400">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span>Database Synced</span>
-          </div>
-
-          <button
-            type="button"
-            onClick={handleSave}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
-          >
-            <Icon name="check-circle" size={14} />
-            <span>Save Configuration</span>
-          </button>
-        </div>
       </div>
 
-      {/* ── Quick Administrative Deep-Links Grid ── */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+      <nav className="flex flex-wrap gap-2" aria-label="Other setup pages">
         {[
-          { label: 'Master Data', desc: 'Entities & Branches', icon: 'grid-squares', to: '/master-data', color: 'blue' },
-          { label: 'SLA Targets', desc: 'Position Goals', icon: 'clock', to: '/settings/targets', color: 'emerald' },
-          { label: 'Pipeline Builder', desc: 'Custom Workflows', icon: 'pipeline', to: '/pipeline-settings', color: 'purple' },
-          { label: 'Users and roles', desc: 'People and access', icon: 'users', to: '/users', color: 'amber' },
-          { label: 'Integrations', desc: 'APIs & Webhooks', icon: 'integrations', to: '/integrations', color: 'cyan' },
-          { label: 'Audit Log', desc: 'Compliance Trail', icon: 'audit', to: '/audit-log', color: 'rose' },
+          { label: 'Master data', to: '/master-data' },
+          { label: 'SLA targets', to: '/settings/targets' },
+          { label: 'Pipeline', to: '/pipeline-settings' },
+          { label: 'Users and roles', to: '/users' },
+          { label: 'Integrations', to: '/integrations' },
+          { label: 'Audit log', to: '/audit-log' },
         ].map((item) => (
           <Link
-            key={item.label}
+            key={item.to}
             to={item.to}
-            className="group flex flex-col p-3.5 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl hover:border-blue-500/50 hover:shadow-md transition-all cursor-pointer"
+            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:border-blue-400 hover:text-blue-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200"
           >
-            <div className="flex items-center justify-between mb-2">
-              <span className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 group-hover:bg-blue-50 group-hover:text-blue-600 transition">
-                <Icon name={item.icon as IconName} size={16} />
-              </span>
-              <Icon name="arrow-left" size={12} className="rotate-180 text-slate-300 group-hover:text-blue-500 transition" />
-            </div>
-            <span className="text-xs font-extrabold text-slate-900 dark:text-white group-hover:text-blue-600 transition">
-              {item.label}
-            </span>
-            <span className="text-[11px] font-medium text-slate-400 mt-0.5 truncate">
-              {item.desc}
-            </span>
+            {item.label}
           </Link>
         ))}
-      </div>
+      </nav>
 
       {isSavedToast && (
         <div className="p-3 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 rounded-xl text-xs font-bold animate-fade-in flex items-center gap-2">
@@ -553,13 +472,9 @@ export function SettingsPage() {
       {/* ── Settings Sub-Navigation Bar ── */}
       <div className="flex items-center gap-6 border-b border-slate-200 dark:border-slate-800 text-xs font-semibold overflow-x-auto pb-1">
         {[
-          { label: 'Pipeline Stages', icon: 'pipeline' },
-          { label: 'SLA Rules', icon: 'clock' },
-          { label: 'Interview Templates', icon: 'file-text' },
-          { label: 'Offer Templates', icon: 'offer' },
-          { label: 'Rejection Reasons', icon: 'close' },
-          { label: 'User Control & Responsibilities', icon: 'users' },
-          { label: 'Permissions', icon: 'shield' },
+          { label: 'Pipeline' },
+          { label: 'People' },
+          { label: 'Permissions' },
         ].map((tab) => (
           <button
             key={tab.label}
@@ -571,14 +486,13 @@ export function SettingsPage() {
                 : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
-            <Icon name={tab.icon as IconName} size={14} />
             <span>{tab.label}</span>
           </button>
         ))}
       </div>
 
       {/* ── TAB 1: Pipeline Stages & Workflow ── */}
-      {activeSubTab === 'Pipeline Stages' && (
+      {activeSubTab === 'Pipeline' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
             <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-4">
@@ -589,8 +503,8 @@ export function SettingsPage() {
                   </h2>
                   <p className="text-xs text-slate-400 mt-0.5">
                     {templates.length > 0
-                      ? `Active Template: ${templates.find((t) => t.id === selectedTemplateId)?.name || 'Clinical Standard'}`
-                      : 'Standard clinical recruitment pipeline template stored in database.'}
+                      ? `Template: ${templates.find((t) => t.id === selectedTemplateId)?.name || 'Default'}`
+                      : 'Stages load from the saved pipeline. Until then, this is the default list.'}
                   </p>
                 </div>
 
@@ -609,7 +523,7 @@ export function SettingsPage() {
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-xl text-xs font-bold text-blue-600 dark:text-blue-300 hover:bg-blue-100 transition shadow-2xs"
                   >
                     <Icon name="settings" size={13} />
-                    <span>Advanced Builder</span>
+                    <span>Edit pipeline</span>
                   </Link>
                 </div>
               </div>
@@ -687,7 +601,7 @@ export function SettingsPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <span className="block font-bold text-slate-900 dark:text-white">Allow Skipping Stages</span>
-                    <span className="block text-[11px] text-slate-400">Enable fast-track for pre-screened healthcare executives.</span>
+                    <span className="block text-[11px] text-slate-400">Let a recruiter move someone past a stage.</span>
                   </div>
                   <button
                     type="button"
@@ -737,294 +651,45 @@ export function SettingsPage() {
         </div>
       )}
 
-      {/* ── TAB 2: SLA Rules & Position Targets ── */}
-      {activeSubTab === 'SLA Rules' && (
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
-            <div>
-              <h2 className="text-base font-extrabold text-slate-900 dark:text-white">
-                Service Level Agreements (SLAs) & Target Metrics
-              </h2>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Hospital time-to-hire thresholds and response time SLAs by clinical position level.
-              </p>
-            </div>
-
-            <Link
-              to="/settings/targets"
-              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs"
-            >
-              <Icon name="clock" size={14} />
-              <span>Manage Position Level Targets</span>
-            </Link>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider text-[10.5px]">
-                <tr>
-                  <th className="px-4 py-3 rounded-l-xl">Position Level</th>
-                  <th className="px-4 py-3">Time to Hire Goal</th>
-                  <th className="px-4 py-3">Screening SLA</th>
-                  <th className="px-4 py-3">Interview SLA</th>
-                  <th className="px-4 py-3">Offer Approval SLA</th>
-                  <th className="px-4 py-3 rounded-r-xl">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {SLA_RULES_DATA.map((row) => (
-                  <tr key={row.roleLevel} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition">
-                    <td className="px-4 py-3.5 font-bold text-slate-900 dark:text-white">{row.roleLevel}</td>
-                    <td className="px-4 py-3.5 font-extrabold text-blue-600 dark:text-blue-400">{row.timeToHire}</td>
-                    <td className="px-4 py-3.5 text-slate-600 dark:text-slate-300">{row.screeningSla}</td>
-                    <td className="px-4 py-3.5 text-slate-600 dark:text-slate-300">{row.interviewSla}</td>
-                    <td className="px-4 py-3.5 text-slate-600 dark:text-slate-300">{row.offerSla}</td>
-                    <td className="px-4 py-3.5">
-                      <span className="px-2.5 py-1 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 font-bold rounded-lg text-[11px]">
-                        {row.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* ── TAB 3: Interview Templates ── */}
-      {activeSubTab === 'Interview Templates' && (
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
-            <div>
-              <h2 className="text-base font-extrabold text-slate-900 dark:text-white">
-                Standardized Clinical Interview Rubrics
-              </h2>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Evaluation scorecards configured for hospital hiring panels and medical committees.
-              </p>
-            </div>
-
-            <Link
-              to="/interviews"
-              className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-800 dark:text-slate-200 rounded-xl text-xs font-bold transition"
-            >
-              <Icon name="calendar" size={14} />
-              <span>View Interview Calendar</span>
-            </Link>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            {INTERVIEW_TEMPLATES_DATA.map((tmpl) => (
-              <div key={tmpl.id} className="p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-800/30 flex flex-col justify-between space-y-4">
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[10.5px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300">
-                      {tmpl.department}
-                    </span>
-                    <span className="text-xs font-bold text-slate-400">{tmpl.duration}</span>
-                  </div>
-                  <h3 className="text-sm font-extrabold text-slate-900 dark:text-white">{tmpl.title}</h3>
-
-                  <div className="mt-3 space-y-1.5">
-                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wide">Key Evaluation Rubrics:</span>
-                    {tmpl.rubrics.map((r) => (
-                      <div key={r} className="flex items-start gap-1.5 text-xs text-slate-600 dark:text-slate-300">
-                        <span className="text-emerald-500">✓</span>
-                        <span>{r}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="pt-3 border-t border-slate-200/60 dark:border-slate-800 flex items-center justify-between text-xs">
-                  <span className="font-bold text-slate-500">{tmpl.scoreWeight}</span>
-                  <span className="font-bold text-blue-600 dark:text-blue-400 cursor-pointer hover:underline">Edit Rubric</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* ── TAB 4: Offer Templates ── */}
-      {activeSubTab === 'Offer Templates' && (
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
-            <div>
-              <h2 className="text-base font-extrabold text-slate-900 dark:text-white">
-                Compensation & Offer Packages
-              </h2>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Standard remuneration structures, housing allowances, medical coverage, and tiered approvals.
-              </p>
-            </div>
-
-            <Link
-              to="/offers"
-              className="inline-flex items-center gap-2 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs"
-            >
-              <Icon name="offer" size={14} />
-              <span>Open Offers Dashboard</span>
-            </Link>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {[
-              { tier: 'Physician Consultant', basic: 'SAR 45,000+', housing: '25% Basic', transport: 'SAR 2,000', coverage: 'Class A+ Executive VIP' },
-              { tier: 'Specialist Physician', basic: 'SAR 28,000+', housing: '25% Basic', transport: 'SAR 1,500', coverage: 'Class A VIP' },
-              { tier: 'Clinical Nursing', basic: 'SAR 9,000+', housing: 'Hospital Accom / Allowance', transport: 'Hospital Transport', coverage: 'Class B Standard' },
-              { tier: 'Allied Health Staff', basic: 'SAR 12,000+', housing: '20% Basic', transport: 'SAR 1,000', coverage: 'Class B Standard' },
-            ].map((p) => (
-              <div key={p.tier} className="p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-800/30 space-y-3">
-                <span className="text-xs font-extrabold text-slate-900 dark:text-white block">{p.tier}</span>
-                <div className="space-y-1 text-xs">
-                  <div className="flex justify-between"><span className="text-slate-400">Base Salary:</span><span className="font-bold text-slate-800 dark:text-slate-200">{p.basic}</span></div>
-                  <div className="flex justify-between"><span className="text-slate-400">Housing:</span><span className="font-semibold text-slate-700 dark:text-slate-300">{p.housing}</span></div>
-                  <div className="flex justify-between"><span className="text-slate-400">Transport:</span><span className="font-semibold text-slate-700 dark:text-slate-300">{p.transport}</span></div>
-                  <div className="flex justify-between"><span className="text-slate-400">Medical:</span><span className="font-semibold text-emerald-600 dark:text-emerald-400">{p.coverage}</span></div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* ── TAB 5: Rejection Reasons ── */}
-      {activeSubTab === 'Rejection Reasons' && (
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
-            <div>
-              <h2 className="text-base font-extrabold text-slate-900 dark:text-white">
-                Rejection Reasons & Pipeline Exit Codes
-              </h2>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Regulated rejection categories with compliance cooldown periods and candidate notification triggers.
-              </p>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead className="bg-slate-50 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider text-[10.5px]">
-                <tr>
-                  <th className="px-4 py-3 rounded-l-xl">Code</th>
-                  <th className="px-4 py-3">Reason Label</th>
-                  <th className="px-4 py-3">Category</th>
-                  <th className="px-4 py-3">Candidate Email</th>
-                  <th className="px-4 py-3 rounded-r-xl">Reapplication Cooldown</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {REJECTION_REASONS_DATA.map((r) => (
-                  <tr key={r.code} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition">
-                    <td className="px-4 py-3.5 font-mono font-bold text-slate-500">{r.code}</td>
-                    <td className="px-4 py-3.5 font-bold text-slate-900 dark:text-white">{r.label}</td>
-                    <td className="px-4 py-3.5 text-slate-500">{r.category}</td>
-                    <td className="px-4 py-3.5">
-                      <span className={`px-2 py-0.5 rounded-full text-[10.5px] font-bold ${r.autoEmail ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'}`}>
-                        {r.autoEmail ? 'Automated Email' : 'Manual Review'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3.5 font-bold text-slate-700 dark:text-slate-300">{r.coolDown}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
       {/* ── TAB 6: User Control & Selected Responsibilities ── */}
-      {activeSubTab === 'User Control & Responsibilities' && (
+      {activeSubTab === 'People' && (
         <div className="space-y-6">
-          {/* Executive Header */}
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-            <div className="flex items-start gap-4">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center shadow-md shadow-blue-500/20 shrink-0">
-                <Icon name="users" size={24} />
-              </div>
-              <div>
-                <div className="flex items-center gap-2.5 flex-wrap">
-                  <h2 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white tracking-tight">
-                    User Control Panel & Delegated Responsibilities
-                  </h2>
-                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 border border-blue-200/80 dark:border-blue-800">
-                    Live Database Control
-                  </span>
-                </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-3xl leading-relaxed">
-                  Delegate hospital facility branches, clinical and medical departments, recruitment workflow responsibilities (sourcing, screening, interviews, compensation, offer sign-off, credentialing, onboarding), and Row-Level Security (RLS) data scopes per user.
-                </p>
-              </div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-slate-900 dark:text-white">People</h2>
+              <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Branches, departments, and what each person can do.</p>
             </div>
-
-            <div className="flex items-center gap-2.5 self-start lg:self-center shrink-0">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={() => void loadUsersAndRoles()}
                 disabled={isLoadingResp}
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold transition cursor-pointer disabled:opacity-50"
+                className="inline-flex min-h-8 items-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 cursor-pointer"
               >
-                <Icon name="integrations" size={14} className={isLoadingResp ? 'animate-spin' : ''} />
-                <span>{isLoadingResp ? 'Syncing...' : 'Refresh Personnel'}</span>
+                {isLoadingResp ? 'Refreshing' : 'Refresh'}
               </button>
-
               <Link
                 to="/users"
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+                className="inline-flex min-h-8 items-center rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white hover:bg-blue-700"
               >
-                <Icon name="shield" size={14} />
-                <span>Full RLS Security Hub</span>
+                Users and roles
               </Link>
             </div>
           </div>
 
-          {/* Operational Metrics Row */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
-            <div className="p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs space-y-1">
-              <div className="flex items-center justify-between text-slate-400">
-                <span className="text-[11px] font-bold uppercase tracking-wider">Authorized Personnel</span>
-                <Icon name="users" size={16} className="text-blue-500" />
-              </div>
-              <div className="text-2xl font-black text-slate-900 dark:text-white">
-                {userRespData?.users.length ?? users.length}
-              </div>
-              <p className="text-[11px] text-slate-400">Active accounts in organization</p>
-            </div>
-
-            <div className="p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs space-y-1">
-              <div className="flex items-center justify-between text-slate-400">
-                <span className="text-[11px] font-bold uppercase tracking-wider">Hospital Facilities</span>
-                <Icon name="grid-squares" size={16} className="text-emerald-500" />
-              </div>
-              <div className="text-2xl font-black text-slate-900 dark:text-white">
-                {userRespData?.branches.length || 32}
-              </div>
-              <p className="text-[11px] text-slate-400">Branches across network</p>
-            </div>
-
-            <div className="p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs space-y-1">
-              <div className="flex items-center justify-between text-slate-400">
-                <span className="text-[11px] font-bold uppercase tracking-wider">Clinical Units</span>
-                <Icon name="clipboard" size={16} className="text-purple-500" />
-              </div>
-              <div className="text-2xl font-black text-slate-900 dark:text-white">
-                {userRespData?.departments.length || 18}
-              </div>
-              <p className="text-[11px] text-slate-400">Medical & operational depts</p>
-            </div>
-
-            <div className="p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs space-y-1">
-              <div className="flex items-center justify-between text-slate-400">
-                <span className="text-[11px] font-bold uppercase tracking-wider">Workflow Stages</span>
-                <Icon name="pipeline" size={16} className="text-amber-500" />
-              </div>
-              <div className="text-2xl font-black text-slate-900 dark:text-white">
-                8 Stages
-              </div>
-              <p className="text-[11px] text-slate-400">Granular responsibilities</p>
-            </div>
+          <div className="flex flex-wrap gap-2 text-xs">
+            <span className="inline-flex items-baseline gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 dark:border-slate-800 dark:bg-slate-900">
+              <span className="text-slate-500">People</span>
+              <span className="font-semibold text-slate-900 dark:text-white">{userRespData?.users.length ?? users.length}</span>
+            </span>
+            <span className="inline-flex items-baseline gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 dark:border-slate-800 dark:bg-slate-900">
+              <span className="text-slate-500">Branches</span>
+              <span className="font-semibold text-slate-900 dark:text-white">{userRespData?.branches.length ?? 0}</span>
+            </span>
+            <span className="inline-flex items-baseline gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 dark:border-slate-800 dark:bg-slate-900">
+              <span className="text-slate-500">Departments</span>
+              <span className="font-semibold text-slate-900 dark:text-white">{userRespData?.departments.length ?? 0}</span>
+            </span>
           </div>
 
           {/* Search & Filter Controls Toolbar */}
@@ -1092,7 +757,7 @@ export function SettingsPage() {
                   onChange={(e) => setRespWorkflowFilter(e.target.value)}
                   className="w-full py-2 px-3 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="">All Responsibilities</option>
+                  <option value="">All work</option>
                   {Object.entries(RESPONSIBILITY_DEFINITIONS).map(([key, item]) => (
                     <option key={key} value={key}>
                       {item.label}
@@ -1106,7 +771,7 @@ export function SettingsPage() {
             <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-slate-100 dark:border-slate-800/70 text-xs">
               <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
                 <span className="font-semibold">
-                  Showing {filteredRespUsers.length} of {userRespData?.users.length || users.length} personnel
+                  Showing {filteredRespUsers.length} of {userRespData?.users.length || users.length} people
                 </span>
                 {(respSearchQuery || respRoleFilter || respDeptFilter || respWorkflowFilter || respBranchFilter) && (
                   <button
@@ -1125,9 +790,7 @@ export function SettingsPage() {
                 )}
               </div>
 
-              <div className="text-[11px] text-slate-400">
-                Click <span className="font-bold text-slate-700 dark:text-slate-300">"Configure Responsibilities & Scope"</span> on any user card to adjust delegations.
-              </div>
+              <div className="text-[11px] text-slate-500">Use Edit access on a person to change branches and work.</div>
             </div>
           </div>
 
@@ -1137,9 +800,9 @@ export function SettingsPage() {
               <div className="w-12 h-12 mx-auto rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center">
                 <Icon name="users" size={20} />
               </div>
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white">No personnel found</h3>
-              <p className="text-xs text-slate-400 max-w-md mx-auto">
-                No users match your selected search query or filters. Clear the filters or adjust your query.
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-white">No people found</h3>
+              <p className="text-xs text-slate-500 max-w-md mx-auto">
+                Nothing matches these filters.
               </p>
             </div>
           ) : (
@@ -1162,7 +825,7 @@ export function SettingsPage() {
                       {/* Top User Header */}
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white font-black flex items-center justify-center text-sm shadow-xs shrink-0">
+                          <div className="grid h-10 w-10 place-items-center rounded-full bg-slate-100 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-200 shrink-0">
                             {initials}
                           </div>
                           <div className="min-w-0">
@@ -1208,12 +871,10 @@ export function SettingsPage() {
                         <div>
                           <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-1">
                             <Icon name="grid-squares" size={12} className="text-blue-500" />
-                            <span>Hospital Facility Allocation</span>
+                            <span>Branches</span>
                           </div>
                           {isAllBranches ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200/70 dark:border-blue-800">
-                              <span>🏥 All 32 Hospital Facilities</span>
-                            </span>
+                            <span className="text-xs text-slate-600 dark:text-slate-300">All branches</span>
                           ) : (
                             <div className="flex flex-wrap gap-1">
                               {user.branches.slice(0, 3).map((b) => (
@@ -1237,12 +898,10 @@ export function SettingsPage() {
                         <div>
                           <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-1">
                             <Icon name="clipboard" size={12} className="text-purple-500" />
-                            <span>Department / Clinical Unit Scope</span>
+                            <span>Departments</span>
                           </div>
                           {isAllDepts ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200/70 dark:border-purple-800">
-                              <span>🩺 All Clinical & Administrative Units</span>
-                            </span>
+                            <span className="text-xs text-slate-600 dark:text-slate-300">All departments</span>
                           ) : (
                             <div className="flex flex-wrap gap-1">
                               {user.departments.slice(0, 3).map((d) => (
@@ -1268,16 +927,16 @@ export function SettingsPage() {
                         <div className="flex items-center justify-between text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-2">
                           <span className="flex items-center gap-1.5">
                             <Icon name="pipeline" size={12} className="text-amber-500" />
-                            <span>Selected Responsibilities</span>
+                            <span>Work</span>
                           </span>
                           <span className="text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-                            {userWorkflows.length} / 8 Active
+                            {userWorkflows.length} / {Object.keys(RESPONSIBILITY_DEFINITIONS).length}
                           </span>
                         </div>
 
                         {userWorkflows.length === 0 ? (
                           <p className="text-xs text-slate-400 italic py-1">
-                            No workflow responsibilities assigned.
+                            None assigned.
                           </p>
                         ) : (
                           <div className="flex flex-wrap gap-1.5">
@@ -1349,7 +1008,7 @@ export function SettingsPage() {
                         className="w-full py-2.5 px-3 rounded-xl bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white text-xs font-extrabold flex items-center justify-center gap-2 transition shadow-xs cursor-pointer"
                       >
                         <Icon name="settings" size={13} />
-                        <span>Configure Responsibilities & Scope</span>
+                        <span>Edit access</span>
                       </button>
                     </div>
                   </div>
@@ -1361,11 +1020,11 @@ export function SettingsPage() {
           {/* Workflow Responsibilities Reference Matrix */}
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-4">
             <div className="border-b border-slate-100 dark:border-slate-800 pb-3">
-              <h3 className="text-sm font-extrabold text-slate-900 dark:text-white">
-                Delegated Workflow Responsibilities Governance Matrix
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
+                Responsibilities
               </h3>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Hospital workflow stages and the operational responsibilities delegated to clinical evaluators, HR recruiters, and department leadership.
+              <p className="text-xs text-slate-500 mt-0.5">
+                What each label means when you edit a person.
               </p>
             </div>
 
@@ -1401,12 +1060,8 @@ export function SettingsPage() {
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
             <div>
-              <h2 className="text-base font-extrabold text-slate-900 dark:text-white">
-                Role-Based Access Control (RBAC) Governance
-              </h2>
-              <p className="text-xs text-slate-400 mt-0.5">
-                Active security roles and functional privilege gates enforced across the API and database.
-              </p>
+              <h2 className="text-base font-semibold text-slate-900 dark:text-white">Roles</h2>
+              <p className="text-xs text-slate-500 mt-0.5">Edit permissions on Users and roles.</p>
             </div>
 
             <Link
@@ -1414,7 +1069,7 @@ export function SettingsPage() {
               className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 text-slate-800 dark:text-slate-200 rounded-xl text-xs font-bold transition"
             >
               <Icon name="audit" size={14} />
-              <span>Inspect Audit Trail</span>
+              <span>Audit log</span>
             </Link>
           </div>
 
@@ -1426,7 +1081,7 @@ export function SettingsPage() {
                   <span className="font-mono text-[10px] px-2 py-0.5 rounded-md bg-slate-200/70 dark:bg-slate-700 font-bold text-slate-700 dark:text-slate-300">{r.code}</span>
                 </div>
                 <p className="text-[11px] text-slate-400">
-                  {r.description || 'Enterprise role with scoped permissions for recruitment workflows.'}
+                  {r.description || 'No description.'}
                 </p>
               </div>
             ))}
@@ -1438,7 +1093,7 @@ export function SettingsPage() {
       <Modal
         isOpen={isAddStageModalOpen}
         onClose={() => setIsAddStageModalOpen(false)}
-        title="Add New Pipeline Stage"
+        title="Add stage"
         maxWidthClass="max-w-md"
       >
         <div className="space-y-4 text-xs">
