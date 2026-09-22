@@ -322,11 +322,11 @@ export function InterviewsPage() {
           : 'TBD',
         duration: durationMins ? `${durationMins}m` : '45m',
         candidateName: name,
-        candidateRole: int.positionTitle || int.application?.positionTitle || 'Healthcare Specialist',
+        candidateRole: int.positionTitle || int.application?.positionTitle || 'Role',
         candidateAvatar: initials,
         jobTitle: int.positionTitle || int.application?.positionTitle || 'Position',
-        department: int.application?.vacancy?.department || 'Saudi German Health',
-        typeTag: int.interviewType ? `${int.interviewType} Round` : 'Panel Round',
+        department: int.application?.vacancy?.department || '',
+        typeTag: int.interviewType || 'Interview',
         typeTone,
         panel: `${int.attendees?.length || 1} Interviewer${(int.attendees?.length || 1) > 1 ? 's' : ''}`,
         mode,
@@ -462,7 +462,7 @@ export function InterviewsPage() {
             <QuickGuideTrigger />
           </div>
           <p className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">
-            Coordinate interviews and booking links.
+            Upcoming interviews and pending scorecards.
           </p>
         </div>
 
@@ -494,7 +494,7 @@ export function InterviewsPage() {
             className="inline-flex min-h-10 items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
           >
             <Icon name="plus" size={14} />
-            <span>Schedule Interview</span>
+            <span>Schedule</span>
           </button>
         </div>
       </div>
@@ -504,9 +504,9 @@ export function InterviewsPage() {
         <div className="bg-gradient-to-r from-blue-50 via-indigo-50/40 to-slate-50 dark:from-blue-950/40 dark:via-indigo-950/20 dark:to-slate-900 rounded-2xl border border-blue-200/80 dark:border-blue-900/60 p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-blue-600 text-white shadow-2xs">
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-blue-600 text-white shadow-2xs">
                 <Icon name="lock" size={10} />
-                Position Interviews
+                This job
               </span>
               <span className="text-xs font-mono font-bold text-slate-500 dark:text-slate-400">
                 {currentVacancy.vacancyCode}
@@ -533,7 +533,7 @@ export function InterviewsPage() {
               className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 transition shadow-xs cursor-pointer"
             >
               <Icon name="arrow-left" size={13} />
-              <span>Back to Overview</span>
+              <span>Back</span>
             </button>
             <button
               type="button"
@@ -541,7 +541,7 @@ export function InterviewsPage() {
               className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-500 hover:text-slate-900 dark:hover:text-white transition cursor-pointer"
               title="View all interviews across all vacancies"
             >
-              <span>View All Interviews</span>
+              <span>All interviews</span>
             </button>
           </div>
         </div>
@@ -553,25 +553,25 @@ export function InterviewsPage() {
           <button
             type="button"
             onClick={() => setInterviewsScope('all')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition cursor-pointer ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer ${
               interviewsScope === 'all'
                 ? 'bg-blue-600 text-white shadow-xs'
                 : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50'
             }`}
           >
-            All Interviews ({apiInterviews.length})
+            All ({apiInterviews.length})
           </button>
           <button
             type="button"
             onClick={() => setInterviewsScope('mine')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-extrabold transition cursor-pointer flex items-center gap-1.5 ${
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center gap-1.5 ${
               interviewsScope === 'mine'
                 ? 'bg-blue-600 text-white shadow-xs'
                 : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-50'
             }`}
           >
             <Icon name="user" size={12} />
-            <span>My Assigned Interviews ({myInterviewsCount})</span>
+            <span>Mine ({myInterviewsCount})</span>
           </button>
         </div>
 
@@ -582,7 +582,7 @@ export function InterviewsPage() {
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold transition cursor-pointer"
           >
             <Icon name="calendar" size={13} />
-            <span>Calendar View</span>
+            <span>Calendar</span>
           </button>
         </div>
       </div>
@@ -611,13 +611,13 @@ export function InterviewsPage() {
           ) : interviewGroups.length === 0 ? (
             <PageState
               kind="empty"
-              title="No interviews scheduled"
+              title="No interviews"
               description={
                 apiInterviews.length === 0
                   ? 'There are no scheduled interviews yet.'
                   : 'No interviews match your selected filters.'
               }
-              actionLabel={apiInterviews.length === 0 ? 'Schedule Interview' : 'Reset Filters'}
+              actionLabel={apiInterviews.length === 0 ? 'Schedule' : 'Reset filters'}
               onAction={() => {
                 if (apiInterviews.length === 0) {
                   setIsScheduleModalOpen(true);
@@ -636,7 +636,7 @@ export function InterviewsPage() {
                   {/* Day Section Header */}
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <h2 className="text-xs sm:text-sm font-extrabold text-slate-900 dark:text-white">
+                      <h2 className="text-xs sm:text-sm font-semibold text-slate-900 dark:text-white">
                         {group.dayTitle} <span className="font-normal text-slate-400">&bull; {group.daySubtitle}</span>
                       </h2>
                     </div>
@@ -675,7 +675,7 @@ export function InterviewsPage() {
           {/* Feedback Pending Card */}
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-3.5">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
-              <h2 className="text-sm font-extrabold text-slate-900 dark:text-white">
+              <h2 className="text-sm font-semibold text-slate-900 dark:text-white">
                 Feedback Pending
               </h2>
               {pendingFeedbackInterviews.length > 0 && (
@@ -720,7 +720,7 @@ export function InterviewsPage() {
           {/* Today's Interviews Summary Card */}
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-3.5">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
-              <h2 className="text-sm font-extrabold text-slate-900 dark:text-white">
+              <h2 className="text-sm font-semibold text-slate-900 dark:text-white">
                 Interview Summary
               </h2>
             </div>
