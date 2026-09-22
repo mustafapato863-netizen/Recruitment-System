@@ -5,12 +5,10 @@ import { PageFrame } from '../components/ui/PageFrame';
 import { PageState } from '../components/ui/PageState';
 import { Alert } from '../components/ui/Alert';
 import { Avatar } from '../components/ui/Avatar';
-import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
 import { DataToolbar } from '../components/ui/DataToolbar';
 import { FilterChip } from '../components/ui/FilterChips';
 import { Input } from '../components/ui/Input';
-import { MetricCard } from '../components/ui/MetricCard';
 import { ProgressBar } from '../components/ui/ProgressBar';
 import { ResponsiveDataView, type ResponsiveDataColumn } from '../components/ui/ResponsiveDataView';
 import { TableSkeleton } from '../components/ui/Skeleton';
@@ -33,13 +31,22 @@ type JoiningRow = {
 
 const JOINING_STATUSES = ['', 'Awaiting Joining', 'Joined', 'Postponed', 'No-show'] as const;
 
+function joiningNextAction(status: string) {
+  switch (status) {
+    case 'Awaiting Joining':
+      return { label: 'Confirm joining', to: (id: string) => `/hires/${id}#checklist` };
+    case 'Postponed':
+      return { label: 'Update date', to: (id: string) => `/hires/${id}#checklist` };
+    case 'No-show':
+      return { label: 'Open case', to: (id: string) => `/hires/${id}` };
+    case 'Joined':
+      return { label: 'View case', to: (id: string) => `/hires/${id}` };
+    default:
+      return { label: 'Open checklist', to: (id: string) => `/hires/${id}#checklist` };
+  }
+}
+
 const joiningColumns: ResponsiveDataColumn<JoiningRow>[] = [
-  {
-    key: 'case',
-    header: 'Case ID',
-    priority: 'secondary',
-    render: (item) => <Badge variant="neutral">{item.id.slice(0, 8).toUpperCase()}</Badge>,
-  },
   {
     key: 'candidate',
     header: 'Candidate',
@@ -50,7 +57,7 @@ const joiningColumns: ResponsiveDataColumn<JoiningRow>[] = [
         className="flex items-center gap-2.5 rounded-sm hover:underline focus:outline-none focus:ring-1 focus:ring-rf-action/40"
       >
         <Avatar initials={item.candidateName ? item.candidateName.slice(0, 2).toUpperCase() : 'CP'} size="sm" />
-        <span className="min-w-0 truncate font-bold text-rf-ink">{item.candidateName}</span>
+        <span className="min-w-0 truncate font-semibold text-rf-ink">{item.candidateName}</span>
       </Link>
     ),
   },
@@ -58,21 +65,20 @@ const joiningColumns: ResponsiveDataColumn<JoiningRow>[] = [
     key: 'position',
     header: 'Position',
     priority: 'secondary',
-    render: (item) => <span className="font-medium text-rf-ink">{item.positionTitle}</span>,
-  },
-  {
-    key: 'branch',
-    header: 'Branch',
-    priority: 'tertiary',
-    render: (item) => <span className="font-medium text-rf-ink-muted">{item.branchName}</span>,
+    render: (item) => (
+      <div>
+        <span className="block font-medium text-rf-ink">{item.positionTitle}</span>
+        <span className="block text-[11px] text-rf-ink-muted">{item.branchName}</span>
+      </div>
+    ),
   },
   {
     key: 'planned-date',
-    header: 'Planned date',
+    header: 'Start date',
     priority: 'secondary',
     render: (item) => (
       <span className="font-medium text-rf-ink-muted">
-        {item.plannedJoiningDate ? new Date(item.plannedJoiningDate).toLocaleDateString() : 'Not reported'}
+        {item.plannedJoiningDate ? new Date(item.plannedJoiningDate).toLocaleDateString('en-GB') : 'Not set'}
       </span>
     ),
   },
@@ -82,7 +88,7 @@ const joiningColumns: ResponsiveDataColumn<JoiningRow>[] = [
     priority: 'secondary',
     render: (item) => {
       if (!item.totalItems || item.totalItems === 0) {
-        return <Badge variant="neutral">Not started</Badge>;
+        return <span className="text-[11px] text-slate-500">Not started</span>;
       }
       return (
         <div className="w-28">
@@ -99,12 +105,6 @@ const joiningColumns: ResponsiveDataColumn<JoiningRow>[] = [
     header: 'Status',
     priority: 'secondary',
     render: (item) => <StatusBadge status={item.status} />,
-  },
-  {
-    key: 'owner',
-    header: 'Owner',
-    priority: 'tertiary',
-    render: (item) => <span className="font-medium text-rf-ink-muted">{item.ownerUserId || 'Owner not reported'}</span>,
   },
 ];
 
@@ -162,25 +162,17 @@ export function JoiningManagementPage() {
 
   const awaitingCount = items.filter((item) => item.status === 'Awaiting Joining').length;
   const joinedCount = items.filter((item) => item.status === 'Joined').length;
+  const exceptionCount = Math.max(0, items.length - awaitingCount - joinedCount);
 
   return (
     <PageFrame
-      eyebrow="Joining & Compliance"
-      title="Joining Management & Onboarding"
-      description="Confirm candidate physical/remote attendance, postpone starting dates, record no-shows, and close vacancy headcount."
+      title="Joining"
+      description="Confirm start dates and close headcount."
       actions={
-        <>
-          <Button variant="ghost" size="sm" onClick={loadData}>
-            <Icon name="refresh-cw" size={13} className={isLoading ? 'animate-spin' : ''} />
-            Refresh
-          </Button>
-          <Button variant="primary" size="sm" asChild>
-            <Link to="/hires">
-              <Icon name="check-circle" size={14} />
-              Pre-hire cases
-            </Link>
-          </Button>
-        </>
+        <Button variant="ghost" size="sm" onClick={loadData}>
+          <Icon name="refresh-cw" size={13} className={isLoading ? 'animate-spin' : ''} />
+          Refresh
+        </Button>
       }
     >
       {error && (
@@ -198,11 +190,23 @@ export function JoiningManagementPage() {
         </Alert>
       )}
 
-      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard label="Awaiting Joining" value={awaitingCount} detail="Awaiting first day" tone="action" icon={<Icon name="clock" size={14} />} />
-        <MetricCard label="Total Pre-Hires" value={items.length} detail="Across all branches" tone="info" icon={<Icon name="users" size={14} />} />
-        <MetricCard label="Joined & Onboarded" value={joinedCount} detail="Headcount closed" tone="success" icon={<Icon name="check-circle" size={14} />} />
-        <MetricCard label="Other Exceptions" value={Math.max(0, items.length - awaitingCount - joinedCount)} detail="Postponed / No-show" tone="warning" icon={<Icon name="alert-triangle" size={14} />} />
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" onClick={() => setFilter('')} className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold ${filter === '' ? 'border-blue-300 bg-blue-50 text-blue-800 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300' : 'border-slate-200 bg-white text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300'}`}>
+          All
+          <span className="text-slate-900 dark:text-white">{items.length}</span>
+        </button>
+        <button type="button" onClick={() => setFilter('Awaiting Joining')} className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold ${filter === 'Awaiting Joining' ? 'border-blue-300 bg-blue-50 text-blue-800 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300' : 'border-slate-200 bg-white text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300'}`}>
+          Awaiting
+          <span className="text-slate-900 dark:text-white">{awaitingCount}</span>
+        </button>
+        <button type="button" onClick={() => setFilter('Joined')} className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold ${filter === 'Joined' ? 'border-blue-300 bg-blue-50 text-blue-800 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300' : 'border-slate-200 bg-white text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300'}`}>
+          Joined
+          <span className="text-slate-900 dark:text-white">{joinedCount}</span>
+        </button>
+        <button type="button" onClick={() => setFilter('Postponed')} className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold ${filter === 'Postponed' ? 'border-blue-300 bg-blue-50 text-blue-800 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300' : 'border-slate-200 bg-white text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300'}`}>
+          Exceptions
+          <span className="text-slate-900 dark:text-white">{exceptionCount}</span>
+        </button>
       </div>
 
       <section className="rf-table-shell overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-xs">
@@ -210,7 +214,7 @@ export function JoiningManagementPage() {
           search={(
             <Input
               aria-label="Search joining cases"
-              placeholder="Search candidate, role or branch..."
+              placeholder="Search candidate or role"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -218,17 +222,17 @@ export function JoiningManagementPage() {
           filters={(
             <div className="flex flex-wrap gap-1.5" aria-label="Filter joining cases by status">
               {JOINING_STATUSES.map((status) => (
-                <FilterChip key={status || 'all'} label={status || 'All statuses'} isActive={filter === status} onClick={() => setFilter(status)} />
+                <FilterChip key={status || 'all'} label={status || 'All'} isActive={filter === status} onClick={() => setFilter(status)} />
               ))}
             </div>
           )}
-          activeFilters={filter ? <FilterChip label={`Status: ${filter}`} onRemove={() => setFilter('')} /> : undefined}
+          activeFilters={filter ? <FilterChip label={filter} onRemove={() => setFilter('')} /> : undefined}
         />
 
         {isLoading ? (
-          <TableSkeleton columns={9} rows={6} />
+          <TableSkeleton columns={6} rows={6} />
         ) : filtered.length === 0 ? (
-          <PageState kind="empty" title="No matching joining records" description="Adjust your search or status filter." />
+          <PageState kind="empty" title="No joining records" description="Adjust the search or status filter." />
         ) : (
           <ResponsiveDataView
             rows={filtered}
@@ -236,15 +240,14 @@ export function JoiningManagementPage() {
             rowKey={(item) => item.id}
             label="Joining cases"
             className="px-4 pb-4 sm:px-5 sm:pb-5"
-            renderActions={(item) => (
-              item.status === 'Joined' ? (
-                <Badge variant="success">✓ Headcount closed</Badge>
-              ) : (
-                <Button variant="secondary" size="sm" asChild>
-                  <Link to={`/hires/${item.id}#checklist`}>Manage</Link>
+            renderActions={(item) => {
+              const action = joiningNextAction(item.status);
+              return (
+                <Button variant={item.status === 'Joined' ? 'secondary' : 'primary'} size="sm" asChild>
+                  <Link to={action.to(item.id)}>{action.label}</Link>
                 </Button>
-              )
-            )}
+              );
+            }}
           />
         )}
       </section>
