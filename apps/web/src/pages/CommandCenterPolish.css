@@ -1,0 +1,20 @@
+/* Command Center: quieter header and metrics */
+
+.rf-page-title {
+  letter-spacing: -0.03em;
+}
+
+.rf-page-title + span {
+  font-weight: 700 !important;
+}
+
+.rf-metric-icon-box + div > span.uppercase,
+span.text-\[11px\].font-bold.uppercase {
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  font-weight: 600 !important;
+}
+
+.rf-metric-value {
+  letter-spacing: -0.03em;
+}
