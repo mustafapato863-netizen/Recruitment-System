@@ -1,4 +1,4 @@
-/* WhatsApp Templates — scoped visual system (token-friendly; no Tailwind palette utilities). */
+/* WhatsApp Templates — scoped visual system */
 .wa-page {
   --wa-bubble: #dcf8c6;
   --wa-bubble-ink: #0b132b;
@@ -84,7 +84,7 @@
   padding: 0.35rem 0.65rem;
   cursor: pointer;
   text-align: start;
-  transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
 }
 
 .wa-var-chip:hover,
@@ -105,6 +105,17 @@
   font-size: 10px;
   font-weight: 700;
   color: var(--color-ink-muted, #6b7280);
+}
+
+.wa-default-pill {
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--wa-accent) 14%, transparent);
+  color: #067a3e;
+  padding: 0.15rem 0.5rem;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .wa-chip-ack { background: color-mix(in srgb, var(--color-info) 14%, transparent); color: var(--color-info-strong); border-color: var(--color-info-border); }
