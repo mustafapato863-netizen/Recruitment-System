@@ -1417,7 +1417,7 @@ export function ApplicationsPage() {
             <QuickGuideTrigger />
           </div>
           <p className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 mt-0.5">
-            Manage candidate pipelines across recruitment stages with real-time governance.
+            Pipeline, search, and next actions for every candidate.
           </p>
         </div>
 
@@ -1441,77 +1441,47 @@ export function ApplicationsPage() {
         </div>
       </div>
 
-      {/* 4-Card Executive KPI Summary Bar (Overview First) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 shrink-0">
-        <div
+      <div className="flex flex-wrap items-center gap-2 shrink-0">
+        <button
+          type="button"
           onClick={() => handleStageFilterChange('ALL')}
-          className={`relative overflow-hidden p-3.5 rounded-2xl border transition-all cursor-pointer shadow-2xs before:absolute before:inset-x-0 before:top-0 before:h-1 before:bg-gradient-to-r before:from-[#0084ce] before:to-[#00a3e0] ${
+          className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold ${
             selectedStageFilter === 'ALL'
-              ? 'bg-blue-50/70 dark:bg-blue-950/40 border-blue-300 dark:border-blue-700 ring-2 ring-blue-500/20'
-              : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-xs'
+              ? 'border-blue-300 bg-blue-50 text-blue-800 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300'
+              : 'border-slate-200 bg-white text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300'
           }`}
-          title="Filter all candidates across pipeline"
         >
-          <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 font-semibold">
-            <span>Total Active Pipeline</span>
-            <span className="w-2 h-2 rounded-full bg-[#0084ce]" />
-          </div>
-          <div className="mt-1 flex items-baseline gap-2">
-            <span className="rf-metric-value">{pipelineMetrics.total}</span>
-            <span className="text-[11px] text-[#0084ce] dark:text-sky-400 font-bold">candidates</span>
-          </div>
-        </div>
-
-        <div
+          All
+          <span className="text-slate-900 dark:text-white">{pipelineMetrics.total}</span>
+        </button>
+        <button
+          type="button"
           onClick={() => handleStageFilterChange(selectedStageFilter === 'screening' ? 'ALL' : 'screening')}
-          className={`relative overflow-hidden p-3.5 rounded-2xl border transition-all cursor-pointer shadow-2xs before:absolute before:inset-x-0 before:top-0 before:h-1 before:bg-gradient-to-r before:from-amber-400 before:to-amber-500 ${
+          className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold ${
             selectedStageFilter === 'screening' || selectedStageFilter === 'interview'
-              ? 'bg-amber-50/70 dark:bg-amber-950/40 border-amber-300 dark:border-amber-700 ring-2 ring-amber-500/20'
-              : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-xs'
+              ? 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300'
+              : 'border-slate-200 bg-white text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300'
           }`}
-          title="Filter candidates in evaluation"
         >
-          <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 font-semibold">
-            <span>Active Evaluations</span>
-            <span className="w-2 h-2 rounded-full bg-amber-500" />
-          </div>
-          <div className="mt-1 flex items-baseline gap-2">
-            <span className="rf-metric-value">{pipelineMetrics.inReview}</span>
-            <span className="text-[11px] text-amber-600 dark:text-amber-400 font-bold">Screening & Interview</span>
-          </div>
-        </div>
-
-        <div
+          In review
+          <span className="text-slate-900 dark:text-white">{pipelineMetrics.inReview}</span>
+        </button>
+        <button
+          type="button"
           onClick={() => handleStageFilterChange(selectedStageFilter === 'offer' ? 'ALL' : 'offer')}
-          className={`relative overflow-hidden p-3.5 rounded-2xl border transition-all cursor-pointer shadow-2xs before:absolute before:inset-x-0 before:top-0 before:h-1 before:bg-gradient-to-r before:from-purple-400 before:to-indigo-500 ${
+          className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold ${
             selectedStageFilter === 'offer' || selectedStageFilter === 'pre_hire'
-              ? 'bg-purple-50/70 dark:bg-purple-950/40 border-purple-300 dark:border-purple-700 ring-2 ring-purple-500/20'
-              : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-xs'
+              ? 'border-violet-300 bg-violet-50 text-violet-800 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-300'
+              : 'border-slate-200 bg-white text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300'
           }`}
-          title="Filter candidates in offer stages"
         >
-          <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 font-semibold">
-            <span>Offers & Pre-Hire</span>
-            <span className="w-2 h-2 rounded-full bg-purple-500" />
-          </div>
-          <div className="mt-1 flex items-baseline gap-2">
-            <span className="rf-metric-value">{pipelineMetrics.inOffer}</span>
-            <span className="text-[11px] text-purple-600 dark:text-purple-400 font-bold">In Final Stages</span>
-          </div>
-        </div>
-
-        <div
-          className="relative overflow-hidden p-3.5 rounded-2xl border bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800 shadow-2xs transition-all hover:shadow-xs before:absolute before:inset-x-0 before:top-0 before:h-1 before:bg-gradient-to-r before:from-emerald-400 before:to-[#00a859]"
-        >
-          <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 font-semibold">
-            <span>Fast-Track Signals</span>
-            <span className="w-2 h-2 rounded-full bg-[#00a859]" />
-          </div>
-          <div className="mt-1 flex items-baseline gap-2">
-            <span className="rf-metric-value">{pipelineMetrics.readySignals}</span>
-            <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold">Ready to Advance</span>
-          </div>
-        </div>
+          Offer
+          <span className="text-slate-900 dark:text-white">{pipelineMetrics.inOffer}</span>
+        </button>
+        <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
+          Ready
+          <span className="text-slate-900 dark:text-white">{pipelineMetrics.readySignals}</span>
+        </span>
       </div>
 
       {/* Position Context Banner (E6.1) */}
@@ -1607,187 +1577,99 @@ export function ApplicationsPage() {
       )}
 
       {/* Filter Bar */}
-      <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-        {/* Pipeline Position Switcher Dropdown (E9.1) */}
-        <div className="relative">
-          <select aria-label="Requisition"
-            value={vacancyId || 'ALL'}
-            onChange={(e) => handleVacancyChange(e.target.value)}
-            className="appearance-none bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 pr-7 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 cursor-pointer shadow-xs focus:ring-2 focus:ring-blue-500 focus:outline-none"
-            title="Switch requisition pipeline"
-          >
-            <option value="ALL">🌐 All Requisitions ({allVacancies.length} active)</option>
-            {allVacancies.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.vacancyCode} — {v.position?.title || v.title || 'Requisition'} ({v.joinedHeadcount ?? 0}/{v.approvedHeadcount ?? 1})
-              </option>
-            ))}
-            {currentVacancy && !allVacancies.some((v) => v.id === currentVacancy.id) && (
-              <option value={currentVacancy.id}>
-                {currentVacancy.vacancyCode} — {currentVacancy.position?.title || currentVacancy.title}
-              </option>
-            )}
-          </select>
-          <Icon
-            name="chevron-down"
-            size={12}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
-          />
-        </div>
+      <div className="flex flex-wrap items-center gap-2 shrink-0">
+        {!currentVacancy && (
+          <div className="relative">
+            <select
+              aria-label="Requisition"
+              value={vacancyId || 'ALL'}
+              onChange={(e) => handleVacancyChange(e.target.value)}
+              className="appearance-none bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 pr-7 text-xs font-semibold text-slate-700 dark:text-slate-200"
+            >
+              <option value="ALL">All requisitions</option>
+              {allVacancies.map((v) => (
+                <option key={v.id} value={v.id}>
+                  {v.vacancyCode} — {v.position?.title || v.title || 'Requisition'}
+                </option>
+              ))}
+            </select>
+            <Icon name="chevron-down" size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+          </div>
+        )}
 
-        {/* All Stages dropdown */}
-        <div className="relative">
-          <select aria-label="Application stage"
-            value={selectedStageFilter}
-            onChange={(e) => handleStageFilterChange(e.target.value)}
-            className="appearance-none bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 pr-7 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 cursor-pointer shadow-xs"
-          >
-            <option value="ALL">All Stages ({getActiveColumnDefs(pipelineMode).length} steps)</option>
-            {getActiveColumnDefs(pipelineMode).map((col) => (
-              <option key={col.id} value={col.id}>
-                {col.name}
-              </option>
-            ))}
-          </select>
-          <Icon
-            name="chevron-down"
-            size={12}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
-          />
-        </div>
-
-        {/* All Owners dropdown */}
-        <div className="relative">
-          <select aria-label="Application owner"
-            value={selectedOwnerFilter}
-            onChange={(e) => {
-              setSelectedOwnerFilter(e.target.value);
-              setListPage(1);
-            }}
-            className="appearance-none bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-2 pr-7 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 cursor-pointer shadow-xs"
-          >
-            <option value="ALL">All Owners</option>
-            {ownerOptions.map((owner) => (
-              <option key={owner} value={owner}>
-                {owner}
-              </option>
-            ))}
-          </select>
-          <Icon
-            name="chevron-down"
-            size={12}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
-          />
-        </div>
-
-        {/* Search Bar */}
-        <div className="relative flex-1 min-w-[200px]">
-          <Icon
-            name="search"
-            size={13}
-            className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
-          />
+        <div className="relative flex-1 min-w-[220px]">
+          <Icon name="search" size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
           <input
-            type="text"
+            type="search"
             value={searchQuery}
             onChange={(e) => {
               setSearchQuery(e.target.value);
               setListPage(1);
             }}
-            placeholder="Search candidates by name, code, title, owner..."
-            className="w-full pl-8 pr-8 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-2xs"
+            placeholder="Search name, code, or role"
+            className="w-full rounded-xl border border-slate-200 bg-white py-2 pl-8 pr-8 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
           />
           {searchQuery && (
-            <button
-              type="button"
-              onClick={() => setSearchQuery('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5 cursor-pointer"
-              title="Clear search"
-            >
+            <button type="button" onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400" aria-label="Clear search">
               <Icon name="close" size={12} />
             </button>
           )}
         </div>
 
-        {/* More filters */}
         <button
           type="button"
           onClick={() => setIsMoreFiltersOpen((prev) => !prev)}
-          className={`inline-flex items-center gap-1.5 px-3 py-2 border rounded-xl text-xs font-semibold transition shadow-xs cursor-pointer ${
-            isMoreFiltersOpen || selectedSourceFilter !== 'ALL'
-              ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950/40 dark:border-blue-800'
-              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50'
+          className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-xs font-semibold ${
+            isMoreFiltersOpen || selectedStageFilter !== 'ALL' || selectedOwnerFilter !== 'ALL' || selectedSourceFilter !== 'ALL'
+              ? 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300'
+              : 'border-slate-200 bg-white text-slate-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200'
           }`}
         >
-          <Icon name="filter" size={12} className="text-slate-400" />
-          <span>Filters</span>
-          {selectedSourceFilter !== 'ALL' && (
-            <span className="w-4 h-4 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center">
-              1
+          <Icon name="filter" size={12} />
+          Filters
+          {(selectedStageFilter !== 'ALL' ? 1 : 0) + (selectedOwnerFilter !== 'ALL' ? 1 : 0) + (selectedSourceFilter !== 'ALL' ? 1 : 0) > 0 && (
+            <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] font-bold text-white">
+              {(selectedStageFilter !== 'ALL' ? 1 : 0) + (selectedOwnerFilter !== 'ALL' ? 1 : 0) + (selectedSourceFilter !== 'ALL' ? 1 : 0)}
             </span>
           )}
         </button>
 
-        {/* Active Filters Reset Button */}
         {(selectedJob !== 'ALL' ||
           selectedStageFilter !== 'ALL' ||
           selectedOwnerFilter !== 'ALL' ||
           selectedSourceFilter !== 'ALL' ||
           searchQuery.trim() !== '') && (
-          <button
-            type="button"
-            onClick={resetFilters}
-            className="inline-flex items-center gap-1 px-2.5 py-2 text-xs font-bold text-rose-600 hover:text-rose-700 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100 rounded-xl border border-rose-200 dark:border-rose-900 transition cursor-pointer"
-            title="Reset all filters"
-          >
-            <Icon name="close" size={11} />
-            <span>Reset</span>
+          <button type="button" onClick={resetFilters} className="text-xs font-semibold text-slate-500 hover:text-rose-600">
+            Clear
           </button>
         )}
 
-        {/* List / Board Toggle */}
-        <div className="flex items-center border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 p-0.5 shadow-2xs">
+        <div className="ml-auto flex items-center rounded-xl border border-slate-200 bg-white p-0.5 dark:border-slate-800 dark:bg-slate-900">
           <button
             type="button"
             onClick={() => setViewMode('list')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-              viewMode === 'list'
-                ? 'bg-slate-100 dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-xs'
-                : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
-            }`}
+            className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${viewMode === 'list' ? 'bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-white' : 'text-slate-500'}`}
           >
-            <Icon name="menu" size={13} />
-            <span>List</span>
+            List
           </button>
           <button
             type="button"
             onClick={() => setViewMode('board')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer ${
-              viewMode === 'board'
-                ? 'bg-slate-100 dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-xs'
-                : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
-            }`}
+            className={`rounded-lg px-3 py-1.5 text-xs font-semibold ${viewMode === 'board' ? 'bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-white' : 'text-slate-500'}`}
           >
-            <Icon name="layout" size={13} />
-            <span>Kanban</span>
+            Board
           </button>
         </div>
 
-        {/* Step Customizer & Density Selector (Fewer Steps with Same Effect) */}
         <div className="relative">
           <button
             type="button"
             onClick={() => setIsCustomizeStepsOpen((prev) => !prev)}
-            className="inline-flex items-center gap-1.5 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs cursor-pointer"
-            title="Customize pipeline steps to show fewer stages with identical effect"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200"
+            title="Pipeline columns"
           >
-            <Icon name="sparkles" size={13} className="text-blue-500" />
             <span>
-              {pipelineMode === 'streamlined'
-                ? '⚡ Streamlined (4 Steps)'
-                : pipelineMode === 'fast_track'
-                ? '🚀 Fast-Track (3 Steps)'
-                : '📋 Standard (6 Stages)'}
+              {pipelineMode === 'streamlined' ? '4 steps' : pipelineMode === 'fast_track' ? '3 steps' : '6 steps'}
             </span>
             <Icon name="chevron-down" size={11} className="text-slate-400" />
           </button>
@@ -1800,10 +1682,7 @@ export function ApplicationsPage() {
               aria-label="Customize Pipeline Steps"
             >
               <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
-                <span className="text-xs font-extrabold text-slate-900 dark:text-white flex items-center gap-1.5">
-                  <Icon name="sparkles" size={12} className="text-blue-500" />
-                  <span>Workflow Steps Customizer</span>
-                </span>
+                <span className="text-xs font-bold text-slate-900 dark:text-white">Pipeline columns</span>
                 <button
                   type="button"
                   onClick={() => setIsCustomizeStepsOpen(false)}
@@ -1814,9 +1693,7 @@ export function ApplicationsPage() {
               </div>
 
               <div className="space-y-1.5 text-xs">
-                <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-400 block px-1">
-                  Step Presets (Same Action Effect)
-                </span>
+                <span className="px-1 text-[11px] font-semibold text-slate-400">Choose how many columns to show</span>
 
                 {/* 1. Streamlined (4 Steps) */}
                 <button
@@ -1920,32 +1797,58 @@ export function ApplicationsPage() {
 
       {/* Expandable Secondary Filters */}
       {isMoreFiltersOpen && (
-        <div className="flex flex-wrap items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200/60 dark:border-slate-700/60 text-xs">
-          <span className="font-bold text-slate-500">Source:</span>
-          {['ALL', ...sourceOptions].map((src) => (
-            <button
-              key={src}
-              type="button"
-              onClick={() => {
-                setSelectedSourceFilter(src);
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-xs dark:border-slate-800 dark:bg-slate-900">
+          <label className="flex items-center gap-2">
+            <span className="font-semibold text-slate-500">Stage</span>
+            <select
+              aria-label="Application stage"
+              value={selectedStageFilter}
+              onChange={(e) => handleStageFilterChange(e.target.value)}
+              className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs dark:border-slate-700 dark:bg-slate-950"
+            >
+              <option value="ALL">All stages</option>
+              {getActiveColumnDefs(pipelineMode).map((col) => (
+                <option key={col.id} value={col.id}>{col.name}</option>
+              ))}
+            </select>
+          </label>
+          <label className="flex items-center gap-2">
+            <span className="font-semibold text-slate-500">Owner</span>
+            <select
+              aria-label="Application owner"
+              value={selectedOwnerFilter}
+              onChange={(e) => {
+                setSelectedOwnerFilter(e.target.value);
                 setListPage(1);
               }}
-              className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer border ${
-                selectedSourceFilter === src
-                  ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
-                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100'
-              }`}
+              className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs dark:border-slate-700 dark:bg-slate-950"
             >
-              {src === 'ALL' ? 'All Sources' : src}
-            </button>
-          ))}
-          <button
-            type="button"
-            onClick={resetFilters}
-            className="ml-auto text-xs font-bold text-slate-500 hover:text-rose-600 cursor-pointer"
-          >
-            Reset Filters
-          </button>
+              <option value="ALL">Anyone</option>
+              {ownerOptions.map((owner) => (
+                <option key={owner} value={owner}>{owner}</option>
+              ))}
+            </select>
+          </label>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-semibold text-slate-500">Source</span>
+            {['ALL', ...sourceOptions].map((src) => (
+              <button
+                key={src}
+                type="button"
+                onClick={() => {
+                  setSelectedSourceFilter(src);
+                  setListPage(1);
+                }}
+                className={`rounded-lg border px-2.5 py-1 text-xs font-semibold ${
+                  selectedSourceFilter === src
+                    ? 'border-blue-600 bg-blue-600 text-white'
+                    : 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300'
+                }`}
+              >
+                {src === 'ALL' ? 'All' : src}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
