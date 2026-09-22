@@ -36,7 +36,7 @@ import { QuickGuideTrigger } from '../quickguide';
 import { computeInterviewsStats } from '../components/candidate/ScorecardSummary';
 import { ScheduleInterviewModal } from '../components/candidate/ScheduleInterviewModal';
 import { RejectApplicantModal } from '../components/candidate/RejectApplicantModal';
-import { NextActionGuidanceBanner } from '../components/candidate/NextActionGuidanceBanner';
+import { NextActionGuidanceBanner, getNextActionPlan } from '../components/candidate/NextActionGuidanceBanner';
 import { ApplicantStageWorkspace } from '../components/candidate/ApplicantStageWorkspace';
 import { useSetBreadcrumbTitle } from '../context/BreadcrumbContext';
 import { confirmDiscardChanges, useUnsavedChanges } from '../hooks/useUnsavedChanges';
@@ -95,6 +95,7 @@ export function ApplicationDetailPage() {
   const [isAddTagModalOpen, setIsAddTagModalOpen] = useState(false);
   const [tags, setTags] = useState<string[]>([]);
   const [newTagInput, setNewTagInput] = useState('');
+  const [isAssigning, setIsAssigning] = useState(false);
 
   // Sibling applications for fast sequential candidate review
   const [siblingApplications, setSiblingApplications] = useState<Application[]>([]);
@@ -548,6 +549,23 @@ export function ApplicationDetailPage() {
       toastError(err, 'Failed to reject applicant');
     } finally {
       setIsSubmittingRejection(false);
+    }
+  };
+
+  const handleAssignToMe = async () => {
+    if (!user?.id || !id) {
+      showToast('Please log in to claim this application.');
+      return;
+    }
+    setIsAssigning(true);
+    try {
+      await patchApi(`/applications/${id}`, { primaryRecruiterId: user.id });
+      showToast('You are now the assigned recruiter.');
+      await refetchApplication();
+    } catch (err: unknown) {
+      toastError(err, 'Could not assign this application');
+    } finally {
+      setIsAssigning(false);
     }
   };
 
@@ -1034,6 +1052,30 @@ export function ApplicationDetailPage() {
       )}
       */}
 
+      <div className="mb-4">
+          <NextActionGuidanceBanner
+            stage={application?.stage}
+            candidateName={candidateName}
+            unassigned={!(application?.primaryRecruiterName || application?.taskOwnerName || application?.primaryRecruiterId)}
+            assigning={isAssigning}
+            onAssign={() => void handleAssignToMe()}
+            onAdvanceStage={() => setIsMoveStageModalOpen(true)}
+            onScheduleInterview={() => setIsScheduleModalOpen(true)}
+            onCreateOffer={() => {
+              const candId = application?.candidateId || application?.candidate?.id;
+              const vacId = application?.vacancyId;
+              navigateWithUnsavedChanges(
+                `/offers/create?${candId ? `candidateId=${candId}` : ''}${vacId ? `&vacancyId=${vacId}` : ''}`
+              );
+            }}
+            onReject={() => setIsRejectModalOpen(true)}
+            onViewCandidate360={() => {
+              const candId = application?.candidateId || application?.candidate?.id;
+              if (candId) navigateWithUnsavedChanges(`/candidates/${candId}`);
+            }}
+          />
+      </div>
+
       <ApplicantStageWorkspace
         application={application}
         workspace={workspace}
@@ -1299,8 +1341,13 @@ export function ApplicationDetailPage() {
 
               {/* Cell 2: Next action */}
               <div className="space-y-1 md:pl-4 pt-3 md:pt-0">
-                <span className="block text-[11px] font-semibold text-slate-400 uppercase">Next action</span>
-                <span className="block text-xs font-bold text-slate-400 italic">None scheduled</span>
+                <span className="block text-[11px] font-medium text-slate-400">Next action</span>
+                <span className="block text-xs font-semibold text-slate-800 dark:text-slate-100">
+                  {getNextActionPlan(
+                    application?.stage,
+                    !(application?.primaryRecruiterName || application?.taskOwnerName || application?.primaryRecruiterId)
+                  ).label}
+                </span>
               </div>
 
               {/* Cell 3: Owner */}
@@ -1357,24 +1404,6 @@ export function ApplicationDetailPage() {
             </div>
           </div>
 
-          {/* ── Intelligent Next Action Guidance ── */}
-          {!workspace && <NextActionGuidanceBanner
-            stage={application?.stage}
-            candidateName={candidateName}
-            onAdvanceStage={() => setIsMoveStageModalOpen(true)}
-            onScheduleInterview={() => setIsScheduleModalOpen(true)}
-            onCreateOffer={() => {
-              const candId = application?.candidateId || application?.candidate?.id;
-              const vacId = application?.vacancyId;
-              navigateWithUnsavedChanges(
-                `/offers/create?${candId ? `candidateId=${candId}` : ''}${vacId ? `&vacancyId=${vacId}` : ''}`
-              );
-            }}
-            onViewCandidate360={() => {
-              const candId = application?.candidateId || application?.candidate?.id;
-              if (candId) navigateWithUnsavedChanges(`/candidates/${candId}`);
-            }}
-          />}
 
           {/* ── Tab Views ── */}
           {activeTab === 'activity' && (
@@ -2105,7 +2134,7 @@ export function ApplicationDetailPage() {
       </div>
 
       {/* ── Smart Action Bar ── */}
-      {application != null && !workspace && (
+      {false && application != null && !workspace && (
         <SmartActionBar
           applicationId={id || application.id}
           stage={application.stage}
