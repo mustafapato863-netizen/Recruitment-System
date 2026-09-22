@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getApi, postApi } from '../api/client';
-import { Icon } from '../components/Icon';
+import { getErrorMessage } from '../api/errors';
+import { ConfirmDialog } from '../components/ConfirmDialog';
+import { Icon, type IconName } from '../components/Icon';
 import { StatusBadge } from '../components/StatusBadge';
 import { Alert } from '../components/ui/Alert';
 import { Badge } from '../components/ui/Badge';
@@ -11,6 +13,7 @@ import { PageState } from '../components/ui/PageState';
 import { ResponsiveDataView, type ResponsiveDataColumn } from '../components/ui/ResponsiveDataView';
 import { SectionHeader } from '../components/ui/SectionHeader';
 import { TableSkeleton } from '../components/ui/Skeleton';
+import { useFeedback } from '../hooks/useFeedback';
 import './PageEnhancementsV2.css';
 
 type FinalApprovalRow = {
@@ -19,6 +22,31 @@ type FinalApprovalRow = {
   positionTitle: string;
   branchName: string;
   status: string;
+};
+
+type ConfirmState = {
+  isOpen: boolean;
+  title: string;
+  description: string;
+  confirmLabel: string;
+  tone: 'success' | 'danger';
+  icon: IconName;
+  withComment: boolean;
+  commentPlaceholder: string;
+  commentRequired?: boolean;
+  action: (comment?: string) => Promise<void>;
+};
+
+const initialConfirmState: ConfirmState = {
+  isOpen: false,
+  title: '',
+  description: '',
+  confirmLabel: 'Confirm',
+  tone: 'success',
+  icon: 'check-circle',
+  withComment: false,
+  commentPlaceholder: '',
+  action: async () => undefined,
 };
 
 const finalApprovalColumns: ResponsiveDataColumn<FinalApprovalRow>[] = [
@@ -54,39 +82,75 @@ const finalApprovalColumns: ResponsiveDataColumn<FinalApprovalRow>[] = [
   },
 ];
 
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : 'An unexpected error occurred.';
-}
-
 export function FinalApprovalInboxPage() {
+  const { success: toastSuccess, error: toastError } = useFeedback();
   const [items, setItems] = useState<FinalApprovalRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmState>(initialConfirmState);
 
-  const loadApprovals = () => {
+  const loadApprovals = useCallback(async () => {
     setIsLoading(true);
     setError(null);
-    getApi<FinalApprovalRow[]>('/hiring/final-approvals')
-      .then(setItems)
-      .catch((reason: unknown) => setError(getErrorMessage(reason)))
-      .finally(() => setIsLoading(false));
-  };
+    try {
+      const data = await getApi<FinalApprovalRow[]>('/hiring/final-approvals');
+      setItems(data);
+    } catch (reason: unknown) {
+      const message = getErrorMessage(reason, 'Unable to load final approvals');
+      setError(message);
+      toastError(reason, 'Unable to load final approvals');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [toastError]);
 
   useEffect(() => {
-    loadApprovals();
-  }, []);
+    void loadApprovals();
+  }, [loadApprovals]);
 
-  const decide = async (caseId: string, decision: 'Approve' | 'Reject') => {
-    setBusyId(caseId);
-    try {
-      await postApi(`/hiring/${caseId}/final-approval`, { decision, comment: 'Decision recorded from final approval inbox.' });
-      setItems((current) => current.filter((item) => item.id !== caseId));
-    } catch (reason: unknown) {
-      setError(getErrorMessage(reason));
-    } finally {
-      setBusyId(null);
-    }
+  const requestDecision = (row: FinalApprovalRow, decision: 'Approve' | 'Reject') => {
+    const isApproval = decision === 'Approve';
+    setConfirmDialog({
+      isOpen: true,
+      title: isApproval
+        ? `Final hiring signoff — ${row.candidateName}`
+        : `Reject final hiring — ${row.candidateName}`,
+      description: isApproval
+        ? `Authorize ${row.candidateName} for ${row.positionTitle} at ${row.branchName}. This unlocks onboarding and locks the hiring case.`
+        : `Reject final hiring for ${row.candidateName} (${row.positionTitle}). The case stays available for follow-up.`,
+      confirmLabel: isApproval ? 'Authorize hire' : 'Reject hire',
+      tone: isApproval ? 'success' : 'danger',
+      icon: isApproval ? 'check-circle' : 'alert-triangle',
+      withComment: true,
+      commentPlaceholder: isApproval
+        ? 'Optional executive signoff notes...'
+        : 'Reason for rejection (recommended)...',
+      action: async (comment?: string) => {
+        setBusyId(row.id);
+        setError(null);
+        try {
+          await postApi(`/hiring/${row.id}/final-approval`, {
+            decision,
+            comment: comment?.trim() || 'Decision recorded from final approval inbox.',
+          });
+          toastSuccess(
+            isApproval ? 'Final approval granted' : 'Final hiring rejected',
+            isApproval
+              ? `${row.candidateName} is authorized for onboarding.`
+              : `${row.candidateName} was not authorized.`,
+          );
+          await loadApprovals();
+        } catch (reason: unknown) {
+          const message = getErrorMessage(reason, 'Unable to record final decision');
+          setError(message);
+          toastError(reason, 'Unable to record final decision');
+        } finally {
+          setBusyId(null);
+          setConfirmDialog(initialConfirmState);
+        }
+      },
+    });
   };
 
   return (
@@ -95,7 +159,7 @@ export function FinalApprovalInboxPage() {
       title="Final Hiring Approval Inbox"
       description="Final governance gate before a candidate can transition to Awaiting Joining status."
       actions={
-        <Button variant="ghost" size="sm" onClick={loadApprovals}>
+        <Button variant="ghost" size="sm" onClick={() => void loadApprovals()}>
           <Icon name="refresh-cw" size={13} className={isLoading ? 'animate-spin' : ''} />
           Refresh
         </Button>
@@ -106,7 +170,7 @@ export function FinalApprovalInboxPage() {
           tone="danger"
           title="Inbox error"
           action={(
-            <Button variant="secondary" size="sm" onClick={loadApprovals}>
+            <Button variant="secondary" size="sm" onClick={() => void loadApprovals()}>
               <Icon name="refresh-cw" size={13} />
               Retry
             </Button>
@@ -141,10 +205,21 @@ export function FinalApprovalInboxPage() {
                 <Button variant="secondary" size="sm" asChild>
                   <Link to={`/hires/${row.id}`}>Review case</Link>
                 </Button>
-                <Button variant="danger" size="sm" disabled={busyId === row.id} onClick={() => void decide(row.id, 'Reject')}>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  disabled={busyId === row.id}
+                  onClick={() => requestDecision(row, 'Reject')}
+                >
                   Reject
                 </Button>
-                <Button variant="primary" size="sm" loading={busyId === row.id} loadingLabel="Approving" onClick={() => void decide(row.id, 'Approve')}>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  loading={busyId === row.id}
+                  loadingLabel="Approving"
+                  onClick={() => requestDecision(row, 'Approve')}
+                >
                   Authorize hire
                 </Button>
               </>
@@ -152,6 +227,20 @@ export function FinalApprovalInboxPage() {
           />
         )}
       </section>
+
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        onClose={() => setConfirmDialog(initialConfirmState)}
+        onConfirm={confirmDialog.action}
+        title={confirmDialog.title}
+        description={confirmDialog.description}
+        confirmLabel={confirmDialog.confirmLabel}
+        tone={confirmDialog.tone}
+        icon={confirmDialog.icon}
+        withComment={confirmDialog.withComment}
+        commentPlaceholder={confirmDialog.commentPlaceholder}
+        isLoading={busyId !== null}
+      />
     </PageFrame>
   );
 }

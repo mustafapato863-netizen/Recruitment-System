@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { OfferApprovalInboxItem } from '@recruitflow/contracts';
 import { getApi, postApi } from '../api/client';
-import { Icon } from '../components/Icon';
+import { getErrorMessage } from '../api/errors';
+import { ConfirmDialog } from '../components/ConfirmDialog';
+import { Icon, type IconName } from '../components/Icon';
 import { Alert } from '../components/ui/Alert';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
@@ -11,9 +13,34 @@ import { PageState } from '../components/ui/PageState';
 import { ResponsiveDataView, type ResponsiveDataColumn } from '../components/ui/ResponsiveDataView';
 import { SectionHeader } from '../components/ui/SectionHeader';
 import { TableSkeleton } from '../components/ui/Skeleton';
+import { useFeedback } from '../hooks/useFeedback';
 import './PageEnhancementsV2.css';
 
 type OfferApprovalRow = OfferApprovalInboxItem;
+
+type ConfirmState = {
+  isOpen: boolean;
+  title: string;
+  description: string;
+  confirmLabel: string;
+  tone: 'success' | 'danger';
+  icon: IconName;
+  withComment: boolean;
+  commentPlaceholder: string;
+  action: (comment?: string) => Promise<void>;
+};
+
+const initialConfirmState: ConfirmState = {
+  isOpen: false,
+  title: '',
+  description: '',
+  confirmLabel: 'Confirm',
+  tone: 'success',
+  icon: 'check-circle',
+  withComment: false,
+  commentPlaceholder: '',
+  action: async () => undefined,
+};
 
 const offerApprovalColumns: ResponsiveDataColumn<OfferApprovalRow>[] = [
   {
@@ -58,44 +85,70 @@ const offerApprovalColumns: ResponsiveDataColumn<OfferApprovalRow>[] = [
   },
 ];
 
-function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : 'An unexpected error occurred.';
-}
-
 export function OfferApprovalInboxPage() {
+  const { success: toastSuccess, error: toastError } = useFeedback();
   const [approvals, setApprovals] = useState<OfferApprovalRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmState>(initialConfirmState);
 
-  useEffect(() => {
-    void fetchApprovals();
-  }, []);
-
-  async function fetchApprovals() {
+  const fetchApprovals = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       const data = await getApi<OfferApprovalRow[]>('/offers/approvals/inbox');
       setApprovals(data);
     } catch (err: unknown) {
-      setError(getErrorMessage(err));
+      const message = getErrorMessage(err, 'Unable to load offer approvals');
+      setError(message);
+      toastError(err, 'Unable to load offer approvals');
     } finally {
       setLoading(false);
     }
-  }
+  }, [toastError]);
 
-  async function handleDecision(approvalId: string, decision: 'Approve' | 'Reject') {
-    setBusyId(approvalId);
-    try {
-      await postApi(`/offers/approvals/${approvalId}/decide`, { decision, comment: '' });
-      await fetchApprovals();
-    } catch (err: unknown) {
-      setError(`Failed to submit decision: ${getErrorMessage(err)}`);
-    } finally {
-      setBusyId(null);
-    }
-  }
+  useEffect(() => {
+    void fetchApprovals();
+  }, [fetchApprovals]);
+
+  const requestDecision = (approval: OfferApprovalRow, decision: 'Approve' | 'Reject') => {
+    const isApproval = decision === 'Approve';
+    setConfirmDialog({
+      isOpen: true,
+      title: isApproval ? `Approve Offer Package ${approval.offerCode}` : `Reject Offer Package ${approval.offerCode}`,
+      description: isApproval
+        ? `Grant compensation signoff for ${approval.candidateName} (version ${approval.versionNumber}). The package will advance toward candidate delivery.`
+        : `Reject this compensation package for ${approval.candidateName}. Talent can revise after your feedback.`,
+      confirmLabel: isApproval ? 'Approve Offer' : 'Reject Offer',
+      tone: isApproval ? 'success' : 'danger',
+      icon: isApproval ? 'check-circle' : 'alert-triangle',
+      withComment: true,
+      commentPlaceholder: isApproval ? 'Optional approval context...' : 'Reason for rejection (helps the revision)...',
+      action: async (comment?: string) => {
+        setBusyId(approval.id);
+        setError(null);
+        try {
+          await postApi(`/offers/approvals/${approval.id}/decide`, {
+            decision,
+            comment: comment?.trim() || '',
+          });
+          toastSuccess(
+            isApproval ? 'Offer approved' : 'Offer rejected',
+            `${approval.offerCode} marked as ${decision}.`,
+          );
+          await fetchApprovals();
+        } catch (err: unknown) {
+          const message = getErrorMessage(err, 'Failed to submit decision');
+          setError(message);
+          toastError(err, 'Unable to record offer decision');
+        } finally {
+          setBusyId(null);
+          setConfirmDialog(initialConfirmState);
+        }
+      },
+    });
+  };
 
   return (
     <PageFrame
@@ -136,10 +189,21 @@ export function OfferApprovalInboxPage() {
                 <Button variant="secondary" size="sm" asChild>
                   <Link to={`/offers/${approval.offerId}`}>Review</Link>
                 </Button>
-                <Button variant="danger" size="sm" disabled={busyId === approval.id} onClick={() => void handleDecision(approval.id, 'Reject')}>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  disabled={busyId === approval.id}
+                  onClick={() => requestDecision(approval, 'Reject')}
+                >
                   Reject
                 </Button>
-                <Button variant="primary" size="sm" loading={busyId === approval.id} loadingLabel="Approving" onClick={() => void handleDecision(approval.id, 'Approve')}>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  loading={busyId === approval.id}
+                  loadingLabel="Approving"
+                  onClick={() => requestDecision(approval, 'Approve')}
+                >
                   Approve
                 </Button>
               </>
@@ -147,6 +211,20 @@ export function OfferApprovalInboxPage() {
           />
         )}
       </section>
+
+      <ConfirmDialog
+        isOpen={confirmDialog.isOpen}
+        onClose={() => setConfirmDialog(initialConfirmState)}
+        onConfirm={confirmDialog.action}
+        title={confirmDialog.title}
+        description={confirmDialog.description}
+        confirmLabel={confirmDialog.confirmLabel}
+        tone={confirmDialog.tone}
+        icon={confirmDialog.icon}
+        withComment={confirmDialog.withComment}
+        commentPlaceholder={confirmDialog.commentPlaceholder}
+        isLoading={busyId !== null}
+      />
     </PageFrame>
   );
 }
