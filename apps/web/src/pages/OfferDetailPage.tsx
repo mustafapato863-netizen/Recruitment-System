@@ -343,8 +343,8 @@ export function OfferDetailPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-              Offer Detail
+            <h1 className="text-xl font-semibold text-slate-900 dark:text-white tracking-tight">
+              {candidateDisplayName}
             </h1>
             <QuickGuideTrigger />
             {offer.offerCode && (
@@ -379,7 +379,7 @@ export function OfferDetailPage() {
             className="inline-flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 shadow-xs cursor-pointer"
           >
             <Icon name="download" size={13} className="text-slate-400" />
-            <span>Download Offer Letter</span>
+            <span>Download</span>
           </button>
 
           {/* Executive Approver Decision Buttons */}
@@ -391,7 +391,7 @@ export function OfferDetailPage() {
                 className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 rounded-xl text-xs font-bold hover:bg-rose-100 transition shadow-xs cursor-pointer"
               >
                 <Icon name="close" size={13} />
-                <span>Reject Package</span>
+                <span>Reject</span>
               </button>
               <button
                 type="button"
@@ -413,7 +413,7 @@ export function OfferDetailPage() {
               className="inline-flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer disabled:opacity-60"
             >
               <Icon name="mail" size={13} />
-              <span>{isUpdatingStatus ? 'Dispatching...' : 'Dispatch Offer to Candidate'}</span>
+              <span>{isUpdatingStatus ? 'Sending…' : 'Send offer'}</span>
             </button>
           )}
 
@@ -427,7 +427,7 @@ export function OfferDetailPage() {
                 className="inline-flex items-center gap-1.5 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 rounded-xl text-xs font-bold hover:bg-slate-50 transition shadow-xs cursor-pointer disabled:opacity-60"
               >
                 <Icon name="close" size={13} />
-                <span>Candidate Declined</span>
+                <span>Declined</span>
               </button>
               <button
                 type="button"
@@ -436,7 +436,7 @@ export function OfferDetailPage() {
                 className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer disabled:opacity-60"
               >
                 <Icon name="check" size={13} />
-                <span>Candidate Accepted</span>
+                <span>Accepted</span>
               </button>
             </div>
           )}
@@ -448,7 +448,7 @@ export function OfferDetailPage() {
                 className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
               >
                 <Icon name="check" size={14} />
-                <span>View Joining Case</span>
+                <span>Open hire</span>
               </Link>
             ) : (
               <button
@@ -458,11 +458,29 @@ export function OfferDetailPage() {
                 className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer disabled:opacity-60"
               >
                 <Icon name="check" size={14} />
-                <span>{isCreatingCase ? 'Creating Case...' : 'Start Onboarding'}</span>
+                <span>{isCreatingCase ? 'Starting…' : 'Start joining'}</span>
               </button>
             )
           )}
         </div>
+      </div>
+
+
+      <div className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between dark:border-slate-800 dark:bg-slate-900">
+        <div>
+          <p className="text-[11px] font-semibold text-slate-500">Next</p>
+          <p className="text-sm font-semibold text-slate-900 dark:text-white">
+            {offer.status === 'Draft' && 'Finish the package, then submit it for approval.'}
+            {offer.status === 'Pending Approval' && 'This offer is waiting for approval.'}
+            {offer.status === 'Approved' && 'Send the offer to the candidate.'}
+            {offer.status === 'Sent' && 'Record whether the candidate accepted or declined.'}
+            {offer.status === 'Accepted' && (joiningCase ? 'Open the hire case and finish joining.' : 'Start the joining case.')}
+            {offer.status === 'Declined' && 'The candidate declined this offer.'}
+            {offer.status === 'Expired' && 'This offer expired. Revise it if you still want to hire.'}
+            {!['Draft','Pending Approval','Approved','Sent','Accepted','Declined','Expired'].includes(offer.status) && `Status: ${offer.status}`}
+          </p>
+        </div>
+        <span className="text-xs text-slate-500">{positionDisplayName}</span>
       </div>
 
       {/* ── Candidate Context Summary Card ── */}
