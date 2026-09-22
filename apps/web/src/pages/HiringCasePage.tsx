@@ -191,7 +191,7 @@ export function HiringCasePage() {
 
   if (loading) {
     return (
-      <PageFrame eyebrow="Hiring Cases" title="Hiring Case Details" description="Loading case...">
+      <PageFrame title="Hire" description="Loading case">
         <PageState kind="loading" title="Loading hiring case" description="Fetching pre-hire readiness checklist." />
       </PageFrame>
     );
@@ -200,21 +200,21 @@ export function HiringCasePage() {
   if (!hiringCase) {
     const isForbidden = error?.toLowerCase().includes('denied') || error?.toLowerCase().includes('permission') || error?.includes('403');
     return (
-      <PageFrame eyebrow="Hiring Cases" title="Hiring Case Details" description="Pre-hire readiness gate.">
+      <PageFrame title="Hire" description="Pre-hire checks and joining.">
         {isForbidden ? (
           <PageState
             kind="forbidden"
-            title="Access Restricted"
-            description="You do not have the required permissions to view this hiring case."
-            actionLabel="Back to Hiring Cases"
+            title="Access restricted"
+            description="You do not have permission to view this hiring case."
+            actionLabel="Back to hires"
             onAction={() => navigate('/hires')}
           />
         ) : (
           <PageState
             kind="empty"
-            title="Hiring Case Not Found"
-            description="The requested hiring case record does not exist or has been removed."
-            actionLabel="Back to Hiring Cases"
+            title="Hire not found"
+            description="This hiring case does not exist or was removed."
+            actionLabel="Back to hires"
             onAction={() => navigate('/hires')}
           />
         )}
@@ -331,16 +331,15 @@ export function HiringCasePage() {
 
   return (
     <PageFrame
-      eyebrow={`Hiring Cases / ${hiringCase.id.slice(0, 8).toUpperCase()}`}
-      title={`${hiringCase.candidateName ?? '—'} · Pre-Hire Gate`}
-      description={`${hiringCase.positionTitle ?? '—'} · ${hiringCase.branchName ?? '—'} · Status: ${hiringCase.status}`}
+      title={hiringCase.candidateName ?? 'Hire'}
+      description={`${hiringCase.positionTitle ?? 'Role'} · ${hiringCase.branchName ?? '—'} · ${hiringCase.status}`}
       actions={
         <>
           <StatusBadge status={hiringCase.status} />
           <Button variant="ghost" size="sm" asChild>
             <Link to="/hires">
               <Icon name="arrow-left" size={13} />
-              Back to cases
+              Back
             </Link>
           </Button>
           {hiringCase.status === 'Pending Compliance' && (
@@ -352,8 +351,7 @@ export function HiringCasePage() {
               disabled={!isReady}
               onClick={() => void submitForApproval()}
             >
-              <Icon name="check-circle" size={14} />
-              Submit for final approval
+              Submit approval
             </Button>
           )}
           {hiringCase.status === 'Pending Final Approval' && (
@@ -365,7 +363,7 @@ export function HiringCasePage() {
                 loadingLabel="Rejecting"
                 onClick={() => triggerFinalApproval('Reject')}
               >
-                Reject Hire
+                Reject
               </Button>
               <Button
                 variant="success"
@@ -374,8 +372,7 @@ export function HiringCasePage() {
                 loadingLabel="Approving"
                 onClick={() => triggerFinalApproval('Approve')}
               >
-                <Icon name="check-circle" size={14} />
-                Grant Final Approval
+                Approve
               </Button>
             </>
           )}
@@ -386,11 +383,10 @@ export function HiringCasePage() {
               loading={busyAction === 'joining'}
               loadingLabel="Confirming"
               disabled={!isReady}
-              title={!isReady ? 'All mandatory compliance items must be verified before confirming joining' : undefined}
+              title={!isReady ? 'Verify required checks before confirming joining' : undefined}
               onClick={triggerConfirmJoining}
             >
-              <Icon name="check-circle" size={14} />
-              Confirm Candidate Joined
+              Confirm joined
             </Button>
           )}
         </>
@@ -417,23 +413,66 @@ export function HiringCasePage() {
       )}
 
       {!isReady && hiringCase.status === 'Awaiting Joining' && (
-        <Alert tone="warning" title="Clinical Compliance & Verification Gate Active">
-          Cannot confirm candidate joining: {requiredCount - verifiedCount} mandatory compliance item(s) (such as SCFHS Medical Classification or DataFlow Primary Source Verification) are still pending. In accordance with Saudi Ministry of Health regulations, clinical staff cannot commence work without full licensing clearance.
+        <Alert tone="warning" title="Checks still open">
+          {requiredCount - verifiedCount} required item{requiredCount - verifiedCount === 1 ? '' : 's'} must be verified before confirming joining.
         </Alert>
       )}
 
       {!isReady && hiringCase.status === 'Pending Compliance' && (
-        <Alert tone="warning" title="Readiness checklist pending">
-          All mandatory compliance items and background checks must be verified before final approval submission.
+        <Alert tone="warning" title="Complete the checklist">
+          Verify required items before submitting for approval.
         </Alert>
       )}
+
+      <div className="mb-4 flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between dark:border-slate-800 dark:bg-slate-900">
+        <div>
+          <p className="text-[11px] font-semibold text-slate-500">Next</p>
+          <p className="text-sm font-semibold text-slate-900 dark:text-white">
+            {hiringCase.status === 'Pending Compliance'
+              ? isReady
+                ? 'Checks are complete. Submit for approval.'
+                : `Finish ${Math.max(0, requiredCount - verifiedCount)} required check${requiredCount - verifiedCount === 1 ? '' : 's'}.`
+              : hiringCase.status === 'Pending Final Approval'
+                ? 'This hire is waiting for final approval.'
+                : hiringCase.status === 'Awaiting Joining'
+                  ? isReady
+                    ? 'Confirm the candidate has joined.'
+                    : 'Finish required checks, then confirm joining.'
+                  : hiringCase.status === 'Joined'
+                    ? 'This candidate has joined.'
+                    : `Status: ${hiringCase.status}`}
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {hiringCase.status === 'Pending Compliance' && (
+            <Button variant="primary" size="sm" loading={busyAction === 'submit'} disabled={!isReady} onClick={() => void submitForApproval()}>
+              Submit approval
+            </Button>
+          )}
+          {hiringCase.status === 'Pending Final Approval' && (
+            <Button variant="primary" size="sm" loading={busyAction === 'Approve'} onClick={() => triggerFinalApproval('Approve')}>
+              Approve
+            </Button>
+          )}
+          {hiringCase.status === 'Awaiting Joining' && (
+            <Button variant="primary" size="sm" loading={busyAction === 'joining'} disabled={!isReady} onClick={triggerConfirmJoining}>
+              Confirm joined
+            </Button>
+          )}
+          {hiringCase.applicationId && (
+            <Button variant="secondary" size="sm" asChild>
+              <Link to={`/applications/${hiringCase.applicationId}`}>Application</Link>
+            </Button>
+          )}
+        </div>
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 flex flex-col gap-6">
           {/* Compliance Progress Bar */}
           <section className="rf-panel rounded-2xl border border-rf-border-subtle/90 bg-white p-5 shadow-xs">
             <div className="flex justify-between items-center mb-2">
-              <h3 className="text-xs font-bold text-rf-ink m-0">Pre-Hire Compliance Progress</h3>
+              <h3 className="text-xs font-bold text-rf-ink m-0">Checks</h3>
               <span className="text-xs font-bold text-rf-ink">{compliancePercentage}%</span>
             </div>
             <ProgressBar value={compliancePercentage} max={100} tone={complianceTone} />
@@ -453,7 +492,7 @@ export function HiringCasePage() {
             />
           </section>
 
-          {/* Collapsible Activity & Notes Section */}
+          {/* Collapsible Activity Section */}
           <details
             open
             className="rf-panel rounded-2xl border border-rf-border-subtle/90 bg-white shadow-xs overflow-hidden group"
@@ -464,7 +503,7 @@ export function HiringCasePage() {
                 <div>
                   <h3 className="text-xs font-bold text-rf-ink m-0">Activity &amp; Notes</h3>
                   <p className="text-[11px] text-rf-ink-muted font-medium m-0 mt-0.5">
-                    Unified feed of approvals, compliance verification events, and notes.
+                    Approvals, checks, and notes.
                   </p>
                 </div>
               </div>
@@ -492,7 +531,7 @@ export function HiringCasePage() {
         <aside className="flex flex-col gap-6">
           <section className="rf-panel rf-detail-hero rounded-2xl border border-rf-border-subtle/90 bg-white p-5 shadow-xs">
             <div className="pb-3 border-b border-rf-border-subtle mb-4">
-              <h3 className="text-xs font-bold text-rf-ink m-0">Approval Gate History</h3>
+              <h3 className="text-xs font-bold text-rf-ink m-0">Approvals</h3>
               <p className="text-[11px] text-rf-ink-muted font-medium m-0 mt-0.5">Recorded sign-offs.</p>
             </div>
             <div className="flex flex-col gap-3">
@@ -502,17 +541,17 @@ export function HiringCasePage() {
 
           <section className="rf-panel rounded-2xl border border-rf-border-subtle/90 bg-white p-5 shadow-xs">
             <div className="pb-3 border-b border-rf-border-subtle mb-4">
-              <h3 className="text-xs font-bold text-rf-ink m-0">Case Metadata</h3>
-              <p className="text-[11px] text-rf-ink-muted font-medium m-0 mt-0.5">Audit trail context.</p>
+              <h3 className="text-xs font-bold text-rf-ink m-0">Case</h3>
+              <p className="text-[11px] text-rf-ink-muted font-medium m-0 mt-0.5">Owner and dates.</p>
             </div>
             <div className="grid grid-cols-1 gap-3 text-xs">
               <div>
-                <span className="text-[11px] text-rf-ink-muted font-medium block mb-0.5">Assigned Owner</span>
-                <strong className="text-rf-ink font-bold">{hiringCase.ownerUserId ?? '—'}</strong>
+                <span className="text-[11px] text-rf-ink-muted font-medium block mb-0.5">Owner</span>
+                <strong className="text-rf-ink font-bold">{hiringCase.ownerName?.trim() || hiringCase.ownerUserId || 'Unassigned'}</strong>
               </div>
               <div>
-                <span className="text-[11px] text-rf-ink-muted font-medium block mb-0.5">Initiation Date</span>
-                <strong className="text-rf-ink font-bold">{new Date(hiringCase.createdAt).toLocaleDateString()}</strong>
+                <span className="text-[11px] text-rf-ink-muted font-medium block mb-0.5">Created</span>
+                <strong className="text-rf-ink font-bold">{new Date(hiringCase.createdAt).toLocaleDateString('en-GB')}</strong>
               </div>
             </div>
           </section>
