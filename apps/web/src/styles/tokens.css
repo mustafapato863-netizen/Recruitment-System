@@ -107,8 +107,8 @@
   /* Layout */
   --sidebar: 232px;
   --sidebar-collapsed: 80px;
-  --header: 62px;
-  --header-height: 62px;
+  --header: 54px;
+  --header-height: 54px; /* prefer --rf-header-height from density.css */
   --page-max-width: 1360px;
   --page-gutter: 24px;
   --control-height: 36px;

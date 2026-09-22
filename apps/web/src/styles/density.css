@@ -1,0 +1,39 @@
+/* RecruitFlow visual density + type scale (Phase F0)
+ * Shared tokens for shell, metrics, and page chrome.
+ * Light/dark inherit semantic color tokens; this file only sizes rhythm.
+ */
+
+:root {
+  /* Type */
+  --rf-type-brand: 13px;
+  --rf-type-brand-weight: 750;
+  --rf-type-page-title: 18px;
+  --rf-type-page-title-weight: 750;
+  --rf-type-metric: 18px;
+  --rf-type-metric-weight: 800;
+  --rf-type-metric-label: 10px;
+  --rf-type-user-name: 12px;
+  --rf-type-user-name-weight: 650;
+  --rf-type-user-role: 10px;
+
+  /* Space / chrome */
+  --rf-space-card: 12px;
+  --rf-header-height: 54px;
+  --rf-brand-height: 54px;
+  --rf-metric-icon: 36px;
+  --rf-brand-mark: 28px;
+  --rf-user-avatar: 30px;
+
+  /* Legacy layout aliases used by shell.css */
+  --header: var(--rf-header-height);
+  --header-height: var(--rf-header-height);
+}
+
+@media (min-width: 1024px) {
+  :root {
+    --rf-type-page-title: 20px;
+    --rf-type-metric: 20px;
+    --rf-type-metric-label: 11px;
+    --rf-space-card: 14px;
+  }
+}

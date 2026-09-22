@@ -11,6 +11,7 @@ import { PageLoadingFallback } from './components/Spinner';
 
 import './App.css';
 import './styles/tokens.css';
+import './styles/density.css';
 import './styles/ui-primitives.css';
 import './styles/design-system.css';
 import './styles/shell.css';
