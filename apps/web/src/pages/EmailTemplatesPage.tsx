@@ -1,10 +1,8 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import type { EmailTemplateItem } from '@recruitflow/contracts';
 import { deleteApi, getApi, patchApi, postApi } from '../api/client';
 import { Icon } from '../components/Icon';
-import { Modal } from '../components/Modal';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { StatusBadge } from '../components/StatusBadge';
 import { Alert } from '../components/ui/Alert';
 import { Badge } from '../components/ui/Badge';
 import { Button } from '../components/ui/Button';
@@ -13,38 +11,47 @@ import { Input } from '../components/ui/Input';
 import { PageFrame } from '../components/ui/PageFrame';
 import { PageState } from '../components/ui/PageState';
 import { Select } from '../components/ui/Select';
-import { TableSkeleton } from '../components/ui/Skeleton';
-import './PageEnhancementsV2.css';
+import './EmailTemplatesPage.css';
 
-const TEMPLATE_VARIABLES = [
-  { key: '{{candidateName}}', label: 'Candidate Name' },
-  { key: '{{positionTitle}}', label: 'Position Title' },
-  { key: '{{stageName}}', label: 'Stage Name' },
-  { key: '{{organizationName}}', label: 'Organization Name' },
-];
+const PLACEHOLDERS = [
+  { key: '{{candidateName}}', label: 'Candidate name', sample: 'Ahmed Youssef' },
+  { key: '{{positionTitle}}', label: 'Job title', sample: 'Web Developer' },
+  { key: '{{stageName}}', label: 'Stage', sample: 'Screening' },
+  { key: '{{organizationName}}', label: 'Organization', sample: 'Saudi German Health' },
+] as const;
 
 const CATEGORY_OPTIONS = [
-  { value: 'stage_auto', label: 'Stage Automation' },
+  { value: 'stage_auto', label: 'Stage automation' },
   { value: 'notification', label: 'Notification' },
-  { value: 'misc', label: 'Miscellaneous' },
+  { value: 'misc', label: 'Misc' },
 ];
 
-type TemplateForm = {
+type FormState = {
+  id?: string;
+  saveMode: 'update' | 'create';
   name: string;
   category: string;
   subject: string;
   bodyTemplate: string;
 };
 
-const emptyForm: TemplateForm = {
+const emptyForm = (): FormState => ({
+  saveMode: 'create',
   name: '',
   category: 'stage_auto',
   subject: '',
-  bodyTemplate: '',
-};
+  bodyTemplate: 'Dear {{candidateName}},\n\n',
+});
 
 function categoryLabel(cat: string): string {
   return CATEGORY_OPTIONS.find((o) => o.value === cat)?.label ?? cat;
+}
+
+function renderPreview(text: string): string {
+  return PLACEHOLDERS.reduce(
+    (out, item) => out.replaceAll(item.key, item.sample),
+    text || '',
+  );
 }
 
 export function EmailTemplatesPage() {
@@ -52,15 +59,21 @@ export function EmailTemplatesPage() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [form, setForm] = useState<TemplateForm>(emptyForm);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [form, setForm] = useState<FormState>(emptyForm());
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const subjectRef = useRef<HTMLInputElement>(null);
+  const bodyRef = useRef<HTMLTextAreaElement>(null);
+  const insertTarget = useRef<'subject' | 'body'>('body');
 
   const loadTemplates = useCallback(async () => {
     try {
       const data = await getApi<EmailTemplateItem[]>('/email-templates');
-      setTemplates(data);
+      const list = Array.isArray(data) ? data : [];
+      setTemplates(list);
+      setSelectedId((prev) => prev ?? list[0]?.id ?? null);
     } catch {
       setError('Failed to load email templates.');
     } finally {
@@ -69,50 +82,115 @@ export function EmailTemplatesPage() {
   }, []);
 
   useEffect(() => {
-    loadTemplates();
+    void loadTemplates();
   }, [loadTemplates]);
 
-  function openCreate() {
-    setForm(emptyForm);
-    setEditingId(null);
-    setError('');
-    setIsModalOpen(true);
-  }
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return templates.filter((t) => {
+      if (categoryFilter !== 'all' && t.category !== categoryFilter) return false;
+      if (!q) return true;
+      return (
+        t.name.toLowerCase().includes(q) ||
+        t.subject.toLowerCase().includes(q) ||
+        t.bodyTemplate.toLowerCase().includes(q)
+      );
+    });
+  }, [templates, query, categoryFilter]);
 
-  function openEdit(t: EmailTemplateItem) {
-    setForm({ name: t.name, category: t.category, subject: t.subject, bodyTemplate: t.bodyTemplate });
-    setEditingId(t.id);
-    setError('');
-    setIsModalOpen(true);
-  }
+  const selected = templates.find((t) => t.id === selectedId) ?? filtered[0] ?? null;
 
-  async function handleDuplicate(t: EmailTemplateItem) {
-    setBusy(true);
-    try {
-      await postApi(`/email-templates/${t.id}/duplicate`, {});
-      await loadTemplates();
-    } catch {
-      setError('Failed to duplicate template.');
-    } finally {
-      setBusy(false);
+  useEffect(() => {
+    if (!selected) return;
+    setForm({
+      id: selected.id,
+      saveMode: 'update',
+      name: selected.name,
+      category: selected.category,
+      subject: selected.subject,
+      bodyTemplate: selected.bodyTemplate,
+    });
+  }, [selected?.id]);
+
+  function insertVariable(token: string) {
+    const target = insertTarget.current;
+    if (target === 'subject') {
+      const el = subjectRef.current;
+      const current = form.subject;
+      if (!el) {
+        setForm((f) => ({ ...f, subject: `${current}${token}` }));
+        return;
+      }
+      const start = el.selectionStart ?? current.length;
+      const end = el.selectionEnd ?? current.length;
+      const next = `${current.slice(0, start)}${token}${current.slice(end)}`;
+      setForm((f) => ({ ...f, subject: next }));
+      requestAnimationFrame(() => {
+        el.focus();
+        const caret = start + token.length;
+        el.setSelectionRange(caret, caret);
+      });
+      return;
     }
+    const el = bodyRef.current;
+    const current = form.bodyTemplate;
+    if (!el) {
+      setForm((f) => ({ ...f, bodyTemplate: `${current}${token}` }));
+      return;
+    }
+    const start = el.selectionStart ?? current.length;
+    const end = el.selectionEnd ?? current.length;
+    const next = `${current.slice(0, start)}${token}${current.slice(end)}`;
+    setForm((f) => ({ ...f, bodyTemplate: next }));
+    requestAnimationFrame(() => {
+      el.focus();
+      const caret = start + token.length;
+      el.setSelectionRange(caret, caret);
+    });
+  }
+
+  function openCreate() {
+    setSelectedId(null);
+    setForm(emptyForm());
+    setError('');
+  }
+
+  function reuseSelected() {
+    if (!selected) return;
+    setForm({
+      saveMode: 'create',
+      name: `${selected.name} (custom)`,
+      category: selected.category,
+      subject: selected.subject,
+      bodyTemplate: selected.bodyTemplate,
+    });
+    setSelectedId(null);
   }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
+    if (!form.name.trim() || !form.subject.trim() || !form.bodyTemplate.trim()) return;
     setBusy(true);
     setError('');
     try {
-      if (editingId) {
-        await patchApi(`/email-templates/${editingId}`, form);
+      if (form.saveMode === 'update' && form.id) {
+        await patchApi(`/email-templates/${form.id}`, {
+          name: form.name,
+          category: form.category,
+          subject: form.subject,
+          bodyTemplate: form.bodyTemplate,
+        });
       } else {
-        await postApi('/email-templates', form);
+        await postApi('/email-templates', {
+          name: form.name,
+          category: form.category,
+          subject: form.subject,
+          bodyTemplate: form.bodyTemplate,
+        });
       }
-      setIsModalOpen(false);
       await loadTemplates();
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to save template.';
-      setError(msg);
+      setError(err instanceof Error ? err.message : 'Failed to save template.');
     } finally {
       setBusy(false);
     }
@@ -124,6 +202,7 @@ export function EmailTemplatesPage() {
     try {
       await deleteApi(`/email-templates/${pendingDelete}`);
       setPendingDelete(null);
+      setSelectedId(null);
       await loadTemplates();
     } catch {
       setError('Failed to delete template.');
@@ -132,194 +211,152 @@ export function EmailTemplatesPage() {
     }
   }
 
-  function insertVariable(varKey: string) {
-    setForm((f) => ({ ...f, bodyTemplate: f.bodyTemplate + varKey }));
-  }
-
   return (
     <PageFrame
       title="Email Templates"
-      description="Manage reusable email templates for stage automation and notifications. Default templates are read-only — duplicate to customise."
+      description="Click a variable to insert it. Preview shows the full email as the candidate will read it. Defaults can be renamed, edited, or reused."
       actions={
         <Button id="btn-create-email-template" variant="primary" onClick={openCreate}>
           <Icon name="plus" size={16} />
-          New Template
+          New template
         </Button>
       }
     >
-      {error && !isModalOpen && (
-        <Alert tone="danger" className="mb-4">{error}</Alert>
-      )}
+      {error && <Alert tone="danger" className="mb-4">{error}</Alert>}
 
       {loading ? (
-        <TableSkeleton rows={5} />
-      ) : templates.length === 0 ? (
+        <PageState kind="loading" title="Loading email templates..." />
+      ) : templates.length === 0 && !form.name ? (
         <PageState
           kind="empty"
           title="No email templates yet"
-          description="Create your first email template to enable stage automation."
-          actionLabel="New Template"
+          description="Create the first template for stage emails."
+          actionLabel="New template"
           onAction={openCreate}
         />
       ) : (
-        <div className="space-y-3">
-          {templates.map((t) => (
-            <div
-              key={t.id}
-              className="glass-card p-4 flex items-start justify-between gap-4 group hover:shadow-md transition-shadow"
-            >
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap mb-1">
-                  <span className="font-semibold text-rf-ink">{t.name}</span>
-                  {t.isDefault && (
-                    <Badge variant="info" className="text-xs">Default</Badge>
-                  )}
-                  <Badge variant="purple" className="text-xs">{categoryLabel(t.category)}</Badge>
-                  <StatusBadge status={t.status} />
-                </div>
-                <p className="text-sm text-rf-ink-muted truncate">
-                  <span className="font-medium">Subject:</span> {t.subject}
-                </p>
-                <p className="text-xs text-rf-ink-subtle mt-1 line-clamp-2">{t.bodyTemplate}</p>
-              </div>
-
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <Button
-                  id={`btn-duplicate-${t.id}`}
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => handleDuplicate(t)}
-                  disabled={busy}
-                  title="Duplicate this template"
-                >
-                  <Icon name="copy" size={14} />
-                </Button>
-                {!t.isDefault && (
-                  <>
-                    <Button
-                      id={`btn-edit-${t.id}`}
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => openEdit(t)}
-                      title="Edit template"
-                    >
-                      <Icon name="edit" size={14} />
-                    </Button>
-                    <Button
-                      id={`btn-delete-${t.id}`}
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setPendingDelete(t.id)}
-                      title="Delete template"
-                      className="text-rf-danger hover:bg-rf-danger/10"
-                    >
-                      <Icon name="trash-2" size={14} />
-                    </Button>
-                  </>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Create / Edit Modal */}
-      <Modal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        title={editingId ? 'Edit Email Template' : 'New Email Template'}
-        maxWidthClass="max-w-2xl"
-      >
-        <form id="email-template-form" onSubmit={handleSubmit} className="space-y-4">
-          {error && <Alert tone="danger">{error}</Alert>}
-
-          <FormField id="et-name" label="Template name" required>
+        <div className="grid gap-4 xl:grid-cols-[280px_minmax(0,1fr)_320px]">
+          <aside className="rounded-2xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
             <Input
-              id="et-name"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="e.g. Screening Invitation"
-              required
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search templates"
+              className="mb-2"
             />
-          </FormField>
-
-          <FormField id="et-category" label="Category">
-            <Select
-              id="et-category"
-              value={form.category}
-              onChange={(e) => setForm({ ...form, category: e.target.value })}
-            >
+            <Select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
+              <option value="all">All categories</option>
               {CATEGORY_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>
               ))}
             </Select>
-          </FormField>
+            <div className="mt-3 space-y-1 max-h-[62vh] overflow-y-auto">
+              {filtered.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setSelectedId(t.id)}
+                  className={`w-full rounded-xl border px-3 py-2.5 text-left ${selectedId === t.id ? 'border-blue-300 bg-blue-50 dark:bg-blue-950/40' : 'border-transparent hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm font-semibold text-slate-900 dark:text-white truncate">{t.name}</span>
+                    {t.isDefault && <Badge variant="info" className="text-[10px]">Default</Badge>}
+                  </div>
+                  <p className="text-[11px] text-slate-500 truncate mt-0.5">{t.subject}</p>
+                  <p className="text-[10px] text-slate-400 mt-1">{categoryLabel(t.category)}</p>
+                </button>
+              ))}
+            </div>
+          </aside>
 
-          <FormField id="et-subject" label="Subject" required>
-            <Input
-              id="et-subject"
-              value={form.subject}
-              onChange={(e) => setForm({ ...form, subject: e.target.value })}
-              placeholder="e.g. We received your application for {{positionTitle}}"
-              required
-            />
-          </FormField>
+          <form onSubmit={handleSubmit} className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3 dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-sm font-bold text-slate-900 dark:text-white">
+                {form.saveMode === 'create' ? 'New template' : 'Edit template'}
+              </h2>
+              {selected && (
+                <Button type="button" variant="secondary" size="sm" onClick={reuseSelected}>
+                  Reuse as custom
+                </Button>
+              )}
+            </div>
 
-          <FormField id="et-body" label="Body">
-            <div className="space-y-2">
-              {/* Variable hint badges */}
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs text-rf-ink-muted">Insert variable:</span>
-                {TEMPLATE_VARIABLES.map((v) => (
-                  <button
-                    key={v.key}
-                    type="button"
-                    id={`btn-var-${v.key}`}
-                    onClick={() => insertVariable(v.key)}
-                    className="text-xs px-2 py-0.5 rounded-full bg-rf-accent/10 text-rf-accent hover:bg-rf-accent/20 transition-colors font-mono"
-                  >
-                    {v.key}
-                  </button>
+            <FormField id="et-name" label="Name" required>
+              <Input id="et-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+            </FormField>
+            <FormField id="et-category" label="Category">
+              <Select id="et-category" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })}>
+                {CATEGORY_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
                 ))}
-              </div>
-              <textarea
-                id="et-body"
-                value={form.bodyTemplate}
-                onChange={(e) => setForm({ ...form, bodyTemplate: e.target.value })}
-                rows={10}
-                className="w-full px-3 py-2 rounded-lg border border-rf-border bg-rf-surface text-rf-ink text-sm font-mono resize-y focus:outline-none focus:ring-2 focus:ring-rf-accent/30"
-                placeholder="Dear {{candidateName}},&#10;&#10;Thank you for applying for {{positionTitle}} at {{organizationName}}..."
+              </Select>
+            </FormField>
+            <FormField id="et-subject" label="Subject" required>
+              <Input
+                id="et-subject"
+                ref={subjectRef}
+                value={form.subject}
+                onFocus={() => { insertTarget.current = 'subject'; }}
+                onChange={(e) => setForm({ ...form, subject: e.target.value })}
                 required
               />
+            </FormField>
+
+            <div className="flex flex-wrap gap-1.5">
+              {PLACEHOLDERS.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => insertVariable(item.key)}
+                  className="rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] font-semibold text-blue-700"
+                  title={`Insert ${item.key}`}
+                >
+                  {item.label}
+                </button>
+              ))}
             </div>
-          </FormField>
 
-          {/* Preview hint */}
-          <div className="text-xs text-rf-ink-muted bg-rf-surface-alt rounded-lg p-3">
-            <span className="font-semibold text-rf-ink">Supported variables:</span>{' '}
-            {TEMPLATE_VARIABLES.map((v) => (
-              <code key={v.key} className="mx-1 px-1 rounded bg-rf-border/30">{v.key}</code>
-            ))}
-          </div>
+            <FormField id="et-body" label="Body" required>
+              <textarea
+                id="et-body"
+                ref={bodyRef}
+                value={form.bodyTemplate}
+                onFocus={() => { insertTarget.current = 'body'; }}
+                onChange={(e) => setForm({ ...form, bodyTemplate: e.target.value })}
+                rows={12}
+                required
+                className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
+              />
+            </FormField>
 
-          <div className="flex justify-end gap-2 pt-2">
-            <Button id="btn-cancel-et" type="button" variant="ghost" onClick={() => setIsModalOpen(false)} disabled={busy}>
-              Cancel
-            </Button>
-            <Button id="btn-save-et" type="submit" variant="primary" disabled={busy}>
-              {busy ? 'Saving…' : editingId ? 'Save changes' : 'Create template'}
-            </Button>
-          </div>
-        </form>
-      </Modal>
+            <div className="flex items-center justify-between gap-2 pt-1">
+              {form.id && !selected?.isDefault && (
+                <Button type="button" variant="ghost" className="text-rose-600" onClick={() => setPendingDelete(form.id!)}>
+                  Delete
+                </Button>
+              )}
+              <div className="ml-auto flex gap-2">
+                <Button type="submit" variant="primary" disabled={busy}>
+                  {busy ? 'Saving…' : form.saveMode === 'create' ? 'Create template' : 'Save changes'}
+                </Button>
+              </div>
+            </div>
+          </form>
 
-      {/* Delete confirmation */}
+          <aside className="email-preview">
+            <div className="email-preview-bar">Inbox preview</div>
+            <div className="email-preview-subject">{renderPreview(form.subject) || 'Subject'}</div>
+            <div className="email-preview-meta">To: Ahmed Youssef · From: Recruiting</div>
+            <div className="email-preview-body">{renderPreview(form.bodyTemplate) || 'Message body will appear here.'}</div>
+          </aside>
+        </div>
+      )}
+
       <ConfirmDialog
         isOpen={pendingDelete !== null}
         onClose={() => setPendingDelete(null)}
         onConfirm={handleDelete}
         title="Delete email template"
-        description="This template will be archived and can no longer be used for stage automation. This action cannot be undone."
+        description="This template will be archived and can no longer be used for stage automation."
         confirmLabel="Delete"
         tone="danger"
       />
