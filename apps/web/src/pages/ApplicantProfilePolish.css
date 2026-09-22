@@ -23,14 +23,9 @@ body.rf-profile-compact section[role="tabpanel"] > div.mb-4 {
   margin-bottom: 0.75rem !important;
 }
 
-/* Hide the second identity + KPI block under the workspace */
-body.rf-profile-compact section[aria-label="Unified applicant stage workspace"] ~ .grid.grid-cols-1 {
+/* Hide everything under the workspace: tabs + empty Overview block */
+body.rf-profile-compact section[aria-label="Unified applicant stage workspace"] ~ * {
   display: none !important;
-}
-
-/* Keep tabs, but tighten them */
-body.rf-profile-compact section[aria-label="Unified applicant stage workspace"] ~ .border-b {
-  margin-top: 0.25rem;
 }
 
 /* Header Advance/Reject are duplicates of the right rail */
