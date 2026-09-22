@@ -2350,8 +2350,19 @@ export function ApplicationsPage() {
                             appCode: card.applicationCode,
                           })
                         }
-                        onMoveStage={() => navigate(`/applications/${card.id}/transition`)}
+                        onMoveStage={() => navigate(`/applications/${card.id}`)}
                         onAssignToMe={() => void handleClaimApplication(card.id)}
+                        onNextAction={(kind) => {
+                          if (kind === 'assign') {
+                            void handleClaimApplication(card.id);
+                            return;
+                          }
+                          if (kind === 'offer') {
+                            navigate(`/offers/create?applicationId=${card.id}`);
+                            return;
+                          }
+                          navigate(`/applications/${card.id}`);
+                        }}
                         onDragStart={(event) => handleDragStart(event, card.id, column.id)}
                         onSignalChange={(next) => setCardSignalValue(card.id, next)}
                       />
