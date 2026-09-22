@@ -1,5 +1,6 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
+import { Icon } from '../Icon';
 
 export interface InterviewAgendaItem {
   id: string;
@@ -30,19 +31,6 @@ interface InterviewAgendaCardProps {
   onDownloadIcs?: (interviewId: string) => void;
 }
 
-function getInterviewNextAction(item: InterviewAgendaItem) {
-  if (item.statusBadge === 'Feedback Pending') {
-    return { kind: 'scorecard' as const, label: 'Submit scorecard', hint: 'Interview ended. Record feedback.' };
-  }
-  if (item.statusBadge === 'Feedback Done') {
-    return { kind: 'application' as const, label: 'Open application', hint: 'Scorecard is in. Continue the pipeline.' };
-  }
-  if (item.locationUrl) {
-    return { kind: 'join' as const, label: 'Join interview', hint: `${item.time} · ${item.mode}` };
-  }
-  return { kind: 'details' as const, label: 'Open interview', hint: `${item.time} · ${item.mode}` };
-}
-
 const getStatusBadgeClass = (tone: 'green' | 'amber' | 'blue') => {
   switch (tone) {
     case 'green':
@@ -55,86 +43,170 @@ const getStatusBadgeClass = (tone: 'green' | 'amber' | 'blue') => {
   }
 };
 
+const getTypeTagClass = (tone: 'purple' | 'blue' | 'green') => {
+  switch (tone) {
+    case 'purple':
+      return 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border border-purple-200 dark:border-purple-800';
+    case 'blue':
+      return 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800';
+    case 'green':
+    default:
+      return 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800';
+  }
+};
+
 export const InterviewAgendaCard: React.FC<InterviewAgendaCardProps> = ({
   item,
   onQuickScorecard,
   onDownloadIcs,
 }) => {
   const navigate = useNavigate();
-  const next = getInterviewNextAction(item);
-
-  const runNext = (event: React.MouseEvent) => {
-    event.stopPropagation();
-    if (next.kind === 'scorecard') {
-      onQuickScorecard?.(item.id);
-      return;
-    }
-    if (next.kind === 'application' && item.applicationId) {
-      navigate(`/applications/${item.applicationId}`);
-      return;
-    }
-    if (next.kind === 'join' && item.locationUrl) {
-      window.open(item.locationUrl, '_blank', 'noopener,noreferrer');
-      return;
-    }
-    navigate(`/interviews/${item.id}`);
-  };
 
   return (
     <div
       onClick={() => navigate(`/interviews/${item.id}`)}
-      className="space-y-3 rounded-xl border border-slate-200 bg-white p-3.5 dark:border-slate-800 dark:bg-slate-900"
+      className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 hover:border-blue-400 hover:shadow-md transition-all cursor-pointer space-y-3 group"
     >
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="w-16 shrink-0 text-center">
-            <span className="block text-sm font-semibold text-slate-900 dark:text-white">{item.time}</span>
-            <span className="block text-[11px] text-slate-500">{item.duration}</span>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-16 sm:w-20 px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200/60 dark:border-slate-700/60 text-center shrink-0">
+            <span className="block text-xs font-black text-slate-900 dark:text-white leading-tight">
+              {item.time}
+            </span>
+            <span className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider">
+              {item.duration}
+            </span>
           </div>
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
-            {item.candidateAvatar}
-          </div>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">{item.candidateName}</p>
-            <p className="truncate text-xs text-slate-500">
-              {item.jobTitle}
-              {item.department && item.department !== '—' ? ` · ${item.department}` : ''}
-            </p>
+
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-2xl bg-teal-600 text-white font-black text-xs flex items-center justify-center shrink-0 shadow-xs">
+              {item.candidateAvatar}
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                {item.candidateId ? (
+                  <Link
+                    to={`/candidates/${item.candidateId}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-sm font-extrabold text-slate-900 dark:text-white hover:text-blue-600 transition truncate no-underline"
+                    title="View Candidate 360 Profile"
+                  >
+                    {item.candidateName}
+                  </Link>
+                ) : (
+                  <span className="text-sm font-extrabold text-slate-900 dark:text-white truncate">
+                    {item.candidateName}
+                  </span>
+                )}
+                {item.candidateId && (
+                  <Link
+                    to={`/candidates/${item.candidateId}`}
+                    onClick={(e) => e.stopPropagation()}
+                    className="px-1.5 py-0.2 rounded-md text-[10px] font-bold bg-purple-50 text-purple-700 dark:bg-purple-950/60 dark:text-purple-300 border border-purple-200 dark:border-purple-800 no-underline hover:bg-purple-100 shrink-0"
+                    title="Open Candidate 360 Profile"
+                  >
+                    360°
+                  </Link>
+                )}
+              </div>
+              <span className="block text-xs text-slate-500 dark:text-slate-400 font-medium truncate mt-0.5">
+                {item.jobTitle} {item.department && item.department !== '—' ? `• ${item.department}` : ''}
+              </span>
+            </div>
           </div>
         </div>
-        <span className={`shrink-0 rounded-md border px-2 py-0.5 text-[11px] font-semibold ${getStatusBadgeClass(item.statusTone)}`}>
-          {item.statusBadge}
-        </span>
+
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <span className={`px-2.5 py-1 rounded-xl text-[11px] font-bold ${getTypeTagClass(item.typeTone)}`}>
+            {item.typeTag}
+          </span>
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-100 dark:bg-slate-800 text-[11px] font-semibold text-slate-600 dark:text-slate-300">
+            <Icon
+              name={item.modeIcon === 'phone' ? 'phone' : item.modeIcon === 'map-pin' ? 'map-pin' : 'video'}
+              size={12}
+              className="text-slate-400"
+            />
+            <span>{item.mode}</span>
+          </div>
+          <span className={`px-2.5 py-1 rounded-xl text-[11px] font-bold whitespace-nowrap ${getStatusBadgeClass(item.statusTone)}`}>
+            {item.statusBadge}
+          </span>
+        </div>
       </div>
 
-      <div className="flex flex-col gap-2 border-t border-slate-100 pt-2 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <p className="truncate text-[11px] text-slate-500">
-            {item.interviewerName} · {item.typeTag.replace(/ Round$/i, '')}
-          </p>
-          <p className="truncate text-[11px] text-slate-500">{next.hint}</p>
+      <div className="pt-2.5 border-t border-slate-100 dark:border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 text-xs">
+          <span className="font-semibold text-slate-400 text-[11px]">Interviewer:</span>
+          <div className="flex items-center gap-1.5">
+            {item.interviewerAvatar && item.interviewerAvatar.startsWith('http') ? (
+              <img
+                src={item.interviewerAvatar}
+                alt={item.interviewerName}
+                className="w-5 h-5 rounded-full object-cover border border-slate-200"
+              />
+            ) : (
+              <div className="w-5 h-5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-[9px] flex items-center justify-center">
+                {item.interviewerAvatar}
+              </div>
+            )}
+            <span className="font-bold text-slate-700 dark:text-slate-300">{item.interviewerName}</span>
+          </div>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+
+        <div className="flex items-center gap-2 self-end sm:self-auto">
+          {item.locationUrl ? (
+            <a
+              href={item.locationUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold transition shadow-2xs no-underline"
+              title="Launch Meeting"
+            >
+              <Icon name="video" size={12} />
+              <span>Join</span>
+            </a>
+          ) : null}
+
           {onDownloadIcs && (
             <button
               type="button"
-              onClick={(event) => {
-                event.stopPropagation();
+              onClick={(e) => {
+                e.stopPropagation();
                 onDownloadIcs(item.id);
               }}
-              className="inline-flex min-h-7 items-center rounded-lg px-2 text-[11px] font-medium text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
-              title="Add to calendar"
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 text-xs font-bold transition shadow-2xs cursor-pointer"
+              title="Download iCalendar (.ics)"
             >
-              Calendar
+              <Icon name="calendar" size={12} />
+              <span>.ICS</span>
             </button>
           )}
-          <button
-            type="button"
-            onClick={runNext}
-            className="inline-flex min-h-7 items-center rounded-lg bg-blue-600 px-2.5 text-[11px] font-semibold text-white hover:bg-blue-700"
+
+          {onQuickScorecard && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onQuickScorecard(item.id);
+              }}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs font-bold transition shadow-2xs cursor-pointer"
+              title="Fast Scorecard Submit"
+            >
+              <Icon name="check-circle" size={12} />
+              <span>Feedback</span>
+            </button>
+          )}
+
+          <Link
+            to={`/interviews/${item.id}`}
+            onClick={(e) => e.stopPropagation()}
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-bold transition shadow-2xs no-underline"
+            title="View Interview Details"
           >
-            {next.label}
-          </button>
+            <span>Details</span>
+            <Icon name="arrow-right" size={12} />
+          </Link>
         </div>
       </div>
     </div>
