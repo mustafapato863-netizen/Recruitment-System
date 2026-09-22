@@ -11,7 +11,6 @@ import { FormField } from '../components/ui/FormField';
 import { FormSection } from '../components/ui/FormSection';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
-import { MetricCard } from '../components/ui/MetricCard';
 import { PipelineStepper } from '../components/PipelineStepper';
 import { Icon } from '../components/Icon';
 import './PageEnhancementsV2.css';
@@ -189,9 +188,8 @@ export function CreateOfferPage() {
 
   return (
     <PageFrame
-      eyebrow="Offer Management / Create"
-      title={isRevision ? 'Revise Offer Package' : 'Create Offer Package'}
-      description="Configure compensation elements, contract terms, salary bands, and multi-tier approval routing."
+      title={isRevision ? 'Revise offer' : 'Create offer'}
+      description={`For ${candidateName}. Set pay and terms, then save.`}
       actions={
         <>
           <Button variant="ghost" size="sm" asChild>
@@ -201,8 +199,7 @@ export function CreateOfferPage() {
             </Link>
           </Button>
           <Button variant="primary" size="sm" loading={loading} loadingLabel="Saving offer" onClick={(e) => void handleSubmit(e)}>
-            <Icon name="check-circle" size={14} />
-            Generate & Submit Offer
+Save offer
           </Button>
         </>
       }
@@ -217,11 +214,16 @@ export function CreateOfferPage() {
         </Alert>
       )}
 
-      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard label="Monthly Total" value={`SAR ${calculateMonthlyTotal().toLocaleString()}`} detail="Gross compensation" tone="action" icon={<Icon name="offer" size={14} />} />
-        <MetricCard label="Annual Value" value={`SAR ${calculateAnnualTotal().toLocaleString()}`} detail="Base + Allowances" tone="info" icon={<Icon name="grid-squares" size={14} />} />
-        <MetricCard label="Contract Type" value={formData.contractType} detail={formData.probationPeriod} tone="neutral" icon={<Icon name="briefcase" size={14} />} />
-        <MetricCard label="Salary Band" value="Within Range" detail="Grade 7 approved" tone="success" icon={<Icon name="check-circle" size={14} />} />
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 font-semibold text-slate-600">
+          Monthly <span className="text-slate-900">SAR {calculateMonthlyTotal().toLocaleString()}</span>
+        </span>
+        <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 font-semibold text-slate-600">
+          Annual <span className="text-slate-900">SAR {calculateAnnualTotal().toLocaleString()}</span>
+        </span>
+        <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 font-semibold text-slate-600">
+          {formData.contractType}
+        </span>
       </div>
 
       <form onSubmit={(e) => void handleSubmit(e)}>
