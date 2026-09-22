@@ -205,7 +205,7 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
   );
 
   return (
-    <div className="flex w-full flex-col p-4 sm:p-6 lg:p-7 max-w-[1720px] mx-auto space-y-6">
+    <div className="flex w-full flex-col p-3 sm:p-4 lg:p-5 max-w-[1720px] mx-auto space-y-5">
       {/* ── Page Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -223,12 +223,12 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5 flex-wrap">
+        <div className="flex w-full flex-col sm:w-auto sm:flex-row sm:flex-wrap sm:items-center gap-2 sm:gap-2.5">
           {onToggleAnalytics && (
             <button
               type="button"
               onClick={onToggleAnalytics}
-              className="inline-flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs cursor-pointer"
+              className="inline-flex min-h-10 items-center justify-center gap-2 px-3.5 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs cursor-pointer"
             >
               <Icon name="report" size={13} className="text-purple-600 dark:text-purple-400" />
               <span>Analytics Dashboard</span>
@@ -238,7 +238,7 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
           <button
             type="button"
             onClick={() => navigate('/cv-intake')}
-            className="inline-flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs cursor-pointer"
+            className="inline-flex min-h-10 items-center justify-center gap-2 px-3.5 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs cursor-pointer"
           >
             <Icon name="upload" size={13} className="text-emerald-700 dark:text-emerald-400" />
             <span>Fast CV Intake</span>
@@ -247,7 +247,7 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
           <button
             type="button"
             onClick={() => navigate('/vacancy-requests/create')}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+              className="inline-flex min-h-10 items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
               aria-label="Create new requisition"
           >
             <Icon name="plus" size={14} />

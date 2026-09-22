@@ -59,9 +59,9 @@ export function EmployeeDashboard() {
   const approvedRequestsCount = requests.filter((r) => r.status === 'Approved').length;
 
   return (
-    <div className="page flex w-full flex-col px-4 py-5 sm:px-6 lg:px-[26px] lg:py-7 mx-auto min-h-screen">
+    <div className="page flex w-full flex-col px-3 py-4 sm:px-4 lg:px-5 lg:py-5 mx-auto min-h-screen">
       {/* Hero Welcome Header */}
-      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-7 bg-gradient-to-r from-blue-600/10 via-indigo-500/5 to-transparent p-6 rounded-2xl border border-rf-border-subtle bg-rf-surface">
+      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5 bg-gradient-to-r from-blue-600/10 via-indigo-500/5 to-transparent p-3 sm:p-4 rounded-2xl border border-rf-border-subtle bg-rf-surface">
         <div>
           <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-[11px] font-bold text-blue-700 dark:text-blue-300 mb-2">
             <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
@@ -78,7 +78,7 @@ export function EmployeeDashboard() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex w-full flex-col sm:w-auto sm:flex-row sm:items-center gap-2 sm:gap-3">
           {canCreateRequests && (
             <Button
               variant="primary"

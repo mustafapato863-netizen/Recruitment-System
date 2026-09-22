@@ -356,7 +356,7 @@ export function OffersPage() {
   };
 
   return (
-    <div className="offers-page flex w-full flex-col p-4 sm:p-6 lg:p-7 max-w-[1720px] mx-auto space-y-6">
+    <div className="offers-page flex w-full flex-col p-3 sm:p-4 lg:p-5 max-w-[1720px] mx-auto space-y-5">
       {/* ── Page Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -371,7 +371,7 @@ export function OffersPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex w-full flex-col sm:w-auto sm:flex-row sm:flex-wrap sm:items-center gap-2 sm:gap-2.5">
           <button
             type="button"
             onClick={() => setIsMoreFiltersOpen((prev) => !prev)}
@@ -388,7 +388,7 @@ export function OffersPage() {
           <button
             type="button"
             onClick={() => navigate('/offers/create')}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+            className="inline-flex min-h-10 items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
           >
             <Icon name="plus" size={14} />
             <span>Create Offer</span>

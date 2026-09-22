@@ -607,7 +607,7 @@ export function CandidatesPage() {
     : `${metrics.directReferralPercentage}%`;
 
   return (
-    <div className="flex w-full flex-col p-4 sm:p-6 lg:p-7 max-w-[1720px] mx-auto space-y-6">
+    <div className="flex w-full flex-col p-3 sm:p-4 lg:p-5 max-w-[1720px] mx-auto space-y-5">
 
       {/* ── Page Header matching Enterprise System ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -628,11 +628,11 @@ export function CandidatesPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5 flex-wrap">
+        <div className="flex w-full flex-col sm:w-auto sm:flex-row sm:flex-wrap sm:items-center gap-2 sm:gap-2.5">
           <button
             type="button"
             onClick={() => void load()}
-            className="flex items-center gap-1.5 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs cursor-pointer"
+            className="flex min-h-10 items-center justify-center gap-1.5 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs cursor-pointer"
           >
             <Icon name="refresh-cw" size={13} className={isLoading ? 'animate-spin' : ''} />
             <span>Refresh</span>
@@ -642,7 +642,7 @@ export function CandidatesPage() {
             type="button"
             onClick={() => void handleExportExcel()}
             disabled={isExporting}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-700 transition shadow-xs cursor-pointer disabled:opacity-50"
+            className="flex min-h-10 items-center justify-center gap-1.5 px-3.5 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-700 transition shadow-xs cursor-pointer disabled:opacity-50"
             aria-label="Export candidates to Excel"
             title="Export filtered candidate records as XLSX workbook"
           >
@@ -655,7 +655,7 @@ export function CandidatesPage() {
               <button
                 type="button"
                 onClick={() => setIsAddModalOpen(true)}
-                className="flex items-center gap-1.5 px-3.5 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-700 transition shadow-xs cursor-pointer"
+                className="flex min-h-10 items-center justify-center gap-1.5 px-3.5 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-700 transition shadow-xs cursor-pointer"
               >
                 <Icon name="plus" size={13} className="text-blue-600 dark:text-blue-400" />
                 <span>Add candidate</span>
@@ -663,7 +663,7 @@ export function CandidatesPage() {
 
               <Link
                 to="/candidates/compare"
-                className="flex items-center gap-1.5 px-3.5 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-700 transition shadow-xs cursor-pointer"
+                className="flex min-h-10 items-center justify-center gap-1.5 px-3.5 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-700 transition shadow-xs cursor-pointer"
               >
                 <Icon name="grid-squares" size={13} className="text-purple-600 dark:text-purple-400" />
                 <span>Compare</span>

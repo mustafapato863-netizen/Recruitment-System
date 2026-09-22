@@ -419,7 +419,7 @@ export function TasksPage() {
   ];
 
   return (
-    <div className="flex w-full flex-col p-4 sm:p-6 lg:p-7 max-w-[1720px] mx-auto space-y-6">
+    <div className="flex w-full flex-col p-3 sm:p-4 lg:p-5 max-w-[1720px] mx-auto space-y-5">
       {/* ── Page Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -438,7 +438,7 @@ export function TasksPage() {
           <button
             type="button"
             onClick={() => setIsAssignModalOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer self-start sm:self-auto"
+            className="inline-flex min-h-10 items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer self-start sm:self-auto"
           >
             <Icon name="plus" size={14} />
             <span>Assign Task</span>
@@ -1017,13 +1017,13 @@ export function TasksPage() {
                   <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300 text-[11px]">
                     Target Objective Type
                   </label>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     {(['Hires', 'Screenings', 'Interviews'] as const).map((t) => (
                       <button
                         key={t}
                         type="button"
                         onClick={() => setTargetType(t)}
-                        className={`py-1.5 px-2 rounded-lg text-[11px] font-bold transition cursor-pointer border ${
+                        className={`min-h-10 py-1.5 px-2 rounded-lg text-[11px] font-bold transition cursor-pointer border ${
                           targetType === t
                             ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
                             : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'

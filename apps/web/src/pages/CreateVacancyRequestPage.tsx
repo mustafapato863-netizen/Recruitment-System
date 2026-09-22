@@ -667,7 +667,7 @@ export function CreateVacancyRequestPage() {
                   </span>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div className="p-2.5 rounded-xl bg-rf-surface-subtle border border-rf-border-subtle">
                     <span className="text-[10px] font-bold text-rf-ink-muted uppercase block">Headcount</span>
                     <span className="text-sm font-black text-rf-ink block mt-0.5">{form.requestedHeadcount} HC</span>

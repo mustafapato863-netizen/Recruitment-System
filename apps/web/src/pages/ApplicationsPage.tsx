@@ -1402,7 +1402,7 @@ export function ApplicationsPage() {
   }, [apiApplications, applicationsTotal, cardSignals]);
 
   return (
-    <div className="flex w-full flex-col lg:h-[calc(100vh-80px)] p-4 sm:px-6 lg:px-7 py-3 mx-auto gap-3 max-w-[1880px] lg:overflow-hidden">
+    <div className="flex w-full flex-col lg:h-[calc(100vh-80px)] p-3 sm:px-4 lg:px-5 py-3 mx-auto gap-3 max-w-[1880px] lg:overflow-hidden">
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
         <div>
@@ -1420,11 +1420,11 @@ export function ApplicationsPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex w-full flex-col sm:w-auto sm:flex-row sm:items-center gap-2">
           <button
             type="button"
             onClick={handleExportCsv}
-            className="inline-flex items-center gap-2 px-3.5 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs cursor-pointer"
+            className="inline-flex min-h-10 items-center justify-center gap-2 px-3.5 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs cursor-pointer"
           >
             <Icon name="download" size={13} />
             <span>Export CSV</span>
@@ -1432,7 +1432,7 @@ export function ApplicationsPage() {
           <button
             type="button"
             onClick={() => setIsAddCandidateOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#0084ce] via-[#00a3e0] to-[#00a859] hover:brightness-105 text-white rounded-xl text-xs font-bold transition shadow-md shadow-sky-500/25 cursor-pointer"
+            className="inline-flex min-h-10 items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-[#0084ce] via-[#00a3e0] to-[#00a859] hover:brightness-105 text-white rounded-xl text-xs font-bold transition shadow-md shadow-sky-500/25 cursor-pointer"
           >
             <Icon name="plus" size={14} />
             <span>Add Application</span>
@@ -1441,7 +1441,7 @@ export function ApplicationsPage() {
       </div>
 
       {/* 4-Card Executive KPI Summary Bar (Overview First) */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 shrink-0">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 shrink-0">
         <div
           onClick={() => handleStageFilterChange('ALL')}
           className={`relative overflow-hidden p-3.5 rounded-2xl border transition-all cursor-pointer shadow-2xs before:absolute before:inset-x-0 before:top-0 before:h-1 before:bg-gradient-to-r before:from-[#0084ce] before:to-[#00a3e0] ${

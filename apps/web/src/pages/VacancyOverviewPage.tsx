@@ -426,7 +426,7 @@ export function VacancyOverviewPage() {
 
   if (isLoading && !vacancy) {
     return (
-      <div className="flex w-full flex-col p-6 max-w-[1720px] mx-auto">
+      <div className="flex w-full flex-col p-3 sm:p-4 max-w-[1720px] mx-auto">
         <PageState kind="loading" title="Loading job position..." description="Fetching vacancy details and pipeline metrics." />
       </div>
     );
@@ -434,7 +434,7 @@ export function VacancyOverviewPage() {
 
   if (!isLoading && !vacancy && id) {
     return (
-      <div className="flex w-full flex-col p-6 max-w-[1720px] mx-auto">
+      <div className="flex w-full flex-col p-3 sm:p-4 max-w-[1720px] mx-auto">
         <PageState
           kind="empty"
           title="Job position not found"
@@ -447,7 +447,7 @@ export function VacancyOverviewPage() {
   }
 
   return (
-    <div className="flex w-full flex-col p-4 sm:p-6 lg:p-7 max-w-[1720px] mx-auto space-y-6">
+    <div className="flex w-full flex-col p-3 sm:p-4 lg:p-5 max-w-[1720px] mx-auto space-y-5">
       {/* ── Top Back Navigation ── */}
       <div>
         <button
@@ -550,7 +550,7 @@ export function VacancyOverviewPage() {
             onClick={() => setIsAddApplicantModalOpen(true)}
             disabled={isOpenWithoutAssignment}
             title={isOpenWithoutAssignment ? 'Assign a primary recruiter before adding candidates' : undefined}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex min-h-10 items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Icon name="plus" size={14} />
             <span>Add Candidate</span>

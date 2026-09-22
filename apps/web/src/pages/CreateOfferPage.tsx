@@ -225,8 +225,8 @@ export function CreateOfferPage() {
       </div>
 
       <form onSubmit={(e) => void handleSubmit(e)}>
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 flex flex-col gap-6">
+        <div className="grid min-w-0 grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 flex min-w-0 flex-col gap-6">
             {!isRevision && (
               <FormSection
                 title="Candidate Application"

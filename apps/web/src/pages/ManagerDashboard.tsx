@@ -355,7 +355,7 @@ export function ManagerDashboard() {
   }, [applications]);
 
   return (
-    <div className="flex w-full flex-col p-4 sm:p-6 lg:p-7 max-w-[1720px] mx-auto space-y-6">
+    <div className="flex w-full flex-col p-3 sm:p-4 lg:p-5 max-w-[1720px] mx-auto space-y-5">
       {/* ── Page Header: Greeting & Quick Buttons ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -370,11 +370,11 @@ export function ManagerDashboard() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex w-full flex-col sm:w-auto sm:flex-row sm:flex-wrap sm:items-center gap-2 sm:gap-3">
           <button
             type="button"
             onClick={() => navigate('/users')}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs cursor-pointer"
+            className="inline-flex min-h-10 items-center justify-center gap-2 px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs cursor-pointer"
           >
             <span>My Team</span>
             <Icon name="users" size={14} className="text-slate-500" />
@@ -384,7 +384,7 @@ export function ManagerDashboard() {
             <button
               type="button"
               onClick={() => openAssignModalForVacancy()}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+              className="inline-flex min-h-10 items-center justify-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
             >
               <Icon name="check-circle" size={14} />
               <span>Assign Vacancy &amp; Target</span>
@@ -394,7 +394,7 @@ export function ManagerDashboard() {
           <button
             type="button"
             onClick={() => setIsActivityModalOpen(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-[#0088cc] hover:bg-[#0077b5] text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+            className="inline-flex min-h-10 items-center justify-center gap-2 px-4 py-2 bg-[#0088cc] hover:bg-[#0077b5] text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
           >
             <Icon name="plus" size={14} />
             <span>Schedule Activity</span>
@@ -1305,7 +1305,7 @@ export function ManagerDashboard() {
                         <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300 text-[11px]">
                           Target Objective Type
                         </label>
-                        <div className="grid grid-cols-3 gap-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                           {(['Hires', 'Screenings', 'Interviews'] as const).map((t) => (
                             <button
                               key={t}
