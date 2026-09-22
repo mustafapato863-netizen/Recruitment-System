@@ -490,7 +490,6 @@ export function InterviewCalendarPage() {
 
   return (
     <PageFrame
-      eyebrow=""
       title="Interview Calendar"
       description={`${viewMode === 'week' ? 'Week' : 'Day'} · ${rangeLabel}`}
     >
