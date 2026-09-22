@@ -617,67 +617,19 @@ export function VacantListPage() {
       {activeSection === 'catalog' && (
         <div className="space-y-5">
           <h2 className="sr-only">Positions directory</h2>
-          {/* KPI Summary Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
-            <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xs relative overflow-hidden">
-              <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-sky-500 to-blue-600" />
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-1">
-                Total DB Positions
-              </span>
-              <div className="flex items-baseline gap-2">
-                <span className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
-                  {uniqueCatalogPositions.length}
-                </span>
-                <span className="text-xs font-bold text-sky-700 dark:text-sky-400">
-                  Configured
-                </span>
-              </div>
-            </div>
-
-            <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xs relative overflow-hidden">
-              <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-teal-500 to-emerald-500" />
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-1">
-                Clinical &amp; Tech Skills
-              </span>
-              <div className="flex items-baseline gap-2">
-                <span className="text-2xl sm:text-3xl font-black text-teal-700 dark:text-teal-400">
-                  {totalCatalogSkills}
-                </span>
-                <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
-                  Catalogued
-                </span>
-              </div>
-            </div>
-
-            <div className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xs relative overflow-hidden">
-              <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-500 to-indigo-500" />
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-1">
-                Hospital Facilities
-              </span>
-              <div className="flex items-baseline gap-2">
-                <span className="text-2xl sm:text-3xl font-black text-blue-600 dark:text-blue-400">
-                  {locations.filter((l) => l !== 'ALL').length || 4}
-                </span>
-                <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
-                  KSA / UAE
-                </span>
-              </div>
-            </div>
-
-            <div className="p-4 rounded-2xl bg-gradient-to-br from-teal-50/80 via-white to-emerald-50/80 dark:from-teal-950/40 dark:via-slate-900 dark:to-emerald-950/40 border border-teal-500/30 shadow-xs relative overflow-hidden">
-              <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-teal-400 to-emerald-400" />
-              <span className="text-[11px] font-bold uppercase tracking-wider text-teal-800 dark:text-teal-300 block mb-1">
-                Matching Ready
-              </span>
-              <div className="flex items-baseline gap-2">
-                <span className="text-2xl sm:text-3xl font-black text-teal-700 dark:text-teal-300">
-                  100%
-                </span>
-                <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                  Specs Active
-                </span>
-              </div>
-            </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
+              Positions
+              <span className="text-slate-900 dark:text-white">{uniqueCatalogPositions.length}</span>
+            </span>
+            <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
+              Skills in catalog
+              <span className="text-slate-900 dark:text-white">{totalCatalogSkills}</span>
+            </span>
+            <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
+              Locations
+              <span className="text-slate-900 dark:text-white">{locations.filter((l) => l !== 'ALL').length}</span>
+            </span>
           </div>
 
           {/* Controls: Search, Department Chips & Exp Filter */}
@@ -691,7 +643,7 @@ export function VacantListPage() {
                 type="text"
                 value={catalogSearch}
                 onChange={(e) => setCatalogSearch(e.target.value)}
-                placeholder="Search by position title, code, skills, or location..."
+                placeholder="Search title, code, or skill"
                 className="w-full pl-9 pr-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800 text-xs text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500"
               />
             </div>
@@ -778,92 +730,65 @@ export function VacantListPage() {
               {filteredCatalogPositions.map((pos) => (
                 <div
                   key={pos.id}
-                  className="group relative flex flex-col justify-between p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 hover:border-cyan-500/50 dark:hover:border-cyan-400/50 transition-all duration-200 shadow-xs hover:shadow-lg overflow-hidden before:absolute before:top-0 before:left-0 before:right-0 before:h-1 before:bg-gradient-to-r before:from-[#0084ce] before:via-[#00a3e0] before:to-[#00a859] before:opacity-0 group-hover:before:opacity-100 before:transition-opacity"
+                  className="group relative flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"
                 >
                   <div className="space-y-3">
-                    {/* Top: Code badge, Title, Status */}
                     <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
-                          <span className="px-2 py-0.5 rounded-md font-mono text-[10px] font-black bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700">
-                            {pos.positionCode || 'POS'}
-                          </span>
-                          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-sky-50 dark:bg-sky-950/60 text-sky-800 dark:text-sky-300 border border-sky-200/70 dark:border-sky-800/60">
-                            {pos.department}
-                          </span>
-                        </div>
-                        <h3 className="text-base font-extrabold text-slate-900 dark:text-white leading-snug">
+                      <div className="min-w-0">
+                        <p className="text-[11px] text-slate-500">{pos.positionCode || pos.vacancyCode} · {pos.department}</p>
+                        <h3 className="mt-0.5 text-base font-bold leading-snug text-slate-900 dark:text-white">
                           {pos.title}
                         </h3>
                       </div>
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 shrink-0">
+                      <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                        pos.status === 'Open'
+                          ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300'
+                          : pos.status === 'Pending Activation'
+                            ? 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300'
+                            : 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                      }`}>
                         {pos.status}
                       </span>
                     </div>
-
-                    {/* Metadata Badges */}
-                    <div className="flex flex-wrap items-center gap-2 text-xs">
-                      <span className="inline-flex items-center gap-1 font-bold text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-md border border-amber-200 dark:border-amber-800/60 text-[11px]">
-                        ⏱️ {pos.minExperienceYears ?? 3}+ Yrs Min Exp
-                      </span>
-                      <span className="inline-flex items-center gap-1 font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-md border border-slate-200/80 dark:border-slate-700 text-[11px]">
-                        📍 {pos.location}
-                      </span>
-                      <span className="text-[10px] text-slate-400 font-mono">
-                        {pos.vacancyCode}
-                      </span>
+                    <p className="text-xs text-slate-600 dark:text-slate-300">
+                      {pos.minExperienceYears ?? 3}+ years · {pos.location}
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {pos.requiredSkills.slice(0, 4).map((skill) => (
+                        <span
+                          key={skill}
+                          className="rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                        >
+                          {skill}
+                        </span>
+                      ))}
+                      {pos.requiredSkills.length > 4 && (
+                        <span className="self-center text-[11px] font-semibold text-slate-500">
+                          +{pos.requiredSkills.length - 4}
+                        </span>
+                      )}
                     </div>
-
-                    {/* Required Skills Chips */}
-                    <div className="space-y-1.5 pt-1">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block">
-                        Required Clinical &amp; Technical Skills ({pos.requiredSkills.length}):
-                      </span>
-                      <div className="flex flex-wrap gap-1.5">
-                        {pos.requiredSkills.slice(0, 6).map((skill) => (
-                          <span
-                            key={skill}
-                            className="px-2.5 py-0.5 rounded-md text-[11px] font-semibold bg-sky-50 dark:bg-slate-800 text-sky-900 dark:text-sky-200 border border-sky-200/80 dark:border-slate-700 shadow-2xs"
-                          >
-                            {skill}
-                          </span>
-                        ))}
-                        {pos.requiredSkills.length > 6 && (
-                          <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 self-center px-1">
-                            +{pos.requiredSkills.length - 6} more
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Qualifications / Licensure preview */}
                     {pos.qualifications && (
-                      <p className="text-[11px] text-slate-600 dark:text-slate-400 line-clamp-2 italic pt-1.5 border-t border-slate-100 dark:border-slate-800/70">
-                        🛡️ {pos.qualifications}
+                      <p className="line-clamp-2 border-t border-slate-100 pt-2 text-[11px] text-slate-500 dark:border-slate-800 dark:text-slate-400">
+                        {pos.qualifications}
                       </p>
                     )}
                   </div>
-
-                  {/* Card Footer Actions */}
-                  <div className="flex items-center justify-between gap-2 pt-4 mt-4 border-t border-slate-100 dark:border-slate-800/80">
+                  <div className="mt-4 flex items-center justify-between gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
                     <button
                       type="button"
                       onClick={() => openSetupForPosition(pos)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition cursor-pointer shadow-2xs"
-                      title="Edit position skills, experience, location, and qualifications"
+                      className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
                     >
                       <Icon name="edit" size={12} />
-                      <span>Edit Specs</span>
+                      Edit specs
                     </button>
-
                     <button
                       type="button"
                       onClick={() => navigate(`/sourcing-match?vacancyId=${pos.id}`)}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-extrabold bg-gradient-to-r from-[#0084ce] via-[#00a3e0] to-[#00a859] hover:brightness-110 text-white shadow-sm hover:shadow-md transition cursor-pointer"
-                      title="Match and rank all candidates in the bench against this position"
+                      className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
                     >
-                      <Icon name="sparkles" size={13} />
-                      <span>⚡ Instant Match</span>
+                      Match candidates
                     </button>
                   </div>
                 </div>
@@ -1047,7 +972,7 @@ export function VacantListPage() {
                 : 'bg-transparent text-slate-600 dark:text-slate-300 border border-transparent hover:bg-slate-100 dark:hover:bg-slate-800 font-medium'
               }`}
             >
-              All positions &bull; {allCount}
+              All · {allCount}
             </button>
 
             <button
@@ -1151,7 +1076,7 @@ export function VacantListPage() {
                               {pos.vacancyCode}
                             </span>
                             <span
-                              className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                              className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
                                 pos.status === 'Open'
                                   ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800'
                                   : pos.status === 'Pending Activation'
@@ -1166,7 +1091,7 @@ export function VacantListPage() {
                           </div>
 
                           <div>
-                            <h3 className="text-base font-extrabold leading-snug text-slate-900 transition group-hover:text-sky-700 dark:text-white dark:group-hover:text-sky-300">
+                            <h3 className="text-base font-bold leading-snug text-slate-900 transition group-hover:text-sky-700 dark:text-white dark:group-hover:text-sky-300">
                               {pos.title}
                             </h3>
                             <p className="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">
@@ -1229,7 +1154,7 @@ export function VacantListPage() {
                                     className="inline-flex items-center gap-1 text-[10px] font-bold text-teal-700 dark:text-teal-300 hover:text-teal-800 dark:hover:text-teal-200 hover:underline cursor-pointer"
                                   >
                                     <Icon name="file-text" size={11} />
-                                    <span>⚡ Auto-fill from JD</span>
+                                    <span>Fill from JD</span>
                                   </button>
                                 </div>
                               </div>
@@ -1238,15 +1163,15 @@ export function VacantListPage() {
 
                           <div className="flex items-center gap-4 border-t border-slate-100 pt-3 text-xs dark:border-slate-800">
                             <div>
-                              <span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Applicants</span>
+                              <span className="block text-[10px] font-medium text-slate-400">Applicants</span>
                               <span className="font-extrabold text-slate-800 dark:text-slate-100">{pos.applicationsCount}</span>
                             </div>
                             <div>
-                              <span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Headcount</span>
+                              <span className="block text-[10px] font-medium text-slate-400">Headcount</span>
                               <span className="font-extrabold text-slate-800 dark:text-slate-100">{pos.joinedHeadcount}/{pos.approvedHeadcount}</span>
                             </div>
                             <div className="ml-auto text-right">
-                              <span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Owner</span>
+                              <span className="block text-[10px] font-medium text-slate-400">Owner</span>
                               <span className="font-bold text-slate-700 dark:text-slate-300">{pos.recruiter.name}</span>
                             </div>
                           </div>
@@ -1351,7 +1276,7 @@ export function VacantListPage() {
                             </td>
                             <td className="p-3">
                               <span
-                                className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                                className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
                                   pos.status === 'Open'
                                     ? 'bg-emerald-50 text-emerald-600'
                                     : pos.status === 'Pending Activation'
@@ -1377,7 +1302,7 @@ export function VacantListPage() {
                                     className="block text-[10px] text-amber-600 dark:text-amber-400 mt-1 font-semibold hover:underline cursor-pointer text-left"
                                     title={reasons.map((r) => r.label).join(', ')}
                                   >
-                                    ⚠ {reasons.length} issue(s)
+                                    {reasons.length} issue(s)
                                   </button>
                                 );
                               })()}
