@@ -141,7 +141,7 @@ export const ComparisonMatrixCard: React.FC<ComparisonMatrixCardProps> = ({
 
       {/* Recommendation */}
       <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
-        <span className="text-[10px] text-slate-400 font-semibold uppercase">Recommendation</span>
+        <span className="text-[11px] text-slate-500">Recommendation</span>
         <span className="text-[11px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/50 px-2.5 py-0.5 rounded-full flex items-center gap-1 border border-emerald-200 dark:border-emerald-900">
           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
           {c.recommendation}
@@ -154,13 +154,13 @@ export const ComparisonMatrixCard: React.FC<ComparisonMatrixCardProps> = ({
           onClick={() => onSelectOffer(c)}
           className="w-full py-2 bg-slate-900 dark:bg-blue-600 hover:bg-slate-800 dark:hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer text-center"
         >
-          Select & Create Offer
+          Create offer
         </button>
         <Link
           to={`/candidates/${c.id}`}
           className="w-full py-1.5 text-center text-xs font-bold text-purple-600 dark:text-purple-400 hover:underline block"
         >
-          View 360° Profile ↗
+          Open profile
         </Link>
       </div>
     </div>
