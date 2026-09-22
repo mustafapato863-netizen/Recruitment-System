@@ -3,6 +3,7 @@ import type { Vacancy } from '@recruitflow/contracts';
 import { calculateCandidateFitScore } from '@recruitflow/validation';
 import { Icon } from '../Icon';
 import { Spinner } from '../Spinner';
+import { CandidateFitScorecard } from '../candidate/CandidateFitScorecard';
 import type { ExtractedCandidate } from '../../utils/resumeParser';
 import type { DuplicateCandidate, ScoredVacancy } from '../../hooks/useCVIntakeFlow';
 
@@ -435,17 +436,7 @@ export const CVMatchAssigner: React.FC<CVMatchAssignerProps> = ({
 
                       {/* Score Badge */}
                       <div className="flex flex-col items-end shrink-0 gap-1">
-                        <span
-                          className={`px-2.5 py-0.5 rounded-full text-xs font-black border shadow-2xs ${
-                            fitResult.score >= 85
-                              ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
-                              : fitResult.score >= 60
-                              ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border-blue-200 dark:border-blue-800'
-                              : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700'
-                          }`}
-                        >
-                          {fitResult.score}% Fit
-                        </span>
+                        <CandidateFitScorecard variant="badge" breakdown={fitResult} />
                         {isSelected && (
                           <span className="inline-flex items-center gap-1 text-[10px] font-bold text-blue-600 dark:text-blue-400">
                             <Icon name="check" size={11} />
@@ -532,14 +523,7 @@ export const CVMatchAssigner: React.FC<CVMatchAssignerProps> = ({
                       Live qualification & clinical requirement breakdown
                     </span>
                   </div>
-                  <div className="text-right">
-                    <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400 leading-none">
-                      {activeScored.fitResult.score}%
-                    </span>
-                    <span className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                      Match Fit
-                    </span>
-                  </div>
+                  <CandidateFitScorecard variant="badge" breakdown={activeScored.fitResult} />
                 </div>
 
                 {/* Progress Bar */}

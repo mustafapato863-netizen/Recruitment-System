@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { SkillTagsOverflow } from './SkillTagsOverflow';
+import { CandidateFitScoreBadge } from './CandidateFitScorecard';
 
 export interface ComparisonCandidate {
   id: string;
@@ -37,16 +38,8 @@ export const ComparisonMatrixCard: React.FC<ComparisonMatrixCardProps> = ({
   onSelectOffer,
 }) => {
   const awaitingPosition = c.matchGrade === 'Select a position';
-  const isTop = !awaitingPosition && c.matchScore >= 90;
-  const ringColor = awaitingPosition
-    ? 'text-slate-300 dark:text-slate-600'
-    : isTop
-      ? 'text-blue-600'
-      : c.matchScore >= 75
-        ? 'text-emerald-500'
-        : 'text-amber-500';
   const scoreLabel = awaitingPosition ? '—' : `${c.matchScore}%`;
-  const scoreDetail = awaitingPosition ? 'Select a position' : `${c.matchScore}% Match`;
+  const scoreDetail = awaitingPosition ? 'Select a position' : 'Position fit';
 
   return (
     <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs flex flex-col justify-between space-y-4 relative">
@@ -84,29 +77,15 @@ export const ComparisonMatrixCard: React.FC<ComparisonMatrixCardProps> = ({
         </div>
       </div>
 
-      {/* Circular Match Gauge */}
+      {/* Compact Match Score */}
       <div className="py-2.5 px-3 flex items-center justify-center gap-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200/60 dark:border-slate-700/60">
-        <div className="relative w-12 h-12 flex items-center justify-center shrink-0">
-          <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
-            <path
-              className="text-slate-200 dark:text-slate-700"
-              strokeWidth="3.5"
-              stroke="currentColor"
-              fill="none"
-              d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-            />
-            <path
-              className={ringColor}
-              strokeDasharray={`${awaitingPosition ? 0 : c.matchScore}, 100`}
-              strokeWidth="3.5"
-              strokeLinecap="round"
-              stroke="currentColor"
-              fill="none"
-              d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-            />
-          </svg>
-          <span className="absolute text-[11px] font-black text-slate-900 dark:text-white">{scoreLabel}</span>
-        </div>
+        {awaitingPosition ? (
+          <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-sm font-black text-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-500">
+            {scoreLabel}
+          </span>
+        ) : (
+          <CandidateFitScoreBadge score={c.matchScore} />
+        )}
         <div>
           <span className="text-xs font-bold text-slate-900 dark:text-white block">{scoreDetail}</span>
           <span className={`text-[10px] font-semibold ${awaitingPosition ? "text-slate-500 dark:text-slate-400" : "text-emerald-600 dark:text-emerald-400"}`}>{c.matchGrade}</span>

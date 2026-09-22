@@ -2520,7 +2520,6 @@ export function ApplicationsPage() {
                                 breakdown={card.fitBreakdown}
                                 candidate={card.rawApplication.candidate}
                                 variant="badge"
-                                className="text-[10px] px-1.5 py-0.5"
                               />
                               {pipelineMode !== 'standard' && (
                                 <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200/80 dark:border-slate-700/80">

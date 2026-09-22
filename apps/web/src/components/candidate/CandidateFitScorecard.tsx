@@ -55,6 +55,35 @@ function getScoreTone(score: number, matchLevel: MatchLevel) {
   };
 }
 
+export function CandidateFitScoreBadge({
+  score,
+  matchLevel,
+  summaryText,
+  className = '',
+}: {
+  score: number;
+  matchLevel?: MatchLevel;
+  summaryText?: string;
+  className?: string;
+}) {
+  const inferredMatchLevel: MatchLevel = score >= 80 ? 'high' : score >= 60 ? 'moderate' : 'low';
+  const tone = getScoreTone(score, matchLevel || inferredMatchLevel);
+
+  return (
+    <span
+      role="img"
+      aria-label={`Candidate fit score: ${score}% (${tone.label})`}
+      title={`Candidate Fit Score: ${score}% (${tone.label})${summaryText ? `\n${summaryText}` : ''}`}
+      className={`inline-flex h-11 w-11 shrink-0 select-none flex-col items-center justify-center rounded-xl border shadow-xs ${tone.border} ${tone.bg} ${tone.text} ${className}`}
+    >
+      <span className="text-[15px] font-black leading-none tracking-tight">{score}%</span>
+      <span className="mt-0.5 text-[8px] font-extrabold uppercase leading-none tracking-[0.14em] opacity-80">
+        Fit
+      </span>
+    </span>
+  );
+}
+
 export function CandidateFitScorecard({
   candidate,
   requirements,
@@ -78,13 +107,12 @@ export function CandidateFitScorecard({
   // Variant: Pure Badge (used on Kanban cards and dense lists)
   if (variant === 'badge') {
     return (
-      <span
-        className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold border transition-all ${tone.bg} ${tone.border} ${tone.text} ${className}`}
-        title={`Candidate Fit Score: ${result.score}% (${tone.label})\n${result.summaryText}`}
-      >
-        <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ backgroundColor: 'currentColor' }} />
-        <span>{result.score}% Match</span>
-      </span>
+      <CandidateFitScoreBadge
+        score={result.score}
+        matchLevel={result.matchLevel}
+        summaryText={result.summaryText}
+        className={className}
+      />
     );
   }
 
@@ -95,9 +123,11 @@ export function CandidateFitScorecard({
         className={`flex items-center justify-between gap-3 p-3 rounded-xl border ${tone.bg} ${tone.border} ${className}`}
       >
         <div className="flex items-center gap-2.5">
-          <div className={`px-2 py-1 rounded-lg text-xs font-black ${tone.badgeBg}`}>
-            {result.score}%
-          </div>
+          <CandidateFitScoreBadge
+            score={result.score}
+            matchLevel={result.matchLevel}
+            className="h-10 w-10 rounded-lg"
+          />
           <div>
             <div className={`text-xs font-bold ${tone.text}`}>{tone.label}</div>
             <p className="text-[11px] text-rf-ink-muted m-0">
@@ -127,12 +157,7 @@ export function CandidateFitScorecard({
       {/* Header Metric & Tier */}
       <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
         <div className="flex items-center gap-3">
-          <div
-            className={`w-13 h-13 rounded-2xl flex flex-col items-center justify-center font-black border shadow-xs ${tone.bg} ${tone.border} ${tone.text}`}
-          >
-            <span className="text-lg leading-none">{result.score}%</span>
-            <span className="text-[9px] uppercase tracking-wider opacity-80 mt-0.5">Fit</span>
-          </div>
+          <CandidateFitScoreBadge score={result.score} matchLevel={result.matchLevel} className="h-12 w-12 rounded-[14px]" />
           <div>
             <div className="flex items-center gap-2">
               <h3 className="text-sm font-extrabold text-slate-900 dark:text-white m-0">

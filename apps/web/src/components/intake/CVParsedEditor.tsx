@@ -4,6 +4,7 @@ import { FormField } from '../ui/FormField';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { Textarea } from '../ui/Textarea';
+import { CandidateFitScorecard } from '../candidate/CandidateFitScorecard';
 import {
   generateAISummary,
   detectClinicalDomain,
@@ -278,9 +279,7 @@ export const CVParsedEditor: React.FC<CVParsedEditorProps> = ({
                   <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-400">
                     AI Position Match
                   </span>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 shadow-2xs">
-                    {scoredVacancies[0].fitResult.score}% Fit
-                  </span>
+                  <CandidateFitScorecard variant="badge" breakdown={scoredVacancies[0].fitResult} />
                 </div>
                 <div
                   onClick={onProceed}
