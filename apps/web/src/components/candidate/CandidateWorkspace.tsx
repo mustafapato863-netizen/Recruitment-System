@@ -1,6 +1,8 @@
 import type { ComponentProps } from 'react';
-import { Avatar, Badge, Button, FilterChip, SLAIndicator } from '../ui';
+import { Avatar, Badge, Button, SLAIndicator } from '../ui';
 import { PipelineStepper } from '../PipelineStepper';
+import { SkillTagsOverflow } from './SkillTagsOverflow';
+import { inferPriorityFromTitle } from './skillTags';
 
 export interface CandidateWorkspaceProps {
   candidateName: string;
@@ -115,7 +117,6 @@ export function CandidateWorkspace({
         />
 
         <div className="flex-1 min-w-0 space-y-1.5">
-          {/* Candidate Name + SLA indicator */}
           <div className="flex flex-wrap items-center gap-2.5">
             <h1 className="text-base sm:text-lg font-bold text-rf-ink truncate leading-tight">
               {candidateName}
@@ -123,7 +124,6 @@ export function CandidateWorkspace({
             {slaDeadline && <SLAIndicator {...getSlaProps(slaDeadline)} />}
           </div>
 
-          {/* positionTitle - APP-xxxxxxxx */}
           {hasRoleOrApp && (
             <div className="flex flex-wrap items-center gap-x-2 text-xs text-rf-ink-muted">
               {hasPosition && <span>{positionTitle!.trim()}</span>}
@@ -140,7 +140,6 @@ export function CandidateWorkspace({
             </div>
           )}
 
-          {/* location - email - phone */}
           {contactItems.length > 0 && (
             <div className="flex flex-wrap items-center gap-x-2 text-xs text-rf-ink-muted">
               {contactItems.map((item, idx) => (
@@ -156,25 +155,16 @@ export function CandidateWorkspace({
             </div>
           )}
 
-          {/* Tags: [chips] [+ Add] */}
           <div className="flex flex-wrap items-center gap-2 pt-0.5">
-            <span className="text-xs font-semibold text-rf-ink-muted">Tags:</span>
-            <ul
-              aria-label="Candidate tags"
-              className="flex flex-wrap items-center gap-1.5 list-none p-0 m-0"
-            >
-              {tags && tags.length > 0 ? (
-                tags.map((tag) => (
-                  <li key={tag}>
-                    <FilterChip label={tag} />
-                  </li>
-                ))
-              ) : (
-                <li>
-                  <span className="text-xs text-rf-ink-muted italic">No tags</span>
-                </li>
-              )}
-            </ul>
+            <span className="text-xs font-semibold text-rf-ink-muted">Skills:</span>
+            <div aria-label="Best-fit skills" className="min-w-0 flex-1">
+              <SkillTagsOverflow
+                skills={tags ?? []}
+                prioritySkills={inferPriorityFromTitle(positionTitle)}
+                limit={6}
+                bestFitOnly
+              />
+            </div>
             {onAddTag && (
               <Button
                 type="button"
@@ -191,7 +181,6 @@ export function CandidateWorkspace({
         </div>
       </div>
 
-      {/* Stage rail via PipelineStepper */}
       {hasStageRail && (
         <div className="pt-2 border-t border-rf-border-subtle [&_.rf-pipeline-stepper-scroll]:mb-0 [&_.rf-pipeline-stepper-scroll]:border-0 [&_.rf-pipeline-stepper-scroll]:shadow-none [&_.rf-pipeline-stepper-scroll]:p-0 [&_.rf-pipeline-stepper-scroll]:bg-transparent">
           <PipelineStepper currentStage={stage!} steps={stages} />
