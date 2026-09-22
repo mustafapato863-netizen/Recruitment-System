@@ -1,5 +1,3 @@
-import type { ApplicationWorkspaceResponse } from '@recruitflow/contracts';
-
 export type ApplicantWorkspaceStage = 'Applied' | 'Screening' | 'Interview' | 'Offer' | 'Pre-Hire' | 'Joined';
 
 export const STANDARD_STAGE_NAMES = new Set(['Applied', 'Screening', 'Interview', 'Offer', 'Pre-Hire', 'Joined']);
