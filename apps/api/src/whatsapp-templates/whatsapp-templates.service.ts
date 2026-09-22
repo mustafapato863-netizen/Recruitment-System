@@ -155,9 +155,9 @@ export class WhatsAppTemplatesService {
       where: {
         organizationId,
         status: 'Active',
-        OR: interviewType
-          ? [{ interviewType: 'Any' }, { interviewType }]
-          : undefined,
+        ...(interviewType
+          ? { OR: [{ interviewType: 'Any' }, { interviewType }] }
+          : {}),
       },
       orderBy: [{ category: 'asc' }, { name: 'asc' }],
     });

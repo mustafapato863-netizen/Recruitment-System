@@ -42,8 +42,9 @@ export function formatPermissionRequirement(options: {
     return `${getPermissionLabel(code)} (${code})`;
   }
   const any = options.requiredAnyPermissions?.filter(Boolean) ?? [];
-  if (any.length === 1) {
-    return `${getPermissionLabel(any[0])} (${any[0]})`;
+  const [first] = any;
+  if (any.length === 1 && first) {
+    return `${getPermissionLabel(first)} (${first})`;
   }
   if (any.length > 1) {
     return any.map((code) => `${getPermissionLabel(code)} (${code})`).join(' or ');

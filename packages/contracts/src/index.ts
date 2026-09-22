@@ -522,7 +522,7 @@ export {
   formatPermissionRequirement,
   getNavigationCatalogItem,
   getPermissionLabel,
-} from './access-control';
+} from './access-control.ts';
 
 export interface NavigationItemRecord {
   key: string;
