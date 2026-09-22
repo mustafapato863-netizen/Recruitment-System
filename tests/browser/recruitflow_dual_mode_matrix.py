@@ -198,7 +198,10 @@ def run() -> int:
                         entry["result"] = "FAIL"
                         entry["issues"].append(str(error))
                     results.append(entry)
-                    print(f"[{entry['result']}] {theme} {width} {route}", flush=True)
+                    if entry["result"] == "FAIL":
+                        print(f"[FAIL] {theme} {width} {route} {json.dumps(entry['issues'], default=str)[:1200]}", flush=True)
+                    else:
+                        print(f"[PASS] {theme} {width} {route}", flush=True)
 
         browser.close()
 
