@@ -316,26 +316,12 @@ export function CandidateComparisonPage() {
       {/* ── Top Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 text-xs font-bold tracking-wider text-slate-400 uppercase">
-            <span>Talent Operations</span>
-            <span>&bull;</span>
-            <span className="text-blue-600 dark:text-blue-400">Decision Matrix</span>
-          </div>
-          <div className="flex items-center gap-3 mt-1">
-            <button
-              type="button"
-              onClick={() => navigate('/candidates')}
-              className="p-1.5 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition cursor-pointer"
-            >
-              <Icon name="arrow-left" size={16} />
-            </button>
-            <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
-              Compare Candidates
-            </h1>
+          <div className="flex items-center gap-2.5">
+            <h1 className="rf-page-title">Compare</h1>
             <QuickGuideTrigger />
           </div>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 ml-9">
-            Side-by-side evaluation of competency ratings, match algorithms, and clinical credentials to finalize hiring decisions.
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+            Pick the strongest person, then create the offer.
           </p>
         </div>
 
@@ -346,7 +332,7 @@ export function CandidateComparisonPage() {
             className="px-3.5 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs cursor-pointer flex items-center gap-1.5"
           >
             <Icon name="users" size={14} />
-            <span>Candidate Directory</span>
+            <span>Candidates</span>
           </button>
           <button
             type="button"
@@ -354,7 +340,7 @@ export function CandidateComparisonPage() {
             className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm transition cursor-pointer shadow-blue-500/20"
           >
             <Icon name="plus" size={14} />
-            <span>Add Candidate</span>
+            <span>Add</span>
           </button>
         </div>
       </div>
@@ -366,25 +352,25 @@ export function CandidateComparisonPage() {
             <Icon name="briefcase" size={18} />
           </div>
           <div>
-            <span className="block text-[10.5px] font-bold text-slate-400 uppercase tracking-wider">Active Position Filter</span>
-            <span className="text-sm font-black text-slate-900 dark:text-white">
+            <span className="block text-[10.5px] font-bold text-slate-400 uppercase tracking-wider">Job</span>
+            <span className="text-sm font-semibold text-slate-900 dark:text-white">
               {activeVacancy
                 ? `${activeVacancy.position?.title || activeVacancy.title} (${activeVacancy.vacancyCode})`
-                : 'Custom Comparison Matrix'}
+                : 'No job selected'}
             </span>
           </div>
         </div>
 
         <div className="flex items-center gap-2.5">
           <label className="text-xs font-bold text-slate-500 dark:text-slate-400 whitespace-nowrap">
-            Compare Requisition:
+            Job
           </label>
           <select
             value={selectedVacancyId}
             onChange={(e) => handleVacancyChange(e.target.value)}
             className="p-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 focus:ring-2 focus:ring-blue-500 cursor-pointer shadow-xs max-w-xs truncate"
           >
-            <option value="">-- All Candidates / Custom Set --</option>
+            <option value="">All candidates</option>
             {vacancies.map((v) => (
               <option key={v.id} value={v.id}>
                 [{v.vacancyCode}] {v.position?.title || v.title}
@@ -425,15 +411,10 @@ export function CandidateComparisonPage() {
                 candidate={c}
                 onRemove={handleRemove}
                 onSelectOffer={(cand) => {
-                  showToast(`✓ Selected ${cand.name} to advance to Offer Creation!`);
-                  setTimeout(
-                    () =>
-                      navigate(
-                        `/offers/create?candidateId=${cand.id}${
-                          selectedVacancyId ? `&vacancyId=${selectedVacancyId}` : ''
-                        }`
-                      ),
-                    1000
+                  navigate(
+                    `/offers/create?candidateId=${cand.id}${
+                      selectedVacancyId ? `&vacancyId=${selectedVacancyId}` : ''
+                    }`
                   );
                 }}
               />
@@ -443,7 +424,7 @@ export function CandidateComparisonPage() {
           {/* Right: Comparison Summary (Calculated Dynamically from Active Candidates) */}
           <div className="lg:col-span-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-5">
             <h2 className="text-sm font-bold text-slate-900 dark:text-white pb-2 border-b border-slate-100 dark:border-slate-800">
-              Hiring Team Recommendation
+              Best fit
             </h2>
 
             <div className="space-y-4 text-xs">
@@ -453,19 +434,19 @@ export function CandidateComparisonPage() {
                   <span className="font-bold text-slate-900 dark:text-white">
                     {topMatchCandidate?.name || '—'}
                   </span>
-                  <span className="font-black text-blue-600 dark:text-blue-400">
+                  <span className="font-semibold text-blue-600 dark:text-blue-400">
                     {topMatchCandidate ? `${topMatchCandidate.matchScore}%` : '—'}
                   </span>
                 </div>
               </div>
 
               <div>
-                <span className="text-[11px] text-slate-400 font-medium block">Highest Clinical Score</span>
+                <span className="text-[11px] text-slate-400 font-medium block">Highest skill score</span>
                 <div className="flex items-center justify-between mt-1">
                   <span className="font-bold text-slate-900 dark:text-white">
                     {highestTechnicalCandidate?.name || '—'}
                   </span>
-                  <span className="font-black text-blue-600 dark:text-blue-400">
+                  <span className="font-semibold text-blue-600 dark:text-blue-400">
                     {highestTechnicalCandidate ? `${highestTechnicalCandidate.ratings.technical}.0 / 5` : '—'}
                   </span>
                 </div>
@@ -477,7 +458,7 @@ export function CandidateComparisonPage() {
                   <span className="font-bold text-slate-900 dark:text-white">
                     {highestCommCandidate?.name || '—'}
                   </span>
-                  <span className="font-black text-blue-600 dark:text-blue-400">
+                  <span className="font-semibold text-blue-600 dark:text-blue-400">
                     {highestCommCandidate ? `${highestCommCandidate.ratings.communication}.0 / 5` : '—'}
                   </span>
                 </div>
@@ -488,13 +469,10 @@ export function CandidateComparisonPage() {
               {topMatchCandidate && (
                 <button
                   type="button"
-                  onClick={() => {
-                    showToast(`✓ Advanced ${topMatchCandidate.name} to formal employment offer generation.`);
-                    setTimeout(() => navigate(`/offers/create?candidateId=${topMatchCandidate.id}${selectedVacancyId ? `&vacancyId=${selectedVacancyId}` : ''}`), 1000);
-                  }}
-                  className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold shadow-sm transition cursor-pointer"
+                  onClick={() => navigate(`/offers/create?candidateId=${topMatchCandidate.id}${selectedVacancyId ? `&vacancyId=${selectedVacancyId}` : ''}`)}
+                  className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold transition cursor-pointer"
                 >
-                  Advance Top Candidate ({topMatchCandidate.name})
+                  Create offer for {topMatchCandidate.name}
                 </button>
               )}
               <button
@@ -502,7 +480,7 @@ export function CandidateComparisonPage() {
                 onClick={() => navigate('/candidates')}
                 className="w-full py-2 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl text-xs font-bold transition cursor-pointer"
               >
-                Back to Candidates Directory
+                Back to candidates
               </button>
             </div>
           </div>
