@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor, within, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
@@ -271,9 +271,12 @@ describe('ApplicationDetailPage — stage transitions', () => {
 
     const workspace = screen.getByRole('region', { name: 'Unified applicant stage workspace' });
     await user.click(within(workspace).getByRole('button', { name: 'Add Note' }));
-    const textarea = screen.getByPlaceholderText('Type candidate observations...');
-    await user.type(textarea, 'SCFHS verification pending');
-    await user.click(screen.getByRole('button', { name: 'Save Note' }));
+    const dialog = await screen.findByRole('dialog', { name: /add internal note/i });
+    const textarea = within(dialog).getByPlaceholderText('Type candidate observations...');
+    fireEvent.change(textarea, { target: { value: 'SCFHS verification pending' } });
+    const saveNote = within(dialog).getByRole('button', { name: 'Save Note' });
+    await waitFor(() => expect(saveNote).toBeEnabled());
+    await user.click(saveNote);
     await waitFor(() => {
       expect(mockPostApi).toHaveBeenCalledWith(
         expect.stringContaining('/notes'),
