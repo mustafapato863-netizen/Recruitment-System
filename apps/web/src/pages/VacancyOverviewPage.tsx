@@ -523,7 +523,7 @@ export function VacancyOverviewPage() {
               className="rounded-xl text-xs font-bold"
             >
               <Icon name="user-check" size={14} />
-              <span>{isRecruiterAssigned ? 'Change Recruiter' : 'Assign Recruiter & Start'}</span>
+              <span>{isRecruiterAssigned ? 'Change recruiter' : 'Assign recruiter'}</span>
             </Button>
           )}
 
@@ -571,7 +571,7 @@ export function VacancyOverviewPage() {
                   className="w-full text-left px-3.5 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2 font-semibold text-slate-700 dark:text-slate-200 cursor-pointer"
                 >
                   <Icon name="folder-kanban" size={13} className="text-blue-500" />
-                  <span>Open Kanban Pipeline</span>
+                  <span>Open pipeline</span>
                 </button>
                 <button
                   type="button"
@@ -579,7 +579,7 @@ export function VacancyOverviewPage() {
                   className="w-full text-left px-3.5 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2 font-semibold text-slate-700 dark:text-slate-200 cursor-pointer"
                 >
                   <Icon name="report" size={13} className="text-purple-500" />
-                  <span>View Job Analytics</span>
+                  <span>Analytics</span>
                 </button>
                 <button
                   type="button"
@@ -588,7 +588,7 @@ export function VacancyOverviewPage() {
                   className="w-full text-left px-3.5 py-2 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center gap-2 font-semibold text-slate-700 dark:text-slate-200 cursor-pointer disabled:opacity-50"
                 >
                   <Icon name="copy" size={13} className="text-emerald-500" />
-                  <span>{isCloning ? 'Cloning...' : 'Clone Requisition'}</span>
+                  <span>{isCloning ? 'Cloning...' : 'Clone'}</span>
                 </button>
                 {isAdministrator && (
                   <>
@@ -608,7 +608,7 @@ export function VacancyOverviewPage() {
                 )}
                 <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
                 <div className="px-3.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                  Change Status
+                  Status
                 </div>
                 {(['Open', 'On Hold', 'Cancelled'] as VacancyStatus[]).map((st) => (
                   <button
@@ -632,95 +632,23 @@ export function VacancyOverviewPage() {
         </div>
       </div>
 
-      {/* ── Persistent RecruitFlow Smart Stat Buttons (E9.2) ── */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {/* Card 1: Applications */}
-        <div
-          onClick={() => navigate(`/applications?vacancyId=${id || ''}`)}
-          className="group flex cursor-pointer items-center justify-between rounded-2xl border border-slate-200/80 bg-white p-3.5 shadow-xs transition hover:border-blue-300 hover:shadow-md dark:border-slate-800 dark:bg-slate-900 dark:hover:border-blue-800 sm:p-4"
-          title="View candidate pipeline for this position"
-        >
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400">
-              <Icon name="users" size={19} />
-            </div>
-            <div>
-              <span className="block text-xs font-semibold text-slate-500 dark:text-slate-400">Applications</span>
-              <span className="rf-metric-value mt-0.5 block">{applicationsCount}</span>
-              <span className="block text-xs font-bold text-blue-600 dark:text-blue-400 mt-0.5">
-                {appsThisWeek > 0 ? `+${appsThisWeek} this week` : '0 this week'}
-              </span>
-            </div>
-          </div>
-          <Icon name="chevron-right" size={18} className="text-slate-300 dark:text-slate-600 group-hover:translate-x-0.5 transition" />
-        </div>
-
-        {/* Card 2: Interviews */}
-        <div
-          onClick={() => navigate(`/interviews?vacancyId=${id || ''}`)}
-          className="group flex cursor-pointer items-center justify-between rounded-2xl border border-slate-200/80 bg-white p-3.5 shadow-xs transition hover:border-emerald-300 hover:shadow-md dark:border-slate-800 dark:bg-slate-900 dark:hover:border-emerald-800 sm:p-4"
-          title="View scheduled interviews for this position"
-        >
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400">
-              <Icon name="calendar" size={19} />
-            </div>
-            <div>
-              <span className="block text-xs font-semibold text-slate-500 dark:text-slate-400">Interviews</span>
-              <span className="rf-metric-value mt-0.5 block">{interviewsCount}</span>
-              <span className="block text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
-                {intsThisWeek > 0 ? `${intsThisWeek} this week` : '0 this week'}
-              </span>
-            </div>
-          </div>
-          <Icon name="chevron-right" size={18} className="text-slate-300 dark:text-slate-600 group-hover:translate-x-0.5 transition" />
-        </div>
-
-        {/* Card 3: Offers */}
-        <div
-          onClick={() => navigate(`/offers?vacancyId=${id || ''}`)}
-          className="group flex cursor-pointer items-center justify-between rounded-2xl border border-slate-200/80 bg-white p-3.5 shadow-xs transition hover:border-purple-300 hover:shadow-md dark:border-slate-800 dark:bg-slate-900 dark:hover:border-purple-800 sm:p-4"
-          title="View offers for this position"
-        >
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-purple-50 text-purple-600 dark:bg-purple-950/40 dark:text-purple-400">
-              <Icon name="offer" size={19} />
-            </div>
-            <div>
-              <span className="block text-xs font-semibold text-slate-500 dark:text-slate-400">Offers</span>
-              <span className="rf-metric-value mt-0.5 block">{offersCount}</span>
-              <span className="block text-xs font-bold text-purple-600 dark:text-purple-400 mt-0.5">
-                {offersThisWeek > 0 ? `${offersThisWeek} this week` : '0 this week'}
-              </span>
-            </div>
-          </div>
-          <Icon name="chevron-right" size={18} className="text-slate-300 dark:text-slate-600 group-hover:translate-x-0.5 transition" />
-        </div>
-
-        {/* Card 4: Headcount Fulfillment & Hires */}
-        <div
-          onClick={() => navigate(`/applications?vacancyId=${id || ''}&stage=Joined`)}
-          className="group flex cursor-pointer items-center justify-between rounded-2xl border border-slate-200/80 bg-white p-3.5 shadow-xs transition hover:border-orange-300 hover:shadow-md dark:border-slate-800 dark:bg-slate-900 dark:hover:border-orange-800 sm:p-4"
-          title="View joined candidates & headcount fulfillment"
-        >
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-600 dark:bg-orange-950/40 dark:text-orange-400">
-              <Icon name="user-check" size={19} />
-            </div>
-            <div>
-              <span className="block text-xs font-semibold text-slate-500 dark:text-slate-400">Headcount Joined</span>
-              <span className="rf-metric-value mt-0.5 block">
-                {hiresCount} / {vacancy?.approvedHeadcount ?? 1}
-              </span>
-              <span className="block text-xs font-bold text-orange-600 dark:text-orange-400 mt-0.5">
-                {hiresCount >= (vacancy?.approvedHeadcount ?? 1)
-                  ? 'Fulfilled (100%)'
-                  : `${Math.round((hiresCount / (vacancy?.approvedHeadcount ?? 1)) * 100)}% filled`}
-              </span>
-            </div>
-          </div>
-          <Icon name="chevron-right" size={18} className="text-slate-300 dark:text-slate-600 group-hover:translate-x-0.5 transition" />
-        </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" onClick={() => navigate(`/applications?vacancyId=${id || ''}`)} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
+          Applications
+          <span className="text-slate-900 dark:text-white">{applicationsCount}</span>
+        </button>
+        <button type="button" onClick={() => navigate(`/interviews?vacancyId=${id || ''}`)} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
+          Interviews
+          <span className="text-slate-900 dark:text-white">{interviewsCount}</span>
+        </button>
+        <button type="button" onClick={() => navigate(`/offers?vacancyId=${id || ''}`)} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
+          Offers
+          <span className="text-slate-900 dark:text-white">{offersCount}</span>
+        </button>
+        <button type="button" onClick={() => navigate(`/applications?vacancyId=${id || ''}&stage=Joined`)} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
+          Joined
+          <span className="text-slate-900 dark:text-white">{hiresCount}/{vacancy?.approvedHeadcount ?? 1}</span>
+        </button>
       </div>
 
       {/* ── Horizontal Navigation Tabs (Overview, Applications, Pipeline, Interviews, etc.) ── */}
@@ -730,7 +658,7 @@ export function VacancyOverviewPage() {
           onClick={() => setActiveTab('overview')}
           className={`pb-3.5 border-b-2 transition cursor-pointer shrink-0 ${
             activeTab === 'overview'
-              ? 'border-blue-600 text-blue-600 font-extrabold'
+              ? 'border-blue-600 text-blue-600 font-semibold'
               : 'border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white'
           }`}
         >
@@ -742,7 +670,7 @@ export function VacancyOverviewPage() {
           onClick={() => setActiveTab('applications')}
           className={`pb-3.5 border-b-2 transition cursor-pointer flex items-center gap-1.5 shrink-0 ${
             activeTab === 'applications'
-              ? 'border-blue-600 text-blue-600 font-extrabold'
+              ? 'border-blue-600 text-blue-600 font-semibold'
               : 'border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white'
           }`}
         >
@@ -757,7 +685,7 @@ export function VacancyOverviewPage() {
           onClick={() => setActiveTab('pipeline')}
           className={`pb-3.5 border-b-2 transition cursor-pointer shrink-0 ${
             activeTab === 'pipeline'
-              ? 'border-blue-600 text-blue-600 font-extrabold'
+              ? 'border-blue-600 text-blue-600 font-semibold'
               : 'border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white'
           }`}
         >
@@ -791,7 +719,7 @@ export function VacancyOverviewPage() {
           onClick={() => setActiveTab('posting')}
           className={`pb-3.5 border-b-2 transition cursor-pointer shrink-0 ${
             activeTab === 'posting'
-              ? 'border-blue-600 text-blue-600 font-extrabold'
+              ? 'border-blue-600 text-blue-600 font-semibold'
               : 'border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white'
           }`}
         >
@@ -803,7 +731,7 @@ export function VacancyOverviewPage() {
           onClick={() => setActiveTab('activity')}
           className={`pb-3.5 border-b-2 transition cursor-pointer shrink-0 ${
             activeTab === 'activity'
-              ? 'border-blue-600 text-blue-600 font-extrabold'
+              ? 'border-blue-600 text-blue-600 font-semibold'
               : 'border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white'
           }`}
         >
@@ -815,7 +743,7 @@ export function VacancyOverviewPage() {
           onClick={() => setActiveTab('settings')}
           className={`pb-3.5 border-b-2 transition cursor-pointer shrink-0 ${
             activeTab === 'settings'
-              ? 'border-blue-600 text-blue-600 font-extrabold'
+              ? 'border-blue-600 text-blue-600 font-semibold'
               : 'border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white'
           }`}
         >
@@ -840,7 +768,7 @@ export function VacancyOverviewPage() {
         {/* Column 1: SLA Progress */}
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-4">
           <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-            <h2 className="text-base font-extrabold text-slate-900 dark:text-white tracking-tight">
+            <h2 className="text-base font-bold text-slate-900 dark:text-white tracking-tight">
               SLA Progress
             </h2>
             <button
@@ -894,7 +822,7 @@ export function VacancyOverviewPage() {
         {/* Column 2: Owner & Hiring Team */}
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-4">
           <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-            <h2 className="text-base font-extrabold text-slate-900 dark:text-white tracking-tight">
+            <h2 className="text-base font-bold text-slate-900 dark:text-white tracking-tight">
               Hiring Team
             </h2>
             <button
@@ -937,7 +865,7 @@ export function VacancyOverviewPage() {
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs flex flex-col justify-between space-y-4">
           <div>
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3 mb-3">
-              <h2 className="text-base font-extrabold text-slate-900 dark:text-white tracking-tight">
+              <h2 className="text-base font-bold text-slate-900 dark:text-white tracking-tight">
                 Last Activity
               </h2>
               <button
@@ -973,15 +901,7 @@ export function VacancyOverviewPage() {
             )}
           </div>
 
-          <div className="pt-2 border-t border-slate-100 dark:border-slate-800 text-center">
-            <button
-              type="button"
-              onClick={() => setActiveTab('activity')}
-              className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
-            >
-              View all activity
-            </button>
-          </div>
+
         </div>
       </div>
 
@@ -990,7 +910,7 @@ export function VacancyOverviewPage() {
         {/* Left: Role Summary */}
         <div className="lg:col-span-8 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-5">
           <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-            <h2 className="text-base font-extrabold text-slate-900 dark:text-white tracking-tight">
+            <h2 className="text-base font-bold text-slate-900 dark:text-white tracking-tight">
               Role Summary
             </h2>
             <button
@@ -1019,7 +939,7 @@ export function VacancyOverviewPage() {
                     <Icon name="briefcase" size={16} />
                   </div>
                   <div>
-                    <span className="block text-[10px] text-slate-400 font-semibold uppercase">Department</span>
+                    <span className="block text-[10px] font-medium text-slate-500">Department</span>
                     <span className="block text-xs font-bold text-slate-900 dark:text-white">{departmentName}</span>
                   </div>
                 </div>
@@ -1029,7 +949,7 @@ export function VacancyOverviewPage() {
                     <Icon name="users" size={16} />
                   </div>
                   <div>
-                    <span className="block text-[10px] text-slate-400 font-semibold uppercase">Requisition Code</span>
+                    <span className="block text-[10px] font-medium text-slate-500">Requisition Code</span>
                     <span className="block text-xs font-bold text-slate-900 dark:text-white">{vacancy?.vacancyCode || '—'}</span>
                   </div>
                 </div>
@@ -1071,7 +991,7 @@ export function VacancyOverviewPage() {
                   <div className="space-y-4">
                     {vacancy?.description && (
                       <div>
-                        <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">About the role</h4>
+                        <h4 className="text-[11px] font-medium text-slate-500 mb-1">About the role</h4>
                         <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-line">
                           {vacancy.description}
                         </p>
@@ -1079,7 +999,7 @@ export function VacancyOverviewPage() {
                     )}
                     {vacancy?.responsibilities && (
                       <div>
-                        <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">Key responsibilities</h4>
+                        <h4 className="text-[11px] font-medium text-slate-500 mb-1">Key responsibilities</h4>
                         <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-line">
                           {vacancy.responsibilities}
                         </p>
@@ -1087,7 +1007,7 @@ export function VacancyOverviewPage() {
                     )}
                     {vacancy?.qualifications && (
                       <div>
-                        <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">Required qualifications</h4>
+                        <h4 className="text-[11px] font-medium text-slate-500 mb-1">Required qualifications</h4>
                         <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-line">
                           {vacancy.qualifications}
                         </p>
@@ -1095,7 +1015,7 @@ export function VacancyOverviewPage() {
                     )}
                     {vacancy?.benefits && (
                       <div>
-                        <h4 className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">Benefits & highlights</h4>
+                        <h4 className="text-[11px] font-medium text-slate-500 mb-1">Benefits & highlights</h4>
                         <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-line">
                           {vacancy.benefits}
                         </p>
@@ -1145,7 +1065,7 @@ export function VacancyOverviewPage() {
                     <Icon name="briefcase" size={15} />
                   </div>
                   <div>
-                    <span className="block text-[10px] text-slate-400 font-semibold uppercase">Requisition Priority</span>
+                    <span className="block text-[10px] font-medium text-slate-500">Requisition Priority</span>
                     <span className="block text-xs font-bold text-slate-900 dark:text-white">
                       {vacancy?.vacancyRequest?.criticality || 'Standard'}
                     </span>
@@ -1157,7 +1077,7 @@ export function VacancyOverviewPage() {
                     <Icon name="award" size={15} />
                   </div>
                   <div>
-                    <span className="block text-[10px] text-slate-400 font-semibold uppercase">Target Headcount</span>
+                    <span className="block text-[10px] font-medium text-slate-500">Target Headcount</span>
                     <span className="block text-xs font-bold text-slate-900 dark:text-white">
                       {vacancy?.approvedHeadcount || 1} approved ({hiresCount} joined)
                     </span>
@@ -1171,7 +1091,7 @@ export function VacancyOverviewPage() {
         {/* Right: Job Details (4 cols out of 12) */}
         <div className="lg:col-span-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-4">
           <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
-            <h2 className="text-base font-extrabold text-slate-900 dark:text-white tracking-tight">
+            <h2 className="text-base font-bold text-slate-900 dark:text-white tracking-tight">
               Job Details
             </h2>
             <button
@@ -1489,7 +1409,7 @@ export function VacancyOverviewPage() {
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-6 shadow-xs space-y-6">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 dark:border-slate-800 pb-4">
             <div>
-              <h2 className="text-lg font-extrabold text-slate-900 dark:text-white">{jobTitle}</h2>
+              <h2 className="text-lg font-bold text-slate-900 dark:text-white">{jobTitle}</h2>
               <p className="text-xs text-slate-500 mt-0.5">
                 {departmentName} &bull; {locationText} &bull; Requisition Code: {vacancy?.vacancyCode || '—'}
               </p>
@@ -1497,7 +1417,7 @@ export function VacancyOverviewPage() {
           </div>
 
           <div className="space-y-4">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Position Overview</h3>
+            <h3 className="text-xs font-medium text-slate-500">Position Overview</h3>
             <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
               {vacancy?.vacancyRequest?.justification ||
                 vacancy?.vacancyRequest?.reason ||
@@ -1506,19 +1426,19 @@ export function VacancyOverviewPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
               <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-100 dark:border-slate-800">
-                <span className="block text-[10px] text-slate-400 font-semibold uppercase">Employment Type</span>
+                <span className="block text-[10px] font-medium text-slate-500">Employment Type</span>
                 <span className="block text-xs font-bold text-slate-900 dark:text-white mt-1">
                   {vacancy?.vacancyRequest?.employmentType || 'Full-time'}
                 </span>
               </div>
               <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-100 dark:border-slate-800">
-                <span className="block text-[10px] text-slate-400 font-semibold uppercase">Approved Headcount</span>
+                <span className="block text-[10px] font-medium text-slate-500">Approved Headcount</span>
                 <span className="block text-xs font-bold text-slate-900 dark:text-white mt-1">
                   {vacancy?.approvedHeadcount || 1} Position{vacancy?.approvedHeadcount === 1 ? '' : 's'}
                 </span>
               </div>
               <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-100 dark:border-slate-800">
-                <span className="block text-[10px] text-slate-400 font-semibold uppercase">Budget Status</span>
+                <span className="block text-[10px] font-medium text-slate-500">Budget Status</span>
                 <span className="block text-xs font-bold text-slate-900 dark:text-white mt-1">
                   {vacancy?.vacancyRequest?.budgetStatus || 'Approved'}
                 </span>
@@ -1532,8 +1452,8 @@ export function VacancyOverviewPage() {
       {activeTab === 'activity' && (
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-4">
           <div className="border-b border-slate-100 dark:border-slate-800 pb-3">
-            <h2 className="text-base font-extrabold text-slate-900 dark:text-white">
-              Position Activity Log ({activities.length})
+            <h2 className="text-base font-bold text-slate-900 dark:text-white">
+              Activity ({activities.length})
             </h2>
           </div>
           {activities.length === 0 ? (
@@ -1565,12 +1485,12 @@ export function VacancyOverviewPage() {
       {activeTab === 'settings' && (
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-6 shadow-xs space-y-6">
           <div className="border-b border-slate-100 dark:border-slate-800 pb-3">
-            <h2 className="text-base font-extrabold text-slate-900 dark:text-white">Requisition Settings</h2>
+            <h2 className="text-base font-bold text-slate-900 dark:text-white">Settings</h2>
             <p className="text-xs text-slate-500">Manage vacancy configuration, budget, and assigned hiring team.</p>
           </div>
 
           <div className="space-y-4">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400">Assigned Hiring Team</h3>
+            <h3 className="text-xs font-medium text-slate-500">Hiring team</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {teamMembers.map((member) => (
                 <div key={member.id} className="p-3 rounded-xl border border-slate-200/80 dark:border-slate-800 flex items-center gap-3">
