@@ -612,19 +612,14 @@ export function CandidatesPage() {
       {/* ── Page Header matching Enterprise System ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 text-xs font-bold tracking-wider text-slate-600 dark:text-slate-400 uppercase">
-            <span>Talent Operations</span>
-            <span>&bull;</span>
-            <span className="text-blue-600 dark:text-blue-400">Global Talent Directory</span>
-          </div>
-          <div className="flex items-center gap-2.5 flex-wrap mt-1">
+          <div className="flex items-center gap-2.5 flex-wrap">
             <h1 className="rf-page-title">
-              Candidate Database
+              Candidates
             </h1>
             <QuickGuideTrigger />
           </div>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            Manage unique candidate identities, clinical licenses, CV documents, and historic applications.
+            Find a person, then assign them to a job.
           </p>
         </div>
 
@@ -681,99 +676,16 @@ export function CandidatesPage() {
         </div>
       </div>
 
-      {/* ── 4 KPI Metric Cards ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Card 1: Total Candidates */}
-        <div className="relative overflow-hidden bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 shadow-xs flex items-center justify-between before:absolute before:inset-x-0 before:top-0 before:h-1 before:bg-gradient-to-r before:from-[#0084ce] before:to-[#00a3e0]">
-          <div>
-            <span className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
-              Total Talent Base
-            </span>
-            <div className="flex items-baseline gap-2 mt-1">
-              <span className="rf-metric-value">
-                {totalDisplayCount}
-              </span>
-              <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded">
-                {metrics ? 'Live count' : 'Unavailable'}
-              </span>
-            </div>
-            <span className="block text-[10.5px] text-slate-500 dark:text-slate-400 mt-1">
-              Verified identity records
-            </span>
-          </div>
-          <div className="rf-metric-icon-box rounded-xl bg-blue-50 dark:bg-blue-950/50 text-[#0084ce] dark:text-sky-400 flex items-center justify-center shrink-0">
-            <Icon name="users" size={20} />
-          </div>
-        </div>
-
-        {/* Card 2: Active in Pipeline */}
-        <div className="relative overflow-hidden bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 shadow-xs flex items-center justify-between before:absolute before:inset-x-0 before:top-0 before:h-1 before:bg-gradient-to-r before:from-emerald-400 before:to-[#00a859]">
-          <div>
-            <span className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
-              Active in Process
-            </span>
-            <div className="flex items-baseline gap-2 mt-1">
-              <span className="rf-metric-value">
-                {activeInPipelineCount}
-              </span>
-                <span className="text-[11px] font-bold text-blue-700 dark:text-sky-300 bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.5 rounded">
-                Screening &bull; Interview
-              </span>
-            </div>
-            <span className="block text-[10.5px] text-slate-500 dark:text-slate-400 mt-1">
-              Across active vacancies
-            </span>
-          </div>
-          <div className="rf-metric-icon-box rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-[#00a859] dark:text-emerald-400 flex items-center justify-center shrink-0">
-            <Icon name="pipeline" size={20} />
-          </div>
-        </div>
-
-        {/* Card 3: In Sourcing Match Bench */}
-        <div className="relative overflow-hidden bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 shadow-xs flex items-center justify-between before:absolute before:inset-x-0 before:top-0 before:h-1 before:bg-gradient-to-r before:from-purple-500 before:to-indigo-500">
-          <div>
-            <span className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
-              Sourcing Bench
-            </span>
-            <div className="flex items-baseline gap-2 mt-1">
-              <span className="rf-metric-value">
-                {talentPoolCount}
-              </span>
-                <span className="text-[11px] font-bold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40 px-1.5 py-0.5 rounded">
-                Bench Qualified
-              </span>
-            </div>
-            <span className="block text-[10.5px] text-slate-500 dark:text-slate-400 mt-1">
-              Ready for instant matching
-            </span>
-          </div>
-          <div className="rf-metric-icon-box rounded-xl bg-purple-50 dark:bg-purple-950/50 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
-            <Icon name="star" size={20} />
-          </div>
-        </div>
-
-        {/* Card 4: Direct & Referrals */}
-        <div className="relative overflow-hidden bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 shadow-xs flex items-center justify-between before:absolute before:inset-x-0 before:top-0 before:h-1 before:bg-gradient-to-r before:from-amber-400 before:to-amber-500">
-          <div>
-            <span className="block text-[11px] font-bold text-slate-600 dark:text-slate-400 uppercase tracking-wider">
-              Direct & Referrals
-            </span>
-            <div className="flex items-baseline gap-2 mt-1">
-              <span className="rf-metric-value">
-                {organicSourcePct}
-              </span>
-                <span className="text-[11px] font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded">
-                Zero Agency Fee
-              </span>
-            </div>
-            <span className="block text-[10.5px] text-slate-500 dark:text-slate-400 mt-1">
-              Internal & career portal sources
-            </span>
-          </div>
-          <div className="rf-metric-icon-box rounded-xl bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
-            <Icon name="award" size={20} />
-          </div>
-        </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
+          All <span className="text-slate-900 dark:text-white">{totalDisplayCount}</span>
+        </span>
+        <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
+          In process <span className="text-slate-900 dark:text-white">{activeInPipelineCount}</span>
+        </span>
+        <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
+          Bench <span className="text-slate-900 dark:text-white">{talentPoolCount}</span>
+        </span>
       </div>
 
       {/* ── Error & Success Alerts ── */}
@@ -1116,12 +1028,13 @@ export function CandidatesPage() {
                       {/* Actions */}
                       <td className="py-3.5 pr-4 text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end gap-1.5 rf-row-action-menu-container relative">
-                          <Link
-                            to={`/candidates/${c.id}`}
-                            className="px-3 py-1 rounded-lg text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-blue-50 hover:text-blue-600 dark:hover:bg-blue-950/50 dark:hover:text-blue-400 transition"
+                          <button
+                            type="button"
+                            onClick={() => void openAssignModal(c)}
+                            className="inline-flex min-h-7 items-center rounded-lg bg-blue-600 px-2.5 text-[11px] font-semibold text-white hover:bg-blue-700"
                           >
-                            Open
-                          </Link>
+                            Assign to job
+                          </button>
                           <div className="relative">
                             <button
                               type="button"
