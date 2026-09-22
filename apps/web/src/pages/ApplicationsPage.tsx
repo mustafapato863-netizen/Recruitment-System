@@ -15,6 +15,7 @@ import { Icon } from '../components/Icon';
 import { Modal } from '../components/Modal';
 import { CandidateFitScorecard } from '../components/candidate/CandidateFitScorecard';
 import { ApplicationKanbanCard, mapFitSummary } from '../components/candidate/ApplicationKanbanCard';
+import { getNextActionPlan, type NextActionKind } from '../components/candidate/NextActionGuidanceBanner';
 import { Drawer } from '../components/ui/Drawer';
 import { CommentsThread } from '../components/ui/CommentsThread';
 import { AddApplicationModal } from '../components/candidate/AddApplicationModal';
@@ -939,6 +940,18 @@ export function ApplicationsPage() {
     }
   };
 
+  const handleNextAction = (applicationId: string, kind: NextActionKind) => {
+    if (kind === 'assign') {
+      void handleClaimApplication(applicationId);
+      return;
+    }
+    if (kind === 'offer') {
+      navigate(`/offers/create?applicationId=${applicationId}`);
+      return;
+    }
+    navigate(`/applications/${applicationId}`);
+  };
+
   const ownerOptions = useMemo(() => {
     const owners = new Set<string>();
     apiApplications.forEach((a) => {
@@ -1048,12 +1061,8 @@ export function ApplicationsPage() {
       const source = app.source || app.candidate?.source || '—';
       const positionTitle = app.positionTitle || 'No position specified';
 
-      let nextAction = 'Review Profile';
-      if (currentStage === 'Screening') nextAction = 'Review Application';
-      else if (currentStage === 'Interview') nextAction = 'Interview Evaluation';
-      else if (currentStage === 'Offer') nextAction = 'Prepare Offer';
-      else if (currentStage === 'Pre-Hire') nextAction = 'Onboarding';
-      else if (currentStage === 'Joined') nextAction = 'Onboarded';
+      const unassigned = !app.primaryRecruiterId || ownerName === 'Unassigned';
+      const nextPlan = getNextActionPlan(currentStage, unassigned);
 
       const targetVacancy = (app.vacancyId ? vacancyMap.get(app.vacancyId) : null) || currentVacancy;
       const fitBreakdown = calculateCandidateFitScore(
@@ -1100,9 +1109,9 @@ export function ApplicationsPage() {
         source,
         fitScore: fitBreakdown.score,
         fitBreakdown,
-        nextAction,
-        nextActionTime: app.nextFollowUpAt ? formatRelativeTime(app.nextFollowUpAt) : 'No follow-up scheduled',
-        nextActionIcon: 'calendar',
+        nextAction: nextPlan.label,
+        nextActionTime: nextPlan.hint,
+        nextActionIcon: nextPlan.icon,
         rawApplication: app,
       };
     });
@@ -1933,7 +1942,7 @@ export function ApplicationsPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr className="border-b border-slate-100 dark:border-slate-800 text-slate-400 font-semibold uppercase text-[10.5px] bg-slate-50/50 dark:bg-slate-800/20">
+                <tr className="border-b border-slate-100 dark:border-slate-800 text-slate-500 font-semibold text-[11px] bg-slate-50/50 dark:bg-slate-800/20">
                   <th className="py-3 px-4 text-left w-10">
                     <input
                       type="checkbox"
@@ -1944,15 +1953,11 @@ export function ApplicationsPage() {
                   </th>
                   <th className="py-3 px-3 text-left">Candidate</th>
                   <th className="py-3 px-3 text-left">Position</th>
-                  <th className="py-3 px-3 text-left">Location</th>
                   <th className="py-3 px-3 text-left">Stage</th>
                   <th className="py-3 px-3 text-left">Owner</th>
-                  <th className="py-3 px-3 text-left">SLA</th>
-                  <th className="py-3 px-3 text-left">Last Activity</th>
-                  <th className="py-3 px-3 text-left">Source</th>
-                  <th className="py-3 px-3 text-left">Fit Score</th>
-                  <th className="py-3 px-3 text-left">Next Action</th>
-                  <th className="py-3 pr-4 text-right">Actions</th>
+                  <th className="py-3 px-3 text-left">Fit</th>
+                  <th className="py-3 px-3 text-left">Next action</th>
+                  <th className="py-3 pr-4 text-right"> </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -2007,11 +2012,7 @@ export function ApplicationsPage() {
                     {/* Position */}
                     <td className="py-3.5 px-3">
                       <span className="font-semibold text-slate-900 dark:text-white block">{row.positionTitle}</span>
-                    </td>
-
-                    {/* Location */}
-                    <td className="py-3.5 px-3">
-                      <span className="text-slate-600 dark:text-slate-300 font-medium">{row.location}</span>
+                      <span className="text-[10px] text-slate-400">{row.location}</span>
                     </td>
 
                     {/* Stage */}
@@ -2035,49 +2036,7 @@ export function ApplicationsPage() {
 
                     {/* Owner */}
                     <td className="py-3.5 px-3">
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-5 h-5 rounded-full bg-teal-600 text-white text-[9px] font-extrabold flex items-center justify-center shrink-0">
-                          {row.ownerAvatar}
-                        </div>
-                        <span className="font-semibold text-slate-800 dark:text-slate-200">{row.ownerName}</span>
-                        {(!row.rawApplication.primaryRecruiterId || row.ownerName === 'Unassigned') && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              void handleClaimApplication(row.id);
-                            }}
-                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 border border-blue-200 dark:border-blue-800 text-[10px] font-bold transition cursor-pointer shadow-2xs"
-                            title="1-Click Claim: Assign yourself as primary recruiter"
-                          >
-                            <Icon name="user-check" size={10} />
-                            <span>Assign to me</span>
-                          </button>
-                        )}
-                      </div>
-                    </td>
-
-                    {/* SLA */}
-                    <td className="py-3.5 px-3">
-                      <div>
-                        <span className="block font-bold text-xs text-emerald-600 dark:text-emerald-400">
-                          {row.sla}
-                        </span>
-                        <span className="block text-[10px] text-slate-400">{row.slaSub}</span>
-                      </div>
-                    </td>
-
-                    {/* Last Activity */}
-                    <td className="py-3.5 px-3">
-                      <div>
-                        <span className="block font-bold text-slate-800 dark:text-slate-200">{row.lastActivity}</span>
-                        <span className="block text-[10.5px] text-slate-400">{row.lastActivityTime}</span>
-                      </div>
-                    </td>
-
-                    {/* Source */}
-                    <td className="py-3.5 px-3">
-                      <span className="text-slate-600 dark:text-slate-300 font-medium">{row.source}</span>
+                      <span className="font-medium text-slate-700 dark:text-slate-200">{row.ownerName}</span>
                     </td>
 
                     {/* Fit Score */}
@@ -2090,13 +2049,19 @@ export function ApplicationsPage() {
                     </td>
 
                     {/* Next Action */}
-                    <td className="py-3.5 px-3">
-                      <div>
-                        <span className="block font-bold text-blue-600 dark:text-blue-400 hover:underline">
-                          {row.nextAction}
-                        </span>
-                        <span className="block text-[10px] text-slate-400">{row.nextActionTime}</span>
-                      </div>
+                    <td className="py-3.5 px-3" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        disabled={row.nextAction === 'Assign to me' && claimingId === row.id}
+                        onClick={() => {
+                          const unassigned = !row.rawApplication.primaryRecruiterId || row.ownerName === 'Unassigned';
+                          const plan = getNextActionPlan(row.currentStage, unassigned);
+                          handleNextAction(row.id, plan.kind);
+                        }}
+                        className="inline-flex min-h-7 items-center rounded-lg bg-blue-600 px-2.5 text-[11px] font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+                      >
+                        {row.nextAction === 'Assign to me' && claimingId === row.id ? 'Assigning…' : row.nextAction}
+                      </button>
                     </td>
 
                     <td className="py-3.5 pr-4 text-right" onClick={(e) => e.stopPropagation()}>
@@ -2352,17 +2317,7 @@ export function ApplicationsPage() {
                         }
                         onMoveStage={() => navigate(`/applications/${card.id}`)}
                         onAssignToMe={() => void handleClaimApplication(card.id)}
-                        onNextAction={(kind) => {
-                          if (kind === 'assign') {
-                            void handleClaimApplication(card.id);
-                            return;
-                          }
-                          if (kind === 'offer') {
-                            navigate(`/offers/create?applicationId=${card.id}`);
-                            return;
-                          }
-                          navigate(`/applications/${card.id}`);
-                        }}
+                        onNextAction={(kind) => handleNextAction(card.id, kind)}
                         onDragStart={(event) => handleDragStart(event, card.id, column.id)}
                         onSignalChange={(next) => setCardSignalValue(card.id, next)}
                       />
