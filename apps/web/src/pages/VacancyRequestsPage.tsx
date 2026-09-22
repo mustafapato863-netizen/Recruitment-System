@@ -9,7 +9,6 @@ import { ResponsiveDataView } from '../components/ui/ResponsiveDataView';
 import { Input } from '../components/ui/Input';
 import { DataToolbar } from '../components/ui/DataToolbar';
 import { Pagination } from '../components/ui/Pagination';
-import { MetricCard } from '../components/ui/MetricCard';
 import { PageFrame } from '../components/ui/PageFrame';
 import { PageState } from '../components/ui/PageState';
 import { Select } from '../components/ui/Select';
@@ -91,8 +90,8 @@ export function VacancyRequestsPage() {
     <PageFrame
       className="rf-vacancy-requests-page"
       eyebrow="Workforce & Openings"
-      title="Vacancy Requests"
-      description="Create, review and track workforce requisitions before they become active pipeline vacancies."
+      title="Job requests"
+      description="Draft, approve, then open the job."
       actions={
         <>
           <Button variant="ghost" size="sm" onClick={() => void load()}>
@@ -108,7 +107,7 @@ export function VacancyRequestsPage() {
           <Button variant="primary" size="sm" asChild>
             <Link to="/vacancy-requests/create">
               <Icon name="plus" size={14} />
-              Create Vacancy Request
+              New request
             </Link>
           </Button>
         </>
@@ -129,105 +128,25 @@ export function VacancyRequestsPage() {
         </Alert>
       )}
 
-      {/* Top Demand Overview Bento Cards */}
-      <section className="rf-request-overview" aria-labelledby="rf-request-overview-title">
-        <div className="rf-request-overview__header">
-          <div>
-            <div className="rf-request-overview__eyebrow">Demand overview</div>
-            <h2 id="rf-request-overview-title">Workforce demand</h2>
-            <p>Track every requisition from initial draft through authorization and active vacancy launch.</p>
-          </div>
-          <div className="rf-request-overview__signal">
-            <span className="rf-request-overview__signal-dot" aria-hidden="true" />
-            <span>{count('Pending Approval') > 0 ? `${count('Pending Approval')} requisitions awaiting approval` : 'All requisitions up to date'}</span>
-          </div>
-        </div>
-
-        <div className="rf-request-metrics grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 p-4 sm:p-5">
-          <MetricCard
-            label="Total Requisitions"
-            value={requests.length}
-            detail="All workforce requests"
-            tone="action"
-            icon={<Icon name="file-text" size={16} />}
-          />
-          <MetricCard
-            label="Draft Stage"
-            value={count('Draft')}
-            detail="Owned by team"
-            tone="neutral"
-            icon={<Icon name="document" size={16} />}
-          />
-          <MetricCard
-            label="Pending Approval"
-            value={count('Pending Approval')}
-            detail="Waiting for decision"
-            tone="warning"
-            icon={<Icon name="clock" size={16} />}
-          />
-          <MetricCard
-            label="Changes Requested"
-            value={count('Changes Requested')}
-            detail="Modifications needed"
-            tone="danger"
-            icon={<Icon name="alert-triangle" size={16} />}
-          />
-          <MetricCard
-            label="Approved & Ready"
-            value={count('Approved')}
-            detail="Ready for conversion"
-            tone="success"
-            icon={<Icon name="check-circle" size={16} />}
-          />
-        </div>
-      </section>
+      <div className="flex flex-wrap items-center gap-2">
+        {quickFilterTabs.map((tab) => {
+          const active = status === tab.value;
+          return (
+            <button
+              key={tab.label}
+              type="button"
+              onClick={() => { setStatus(tab.value); setCurrentPage(1); }}
+              className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold ${active ? 'border-blue-300 bg-blue-50 text-blue-800' : 'border-slate-200 bg-white text-slate-600'}`}
+            >
+              {tab.label === 'All Requests' ? 'All' : tab.label === 'Pending Approval' ? 'Approvals' : tab.label === 'Changes Requested' ? 'Changes' : tab.label}
+              <span className="text-slate-900">{tab.count}</span>
+            </button>
+          );
+        })}
+      </div>
 
       {/* Main Request Workspace Register */}
       <section className="rf-request-workspace" aria-labelledby="rf-request-workspace-title">
-        <header className="rf-request-workspace__header">
-          <div>
-            <div className="rf-request-workspace__eyebrow">Request register</div>
-            <h2 id="rf-request-workspace-title">Workforce Requisitions</h2>
-            <p>Review demand, position specifications, location, timing, and approval gates in real time.</p>
-          </div>
-          <div className="rf-request-workspace__actions flex items-center gap-3">
-            <span className="rf-request-workspace__count text-xs font-bold text-rf-ink-muted">
-              {filtered.length} of {requests.length} visible
-            </span>
-          </div>
-        </header>
-
-        {/* Quick Filter Tabs */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 px-4 sm:px-6 pt-3 border-b border-rf-border-subtle">
-          {quickFilterTabs.map((tab) => {
-            const isActive = status === tab.value;
-            return (
-              <button
-                key={tab.label}
-                type="button"
-                onClick={() => {
-                  setStatus(tab.value);
-                  setCurrentPage(1);
-                }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer inline-flex items-center gap-2 whitespace-nowrap ${
-                  isActive
-                    ? 'bg-rf-action text-rf-on-action shadow-2xs'
-                    : 'text-rf-ink-muted hover:text-rf-ink hover:bg-rf-surface-subtle bg-transparent border-0'
-                }`}
-              >
-                <span>{tab.label}</span>
-                <span
-                  className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
-                    isActive ? 'bg-rf-surface text-rf-action-strong' : 'bg-rf-surface-subtle text-rf-ink-muted border border-rf-border-subtle'
-                  }`}
-                >
-                  {tab.count}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
         <DataToolbar className="rf-request-toolbar p-4 sm:p-5 flex flex-col sm:flex-row gap-3">
           <Input
             className="min-w-0 flex-1"
@@ -259,7 +178,7 @@ export function VacancyRequestsPage() {
 
         {isLoading ? (
           <div className="p-8">
-            <PageState kind="loading" title="Loading vacancy requests" description="Fetching the latest workforce demand." />
+            <PageState kind="loading" title="Loading requests" description="Fetching the latest workforce demand." />
           </div>
         ) : (
           <>
@@ -271,9 +190,9 @@ export function VacancyRequestsPage() {
                 <div className="rf-request-empty p-8">
                   <PageState
                     kind="empty"
-                    title="No matching requests found"
+                    title="No requests"
                     description="Adjust the search query, clear filters, or create a new vacancy request."
-                    actionLabel="Create Vacancy Request"
+                    actionLabel="New request"
                     actionHref="/vacancy-requests/create"
                   />
                 </div>
@@ -371,10 +290,15 @@ export function VacancyRequestsPage() {
                   header: 'Actions',
                   priority: 'primary',
                   render: (request) => (
-                    <Button variant="secondary" size="sm" asChild>
+                    <Button variant="primary" size="sm" asChild>
                       <Link to={`/vacancy-requests/${request.id}`}>
-                        View Requisition
-                        <Icon name="chevron-right" size={13} />
+                        {request.status === 'Draft' || request.status === 'Changes Requested'
+                          ? 'Continue'
+                          : request.status === 'Pending Approval'
+                            ? 'Review'
+                            : request.status === 'Approved'
+                              ? 'Open job'
+                              : 'Open'}
                       </Link>
                     </Button>
                   ),
