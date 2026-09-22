@@ -51,6 +51,12 @@ function buildWaMe(phone: string, text: string) {
   return digits ? `https://wa.me/${digits}?text=${q}` : `https://wa.me/?text=${q}`;
 }
 
+/** WhatsApp needs a plausible E.164-ish number (8–15 digits after stripping). */
+function phoneLooksValid(phone: string): boolean {
+  const digits = phone.replace(/[^\d]/g, '');
+  return digits.length >= 8 && digits.length <= 15;
+}
+
 export function SendWhatsAppDialog({ isOpen, onClose, context }: Props) {
   const { error: toastError, success: toastSuccess } = useFeedback();
   const [templates, setTemplates] = useState<WhatsAppTemplateItem[]>([]);
@@ -106,6 +112,10 @@ export function SendWhatsAppDialog({ isOpen, onClose, context }: Props) {
 
   const openWhatsApp = async () => {
     if (!body.trim()) return;
+    if (!phoneLooksValid(phone)) {
+      toastError(new Error('Invalid phone'), 'Enter a valid mobile number with country code');
+      return;
+    }
     setBusy(true);
     try {
       if (selectedId) {
@@ -142,7 +152,18 @@ export function SendWhatsAppDialog({ isOpen, onClose, context }: Props) {
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             placeholder="+9665…"
+            inputMode="tel"
+            autoComplete="tel"
           />
+          {phone.trim() && !phoneLooksValid(phone) ? (
+            <p className="mt-1 text-[11px] font-medium text-rf-danger">
+              Enter a valid mobile number with country code (8–15 digits).
+            </p>
+          ) : (
+            <p className="mt-1 text-[11px] text-rf-ink-muted">
+              Include country code. WhatsApp opens on your device with this chat ready.
+            </p>
+          )}
         </FormField>
 
         <FormField id="wa-tpl" label="Template">
@@ -191,7 +212,7 @@ export function SendWhatsAppDialog({ isOpen, onClose, context }: Props) {
           <Button
             type="button"
             onClick={() => void openWhatsApp()}
-            disabled={busy || !body.trim()}
+            disabled={busy || !body.trim() || !phoneLooksValid(phone)}
             className="inline-flex items-center gap-2"
           >
             <Icon name="chat" size={14} />

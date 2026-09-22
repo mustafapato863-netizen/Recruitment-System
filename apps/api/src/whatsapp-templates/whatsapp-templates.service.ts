@@ -86,6 +86,23 @@ Kindly confirm via WhatsApp.
     isDefault: true,
   },
   {
+    name: 'Executive interview invite',
+    category: 'interview_invite',
+    interviewType: 'Executive',
+    bodyTemplate: `Dear {{candidateName}},
+
+We would like to invite you to an {{interviewType}} interview for {{positionTitle}} at {{organizationName}}.
+
+Proposed time: {{interviewDate}}
+
+Please confirm on WhatsApp at your earliest convenience.
+
+Warm regards,
+{{recruiterName}}
+{{organizationName}}`,
+    isDefault: true,
+  },
+  {
     name: 'Offer / next-step WhatsApp',
     category: 'offer_next_step',
     interviewType: 'Any',
