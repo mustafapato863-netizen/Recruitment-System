@@ -11,12 +11,24 @@ const STOPWORDS = new Set([
   'lead', 'officer', 'specialist', 'assistant', 'manager',
 ]);
 
+const TITLE_ALIASES: Record<string, string[]> = {
+  web: ['html', 'css', 'javascript', 'typescript', 'react', 'frontend', 'api', 'node'],
+  developer: ['javascript', 'typescript', 'react', 'node', 'html', 'css', 'api', 'programming', 'frontend', 'backend', 'git'],
+  software: ['javascript', 'typescript', 'python', 'java', 'api', 'git'],
+  frontend: ['html', 'css', 'javascript', 'typescript', 'react'],
+  backend: ['api', 'node', 'database', 'sql'],
+  marketing: ['digital advertising', 'google ads', 'facebook', 'analytics', 'seo', 'content'],
+  nurse: ['nursing', 'patient', 'clinical', 'license'],
+};
+
 export function inferPriorityFromTitle(title?: string | null): string[] {
   if (!title) return [];
-  return title
+  const tokens = title
     .split(/[^a-zA-Z0-9+#]+/)
     .map((part) => part.trim())
     .filter((part) => part.length >= 3 && !STOPWORDS.has(part.toLowerCase()));
+  const extras = tokens.flatMap((token) => TITLE_ALIASES[token.toLowerCase()] ?? []);
+  return [...tokens, ...extras];
 }
 
 export function isSkillPrioritized(skill: string, prioritySkills: readonly string[]): boolean {
