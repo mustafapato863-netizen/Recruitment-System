@@ -211,15 +211,12 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
         <div>
           <div className="flex items-center gap-2.5 flex-wrap">
             <h1 className="rf-page-title">
-              Recruitment Command Center
+              Command Center
             </h1>
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
-              Live Operations
-            </span>
             <QuickGuideTrigger />
           </div>
           <p className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">
-            Real-time requisition velocity, candidate pipeline throughput, and operational shortcuts.
+            Open requisitions, pipeline, and next actions.
           </p>
         </div>
 
@@ -231,7 +228,7 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
               className="inline-flex min-h-10 items-center justify-center gap-2 px-3.5 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs cursor-pointer"
             >
               <Icon name="report" size={13} className="text-purple-600 dark:text-purple-400" />
-              <span>Analytics Dashboard</span>
+              <span>Analytics</span>
             </button>
           )}
 
@@ -241,7 +238,7 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
             className="inline-flex min-h-10 items-center justify-center gap-2 px-3.5 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs cursor-pointer"
           >
             <Icon name="upload" size={13} className="text-emerald-700 dark:text-emerald-400" />
-            <span>Fast CV Intake</span>
+            <span>CV intake</span>
           </button>
 
           <button
@@ -256,109 +253,23 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
         </div>
       </div>
 
-      {/* ── Top RecruitFlow Smart Stat Banner ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Metric 1: Open Positions */}
-        <div
-          onClick={() => setStatusFilter('Open')}
-          className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 shadow-xs hover:border-blue-300 dark:hover:border-blue-700 transition cursor-pointer flex items-center justify-between group"
-        >
-          <div className="flex items-center gap-3.5">
-            <div className="rf-metric-icon-box rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
-              <Icon name="briefcase" size={20} />
-            </div>
-            <div>
-              <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">Open Requisitions</span>
-              <span className="rf-metric-value block mt-0.5">{totalOpen}</span>
-              <span className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400">
-                {positions.length} total across hospitals
-              </span>
-            </div>
-          </div>
-          <Icon name="chevron-right" size={16} className="text-slate-300 dark:text-slate-600 group-hover:translate-x-0.5 transition" />
-        </div>
-
-        {/* Metric 2: Pipeline Candidates */}
-        <div
-          onClick={() => navigate('/applications')}
-          className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 shadow-xs hover:border-emerald-300 dark:hover:border-emerald-700 transition cursor-pointer flex items-center justify-between group"
-        >
-          <div className="flex items-center gap-3.5">
-            <div className="rf-metric-icon-box rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 flex items-center justify-center shrink-0">
-              <Icon name="users" size={20} />
-            </div>
-            <div>
-              <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">Active Candidates</span>
-              <span className="rf-metric-value block mt-0.5">{totalInFlightCandidates}</span>
-              <span className="block text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
-                In-flight pipeline &bull; Click to open
-              </span>
-            </div>
-          </div>
-          <Icon name="chevron-right" size={16} className="text-slate-300 dark:text-slate-600 group-hover:translate-x-0.5 transition" />
-        </div>
-
-        {/* Metric 3: Pending Approval Inboxes */}
-        <div
-          onClick={() => navigate('/approval-inbox')}
-          className={`rounded-2xl border p-4 shadow-xs transition cursor-pointer flex items-center justify-between group ${
-            pendingApprovalsCount > 0
-              ? 'bg-amber-50/40 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/60 hover:border-amber-400'
-              : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800'
-          }`}
-        >
-          <div className="flex items-center gap-3.5">
-            <div
-              className={`rf-metric-icon-box rounded-xl flex items-center justify-center shrink-0 ${
-                pendingApprovalsCount > 0
-                  ? 'bg-amber-100 dark:bg-amber-900/50 text-amber-600 dark:text-amber-300'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
-              }`}
-            >
-              <Icon name="check-circle" size={20} />
-            </div>
-            <div>
-              <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">Approval Inbox</span>
-              <span className="rf-metric-value block mt-0.5">
-                {pendingApprovalsCount}
-              </span>
-              <span className={`block text-[11px] font-semibold ${pendingApprovalsCount > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-600 dark:text-slate-400'}`}>
-                {pendingApprovalsCount > 0 ? 'Action required &bull; Review now' : 'All decisions cleared'}
-              </span>
-            </div>
-          </div>
-          <Icon name="chevron-right" size={16} className="text-slate-300 dark:text-slate-600 group-hover:translate-x-0.5 transition" />
-        </div>
-
-        {/* Metric 4: SLA Health */}
-        <div
-          onClick={() => navigate('/reports')}
-          className={`rounded-2xl border p-4 shadow-xs transition cursor-pointer flex items-center justify-between group ${
-            totalSlaAtRisk > 0
-              ? 'bg-rose-50/30 dark:bg-rose-950/20 border-rose-200 dark:border-rose-900/60 hover:border-rose-400'
-              : 'bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800'
-          }`}
-        >
-          <div className="flex items-center gap-3.5">
-            <div
-              className={`rf-metric-icon-box rounded-xl flex items-center justify-center shrink-0 ${
-                totalSlaAtRisk > 0
-                  ? 'bg-rose-100 dark:bg-rose-900/50 text-rose-600 dark:text-rose-300'
-                  : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400'
-              }`}
-            >
-              <Icon name="clock" size={20} />
-            </div>
-            <div>
-              <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">SLA At-Risk</span>
-              <span className="rf-metric-value block mt-0.5">{totalSlaAtRisk}</span>
-              <span className={`block text-[11px] font-semibold ${totalSlaAtRisk > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-700 dark:text-emerald-400'}`}>
-                {totalSlaAtRisk > 0 ? 'Attention needed' : '100% On-Track'}
-              </span>
-            </div>
-          </div>
-          <Icon name="chevron-right" size={16} className="text-slate-300 dark:text-slate-600 group-hover:translate-x-0.5 transition" />
-        </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" onClick={() => setStatusFilter('Open')} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
+          Open
+          <span className="text-slate-900 dark:text-white">{totalOpen}</span>
+        </button>
+        <button type="button" onClick={() => navigate('/applications')} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
+          Candidates
+          <span className="text-slate-900 dark:text-white">{totalInFlightCandidates}</span>
+        </button>
+        <button type="button" onClick={() => navigate('/approval-inbox')} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
+          Approvals
+          <span className="text-slate-900 dark:text-white">{pendingApprovalsCount}</span>
+        </button>
+        <button type="button" onClick={() => navigate('/reports')} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
+          SLA at risk
+          <span className="text-slate-900 dark:text-white">{totalSlaAtRisk}</span>
+        </button>
       </div>
 
       {/* ── My Activity Targets Widget (Recruiter View) ── */}
@@ -418,7 +329,7 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
           <div className="relative min-w-[220px]">
             <input
               type="text"
-              placeholder="Search positions..."
+              placeholder="Search requisition or code"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full h-8 pl-8 pr-3 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl text-xs placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -495,13 +406,13 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
 
                     <div className="flex items-center gap-1.5">
                       {pos.needActionCount > 0 && (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 border border-rose-200 dark:border-rose-800 animate-pulse">
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 border border-rose-200 dark:border-rose-800 ">
                           {pos.needActionCount} Action Needed
                         </span>
                       )}
 
                       <span
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold capitalize ${
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize ${
                           pos.status === 'Open'
                             ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/60'
                             : pos.status === 'On Hold'
@@ -518,7 +429,7 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
                   <div className="mt-3">
                     <h2
                       onClick={() => navigate(`/vacancies/${pos.id}`)}
-                      className="text-base font-black text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition cursor-pointer line-clamp-1"
+                      className="text-base font-bold text-slate-900 dark:text-white hover:text-blue-700 dark:hover:text-blue-300 cursor-pointer line-clamp-1"
                       title={pos.title}
                     >
                       {pos.title}
@@ -529,10 +440,10 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
                   </div>
 
                   {/* Headcount Progress Bar */}
-                  <div className="mt-4 p-3 bg-slate-50/80 dark:bg-slate-800/40 rounded-xl space-y-1.5 border border-slate-100 dark:border-slate-800/60">
+                  <div className="mt-3 space-y-1.5">
                     <div className="flex items-center justify-between text-[11px]">
                       <span className="font-semibold text-slate-500 dark:text-slate-400">Headcount Filled</span>
-                      <span className="font-mono font-extrabold text-slate-900 dark:text-white">
+                      <span className="font-semibold text-slate-900 dark:text-white">
                         {pos.joinedHeadcount} / {pos.approvedHeadcount} ({fillRate}%)
                       </span>
                     </div>
@@ -555,7 +466,7 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
                 <div className="pt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-3">
                   {/* Recruiter Avatar */}
                   <div className="flex items-center gap-2 shrink-0">
-                    <div className="w-7 h-7 rounded-full bg-teal-600 text-white text-[10px] font-black flex items-center justify-center shadow-2xs">
+                    <div className="w-7 h-7 rounded-full bg-slate-700 text-white text-[10px] font-semibold flex items-center justify-center shadow-2xs">
                       {pos.recruiter.initials}
                     </div>
                     <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 max-w-[90px] truncate" title={pos.recruiter.name}>
@@ -567,7 +478,7 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
                   <button
                     type="button"
                     onClick={() => navigate(`/applications?vacancyId=${pos.id}`)}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-50 dark:bg-blue-950/50 hover:bg-blue-600 text-blue-700 dark:text-blue-300 hover:text-white rounded-xl text-xs font-extrabold transition shadow-2xs cursor-pointer border border-blue-200 dark:border-blue-900 group-hover:bg-blue-600 group-hover:text-white"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 rounded-xl text-xs font-semibold transition cursor-pointer border border-blue-200 dark:border-blue-900"
                   >
                     <span>{pos.applicationsCount} Applications</span>
                     <Icon name="chevron-right" size={13} />
@@ -583,7 +494,7 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr className="border-b border-slate-100 dark:border-slate-800 text-slate-600 dark:text-slate-300 font-bold uppercase text-[10.5px] bg-slate-50/50 dark:bg-slate-800/20">
+                <tr className="border-b border-slate-100 dark:border-slate-800 text-slate-600 dark:text-slate-300 font-semibold text-[10.5px] bg-slate-50/50 dark:bg-slate-800/20">
                   <th className="py-3 px-4 text-left">Code</th>
                   <th className="py-3 px-4 text-left">Position Title</th>
                   <th className="py-3 px-4 text-left">Department</th>
@@ -616,7 +527,7 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
                       {pos.joinedHeadcount} / {pos.approvedHeadcount}
                     </td>
                     <td className="py-3.5 px-4">
-                      <span className="font-extrabold text-blue-600 dark:text-blue-400">
+                      <span className="font-semibold text-blue-700 dark:text-blue-300">
                         {pos.applicationsCount} active
                       </span>
                     </td>
