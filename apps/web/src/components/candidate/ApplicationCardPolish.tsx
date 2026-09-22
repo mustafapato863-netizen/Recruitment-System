@@ -13,7 +13,7 @@ function polishCard(card: HTMLElement) {
   card.querySelectorAll('span').forEach((el) => {
     const text = el.textContent?.trim() || '';
     if (text === 'Claim') el.textContent = 'Assign to me';
-    if (/^review profile$/i.test(text)) el.textContent = 'Review application \u2192';
+    if (/^review profile$/i.test(text)) el.textContent = 'Review application →';
     if (text === text.toUpperCase() && text.length > 8 && el.className.includes('truncate')) {
       el.textContent = titleCase(text);
     }
