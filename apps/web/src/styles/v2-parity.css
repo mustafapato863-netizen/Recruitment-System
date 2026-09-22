@@ -506,35 +506,39 @@
   color: #cbd5e1 !important;
 }
 
-@media (max-width: 1180px) {
+@media (max-width: 1180px) and (min-width: 1024px) {
   :root {
     --sidebar: 244px;
   }
+}
 
+@media (max-width: 1180px) {
   .rf-kpi-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   }
 }
 
-@media (max-width: 860px) {
+@media (max-width: 1023px) {
   :root {
     --sidebar: 0px;
   }
 
   /* Keep the hidden drawer a real-width surface so its min-content cannot
-   * bleed into the 0px desktop layout variable on narrow screens. */
+   * bleed into the 0px desktop layout variable on narrow screens.
+   * Breakpoint matches shell.css + Tailwind `lg` (1024px). */
   .sidebar {
     width: min(290px, calc(100vw - 48px)) !important;
     min-width: 0;
     overflow-x: hidden;
   }
 
-  .app:not(.is-mobile-nav-open) .sidebar {
+  .app:not(.is-mobile-open) .sidebar {
     visibility: hidden;
     pointer-events: none;
   }
 
-  .app.is-mobile-nav-open .sidebar {
+  .app.is-mobile-open .sidebar,
+  .sidebar.mobile-active {
     visibility: visible;
     pointer-events: auto;
   }
@@ -1106,13 +1110,13 @@
   display: none !important;
 }
 
-@media (max-width: 1180px) and (min-width: 861px) {
+@media (max-width: 1180px) and (min-width: 1024px) {
   :root {
     --sidebar: 244px;
   }
 }
 
-@media (max-width: 860px) {
+@media (max-width: 1023px) {
   :root {
     --sidebar: 0px;
   }
@@ -1168,7 +1172,10 @@
 /* The shared icon-button primitive supplies display styles of its own. Keep
    the shell controls explicit so mobile-only actions never appear as
    duplicate desktop controls. */
-@media (min-width: 861px) {
+/* Align shell chrome with Tailwind `lg` (1024px) and shell.css max-width 1023px.
+ * Previously 861px hid the header hamburger while the sidebar was already in
+ * off-canvas mode (shell.css ≤1023), leaving 861–1023px with no navigation. */
+@media (min-width: 1024px) {
   .sidebar .sidebar-collapse[class~='lg:hidden'],
   .header .rf-icon-button[class~='lg:hidden'] {
     display: none !important;
@@ -1179,7 +1186,7 @@
   }
 }
 
-@media (max-width: 860px) {
+@media (max-width: 1023px) {
   .sidebar .sidebar-collapse[class~='hidden'][class~='lg:flex'] {
     display: none !important;
   }
