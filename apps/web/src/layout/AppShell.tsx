@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import type { NavigationItemRecord } from '@recruitflow/contracts';
 import { getNavigationCatalogItem } from '@recruitflow/contracts';
@@ -55,6 +56,7 @@ export function NavigationItem({
   badgeTone = 'blue',
   unavailableMode = 'disable',
 }: NavigationItemProps) {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const { canAccess, describeRequirement } = usePermissions();
   const navigationSettings = useContext(NavigationSettingsContext);
@@ -101,7 +103,7 @@ export function NavigationItem({
     requiredPermission: effectiveRequiredPermission,
     requiredAnyPermissions: effectiveRequiredAny,
   });
-  const deniedTitle = `Needs ${requirementText}`;
+  const deniedTitle = t('nav.needs', { requirement: requirementText });
 
   if (!hasNaturalAccess) {
     if (unavailableMode === 'hide') return null;
@@ -109,7 +111,7 @@ export function NavigationItem({
       <span
         className="nav-item-disabled relative nav-item opacity-60 cursor-not-allowed"
         aria-disabled="true"
-        aria-label={`${displayLabel}. Locked. ${deniedTitle}`}
+        aria-label={t('nav.itemLockedAria', { label: displayLabel, needs: deniedTitle })}
         title={deniedTitle}
         tabIndex={0}
       >
@@ -117,10 +119,10 @@ export function NavigationItem({
         {!isCollapsed ? (
           <span className="nav-label flex items-center justify-between gap-2">
             <span>{displayLabel}</span>
-            <span className="rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-rf-ink-muted ring-1 ring-rf-border">Locked</span>
+            <span className="rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-rf-ink-muted ring-1 ring-rf-border">{t('nav.locked')}</span>
           </span>
         ) : (
-          <span className="sr-only">{displayLabel}. Locked. {deniedTitle}</span>
+          <span className="sr-only">{t('nav.itemLockedAria', { label: displayLabel, needs: deniedTitle })}</span>
         )}
         {isCollapsed && (
           <span
@@ -190,6 +192,7 @@ export function NavigationItem({
 }
 
 export function AppShellInner() {
+  const { t } = useTranslation();
   const { user, logout } = useAuth();
   const { openGuide } = useQuickGuide();
   const location = useLocation();
@@ -364,14 +367,14 @@ export function AppShellInner() {
         aria-hidden={!isMobileDrawerOpen && typeof window !== 'undefined' && window.innerWidth < 1024 ? 'true' : undefined}
       >
         <div className="brand">
-          <Link className="brand-home" to="/" aria-label="Saudi German Health — RecruitFlow" onClick={closeMobileDrawer}>
+          <Link className="brand-home" to="/" aria-label={t('brand.homeAriaLabel')} onClick={closeMobileDrawer}>
             <div className="mark brand-mark" aria-hidden="true">
               <SghHeartSvg size={28} glow />
             </div>
             {!isSidebarCollapsed && (
               <div className="brand-copy min-w-0 overflow-hidden">
-                <b className="sgh-gradient-text truncate block">RecruitFlow</b>
-                <small className="truncate block">Saudi German Health</small>
+                <b className="sgh-gradient-text truncate block">{t('brand.productName')}</b>
+                <small className="truncate block">{t('brand.orgName')}</small>
               </div>
             )}
           </Link>

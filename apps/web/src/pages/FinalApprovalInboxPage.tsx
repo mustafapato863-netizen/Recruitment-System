@@ -14,6 +14,7 @@ import { ResponsiveDataView, type ResponsiveDataColumn } from '../components/ui/
 import { SectionHeader } from '../components/ui/SectionHeader';
 import { TableSkeleton } from '../components/ui/Skeleton';
 import { useFeedback } from '../hooks/useFeedback';
+import { useTranslation } from 'react-i18next';
 import './PageEnhancementsV2.css';
 
 type FinalApprovalRow = {
@@ -41,7 +42,7 @@ const initialConfirmState: ConfirmState = {
   isOpen: false,
   title: '',
   description: '',
-  confirmLabel: 'Confirm',
+  confirmLabel: '',
   tone: 'success',
   icon: 'check-circle',
   withComment: false,
@@ -83,6 +84,7 @@ const finalApprovalColumns: ResponsiveDataColumn<FinalApprovalRow>[] = [
 ];
 
 export function FinalApprovalInboxPage() {
+  const { t } = useTranslation();
   const { success: toastSuccess, error: toastError } = useFeedback();
   const [items, setItems] = useState<FinalApprovalRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -97,13 +99,13 @@ export function FinalApprovalInboxPage() {
       const data = await getApi<FinalApprovalRow[]>('/hiring/final-approvals');
       setItems(data);
     } catch (reason: unknown) {
-      const message = getErrorMessage(reason, 'Unable to load final approvals');
+      const message = getErrorMessage(reason, t('finalInbox.loadErrorToast'));
       setError(message);
-      toastError(reason, 'Unable to load final approvals');
+      toastError(reason, t('finalInbox.loadErrorToast'));
     } finally {
       setIsLoading(false);
     }
-  }, [toastError]);
+  }, [toastError, t]);
 
   useEffect(() => {
     void loadApprovals();
@@ -114,18 +116,25 @@ export function FinalApprovalInboxPage() {
     setConfirmDialog({
       isOpen: true,
       title: isApproval
-        ? `Final hiring signoff — ${row.candidateName}`
-        : `Reject final hiring — ${row.candidateName}`,
+        ? t('finalInbox.approveTitle', { candidate: row.candidateName })
+        : t('finalInbox.rejectTitle', { candidate: row.candidateName }),
       description: isApproval
-        ? `Authorize ${row.candidateName} for ${row.positionTitle} at ${row.branchName}. This unlocks onboarding and locks the hiring case.`
-        : `Reject final hiring for ${row.candidateName} (${row.positionTitle}). The case stays available for follow-up.`,
-      confirmLabel: isApproval ? 'Authorize hire' : 'Reject hire',
+        ? t('finalInbox.approveDescription', {
+            candidate: row.candidateName,
+            position: row.positionTitle,
+            branch: row.branchName,
+          })
+        : t('finalInbox.rejectDescription', {
+            candidate: row.candidateName,
+            position: row.positionTitle,
+          }),
+      confirmLabel: isApproval ? t('finalInbox.approveConfirm') : t('finalInbox.rejectConfirm'),
       tone: isApproval ? 'success' : 'danger',
       icon: isApproval ? 'check-circle' : 'alert-triangle',
       withComment: true,
       commentPlaceholder: isApproval
-        ? 'Optional executive signoff notes...'
-        : 'Reason for rejection (recommended)...',
+        ? t('finalInbox.approveCommentPlaceholder')
+        : t('finalInbox.rejectCommentPlaceholder'),
       action: async (comment?: string) => {
         setBusyId(row.id);
         setError(null);
@@ -135,16 +144,16 @@ export function FinalApprovalInboxPage() {
             comment: comment?.trim() || 'Decision recorded from final approval inbox.',
           });
           toastSuccess(
-            isApproval ? 'Final approval granted' : 'Final hiring rejected',
+            isApproval ? t('finalInbox.toastApprovedTitle') : t('finalInbox.toastRejectedTitle'),
             isApproval
-              ? `${row.candidateName} is authorized for onboarding.`
-              : `${row.candidateName} was not authorized.`,
+              ? t('finalInbox.toastApprovedDetail', { candidate: row.candidateName })
+              : t('finalInbox.toastRejectedDetail', { candidate: row.candidateName }),
           );
           await loadApprovals();
         } catch (reason: unknown) {
-          const message = getErrorMessage(reason, 'Unable to record final decision');
+          const message = getErrorMessage(reason, t('finalInbox.decisionErrorFallback'));
           setError(message);
-          toastError(reason, 'Unable to record final decision');
+          toastError(reason, t('finalInbox.decisionErrorToast'));
         } finally {
           setBusyId(null);
           setConfirmDialog(initialConfirmState);

@@ -1,4 +1,5 @@
 import { useId, useState, type FormEvent } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Modal } from './Modal';
 import { Button } from './ui/Button';
 import { FormField } from './ui/FormField';
@@ -28,16 +29,21 @@ export function ConfirmDialog({
   onConfirm,
   title,
   description,
-  confirmLabel = 'Confirm',
-  cancelLabel = 'Cancel',
+  confirmLabel,
+  cancelLabel,
   tone = 'primary',
   icon,
   withComment = false,
-  commentLabel = 'Decision comment or notes',
-  commentPlaceholder = 'Add reason or context...',
+  commentLabel,
+  commentPlaceholder,
   commentRequired = false,
   isLoading = false,
 }: ConfirmDialogProps) {
+  const { t } = useTranslation();
+  const resolvedConfirmLabel = confirmLabel ?? t('confirm.confirm');
+  const resolvedCancelLabel = cancelLabel ?? t('confirm.cancel');
+  const resolvedCommentLabel = commentLabel ?? t('confirm.commentLabel');
+  const resolvedCommentPlaceholder = commentPlaceholder ?? t('confirm.commentPlaceholder');
   const [comment, setComment] = useState('');
   const descriptionId = useId();
 
@@ -97,13 +103,13 @@ export function ConfirmDialog({
         </div>
 
         {withComment && (
-          <FormField id="confirm-dialog-comment" label={commentLabel} required={commentRequired}>
+          <FormField id="confirm-dialog-comment" label={resolvedCommentLabel} required={commentRequired}>
             <Textarea
               id="confirm-dialog-comment"
               rows={3}
               required={commentRequired}
               autoFocus={commentRequired}
-              placeholder={commentPlaceholder}
+              placeholder={resolvedCommentPlaceholder}
               value={comment}
               onChange={(e) => setComment(e.target.value)}
             />
@@ -112,7 +118,7 @@ export function ConfirmDialog({
 
         <div className="flex items-center justify-end gap-2 pt-3 border-t border-rf-border-subtle mt-1">
           <Button variant="ghost" size="sm" type="button" disabled={isLoading} onClick={onClose}>
-            {cancelLabel}
+            {resolvedCancelLabel}
           </Button>
           <Button
             variant={btnVariant}
@@ -122,7 +128,7 @@ export function ConfirmDialog({
             loadingLabel="Processing..."
             disabled={commentRequired && !comment.trim()}
           >
-            {confirmLabel}
+            {resolvedConfirmLabel}
           </Button>
         </div>
       </form>

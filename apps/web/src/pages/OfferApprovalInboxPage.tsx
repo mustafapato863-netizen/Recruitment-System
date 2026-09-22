@@ -14,6 +14,7 @@ import { ResponsiveDataView, type ResponsiveDataColumn } from '../components/ui/
 import { SectionHeader } from '../components/ui/SectionHeader';
 import { TableSkeleton } from '../components/ui/Skeleton';
 import { useFeedback } from '../hooks/useFeedback';
+import { useTranslation } from 'react-i18next';
 import './PageEnhancementsV2.css';
 
 type OfferApprovalRow = OfferApprovalInboxItem;
@@ -34,7 +35,7 @@ const initialConfirmState: ConfirmState = {
   isOpen: false,
   title: '',
   description: '',
-  confirmLabel: 'Confirm',
+  confirmLabel: '',
   tone: 'success',
   icon: 'check-circle',
   withComment: false,
@@ -86,6 +87,7 @@ const offerApprovalColumns: ResponsiveDataColumn<OfferApprovalRow>[] = [
 ];
 
 export function OfferApprovalInboxPage() {
+  const { t } = useTranslation();
   const { success: toastSuccess, error: toastError } = useFeedback();
   const [approvals, setApprovals] = useState<OfferApprovalRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -100,13 +102,13 @@ export function OfferApprovalInboxPage() {
       const data = await getApi<OfferApprovalRow[]>('/offers/approvals/inbox');
       setApprovals(data);
     } catch (err: unknown) {
-      const message = getErrorMessage(err, 'Unable to load offer approvals');
+      const message = getErrorMessage(err, t('offerInbox.loadErrorToast'));
       setError(message);
-      toastError(err, 'Unable to load offer approvals');
+      toastError(err, t('offerInbox.loadErrorToast'));
     } finally {
       setLoading(false);
     }
-  }, [toastError]);
+  }, [toastError, t]);
 
   useEffect(() => {
     void fetchApprovals();
@@ -116,15 +118,22 @@ export function OfferApprovalInboxPage() {
     const isApproval = decision === 'Approve';
     setConfirmDialog({
       isOpen: true,
-      title: isApproval ? `Approve Offer Package ${approval.offerCode}` : `Reject Offer Package ${approval.offerCode}`,
+      title: isApproval
+        ? t('offerInbox.approveTitle', { code: approval.offerCode })
+        : t('offerInbox.rejectTitle', { code: approval.offerCode }),
       description: isApproval
-        ? `Grant compensation signoff for ${approval.candidateName} (version ${approval.versionNumber}). The package will advance toward candidate delivery.`
-        : `Reject this compensation package for ${approval.candidateName}. Talent can revise after your feedback.`,
-      confirmLabel: isApproval ? 'Approve Offer' : 'Reject Offer',
+        ? t('offerInbox.approveDescription', {
+            candidate: approval.candidateName,
+            version: approval.versionNumber,
+          })
+        : t('offerInbox.rejectDescription', { candidate: approval.candidateName }),
+      confirmLabel: isApproval ? t('offerInbox.approveConfirm') : t('offerInbox.rejectConfirm'),
       tone: isApproval ? 'success' : 'danger',
       icon: isApproval ? 'check-circle' : 'alert-triangle',
       withComment: true,
-      commentPlaceholder: isApproval ? 'Optional approval context...' : 'Reason for rejection (helps the revision)...',
+      commentPlaceholder: isApproval
+        ? t('offerInbox.approveCommentPlaceholder')
+        : t('offerInbox.rejectCommentPlaceholder'),
       action: async (comment?: string) => {
         setBusyId(approval.id);
         setError(null);
@@ -134,14 +143,14 @@ export function OfferApprovalInboxPage() {
             comment: comment?.trim() || '',
           });
           toastSuccess(
-            isApproval ? 'Offer approved' : 'Offer rejected',
-            `${approval.offerCode} marked as ${decision}.`,
+            isApproval ? t('offerInbox.toastApprovedTitle') : t('offerInbox.toastRejectedTitle'),
+            t('offerInbox.toastDecisionDetail', { code: approval.offerCode, decision }),
           );
           await fetchApprovals();
         } catch (err: unknown) {
-          const message = getErrorMessage(err, 'Failed to submit decision');
+          const message = getErrorMessage(err, t('offerInbox.decisionErrorFallback'));
           setError(message);
-          toastError(err, 'Unable to record offer decision');
+          toastError(err, t('offerInbox.decisionErrorToast'));
         } finally {
           setBusyId(null);
           setConfirmDialog(initialConfirmState);
@@ -162,7 +171,7 @@ export function OfferApprovalInboxPage() {
         </Button>
       }
     >
-      {error && <Alert tone="danger" title="Unable to load approvals">{error}</Alert>}
+      {error && <Alert tone="danger" title={t('offerInbox.loadErrorTitle')}>{error}</Alert>}
 
       <section className="rf-table-shell rf-long-content overflow-hidden rounded-2xl border border-rf-border/90 bg-white shadow-xs">
         <SectionHeader
