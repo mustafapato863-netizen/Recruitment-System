@@ -1240,7 +1240,7 @@ export function calculateCandidateFitScore(
     .map((item) => item.skill);
 
   // Calculate percentage with partial credit and preferred skill weighting
-  let skillsPercentage = 100;
+  let skillsPercentage: number;
   const requiredItems = evidenceItems.filter((i) => i.category === 'required' || i.category === 'hard_gate');
   const preferredItems = evidenceItems.filter(
     (i) => i.category === 'preferred' || i.category === 'nice_to_have',
