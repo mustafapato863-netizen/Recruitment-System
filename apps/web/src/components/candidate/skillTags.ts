@@ -6,6 +6,19 @@ export function normalizeSkillKey(skill: string): string {
   return skill.trim().toLowerCase();
 }
 
+const STOPWORDS = new Set([
+  'and', 'the', 'for', 'with', 'from', 'job', 'role', 'senior', 'junior',
+  'lead', 'officer', 'specialist', 'assistant', 'manager',
+]);
+
+export function inferPriorityFromTitle(title?: string | null): string[] {
+  if (!title) return [];
+  return title
+    .split(/[^a-zA-Z0-9+#]+/)
+    .map((part) => part.trim())
+    .filter((part) => part.length >= 3 && !STOPWORDS.has(part.toLowerCase()));
+}
+
 export function isSkillPrioritized(skill: string, prioritySkills: readonly string[]): boolean {
   const needle = normalizeSkillKey(skill);
   if (!needle || prioritySkills.length === 0) return false;
