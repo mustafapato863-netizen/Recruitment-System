@@ -602,8 +602,8 @@ export function InterviewDetailPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-              {interview?.title || 'Interview Details'}
+            <h1 className="text-xl font-semibold text-slate-900 dark:text-white tracking-tight">
+              {candidateDisplayName}
             </h1>
             <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
               {interview?.status || 'Scheduled'}
@@ -662,26 +662,69 @@ export function InterviewDetailPage() {
             )}
           </div>
 
-          <div className="flex items-center border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900 overflow-hidden shadow-xs">
-            <button
-              type="button"
-              onClick={() => navigate('/interviews')}
-              className="p-2 hover:bg-slate-50 text-slate-600 dark:text-slate-300 border-r border-slate-200 dark:border-slate-800 cursor-pointer"
-              title="Previous Interview"
-            >
-              <Icon name="chevron-left" size={14} />
-            </button>
-            <button
-              type="button"
-              onClick={() => navigate('/interviews')}
-              className="p-2 hover:bg-slate-50 text-slate-600 dark:text-slate-300 cursor-pointer"
-              title="Next Interview"
-            >
-              <Icon name="chevron-right" size={14} />
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={() => navigate('/interviews')}
+            className="inline-flex min-h-9 items-center rounded-lg px-3 text-xs font-semibold text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+          >
+            Back
+          </button>
         </div>
       </div>
+
+
+      {(() => {
+        const cancelled = interview?.status === 'Cancelled';
+        const isPast = Boolean(interview?.scheduledStart && new Date(interview.scheduledStart) < new Date());
+        const hasLink = Boolean(interview?.locationUrl && interview.locationUrl.startsWith('http'));
+        const needsScore = !cancelled && !isLocked && (isPast || interview?.status === 'Completed');
+        const label = cancelled
+          ? 'Open application'
+          : needsScore
+            ? 'Submit scorecard'
+            : hasLink && !isPast
+              ? 'Join interview'
+              : isLocked && rawAppId
+                ? 'Open application'
+                : hasLink
+                  ? 'Join interview'
+                  : 'Open application';
+        const hint = cancelled
+          ? 'This interview was cancelled.'
+          : needsScore
+            ? 'The interview is over. Record your feedback.'
+            : hasLink && !isPast
+              ? 'Join when it is time, then come back to score.'
+              : isLocked
+                ? 'Scorecard is in. Continue the application.'
+                : 'Open the application if you need the full profile.';
+        const run = () => {
+          if (label === 'Submit scorecard') {
+            document.getElementById('interview-scorecard')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            return;
+          }
+          if (label === 'Join interview' && interview?.locationUrl) {
+            window.open(interview.locationUrl, '_blank', 'noopener,noreferrer');
+            return;
+          }
+          if (rawAppId) navigate(`/applications/${rawAppId}`);
+        };
+        return (
+          <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between dark:border-slate-800 dark:bg-slate-900">
+            <div>
+              <p className="text-[11px] font-semibold text-slate-500">Next</p>
+              <p className="text-sm font-semibold text-slate-900 dark:text-white">{hint}</p>
+            </div>
+            <button
+              type="button"
+              onClick={run}
+              className="inline-flex min-h-9 shrink-0 items-center rounded-lg bg-blue-600 px-3.5 text-xs font-semibold text-white hover:bg-blue-700"
+            >
+              {label}
+            </button>
+          </div>
+        );
+      })()}
 
       {/* ── Candidate Context Header Card ── */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs">
@@ -692,7 +735,7 @@ export function InterviewDetailPage() {
               {candidateInitials}
             </div>
             <div>
-              <h2 className="text-lg font-black text-slate-900 dark:text-white leading-tight">
+              <h2 className="text-base font-semibold text-slate-900 dark:text-white leading-tight">
                 {candidateDisplayName}
               </h2>
               <p className="text-xs font-bold text-slate-700 dark:text-slate-300 mt-0.5">
@@ -789,9 +832,7 @@ export function InterviewDetailPage() {
               </button>
             </div>
 
-            <div className="rounded-lg border border-dashed border-slate-200 dark:border-slate-700 p-3 text-[11px] text-slate-500 dark:text-slate-400">
-              Match percentages are unavailable until a configured, persisted job-matching assessment is completed. Use the structured scorecard below for interview evidence.
-            </div>
+            <p className="text-[11px] text-slate-500">Use the scorecard below. Match scores are not shown here.</p>
           </div>
         </div>
       </div>
@@ -1046,6 +1087,7 @@ export function InterviewDetailPage() {
 
       {/* ── Feedback & Scorecard Section (P3.2) ── */}
       <section
+        id="interview-scorecard"
         aria-labelledby="feedback-scorecard-heading"
         className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-5"
       >
