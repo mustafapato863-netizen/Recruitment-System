@@ -497,7 +497,7 @@ export function VacantListPage() {
   };
 
   return (
-    <div className="flex w-full flex-col p-4 sm:p-6 lg:p-7 max-w-[1720px] mx-auto space-y-5">
+    <div className="mx-auto flex w-full max-w-[1720px] flex-col space-y-6 rounded-[28px] bg-slate-50/55 p-4 sm:p-6 lg:p-7 dark:bg-slate-950/20">
       {/* ── Page Header: Title & Action Buttons ── */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
@@ -526,7 +526,7 @@ export function VacantListPage() {
       )}
 
       {/* ── Top-Level View Switcher: Full Positions Directory vs Active Requisitions ── */}
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-rf-border">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-slate-200/80 dark:border-slate-800">
         <nav aria-label="Position views" className="flex flex-wrap gap-1">
           <button
             type="button"
@@ -534,12 +534,12 @@ export function VacantListPage() {
             aria-current={activeSection === 'catalog' ? 'page' : undefined}
             className={`inline-flex min-h-11 items-center gap-2 border-b-2 px-3 text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-rf-action ${
               activeSection === 'catalog'
-                ? 'border-rf-action text-rf-action'
-                : 'border-transparent text-rf-ink-muted hover:text-rf-ink'
+                ? 'border-sky-600 text-sky-700 dark:border-sky-400 dark:text-sky-300'
+                : 'border-transparent text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
             }`}
           >
             <span>Position directory</span>
-            <span className="rounded-full bg-rf-surface-muted px-2 py-0.5 text-xs font-bold text-rf-ink-muted">
+            <span className="rounded-md bg-slate-200/80 px-2 py-0.5 text-xs font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
               {uniqueCatalogPositions.length}
             </span>
           </button>
@@ -549,12 +549,12 @@ export function VacantListPage() {
             aria-current={activeSection === 'requisitions' ? 'page' : undefined}
             className={`inline-flex min-h-11 items-center gap-2 border-b-2 px-3 text-sm font-semibold transition focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-rf-action ${
               activeSection === 'requisitions'
-                ? 'border-rf-action text-rf-action'
-                : 'border-transparent text-rf-ink-muted hover:text-rf-ink'
+                ? 'border-sky-600 text-sky-700 dark:border-sky-400 dark:text-sky-300'
+                : 'border-transparent text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
             }`}
           >
             <span>Requisitions</span>
-            <span className="rounded-full bg-rf-surface-muted px-2 py-0.5 text-xs font-bold text-rf-ink-muted">
+            <span className="rounded-md bg-slate-200/80 px-2 py-0.5 text-xs font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
               {openCount}
             </span>
           </button>
@@ -570,7 +570,7 @@ export function VacantListPage() {
             }
           }}
         >
-          <summary className="flex min-h-10 cursor-pointer list-none items-center gap-1.5 rounded-lg px-3 text-sm font-semibold text-rf-ink-muted marker:hidden hover:bg-rf-surface-hover hover:text-rf-ink focus-visible:outline-2 focus-visible:outline-rf-action">
+          <summary className="flex min-h-10 cursor-pointer list-none items-center gap-1.5 rounded-lg px-3 text-sm font-semibold text-slate-500 marker:hidden hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-2 focus-visible:outline-sky-600 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white">
             More actions
             <Icon name="chevron-down" size={14} />
           </summary>
@@ -879,7 +879,7 @@ export function VacantListPage() {
       {activeSection === 'requisitions' && (
         <>
           {/* Filters Row 1: Dropdowns + Search */}
-          <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 pt-1">
+          <div className="flex flex-col items-stretch justify-between gap-3 rounded-2xl border border-slate-200/80 bg-white/75 p-3 shadow-sm backdrop-blur-sm md:flex-row md:items-center dark:border-slate-800 dark:bg-slate-900/75">
             <div className="flex flex-wrap items-center gap-2.5">
               <div className="relative">
                 <select
@@ -941,7 +941,7 @@ export function VacantListPage() {
                 className={`inline-flex items-center gap-2 px-3.5 py-2 border rounded-xl text-xs font-semibold transition shadow-xs cursor-pointer ${
                   isMoreFiltersOpen || selectedLocation !== 'ALL'
                     ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950/40 dark:border-blue-800'
-                    : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50'
+                    : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800'
                 }`}
               >
                 <Icon name="filter" size={13} className="text-slate-500" />
@@ -959,19 +959,19 @@ export function VacantListPage() {
                     setSearch(e.target.value);
                     setCurrentPage(1);
                   }}
-                  className="w-full h-9 pl-3.5 pr-9 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-medium text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-xs"
+                  className="h-9 w-full rounded-lg border border-slate-200 bg-white pl-3.5 pr-9 text-xs font-medium text-slate-900 shadow-xs placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500 dark:border-slate-800 dark:bg-slate-950 dark:text-white"
                 />
                 <Icon name="search" size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
               </div>
 
-              <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded-xl border border-slate-200 dark:border-slate-700">
+              <div className="flex items-center rounded-lg border border-slate-200 bg-slate-100 p-0.5 dark:border-slate-700 dark:bg-slate-800">
                 <button
                   type="button"
                   onClick={() => setViewMode('cards')}
                   title="Cards View"
                   className={`p-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
                     viewMode === 'cards'
-                      ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs font-bold'
+                      ? 'bg-white dark:bg-slate-900 text-sky-700 dark:text-sky-300 shadow-xs font-bold'
                       : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
@@ -984,7 +984,7 @@ export function VacantListPage() {
                   title="Table View"
                   className={`p-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer ${
                     viewMode === 'table'
-                      ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs font-bold'
+                      ? 'bg-white dark:bg-slate-900 text-sky-700 dark:text-sky-300 shadow-xs font-bold'
                       : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
@@ -997,7 +997,7 @@ export function VacantListPage() {
 
           {/* Expandable Secondary Filters */}
           {isMoreFiltersOpen && (
-            <div className="flex flex-wrap items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200/60 dark:border-slate-700/60 text-xs">
+            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200/80 bg-slate-100/70 p-3 text-xs dark:border-slate-800 dark:bg-slate-900/70">
               <span className="font-bold text-slate-500">Location:</span>
               {locations.map((loc) => (
                 <button
@@ -1010,7 +1010,7 @@ export function VacantListPage() {
                   className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer border ${
                     selectedLocation === loc
                       ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
-                      : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100'
+                      : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-200/70 dark:hover:bg-slate-800'
                   }`}
                 >
                   {loc === 'ALL' ? 'All Locations' : loc}
@@ -1034,7 +1034,7 @@ export function VacantListPage() {
           )}
 
           {/* Status Pill Tabs */}
-          <div className="flex items-center gap-2 pt-1 overflow-x-auto rf-scrollbar">
+          <div className="flex items-center gap-2 overflow-x-auto rounded-xl border border-slate-200/80 bg-white/65 p-1.5 rf-scrollbar dark:border-slate-800 dark:bg-slate-900/65">
             <button
               type="button"
               onClick={() => {
@@ -1043,8 +1043,8 @@ export function VacantListPage() {
               }}
               className={`px-3.5 py-1.5 rounded-full text-xs transition cursor-pointer shrink-0 ${
                 statusFilter === 'ALL'
-                  ? 'bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-900 font-extrabold'
-                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 font-medium'
+                ? 'bg-sky-600 text-white border border-sky-600 font-extrabold shadow-sm'
+                : 'bg-transparent text-slate-600 dark:text-slate-300 border border-transparent hover:bg-slate-100 dark:hover:bg-slate-800 font-medium'
               }`}
             >
               All positions &bull; {allCount}
@@ -1058,8 +1058,8 @@ export function VacantListPage() {
               }}
               className={`px-3.5 py-1.5 rounded-full text-xs transition cursor-pointer shrink-0 ${
                 statusFilter === 'Open'
-                  ? 'bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-900 font-extrabold'
-                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 font-medium'
+                ? 'bg-emerald-600 text-white border border-emerald-600 font-extrabold shadow-sm'
+                : 'bg-transparent text-slate-600 dark:text-slate-300 border border-transparent hover:bg-slate-100 dark:hover:bg-slate-800 font-medium'
               }`}
             >
               Open &bull; {openCount}
@@ -1073,8 +1073,8 @@ export function VacantListPage() {
               }}
               className={`px-3.5 py-1.5 rounded-full text-xs transition cursor-pointer shrink-0 ${
                 statusFilter === 'Pending Activation'
-                  ? 'bg-amber-50 dark:bg-amber-950/50 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-800 font-extrabold'
-                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 font-medium'
+                ? 'bg-amber-500 text-white border border-amber-500 font-extrabold shadow-sm'
+                : 'bg-transparent text-slate-600 dark:text-slate-300 border border-transparent hover:bg-slate-100 dark:hover:bg-slate-800 font-medium'
               }`}
             >
               Pending Activation &bull; {pendingActivationCount}
@@ -1088,8 +1088,8 @@ export function VacantListPage() {
               }}
               className={`px-3.5 py-1.5 rounded-full text-xs transition cursor-pointer shrink-0 ${
                 statusFilter === 'On Hold'
-                  ? 'bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-900 font-extrabold'
-                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 font-medium'
+                ? 'bg-slate-700 text-white border border-slate-700 font-extrabold shadow-sm dark:bg-slate-600 dark:border-slate-600'
+                : 'bg-transparent text-slate-600 dark:text-slate-300 border border-transparent hover:bg-slate-100 dark:hover:bg-slate-800 font-medium'
               }`}
             >
               On Hold &bull; {onHoldCount}
@@ -1103,8 +1103,8 @@ export function VacantListPage() {
               }}
               className={`px-3.5 py-1.5 rounded-full text-xs transition cursor-pointer shrink-0 ${
                 statusFilter === 'Closed'
-                  ? 'bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-900 font-extrabold'
-                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-800 hover:bg-slate-50 font-medium'
+                ? 'bg-slate-700 text-white border border-slate-700 font-extrabold shadow-sm dark:bg-slate-600 dark:border-slate-600'
+                : 'bg-transparent text-slate-600 dark:text-slate-300 border border-transparent hover:bg-slate-100 dark:hover:bg-slate-800 font-medium'
               }`}
             >
               Closed &bull; {closedCount}
@@ -1112,7 +1112,7 @@ export function VacantListPage() {
           </div>
 
           {/* Cards / Table View */}
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs overflow-hidden">
+          <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white/80 shadow-sm backdrop-blur-sm dark:border-slate-800 dark:bg-slate-900/80">
             {isLoading ? (
               <div className="p-8 text-center">
                 <PageState kind="loading" title="Loading job positions..." />
@@ -1130,27 +1130,35 @@ export function VacantListPage() {
             ) : (
               <>
                 {viewMode === 'cards' ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-5">
+                  <div className="grid grid-cols-1 gap-4 p-4 sm:p-5 md:grid-cols-2">
                     {paginatedPositions.map((pos) => (
                       <div
                         key={pos.id}
                         onClick={() => navigate(`/vacancies/${pos.id}`)}
-                        className="group flex flex-col justify-between p-4 rounded-xl border border-slate-200/80 dark:border-slate-800 hover:border-blue-500/50 hover:shadow-md transition-all cursor-pointer bg-white dark:bg-slate-900"
+                        className={`group flex cursor-pointer flex-col justify-between rounded-xl border border-slate-200/90 bg-white p-5 shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:border-sky-300 hover:shadow-md dark:border-slate-800 dark:bg-slate-900 dark:hover:border-sky-700 ${
+                          pos.status === 'Open'
+                            ? 'border-l-4 border-l-emerald-500'
+                            : pos.status === 'Pending Activation'
+                              ? 'border-l-4 border-l-amber-500'
+                              : pos.status === 'On Hold'
+                                ? 'border-l-4 border-l-slate-400'
+                                : 'border-l-4 border-l-slate-300 dark:border-l-slate-600'
+                        }`}
                       >
                         <div className="space-y-2.5">
                           <div className="flex items-start justify-between gap-2">
-                            <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
+                            <span className="rounded-md bg-slate-100 px-2 py-1 font-mono text-[10px] font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-400">
                               {pos.vacancyCode}
                             </span>
                             <span
                               className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
                                 pos.status === 'Open'
-                                  ? 'bg-emerald-50 text-emerald-600 border border-emerald-200'
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800'
                                   : pos.status === 'Pending Activation'
                                   ? 'bg-amber-50 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-800'
                                   : pos.status === 'On Hold'
                                   ? 'bg-amber-50 text-amber-600 border border-amber-200'
-                                  : 'bg-slate-100 text-slate-600'
+                                  : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
                               }`}
                             >
                               {pos.status}
@@ -1158,10 +1166,10 @@ export function VacantListPage() {
                           </div>
 
                           <div>
-                            <h3 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-blue-600 transition">
+                            <h3 className="text-base font-extrabold leading-snug text-slate-900 transition group-hover:text-sky-700 dark:text-white dark:group-hover:text-sky-300">
                               {pos.title}
                             </h3>
-                            <p className="text-xs text-slate-500 mt-0.5">
+                            <p className="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">
                               {pos.department} &bull; {pos.location}
                             </p>
                           </div>
@@ -1228,33 +1236,33 @@ export function VacantListPage() {
                             );
                           })()}
 
-                          <div className="flex items-center gap-3 text-xs pt-1 border-t border-slate-100 dark:border-slate-800">
+                          <div className="flex items-center gap-4 border-t border-slate-100 pt-3 text-xs dark:border-slate-800">
                             <div>
-                              <span className="text-[10px] text-slate-400 block font-semibold">Applicants</span>
-                              <span className="font-bold text-slate-700 dark:text-slate-200">{pos.applicationsCount}</span>
+                              <span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Applicants</span>
+                              <span className="font-extrabold text-slate-800 dark:text-slate-100">{pos.applicationsCount}</span>
                             </div>
                             <div>
-                              <span className="text-[10px] text-slate-400 block font-semibold">Headcount</span>
-                              <span className="font-bold text-slate-700 dark:text-slate-200">{pos.joinedHeadcount}/{pos.approvedHeadcount}</span>
+                              <span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Headcount</span>
+                              <span className="font-extrabold text-slate-800 dark:text-slate-100">{pos.joinedHeadcount}/{pos.approvedHeadcount}</span>
                             </div>
                             <div className="ml-auto text-right">
-                              <span className="text-[10px] text-slate-400 block font-semibold">Owner</span>
-                              <span className="font-semibold text-slate-700 dark:text-slate-300">{pos.recruiter.name}</span>
+                              <span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-400">Owner</span>
+                              <span className="font-bold text-slate-700 dark:text-slate-300">{pos.recruiter.name}</span>
                             </div>
                           </div>
                         </div>
 
-                        <div className="pt-3 mt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
+                        <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-100 pt-4 text-xs dark:border-slate-800">
                           <button
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
                               navigate(`/sourcing-match?vacancyId=${pos.id}`);
                             }}
-                            className="inline-flex items-center gap-1 text-teal-600 dark:text-teal-400 font-bold hover:underline"
+                            className="inline-flex items-center gap-1.5 font-bold text-sky-700 transition hover:text-sky-900 hover:underline dark:text-sky-300 dark:hover:text-sky-200"
                           >
                             <Icon name="sparkles" size={12} />
-                            <span>⚡ Match Sourcing</span>
+                            <span>Match sourcing</span>
                           </button>
                           <div className="flex items-center gap-2">
                             {pos.recruiter.name === 'Unassigned'
@@ -1282,8 +1290,8 @@ export function VacantListPage() {
                                     Reassign
                                   </Button>
                                 )}
-                            <span className="text-slate-400 text-[11px] group-hover:text-blue-600">
-                              View details &rarr;
+                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-400 transition group-hover:text-sky-700 dark:group-hover:text-sky-300">
+                              View details <Icon name="chevron-right" size={12} />
                             </span>
                           </div>
                         </div>
