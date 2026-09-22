@@ -1,0 +1,158 @@
+/* RecruitFlow UI layer: quieter type, clearer actions, less chrome */
+
+html {
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  letter-spacing: -0.01em;
+}
+
+h1, h2, h3 {
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+button, a, [role="button"] {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid #0084ce;
+  outline-offset: 2px;
+}
+
+/* Sidebar: less shouty labels */
+aside nav span,
+[class*="sidebar"] .uppercase,
+nav .uppercase {
+  letter-spacing: 0.04em;
+}
+
+/* Page titles should not fight badges */
+main h1,
+.flex.w-full.flex-col h1 {
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+/* Soften default cards */
+.rounded-2xl.border,
+.rounded-xl.border {
+  border-color: rgb(226 232 240 / 0.9);
+}
+
+.dark .rounded-2xl.border,
+.dark .rounded-xl.border {
+  border-color: rgb(30 41 59 / 0.9);
+}
+
+/* Primary actions stay brand blue; secondary stays quiet */
+button.bg-blue-600,
+button[class*="variant-primary"] {
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.08);
+}
+
+/* Tables */
+table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+thead th {
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+  color: rgb(100 116 139) !important;
+}
+
+tbody td {
+  font-size: 13px;
+}
+
+/* Kanban columns */
+.bg-slate-50\/85.rounded-2xl,
+.bg-slate-50\/90.rounded-2xl {
+  background: rgb(248 250 252 / 0.92);
+}
+
+/* Applicant kanban card */
+.cursor-grab.group {
+  gap: 10px !important;
+  padding: 12px !important;
+  box-shadow: none !important;
+  border-color: rgb(226 232 240) !important;
+  transform: none !important;
+}
+
+.cursor-grab.group:hover {
+  border-color: rgb(125 211 252) !important;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.05) !important;
+}
+
+.cursor-grab.group .text-\[13px\].font-bold {
+  text-transform: none !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.02em;
+}
+
+.cursor-grab.group .text-xs.font-semibold {
+  text-transform: none !important;
+  font-weight: 500 !important;
+  color: rgb(71 85 105) !important;
+}
+
+.cursor-grab.group button[title^="Status:"] {
+  display: none !important;
+}
+
+.cursor-grab.group button[title="Quick note"],
+.cursor-grab.group button[title="Move stage"] {
+  min-width: 28px;
+  min-height: 28px;
+}
+
+.cursor-grab.group [title^="1-Click Claim"] {
+  border-radius: 8px !important;
+  padding: 5px 10px !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+}
+
+/* Fit badge should not dominate */
+.cursor-grab.group [class*="Fit"],
+.cursor-grab.group span[class*="rose-"],
+.cursor-grab.group span[class*="bg-rose"] {
+  font-size: 10px !important;
+  font-weight: 700 !important;
+}
+
+/* Forms */
+input, select, textarea {
+  border-radius: 10px;
+}
+
+label {
+  font-weight: 600;
+}
+
+/* Empty states */
+[class*="border-dashed"] {
+  color: rgb(148 163 184);
+}
+
+/* Profile compact extras */
+body.rf-profile-compact .max-w-\[1720px\] {
+  gap: 1rem;
+}
+
+body.rf-profile-compact aside[aria-label="Applicant actions"] button {
+  min-height: 36px;
+}
