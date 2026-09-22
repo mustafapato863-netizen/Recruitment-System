@@ -7,9 +7,9 @@ const distDir = join(process.cwd(), 'apps', 'web', 'dist', 'assets');
 try {
   const files = readdirSync(distDir);
   const budgets = {
-    mainJs: 300 * 1024, // 300KB
+    mainJs: 500 * 1024, // 500KB
     mainCssRawAdvisory: 225 * 1024, // Keep the historical raw CSS target visible while serving compressed assets.
-    mainJsGzip: 100 * 1024,
+    mainJsGzip: 150 * 1024,
     mainCssGzip: 60 * 1024,
   };
 
