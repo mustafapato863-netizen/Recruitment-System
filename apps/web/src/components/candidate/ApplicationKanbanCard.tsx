@@ -1,8 +1,7 @@
-import { useEffect, useRef, useState, type DragEvent } from 'react';
+import type { DragEvent } from 'react';
 import type { ApplicationStage } from '@recruitflow/contracts';
 import type { CriteriaBreakdown } from '@recruitflow/validation';
 import { Icon } from '../Icon';
-import { getNextActionPlan, type NextActionKind } from './NextActionGuidanceBanner';
 
 export type KanbanOwner = {
   name: string;
@@ -40,22 +39,15 @@ type ApplicationKanbanCardProps = {
   onAddNote: () => void;
   onMoveStage: () => void;
   onAssignToMe: () => void;
-  onNextAction?: (kind: NextActionKind) => void;
+  onNextAction?: (kind: 'assign' | 'advance' | 'schedule' | 'offer' | 'hire' | 'view') => void;
   onDragStart: (event: DragEvent) => void;
   onSignalChange: (next: CardStatusSignal) => void;
 };
 
-function titleCase(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/\b([a-z])/g, (letter) => letter.toUpperCase())
-    .replace(/\bApi\b/g, 'API');
-}
-
 function formatRelativeTime(dateStr?: string | null): string {
-  if (!dateStr) return 'recently';
+  if (!dateStr) return 'Recent';
   const date = new Date(dateStr);
-  if (Number.isNaN(date.getTime())) return 'recently';
+  if (Number.isNaN(date.getTime())) return 'Recent';
   const diffSec = Math.floor((Date.now() - date.getTime()) / 1000);
   if (diffSec < 60) return 'just now';
   const diffMin = Math.floor(diffSec / 60);
@@ -64,18 +56,13 @@ function formatRelativeTime(dateStr?: string | null): string {
   if (diffHours < 24) return `${diffHours}h ago`;
   const diffDays = Math.floor(diffHours / 24);
   if (diffDays === 1) return 'yesterday';
-  return `${diffDays} days ago`;
+  return `${diffDays}d ago`;
 }
 
-function fitTone(score: number) {
-  if (score >= 80) return 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300';
-  if (score >= 60) return 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300';
-  return 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300';
-}
-
-function prettySource(source: string): string {
-  if (!source || source === '—') return '';
-  return titleCase(source.replace(/_/g, ' '));
+function nextSignal(signal: CardStatusSignal): CardStatusSignal {
+  if (signal === 'in_progress') return 'ready';
+  if (signal === 'ready') return 'blocked';
+  return 'in_progress';
 }
 
 export function ApplicationKanbanCard({
@@ -87,197 +74,150 @@ export function ApplicationKanbanCard({
   onAddNote,
   onMoveStage,
   onAssignToMe,
-  onNextAction,
   onDragStart,
   onSignalChange,
 }: ApplicationKanbanCardProps) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
   const unassigned = !card.primaryRecruiterId || card.owner.name === 'Unassigned';
   const appliedAgo = formatRelativeTime(card.appliedAt || card.createdAt);
-  const sourceLabel = prettySource(card.source);
-  const years = card.experienceYears;
-  const nextPlan = getNextActionPlan(card.stage as ApplicationStage, unassigned);
-
-  const runNextAction = () => {
-    if (onNextAction) {
-      onNextAction(nextPlan.kind);
-      return;
-    }
-    if (nextPlan.kind === 'assign') onAssignToMe();
-    else if (nextPlan.kind === 'view') onOpen();
-    else onMoveStage();
-  };
-
-  useEffect(() => {
-    if (!menuOpen) return;
-    const onDocClick = (event: MouseEvent) => {
-      if (!menuRef.current?.contains(event.target as Node)) setMenuOpen(false);
-    };
-    document.addEventListener('mousedown', onDocClick);
-    return () => document.removeEventListener('mousedown', onDocClick);
-  }, [menuOpen]);
+  const signalTitle =
+    signal === 'ready'
+      ? 'Status: Ready for next stage'
+      : signal === 'blocked'
+        ? 'Status: Blocked'
+        : 'Status: In progress';
+  const signalDotClass =
+    signal === 'ready'
+      ? 'bg-emerald-500 ring-2 ring-emerald-300 dark:ring-emerald-700'
+      : signal === 'blocked'
+        ? 'bg-rose-500 ring-2 ring-rose-300 dark:ring-rose-700'
+        : 'bg-amber-400 ring-2 ring-amber-200 dark:ring-amber-700';
 
   return (
     <article
-      className="group relative flex flex-col gap-2.5 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900"
+      draggable
+      onDragStart={onDragStart}
+      onClick={onOpen}
+      className="group relative flex cursor-grab select-none flex-col gap-2.5 rounded-xl border border-slate-200/85 bg-white p-3 shadow-2xs transition-all duration-150 hover:-translate-y-0.5 hover:border-blue-400/80 hover:shadow-md active:cursor-grabbing dark:border-slate-800 dark:bg-slate-900 dark:hover:border-blue-600"
     >
-      <div className="flex items-start gap-2">
-        <button
-          type="button"
-          draggable
-          aria-label="Drag to move stage"
-          title="Drag to move stage"
-          onDragStart={(event) => {
-            event.stopPropagation();
-            onDragStart(event);
-          }}
-          onClick={(event) => event.stopPropagation()}
-          className="mt-1 shrink-0 rounded-md p-1 text-slate-300 hover:bg-slate-100 hover:text-slate-500 dark:hover:bg-slate-800"
-        >
-          <Icon name="grip" size={14} />
-        </button>
-
-        {card.photoUrl ? (
-          <img
-            src={card.photoUrl}
-            alt=""
-            className="h-9 w-9 shrink-0 rounded-full object-cover border border-slate-200 dark:border-slate-700"
-          />
-        ) : (
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-slate-100 text-xs font-bold text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200">
-            {card.initials}
-          </div>
-        )}
-
-        <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-2">
-            <button
-              type="button"
-              onClick={onOpen}
-              className="min-w-0 text-left"
-            >
-              <span className="block truncate text-sm font-bold leading-tight text-slate-900 dark:text-white">
-                {titleCase(card.name)}
-              </span>
-              <span className="mt-0.5 block truncate text-xs font-medium text-slate-600 dark:text-slate-300">
-                {titleCase(card.positionTitle || 'Open role')}
-              </span>
-            </button>
-
-            <div className="relative shrink-0" ref={menuRef}>
-              <button
-                type="button"
-                aria-haspopup="menu"
-                aria-expanded={menuOpen}
-                aria-label="Card actions"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  setMenuOpen((open) => !open);
-                }}
-                className="inline-flex h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
-              >
-                <Icon name="more-horizontal" size={16} />
-              </button>
-              {menuOpen && (
-                <div
-                  role="menu"
-                  className="absolute right-0 z-20 mt-1 w-48 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-900"
-                >
-                  <button type="button" role="menuitem" className="block w-full px-3 py-2 text-left text-xs font-medium text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800" onClick={() => { setMenuOpen(false); onAddNote(); }}>
-                    Add note
-                  </button>
-                  <button type="button" role="menuitem" className="block w-full px-3 py-2 text-left text-xs font-medium text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800" onClick={() => { setMenuOpen(false); onMoveStage(); }}>
-                    Move stage
-                  </button>
-                  {unassigned && (
-                    <button type="button" role="menuitem" className="block w-full px-3 py-2 text-left text-xs font-medium text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800" onClick={() => { setMenuOpen(false); onAssignToMe(); }}>
-                      Assign recruiter
-                    </button>
-                  )}
-                  <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
-                  <p className="px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Status</p>
-                  {([
-                    ['in_progress', 'In progress'],
-                    ['ready', 'Ready'],
-                    ['blocked', 'Blocked'],
-                  ] as const).map(([value, label]) => (
-                    <button
-                      key={value}
-                      type="button"
-                      role="menuitem"
-                      className={`block w-full px-3 py-2 text-left text-xs ${signal === value ? 'font-bold text-blue-700 dark:text-blue-300' : 'font-medium text-slate-700 dark:text-slate-200'} hover:bg-slate-50 dark:hover:bg-slate-800`}
-                      onClick={() => {
-                        setMenuOpen(false);
-                        onSignalChange(value);
-                      }}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              )}
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex min-w-0 flex-1 items-center gap-2.5">
+          {card.photoUrl ? (
+            <img
+              src={card.photoUrl}
+              alt=""
+              className="h-8 w-8 shrink-0 rounded-full border border-slate-200 object-cover dark:border-slate-700"
+            />
+          ) : (
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-slate-200/60 bg-slate-100 text-xs font-bold text-slate-700 dark:border-slate-700/60 dark:bg-slate-800 dark:text-slate-300">
+              {card.initials}
+            </div>
+          )}
+          <div className="min-w-0 flex-1">
+            <span className="block truncate text-[13px] font-bold leading-tight text-slate-900 group-hover:text-blue-600 dark:text-white" title={card.name}>
+              {card.name}
+            </span>
+            <div className="mt-0.5 flex items-center gap-1.5 font-mono text-[10.5px] text-slate-600 dark:text-slate-400">
+              <span className="max-w-[120px] truncate">{card.applicationCode}</span>
+              <span className="text-slate-300 dark:text-slate-700">•</span>
+              <span className="shrink-0">{appliedAgo}</span>
             </div>
           </div>
+        </div>
 
-          <p className="mt-1 truncate text-[11px] text-slate-500 dark:text-slate-400">
-            {card.applicationCode} · Applied {appliedAgo}
-          </p>
+        <div className="flex shrink-0 items-center gap-1.5 pt-0.5">
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onSignalChange(nextSignal(signal));
+            }}
+            className={`h-3 w-3 shrink-0 cursor-pointer rounded-full shadow-xs transition hover:scale-125 ${signalDotClass}`}
+            title={signalTitle}
+            aria-label={signalTitle}
+          />
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onAddNote();
+            }}
+            className="cursor-pointer rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-blue-600 dark:hover:bg-slate-800"
+            title="Quick note"
+          >
+            <Icon name="edit" size={12} />
+          </button>
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              onMoveStage();
+            }}
+            className="cursor-pointer rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800"
+            title="Move stage"
+          >
+            <Icon name="more-horizontal" size={12} />
+          </button>
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pl-7">
-        <span
-          title={card.fitSummary || `Candidate fit ${card.matchScore}%`}
-          className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-semibold ${fitTone(card.matchScore)}`}
-        >
-          {card.matchScore}% fit
-        </span>
-        {showStage && (
-          <span className="text-[11px] text-slate-500 dark:text-slate-400">{card.stage}</span>
-        )}
-        {sourceLabel && (
-          <span className="text-[11px] text-slate-600 dark:text-slate-300">{sourceLabel}</span>
-        )}
-        {typeof years === 'number' && years > 0 && (
-          <span className="text-[11px] text-slate-600 dark:text-slate-300">
-            {years} yrs experience
+      <div className="space-y-1.5">
+        <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200">
+          <Icon name="briefcase" size={11} className="shrink-0 text-slate-400" />
+          <span className="truncate">{card.positionTitle}</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span
+            title={card.fitSummary || `Candidate fit ${card.matchScore}%`}
+            className="inline-flex items-center rounded-md border border-blue-200/60 bg-blue-50 px-1.5 py-0.5 text-[10px] font-bold text-blue-700 dark:border-blue-800/60 dark:bg-blue-950/40 dark:text-blue-300"
+          >
+            {card.matchScore}% fit
           </span>
-        )}
-      </div>
-
-      <div className="flex items-center justify-between gap-2 border-t border-slate-100 pt-2 dark:border-slate-800">
-        <div className="min-w-0">
-          {unassigned ? (
-            <span className="text-[11px] text-slate-500">Unassigned</span>
-          ) : (
-            <span className="truncate text-[11px] font-medium text-slate-700 dark:text-slate-200" title={card.owner.name}>
-              {card.owner.name}
+          {showStage && (
+            <span className="inline-flex items-center rounded-md border border-slate-200/80 bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-700 dark:border-slate-700/80 dark:bg-slate-800 dark:text-slate-300">
+              {card.stage}
             </span>
           )}
-          <p className="truncate text-[11px] text-slate-500">{nextPlan.hint}</p>
+          {card.source && card.source !== '—' && (
+            <span className="inline-flex max-w-[95px] items-center truncate rounded-md border border-slate-200/60 bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 dark:border-slate-700/60 dark:bg-slate-800 dark:text-slate-400">
+              {card.source}
+            </span>
+          )}
+          {card.experienceYears ? (
+            <span className="inline-flex items-center rounded-md border border-blue-200/60 bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-600 dark:border-blue-800/60 dark:bg-blue-950/40 dark:text-blue-300">
+              {card.experienceYears}y exp
+            </span>
+          ) : null}
         </div>
-        <button
-          type="button"
-          disabled={nextPlan.kind === 'assign' && claiming}
-          onClick={(event) => {
-            event.stopPropagation();
-            runNextAction();
-          }}
-          className="inline-flex min-h-7 shrink-0 items-center rounded-lg bg-blue-600 px-2.5 text-[11px] font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
-        >
-          {nextPlan.kind === 'assign' && claiming ? 'Assigning…' : nextPlan.label}
-        </button>
       </div>
 
-      <button
-        type="button"
-        onClick={onOpen}
-        className="inline-flex min-h-8 items-center justify-between rounded-lg px-0 text-left text-[12px] font-semibold text-blue-700 hover:underline dark:text-blue-300"
-      >
-        Review application
-        <span aria-hidden="true">→</span>
-      </button>
+      <div className="flex items-center justify-between gap-2 border-t border-slate-100 pt-2 text-[11px] dark:border-slate-800/80">
+        <div className="flex min-w-0 flex-1 items-center gap-1.5 text-slate-600 dark:text-slate-400">
+          <Icon name="calendar" size={11} className="shrink-0 text-slate-400" />
+          <span className="truncate font-medium">{card.nextAction}</span>
+        </div>
+        {unassigned ? (
+          <button
+            type="button"
+            disabled={claiming}
+            onClick={(event) => {
+              event.stopPropagation();
+              onAssignToMe();
+            }}
+            className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10.5px] font-bold text-blue-700 shadow-2xs transition hover:bg-blue-100 disabled:opacity-60 dark:border-blue-800 dark:bg-blue-950/50 dark:text-blue-300 dark:hover:bg-blue-900/60"
+            title="Assign yourself as recruiter"
+          >
+            <Icon name="user-check" size={10} />
+            <span>{claiming ? 'Claiming…' : 'Claim'}</span>
+          </button>
+        ) : (
+          <div
+            className={`flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-extrabold text-white shadow-2xs ${card.owner.color}`}
+            title={`Assigned recruiter: ${card.owner.name}`}
+          >
+            {card.owner.initials}
+          </div>
+        )}
+      </div>
     </article>
   );
 }
