@@ -518,7 +518,7 @@ export function SettingsPage() {
           { label: 'Master Data', desc: 'Entities & Branches', icon: 'grid-squares', to: '/master-data', color: 'blue' },
           { label: 'SLA Targets', desc: 'Position Goals', icon: 'clock', to: '/settings/targets', color: 'emerald' },
           { label: 'Pipeline Builder', desc: 'Custom Workflows', icon: 'pipeline', to: '/pipeline-settings', color: 'purple' },
-          { label: 'Users & Roles', desc: 'Access Control', icon: 'users', to: '/users', color: 'amber' },
+          { label: 'Users and roles', desc: 'People and access', icon: 'users', to: '/users', color: 'amber' },
           { label: 'Integrations', desc: 'APIs & Webhooks', icon: 'integrations', to: '/integrations', color: 'cyan' },
           { label: 'Audit Log', desc: 'Compliance Trail', icon: 'audit', to: '/audit-log', color: 'rose' },
         ].map((item) => (

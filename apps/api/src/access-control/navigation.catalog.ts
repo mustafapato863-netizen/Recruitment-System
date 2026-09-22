@@ -23,7 +23,7 @@ export const NAVIGATION_CATALOG: NavigationItemRecord[] = [
   { key: 'joinings', route: '/joinings', label: 'Hires & Joining', icon: 'user-check', group: 'Compliance & Hires', sortOrder: 110, visible: true, requiredPermission: 'APPLICATION_VIEW' },
   { key: 'licenses', route: '/licenses', label: 'Medical Licenses', icon: 'shield-check', group: 'Compliance & Hires', sortOrder: 120, visible: true, requiredPermission: 'APPLICATION_VIEW' },
   { key: 'reports', route: '/reports', label: 'Reports', icon: 'report', group: 'Governance', sortOrder: 130, visible: true, requiredPermission: 'APPLICATION_VIEW' },
-  { key: 'users', route: '/users', label: 'Users & Roles', icon: 'users', group: 'Governance', sortOrder: 140, visible: true, requiredPermission: 'USERS_VIEW' },
+  { key: 'users', route: '/users', label: 'Users and roles', icon: 'users', group: 'Governance', sortOrder: 140, visible: true, requiredPermission: 'USERS_VIEW' },
   { key: 'reporting-tree', route: '/reporting-tree', label: 'Reporting Tree', icon: 'pipeline', group: 'Governance', sortOrder: 145, visible: true, requiredPermission: 'USERS_VIEW' },
   { key: 'master-data', route: '/master-data', label: 'Master Data', icon: 'database', group: 'Governance', sortOrder: 150, visible: true, requiredPermission: 'MASTER_DATA_VIEW' },
   { key: 'audit-log', route: '/audit-log', label: 'Audit Log', icon: 'history', group: 'Governance', sortOrder: 160, visible: true, requiredPermission: 'AUDIT_VIEW' },

@@ -14,7 +14,6 @@ import { DataToolbar } from '../components/ui/DataToolbar';
 import { FilterChip } from '../components/ui/FilterChips';
 import { FormField } from '../components/ui/FormField';
 import { Input } from '../components/ui/Input';
-import { MetricCard } from '../components/ui/MetricCard';
 import { ResponsiveDataView, type ResponsiveDataColumn } from '../components/ui/ResponsiveDataView';
 import { SectionHeader } from '../components/ui/SectionHeader';
 import { Select } from '../components/ui/Select';
@@ -372,12 +371,12 @@ export function UsersRolesPage() {
       setHasRlsChanges(false);
       setRlsNotification({
         type: 'success',
-        message: 'Row-Level Security (RLS) policies successfully saved and applied to all enterprise users.',
+        message: 'Record access saved.',
       });
     } catch (err) {
       setRlsNotification({
         type: 'error',
-        message: err instanceof Error ? err.message : 'Failed to save RLS policies.',
+        message: err instanceof Error ? err.message : 'Could not save record access.',
       });
     } finally {
       setIsRlsSaving(false);
@@ -422,7 +421,7 @@ export function UsersRolesPage() {
     setHasRlsChanges(true);
     setRlsNotification({
       type: 'success',
-      message: 'Applied SGH Clinical & Operational standard least-privilege RLS template. Review and click Save to apply.',
+      message: 'Default rules are filled in. Review them, then save.',
     });
   };
 
@@ -438,9 +437,8 @@ export function UsersRolesPage() {
 
   return (
     <PageFrame
-      eyebrow="Security & Governance"
-      title="Access Control & RLS Governance"
-      description="Manage enterprise users, configure RBAC roles, and control Row-Level Security (RLS) data scoping per role."
+      title="Users and roles"
+      description="Add people, choose what they can open, and limit which records they see."
       actions={
         <>
           <Button variant="ghost" size="sm" onClick={() => void load()}>
@@ -452,11 +450,10 @@ export function UsersRolesPage() {
               variant="primary"
               size="sm"
               loading={isRlsSaving}
-              loadingLabel="Saving RLS Policy..."
+              loadingLabel="Saving"
               onClick={() => void saveRlsPolicies()}
             >
-              <Icon name="check-circle" size={14} />
-              Save RLS Matrix
+              Save
             </Button>
           ) : (
             <>
@@ -476,7 +473,7 @@ export function UsersRolesPage() {
       {error && (
         <Alert
           tone="danger"
-          title="Unable to load access control data"
+          title="Could not load users"
           action={
             <Button variant="secondary" size="sm" onClick={() => void load()}>
               <Icon name="refresh-cw" size={13} />
@@ -491,69 +488,42 @@ export function UsersRolesPage() {
       {rlsNotification && (
         <Alert
           tone={rlsNotification.type === 'success' ? 'success' : 'danger'}
-          title={rlsNotification.type === 'success' ? 'RLS Governance Updated' : 'Error'}
+          title={rlsNotification.type === 'success' ? 'Saved' : 'Could not save'}
         >
           {rlsNotification.message}
         </Alert>
       )}
 
-      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
-        <MetricCard label="Authorized Users" value={users.length} detail="Enterprise accounts" tone="action" icon={<Icon name="users" size={14} />} />
-        <MetricCard label="Active Logins" value={activeUserCount} detail="Enabled sessions" tone="success" icon={<Icon name="check-circle" size={14} />} />
-        <MetricCard label="Configured Roles" value={roles.length} detail="RBAC permission sets" tone="info" icon={<Icon name="grid-squares" size={14} />} />
-        <MetricCard label="RLS Governance" value={configuredRlsRolesCount ? `${configuredRlsRolesCount} Roles` : 'Active'} detail="Dynamic row-scoping" tone="action" icon={<Icon name="shield" size={14} />} />
+      <div className="flex flex-wrap gap-2 text-xs">
+        <span className="inline-flex items-baseline gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 dark:border-slate-800 dark:bg-slate-900">
+          <span className="text-slate-500">Users</span>
+          <span className="font-semibold text-slate-900 dark:text-white">{users.length}</span>
+        </span>
+        <span className="inline-flex items-baseline gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 dark:border-slate-800 dark:bg-slate-900">
+          <span className="text-slate-500">Active</span>
+          <span className="font-semibold text-slate-900 dark:text-white">{activeUserCount}</span>
+        </span>
+        <span className="inline-flex items-baseline gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 dark:border-slate-800 dark:bg-slate-900">
+          <span className="text-slate-500">Roles</span>
+          <span className="font-semibold text-slate-900 dark:text-white">{roles.length}</span>
+        </span>
+        <span className="inline-flex items-baseline gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 dark:border-slate-800 dark:bg-slate-900">
+          <span className="text-slate-500">Record rules</span>
+          <span className="font-semibold text-slate-900 dark:text-white">{configuredRlsRolesCount}</span>
+        </span>
       </div>
 
       {/* Primary Navigation Tabs */}
       <div className="border-b border-rf-border-subtle pt-2">
         <Tabs
-          ariaLabel="Access Control Sections"
+          ariaLabel="Users and roles"
           activeKey={activeTab}
           onChange={(key) => setActiveTab(key as typeof activeTab)}
           items={[
-            {
-              key: 'users',
-              label: (
-                <span className="flex items-center gap-2">
-                  <Icon name="users" size={14} />
-                  Team Users
-                  <Badge variant="neutral" className="ml-1">{users.length}</Badge>
-                </span>
-              ),
-            },
-            {
-              key: 'roles',
-              label: (
-                <span className="flex items-center gap-2">
-                  <Icon name="grid-squares" size={14} />
-                  System Roles
-                  <Badge variant="neutral" className="ml-1">{roles.length}</Badge>
-                </span>
-              ),
-            },
-            {
-              key: 'access',
-              label: (
-                <span className="flex items-center gap-2 font-bold text-rf-action">
-                  <Icon name="lock" size={14} />
-                  Permissions &amp; Sidebar
-                  <Badge variant="success" className="ml-1">Admin Controlled</Badge>
-                </span>
-              ),
-            },
-            {
-              key: 'rls',
-              label: (
-                <span className="flex items-center gap-2 font-bold text-rf-action">
-                  <Icon name="lock" size={14} />
-                  RLS & Data Visibility Governance
-                  {hasRlsChanges && (
-                    <span className="inline-block h-2 w-2 rounded-full bg-amber-500" title="Unsaved changes" />
-                  )}
-                  <Badge variant="success" className="ml-1">Admin Controlled</Badge>
-                </span>
-              ),
-            },
+            { key: 'users', label: `Users (${users.length})` },
+            { key: 'roles', label: `Roles (${roles.length})` },
+            { key: 'access', label: 'Permissions' },
+            { key: 'rls', label: hasRlsChanges ? 'Record access · Unsaved' : 'Record access' },
           ]}
         />
       </div>
@@ -613,8 +583,8 @@ export function UsersRolesPage() {
       {activeTab === 'roles' && (
         <section className="rf-panel overflow-hidden rounded-2xl border border-rf-border-subtle bg-white shadow-xs">
           <SectionHeader
-            title={`Configured System Roles (${roles.length})`}
-            description="Role definitions and base permissions. Row-level data visibility can be governed in the RLS Governance tab."
+            title={`Roles (${roles.length})`}
+            description="What each role can open. Record access is a separate tab."
             density="default"
             className="border-b border-rf-border-subtle p-5"
             actions={(
@@ -638,7 +608,7 @@ export function UsersRolesPage() {
                     <div className="mt-1 font-mono text-xs font-semibold text-rf-ink-muted">{role.code}</div>
                   </div>
                   <div className="mt-4 pt-3 border-t border-rf-border-subtle flex items-center justify-between text-xs text-rf-ink-muted">
-                    <span>RLS Scope: <strong className="text-rf-ink">{rlsPolicies[role.code]?.dataScope || 'ALL'}</strong></span>
+                    <span>Sees: <strong className="text-rf-ink">{rlsPolicies[role.code]?.dataScope || 'ALL'}</strong></span>
                     <button
                       type="button"
                       className="text-rf-action hover:underline font-semibold"
@@ -647,7 +617,7 @@ export function UsersRolesPage() {
                         setRlsSearch(role.name);
                       }}
                     >
-                      Configure RLS →
+                      Edit access
                     </button>
                   </div>
                 </div>
@@ -666,48 +636,37 @@ export function UsersRolesPage() {
       {activeTab === 'rls' && (
         <div className="space-y-6">
           {/* RLS Overview Banner */}
-          <div className="rounded-2xl border border-rf-border-subtle bg-gradient-to-r from-blue-50/50 via-indigo-50/30 to-purple-50/50 p-5 sm:p-6 dark:from-slate-900 dark:via-indigo-950/40 dark:to-slate-900">
+          <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
             <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
               <div className="max-w-2xl">
-                <div className="flex items-center gap-2 text-rf-action text-xs font-bold uppercase tracking-wider">
-                  <Icon name="shield" size={14} />
-                  Row-Level Security (RLS) & Privacy Governance
-                </div>
-                <h3 className="text-lg font-bold text-rf-ink mt-1">Flexible Role-Based Visibility Control</h3>
-                <p className="text-sm text-rf-ink-muted mt-1 leading-relaxed">
-                  As Administrator, you decide exactly <strong>who should see what</strong>. Customize requisition visibility
-                  scope (All Organization, Assigned Only, Branch Scoped, Department Scoped) and enforce granular data masking for
-                  candidate direct contact info (PII), salary figures, and resume file downloads.
+                <h3 className="text-base font-semibold text-slate-900 dark:text-white">Who can see which records</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  For each role, choose all records, assigned only, a branch, or a department. Then choose whether they can see contact details, salary, and files.
                 </p>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2.5">
+              <div className="flex flex-wrap items-center gap-2">
                 <Button variant="secondary" size="sm" onClick={applyStrictSghDefaults}>
-                  <Icon name="sliders" size={13} />
-                  Apply Standard Template
+                  Use defaults
                 </Button>
                 <Button
                   variant="primary"
                   size="sm"
                   loading={isRlsSaving}
-                  loadingLabel="Saving Changes..."
+                  loadingLabel="Saving"
                   onClick={() => void saveRlsPolicies()}
                   disabled={!hasRlsChanges && !isRlsSaving}
                 >
-                  <Icon name="check-circle" size={14} />
-                  Save RLS Matrix
+                  Save
                 </Button>
               </div>
             </div>
 
             {hasRlsChanges && (
-              <div className="mt-4 flex items-center justify-between gap-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 p-3 text-xs text-amber-900 dark:text-amber-200 font-medium">
-                <div className="flex items-center gap-2">
-                  <Icon name="alert-triangle" size={14} className="text-amber-600" />
-                  <span>You have unsaved changes to role visibility and masking rules.</span>
-                </div>
+              <div className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+                <span>Unsaved changes.</span>
                 <Button variant="primary" size="sm" onClick={() => void saveRlsPolicies()} loading={isRlsSaving}>
-                  Save & Apply
+                  Save
                 </Button>
               </div>
             )}
@@ -718,13 +677,13 @@ export function UsersRolesPage() {
             <div className="max-w-md w-full">
               <Input
                 aria-label="Search role policies"
-                placeholder="Filter roles by name or code..."
+                placeholder="Search roles"
                 value={rlsSearch}
                 onChange={(e) => setRlsSearch(e.target.value)}
               />
             </div>
             <span className="text-xs text-rf-ink-muted">
-              Showing <strong>{filteredRlsRoles.length}</strong> configured security roles
+              {filteredRlsRoles.length} roles
             </span>
           </div>
 
@@ -895,7 +854,7 @@ export function UsersRolesPage() {
       <Modal
         isOpen={simulationModal.isOpen}
         onClose={() => setSimulationModal((prev) => ({ ...prev, isOpen: false }))}
-        title={`RLS Query Simulation: ${simulationModal.roleCode}`}
+        title={`Record access: ${simulationModal.roleCode}`}
       >
         <div className="space-y-4 text-xs">
           <p className="text-rf-ink-muted">
@@ -932,7 +891,7 @@ export function UsersRolesPage() {
       </Modal>
 
       {/* Create User Modal */}
-      <Modal isOpen={isInviteOpen} onClose={() => setIsInviteOpen(false)} title="Create System User">
+      <Modal isOpen={isInviteOpen} onClose={() => setIsInviteOpen(false)} title="New user">
         <form onSubmit={(e) => void submitUser(e)}>
           {formError && (
             <div className="mb-4">

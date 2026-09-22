@@ -23,7 +23,7 @@ const PATH_NAME_MAP: Record<string, string> = {
   targets: 'Position Targets',
   'master-data': 'Master Data',
   'pipeline-settings': 'Pipeline Builder',
-  users: 'Users & Roles',
+  users: 'Users and roles',
   integrations: 'Integrations & Webhooks',
   'audit-log': 'Security & Audit Log',
   tasks: 'Tasks & Reminders',
