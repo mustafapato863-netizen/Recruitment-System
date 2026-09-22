@@ -25,3 +25,13 @@ body.rf-profile-compact button[title="Reject candidate"] {
 body.rf-profile-compact h3.font-bold + p.mt-2.text-slate-600 {
   display: none !important;
 }
+
+/* Page source hides the lower grid while workspace is open. Show it again. */
+body.rf-profile-compact section[aria-label="Unified applicant stage workspace"] ~ .border-b,
+body.rf-profile-compact section[aria-label="Unified applicant stage workspace"] ~ .grid {
+  display: flex !important;
+}
+
+body.rf-profile-compact section[aria-label="Unified applicant stage workspace"] ~ .grid {
+  display: grid !important;
+}
