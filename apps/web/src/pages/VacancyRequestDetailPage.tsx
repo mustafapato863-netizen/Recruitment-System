@@ -10,7 +10,6 @@ import { PageState } from '../components/ui/PageState';
 import { Icon, type IconName } from '../components/Icon';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ActivityTimeline } from '../components/ui/ActivityTimeline';
-import { BorderGlow } from '../components/ui/BorderGlow';
 import { useSetBreadcrumbTitle } from '../context/BreadcrumbContext';
 import { useAuth } from '../auth/AuthContext';
 import './PageEnhancementsV2.css';
@@ -296,7 +295,6 @@ export function VacancyRequestDetailPage() {
 
   return (
     <PageFrame
-      eyebrow="Requisition Dossier"
       title={
         <div className="flex items-center gap-2.5 flex-wrap">
           <span className="px-2.5 py-0.5 rounded-md text-xs font-bold text-rf-action bg-rf-action-soft border border-rf-action/20 font-mono">
@@ -317,7 +315,7 @@ export function VacancyRequestDetailPage() {
               loadingLabel="Cancelling"
               onClick={triggerCancel}
             >
-              Cancel Request
+              Cancel
             </Button>
           )}
           {canSubmit && (
@@ -329,7 +327,7 @@ export function VacancyRequestDetailPage() {
               onClick={() => void submitForApproval()}
             >
               <Icon name="send" size={13} />
-              Submit for Approval
+              Submit
             </Button>
           )}
           {canConvert && (
@@ -341,7 +339,7 @@ export function VacancyRequestDetailPage() {
               onClick={() => void convertToVacancy()}
             >
               <Icon name="check-circle" size={14} />
-              {request.recruitmentTiming === 'Deferred' ? 'Create Deferred Vacancy' : 'Create Vacancy'}
+              {request.recruitmentTiming === 'Deferred' ? 'Create later' : 'Open job'}
             </Button>
           )}
         </div>
@@ -359,115 +357,19 @@ export function VacancyRequestDetailPage() {
         </Alert>
       )}
 
-      {/* 4 Premium 21st.dev Style Metric Cards (Enhanced user section) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        {/* Card 1: Headcount */}
-        <BorderGlow
-          borderRadius={16}
-          colors={['var(--color-action)', 'var(--color-action-focus)', 'var(--color-info)']}
-          className="h-full shadow-2xs hover:shadow-xs transition-all"
-        >
-          <div className="p-5 flex flex-col justify-between h-full bg-rf-surface rounded-2xl">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-rf-ink-muted">
-                Headcount
-              </span>
-              <div className="w-9 h-9 rounded-xl bg-rf-action-soft text-rf-action flex items-center justify-center shadow-2xs">
-                <Icon name="users" size={17} />
-              </div>
-            </div>
-            <div className="mt-3">
-              <span className="text-2xl font-rf-heading font-black text-rf-ink tabular-nums leading-tight block">
-                {request.requestedHeadcount} {request.requestedHeadcount === 1 ? 'Position' : 'Positions'}
-              </span>
-              <span className="text-[11px] font-medium text-rf-ink-muted mt-1 inline-flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-rf-action inline-block" />
-                Approved allocation target
-              </span>
-            </div>
-          </div>
-        </BorderGlow>
-
-        {/* Card 2: Monthly budget range */}
-        <BorderGlow
-          borderRadius={16}
-          colors={['var(--color-info)', 'var(--color-action)', 'var(--color-info-focus)']}
-          className="h-full shadow-2xs hover:shadow-xs transition-all"
-        >
-          <div className="p-5 flex flex-col justify-between h-full bg-rf-surface rounded-2xl">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-rf-ink-muted">
-                Monthly Budget
-              </span>
-              <div className="w-9 h-9 rounded-xl bg-rf-info-soft text-rf-info flex items-center justify-center shadow-2xs">
-                <Icon name="briefcase" size={17} />
-              </div>
-            </div>
-            <div className="mt-3">
-              <span className="text-2xl font-rf-heading font-black text-rf-ink leading-tight block">
-                {displayBudget(request)}
-              </span>
-              <span className="text-[11px] font-medium text-rf-ink-muted mt-1 inline-flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-rf-info inline-block" />
-                Budget range per month
-              </span>
-            </div>
-          </div>
-        </BorderGlow>
-
-        {/* Card 3: Recruitment timing */}
-        <BorderGlow
-          borderRadius={16}
-          colors={['var(--color-warning)', 'var(--color-warning-strong)', 'var(--color-warning-soft)']}
-          className="h-full shadow-2xs hover:shadow-xs transition-all"
-        >
-          <div className="p-5 flex flex-col justify-between h-full bg-rf-surface rounded-2xl">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-rf-ink-muted">
-                Recruitment Plan
-              </span>
-              <div className="w-9 h-9 rounded-xl bg-rf-warning-soft text-rf-warning flex items-center justify-center shadow-2xs">
-                <Icon name="alert-triangle" size={17} />
-              </div>
-            </div>
-            <div className="mt-3">
-              <span className="text-2xl font-rf-heading font-black text-rf-ink leading-tight block">
-                {request.recruitmentTiming || 'Not planned'}
-              </span>
-              <span className="text-[11px] font-medium text-rf-warning mt-1 inline-flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-rf-warning inline-block" />
-                {request.recruitmentTiming === 'Deferred' ? `Open on ${displayDate(request.plannedOpenDate)}` : request.recruitmentTiming === 'After Approval' ? 'Start after approval and activation' : 'Set timing before submission'}
-              </span>
-            </div>
-          </div>
-        </BorderGlow>
-
-        {/* Card 4: Target fill date */}
-        <BorderGlow
-          borderRadius={16}
-          colors={['var(--color-success)', 'var(--color-success-strong)', 'var(--color-success-soft)']}
-          className="h-full shadow-2xs hover:shadow-xs transition-all"
-        >
-          <div className="p-5 flex flex-col justify-between h-full bg-rf-surface rounded-2xl">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-rf-ink-muted">
-                Target Fill
-              </span>
-              <div className="w-9 h-9 rounded-xl bg-rf-success-soft text-rf-success flex items-center justify-center shadow-2xs">
-                <Icon name="calendar" size={17} />
-              </div>
-            </div>
-            <div className="mt-3">
-              <span className="text-2xl font-rf-heading font-black text-rf-ink leading-tight block truncate">
-                {displayDate(request.targetFillDate)}
-              </span>
-              <span className="text-[11px] font-medium text-rf-success mt-1 inline-flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-rf-success inline-block" />
-                Planned date to fill the position
-              </span>
-            </div>
-          </div>
-        </BorderGlow>
+      <div className="mb-4 flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-[11px] font-semibold text-slate-500">Next</p>
+          <p className="text-sm font-semibold text-slate-900">
+            {canSubmit && 'Finish the request, then submit it for approval.'}
+            {canDecide && 'This request is waiting for approval.'}
+            {canConvert && 'Approved. Open the job so recruiting can start.'}
+            {!canSubmit && !canDecide && !canConvert && `Status: ${request.status}`}
+          </p>
+        </div>
+        <p className="text-xs text-slate-500">
+          {request.requestedHeadcount} headcount · {displayBudget(request)} · Start {displayDate(request.targetFillDate)}
+        </p>
       </div>
 
       {/* Main Content Layout: Specifications vs Workflow Timeline */}
