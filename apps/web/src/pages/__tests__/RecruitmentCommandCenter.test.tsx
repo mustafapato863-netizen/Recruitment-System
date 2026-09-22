@@ -89,8 +89,8 @@ describe('RecruitmentCommandCenter Component', () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByText('Recruitment Command Center')).toBeInTheDocument();
-    expect(screen.getByText('Live Operations')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Command Center' })).toBeInTheDocument();
+    expect(screen.getByText('Open requisitions, pipeline, and next actions.')).toBeInTheDocument();
 
     await waitFor(() => {
       expect(screen.getByText('Senior ICU Specialist')).toBeInTheDocument();
@@ -101,9 +101,9 @@ describe('RecruitmentCommandCenter Component', () => {
     expect(screen.queryByText('VAC-102')).not.toBeInTheDocument();
 
     // Check KPI strip
-    expect(screen.getByText('Open Requisitions')).toBeInTheDocument();
-    expect(screen.getByText('Active Candidates')).toBeInTheDocument();
-    expect(screen.getByText('Approval Inbox')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Candidates/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Approvals/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Need action/i })).toBeInTheDocument();
   });
 
   it('filters requisitions by status tabs', async () => {
@@ -135,10 +135,10 @@ describe('RecruitmentCommandCenter Component', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText('8 Applications')).toBeInTheDocument();
+      expect(screen.getByText(/8 candidates/i)).toBeInTheDocument();
     });
 
-    const appBtn = screen.getByRole('button', { name: /8 Applications/i });
+    const appBtn = screen.getByRole('button', { name: /review 2 candidates/i });
     await user.click(appBtn);
 
     expect(mockNavigate).toHaveBeenCalledWith('/applications?vacancyId=vac-1');

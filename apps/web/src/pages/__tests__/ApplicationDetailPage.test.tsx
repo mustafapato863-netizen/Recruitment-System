@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { ApplicationDetailPage } from '../ApplicationDetailPage';
+import { ToastProvider } from '../../components/ui/ToastContext';
 
 // ── Router helpers ──────────────────────────────────────────────────────────
 const mockNavigate = vi.fn();
@@ -81,9 +82,11 @@ vi.mock('../../api/client', () => ({
 function renderPage(appId = 'app-abc-001') {
   return render(
     <MemoryRouter initialEntries={[`/applications/${appId}`]}>
-      <Routes>
-        <Route path="/applications/:id" element={<ApplicationDetailPage />} />
-      </Routes>
+      <ToastProvider>
+        <Routes>
+          <Route path="/applications/:id" element={<ApplicationDetailPage />} />
+        </Routes>
+      </ToastProvider>
     </MemoryRouter>
   );
 }
@@ -240,7 +243,7 @@ describe('ApplicationDetailPage — stage transitions', () => {
     await user.click(within(workspace).getByRole('button', { name: 'Advance Stage' }));
     await user.click(screen.getByRole('button', { name: 'Confirm Move' }));
     await waitFor(() => {
-      expect(screen.getByText(/updated by someone else/i)).toBeInTheDocument();
+      expect(screen.getAllByText(/updated by someone else/i).length).toBeGreaterThan(0);
     });
   });
 

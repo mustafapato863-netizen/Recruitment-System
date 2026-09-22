@@ -64,31 +64,29 @@ describe('EmailTemplatesPage', () => {
     expect(screen.getByText('Custom Follow-up')).toBeInTheDocument();
   });
 
-  it('shows Default badge on default templates and hides edit/delete buttons', async () => {
+  it('shows Default badge and only lets custom templates be deleted', async () => {
     renderPage();
     await waitFor(() => {
       expect(screen.getByText('Default')).toBeInTheDocument();
     });
-    // Default template (tpl-1) must NOT have edit/delete buttons
-    expect(document.getElementById('btn-edit-tpl-1')).toBeNull();
-    expect(document.getElementById('btn-delete-tpl-1')).toBeNull();
-    // Custom template (tpl-2) SHOULD have edit/delete buttons
-    expect(document.getElementById('btn-edit-tpl-2')).not.toBeNull();
-    expect(document.getElementById('btn-delete-tpl-2')).not.toBeNull();
+    expect(screen.queryByRole('button', { name: /^delete$/i })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /custom follow-up/i }));
+    expect(await screen.findByRole('button', { name: /^delete$/i })).toBeInTheDocument();
   });
 
-  it('opens create modal and submits a new template', async () => {
+  it('opens the create form and submits a new template', async () => {
     renderPage();
     await waitFor(() => {
       expect(screen.getByText('Application Received — Acknowledgement')).toBeInTheDocument();
     });
 
     fireEvent.click(screen.getByRole('button', { name: /new template/i }));
-    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'New template' })).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText(/template name/i), { target: { value: 'My New Template' } });
-    fireEvent.change(screen.getByLabelText(/subject/i), { target: { value: 'Hello {{candidateName}}' } });
-    fireEvent.change(screen.getByLabelText(/body/i), { target: { value: 'Dear {{candidateName}},\nWelcome!' } });
+    fireEvent.change(screen.getByLabelText(/^name/i), { target: { value: 'My New Template' } });
+    fireEvent.change(screen.getByLabelText(/^subject/i), { target: { value: 'Hello {{candidateName}}' } });
+    fireEvent.change(screen.getByLabelText(/^body/i), { target: { value: 'Dear {{candidateName}},\nWelcome!' } });
 
     fireEvent.click(screen.getByRole('button', { name: /create template/i }));
 

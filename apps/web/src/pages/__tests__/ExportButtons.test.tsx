@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { CandidatesPage } from '../CandidatesPage';
 import { VacantListPage } from '../VacantListPage';
+import { ToastProvider } from '../../components/ui/ToastContext';
 import { downloadApi, fetchApi, getApi } from '../../api/client';
 import { saveBlob } from '../../utils/download';
 
@@ -53,7 +54,9 @@ describe('Export XLSX Buttons', () => {
 
       render(
         <MemoryRouter>
-          <CandidatesPage />
+          <ToastProvider>
+            <CandidatesPage />
+          </ToastProvider>
         </MemoryRouter>,
       );
 

@@ -100,7 +100,7 @@ describe('Vacancy Assignment and Activation Flow', () => {
   ];
 
   describe('VacancyOverviewPage - Inline Assign and Activation', () => {
-    it('renders "Assign Recruiter & Start" when vacancy has no primary recruiter', async () => {
+    it('renders Assign recruiter when vacancy has no primary recruiter', async () => {
       mockFetchApi.mockResolvedValueOnce(mockVacancyUnassigned);
       mockGetApi.mockImplementation(
         ((url: string) => {
@@ -120,7 +120,7 @@ describe('Vacancy Assignment and Activation Flow', () => {
         </MemoryRouter>,
       );
 
-      const assignBtn = await screen.findByRole('button', { name: /assign recruiter & start/i });
+      const assignBtn = await screen.findByRole('button', { name: /^assign recruiter$/i });
       expect(assignBtn).toBeInTheDocument();
     });
 
@@ -525,7 +525,7 @@ describe('Vacancy Assignment and Activation Flow', () => {
       );
 
       await screen.findByText('Senior Frontend Engineer');
-      expect(screen.queryByRole('button', { name: /assign recruiter & start/i })).toBeNull();
+      expect(screen.queryByRole('button', { name: /^assign recruiter$/i })).toBeNull();
       expect(screen.queryByRole('button', { name: /change recruiter/i })).toBeNull();
     });
 

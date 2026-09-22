@@ -128,7 +128,7 @@ describe('InterviewCalendarPage', () => {
 
     // Modal opens with full details
     await waitFor(() => {
-      expect(screen.getByText(/Interview Dossier & Meeting/i)).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Interview' })).toBeInTheDocument();
       expect(screen.getByText('Consultant Cardiologist')).toBeInTheDocument();
       expect(screen.getByText('INT-2026-101')).toBeInTheDocument();
       expect(screen.getByRole('link', { name: /Join Meeting/i })).toBeInTheDocument();
