@@ -29,3 +29,9 @@
 - Accepted bounded custom pipeline stage labels for transition requests; the server still rejects arbitrary jumps and only permits the immediate persisted next stage.
 - Verified API tests (19 files/92 tests), all web tests (47 files/166 tests), worker tests (2 files/6 tests), focused Applicant Profile UI tests (6 tests), API/web/worker type checks, lint, production build, Prisma validation/generation/migration status, bundle budgets, and local browser workspace smoke. The final build still reports advisory Vite chunk-size warnings while completing successfully.
 - Restored the user’s ignored deployed-API browser configuration after local smoke testing; generated browser screenshots are temporary verification artifacts.
+# 2026-09-22 — Product readiness plan update
+
+- Located the current plan at `docs/version-one-simplification-plan.md`; the previously referenced `docs/development/PROJECT_EXECUTION_PLAN.md` is not present.
+- Audited the release notes, UAT plan, full-app audit, handover guide, current branch history, build output, and web test result.
+- Added the dated ready-for-controlled-UAT, delayed-scope, and production-cutover tables to the current plan.
+- Validation: documentation diff check passed; only the plan and planning evidence files changed, with no product-code changes. Changes remain local and are not pushed.

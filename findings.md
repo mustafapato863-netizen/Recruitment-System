@@ -32,3 +32,11 @@
 ## Transition boundary
 
 The persisted pipeline ordering is authoritative whenever it contains the current stage: only its immediate next stage (plus terminal rejection/withdrawal paths) can be entered. Legacy records without a matching pipeline stage use the canonical transition map. Custom labels remain bounded and arbitrary jumps are rejected.
+# Current task — Readiness audit (2026-09-22)
+
+- The active project plan is `docs/version-one-simplification-plan.md`; it is dated 8 September 2026 and says local UAT is ready, but it has no current ready/delay table.
+- The current `main` build is commit `6071900`; the frontend production build completed successfully and the Vercel deployment is serving the new hashed assets.
+- The web test suite currently reports 258 passing tests and 7 failures. The failures are existing test-wrapper errors caused by pages using `useToast` without a `ToastProvider`; this is a release verification gap, not evidence that the corresponding workflows are production-ready.
+- The repository and handover documentation explicitly defer autonomous AI decisions, production CV binary storage/scanning/retention, outbound email/SMS/WhatsApp delivery, SSO/SAML/OAuth, payroll/HCM replacement, multi-tenant SaaS operation, and compliance certification claims.
+- Implemented core workflows include authentication/RBAC, requisitions and approvals, job positions, candidate/application pipeline, interviews/scorecards, offers, compliance/joining, administration/master data, audit logging, reports, and Vercel web deployment. Production readiness still depends on configured API/database/worker/Redis/storage environments and release gates.
+- JD import is intentionally exposed from Job Positions; it is not a general Bulk Import or vacancy-detail action.

@@ -1,9 +1,51 @@
 # RecruitFlow version-one simplification plan
 
-Status: implementation slice completed and independently reviewed on 8 September 2026; local UAT is ready on the current build.
-Prepared: 8 September 2026.
+Status: current readiness review for controlled UAT and production cutover planning.
+Prepared: 22 September 2026.
 
 This is the current product-scope plan agreed in the conversation. It supersedes broader interface expansion in `uat-enhancement-plan.md`, including its old drawer workflow. Existing security, data-preservation and verification requirements still apply. Prior audit results are historical evidence, not acceptance evidence for these changes.
+
+## Current readiness — 22 September 2026
+
+This table reflects the current `main` build (`6071900`) and the deployed web build. “Ready for controlled UAT” means the workflow exists and can be tested with isolated data and configured services. It does not mean that an external provider, production data store, or production release gate is already configured.
+
+| Area | Ready for controlled UAT now | Delayed or conditional work |
+| --- | --- | --- |
+| Access and authorization | Login, password reset/invitations, refresh-cookie sessions, role/permission guards, tenant-scoped API checks and audit events. | SSO/SAML/OAuth and a long-session soak remain delayed; verify refresh behavior in the final API/web environment before cutover. |
+| Requisitions and approvals | Vacancy request creation, budget/headcount planning, AED/EGP currency choice, target fill date, start/defer timing, sequential approvals and conversion to a vacancy. | Production approval-matrix sign-off and migration/rollback rehearsal are still required. |
+| Job Positions | Position directory, requisition queue, lifecycle/status controls, recruiter assignment, requirements setup and Job Description import from the Job Positions workspace. | JD import stays scoped to Job Positions; external parsing/provider expansion is delayed until the configured service and error/retry path are accepted. |
+| Candidates, CV intake and talent pool | Candidate profiles, duplicate review, CV intake/parsing where configured, CSV/XLSX import, source data, talent-pool storage and candidate-to-position linking. | Production CV binary storage, malware scanning, retention, external backup and full provider validation are delayed. |
+| Applications and Applicant Profile | Unified stage workspace, persisted screening, notes/activity, stage gates, optimistic-lock conflict handling, application pipeline and permission-aware actions. | Full multi-role browser matrix and long-session refresh verification remain release gates. |
+| Sourcing and comparison | Vacancy-based matching, candidate comparison, matched-first skill tags and truthful fit scoring when a vacancy is selected. | Fit remains assistive; autonomous screening or hiring recommendations are delayed. |
+| Interviews and scorecards | Calendar views, scheduling, candidate self-scheduling links, `.ics` export, structured scorecards and fast scorecard entry. | SMTP delivery, external calendar invitations and multi-channel reminders are delayed; use in-app flows and exported calendar files for UAT. |
+| Offers, compliance and joining | Versioned offers, approval flow, compensation capture, clinical readiness gates, joining checklist and headcount update. | Payroll/HCM/ERP integration and external onboarding synchronization are delayed. |
+| Administration, master data and audit | Users/Roles, master data, controlled imports, email-template management, reports, integration health visibility and immutable audit log. | Scheduled report delivery, broad integration management and additional external providers are delayed. |
+| Deployment and operations | Vercel web production build, Docker Compose targets, health/readiness endpoints, release documentation and rollback guidance. | Production API/worker/database/Redis/document-storage cutover, backup-restore drill, mail sink, load test and final monitoring sign-off are still required. |
+
+### Explicitly delayed product scope
+
+| Capability | Decision | Reason |
+| --- | --- | --- |
+| Autonomous AI screening or hiring decisions | Delay | Matching and fit scores assist a human reviewer; they must not make or approve a hiring decision. |
+| Production CV binary lifecycle | Delay | Storage, malware scanning, retention, external backup and recovery ownership are not yet accepted for production. |
+| Outbound email, WhatsApp, SMS and external reminder delivery | Delay | Current workflows support in-app notifications, templates, links and `.ics`; external delivery needs an approved outbox/provider design. |
+| SSO/SAML/OAuth | Delay | Username/password authentication is the supported release path. |
+| Payroll, ERP and full HCM replacement | Delay | RecruitFlow covers recruitment operations and joining readiness, not payroll or the complete HR system of record. |
+| Multi-tenant SaaS operation and compliance certification claims | Delay | The deployment model is single-tenant and the repository makes no GDPR, PDPL, ISO or SOC2 certification claim. |
+| Scheduled/advanced reporting delivery and custom report builders | Delay | Current reports are read-only operational views with manual export/print paths. |
+
+### Required before production cutover
+
+| Gate | Evidence required |
+| --- | --- |
+| Current build verification | Typecheck, production build, focused workflow tests and the full web test wrapper failures either fixed or explicitly accepted. |
+| Environment readiness | Real API, PostgreSQL, Redis/worker, document storage, secrets, CORS and health/readiness checks verified together. |
+| Security and permissions | Administrator, recruiter and restricted employee checks across at least two isolated organizations, including direct URLs and sensitive-field redaction. |
+| Data recovery | Migration status, disposable restore rehearsal, document backup/restore plan and rollback commit identified. |
+| Operational smoke test | Candidate/CV intake, vacancy approval, application stage move, interview/scorecard, offer approval and joining completion with isolated records. |
+| Observability | API/worker health, queue backlog, failed jobs, storage failures, auth refresh failures and audit events visible to the support owner. |
+
+The readiness boundary is intentional: the current build is suitable for controlled UAT and internal workflow validation. Production certification waits for the cutover gates above; delayed scope should not be presented as available functionality.
 
 ## Outcome
 
@@ -25,7 +67,7 @@ Use existing records, services and visual components. Preserve current business 
 | Offers & Hiring | Group existing offer and joining workflows without combining their underlying records or approvals. |
 | Administration | Users & Roles, Master Data and essential Settings, with existing permission gates. |
 
-Remove Notification Center, Integrations & API Management and Tasks from the default sidebar, command search and redundant shortcuts. Keep the notification bell and working record links. Keep task storage and follow-up functionality. Move CV Intake to an Upload CV action instead of a separate sidebar destination. Defer Smart Sourcing, candidate comparison and advanced reporting from the default version-one navigation; retain useful code/data and authorized compatibility links.
+Remove Notification Center, Integrations & API Management and Tasks from the default sidebar, command search and redundant shortcuts. Keep the notification bell and working record links. Keep task storage and follow-up functionality. Move CV Intake to an Upload CV action instead of a separate sidebar destination. Keep Smart Sourcing and candidate comparison as optional, permission-aware modules for controlled UAT; keep advanced reporting outside the default navigation. Fit remains human-reviewed assistance, not an autonomous decision.
 
 Navigation hiding never grants or revokes API access. For retired entry points, use a meaningful authorized redirect after auditing inbound links. `/tasks` must still resolve existing task references to My Work or their linked record; unlinked tasks must remain accessible in My Work before the old entry is retired. Integration configuration stays preserved and outside the ordinary employee flow.
 
@@ -126,7 +168,7 @@ Only last contact, completed activity count and next follow-up are required now.
 
 ## Deferred scope
 
-Advanced sourcing/matching interfaces, candidate comparison, advanced reporting, a standalone task manager, standalone notification history, integration management UI, spreadsheet formulas/custom columns and new external-provider integrations.
+Standalone task management, standalone notification history, spreadsheet formulas/custom columns, scheduled/advanced reporting delivery, broad integration management and new external-provider integrations remain outside the initial operational rollout. Vacancy-based matching and candidate comparison are implemented in the current build as controlled, human-reviewed assistance; they are not autonomous hiring decisions.
 
 Existing capabilities needed for approval, privacy, CV storage or hiring are preserved. “Deferred” means outside the default version-one experience, not deletion of historical records.
 
@@ -140,4 +182,4 @@ Existing capabilities needed for approval, privacy, CV storage or hiring are pre
 - [x] Phase 5: tabbed Master Data grid
 - [x] Phase 6: workflow verification and handover
 
-Implement in this order. Do not hide a page until its useful actions and records have a working replacement. The current implementation and independent review satisfy the local first-version acceptance checks; production deployment and external delivery remain outside this plan.
+Implement in this order. Do not hide a page until its useful actions and records have a working replacement. The current implementation is ready for controlled UAT, while the production cutover gates and explicitly delayed scope above remain open.

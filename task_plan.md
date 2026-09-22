@@ -43,3 +43,20 @@ Keep Applicant Profile as the recruiter’s single stage-aware workspace for the
 ## Transition boundary
 
 The persisted pipeline ordering is authoritative whenever it contains the current stage: only its immediate next stage (plus terminal rejection/withdrawal paths) can be entered. Legacy records without a matching pipeline stage fall back to the canonical transition map. Custom stage labels remain bounded and arbitrary jumps are rejected.
+# Current task — Product readiness plan update (2026-09-22)
+
+## Goal
+
+Update `docs/version-one-simplification-plan.md` from the current repository and deployment state, separating capabilities ready for controlled use from work that stays delayed or must be completed before production cutover.
+
+## Phases
+
+- [x] Audit current implementation, verification evidence, and known limitations.
+- [x] Add the readiness table and production/deferred boundaries to the project plan.
+- [x] Validate the documentation change and report the remaining gates.
+
+## Decisions
+
+- Use “Ready for controlled UAT” for workflows implemented in the current build with an explicit environment/configuration caveat.
+- Keep production external delivery, provider integrations, and autonomous AI decisions out of the ready column.
+- Record current verification limits instead of using historical test counts from older release notes.
