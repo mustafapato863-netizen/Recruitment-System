@@ -264,12 +264,12 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
           className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 shadow-xs hover:border-blue-300 dark:hover:border-blue-700 transition cursor-pointer flex items-center justify-between group"
         >
           <div className="flex items-center gap-3.5">
-            <div className="w-11 h-11 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+            <div className="rf-metric-icon-box rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
               <Icon name="briefcase" size={20} />
             </div>
             <div>
               <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">Open Requisitions</span>
-              <span className="block text-2xl font-black text-slate-900 dark:text-white mt-0.5">{totalOpen}</span>
+              <span className="rf-metric-value block mt-0.5">{totalOpen}</span>
               <span className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400">
                 {positions.length} total across hospitals
               </span>
@@ -284,12 +284,12 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
           className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 shadow-xs hover:border-emerald-300 dark:hover:border-emerald-700 transition cursor-pointer flex items-center justify-between group"
         >
           <div className="flex items-center gap-3.5">
-            <div className="w-11 h-11 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 flex items-center justify-center shrink-0">
+            <div className="rf-metric-icon-box rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 flex items-center justify-center shrink-0">
               <Icon name="users" size={20} />
             </div>
             <div>
               <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">Active Candidates</span>
-              <span className="block text-2xl font-black text-slate-900 dark:text-white mt-0.5">{totalInFlightCandidates}</span>
+              <span className="rf-metric-value block mt-0.5">{totalInFlightCandidates}</span>
               <span className="block text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
                 In-flight pipeline &bull; Click to open
               </span>
@@ -309,7 +309,7 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
         >
           <div className="flex items-center gap-3.5">
             <div
-              className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
+              className={`rf-metric-icon-box rounded-xl flex items-center justify-center shrink-0 ${
                 pendingApprovalsCount > 0
                   ? 'bg-amber-100 dark:bg-amber-900/50 text-amber-600 dark:text-amber-300'
                   : 'bg-slate-100 dark:bg-slate-800 text-slate-500'
@@ -319,7 +319,7 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
             </div>
             <div>
               <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">Approval Inbox</span>
-              <span className="block text-2xl font-black text-slate-900 dark:text-white mt-0.5">
+              <span className="rf-metric-value block mt-0.5">
                 {pendingApprovalsCount}
               </span>
               <span className={`block text-[11px] font-semibold ${pendingApprovalsCount > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-slate-600 dark:text-slate-400'}`}>
@@ -341,7 +341,7 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
         >
           <div className="flex items-center gap-3.5">
             <div
-              className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 ${
+              className={`rf-metric-icon-box rounded-xl flex items-center justify-center shrink-0 ${
                 totalSlaAtRisk > 0
                   ? 'bg-rose-100 dark:bg-rose-900/50 text-rose-600 dark:text-rose-300'
                   : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400'
@@ -351,7 +351,7 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
             </div>
             <div>
               <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400">SLA At-Risk</span>
-              <span className="block text-2xl font-black text-slate-900 dark:text-white mt-0.5">{totalSlaAtRisk}</span>
+              <span className="rf-metric-value block mt-0.5">{totalSlaAtRisk}</span>
               <span className={`block text-[11px] font-semibold ${totalSlaAtRisk > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-700 dark:text-emerald-400'}`}>
                 {totalSlaAtRisk > 0 ? 'Attention needed' : '100% On-Track'}
               </span>

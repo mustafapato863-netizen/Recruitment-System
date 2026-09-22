@@ -690,7 +690,7 @@ export function CandidatesPage() {
               Total Talent Base
             </span>
             <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-2xl font-black text-slate-900 dark:text-white">
+              <span className="rf-metric-value">
                 {totalDisplayCount}
               </span>
               <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded">
@@ -701,7 +701,7 @@ export function CandidatesPage() {
               Verified identity records
             </span>
           </div>
-          <div className="w-11 h-11 rounded-2xl bg-blue-50 dark:bg-blue-950/50 text-[#0084ce] dark:text-sky-400 flex items-center justify-center shrink-0">
+          <div className="rf-metric-icon-box rounded-xl bg-blue-50 dark:bg-blue-950/50 text-[#0084ce] dark:text-sky-400 flex items-center justify-center shrink-0">
             <Icon name="users" size={20} />
           </div>
         </div>
@@ -713,7 +713,7 @@ export function CandidatesPage() {
               Active in Process
             </span>
             <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-2xl font-black text-slate-900 dark:text-white">
+              <span className="rf-metric-value">
                 {activeInPipelineCount}
               </span>
                 <span className="text-[11px] font-bold text-blue-700 dark:text-sky-300 bg-blue-50 dark:bg-blue-950/40 px-1.5 py-0.5 rounded">
@@ -724,7 +724,7 @@ export function CandidatesPage() {
               Across active vacancies
             </span>
           </div>
-          <div className="w-11 h-11 rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 text-[#00a859] dark:text-emerald-400 flex items-center justify-center shrink-0">
+          <div className="rf-metric-icon-box rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-[#00a859] dark:text-emerald-400 flex items-center justify-center shrink-0">
             <Icon name="pipeline" size={20} />
           </div>
         </div>
@@ -736,7 +736,7 @@ export function CandidatesPage() {
               Sourcing Bench
             </span>
             <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-2xl font-black text-slate-900 dark:text-white">
+              <span className="rf-metric-value">
                 {talentPoolCount}
               </span>
                 <span className="text-[11px] font-bold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/40 px-1.5 py-0.5 rounded">
@@ -747,7 +747,7 @@ export function CandidatesPage() {
               Ready for instant matching
             </span>
           </div>
-          <div className="w-11 h-11 rounded-2xl bg-purple-50 dark:bg-purple-950/50 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
+          <div className="rf-metric-icon-box rounded-xl bg-purple-50 dark:bg-purple-950/50 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
             <Icon name="star" size={20} />
           </div>
         </div>
@@ -759,7 +759,7 @@ export function CandidatesPage() {
               Direct & Referrals
             </span>
             <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-2xl font-black text-slate-900 dark:text-white">
+              <span className="rf-metric-value">
                 {organicSourcePct}
               </span>
                 <span className="text-[11px] font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 px-1.5 py-0.5 rounded">
@@ -770,7 +770,7 @@ export function CandidatesPage() {
               Internal & career portal sources
             </span>
           </div>
-          <div className="w-11 h-11 rounded-2xl bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+          <div className="rf-metric-icon-box rounded-xl bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
             <Icon name="award" size={20} />
           </div>
         </div>

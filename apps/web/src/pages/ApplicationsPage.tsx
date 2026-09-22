@@ -1456,7 +1456,7 @@ export function ApplicationsPage() {
             <span className="w-2 h-2 rounded-full bg-[#0084ce]" />
           </div>
           <div className="mt-1 flex items-baseline gap-2">
-            <span className="text-2xl font-black text-slate-900 dark:text-white">{pipelineMetrics.total}</span>
+            <span className="rf-metric-value">{pipelineMetrics.total}</span>
             <span className="text-[11px] text-[#0084ce] dark:text-sky-400 font-bold">candidates</span>
           </div>
         </div>
@@ -1475,7 +1475,7 @@ export function ApplicationsPage() {
             <span className="w-2 h-2 rounded-full bg-amber-500" />
           </div>
           <div className="mt-1 flex items-baseline gap-2">
-            <span className="text-2xl font-black text-slate-900 dark:text-white">{pipelineMetrics.inReview}</span>
+            <span className="rf-metric-value">{pipelineMetrics.inReview}</span>
             <span className="text-[11px] text-amber-600 dark:text-amber-400 font-bold">Screening & Interview</span>
           </div>
         </div>
@@ -1494,7 +1494,7 @@ export function ApplicationsPage() {
             <span className="w-2 h-2 rounded-full bg-purple-500" />
           </div>
           <div className="mt-1 flex items-baseline gap-2">
-            <span className="text-2xl font-black text-slate-900 dark:text-white">{pipelineMetrics.inOffer}</span>
+            <span className="rf-metric-value">{pipelineMetrics.inOffer}</span>
             <span className="text-[11px] text-purple-600 dark:text-purple-400 font-bold">In Final Stages</span>
           </div>
         </div>
@@ -1507,7 +1507,7 @@ export function ApplicationsPage() {
             <span className="w-2 h-2 rounded-full bg-[#00a859]" />
           </div>
           <div className="mt-1 flex items-baseline gap-2">
-            <span className="text-2xl font-black text-slate-900 dark:text-white">{pipelineMetrics.readySignals}</span>
+            <span className="rf-metric-value">{pipelineMetrics.readySignals}</span>
             <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-bold">Ready to Advance</span>
           </div>
         </div>

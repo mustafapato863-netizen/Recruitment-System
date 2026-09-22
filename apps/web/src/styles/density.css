@@ -53,3 +53,35 @@
 [data-theme='dark'] .rf-page-title {
   color: var(--color-ink-950);
 }
+
+/* Shared KPI / metric type */
+.rf-metric-value {
+  font-family: var(--font-heading, inherit);
+  font-size: var(--rf-type-metric);
+  font-weight: var(--rf-type-metric-weight);
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--color-ink-950);
+  font-variant-numeric: tabular-nums;
+}
+
+.rf-metric-label {
+  font-size: var(--rf-type-metric-label);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-ink-500);
+}
+
+.rf-metric-icon-box {
+  width: var(--rf-metric-icon);
+  height: var(--rf-metric-icon);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.rf-metric-card-pad {
+  padding: var(--rf-space-card);
+}

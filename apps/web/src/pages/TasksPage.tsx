@@ -450,12 +450,12 @@ export function TasksPage() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         {/* Card 1: All Tasks */}
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs space-y-2">
-          <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 flex items-center justify-center">
+          <div className="rf-metric-icon-box rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 flex items-center justify-center">
             <Icon name="check-circle" size={18} />
           </div>
           <div>
             <span className="text-xs font-semibold text-slate-400 block">All Tasks</span>
-            <span className="text-2xl font-black text-slate-900 dark:text-white block mt-0.5">
+            <span className="rf-metric-value block mt-0.5">
               {metrics.all}
             </span>
             <span className="text-xs font-bold text-slate-500 block mt-1">Active queue</span>
@@ -464,12 +464,12 @@ export function TasksPage() {
 
         {/* Card 2: Overdue */}
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs space-y-2">
-          <div className="w-10 h-10 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 flex items-center justify-center">
+          <div className="rf-metric-icon-box rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 flex items-center justify-center">
             <Icon name="alert-triangle" size={18} />
           </div>
           <div>
             <span className="text-xs font-semibold text-slate-400 block">Overdue</span>
-            <span className="text-2xl font-black text-slate-900 dark:text-white block mt-0.5">
+            <span className="rf-metric-value block mt-0.5">
               {metrics.overdue}
             </span>
             <span className="text-xs font-bold text-rose-600 block mt-1">
@@ -480,12 +480,12 @@ export function TasksPage() {
 
         {/* Card 3: Due Today */}
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs space-y-2">
-          <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 flex items-center justify-center">
+          <div className="rf-metric-icon-box rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 flex items-center justify-center">
             <Icon name="calendar" size={18} />
           </div>
           <div>
             <span className="text-xs font-semibold text-slate-400 block">Due Today</span>
-            <span className="text-2xl font-black text-slate-900 dark:text-white block mt-0.5">
+            <span className="rf-metric-value block mt-0.5">
               {metrics.dueToday}
             </span>
             <span className="text-xs font-bold text-amber-600 block mt-1">Scheduled today</span>
@@ -494,12 +494,12 @@ export function TasksPage() {
 
         {/* Card 4: Upcoming */}
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs space-y-2">
-          <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 flex items-center justify-center">
+          <div className="rf-metric-icon-box rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 flex items-center justify-center">
             <Icon name="clock" size={18} />
           </div>
           <div>
             <span className="text-xs font-semibold text-slate-400 block">Upcoming</span>
-            <span className="text-2xl font-black text-slate-900 dark:text-white block mt-0.5">
+            <span className="rf-metric-value block mt-0.5">
               {metrics.upcoming}
             </span>
             <span className="text-xs font-bold text-emerald-600 block mt-1">Within SLA</span>
@@ -508,12 +508,12 @@ export function TasksPage() {
 
         {/* Card 5: Completed */}
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs space-y-2">
-          <div className="w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 flex items-center justify-center">
+          <div className="rf-metric-icon-box rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 flex items-center justify-center">
             <Icon name="check" size={18} />
           </div>
           <div>
             <span className="text-xs font-semibold text-slate-400 block">Completed</span>
-            <span className="text-2xl font-black text-slate-900 dark:text-white block mt-0.5">
+            <span className="rf-metric-value block mt-0.5">
               {metrics.completed}
             </span>
             <span className="text-xs font-bold text-purple-600 block mt-1">Closed items</span>

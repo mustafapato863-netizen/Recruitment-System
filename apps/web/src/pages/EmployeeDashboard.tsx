@@ -102,32 +102,32 @@ export function EmployeeDashboard() {
       {/* Summary KPI Pills */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-7">
         <div className="flex items-center gap-4 p-4 rounded-xl border border-rf-border-subtle bg-rf-surface shadow-2xs">
-          <div className="w-11 h-11 rounded-xl bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+          <div className="rf-metric-icon-box rounded-xl bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
             <Icon name="clock" size={20} />
           </div>
           <div>
             <div className="text-xs font-bold text-rf-ink-muted uppercase tracking-wider">Pending Requests</div>
-            <div className="text-2xl font-black text-rf-ink">{isLoading ? '—' : pendingRequestsCount}</div>
+            <div className="rf-metric-value">{isLoading ? '—' : pendingRequestsCount}</div>
           </div>
         </div>
 
         <div className="flex items-center gap-4 p-4 rounded-xl border border-rf-border-subtle bg-rf-surface shadow-2xs">
-          <div className="w-11 h-11 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+          <div className="rf-metric-icon-box rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
             <Icon name="check-circle" size={20} />
           </div>
           <div>
             <div className="text-xs font-bold text-rf-ink-muted uppercase tracking-wider">Approved Requests</div>
-            <div className="text-2xl font-black text-rf-ink">{isLoading ? '—' : approvedRequestsCount}</div>
+            <div className="rf-metric-value">{isLoading ? '—' : approvedRequestsCount}</div>
           </div>
         </div>
 
         <div className="flex items-center gap-4 p-4 rounded-xl border border-rf-border-subtle bg-rf-surface shadow-2xs">
-          <div className="w-11 h-11 rounded-xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+          <div className="rf-metric-icon-box rounded-xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
             <Icon name="tasks" size={20} />
           </div>
           <div>
             <div className="text-xs font-bold text-rf-ink-muted uppercase tracking-wider">Active Tasks</div>
-            <div className="text-2xl font-black text-rf-ink">{isLoading ? '—' : tasks.length}</div>
+            <div className="rf-metric-value">{isLoading ? '—' : tasks.length}</div>
           </div>
         </div>
       </div>

@@ -22,6 +22,8 @@ export interface MetricCardProps {
   urgencyText?: string;
   urgencyTone?: UrgencyTone;
   infoTooltip?: ReactNode;
+  /** compact (default) uses density tokens; default keeps legacy larger chrome */
+  density?: 'default' | 'compact';
 }
 
 const toneClasses: Record<MetricTone, string> = {
@@ -102,6 +104,7 @@ export function MetricCard({
   urgencyText,
   urgencyTone,
   infoTooltip,
+  density = 'compact',
 }: MetricCardProps) {
   const trendClasses = trend?.isPositive === true
     ? 'text-rf-success-strong'
@@ -123,7 +126,8 @@ export function MetricCard({
       className="h-full shadow-[var(--shadow-2xs)] transition-shadow duration-150 hover:shadow-[var(--shadow-xs)] relative group flex flex-col"
     >
       <article className={[
-        'flex min-h-[116px] flex-1 flex-col justify-between p-5 relative z-10 w-full',
+        'flex flex-1 flex-col justify-between relative z-10 w-full',
+        density === 'compact' ? 'min-h-[92px] rf-metric-card-pad' : 'min-h-[116px] p-5',
         featured ? 'bg-rf-action-soft/5' : '',
       ].filter(Boolean).join(' ')}>
         {action && (
@@ -144,7 +148,7 @@ export function MetricCard({
             )}
             <div className="flex flex-col gap-1.5 min-w-0">
               <div className="flex items-center gap-1.5">
-                <span className="text-xs font-bold uppercase tracking-wider text-rf-ink-muted truncate" title={typeof infoTooltip === 'string' ? infoTooltip : undefined}>{label}</span>
+                <span className={density === 'compact' ? 'rf-metric-label truncate' : 'text-xs font-bold uppercase tracking-wider text-rf-ink-muted truncate'} title={typeof infoTooltip === 'string' ? infoTooltip : undefined}>{label}</span>
                 {infoTooltip && (
                   <div className="group/tooltip relative flex items-center">
                     <svg className="w-3.5 h-3.5 text-rf-ink-muted opacity-60 hover:opacity-100 cursor-help transition-opacity" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -171,13 +175,13 @@ export function MetricCard({
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-1.5 transition-opacity group-hover:opacity-30">
-            {icon && <div className={['grid h-8 w-8 place-items-center rounded-lg ring-1 shadow-2xs', toneClasses[tone]].join(' ')} aria-hidden="true">{icon}</div>}
+            {icon && <div className={[density === 'compact' ? 'rf-metric-icon-box grid place-items-center rounded-lg ring-1 shadow-2xs' : 'grid h-8 w-8 place-items-center rounded-lg ring-1 shadow-2xs', toneClasses[tone]].join(' ')} aria-hidden="true">{icon}</div>}
           </div>
         </div>
 
         <div className="mt-3">
           <div className="flex items-end justify-between gap-2">
-            <strong className="block font-rf-heading text-[22px] font-black leading-none tracking-[-0.03em] text-rf-ink tabular-nums">{value}</strong>
+            <strong className={density === 'compact' ? 'rf-metric-value block' : 'block font-rf-heading text-[22px] font-black leading-none tracking-[-0.03em] text-rf-ink tabular-nums'}>{value}</strong>
             {sparkline && sparkline.length > 1 && <div className="shrink-0 -mb-1"><Sparkline data={sparkline} color={sparklineColor ?? toneSparkColors[tone]} width={82} height={24} /></div>}
           </div>
           {(detail || trend) && <div className="mt-2 flex min-w-0 items-center justify-between gap-2">

@@ -487,14 +487,14 @@ export function OffersPage() {
           className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs space-y-2 relative group cursor-pointer hover:border-blue-300 transition"
         >
           <div className="flex items-center justify-between">
-            <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 flex items-center justify-center">
+            <div className="rf-metric-icon-box rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 flex items-center justify-center">
               <Icon name="file-text" size={18} />
             </div>
             <Icon name="chevron-right" size={14} className="text-slate-300 group-hover:translate-x-0.5 transition" />
           </div>
           <div>
             <span className="text-xs font-semibold text-slate-400 block">Awaiting Approval</span>
-            <span className="text-2xl font-black text-slate-900 dark:text-white block mt-0.5">
+            <span className="rf-metric-value block mt-0.5">
               {kpiMetrics.awaitingApproval}
             </span>
             <span className="text-xs font-bold text-amber-600 dark:text-amber-400 block mt-1">
@@ -508,12 +508,12 @@ export function OffersPage() {
           onClick={() => { setActivePill('Sent'); setPage(1); }}
           className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs space-y-2 cursor-pointer hover:border-blue-300 transition"
         >
-          <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 flex items-center justify-center">
+          <div className="rf-metric-icon-box rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 flex items-center justify-center">
             <Icon name="send" size={18} />
           </div>
           <div>
             <span className="text-xs font-semibold text-slate-400 block">Sent Offers</span>
-            <span className="text-2xl font-black text-slate-900 dark:text-white block mt-0.5">
+            <span className="rf-metric-value block mt-0.5">
               {kpiMetrics.sent}
             </span>
             <div className="flex items-center gap-1.5 mt-1">
@@ -527,12 +527,12 @@ export function OffersPage() {
           onClick={() => { setActivePill('Accepted'); setPage(1); }}
           className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs space-y-2 cursor-pointer hover:border-blue-300 transition"
         >
-          <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 flex items-center justify-center">
+          <div className="rf-metric-icon-box rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 flex items-center justify-center">
             <Icon name="check-circle" size={18} />
           </div>
           <div>
             <span className="text-xs font-semibold text-slate-400 block">Accepted</span>
-            <span className="text-2xl font-black text-slate-900 dark:text-white block mt-0.5">
+            <span className="rf-metric-value block mt-0.5">
               {kpiMetrics.accepted}
             </span>
             <div className="flex items-center gap-1.5 mt-1">
@@ -543,12 +543,12 @@ export function OffersPage() {
 
         {/* Card 4 */}
         <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs space-y-2">
-          <div className="w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 flex items-center justify-center">
+          <div className="rf-metric-icon-box rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 flex items-center justify-center">
             <Icon name="clock" size={18} />
           </div>
           <div>
             <span className="text-xs font-semibold text-slate-400 block">Expiring / Overdue</span>
-            <span className="text-2xl font-black text-slate-900 dark:text-white block mt-0.5">
+            <span className="rf-metric-value block mt-0.5">
               {kpiMetrics.expiringSoon}
             </span>
             <span className="text-xs font-medium text-slate-400 block mt-1">Requires follow-up</span>
@@ -560,12 +560,12 @@ export function OffersPage() {
           onClick={() => { setActivePill('Draft'); setPage(1); }}
           className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs space-y-2 cursor-pointer hover:border-blue-300 transition"
         >
-          <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center">
+          <div className="rf-metric-icon-box rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center">
             <Icon name="file-text" size={18} />
           </div>
           <div>
             <span className="text-xs font-semibold text-slate-400 block">Draft Offers</span>
-            <span className="text-2xl font-black text-slate-900 dark:text-white block mt-0.5">
+            <span className="rf-metric-value block mt-0.5">
               {kpiMetrics.drafts}
             </span>
             <span className="text-xs font-medium text-slate-400 block mt-1">In progress</span>

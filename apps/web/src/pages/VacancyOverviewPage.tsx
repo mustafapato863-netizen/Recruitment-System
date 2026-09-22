@@ -675,7 +675,7 @@ export function VacancyOverviewPage() {
             </div>
             <div>
               <span className="block text-xs font-semibold text-slate-500 dark:text-slate-400">Applications</span>
-              <span className="mt-0.5 block text-xl font-black text-slate-900 dark:text-white">{applicationsCount}</span>
+              <span className="rf-metric-value mt-0.5 block">{applicationsCount}</span>
               <span className="block text-xs font-bold text-blue-600 dark:text-blue-400 mt-0.5">
                 {appsThisWeek > 0 ? `+${appsThisWeek} this week` : '0 this week'}
               </span>
@@ -696,7 +696,7 @@ export function VacancyOverviewPage() {
             </div>
             <div>
               <span className="block text-xs font-semibold text-slate-500 dark:text-slate-400">Interviews</span>
-              <span className="mt-0.5 block text-xl font-black text-slate-900 dark:text-white">{interviewsCount}</span>
+              <span className="rf-metric-value mt-0.5 block">{interviewsCount}</span>
               <span className="block text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
                 {intsThisWeek > 0 ? `${intsThisWeek} this week` : '0 this week'}
               </span>
@@ -717,7 +717,7 @@ export function VacancyOverviewPage() {
             </div>
             <div>
               <span className="block text-xs font-semibold text-slate-500 dark:text-slate-400">Offers</span>
-              <span className="mt-0.5 block text-xl font-black text-slate-900 dark:text-white">{offersCount}</span>
+              <span className="rf-metric-value mt-0.5 block">{offersCount}</span>
               <span className="block text-xs font-bold text-purple-600 dark:text-purple-400 mt-0.5">
                 {offersThisWeek > 0 ? `${offersThisWeek} this week` : '0 this week'}
               </span>
@@ -738,7 +738,7 @@ export function VacancyOverviewPage() {
             </div>
             <div>
               <span className="block text-xs font-semibold text-slate-500 dark:text-slate-400">Headcount Joined</span>
-              <span className="mt-0.5 block text-xl font-black text-slate-900 dark:text-white">
+              <span className="rf-metric-value mt-0.5 block">
                 {hiresCount} / {vacancy?.approvedHeadcount ?? 1}
               </span>
               <span className="block text-xs font-bold text-orange-600 dark:text-orange-400 mt-0.5">
