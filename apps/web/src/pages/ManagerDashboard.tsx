@@ -360,7 +360,7 @@ export function ManagerDashboard() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2.5 flex-wrap">
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
+            <h1 className="rf-page-title">
               Good morning, {greetingName}
             </h1>
             <QuickGuideTrigger />

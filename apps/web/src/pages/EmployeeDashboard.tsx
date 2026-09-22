@@ -68,7 +68,7 @@ export function EmployeeDashboard() {
             Employee Workspace
           </div>
           <div className="flex items-center gap-2.5 flex-wrap">
-            <h1 className="text-2xl font-rf-heading font-black tracking-tight text-rf-ink m-0">
+            <h1 className="rf-page-title">
               Welcome back, {greetingName}
             </h1>
             <QuickGuideTrigger />

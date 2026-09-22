@@ -618,7 +618,7 @@ export function CandidatesPage() {
             <span className="text-blue-600 dark:text-blue-400">Global Talent Directory</span>
           </div>
           <div className="flex items-center gap-2.5 flex-wrap mt-1">
-            <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">
+            <h1 className="rf-page-title">
               Candidate Database
             </h1>
             <QuickGuideTrigger />

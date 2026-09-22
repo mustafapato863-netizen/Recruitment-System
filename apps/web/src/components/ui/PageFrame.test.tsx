@@ -17,6 +17,7 @@ describe('PageFrame component', () => {
 
     expect(screen.getByText('Recruitment Operations')).toBeVisible();
     expect(screen.getByRole('heading', { level: 1, name: 'Openings & Job Cards' })).toBeVisible();
+    expect(screen.getByRole('heading', { level: 1, name: 'Openings & Job Cards' })).toHaveClass('rf-page-title');
     expect(screen.getByText('Manage active requisitions and vacancies across all branches.')).toBeVisible();
     expect(screen.getByText('Content Body')).toBeVisible();
   });

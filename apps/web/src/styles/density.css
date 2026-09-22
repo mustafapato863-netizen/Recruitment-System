@@ -37,3 +37,19 @@
     --rf-space-card: 14px;
   }
 }
+
+/* Shared page H1 - use on Wave 1+ chrome instead of text-2xl/3xl */
+.rf-page-title {
+  margin: 0;
+  font-family: var(--font-heading, inherit);
+  font-size: var(--rf-type-page-title);
+  font-weight: var(--rf-type-page-title-weight);
+  line-height: 1.16;
+  letter-spacing: -0.03em;
+  color: var(--color-ink-950);
+}
+
+.dark .rf-page-title,
+[data-theme='dark'] .rf-page-title {
+  color: var(--color-ink-950);
+}
