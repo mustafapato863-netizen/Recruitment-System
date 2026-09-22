@@ -699,8 +699,6 @@ export function ApprovalInboxPage() {
         </section>
       )}
 
-      </section>
-
       {/* Confirmation Action Dialog */}
       <ConfirmDialog
         isOpen={confirmDialog.isOpen}

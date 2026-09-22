@@ -346,11 +346,6 @@ export function VacancyOverviewPage() {
   const offersCount = vacancy?.funnelCounts?.offer ?? vacancyOffers.length;
   const hiresCount = vacancy?.joinedHeadcount ?? vacancy?.funnelCounts?.joined ?? vacancyApps.filter((a) => a.stage === 'Joined' || (a as unknown as { stage?: string; status?: string }).stage === 'Hired' || (a as unknown as { status?: string }).status === 'HIRED').length;
 
-  const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-  const appsThisWeek = vacancyApps.filter((a) => new Date(a.appliedAt || a.createdAt) >= oneWeekAgo).length;
-  const intsThisWeek = vacancyInterviews.filter((i) => new Date(i.scheduledStart || (i as unknown as { scheduledAt?: string }).scheduledAt || '1970-01-01') >= oneWeekAgo).length;
-  const offersThisWeek = vacancyOffers.filter((o) => new Date(o.createdAt) >= oneWeekAgo).length;
-
   const daysOpen = vacancy?.openedAt || vacancy?.createdAt
     ? Math.max(0, Math.floor((Date.now() - new Date(vacancy.openedAt || vacancy.createdAt).getTime()) / (1000 * 60 * 60 * 24)))
     : 0;

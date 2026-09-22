@@ -16,7 +16,8 @@
     "prisma:format": "node scripts/prisma.cjs format --schema prisma/schema.prisma",
     "prisma:validate": "node scripts/prisma.cjs validate --schema prisma/schema.prisma",
     "prisma:migrate:deploy": "node scripts/prisma.cjs migrate deploy --schema prisma/schema.prisma",
-    "prisma:migrate:status": "node scripts/prisma.cjs migrate status --schema prisma/schema.prisma"
+    "prisma:migrate:status": "node scripts/prisma.cjs migrate status --schema prisma/schema.prisma",
+    "prisma:seed": "node prisma/seed.cjs"
   },
   "dependencies": {
     "@prisma/client": "6.19.3",

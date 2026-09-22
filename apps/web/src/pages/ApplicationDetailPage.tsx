@@ -29,7 +29,6 @@ import { ListSkeleton } from '../components/ui/Skeleton';
 import { StatusBadge } from '../components/StatusBadge';
 import { ActivityFeed, type FeedEntry } from '../components/candidate/ActivityFeed';
 import { CandidateActivityPanel } from '../components/candidate/CandidateActivityPanel';
-import { SmartActionBar, getDefaultActions } from '../components/candidate/SmartActionBar';
 import { useFeedback } from '../hooks/useFeedback';
 import { usePermissions } from '../hooks/usePermissions';
 import { QuickGuideTrigger } from '../quickguide';
@@ -2132,17 +2131,6 @@ export function ApplicationDetailPage() {
           )}
         </div>
       </div>
-
-      {/* ── Smart Action Bar ── */}
-      {false && application != null && !workspace && (
-        <SmartActionBar
-          applicationId={id || application.id}
-          stage={application.stage}
-          version={application.version ?? 1}
-          actions={getDefaultActions(application.stage)}
-          onActionComplete={refetchApplication}
-        />
-      )}
 
       {/* ── Modals for Quick Actions ── */}
       {/* 1. Move Stage Modal */}
