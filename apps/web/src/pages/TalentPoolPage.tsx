@@ -169,13 +169,13 @@ export function TalentPoolPage() {
         candidateId: fastTrackTarget.candidate.id,
         vacancyId: selectedVacancy.id,
         stage: fastTrackStage,
-        notes: fastTrackNote ? `[Smart Sourcing Fast-Track]: ${fastTrackNote}` : '[Smart Sourcing Fast-Track]',
+        notes: fastTrackNote ? `[Added to job]: ${fastTrackNote}` : '[Added to job]',
       });
 
       show({
         tone: 'success',
-        title: 'Candidate Fast-Tracked!',
-        message: `${fastTrackTarget.candidate.firstName} ${fastTrackTarget.candidate.lastName} was submitted into ${selectedVacancy.title || 'the position'} at ${fastTrackStage} stage.`,
+        title: 'Added to job',
+        message: `${fastTrackTarget.candidate.firstName} ${fastTrackTarget.candidate.lastName} is now on ${selectedVacancy.title || 'this job'} at ${fastTrackStage}.`,
       });
 
       setFastTrackTarget(null);
@@ -183,8 +183,8 @@ export function TalentPoolPage() {
     } catch (err: unknown) {
       show({
         tone: 'error',
-        title: 'Fast-Track Failed',
-        message: err instanceof Error ? err.message : 'Could not submit candidate to application pipeline.',
+        title: 'Could not add candidate',
+        message: err instanceof Error ? err.message : 'Could not add this person to the job.',
       });
     } finally {
       setIsFastTracking(false);
@@ -216,16 +216,15 @@ export function TalentPoolPage() {
     );
     show({
       tone: 'success',
-      title: 'Requirements Saved',
-      message: 'Position benchmark requirements updated. Fit scores re-calculated in real time.',
+      title: 'Requirements saved',
+      message: 'Job requirements updated. Fit scores were recalculated.',
     });
   };
 
   return (
     <PageFrame
-      eyebrow="Talent & Sourcing"
-      title="Smart Sourcing & Match Engine"
-      description="Position-driven candidate screening, empirical % fit scorecards, and instant pipeline fast-tracking"
+      title="Talent pool"
+      description="Rank people against one job, then add the best fit."
       actions={
         <Button
           variant="outline"
@@ -234,7 +233,7 @@ export function TalentPoolPage() {
           onClick={() => navigate('/vacancies?tab=catalog')}
         >
           <Icon name="briefcase" size={14} />
-          <span>Full Positions Directory</span>
+          <span>Jobs</span>
         </Button>
       }
     >
@@ -247,40 +246,32 @@ export function TalentPoolPage() {
         )}
 
         {/* Position Target Selector Bar (Dual-Theme Enterprise Benchmark) */}
-        <div className="p-5 sm:p-6 rounded-2xl bg-gradient-to-br from-sky-50/95 via-white to-emerald-50/90 dark:from-slate-900/95 dark:via-[#0c182a]/95 dark:to-slate-900/95 text-slate-900 dark:text-white shadow-sm dark:shadow-xl border border-sky-200/80 dark:border-cyan-500/25 relative overflow-hidden transition-colors">
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-[#0084ce] via-[#00a3e0] to-[#00a859]" />
-          
+        <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wider bg-sky-100 dark:bg-cyan-500/20 text-sky-800 dark:text-cyan-300 border border-sky-300/80 dark:border-cyan-400/30">
-                  Target Requisition Benchmark
-                </span>
-                <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">
-                  {vacancies.length} Positions Active in DB
-                </span>
-              </div>
-              <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">
-                Compare Candidate Bench Against Specific Position
+            <div className="space-y-1 min-w-0">
+              <p className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                {vacancies.length} open {vacancies.length === 1 ? 'job' : 'jobs'}
+              </p>
+              <h2 className="text-base font-semibold text-slate-900 dark:text-white truncate">
+                {selectedVacancy?.title || selectedVacancy?.position?.title || 'Choose a job'}
               </h2>
             </div>
 
-            {/* Position Dropdown */}
-            <div className="flex items-center gap-3">
-              <div className="relative min-w-[280px] sm:min-w-[340px]">
+            <div className="flex items-center gap-2">
+              <div className="relative min-w-[240px] sm:min-w-[320px]">
                 <select
-                  aria-label="Select Target Position for Match Benchmark"
+                  aria-label="Job to match against"
                   value={selectedVacancyId}
                   onChange={(e) => setSelectedVacancyId(e.target.value)}
-                  className="w-full pl-3.5 pr-9 py-2.5 rounded-xl bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-sm font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-sky-500 dark:focus:ring-cyan-400 shadow-xs appearance-none cursor-pointer"
+                  className="w-full pl-3 pr-9 py-2 rounded-lg bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-700 text-sm font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none cursor-pointer"
                 >
                   {vacancies.map((v) => (
                     <option key={v.id} value={v.id} className="bg-white dark:bg-slate-950 text-slate-900 dark:text-white py-1">
-                      {v.title || v.position?.title || 'Untitled Position'} ({v.vacancyCode})
+                      {v.title || v.position?.title || 'Untitled job'} ({v.vacancyCode})
                     </option>
                   ))}
                 </select>
-                <div className="pointer-events-none absolute right-3 top-3.5 text-slate-400">
+                <div className="pointer-events-none absolute right-3 top-2.5 text-slate-400">
                   <Icon name="chevron-down" size={14} />
                 </div>
               </div>
@@ -289,54 +280,40 @@ export function TalentPoolPage() {
                 <button
                   type="button"
                   onClick={() => setIsEditRequirementsOpen(true)}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-gradient-to-r from-[#0084ce] via-[#00a3e0] to-[#00a859] hover:brightness-110 text-white text-xs font-black transition shadow-sm cursor-pointer whitespace-nowrap"
-                  title="Edit position required skills, experience, location, and certifications"
+                  className="inline-flex min-h-9 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800 cursor-pointer whitespace-nowrap"
                 >
                   <Icon name="edit" size={13} />
-                  <span>Edit Specs</span>
+                  <span>Edit requirements</span>
                 </button>
               )}
             </div>
           </div>
 
-          {/* Active Position Requirements Specs Banner */}
           {selectedVacancy && (
-            <div className="mt-4 pt-4 border-t border-slate-200/80 dark:border-slate-700/60 grid grid-cols-1 md:grid-cols-4 gap-3 text-xs">
-              <div className="p-3 rounded-xl bg-white/90 dark:bg-slate-800/80 border border-slate-200/90 dark:border-slate-700/60 shadow-2xs">
-                <span className="text-slate-500 dark:text-slate-400 font-bold block mb-1 text-[11px]">Clinical Department</span>
-                <span className="text-slate-900 dark:text-slate-100 font-extrabold text-xs">
-                  {selectedVacancy.department || 'General Clinical'}
+            <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2">
+              <div className="flex flex-wrap gap-2 text-xs">
+                <span className="rounded-md bg-slate-100 px-2 py-1 text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                  {selectedVacancy.department || 'Department not set'}
+                </span>
+                <span className="rounded-md bg-slate-100 px-2 py-1 text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                  {selectedVacancy.minExperienceYears ?? 0}+ years
+                </span>
+                <span className="rounded-md bg-slate-100 px-2 py-1 text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                  {selectedVacancy.location || 'Location not set'}
+                </span>
+                <span className="rounded-md bg-slate-100 px-2 py-1 text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                  {tierCounts.high} strong · {tierCounts.moderate} possible
                 </span>
               </div>
-              <div className="p-3 rounded-xl bg-white/90 dark:bg-slate-800/80 border border-slate-200/90 dark:border-slate-700/60 shadow-2xs">
-                <span className="text-slate-500 dark:text-slate-400 font-bold block mb-1 text-[11px]">Min Experience Benchmark</span>
-                <span className="text-amber-700 dark:text-amber-300 font-extrabold text-xs">
-                  ⏱️ {selectedVacancy.minExperienceYears ?? 3}+ Years Required
-                </span>
-              </div>
-              <div className="p-3 rounded-xl bg-white/90 dark:bg-slate-800/80 border border-slate-200/90 dark:border-slate-700/60 shadow-2xs">
-                <span className="text-slate-500 dark:text-slate-400 font-bold block mb-1 text-[11px]">Hospital Facility Location</span>
-                <span className="text-slate-900 dark:text-slate-100 font-extrabold text-xs">
-                  📍 {selectedVacancy.location || 'SGH Riyadh Hospital'}
-                </span>
-              </div>
-              <div className="p-3 rounded-xl bg-white/90 dark:bg-slate-800/80 border border-slate-200/90 dark:border-slate-700/60 shadow-2xs">
-                <span className="text-slate-500 dark:text-slate-400 font-bold block mb-1 text-[11px]">Candidate Match Yield</span>
-                <span className="text-emerald-700 dark:text-emerald-400 font-extrabold text-xs">
-                  🎯 {tierCounts.high} High • {tierCounts.moderate} Moderate
-                </span>
-              </div>
-
-              {/* Required Skills Chips */}
-              <div className="md:col-span-4 flex flex-wrap items-center gap-1.5 pt-2">
-                <span className="text-slate-500 dark:text-slate-400 font-bold mr-1 text-[11px]">Required Skills:</span>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mr-1">Required skills</span>
                 {(!selectedVacancy.requiredSkills || selectedVacancy.requiredSkills.length === 0) ? (
-                  <span className="text-slate-400 italic text-[11px]">No specific skills listed. Click "Edit Specs" to configure.</span>
+                  <span className="text-[11px] text-slate-500">None yet. Use Edit requirements.</span>
                 ) : (
                   selectedVacancy.requiredSkills.map((skill) => (
                     <span
                       key={skill}
-                      className="px-2.5 py-0.5 rounded-md text-[11px] font-semibold bg-sky-100 dark:bg-slate-800 text-sky-900 dark:text-cyan-200 border border-sky-200/90 dark:border-slate-700 shadow-2xs"
+                      className="rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
                     >
                       {skill}
                     </span>
@@ -360,7 +337,7 @@ export function TalentPoolPage() {
                 type="text"
                 value={benchSearch}
                 onChange={(e) => setBenchSearch(e.target.value)}
-                placeholder="Search candidates by name, current title, skills, or city..."
+                placeholder="Search by name, title, skill, or city"
                 className="w-full pl-9 pr-4 py-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 shadow-sm"
               />
             </div>
@@ -376,7 +353,7 @@ export function TalentPoolPage() {
                     : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                 }`}
               >
-                All Bench ({tierCounts.all})
+                All ({tierCounts.all})
               </button>
               <button
                 type="button"
@@ -387,8 +364,8 @@ export function TalentPoolPage() {
                     : 'text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40'
                 }`}
               >
-                <span>High Match ≥80%</span>
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-500/30 text-white font-extrabold">
+                <span>Strong</span>
+                <span className="text-[10px] font-semibold opacity-90">
                   {tierCounts.high}
                 </span>
               </button>
@@ -401,8 +378,8 @@ export function TalentPoolPage() {
                     : 'text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40'
                 }`}
               >
-                <span>Moderate 60-79%</span>
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-500/30 text-white font-extrabold">
+                <span>Possible</span>
+                <span className="text-[10px] font-semibold opacity-90">
                   {tierCounts.moderate}
                 </span>
               </button>
@@ -415,8 +392,8 @@ export function TalentPoolPage() {
                     : 'text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40'
                 }`}
               >
-                <span>Skill Gaps &lt;60%</span>
-                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-rose-500/30 text-white font-extrabold">
+                <span>Gap</span>
+                <span className="text-[10px] font-semibold opacity-90">
                   {tierCounts.gap}
                 </span>
               </button>
@@ -425,17 +402,17 @@ export function TalentPoolPage() {
 
           {/* Candidates List with Real-Time Fit Scores */}
           {loading ? (
-            <PageState kind="loading" title="Loading candidate bench and calculating % fit..." />
+            <PageState kind="loading" title="Loading talent pool" />
           ) : filteredCandidates.length === 0 ? (
             <div className="text-center py-12 px-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
               <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto mb-3">
                 <Icon name="search" size={20} />
               </div>
               <h3 className="text-base font-bold text-slate-800 dark:text-slate-200">
-                No candidates found in this tier
+                No matches
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto mt-1">
-                Try switching the match tier filter or search query to see other bench candidates.
+                Try another filter or search.
               </p>
             </div>
           ) : (
@@ -447,17 +424,17 @@ export function TalentPoolPage() {
                 return (
                   <div
                     key={candidate.id}
-                    className="p-4 sm:p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 hover:border-cyan-500/50 dark:hover:border-cyan-400/50 transition-all duration-200 shadow-xs hover:shadow-md"
+                    className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"
                   >
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                       {/* Left: Avatar & Candidate Info */}
                       <div className="flex items-start gap-3.5 min-w-0">
-                        <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-sky-500/20 via-teal-500/20 to-emerald-500/20 text-sky-800 dark:text-cyan-300 font-black text-sm flex items-center justify-center border border-sky-300/40 dark:border-cyan-500/30 shrink-0 shadow-2xs">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
                           {(candidate.firstName?.[0] || 'C') + (candidate.lastName?.[0] || 'D')}
                         </div>
                         <div className="min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <h3 className="text-sm sm:text-base font-extrabold text-slate-900 dark:text-white hover:text-sky-600 dark:hover:text-cyan-400 transition cursor-pointer">
+                            <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
                               {fullName}
                             </h3>
                             <CandidateFitScorecard
@@ -465,17 +442,15 @@ export function TalentPoolPage() {
                               breakdown={fit}
                             />
                             {candidate.certifications && candidate.certifications.length > 0 && (
-                              <span className="px-2 py-0.5 rounded-md text-[10.5px] font-bold bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/25">
-                                🛡️ {candidate.certifications[0]}
+                              <span className="rounded-md border border-slate-200 px-2 py-0.5 text-[11px] font-medium text-slate-600 dark:border-slate-700 dark:text-slate-300">
+                                {candidate.certifications[0]}
                               </span>
                             )}
                           </div>
                           <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 font-medium">
-                            {candidate.currentTitle || 'Healthcare Professional'} •{' '}
-                            <span className="font-bold text-slate-800 dark:text-slate-200">
-                              {candidate.experienceYears ?? 0} yrs experience
-                            </span>{' '}
-                            • {candidate.location || 'Saudi Arabia'}
+                            {[candidate.currentTitle, candidate.experienceYears != null ? `${candidate.experienceYears} yrs` : null, candidate.location]
+                              .filter(Boolean)
+                              .join(' · ') || 'Role not set'}
                           </p>
                           {/* Candidate Skills Chips */}
                           <SkillTagsOverflow
@@ -495,16 +470,15 @@ export function TalentPoolPage() {
                           className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 transition cursor-pointer shadow-2xs"
                         >
                           <Icon name="chevron-down" size={13} className={isExpanded ? 'rotate-180 transition-transform duration-200' : 'transition-transform duration-200'} />
-                          <span>{isExpanded ? 'Hide Specs' : 'Match Specs'}</span>
+                          <span>{isExpanded ? 'Hide fit' : 'View fit'}</span>
                         </button>
 
                         <button
                           type="button"
                           onClick={() => setFastTrackTarget({ candidate, fit })}
-                          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-black bg-gradient-to-r from-[#0084ce] via-[#00a3e0] to-[#00a859] hover:brightness-110 text-white shadow-sm hover:shadow-md transition-all cursor-pointer"
+                          className="inline-flex min-h-8 items-center rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white hover:bg-blue-700 cursor-pointer"
                         >
-                          <Icon name="sparkles" size={13} />
-                          <span>Fast-Track</span>
+                          Add to job
                         </button>
                       </div>
                     </div>
@@ -531,17 +505,17 @@ export function TalentPoolPage() {
         <Modal
           isOpen={Boolean(fastTrackTarget)}
           onClose={() => setFastTrackTarget(null)}
-          title="Fast-Track Candidate to Requisition Pipeline"
+          title="Add to job"
           maxWidthClass="max-w-lg"
         >
           <div className="space-y-4 py-2">
-            <div className="p-3 rounded-xl bg-teal-50 dark:bg-teal-950/40 border border-teal-200 dark:border-teal-900/60 flex items-center justify-between">
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-950 flex items-center justify-between">
               <div>
-                <h4 className="text-sm font-bold text-teal-900 dark:text-teal-200">
+                <h4 className="text-sm font-semibold text-slate-900 dark:text-white">
                   {fastTrackTarget.candidate.firstName} {fastTrackTarget.candidate.lastName}
                 </h4>
-                <p className="text-xs text-teal-700 dark:text-teal-400">
-                  Target: {selectedVacancy.title || 'Position'} ({selectedVacancy.vacancyCode})
+                <p className="text-xs text-slate-600 dark:text-slate-300">
+                  {selectedVacancy.title || 'Job'} · {selectedVacancy.vacancyCode}
                 </p>
               </div>
               <CandidateFitScorecard
@@ -551,29 +525,29 @@ export function TalentPoolPage() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                Pipeline Destination Stage
+              <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">
+                Stage
               </label>
               <select
                 value={fastTrackStage}
                 onChange={(e) => setFastTrackStage(e.target.value)}
                 className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500"
               >
-                <option value="Screening">Screening (Recommended)</option>
-                <option value="Interview">Direct to Interview</option>
-                <option value="Applied">Applied Queue</option>
+                <option value="Screening">Screening</option>
+                <option value="Interview">Interview</option>
+                <option value="Applied">Applied</option>
               </select>
             </div>
 
             <div className="space-y-1.5">
-              <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-                Sourcing Notes
+              <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">
+                Note
               </label>
               <textarea
                 rows={2}
                 value={fastTrackNote}
                 onChange={(e) => setFastTrackNote(e.target.value)}
-                placeholder="e.g. Sourced from Bench with 92% clinical fit. Immediate availability."
+                placeholder="Optional note for the recruiter"
                 className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
               />
             </div>
@@ -601,7 +575,7 @@ export function TalentPoolPage() {
                 ) : (
                   <>
                     <Icon name="check" size={13} />
-                    <span>Submit to Screening</span>
+                    <span>Add to job</span>
                   </>
                 )}
               </button>
@@ -620,8 +594,8 @@ export function TalentPoolPage() {
           positionCode={selectedVacancy.vacancyCode}
           initialSkills={selectedVacancy.requiredSkills || []}
           initialMinExp={selectedVacancy.minExperienceYears ?? 3}
-          initialLocation={selectedVacancy.location || 'SGH Riyadh Hospital'}
-          initialDepartment={selectedVacancy.department || 'Clinical Services'}
+          initialLocation={selectedVacancy.location || ''}
+          initialDepartment={selectedVacancy.department || ''}
           initialQualifications={selectedVacancy.qualifications}
           initialJobSummary={selectedVacancy.jobSummary}
           onSaved={handlePositionRequirementsSaved}

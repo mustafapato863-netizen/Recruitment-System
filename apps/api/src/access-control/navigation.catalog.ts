@@ -19,7 +19,7 @@ export const NAVIGATION_CATALOG: NavigationItemRecord[] = [
   { key: 'candidates', route: '/candidates', label: 'Candidates DB', icon: 'database', group: 'Sourcing & Talent', sortOrder: 80, visible: true, requiredPermission: 'CANDIDATE_VIEW' },
   { key: 'cv-bank', route: '/cv-bank', label: 'CV Bank', icon: 'file-text', group: 'Sourcing & Talent', sortOrder: 85, visible: true, requiredPermission: 'CANDIDATE_VIEW' },
   { key: 'cv-intake', route: '/cv-intake', label: 'CV Intake', icon: 'upload', group: 'Sourcing & Talent', sortOrder: 90, visible: true, requiredPermission: 'CANDIDATE_CREATE' },
-  { key: 'sourcing-match', route: '/sourcing-match', label: 'Smart Sourcing & Match', icon: 'sparkles', group: 'Sourcing & Talent', sortOrder: 100, visible: true, requiredPermission: 'CANDIDATE_VIEW' },
+  { key: 'sourcing-match', route: '/sourcing-match', label: 'Talent pool', icon: 'sparkles', group: 'Sourcing & Talent', sortOrder: 100, visible: true, requiredPermission: 'CANDIDATE_VIEW' },
   { key: 'joinings', route: '/joinings', label: 'Hires & Joining', icon: 'user-check', group: 'Compliance & Hires', sortOrder: 110, visible: true, requiredPermission: 'APPLICATION_VIEW' },
   { key: 'licenses', route: '/licenses', label: 'Medical Licenses', icon: 'shield-check', group: 'Compliance & Hires', sortOrder: 120, visible: true, requiredPermission: 'APPLICATION_VIEW' },
   { key: 'reports', route: '/reports', label: 'Reports', icon: 'report', group: 'Governance', sortOrder: 130, visible: true, requiredPermission: 'APPLICATION_VIEW' },
