@@ -462,7 +462,7 @@ export function InterviewsPage() {
             <QuickGuideTrigger />
           </div>
           <p className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">
-            Coordinate panel interviews, candidate self-booking, and clinical evaluations.
+            Coordinate interviews and booking links.
           </p>
         </div>
 
@@ -483,7 +483,7 @@ export function InterviewsPage() {
             title="Generate Candidate Self-Schedule Link"
           >
             <Icon name="calendar" size={13} />
-            <span>Self-Schedule Link</span>
+            <span>Share booking link</span>
           </button>
 
           <button
