@@ -14,6 +14,7 @@ import { calculateCandidateFitScore, type CriteriaBreakdown } from '@recruitflow
 import { Icon } from '../components/Icon';
 import { Modal } from '../components/Modal';
 import { CandidateFitScorecard } from '../components/candidate/CandidateFitScorecard';
+import { ApplicationKanbanCard, mapFitSummary } from '../components/candidate/ApplicationKanbanCard';
 import { Drawer } from '../components/ui/Drawer';
 import { CommentsThread } from '../components/ui/CommentsThread';
 import { AddApplicationModal } from '../components/candidate/AddApplicationModal';
@@ -466,6 +467,7 @@ export function ApplicationsPage() {
     candidateName: string;
     appCode: string;
   } | null>(null);
+  const [claimingId, setClaimingId] = useState<string | null>(null);
 
   const [apiApplications, setApiApplications] = useState<Application[]>([]);
   const [applicationsTotal, setApplicationsTotal] = useState(0);
@@ -555,12 +557,8 @@ export function ApplicationsPage() {
     return map;
   });
 
-  const toggleCardSignal = useCallback((cardId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const setCardSignalValue = useCallback((cardId: string, next: CardStatusSignal) => {
     setCardSignals((prev) => {
-      const current = prev[cardId] || 'in_progress';
-      const next: CardStatusSignal =
-        current === 'in_progress' ? 'ready' : current === 'ready' ? 'blocked' : 'in_progress';
       try {
         localStorage.setItem(`rf_signal_${cardId}`, next);
       } catch {
@@ -896,10 +894,11 @@ export function ApplicationsPage() {
       showToast('Please log in to claim this application', 'warning');
       return;
     }
+    setClaimingId(cardId);
     try {
       await patchApi(`/applications/${cardId}`, { primaryRecruiterId: user.id });
       const currentUserName = user.displayName || user.email || 'Current Recruiter';
-      showToast('Application claimed! You are now the assigned recruiter.', 'success');
+      showToast('You are now the assigned recruiter.', 'success');
       setBoardColumns((prev) =>
         prev.map((col) => ({
           ...col,
@@ -934,7 +933,9 @@ export function ApplicationsPage() {
         )
       );
     } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : 'Failed to claim application', 'error');
+      showToast(err instanceof Error ? err.message : 'Failed to assign application', 'error');
+    } finally {
+      setClaimingId(null);
     }
   };
 
@@ -2147,7 +2148,7 @@ export function ApplicationsPage() {
                             title="1-Click Claim: Assign yourself as primary recruiter"
                           >
                             <Icon name="user-check" size={10} />
-                            <span>Claim</span>
+                            <span>Assign to me</span>
                           </button>
                         )}
                       </div>
@@ -2414,165 +2415,44 @@ export function ApplicationsPage() {
 
                   {/* Independently Scrollable Candidate Cards Container */}
                   <div className="flex-1 overflow-y-auto rf-scrollbar min-h-0 space-y-2.5 p-0.5 pt-2 pr-1.5">
-                    {column.cards.map((card) => {
-                      const signal = cardSignals[card.id] || 'in_progress';
-                      const signalTitle =
-                        signal === 'ready'
-                          ? 'Status: Ready for Next Stage (Click to toggle)'
-                          : signal === 'blocked'
-                          ? 'Status: Blocked / Action Required (Click to toggle)'
-                          : 'Status: In Progress / Active (Click to toggle)';
-                      const signalDotClass =
-                        signal === 'ready'
-                          ? 'bg-emerald-500 ring-2 ring-emerald-300 dark:ring-emerald-700'
-                          : signal === 'blocked'
-                          ? 'bg-rose-500 ring-2 ring-rose-300 dark:ring-rose-700 animate-pulse'
-                          : 'bg-amber-400 ring-2 ring-amber-200 dark:ring-amber-700';
-
-                      return (
-                        <div
-                          key={card.id}
-                          draggable
-                          onDragStart={(e) => handleDragStart(e, card.id, column.id)}
-                          onClick={() => navigate(`/applications/${card.id}`)}
-                          className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200/85 dark:border-slate-800 p-3 shadow-2xs hover:shadow-md hover:border-blue-400/80 dark:hover:border-blue-600 transition-all duration-150 cursor-grab active:cursor-grabbing group flex flex-col gap-2.5 relative hover:-translate-y-0.5 select-none"
-                        >
-                          {/* Card Top: Candidate Avatar, Name, Code, Signal & Actions */}
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                              {card.photoUrl ? (
-                                <img
-                                  src={card.photoUrl}
-                                  alt={card.name}
-                                  className="w-8 h-8 rounded-full object-cover border border-slate-200 dark:border-slate-700 shrink-0"
-                                />
-                              ) : (
-                                <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold flex items-center justify-center shrink-0 border border-slate-200/60 dark:border-slate-700/60">
-                                  {card.initials}
-                                </div>
-                              )}
-                              <div className="min-w-0 flex-1">
-                                <span
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    navigate(`/applications/${card.id}`);
-                                  }}
-                                  className="text-[13px] font-bold text-slate-900 dark:text-white group-hover:text-blue-600 transition block leading-tight cursor-pointer truncate"
-                                  title={card.name}
-                                >
-                                  {card.name}
-                                </span>
-                              <div className="flex items-center gap-1.5 mt-0.5 text-[10.5px] text-slate-600 dark:text-slate-400 font-mono">
-                                  <span className="truncate max-w-[120px]">{card.applicationCode}</span>
-                                  <span className="text-slate-300 dark:text-slate-700">&bull;</span>
-                                  <span className="shrink-0">{formatRelativeTime(card.rawApplication.appliedAt || card.rawApplication.createdAt) || 'Recent'}</span>
-                                </div>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-1.5 shrink-0 pt-0.5">
-                              {/* Status Signal Dot (Phase A3) */}
-                              <button
-                                type="button"
-                                onClick={(e) => toggleCardSignal(card.id, e)}
-                                className={`w-3 h-3 rounded-full ${signalDotClass} cursor-pointer shadow-xs hover:scale-125 transition shrink-0`}
-                                title={signalTitle}
-                                aria-label={signalTitle}
-                              />
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setQuickNoteApp({
-                                    id: card.id,
-                                    candidateName: card.name,
-                                    appCode: card.applicationCode,
-                                  });
-                                }}
-                                className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md text-slate-400 hover:text-blue-600 cursor-pointer transition"
-                                title="Quick note"
-                              >
-                                <Icon name="edit" size={12} />
-                              </button>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  navigate(`/applications/${card.id}/transition`);
-                                }}
-                                className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-md text-slate-400 hover:text-slate-700 cursor-pointer"
-                                title="Move stage"
-                              >
-                                <Icon name="more-horizontal" size={12} />
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Card Body: Target Position & Metadata Tags */}
-                          <div className="space-y-1.5">
-                            <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200">
-                              <Icon name="briefcase" size={11} className="text-slate-400 shrink-0" />
-                              <span className="truncate">{card.positionTitle}</span>
-                            </div>
-
-                            <div className="flex items-center gap-1.5 flex-wrap">
-                              <CandidateFitScorecard
-                                breakdown={card.fitBreakdown}
-                                candidate={card.rawApplication.candidate}
-                                variant="badge"
-                              />
-                              {pipelineMode !== 'standard' && (
-                                <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200/80 dark:border-slate-700/80">
-                                  {card.stage}
-                                </span>
-                              )}
-                              {card.source && card.source !== '—' && (
-                                <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200/60 dark:border-slate-700/60 truncate max-w-[95px]">
-                                  {card.source}
-                                </span>
-                              )}
-                              {card.experienceYears ? (
-                                <span className="inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-300 border border-blue-200/60 dark:border-blue-800/60">
-                                  {card.experienceYears}y exp
-                                </span>
-                              ) : null}
-                            </div>
-                          </div>
-
-                          {/* Card Footer: Next Action + Recruiter / Claim Pill */}
-                          <div className="pt-2 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-[11px] gap-2">
-                            <div className="flex items-center gap-1.5 text-slate-600 dark:text-slate-400 min-w-0 flex-1">
-                              <Icon name="calendar" size={11} className="text-slate-400 shrink-0" />
-                              <span className="truncate font-medium">{card.nextAction}</span>
-                            </div>
-
-                            <div className="shrink-0 flex items-center gap-1.5">
-                              {(!card.rawApplication.primaryRecruiterId || card.owner.name === 'Unassigned') ? (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    void handleClaimApplication(card.id);
-                                  }}
-                                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/60 border border-blue-200 dark:border-blue-800 text-[10.5px] font-bold transition cursor-pointer shadow-2xs"
-                                  title="1-Click Claim: Assign yourself as primary recruiter"
-                                >
-                                  <Icon name="user-check" size={10} />
-                                  <span>Claim</span>
-                                </button>
-                              ) : (
-                                <div
-                                  className={`w-5 h-5 rounded-full ${card.owner.color} text-white text-[9px] font-extrabold flex items-center justify-center shadow-2xs cursor-help`}
-                                  title={`Assigned Recruiter: ${card.owner.name}`}
-                                >
-                                  {card.owner.initials}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
+                    {column.cards.map((card) => (
+                      <ApplicationKanbanCard
+                        key={card.id}
+                        card={{
+                          id: card.id,
+                          applicationCode: card.applicationCode,
+                          name: card.name,
+                          initials: card.initials,
+                          photoUrl: card.photoUrl,
+                          positionTitle: card.positionTitle,
+                          source: card.source,
+                          stage: card.stage,
+                          nextAction: card.nextAction,
+                          experienceYears: card.experienceYears,
+                          matchScore: card.matchScore,
+                          owner: card.owner,
+                          appliedAt: card.rawApplication.appliedAt || card.rawApplication.createdAt,
+                          createdAt: card.rawApplication.createdAt,
+                          primaryRecruiterId: card.rawApplication.primaryRecruiterId,
+                          fitSummary: mapFitSummary(card.fitBreakdown),
+                        }}
+                        showStage={pipelineMode !== 'standard'}
+                        signal={cardSignals[card.id] || 'in_progress'}
+                        claiming={claimingId === card.id}
+                        onOpen={() => navigate(`/applications/${card.id}`)}
+                        onAddNote={() =>
+                          setQuickNoteApp({
+                            id: card.id,
+                            candidateName: card.name,
+                            appCode: card.applicationCode,
+                          })
+                        }
+                        onMoveStage={() => navigate(`/applications/${card.id}/transition`)}
+                        onAssignToMe={() => void handleClaimApplication(card.id)}
+                        onDragStart={(event) => handleDragStart(event, card.id, column.id)}
+                        onSignalChange={(next) => setCardSignalValue(card.id, next)}
+                      />
+                    ))}
 
                     {column.cards.length === 0 && (
                       <div className="h-28 rounded-xl border-2 border-dashed border-slate-200 dark:border-slate-800 flex flex-col items-center justify-center gap-1 text-xs text-slate-400 font-medium">
