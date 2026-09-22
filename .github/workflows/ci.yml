@@ -31,8 +31,8 @@ jobs:
       API_PORT: 3000
       WEB_ORIGIN: http://localhost:5173
       VITE_API_BASE_URL: http://localhost:3000/api/v1
-      JWT_ACCESS_SECRET: ci-access-secret-change-me
-      JWT_REFRESH_SECRET: ci-refresh-secret-change-me
+      JWT_ACCESS_SECRET: ci-access-secret-must-be-at-least-32-characters
+      JWT_REFRESH_SECRET: ci-refresh-secret-must-be-at-least-32-characters
 
     steps:
       - name: Checkout Code
@@ -93,7 +93,11 @@ jobs:
             fi
             sleep 2
           done
-          curl --fail --silent http://localhost:3000/api/v1/health > /dev/null
+          if ! curl --fail --silent http://localhost:3000/api/v1/health > /dev/null; then
+            echo "----- api-ci.log -----"
+            cat api-ci.log
+            exit 1
+          fi
 
       - name: Start Web Preview for Browser Gate
         run: |
