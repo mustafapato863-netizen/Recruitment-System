@@ -8,7 +8,48 @@ import { Spinner } from '../components/Spinner';
 import { ComparisonMatrixCard, type ComparisonCandidate } from '../components/candidate/ComparisonMatrixCard';
 import { QuickGuideTrigger } from '../quickguide';
 import { calculateCandidateFitScore } from '@recruitflow/validation';
+import { gradeForScore } from '../components/candidate/skillTags';
 import './PageEnhancementsV2.css';
+
+
+function buildFitForCandidate(cand: Candidate | undefined | null, vacancy: Vacancy | undefined) {
+  const skills = cand?.skills || [];
+  const expYears = cand?.experienceYears ?? 0;
+  if (!vacancy) {
+    return {
+      score: 0,
+      grade: gradeForScore(0, false),
+      matchedSkills: [] as string[],
+      skills,
+      expYears,
+    };
+  }
+  const fitResult = calculateCandidateFitScore(
+    {
+      skills,
+      experienceYears: expYears,
+      location: cand?.location,
+      certifications: cand?.certifications,
+      currentTitle: cand?.currentTitle,
+      summary: cand?.summary,
+      rawText: cand?.summary,
+    },
+    {
+      requiredSkills: vacancy.requiredSkills || [],
+      minExperienceYears: vacancy.minExperienceYears || 0,
+      location: vacancy.location || vacancy.branch?.name || '',
+      qualifications: vacancy.qualifications || '',
+      department: vacancy.department || '',
+    },
+  );
+  return {
+    score: fitResult.score,
+    grade: gradeForScore(fitResult.score, true),
+    matchedSkills: fitResult.breakdown?.skills?.matched ?? [],
+    skills,
+    expYears,
+  };
+}
 
 const AVATAR_COLORS = [
   'bg-blue-600 text-white',
@@ -70,13 +111,7 @@ export function CandidateComparisonPage() {
           const mapped: ComparisonCandidate[] = apps.slice(0, 4).map((app, idx) => {
             const cand = app.candidate;
             const name = cand ? `${cand.firstName} ${cand.lastName}` : 'Candidate';
-            const skills = cand?.skills || [];
-            const expYears = cand?.experienceYears ?? 0;
-            const fitResult = calculateCandidateFitScore(
-              { skills, experienceYears: expYears, location: cand?.location, certifications: cand?.certifications, currentTitle: cand?.currentTitle, summary: cand?.summary, rawText: cand?.summary },
-              { requiredSkills: selectedVacancy?.requiredSkills || [], minExperienceYears: selectedVacancy?.minExperienceYears || 0, location: selectedVacancy?.location || selectedVacancy?.branch?.name || '', qualifications: selectedVacancy?.qualifications || '', department: selectedVacancy?.department || '' },
-            );
-            const score = fitResult.score;
+            const fit = buildFitForCandidate(cand, selectedVacancy);
             
             return {
               id: cand?.id || app.candidateId || `app-${app.id}`,
@@ -85,10 +120,11 @@ export function CandidateComparisonPage() {
               name,
               role: cand?.currentTitle || app.positionTitle || 'Applicant',
               avatarColor: AVATAR_COLORS[idx % AVATAR_COLORS.length],
-              matchScore: score,
-              matchGrade: score >= 90 ? 'High Match' : score >= 80 ? 'Good Match' : 'Fair Match',
-              skills,
-              experience: `${expYears} years in ${cand?.currentTitle || 'Healthcare'}, Clinical Unit`,
+              matchScore: fit.score,
+              matchGrade: fit.grade,
+              skills: fit.skills,
+              matchedSkills: fit.matchedSkills,
+              experience: `${fit.expYears} years in ${cand?.currentTitle || 'Healthcare'}, Clinical Unit`,
               education: (cand as (Candidate & { education?: string | null }) | undefined)?.education || '',
               stage: app.stage,
               ratings: {
@@ -119,9 +155,7 @@ export function CandidateComparisonPage() {
           if (loadedCands.length > 0) {
             const mapped: ComparisonCandidate[] = loadedCands.map((cand, idx) => {
               const name = `${cand.firstName} ${cand.lastName}`;
-              const skills = cand.skills || [];
-              const expYears = cand.experienceYears ?? 0;
-              const score = 0;
+              const fit = buildFitForCandidate(cand, selectedVacancy);
 
               return {
                 id: cand.id,
@@ -129,10 +163,11 @@ export function CandidateComparisonPage() {
                 name,
                 role: cand.currentTitle || '',
                 avatarColor: AVATAR_COLORS[idx % AVATAR_COLORS.length],
-                matchScore: score,
-                matchGrade: score >= 90 ? 'High Match' : score >= 80 ? 'Good Match' : 'Fair Match',
-                skills,
-                experience: expYears > 0 ? `${expYears} years in ${cand.currentCompany || ''}` : '',
+                matchScore: fit.score,
+                matchGrade: fit.grade,
+                skills: fit.skills,
+                matchedSkills: fit.matchedSkills,
+                experience: fit.expYears > 0 ? `${fit.expYears} years in ${cand.currentCompany || ''}` : '',
                 education: (cand as Candidate & { education?: string | null }).education || '',
                 ratings: { technical: 0, communication: 0, teamwork: 0 },
                 recommendation: 'No recommendation',
@@ -151,16 +186,17 @@ export function CandidateComparisonPage() {
       if (cList.length > 0) {
         const mapped: ComparisonCandidate[] = cList.slice(0, 3).map((cand, idx) => {
           const name = `${cand.firstName} ${cand.lastName}`;
-            const score = 0;
+          const fit = buildFitForCandidate(cand, selectedVacancy);
           return {
             id: cand.id,
             candidateCode: cand.candidateCode,
             name,
             role: cand.currentTitle || '',
             avatarColor: AVATAR_COLORS[idx % AVATAR_COLORS.length],
-            matchScore: score,
-            matchGrade: score >= 90 ? 'High Match' : 'Good Match',
-            skills: cand.skills || [],
+            matchScore: fit.score,
+            matchGrade: fit.grade,
+            skills: fit.skills,
+            matchedSkills: fit.matchedSkills,
             experience: cand.experienceYears != null ? `${cand.experienceYears} years experience` : '',
             education: '',
             ratings: { technical: 0, communication: 0, teamwork: 0 },
@@ -195,15 +231,18 @@ export function CandidateComparisonPage() {
   const handleAddCandidate = (cand: Candidate) => {
     const nextIdx = candidates.length;
     const name = `${cand.firstName} ${cand.lastName}`;
+    const selectedVacancy = vacancies.find((vacancy) => vacancy.id === selectedVacancyId);
+    const fit = buildFitForCandidate(cand, selectedVacancy);
     const newEntry: ComparisonCandidate = {
       id: cand.id,
       candidateCode: cand.candidateCode,
       name,
       role: cand.currentTitle || '',
       avatarColor: AVATAR_COLORS[nextIdx % AVATAR_COLORS.length],
-      matchScore: 0,
-      matchGrade: 'No score',
-      skills: cand.skills || [],
+      matchScore: fit.score,
+      matchGrade: fit.grade,
+      skills: fit.skills,
+      matchedSkills: fit.matchedSkills,
       experience: cand.experienceYears != null ? `${cand.experienceYears} years professional experience` : '',
       education: '',
       ratings: { technical: 0, communication: 0, teamwork: 0 },

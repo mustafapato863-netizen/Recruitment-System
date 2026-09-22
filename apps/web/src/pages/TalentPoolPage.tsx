@@ -5,6 +5,7 @@ import { PageFrame } from '../components/ui/PageFrame';
 import { PageState } from '../components/ui/PageState';
 import { Button } from '../components/ui/Button';
 import { Icon } from '../components/Icon';
+import { SkillTagsOverflow } from '../components/candidate/SkillTagsOverflow';
 import { Modal } from '../components/Modal';
 import { useToast } from '../components/ui/ToastContext';
 import { CandidateFitScorecard } from '../components/candidate/CandidateFitScorecard';
@@ -477,29 +478,13 @@ export function TalentPoolPage() {
                             • {candidate.location || 'Saudi Arabia'}
                           </p>
                           {/* Candidate Skills Chips */}
-                          <div className="flex flex-wrap gap-1.5 mt-2.5">
-                            {(candidate.skills || []).slice(0, 5).map((skill) => {
-                              const isMatched = fit.breakdown.skills.matched.includes(skill);
-                              return (
-                                <span
-                                  key={skill}
-                                  className={`px-2.5 py-0.5 rounded-md text-[11px] font-semibold transition ${
-                                    isMatched
-                                      ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 shadow-2xs'
-                                      : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700'
-                                  }`}
-                                >
-                                  {isMatched ? '✓ ' : ''}{skill}
-                                </span>
-                              );
-                            })}
-                            {(candidate.skills || []).length > 5 && (
-                              <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 self-center px-1">
-                                +{(candidate.skills || []).length - 5} more
-                              </span>
-                            )}
-                          </div>
-                        </div>
+                          <SkillTagsOverflow
+                            className="mt-2.5 gap-1.5"
+                            skills={candidate.skills || []}
+                            prioritySkills={fit.breakdown.skills.matched}
+                            limit={5}
+                          />
+</div>
                       </div>
 
                       {/* Right: Quick Action CTAs */}

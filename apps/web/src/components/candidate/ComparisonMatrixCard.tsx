@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { SkillTagsOverflow } from './SkillTagsOverflow';
 
 export interface ComparisonCandidate {
   id: string;
@@ -11,6 +12,8 @@ export interface ComparisonCandidate {
   matchScore: number;
   matchGrade: string;
   skills: string[];
+  /** Matched requirement skills for chip priority/highlight. */
+  matchedSkills?: string[];
   experience: string;
   education: string;
   stage?: string;
@@ -33,8 +36,17 @@ export const ComparisonMatrixCard: React.FC<ComparisonMatrixCardProps> = ({
   onRemove,
   onSelectOffer,
 }) => {
-  const isTop = c.matchScore >= 90;
-  const ringColor = isTop ? 'text-blue-600' : c.matchScore >= 75 ? 'text-emerald-500' : 'text-amber-500';
+  const awaitingPosition = c.matchGrade === 'Select a position';
+  const isTop = !awaitingPosition && c.matchScore >= 90;
+  const ringColor = awaitingPosition
+    ? 'text-slate-300 dark:text-slate-600'
+    : isTop
+      ? 'text-blue-600'
+      : c.matchScore >= 75
+        ? 'text-emerald-500'
+        : 'text-amber-500';
+  const scoreLabel = awaitingPosition ? '—' : `${c.matchScore}%`;
+  const scoreDetail = awaitingPosition ? 'Select a position' : `${c.matchScore}% Match`;
 
   return (
     <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs flex flex-col justify-between space-y-4 relative">
@@ -85,7 +97,7 @@ export const ComparisonMatrixCard: React.FC<ComparisonMatrixCardProps> = ({
             />
             <path
               className={ringColor}
-              strokeDasharray={`${c.matchScore}, 100`}
+              strokeDasharray={`${awaitingPosition ? 0 : c.matchScore}, 100`}
               strokeWidth="3.5"
               strokeLinecap="round"
               stroke="currentColor"
@@ -93,11 +105,11 @@ export const ComparisonMatrixCard: React.FC<ComparisonMatrixCardProps> = ({
               d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
             />
           </svg>
-          <span className="absolute text-[11px] font-black text-slate-900 dark:text-white">{c.matchScore}%</span>
+          <span className="absolute text-[11px] font-black text-slate-900 dark:text-white">{scoreLabel}</span>
         </div>
         <div>
-          <span className="text-xs font-bold text-slate-900 dark:text-white block">{c.matchScore}% Match</span>
-          <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">{c.matchGrade}</span>
+          <span className="text-xs font-bold text-slate-900 dark:text-white block">{scoreDetail}</span>
+          <span className={`text-[10px] font-semibold ${awaitingPosition ? "text-slate-500 dark:text-slate-400" : "text-emerald-600 dark:text-emerald-400"}`}>{c.matchGrade}</span>
         </div>
       </div>
 
@@ -106,16 +118,11 @@ export const ComparisonMatrixCard: React.FC<ComparisonMatrixCardProps> = ({
         <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
           Key Competencies
         </span>
-        <div className="flex flex-wrap gap-1">
-          {c.skills.map((skill, idx) => (
-            <span
-              key={idx}
-              className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-200/60 dark:border-blue-900/40"
-            >
-              {skill}
-            </span>
-          ))}
-        </div>
+        <SkillTagsOverflow
+          skills={c.skills}
+          prioritySkills={c.matchedSkills}
+          limit={6}
+        />
       </div>
 
       {/* Experience */}
