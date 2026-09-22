@@ -24,12 +24,12 @@ const CATEGORIES = [
 const INTERVIEW_TYPES = ['Any', 'Screening', 'Technical', 'Behavioral', 'Managerial', 'Executive'] as const;
 
 const PLACEHOLDERS = [
-  { key: 'candidateName', label: '\u0627\u0633\u0645 \u0627\u0644\u0645\u0631\u0634\u062d', sample: 'Sara Alharbi' },
-  { key: 'positionTitle', label: '\u0627\u0644\u0645\u0633\u0645\u0649 \u0627\u0644\u0648\u0638\u064a\u0641\u064a', sample: 'Staff Nurse' },
-  { key: 'organizationName', label: '\u0627\u0633\u0645 \u0627\u0644\u0645\u0646\u0634\u0623\u0629', sample: 'Saudi German Health' },
-  { key: 'interviewType', label: '\u0646\u0648\u0639 \u0627\u0644\u0645\u0642\u0627\u0628\u0644\u0629', sample: 'Technical' },
-  { key: 'interviewDate', label: '\u062a\u0627\u0631\u064a\u062e \u0627\u0644\u0645\u0642\u0627\u0628\u0644\u0629', sample: 'Tue 24 Sep, 11:00 AM' },
-  { key: 'recruiterName', label: '\u0627\u0633\u0645 \u0627\u0644\u0645\u0633\u0624\u0648\u0644', sample: 'Mustafa Zainhom' },
+  { key: 'candidateName', label: 'Candidate name', sample: 'Sara Alharbi' },
+  { key: 'positionTitle', label: 'Job title', sample: 'Staff Nurse' },
+  { key: 'organizationName', label: 'Organization', sample: 'Saudi German Health' },
+  { key: 'interviewType', label: 'Interview type', sample: 'Technical' },
+  { key: 'interviewDate', label: 'Interview date', sample: 'Tue 24 Sep, 11:00 AM' },
+  { key: 'recruiterName', label: 'Recruiter name', sample: 'Mustafa Zainhom' },
 ] as const;
 
 const SAMPLE_VALUES: Record<string, string> = Object.fromEntries(
@@ -38,6 +38,9 @@ const SAMPLE_VALUES: Record<string, string> = Object.fromEntries(
 
 type EditorState = {
   id?: string;
+  sourceId?: string;
+  isDefaultSource?: boolean;
+  saveMode: 'update' | 'create';
   name: string;
   category: string;
   interviewType: string;
@@ -45,6 +48,7 @@ type EditorState = {
 };
 
 const emptyEditor = (): EditorState => ({
+  saveMode: 'create',
   name: '',
   category: 'misc',
   interviewType: 'Any',
@@ -78,6 +82,11 @@ function tokenFor(key: string) {
   return `{{${key}}}`;
 }
 
+function snippet(body: string) {
+  const text = renderPreview(body).replace(/\s+/g, ' ').trim();
+  return text.length > 140 ? `${text.slice(0, 137)}...` : text;
+}
+
 function WhatsAppFullPreview({ body, title }: { body: string; title?: string }) {
   const rendered = renderPreview(body);
   return (
@@ -86,12 +95,12 @@ function WhatsAppFullPreview({ body, title }: { body: string; title?: string }) 
         <span className="wa-phone-dot" />
         <div className="min-w-0">
           <div className="truncate text-[13px] font-bold text-white">{title || 'WhatsApp'}</div>
-          <div className="text-[10px] text-white/70">\u0645\u0639\u0627\u064a\u0646\u0629 \u0627\u0644\u0631\u0633\u0627\u0644\u0629 \u0643\u0645\u0627 \u0633\u062a\u0638\u0647\u0631 \u0644\u0644\u0645\u0631\u0634\u062d</div>
+          <div className="text-[10px] text-white/70">Full message preview</div>
         </div>
       </div>
       <div className="wa-preview-shell wa-preview-shell-full">
         <div className="wa-bubble relative z-[1] ml-auto max-w-[94%] px-3 py-2.5 text-[13px] leading-relaxed">
-          {rendered || '\u2014'}
+          {rendered || 'Message preview will appear here.'}
         </div>
       </div>
     </div>
@@ -131,7 +140,7 @@ export function WhatsAppTemplatesPage() {
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [load]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -172,14 +181,14 @@ export function WhatsAppTemplatesPage() {
     setEditorOpen(true);
   }
 
-  function openEdit(t: WhatsAppTemplateItem) {
-    if (t.isDefault) {
-      toastError(new Error('Default templates are read-only'), 'Duplicate to customise');
-      return;
-    }
+  function openEdit(t: WhatsAppTemplateItem, mode: 'update' | 'create' = 'update') {
+    const baseName = mode === 'create' ? `${t.name} (custom)` : t.name;
     setEditor({
-      id: t.id,
-      name: t.name,
+      id: mode === 'update' ? t.id : undefined,
+      sourceId: t.id,
+      isDefaultSource: t.isDefault,
+      saveMode: mode,
+      name: baseName,
       category: t.category,
       interviewType: t.interviewType,
       bodyTemplate: t.bodyTemplate,
@@ -191,23 +200,19 @@ export function WhatsAppTemplatesPage() {
     if (!editor.name.trim() || !editor.bodyTemplate.trim()) return;
     setSaving(true);
     try {
-      if (editor.id) {
-        await patchApi(`/whatsapp-templates/${editor.id}`, {
-          name: editor.name,
-          category: editor.category,
-          interviewType: editor.interviewType,
-          bodyTemplate: editor.bodyTemplate,
-        });
+      const payload = {
+        name: editor.name.trim(),
+        category: editor.category,
+        interviewType: editor.interviewType,
+        bodyTemplate: editor.bodyTemplate,
+      };
+      if (editor.saveMode === 'update' && editor.id) {
+        await patchApi(`/whatsapp-templates/${editor.id}`, payload);
         toastSuccess('Template updated', editor.name);
       } else {
-        const created = await postApi<WhatsAppTemplateItem>('/whatsapp-templates', {
-          name: editor.name,
-          category: editor.category,
-          interviewType: editor.interviewType,
-          bodyTemplate: editor.bodyTemplate,
-        });
+        const created = await postApi<WhatsAppTemplateItem>('/whatsapp-templates', payload);
         setSelectedId(created.id);
-        toastSuccess('Template created', created.name);
+        toastSuccess('Template saved', created.name);
       }
       setEditorOpen(false);
       await load();
@@ -215,17 +220,6 @@ export function WhatsAppTemplatesPage() {
       toastError(err, getErrorMessage(err, 'Unable to save template'));
     } finally {
       setSaving(false);
-    }
-  }
-
-  async function duplicate(t: WhatsAppTemplateItem) {
-    try {
-      const copy = await postApi<WhatsAppTemplateItem>(`/whatsapp-templates/${t.id}/duplicate`, {});
-      toastSuccess('Template duplicated', copy.name);
-      setSelectedId(copy.id);
-      await load();
-    } catch (err) {
-      toastError(err, getErrorMessage(err, 'Unable to duplicate'));
     }
   }
 
@@ -242,6 +236,13 @@ export function WhatsAppTemplatesPage() {
     }
   }
 
+  const editorTitle =
+    editor.saveMode === 'create' && editor.sourceId
+      ? 'Reuse default as a new template'
+      : editor.id
+        ? 'Edit template'
+        : 'New template';
+
   return (
     <div className="wa-page rf-page space-y-5">
       <div className="wa-hero rounded-3xl p-5 sm:p-6 shadow-xs">
@@ -252,7 +253,7 @@ export function WhatsAppTemplatesPage() {
             </p>
             <h1 className="rf-page-title m-0 text-rf-ink">WhatsApp Templates</h1>
             <p className="mt-2 max-w-2xl text-sm text-rf-ink-muted">
-              \u0627\u062e\u062a\u0631 \u0627\u0644\u0645\u062a\u063a\u064a\u0631 \u0628\u0627\u0644\u0636\u063a\u0637 \u0639\u0644\u064a\u0647 \u0644\u064a\u064f\u062f\u0631\u062c \u0641\u064a \u0627\u0644\u0646\u0635\u060c \u0648\u0627\u0644\u0645\u0639\u0627\u064a\u0646\u0629 \u0639\u0644\u0649 \u0627\u0644\u064a\u0645\u064a\u0646 \u062a\u0639\u0631\u0636 \u0627\u0644\u0631\u0633\u0627\u0644\u0629 \u0643\u0627\u0645\u0644\u0629 \u0643\u0645\u0627 \u0633\u062a\u0638\u0647\u0631 \u0639\u0644\u0649 \u0648\u0627\u062a\u0633\u0627\u0628.
+              Click a variable to insert it. Preview on the right shows the full message as it will appear. Default templates can be renamed, edited, or saved as a reusable copy.
             </p>
           </div>
           <Button type="button" variant="primary" onClick={openCreate} className="inline-flex items-center gap-2">
@@ -270,7 +271,7 @@ export function WhatsAppTemplatesPage() {
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search templates\u2026"
+          placeholder="Search templates..."
           className="min-w-[200px] flex-1 rounded-xl border border-rf-border bg-rf-surface px-3 py-2 text-sm text-rf-ink"
         />
         <select
@@ -305,18 +306,15 @@ export function WhatsAppTemplatesPage() {
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="truncate text-sm font-bold text-rf-ink">{t.name}</span>
-                        {t.isDefault && (
-                          <span className="rounded-full bg-rf-surface-muted px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-rf-ink-muted">Default</span>
-                        )}
+                        {t.isDefault && <span className="wa-default-pill">Default</span>}
                       </div>
-                      <p className="mt-1 line-clamp-2 text-xs text-rf-ink-muted whitespace-pre-wrap">{t.bodyTemplate}</p>
+                      <p className="mt-1 text-xs text-rf-ink-muted">{snippet(t.bodyTemplate)}</p>
                     </div>
                     <Icon name="chat" size={16} className="shrink-0 text-rf-ink-muted" />
                   </div>
                   <div className="mt-3 flex flex-wrap gap-1.5">
                     <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${categoryChipClass(t.category)}`}>{categoryLabel(t.category)}</span>
                     <span className="rounded-full border border-rf-border-subtle bg-rf-surface-subtle px-2 py-0.5 text-[10px] font-bold text-rf-ink">{t.interviewType}</span>
-                    <span className="rounded-full border border-rf-border-subtle px-2 py-0.5 text-[10px] font-bold text-rf-ink-muted">{t.status}</span>
                   </div>
                 </button>
               );
@@ -327,7 +325,10 @@ export function WhatsAppTemplatesPage() {
             {selected ? (
               <>
                 <div>
-                  <h2 className="m-0 text-base font-bold text-rf-ink">{selected.name}</h2>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <h2 className="m-0 text-base font-bold text-rf-ink">{selected.name}</h2>
+                    {selected.isDefault && <span className="wa-default-pill">Default</span>}
+                  </div>
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${categoryChipClass(selected.category)}`}>{categoryLabel(selected.category)}</span>
                     <span className="rounded-full border border-rf-border-subtle px-2 py-0.5 text-[10px] font-bold text-rf-ink">Interview: {selected.interviewType}</span>
@@ -335,12 +336,10 @@ export function WhatsAppTemplatesPage() {
                 </div>
                 <WhatsAppFullPreview body={selected.bodyTemplate} title={selected.name} />
                 <div className="flex flex-wrap gap-2">
-                  <Button type="button" variant="secondary" size="sm" onClick={() => void duplicate(selected)}>Duplicate</Button>
+                  <Button type="button" variant="primary" size="sm" onClick={() => openEdit(selected, 'update')}>Rename & edit</Button>
+                  <Button type="button" variant="secondary" size="sm" onClick={() => openEdit(selected, 'create')}>Save as new</Button>
                   {!selected.isDefault && (
-                    <>
-                      <Button type="button" variant="secondary" size="sm" onClick={() => openEdit(selected)}>Edit</Button>
-                      <Button type="button" variant="danger" size="sm" onClick={() => setArchiveTarget(selected)}>Archive</Button>
-                    </>
+                    <Button type="button" variant="danger" size="sm" onClick={() => setArchiveTarget(selected)}>Archive</Button>
                   )}
                 </div>
               </>
@@ -354,18 +353,30 @@ export function WhatsAppTemplatesPage() {
       <Modal
         isOpen={editorOpen}
         onClose={() => setEditorOpen(false)}
-        title={editor.id ? 'Edit WhatsApp template' : 'New WhatsApp template'}
+        title={editorTitle}
         maxWidthClass="max-w-2xl"
         footer={
           <div className="flex justify-end gap-2">
             <Button type="button" variant="ghost" onClick={() => setEditorOpen(false)}>Cancel</Button>
-            <Button type="button" variant="primary" disabled={saving} onClick={() => void saveEditor()}>{saving ? 'Saving\u2026' : 'Save template'}</Button>
+            <Button type="button" variant="primary" disabled={saving} onClick={() => void saveEditor()}>
+              {saving ? 'Saving...' : editor.saveMode === 'create' ? 'Save as new template' : 'Save changes'}
+            </Button>
           </div>
         }
       >
         <div className="space-y-3">
-          <FormField id="wa-name" label="Name" required>
-            <input className="w-full rounded-xl border border-rf-border bg-rf-surface px-3 py-2 text-sm" value={editor.name} onChange={(e) => setEditor((s) => ({ ...s, name: e.target.value }))} />
+          {editor.isDefaultSource && editor.saveMode === 'update' && (
+            <Alert tone="info" title="Editing a default">
+              You can rename this default and change the message. Use Save as new if you want to keep the original wording.
+            </Alert>
+          )}
+          <FormField id="wa-name" label="Template name" required>
+            <input
+              className="w-full rounded-xl border border-rf-border bg-rf-surface px-3 py-2 text-sm"
+              value={editor.name}
+              onChange={(e) => setEditor((s) => ({ ...s, name: e.target.value }))}
+              placeholder="e.g. Screening invite - Nursing"
+            />
           </FormField>
           <div className="grid gap-3 sm:grid-cols-2">
             <FormField id="wa-cat" label="Category">
@@ -373,13 +384,13 @@ export function WhatsAppTemplatesPage() {
                 {CATEGORIES.map((c) => (<option key={c.value} value={c.value}>{c.label}</option>))}
               </select>
             </FormField>
-            <FormField id="wa-itype" label="Interview type tag">
+            <FormField id="wa-itype" label="Interview type">
               <select className="w-full rounded-xl border border-rf-border bg-rf-surface px-3 py-2 text-sm" value={editor.interviewType} onChange={(e) => setEditor((s) => ({ ...s, interviewType: e.target.value }))}>
                 {INTERVIEW_TYPES.map((t) => (<option key={t} value={t}>{t}</option>))}
               </select>
             </FormField>
           </div>
-          <FormField id="wa-body" label="Body" required hint="\u0627\u0636\u063a\u0637 \u0627\u0644\u0645\u062a\u063a\u064a\u0631 \u0644\u0625\u062f\u0631\u0627\u062c\u0647 \u0641\u064a \u0645\u0643\u0627\u0646 \u0627\u0644\u0645\u0624\u0634\u0631 \u2014 \u0628\u062f\u0648\u0646 \u0643\u062a\u0627\u0628\u0629 \u064a\u062f\u0648\u064a\u0629">
+          <FormField id="wa-body" label="Message" required hint="Click a field below to insert it at the cursor.">
             <div className="mb-2 flex flex-wrap gap-2">
               {PLACEHOLDERS.map((item) => (
                 <button key={item.key} type="button" className="wa-var-chip" onMouseDown={(e) => e.preventDefault()} onClick={() => insertPlaceholder(item.key)}>
@@ -399,7 +410,7 @@ export function WhatsAppTemplatesPage() {
         onClose={() => setArchiveTarget(null)}
         onConfirm={() => void confirmArchive()}
         title="Archive WhatsApp template?"
-        description={archiveTarget ? `Archive \u201c${archiveTarget.name}\u201d? Recruiters will no longer see it in send pickers.` : undefined}
+        description={archiveTarget ? `Archive "${archiveTarget.name}"? Recruiters will no longer see it in send pickers.` : undefined}
         confirmLabel="Archive"
         tone="danger"
       />
