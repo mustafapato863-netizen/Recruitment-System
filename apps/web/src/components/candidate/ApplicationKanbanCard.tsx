@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type DragEvent } from 'react';
 import type { ApplicationStage } from '@recruitflow/contracts';
 import type { CriteriaBreakdown } from '@recruitflow/validation';
 import { Icon } from '../Icon';
+import { getNextActionPlan, type NextActionKind } from './NextActionGuidanceBanner';
 
 export type KanbanOwner = {
   name: string;
@@ -39,6 +40,7 @@ type ApplicationKanbanCardProps = {
   onAddNote: () => void;
   onMoveStage: () => void;
   onAssignToMe: () => void;
+  onNextAction?: (kind: NextActionKind) => void;
   onDragStart: (event: DragEvent) => void;
   onSignalChange: (next: CardStatusSignal) => void;
 };
@@ -85,6 +87,7 @@ export function ApplicationKanbanCard({
   onAddNote,
   onMoveStage,
   onAssignToMe,
+  onNextAction,
   onDragStart,
   onSignalChange,
 }: ApplicationKanbanCardProps) {
@@ -94,6 +97,17 @@ export function ApplicationKanbanCard({
   const appliedAgo = formatRelativeTime(card.appliedAt || card.createdAt);
   const sourceLabel = prettySource(card.source);
   const years = card.experienceYears;
+  const nextPlan = getNextActionPlan(card.stage as ApplicationStage, unassigned);
+
+  const runNextAction = () => {
+    if (onNextAction) {
+      onNextAction(nextPlan.kind);
+      return;
+    }
+    if (nextPlan.kind === 'assign') onAssignToMe();
+    else if (nextPlan.kind === 'view') onOpen();
+    else onMoveStage();
+  };
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -241,20 +255,19 @@ export function ApplicationKanbanCard({
               {card.owner.name}
             </span>
           )}
+          <p className="truncate text-[11px] text-slate-500">{nextPlan.hint}</p>
         </div>
-        {unassigned ? (
-          <button
-            type="button"
-            disabled={claiming}
-            onClick={(event) => {
-              event.stopPropagation();
-              onAssignToMe();
-            }}
-            className="inline-flex min-h-7 items-center rounded-lg bg-blue-600 px-2.5 text-[11px] font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
-          >
-            {claiming ? 'Assigning…' : 'Assign to me'}
-          </button>
-        ) : null}
+        <button
+          type="button"
+          disabled={nextPlan.kind === 'assign' && claiming}
+          onClick={(event) => {
+            event.stopPropagation();
+            runNextAction();
+          }}
+          className="inline-flex min-h-7 shrink-0 items-center rounded-lg bg-blue-600 px-2.5 text-[11px] font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+        >
+          {nextPlan.kind === 'assign' && claiming ? 'Assigning…' : nextPlan.label}
+        </button>
       </div>
 
       <button
