@@ -16,28 +16,19 @@ import { Modal } from '../components/Modal';
 import { getApi, downloadApi } from '../api/client';
 import './PageEnhancementsV2.css';
 
-interface SparklineProps {
-  color: string;
-  points: string;
-}
-
 type SourceDatum = { name: string; value: number; pct: string; color: string };
 type TimeToHireDatum = { period: string; days: number };
 type OfferDatum = { name: string; value: number; pct: string; color: string };
 type FunnelDatum = { stage: string; count: number; pct: string; color: string; width: string };
 type DepartmentDatum = { name: string; count: number; pct: number; color: string; activePositions: number; timeToHire: number | null };
 
-function Sparkline({ color, points }: SparklineProps) {
+function formatChip(label: string, value: string | number, detail?: string) {
   return (
-    <svg className="w-14 h-4 overflow-visible" viewBox="0 0 50 15">
-      <path
-        d={points}
-        fill="none"
-        stroke={color}
-        strokeWidth="2"
-        strokeLinecap="round"
-      />
-    </svg>
+    <span className="inline-flex items-baseline gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
+      <span>{label}</span>
+      <span className="font-semibold text-slate-900 dark:text-white">{value}</span>
+      {detail ? <span className="text-slate-500">{detail}</span> : null}
+    </span>
   );
 }
 
@@ -405,7 +396,7 @@ export function ReportsPage() {
     URL.revokeObjectURL(url);
 
     setIsExportModalOpen(false);
-    showToast('✓ Recruitment KPIs CSV scorecard extracted successfully!');
+    showToast('KPI spreadsheet downloaded.');
   };
 
   // ── Active Export Handlers ──
@@ -442,7 +433,7 @@ export function ReportsPage() {
     URL.revokeObjectURL(url);
 
     setIsExportModalOpen(false);
-    showToast('✓ Recruitment CSV report downloaded successfully!');
+    showToast('Report downloaded.');
   };
 
   const handleExportExcel = async () => {
@@ -461,7 +452,7 @@ export function ReportsPage() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       setIsExportModalOpen(false);
-      showToast('✓ Official Excel spreadsheet downloaded from API!');
+      showToast('Excel report downloaded.');
     } catch (err) {
       console.warn('Backend excel export failed, falling back to CSV', err);
       handleExportCSV();
@@ -472,7 +463,7 @@ export function ReportsPage() {
 
   const handleExportPDF = () => {
     setIsExportModalOpen(false);
-    showToast('Preparing formatted PDF print preview...');
+    showToast('Opening print preview.');
     setTimeout(() => {
       window.print();
     }, 400);
@@ -484,12 +475,10 @@ export function ReportsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2.5 flex-wrap">
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-              Recruitment Reports
-            </h1>
+            <h1 className="rf-page-title">Reports</h1>
           </div>
-          <p className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 mt-0.5">
-            Track performance, analyze trends, and optimize your hiring process.
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+            Hiring numbers for the selected period.
           </p>
         </div>
 
@@ -529,7 +518,7 @@ export function ReportsPage() {
           }`}
         >
           <Icon name="report" size={14} />
-          <span>Executive Overview</span>
+          <span>Overview</span>
         </button>
 
         <button
@@ -542,122 +531,19 @@ export function ReportsPage() {
           }`}
         >
           <Icon name="award" size={14} />
-          <span>Recruitment KPIs Scorecard</span>
-          <span
-            className={`px-1.5 py-0.5 text-[10px] font-black rounded-md ${
-              reportViewMode === 'kpis'
-                ? 'bg-white/20 text-white'
-                : 'bg-emerald-100 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
-            }`}
-          >
-            6 KPIs
-          </span>
+          <span>KPIs</span>
         </button>
       </div>
 
       {reportViewMode === 'overview' ? (
         <div className="space-y-6">
-          {/* ── Row 1: 5 KPI Summary Metric Cards ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        {/* Card 1: Applications */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-              <Icon name="file-text" size={18} />
-            </div>
-            <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">Applications</span>
+          <div className="flex flex-wrap gap-2">
+            {formatChip('Applications', kpis.applications, kpis.appTrend)}
+            {formatChip('Interviews', kpis.interviews, kpis.intTrend)}
+            {formatChip('Offers', kpis.offers, kpis.offTrend)}
+            {formatChip('Hires', kpis.hires, kpis.hireTrend)}
+            {formatChip('Time to hire', kpis.timeToHire > 0 ? `${kpis.timeToHire} days` : '—', kpis.timeTrend)}
           </div>
-          <div>
-            <span className="block text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
-              {kpis.applications}
-            </span>
-            <div className="flex items-center justify-between mt-1">
-              <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400">{kpis.appTrend}</span>
-              <Sparkline color="#3b82f6" points="M0 12 Q 12 14, 20 6 T 35 8 T 50 2" />
-            </div>
-          </div>
-        </div>
-
-        {/* Card 2: Interviews */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 flex items-center justify-center">
-              <Icon name="calendar" size={18} />
-            </div>
-            <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">Interviews</span>
-          </div>
-          <div>
-            <span className="block text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
-              {kpis.interviews}
-            </span>
-            <div className="flex items-center justify-between mt-1">
-              <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400">{kpis.intTrend}</span>
-              <Sparkline color="#10b981" points="M0 10 Q 15 15, 25 7 T 40 9 T 50 3" />
-            </div>
-          </div>
-        </div>
-
-        {/* Card 3: Offers */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-950/50 text-purple-600 dark:text-purple-400 flex items-center justify-center">
-              <Icon name="offer" size={18} />
-            </div>
-            <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">Offers</span>
-          </div>
-          <div>
-            <span className="block text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
-              {kpis.offers}
-            </span>
-            <div className="flex items-center justify-between mt-1">
-              <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400">{kpis.offTrend}</span>
-              <Sparkline color="#a855f7" points="M0 13 Q 15 10, 25 12 T 40 4 T 50 2" />
-            </div>
-          </div>
-        </div>
-
-        {/* Card 4: Hires */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="w-10 h-10 rounded-xl bg-orange-50 dark:bg-orange-950/50 text-orange-600 dark:text-orange-400 flex items-center justify-center">
-              <Icon name="user-check" size={18} />
-            </div>
-            <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">Hires</span>
-          </div>
-          <div>
-            <span className="block text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
-              {kpis.hires}
-            </span>
-            <div className="flex items-center justify-between mt-1">
-              <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400">{kpis.hireTrend}</span>
-              <Sparkline color="#f97316" points="M0 12 Q 10 14, 25 8 T 40 6 T 50 1" />
-            </div>
-          </div>
-        </div>
-
-        {/* Card 5: Time to Hire */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 flex items-center justify-center">
-              <Icon name="clock" size={18} />
-            </div>
-            <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">Time to Hire</span>
-          </div>
-          <div>
-            <div className="flex items-baseline gap-1">
-              <span className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
-                {kpis.timeToHire > 0 ? kpis.timeToHire : '—'}
-              </span>
-              {kpis.timeToHire > 0 && <span className="text-xs font-bold text-slate-500">days</span>}
-            </div>
-            <div className="flex items-center justify-between mt-1">
-              <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400">{kpis.timeTrend}</span>
-              <Sparkline color="#06b6d4" points="M0 8 Q 12 10, 24 12 T 36 14 T 50 14" />
-            </div>
-          </div>
-        </div>
-      </div>
-
       {/* ── Row 2: 3 Analytics Visual Charts with Recharts ── */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
         {/* Chart 1: Applications Over Time (Recharts AreaChart) (5 cols) */}
@@ -1052,152 +938,48 @@ export function ReportsPage() {
     </div>
   ) : (
     <div className="space-y-6 animate-fade-in">
-          {/* Top KPI Banner & Extraction Action Bar */}
-          <div className="bg-gradient-to-r from-blue-900/90 via-indigo-900/80 to-slate-900 rounded-2xl p-5 sm:p-6 text-white border border-blue-800/40 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-5">
-            <div className="space-y-1.5 max-w-3xl">
-              <div className="flex items-center gap-2">
-                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-500/30 text-blue-200 border border-blue-400/30 uppercase tracking-wider">
-                  Recruitment Position Performance
-                </span>
-                <span className="text-xs text-blue-200/80">• {dateLabel}</span>
-              </div>
-              <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
-                Recruitment Key Performance Indicators (KPIs)
-              </h2>
-              <p className="text-xs sm:text-sm text-blue-100/80 leading-relaxed">
-                Objective evaluation metrics measuring candidate interview attendance, offer acceptance, hiring velocity, target delivery, and probation quality.
-              </p>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-slate-900 dark:text-white">Key indicators</h2>
+              <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">{dateLabel}. Targets and current results are in the table.</p>
             </div>
-
-            <div className="flex items-center gap-2.5 flex-wrap shrink-0">
+            <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={handleExportKpisCSV}
-                className="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-md transition cursor-pointer"
+                className="inline-flex min-h-8 items-center gap-1.5 rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white hover:bg-blue-700 cursor-pointer"
               >
-                <Icon name="download" size={14} />
-                <span>Extract KPIs (.csv)</span>
+                <Icon name="download" size={13} />
+                Download CSV
               </button>
-
               <button
                 type="button"
                 onClick={handleExportExcel}
                 disabled={isExporting}
-                className="inline-flex items-center gap-2 px-3.5 py-2.5 bg-white/10 hover:bg-white/20 text-white border border-white/20 rounded-xl text-xs font-bold transition cursor-pointer"
+                className="inline-flex min-h-8 items-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 cursor-pointer"
               >
-                <Icon name="file-text" size={14} />
-                <span>Download Excel</span>
+                Excel
               </button>
-
               <button
                 type="button"
                 onClick={handleExportPDF}
-                className="inline-flex items-center gap-2 px-3.5 py-2.5 bg-white/10 hover:bg-white/20 text-white border border-white/20 rounded-xl text-xs font-bold transition cursor-pointer"
+                className="inline-flex min-h-8 items-center rounded-lg border border-slate-300 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 cursor-pointer"
               >
-                <Icon name="file-text" size={14} />
-                <span>Print Scorecard</span>
+                Print
               </button>
             </div>
           </div>
-
-          {/* ── 6 KPI Visual Cards Grid ── */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {activeRecruitmentKpis.map((kpi) => {
-              const isExceeded = kpi.status === 'Exceeded';
-              const isOnTarget = kpi.status === 'On Target';
-              const statusColor = isExceeded
-                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
-                : isOnTarget
-                ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30'
-                : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30';
-
-              const barColor = isExceeded
-                ? 'bg-emerald-500'
-                : isOnTarget
-                ? 'bg-blue-600'
-                : 'bg-amber-500';
-
-              return (
-                <div
-                  key={kpi.id}
-                  className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs flex flex-col justify-between space-y-4 hover:border-slate-300 dark:hover:border-slate-700 transition"
-                >
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 uppercase tracking-wider">
-                          {kpi.position}
-                        </span>
-                        <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                          {kpi.name}
-                        </h3>
-                      </div>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-black border ${statusColor}`}>
-                        {kpi.status}
-                      </span>
-                    </div>
-
-                    {/* Definition */}
-                    <p className="text-xs text-slate-600 dark:text-slate-400 min-h-[36px] line-clamp-2">
-                      {kpi.definition}
-                    </p>
-                  </div>
-
-                  {/* Metrics & Progress */}
-                  <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800/80">
-                    <div className="flex items-baseline justify-between">
-                      <div className="flex items-baseline gap-1.5">
-                        <span className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-tight">
-                          {kpi.formattedValue}
-                        </span>
-                        <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-                          / Target: {kpi.formattedTarget}
-                        </span>
-                      </div>
-                      <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                        {kpi.achievementRate}% achieved
-                      </span>
-                    </div>
-
-                    {/* Progress Bar */}
-                    <div className="w-full h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all duration-500 ${barColor}`}
-                        style={{ width: `${Math.min(100, Math.max(5, kpi.achievementRate))}%` }}
-                      />
-                    </div>
-
-                    {kpi.notes && (
-                      <span className="block text-[11px] text-slate-500 dark:text-slate-400 truncate">
-                        {kpi.notes}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
           {/* ── Detailed Scorecard Table matching exact user fields (No Weights) ── */}
           <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                  Recruitment KPI Scorecard Table
+                <h3 className="text-base font-semibold text-slate-900 dark:text-white">
+                  KPI details
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  Complete breakdown of recruitment indicators with definition, targets, and live performance.
+                  Definition, target, and current result for each indicator.
                 </p>
               </div>
-
-              <button
-                type="button"
-                onClick={handleExportKpisCSV}
-                className="inline-flex items-center gap-2 px-3.5 py-2 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 border border-emerald-200 dark:border-emerald-900 rounded-xl text-xs font-bold transition cursor-pointer self-start sm:self-auto shadow-2xs"
-              >
-                <Icon name="download" size={13} />
-                <span>Extract Recruitment KPIs (.csv)</span>
-              </button>
             </div>
 
             <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
@@ -1219,10 +1001,10 @@ export function ReportsPage() {
                     const isExceeded = item.status === 'Exceeded';
                     const isOnTarget = item.status === 'On Target';
                     const statusClass = isExceeded
-                      ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-300/40'
+                      ? 'bg-emerald-50 text-emerald-900 border border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
                       : isOnTarget
-                      ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-300/40'
-                      : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-300/40';
+                      ? 'bg-blue-50 text-blue-900 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800'
+                      : 'bg-amber-50 text-amber-950 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800';
 
                     return (
                       <tr key={item.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition">
@@ -1280,12 +1062,12 @@ export function ReportsPage() {
       <Modal
         isOpen={isExportModalOpen}
         onClose={() => setIsExportModalOpen(false)}
-        title="Export Recruitment Reports"
+        title="Export report"
         maxWidthClass="max-w-lg"
       >
         <div className="space-y-4 text-xs">
           <p className="text-slate-500 dark:text-slate-400">
-            Export full recruiting performance, department velocity, and pipeline SLA reports in your preferred format.
+            Download this period as Excel, CSV, or a print view.
           </p>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -1299,7 +1081,7 @@ export function ReportsPage() {
                 <Icon name="file-text" size={20} />
               </div>
               <span className="text-slate-900 dark:text-white text-[11px]">Excel (.xlsx)</span>
-              <span className="text-[10px] text-slate-600 dark:text-slate-400 font-normal">Full Data + KPIs</span>
+              <span className="text-[10px] text-slate-600 dark:text-slate-400 font-normal">Spreadsheet</span>
             </button>
 
             <button
@@ -1310,8 +1092,8 @@ export function ReportsPage() {
               <div className="w-9 h-9 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 flex items-center justify-center group-hover:scale-110 transition">
                 <Icon name="award" size={20} />
               </div>
-              <span className="text-slate-900 dark:text-white text-[11px]">Recruitment KPIs</span>
-              <span className="text-[10px] text-slate-600 dark:text-slate-400 font-normal">6 KPIs CSV</span>
+              <span className="text-slate-900 dark:text-white text-[11px]">KPI CSV</span>
+              <span className="text-[10px] text-slate-600 dark:text-slate-400 font-normal">6 indicators</span>
             </button>
 
             <button
@@ -1323,7 +1105,7 @@ export function ReportsPage() {
                 <Icon name="download" size={20} />
               </div>
               <span className="text-slate-900 dark:text-white text-[11px]">Overview CSV</span>
-              <span className="text-[10px] text-slate-600 dark:text-slate-400 font-normal">Raw Table</span>
+              <span className="text-[10px] text-slate-600 dark:text-slate-400 font-normal">Summary</span>
             </button>
 
             <button
@@ -1335,7 +1117,7 @@ export function ReportsPage() {
                 <Icon name="file-text" size={20} />
               </div>
               <span className="text-slate-900 dark:text-white text-[11px]">PDF / Print</span>
-              <span className="text-[10px] text-slate-600 dark:text-slate-400 font-normal">Executive</span>
+              <span className="text-[10px] text-slate-600 dark:text-slate-400 font-normal">Print</span>
             </button>
           </div>
         </div>
@@ -1345,15 +1127,15 @@ export function ReportsPage() {
       <Modal
         isOpen={isDateModalOpen}
         onClose={() => setIsDateModalOpen(false)}
-        title="Select Reporting Period"
+        title="Period"
         maxWidthClass="max-w-sm"
       >
         <div className="space-y-2 text-xs">
           {[
-            { id: '7d', label: 'Last 7 Days', sub: 'Rolling seven-day window' },
-            { id: '30d', label: 'Last 30 Days', sub: 'Full Month of August 2026' },
-            { id: 'quarter', label: 'Quarter to Date', sub: 'Q3 2026 (July – September)' },
-            { id: 'ytd', label: 'Year to Date', sub: 'Calendar Year 2026 Pacing' },
+            { id: '7d', label: 'Last 7 days', sub: 'Rolling 7 days' },
+            { id: '30d', label: 'Last 30 days', sub: 'Rolling 30 days' },
+            { id: 'quarter', label: 'Quarter to date', sub: 'Current quarter' },
+            { id: 'ytd', label: 'Year to date', sub: 'Current year' },
           ].map((preset) => (
             <button
               key={preset.id}
@@ -1383,12 +1165,12 @@ export function ReportsPage() {
       <Modal
         isOpen={isDeptModalOpen}
         onClose={() => setIsDeptModalOpen(false)}
-        title="All Hospital Departments — Applications Breakdown"
+        title="Departments"
         maxWidthClass="max-w-2xl"
       >
         <div className="space-y-4 text-xs">
           <p className="text-slate-500 dark:text-slate-400">
-            Comprehensive breakdown of applicant intake, open requisitions, and time-to-fill across all Saudi German Health departments.
+            Applications, open jobs, and days to hire by department.
           </p>
 
           <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">

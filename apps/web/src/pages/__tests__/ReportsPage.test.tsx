@@ -142,16 +142,14 @@ describe('ReportsPage - Recruitment KPIs Scorecard & Extraction', () => {
       </MemoryRouter>,
     );
 
-    expect(await screen.findByText('Recruitment Reports')).toBeInTheDocument();
-    expect(screen.getByText('Executive Overview')).toBeInTheDocument();
-    expect(screen.getByText('Recruitment KPIs Scorecard')).toBeInTheDocument();
+    expect(await screen.findByText('Reports')).toBeInTheDocument();
+    expect(screen.getByText('Overview')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^KPIs$/i })).toBeInTheDocument();
 
-    // Click Recruitment KPIs Scorecard
-    const kpiTab = screen.getByRole('button', { name: /Recruitment KPIs Scorecard/i });
+    const kpiTab = screen.getByRole('button', { name: /^KPIs$/i });
     await user.click(kpiTab);
 
-    // Verify all 6 KPIs are displayed
-    expect(await screen.findByText('Recruitment Key Performance Indicators (KPIs)')).toBeInTheDocument();
+    expect(await screen.findByText('Key indicators')).toBeInTheDocument();
     expect(screen.getAllByText('Invitation').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Accepted Final').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Offers').length).toBeGreaterThan(0);
@@ -159,9 +157,7 @@ describe('ReportsPage - Recruitment KPIs Scorecard & Extraction', () => {
     expect(screen.getAllByText('Time to Fill').length).toBeGreaterThan(0);
     expect(screen.getAllByText('Quality of Hire (Probation Success Rate)').length).toBeGreaterThan(0);
 
-    // Verify extraction action buttons exist
-    expect(screen.getByRole('button', { name: /Extract KPIs \(\.csv\)/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Extract Recruitment KPIs \(\.csv\)/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Download CSV/i })).toBeInTheDocument();
 
     // Verify weights are NOT displayed anywhere (e.g. "KPI Weight", "10%", "20%", "30%")
     expect(screen.queryByText(/KPI Weight/i)).not.toBeInTheDocument();
@@ -180,10 +176,10 @@ describe('ReportsPage - Recruitment KPIs Scorecard & Extraction', () => {
       </MemoryRouter>,
     );
 
-    const kpiTab = await screen.findByRole('button', { name: /Recruitment KPIs Scorecard/i });
+    const kpiTab = await screen.findByRole('button', { name: /^KPIs$/i });
     await user.click(kpiTab);
 
-    const extractBtn = screen.getByRole('button', { name: /Extract KPIs \(\.csv\)/i });
+    const extractBtn = screen.getByRole('button', { name: /Download CSV/i });
     await user.click(extractBtn);
 
     await waitFor(() => {
