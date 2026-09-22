@@ -61,7 +61,6 @@ export function OffersPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isCreateOfferModalOpen, setIsCreateOfferModalOpen] = useState(false);
-  const [isMoreFiltersOpen, setIsMoreFiltersOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
@@ -259,20 +258,6 @@ export function OffersPage() {
       });
   }, [vacancyId]);
 
-  const kpiMetrics = useMemo(() => {
-    const awaitingApproval = apiOffers.filter(
-      (o) => o.status === 'Pending Approval' || o.status === 'Approval'
-    ).length;
-    const sent = apiOffers.filter((o) => o.status === 'Sent').length;
-    const accepted = apiOffers.filter((o) => o.status === 'Accepted').length;
-    const expiringSoon = apiOffers.filter(
-      (o) => o.daysLeftTone === 'amber' || o.daysLeftTone === 'red'
-    ).length;
-    const drafts = apiOffers.filter((o) => o.status === 'Draft').length;
-
-    return { awaitingApproval, sent, accepted, expiringSoon, drafts };
-  }, [apiOffers]);
-
   const statusCounts = useMemo(() => {
     return {
       ALL: apiOffers.length,
@@ -367,24 +352,11 @@ export function OffersPage() {
             <QuickGuideTrigger />
           </div>
           <p className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">
-            Manage and track all job offers throughout the approval and negotiation process.
+            Track approvals, sent offers, and acceptances.
           </p>
         </div>
 
         <div className="flex w-full flex-col sm:w-auto sm:flex-row sm:flex-wrap sm:items-center gap-2 sm:gap-2.5">
-          <button
-            type="button"
-            onClick={() => setIsMoreFiltersOpen((prev) => !prev)}
-            className={`inline-flex items-center gap-2 px-3.5 py-2 border rounded-xl text-xs font-bold transition shadow-xs cursor-pointer ${
-              isMoreFiltersOpen
-                ? 'bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-950/40 dark:border-blue-800'
-                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50'
-            }`}
-          >
-            <Icon name="filter" size={13} className="text-slate-400" />
-            <span>{isMoreFiltersOpen ? 'Hide Filters' : 'Filters'}</span>
-          </button>
-
           <button
             type="button"
             onClick={() => navigate('/offers/create')}
@@ -412,7 +384,7 @@ export function OffersPage() {
                 {currentVacancy.status}
               </span>
             </div>
-            <h2 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white tracking-tight">
+            <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white tracking-tight">
               {currentVacancy.position?.title || currentVacancy.title || 'Job Position'}
             </h2>
             <p className="text-xs text-slate-600 dark:text-slate-400 font-medium">
@@ -443,135 +415,6 @@ export function OffersPage() {
           </div>
         </div>
       )}
-
-      {/* Expandable filters */}
-      {isMoreFiltersOpen && (
-        <div className="flex flex-wrap items-center gap-3 p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200/60 dark:border-slate-700/60 text-xs">
-          <span className="font-bold text-slate-500">Filter by Status:</span>
-          {(['ALL', 'Draft', 'Pending Approval', 'Approved', 'Sent', 'Accepted', 'Declined', 'Expired'] as const).map((st) => (
-            <button
-              key={st}
-              type="button"
-              onClick={() => {
-                setActivePill(st);
-                setPage(1);
-              }}
-              className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition cursor-pointer border ${
-                activePill === st
-                  ? 'bg-blue-600 text-white border-blue-600 shadow-2xs'
-                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100'
-              }`}
-            >
-              {st === 'ALL' ? 'All Offers' : st}
-            </button>
-          ))}
-          <button
-            type="button"
-            onClick={() => {
-              setActivePill('ALL');
-              setSearchQuery('');
-              setPage(1);
-            }}
-            className="ml-auto text-xs font-bold text-slate-500 hover:text-rose-600 cursor-pointer"
-          >
-            Reset
-          </button>
-        </div>
-      )}
-
-      {/* ── Top 5 KPI Summary Cards ── */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-        {/* Card 1 */}
-        <div
-          onClick={() => { setActivePill('Pending Approval'); setPage(1); }}
-          className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs space-y-2 relative group cursor-pointer hover:border-blue-300 transition"
-        >
-          <div className="flex items-center justify-between">
-            <div className="rf-metric-icon-box rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 flex items-center justify-center">
-              <Icon name="file-text" size={18} />
-            </div>
-            <Icon name="chevron-right" size={14} className="text-slate-300 group-hover:translate-x-0.5 transition" />
-          </div>
-          <div>
-            <span className="text-xs font-semibold text-slate-400 block">Awaiting Approval</span>
-            <span className="rf-metric-value block mt-0.5">
-              {kpiMetrics.awaitingApproval}
-            </span>
-            <span className="text-xs font-bold text-amber-600 dark:text-amber-400 block mt-1">
-              Pending review
-            </span>
-          </div>
-        </div>
-
-        {/* Card 2 */}
-        <div
-          onClick={() => { setActivePill('Sent'); setPage(1); }}
-          className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs space-y-2 cursor-pointer hover:border-blue-300 transition"
-        >
-          <div className="rf-metric-icon-box rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 flex items-center justify-center">
-            <Icon name="send" size={18} />
-          </div>
-          <div>
-            <span className="text-xs font-semibold text-slate-400 block">Sent Offers</span>
-            <span className="rf-metric-value block mt-0.5">
-              {kpiMetrics.sent}
-            </span>
-            <div className="flex items-center gap-1.5 mt-1">
-              <span className="text-xs text-slate-400">Awaiting candidate</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Card 3 */}
-        <div
-          onClick={() => { setActivePill('Accepted'); setPage(1); }}
-          className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs space-y-2 cursor-pointer hover:border-blue-300 transition"
-        >
-          <div className="rf-metric-icon-box rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 flex items-center justify-center">
-            <Icon name="check-circle" size={18} />
-          </div>
-          <div>
-            <span className="text-xs font-semibold text-slate-400 block">Accepted</span>
-            <span className="rf-metric-value block mt-0.5">
-              {kpiMetrics.accepted}
-            </span>
-            <div className="flex items-center gap-1.5 mt-1">
-              <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400">Ready to hire</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Card 4 */}
-        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs space-y-2">
-          <div className="rf-metric-icon-box rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 flex items-center justify-center">
-            <Icon name="clock" size={18} />
-          </div>
-          <div>
-            <span className="text-xs font-semibold text-slate-400 block">Expiring / Overdue</span>
-            <span className="rf-metric-value block mt-0.5">
-              {kpiMetrics.expiringSoon}
-            </span>
-            <span className="text-xs font-medium text-slate-400 block mt-1">Requires follow-up</span>
-          </div>
-        </div>
-
-        {/* Card 5 */}
-        <div
-          onClick={() => { setActivePill('Draft'); setPage(1); }}
-          className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-4 sm:p-5 shadow-xs space-y-2 cursor-pointer hover:border-blue-300 transition"
-        >
-          <div className="rf-metric-icon-box rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 flex items-center justify-center">
-            <Icon name="file-text" size={18} />
-          </div>
-          <div>
-            <span className="text-xs font-semibold text-slate-400 block">Draft Offers</span>
-            <span className="rf-metric-value block mt-0.5">
-              {kpiMetrics.drafts}
-            </span>
-            <span className="text-xs font-medium text-slate-400 block mt-1">In progress</span>
-          </div>
-        </div>
-      </div>
 
       {/* ── Filter Pills & Search Bar ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-2">
@@ -614,7 +457,7 @@ export function OffersPage() {
               setSearchQuery(e.target.value);
               setPage(1);
             }}
-            placeholder="Search offers..."
+            placeholder="Search candidate or offer"
             className="w-full pl-8 pr-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-2xs"
           />
         </div>
