@@ -1,10 +1,9 @@
-/* Applicant Profile: cut duplicate chrome when the unified workspace is open */
+/* Applicant Profile: tighter workspace chrome. Keep the lower profile block visible. */
 
 body.rf-profile-compact h1 {
   font-size: 1.5rem !important;
 }
 
-body.rf-profile-compact section[aria-label="Applicant pipeline stages"] > div.mb-3 p.text-\[10px\],
 body.rf-profile-compact section[aria-label="Applicant pipeline stages"] p.text-\[10px\] {
   display: none !important;
 }
@@ -18,24 +17,9 @@ body.rf-profile-compact section[role="tabpanel"] > div.mb-4 p.mt-1.text-xs {
   display: none !important;
 }
 
-body.rf-profile-compact section[role="tabpanel"] > div.mb-4 {
-  padding-bottom: 0.5rem !important;
-  margin-bottom: 0.75rem !important;
-}
-
-/* Hide everything under the workspace: tabs + empty Overview block */
-body.rf-profile-compact section[aria-label="Unified applicant stage workspace"] ~ * {
-  display: none !important;
-}
-
-/* Header Advance/Reject are duplicates of the right rail */
 body.rf-profile-compact button[title="Fast advance stage"],
 body.rf-profile-compact button[title="Reject candidate"] {
   display: none !important;
-}
-
-body.rf-profile-compact aside[aria-label="Applicant actions"] .grid.grid-cols-3 {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 body.rf-profile-compact h3.font-bold + p.mt-2.text-slate-600 {
