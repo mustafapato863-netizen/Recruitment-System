@@ -3,6 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { getApi } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { Icon } from '../components/Icon';
+import {
+  VacancyCard,
+  VacancyCardHeadcountProgress,
+  VacancyCardMeta,
+  VacancyCardMetrics,
+} from '../components/vacancy/VacancyCard';
 import { PageState } from '../components/ui/PageState';
 import { QuickGuideTrigger } from '../quickguide';
 import { MyTargetsWidget } from '../components/MyTargetsWidget';
@@ -435,87 +441,54 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
         /* RecruitFlow 3-Column Position Card Grid */
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {filteredPositions.map((pos) => {
-            const fillRate = Math.min(100, Math.round((pos.joinedHeadcount / Math.max(1, pos.approvedHeadcount)) * 100));
+            const nextAction = getPositionNextAction(pos);
 
             return (
-              <div
+              <VacancyCard
                 key={pos.id}
-                className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs hover:shadow-md hover:border-blue-300 dark:hover:border-blue-700 transition flex flex-col justify-between space-y-4 group relative"
-              >
-                <div>
-                  {/* Top Bar: Code, Status & SLA */}
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-mono text-[11px] font-bold tracking-wider px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-                      {pos.vacancyCode}
-                    </span>
-
-                    <div className="flex items-center gap-1.5">
-
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-semibold capitalize ${
-                          pos.status === 'Open'
-                            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/60'
-                            : pos.status === 'On Hold'
-                            ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400 border border-amber-200/60 dark:border-amber-800/60'
-                            : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400'
-                        }`}
-                      >
-                        {pos.status}
-                      </span>
+                vacancy={pos}
+                onOpen={() => navigate(`/vacancies/${pos.id}`)}
+                className="min-h-[280px] justify-between"
+                footer={(
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-xs font-semibold text-slate-700 dark:text-slate-200">{nextAction.hint}</p>
                     </div>
-                  </div>
-
-                  {/* Title & Department */}
-                  <div className="mt-3">
-                    <h2
-                      onClick={() => navigate(`/vacancies/${pos.id}`)}
-                      className="text-base font-bold text-slate-900 dark:text-white hover:text-blue-700 dark:hover:text-blue-300 cursor-pointer line-clamp-1"
-                      title={pos.title}
+                    <button
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        navigate(nextAction.to);
+                      }}
+                      className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl bg-blue-600 px-4 text-xs font-bold text-white shadow-sm transition-colors hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
                     >
-                      {pos.title}
-                    </h2>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
-                      {pos.department} &bull; {pos.location}
-                    </p>
+                      {nextAction.label}
+                      <Icon name="arrow-right" size={14} aria-hidden="true" />
+                    </button>
                   </div>
-
-                  {/* Headcount Progress Bar */}
-                  <div className="mt-3 space-y-1.5">
-                    <div className="flex items-center justify-between text-[11px]">
-                      <span className="font-semibold text-slate-500 dark:text-slate-400">Headcount Filled</span>
-                      <span className="font-semibold text-slate-900 dark:text-white">
-                        {pos.joinedHeadcount} / {pos.approvedHeadcount} ({fillRate}%)
-                      </span>
-                    </div>
-                    <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
-                      <div
-                        className={`h-2 rounded-full transition-all ${
-                          fillRate >= 100
-                            ? 'bg-emerald-500'
-                            : fillRate > 50
-                            ? 'bg-blue-600'
-                            : 'bg-amber-500'
-                        }`}
-                        style={{ width: `${Math.max(5, fillRate)}%` }}
-                      />
-                    </div>
-                  </div>
+                )}
+              >
+                <div className="mt-1 space-y-4">
+                  <VacancyCardMeta location={pos.location} workType={pos.workType} />
+                  <VacancyCardMetrics items={[
+                    { key: 'applicants', label: 'Applicants', value: pos.applicationsCount, icon: 'users' },
+                    {
+                      key: 'owner',
+                      label: 'Owner',
+                      value: (
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[9px] font-bold text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                            {pos.recruiter.initials || '—'}
+                          </span>
+                          <span className="truncate text-xs font-semibold text-slate-700 dark:text-slate-200">{pos.recruiter.name}</span>
+                        </span>
+                      ),
+                      icon: 'user',
+                    },
+                  ]} />
+                  <VacancyCardHeadcountProgress filled={pos.joinedHeadcount} target={pos.approvedHeadcount} />
                 </div>
-
-                <div className="pt-3 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-[11px] text-slate-500">{pos.recruiter.name} · {pos.applicationsCount} candidate{pos.applicationsCount === 1 ? '' : 's'}</p>
-                    <p className="truncate text-[11px] text-slate-500">{getPositionNextAction(pos).hint}</p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => navigate(getPositionNextAction(pos).to)}
-                    className="inline-flex min-h-8 shrink-0 items-center rounded-lg bg-blue-600 px-2.5 text-[11px] font-semibold text-white hover:bg-blue-700"
-                  >
-                    {getPositionNextAction(pos).label}
-                  </button>
-                </div>
-              </div>
+              </VacancyCard>
             );
           })}
         </div>

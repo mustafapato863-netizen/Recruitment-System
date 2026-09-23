@@ -12,6 +12,14 @@ import { PageState } from '../components/ui/PageState';
 import { saveBlob } from '../utils/download';
 import { EditPositionRequirementsModal } from '../components/vacancy/EditPositionRequirementsModal';
 import { ImportJobDescriptionModal } from '../components/vacancy/ImportJobDescriptionModal';
+import {
+  VacancyCard,
+  VacancyCardEducation,
+  VacancyCardHeadcountProgress,
+  VacancyCardMeta,
+  VacancyCardMetrics,
+  VacancyCardSkills,
+} from '../components/vacancy/VacancyCard';
 import { getVacancyBlockingReasons } from '../utils/vacancyActivation';
 
 interface JobPositionRow {
@@ -726,72 +734,43 @@ export function VacantListPage() {
               </p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
               {filteredCatalogPositions.map((pos) => (
-                <div
+                <VacancyCard
                   key={pos.id}
-                  className="group relative flex flex-col justify-between rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"
+                  vacancy={pos}
+                  className="min-h-[320px] hover:-translate-y-0.5"
+                  footer={(
+                    <div className="flex flex-col-reverse gap-2 2xl:flex-row 2xl:items-center 2xl:justify-between">
+                      <button
+                        type="button"
+                        onClick={() => openSetupForPosition(pos)}
+                        className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 dark:focus-visible:ring-offset-slate-900"
+                      >
+                        <Icon name="edit" size={16} />
+                        Edit specs
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/sourcing-match?vacancyId=${pos.id}`)}
+                        className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
+                      >
+                        <Icon name="users" size={16} />
+                        Match candidates
+                        <Icon name="arrow-right" size={16} />
+                      </button>
+                    </div>
+                  )}
                 >
-                  <div className="space-y-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-[11px] text-slate-500">{pos.positionCode || pos.vacancyCode} · {pos.department}</p>
-                        <h3 className="mt-0.5 text-base font-bold leading-snug text-slate-900 dark:text-white">
-                          {pos.title}
-                        </h3>
-                      </div>
-                      <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
-                        pos.status === 'Open'
-                          ? 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300'
-                          : pos.status === 'Pending Activation'
-                            ? 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300'
-                            : 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
-                      }`}>
-                        {pos.status}
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-600 dark:text-slate-300">
-                      {pos.minExperienceYears ?? 3}+ years · {pos.location}
-                    </p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {pos.requiredSkills.slice(0, 4).map((skill) => (
-                        <span
-                          key={skill}
-                          className="rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
-                        >
-                          {skill}
-                        </span>
-                      ))}
-                      {pos.requiredSkills.length > 4 && (
-                        <span className="self-center text-[11px] font-semibold text-slate-500">
-                          +{pos.requiredSkills.length - 4}
-                        </span>
-                      )}
-                    </div>
-                    {pos.qualifications && (
-                      <p className="line-clamp-2 border-t border-slate-100 pt-2 text-[11px] text-slate-500 dark:border-slate-800 dark:text-slate-400">
-                        {pos.qualifications}
-                      </p>
-                    )}
+                  <div className="mt-4 flex flex-1 flex-col gap-4">
+                    <VacancyCardMeta
+                      location={pos.location}
+                      experienceLabel={`${pos.minExperienceYears ?? 3}+ years experience`}
+                    />
+                    <VacancyCardSkills vacancy={pos} skills={pos.requiredSkills} maxVisible={4} showWhenEmpty />
+                    <VacancyCardEducation qualifications={pos.qualifications} />
                   </div>
-                  <div className="mt-4 flex items-center justify-between gap-2 border-t border-slate-100 pt-3 dark:border-slate-800">
-                    <button
-                      type="button"
-                      onClick={() => openSetupForPosition(pos)}
-                      className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
-                    >
-                      <Icon name="edit" size={12} />
-                      Edit specs
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => navigate(`/sourcing-match?vacancyId=${pos.id}`)}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700"
-                    >
-                      Match candidates
-                    </button>
-                  </div>
-                </div>
+                </VacancyCard>
               ))}
             </div>
           )}
@@ -1055,68 +1034,121 @@ export function VacantListPage() {
             ) : (
               <>
                 {viewMode === 'cards' ? (
-                  <div className="grid grid-cols-1 gap-4 p-4 sm:p-5 md:grid-cols-2">
-                    {paginatedPositions.map((pos) => (
-                      <div
-                        key={pos.id}
-                        onClick={() => navigate(`/vacancies/${pos.id}`)}
-                        className={`group flex cursor-pointer flex-col justify-between rounded-xl border border-slate-200/90 bg-white p-5 shadow-xs transition-all duration-200 hover:-translate-y-0.5 hover:border-sky-300 hover:shadow-md dark:border-slate-800 dark:bg-slate-900 dark:hover:border-sky-700 ${
-                          pos.status === 'Open'
-                            ? 'border-l-4 border-l-emerald-500'
-                            : pos.status === 'Pending Activation'
-                              ? 'border-l-4 border-l-amber-500'
-                              : pos.status === 'On Hold'
-                                ? 'border-l-4 border-l-slate-400'
-                                : 'border-l-4 border-l-slate-300 dark:border-l-slate-600'
-                        }`}
-                      >
-                        <div className="space-y-2.5">
-                          <div className="flex items-start justify-between gap-2">
-                            <span className="rounded-md bg-slate-100 px-2 py-1 font-mono text-[10px] font-bold text-slate-600 dark:bg-slate-800 dark:text-slate-400">
-                              {pos.vacancyCode}
-                            </span>
-                            <span
-                              className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                                pos.status === 'Open'
-                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:border-emerald-800'
-                                  : pos.status === 'Pending Activation'
-                                  ? 'bg-amber-50 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-800'
-                                  : pos.status === 'On Hold'
-                                  ? 'bg-amber-50 text-amber-600 border border-amber-200'
-                                  : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'
-                              }`}
-                            >
-                              {pos.status}
-                            </span>
-                          </div>
+                  <div className="grid grid-cols-1 gap-4 p-4 sm:p-5 lg:grid-cols-2 2xl:grid-cols-3">
+                    {paginatedPositions.map((pos) => {
+                      const statusEdgeClass = pos.status === 'Open'
+                        ? 'border-l-4 border-l-emerald-500'
+                        : pos.status === 'Pending Activation'
+                          ? 'border-l-4 border-l-amber-500'
+                          : pos.status === 'On Hold'
+                            ? 'border-l-4 border-l-slate-400'
+                            : 'border-l-4 border-l-slate-300 dark:border-l-slate-600';
 
-                          <div>
-                            <h3 className="text-base font-bold leading-snug text-slate-900 transition group-hover:text-sky-700 dark:text-white dark:group-hover:text-sky-300">
-                              {pos.title}
-                            </h3>
-                            <p className="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">
-                              {pos.department} &bull; {pos.location}
-                            </p>
+                      return (
+                        <VacancyCard
+                          key={pos.id}
+                          vacancy={pos}
+                          onOpen={() => navigate(`/vacancies/${pos.id}`)}
+                          className={`min-h-[340px] hover:-translate-y-0.5 motion-reduce:transform-none ${statusEdgeClass}`}
+                          footer={(
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  navigate(`/sourcing-match?vacancyId=${pos.id}`);
+                                }}
+                                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 text-sm font-semibold text-blue-700 transition-colors hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:text-blue-300 dark:hover:bg-blue-950/40"
+                              >
+                                <Icon name="sparkles" size={15} />
+                                Match sourcing
+                              </button>
+                              <div className="flex flex-wrap items-center justify-end gap-2">
+                                {pos.recruiter.name === 'Unassigned'
+                                  ? canAssignInitial && (
+                                      <Button
+                                        size="sm"
+                                        variant="secondary"
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          openAssignModal(pos);
+                                        }}
+                                      >
+                                        Assign recruiter
+                                      </Button>
+                                    )
+                                  : canReassignRecruiter && (
+                                      <Button
+                                        size="sm"
+                                        variant="secondary"
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+                                          openAssignModal(pos);
+                                        }}
+                                      >
+                                        Reassign
+                                      </Button>
+                                    )}
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    navigate(`/vacancies/${pos.id}`);
+                                  }}
+                                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-bold text-white shadow-sm transition-colors hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
+                                >
+                                  View details
+                                  <Icon name="arrow-right" size={15} />
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        >
+                          <div className="mt-4 space-y-4">
+                            <VacancyCardMeta
+                              location={pos.location}
+                              experienceLabel={pos.minExperienceYears != null ? `${pos.minExperienceYears}+ years experience` : 'Experience not specified'}
+                            />
+                            <VacancyCardMetrics items={[
+                              { key: 'applicants', label: 'Applicants', value: pos.applicationsCount, icon: 'users' },
+                              { key: 'headcount', label: 'Headcount', value: `${pos.joinedHeadcount}/${pos.approvedHeadcount}`, icon: 'briefcase' },
+                              {
+                                key: 'owner',
+                                label: 'Owner',
+                                value: (
+                                  <span className="flex min-w-0 items-center gap-2">
+                                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[9px] font-bold text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                                      {pos.recruiter.initials || '—'}
+                                    </span>
+                                    <span className="truncate text-xs font-semibold text-slate-700 dark:text-slate-200">{pos.recruiter.name}</span>
+                                  </span>
+                                ),
+                                icon: 'user',
+                              },
+                            ]} />
+                            <VacancyCardHeadcountProgress filled={pos.joinedHeadcount} target={pos.approvedHeadcount} />
+                            <VacancyCardSkills vacancy={pos} skills={pos.requiredSkills} maxVisible={3} />
+                            {pos.qualifications && <VacancyCardEducation qualifications={pos.qualifications} />}
                           </div>
 
                           {pos.status === 'Pending Activation' && (() => {
                             const blockingReasons = getVacancyBlockingReasons(pos);
                             return (
                               <div
-                                className="mt-1 rounded-xl border border-amber-200 bg-amber-50/90 dark:border-amber-900/60 dark:bg-amber-950/40 p-2.5 text-[11px]"
-                                onClick={(e) => e.stopPropagation()}
+                                className="mt-4 rounded-xl border border-amber-200 bg-amber-50/90 p-3 text-xs dark:border-amber-900/60 dark:bg-amber-950/40"
+                                onClick={(event) => event.stopPropagation()}
                               >
-                                <div className="flex items-center justify-between text-amber-900 dark:text-amber-300 font-bold mb-1.5">
-                                  <span className="flex items-center gap-1">
-                                    <Icon name="alert-triangle" size={13} className="text-amber-600 dark:text-amber-400" />
-                                    <span>Pending Activation ({blockingReasons.length})</span>
+                                <div className="mb-2 flex items-center justify-between gap-2 font-bold text-amber-900 dark:text-amber-300">
+                                  <span className="flex items-center gap-1.5">
+                                    <Icon name="alert-triangle" size={14} className="text-amber-600 dark:text-amber-400" />
+                                    <span>Pending activation ({blockingReasons.length})</span>
                                   </span>
                                   <span className="text-[10px] font-semibold text-amber-700 dark:text-amber-400">Action needed</span>
                                 </div>
-                                <div className="space-y-1">
+                                <div className="space-y-1.5">
                                   {blockingReasons.map((reason) => (
                                     <div key={reason.key} className="flex items-center justify-between gap-2 text-slate-700 dark:text-slate-300">
-                                      <span className="truncate">&bull; {reason.label}</span>
+                                      <span className="min-w-0 truncate">{reason.label}</span>
                                       <button
                                         type="button"
                                         onClick={() => {
@@ -1129,16 +1161,16 @@ export function VacantListPage() {
                                             );
                                           }
                                         }}
-                                        className="shrink-0 text-[10px] font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+                                        className="inline-flex min-h-8 shrink-0 items-center rounded-lg px-2 text-[11px] font-bold text-blue-700 hover:bg-white/70 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:text-blue-300 dark:hover:bg-slate-900/50"
                                       >
-                                        {reason.actionLabel} &rarr;
+                                        {reason.actionLabel} <span aria-hidden="true" className="ml-1">→</span>
                                       </button>
                                     </div>
                                   ))}
                                 </div>
 
-                                <div className="pt-2 mt-1.5 border-t border-amber-200/70 dark:border-amber-900/40 flex items-center justify-between">
-                                  <span className="text-[10px] text-amber-800 dark:text-amber-300 font-medium">Have official JD document?</span>
+                                <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-amber-200/70 pt-2 dark:border-amber-900/40">
+                                  <span className="text-[11px] font-medium text-amber-800 dark:text-amber-300">Have an official job description?</span>
                                   <button
                                     type="button"
                                     onClick={() => {
@@ -1151,9 +1183,9 @@ export function VacantListPage() {
                                       });
                                       setIsJdModalOpen(true);
                                     }}
-                                    className="inline-flex items-center gap-1 text-[10px] font-bold text-teal-700 dark:text-teal-300 hover:text-teal-800 dark:hover:text-teal-200 hover:underline cursor-pointer"
+                                    className="inline-flex min-h-8 items-center gap-1.5 rounded-lg px-2 text-[11px] font-bold text-teal-800 hover:bg-white/70 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 dark:text-teal-300 dark:hover:bg-slate-900/50"
                                   >
-                                    <Icon name="file-text" size={11} />
+                                    <Icon name="file-text" size={13} />
                                     <span>Fill from JD</span>
                                   </button>
                                 </div>
@@ -1161,67 +1193,9 @@ export function VacantListPage() {
                             );
                           })()}
 
-                          <div className="flex items-center gap-4 border-t border-slate-100 pt-3 text-xs dark:border-slate-800">
-                            <div>
-                              <span className="block text-[10px] font-medium text-slate-400">Applicants</span>
-                              <span className="font-extrabold text-slate-800 dark:text-slate-100">{pos.applicationsCount}</span>
-                            </div>
-                            <div>
-                              <span className="block text-[10px] font-medium text-slate-400">Headcount</span>
-                              <span className="font-extrabold text-slate-800 dark:text-slate-100">{pos.joinedHeadcount}/{pos.approvedHeadcount}</span>
-                            </div>
-                            <div className="ml-auto text-right">
-                              <span className="block text-[10px] font-medium text-slate-400">Owner</span>
-                              <span className="font-bold text-slate-700 dark:text-slate-300">{pos.recruiter.name}</span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="mt-4 flex items-center justify-between gap-3 border-t border-slate-100 pt-4 text-xs dark:border-slate-800">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              navigate(`/sourcing-match?vacancyId=${pos.id}`);
-                            }}
-                            className="inline-flex items-center gap-1.5 font-bold text-sky-700 transition hover:text-sky-900 hover:underline dark:text-sky-300 dark:hover:text-sky-200"
-                          >
-                            <Icon name="sparkles" size={12} />
-                            <span>Match sourcing</span>
-                          </button>
-                          <div className="flex items-center gap-2">
-                            {pos.recruiter.name === 'Unassigned'
-                              ? canAssignInitial && (
-                                  <Button
-                                    size="sm"
-                                    variant="primary"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      openAssignModal(pos);
-                                    }}
-                                  >
-                                    Assign recruiter
-                                  </Button>
-                                )
-                              : canReassignRecruiter && (
-                                  <Button
-                                    size="sm"
-                                    variant="secondary"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      openAssignModal(pos);
-                                    }}
-                                  >
-                                    Reassign
-                                  </Button>
-                                )}
-                            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-400 transition group-hover:text-sky-700 dark:group-hover:text-sky-300">
-                              View details <Icon name="chevron-right" size={12} />
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+                        </VacancyCard>
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="overflow-x-auto">

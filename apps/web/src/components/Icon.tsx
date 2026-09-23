@@ -11,6 +11,7 @@ import {
   CalendarCheck,
   CalendarClock,
   CalendarDays,
+  Calculator,
   Check,
   CheckCircle2,
   ChevronDown,
@@ -42,20 +43,28 @@ import {
   LockKeyhole,
   LogOut,
   Mail,
+  Megaphone,
   Menu,
   MessageSquare,
+  Microscope,
   Moon,
   Pencil,
   Phone,
+  Pill,
   Plug,
   Plus,
   RefreshCw,
   Search,
+  Scale,
   Send,
   Settings,
   ShieldCheck,
   Shield,
+  Stethoscope,
   Clipboard,
+  Code2,
+  GraduationCap,
+  MapPin,
   SlidersHorizontal,
   Sparkles,
   Star,
@@ -158,7 +167,15 @@ export type IconName =
   | 'alert-circle'
   | 'external-link'
   | 'activity'
-  | 'link';
+  | 'link'
+  | 'code'
+  | 'graduation-cap'
+  | 'calculator'
+  | 'megaphone'
+  | 'microscope'
+  | 'pill'
+  | 'scale'
+  | 'stethoscope';
 
 const icons: Record<IconName, LucideIcon> = {
   shield: Shield,
@@ -241,7 +258,15 @@ const icons: Record<IconName, LucideIcon> = {
   'trash-2': Trash2,
   trash: Trash2,
   filter: List,
-  'map-pin': Building2,
+  'map-pin': MapPin,
+  code: Code2,
+  'graduation-cap': GraduationCap,
+  calculator: Calculator,
+  megaphone: Megaphone,
+  microscope: Microscope,
+  pill: Pill,
+  scale: Scale,
+  stethoscope: Stethoscope,
   video: CalendarCheck,
   slash: X,
   'trend-up': BarChart3,

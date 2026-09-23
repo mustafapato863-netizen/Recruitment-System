@@ -135,7 +135,7 @@ describe('RecruitmentCommandCenter Component', () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText(/8 candidates/i)).toBeInTheDocument();
+      expect(screen.getByText('Waiting on a recruiter decision')).toBeInTheDocument();
     });
 
     const appBtn = screen.getByRole('button', { name: /review 2 candidates/i });
