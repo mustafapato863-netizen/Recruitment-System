@@ -63,13 +63,12 @@ const dto = {
 };
 
 describe('TasksService team-scoped assignment', () => {
-  it('lets administrators assign to anyone', async () => {
+  it('blocks administrators from assigning outside their reporting line', async () => {
     const { service } = createService({
       assignee: { id: 'member-1', managerId: 'other-lead' },
       permissions: ['USERS_MANAGE'],
     });
-    const task = await service.create(ORG, 'admin-1', { ...dto });
-    expect(task.assigneeUserId).toBe('member-1');
+    await expect(service.create(ORG, 'admin-1', { ...dto })).rejects.toThrow(ForbiddenException);
   });
 
   it('lets team leaders assign to their direct reports', async () => {
@@ -82,13 +81,33 @@ describe('TasksService team-scoped assignment', () => {
   });
 
   it('lets anyone assign a task to themselves', async () => {
-    const { service, permissions } = createService({
+    const { service } = createService({
       assignee: { id: LEAD, managerId: 'other-lead' },
       permissions: [],
     });
     const task = await service.create(ORG, LEAD, { ...dto, assigneeUserId: LEAD });
     expect(task.assigneeUserId).toBe(LEAD);
-    expect(permissions.getPermissionSet).not.toHaveBeenCalled();
+  });
+
+  it('lets a lead assign through a manager who reports to them', async () => {
+    const findFirst = vi.fn().mockImplementation(({ where }: { where: { id?: string } }) => {
+      if (where.id === 'member-1') return Promise.resolve({ id: 'member-1', managerId: 'mid-1' });
+      if (where.id === 'mid-1') return Promise.resolve({ id: 'mid-1', managerId: LEAD });
+      return Promise.resolve(null);
+    });
+    const prisma = {
+      user: { findFirst },
+      $transaction: vi.fn().mockImplementation(async (callback: (tx: unknown) => unknown) => {
+        const tx = {
+          task: { create: vi.fn().mockResolvedValue(taskRow({ assigneeUserId: 'member-1' })) },
+          notification: { create: vi.fn().mockResolvedValue({}) },
+        };
+        return callback(tx);
+      }),
+    } as unknown as PrismaService;
+    const service = new TasksService(prisma, undefined, { getPermissionSet: vi.fn(), hasPermission: vi.fn() } as unknown as UserPermissionsService);
+    const task = await service.create(ORG, LEAD, { ...dto });
+    expect(task.assigneeUserId).toBe('member-1');
   });
 
   it('blocks team leaders from assigning outside their team', async () => {

@@ -88,25 +88,16 @@ describe('UsersService reporting lines', () => {
     expect(record.managerId).toBe('user-2');
   });
 
-  it('lists everyone for administrators in listAssignable', async () => {
-    const { service, findMany } = createService({ permissions: ['USERS_MANAGE'] });
-    await service.listAssignable(ORG, 'admin-1');
-    expect(findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { organizationId: ORG, status: 'Active' } }),
-    );
-  });
-
-  it('lists only self plus direct reports for team leaders', async () => {
-    const { service, findMany } = createService({ permissions: ['VACANCY_ASSIGN'] });
-    await service.listAssignable(ORG, 'lead-1');
-    expect(findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: {
-          organizationId: ORG,
-          status: 'Active',
-          OR: [{ id: 'lead-1' }, { managerId: 'lead-1' }],
-        },
-      }),
-    );
+  it('lists only people who report to the caller, including indirect reports', async () => {
+    const rows = [
+      userRow({ id: 'lead-1', displayName: 'Lead' }),
+      userRow({ id: 'member-1', displayName: 'Member', managerId: 'lead-1' }),
+      userRow({ id: 'nested-1', displayName: 'Nested', managerId: 'member-1' }),
+      userRow({ id: 'other-1', displayName: 'Other', managerId: 'boss-2' }),
+    ];
+    const { service, findMany } = createService({ permissions: ['USERS_MANAGE', 'VACANCY_MANAGE'] });
+    findMany.mockResolvedValue(rows);
+    const result = await service.listAssignable(ORG, 'lead-1');
+    expect(result.map((user) => user.id).sort()).toEqual(['member-1', 'nested-1']);
   });
 });

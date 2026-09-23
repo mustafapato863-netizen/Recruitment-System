@@ -76,14 +76,14 @@ function getPositionNextAction(pos: CommandCenterPosition) {
     };
   }
   if (pos.applicationsCount === 0 && pos.status === 'Open') {
-    return { label: 'Add candidates', hint: 'No applicants yet', to: '/cv-intake' };
+    return { label: 'Add candidates', hint: '', to: '/cv-intake' };
   }
   if (pos.isOverdue) {
     return { label: 'Review overdue job', hint: 'SLA is at risk', to: `/vacancies/${pos.id}` };
   }
   return {
     label: 'Open pipeline',
-    hint: `${pos.applicationsCount} candidate${pos.applicationsCount === 1 ? '' : 's'}`,
+    hint: '',
     to: `/applications?vacancyId=${pos.id}`,
   };
 }
@@ -448,19 +448,18 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
                 key={pos.id}
                 vacancy={pos}
                 onOpen={() => navigate(`/vacancies/${pos.id}`)}
-                className="min-h-[280px] justify-between"
                 footer={(
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate text-xs font-semibold text-slate-700 dark:text-slate-200">{nextAction.hint}</p>
-                    </div>
+                  <div className="flex items-center justify-end gap-3">
+                    {nextAction.hint ? (
+                      <p className="min-w-0 flex-1 truncate text-xs font-medium text-rf-ink-muted">{nextAction.hint}</p>
+                    ) : null}
                     <button
                       type="button"
                       onClick={(event) => {
                         event.stopPropagation();
                         navigate(nextAction.to);
                       }}
-                      className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl bg-blue-600 px-4 text-xs font-bold text-white shadow-sm transition-colors hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
+                      className="inline-flex min-h-11 shrink-0 items-center gap-2 rounded-xl bg-rf-action px-4 text-xs font-bold text-rf-on-action shadow-sm transition-colors hover:bg-rf-action-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rf-action/40 focus-visible:ring-offset-2 focus-visible:ring-offset-rf-surface"
                     >
                       {nextAction.label}
                       <Icon name="arrow-right" size={14} aria-hidden="true" />
@@ -468,7 +467,7 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
                   </div>
                 )}
               >
-                <div className="mt-1 space-y-4">
+                <div className="space-y-3">
                   <VacancyCardMeta location={pos.location} workType={pos.workType} />
                   <VacancyCardMetrics items={[
                     { key: 'applicants', label: 'Applicants', value: pos.applicationsCount, icon: 'users' },

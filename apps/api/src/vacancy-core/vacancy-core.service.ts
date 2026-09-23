@@ -832,6 +832,8 @@ export class VacancyCoreService {
         userRole.role.permissions.map((rolePermission) => rolePermission.permission.code),
       ) ?? [],
     );
+    await this.assertReportsToActor(organizationId, user.userId, dto.userId);
+
     const isAdmin = actor?.userRoles.some((ur) => ur.role.code === 'ADMINISTRATOR');
     const canManage = permissionCodes.has('VACANCY_MANAGE');
     const canAssign = permissionCodes.has('VACANCY_ASSIGN');
@@ -862,6 +864,27 @@ export class VacancyCoreService {
     if (!isReassignment && !canAssign && !canManage) {
       throw new ForbiddenException('Assigning a vacancy owner requires VACANCY_ASSIGN permission.');
     }
+  }
+
+  /** The assignee may be the actor, or anyone who reports up to the actor. */
+  private async assertReportsToActor(organizationId: string, actorId: string, assigneeId: string): Promise<void> {
+    if (assigneeId === actorId) return;
+    const assignee = await this.prisma.user.findFirst({
+      where: { id: assigneeId, organizationId, status: 'Active' },
+      select: { managerId: true },
+    });
+    let cursor = assignee?.managerId ?? null;
+    const seen = new Set<string>();
+    while (cursor && !seen.has(cursor)) {
+      if (cursor === actorId) return;
+      seen.add(cursor);
+      const next = await this.prisma.user.findFirst({
+        where: { id: cursor, organizationId },
+        select: { managerId: true },
+      });
+      cursor = next?.managerId ?? null;
+    }
+    throw new ForbiddenException('Access denied: you can only assign people who report to you.');
   }
 
   async updateVacancy(

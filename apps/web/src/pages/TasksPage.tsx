@@ -273,7 +273,11 @@ export function TasksPage() {
       return;
     }
     const vacancy = apiVacancies.find((v) => v.id === selectedVacancyId);
-    const recruiter = apiRecruiters.find((r) => r.id === selectedRecruiterId) || apiRecruiters[0];
+    const recruiter = apiRecruiters.find((r) => r.id === selectedRecruiterId);
+    if (!recruiter) {
+      showToast('Choose someone who reports to you.');
+      return;
+    }
 
     const vacancyTitle = vacancy?.title || vacancy?.position?.title || 'Open Vacancy';
     const vacancyDept = (vacancy as unknown as { department?: string } | null | undefined)?.department || vacancy?.branch?.name || 'Operations';
@@ -295,7 +299,7 @@ export function TasksPage() {
         type: targetType === 'Hires' ? 'Hiring' : 'Screening',
         priority: priority === 'High' ? 'High' : 'Normal',
         description: `Position: ${vacancyTitle} | Department: ${vacancyDept} | Location: ${vacancyLoc} | Quota: ${targetQuota} ${targetType} | Due: ${targetDeadline} | Notes: ${instructions || 'Target assigned by recruitment manager'}`,
-        assigneeUserId: recruiter?.id || user?.id,
+        assigneeUserId: recruiter.id,
         entityType: 'Vacancy',
         entityId: vacancy?.id || null,
       });
@@ -902,14 +906,16 @@ export function TasksPage() {
               {/* Recruiter Selector (team-scoped via reporting tree) */}
               <div>
                 <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">
-                  Assign To {isAdministrator ? 'Team Member' : 'My Team Member'}
+                  Assign to someone who reports to you
                 </label>
                 <select
                   value={selectedRecruiterId}
                   onChange={(e) => setSelectedRecruiterId(e.target.value)}
                   className="w-full p-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white font-semibold cursor-pointer"
                 >
-                  {apiRecruiters.map((rec) => (
+                  {apiRecruiters.length === 0 ? (
+                    <option value="">No one reports to you yet</option>
+                  ) : apiRecruiters.map((rec) => (
                     <option key={rec.id} value={rec.id}>
                       {rec.name} — {rec.role}
                     </option>

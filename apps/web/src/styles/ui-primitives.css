@@ -1763,3 +1763,41 @@
   height: 16px;
   accent-color: var(--color-action);
 }
+
+/* Quiet card frame with a subtle lift from the page surface. */
+.rf-vacancy-card {
+  border: 1.5px solid transparent;
+  border-radius: 12px;
+  background:
+    linear-gradient(var(--color-surface), var(--color-surface)) padding-box,
+    var(--gradient-brand) border-box;
+  box-shadow: var(--shadow-sm);
+  transition:
+    border-color var(--motion-fast, 150ms) var(--ease-standard, ease),
+    box-shadow var(--motion-fast, 150ms) var(--ease-standard, ease);
+}
+
+.rf-vacancy-card:hover {
+  box-shadow: var(--shadow-hover);
+}
+
+.rf-vacancy-card__metric {
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-surface-subtle);
+}
+
+.rf-vacancy-card__track {
+  background: var(--color-surface-muted);
+}
+
+.rf-vacancy-card__fill {
+  background: var(--color-warning);
+}
+
+.rf-vacancy-card__fill.is-mid {
+  background: var(--color-action);
+}
+
+.rf-vacancy-card__fill.is-complete {
+  background: var(--color-success);
+}

@@ -214,21 +214,12 @@ export function VacantListPage() {
     let isMounted = true;
     const fetchRecruiters = async () => {
       try {
-        const res = await getApi<Array<{ id: string; displayName?: string; name?: string }>>('/users/interviewers');
-        if (isMounted && Array.isArray(res) && res.length > 0) {
-          setRecruiters(res.map((r) => ({ id: r.id, name: r.displayName || r.name || 'Recruiter' })));
-          return;
+        const res = await getApi<Array<{ id: string; displayName?: string; name?: string }>>('/users/assignable');
+        if (isMounted && Array.isArray(res)) {
+          setRecruiters(res.map((r) => ({ id: r.id, name: r.displayName || r.name || 'Team member' })));
         }
       } catch {
-        // Fallback to /users?role=RECRUITER
-      }
-      try {
-        const res = await getApi<Array<{ id: string; displayName?: string; name?: string }>>('/users?role=RECRUITER');
-        if (isMounted && Array.isArray(res) && res.length > 0) {
-          setRecruiters(res.map((r) => ({ id: r.id, name: r.displayName || r.name || 'Recruiter' })));
-        }
-      } catch {
-        // ignore
+        if (isMounted) setRecruiters([]);
       }
     };
     void fetchRecruiters();
@@ -739,13 +730,12 @@ export function VacantListPage() {
                 <VacancyCard
                   key={pos.id}
                   vacancy={pos}
-                  className="min-h-[320px] hover:-translate-y-0.5"
                   footer={(
-                    <div className="flex flex-col-reverse gap-2 2xl:flex-row 2xl:items-center 2xl:justify-between">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
                       <button
                         type="button"
                         onClick={() => openSetupForPosition(pos)}
-                        className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800 dark:focus-visible:ring-offset-slate-900"
+                        className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-rf-border bg-rf-surface px-4 text-sm font-semibold text-rf-ink transition-colors hover:bg-rf-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rf-action/40 focus-visible:ring-offset-2 focus-visible:ring-offset-rf-surface"
                       >
                         <Icon name="edit" size={16} />
                         Edit specs
@@ -753,16 +743,15 @@ export function VacantListPage() {
                       <button
                         type="button"
                         onClick={() => navigate(`/sourcing-match?vacancyId=${pos.id}`)}
-                        className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-bold text-white shadow-sm transition-colors hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
+                        className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl bg-rf-action px-4 text-sm font-bold text-rf-on-action shadow-sm transition-colors hover:bg-rf-action-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rf-action/40 focus-visible:ring-offset-2 focus-visible:ring-offset-rf-surface"
                       >
-                        <Icon name="users" size={16} />
                         Match candidates
                         <Icon name="arrow-right" size={16} />
                       </button>
                     </div>
                   )}
                 >
-                  <div className="mt-4 flex flex-1 flex-col gap-4">
+                  <div className="flex flex-1 flex-col gap-3">
                     <VacancyCardMeta
                       location={pos.location}
                       experienceLabel={`${pos.minExperienceYears ?? 3}+ years experience`}
@@ -1036,29 +1025,20 @@ export function VacantListPage() {
                 {viewMode === 'cards' ? (
                   <div className="grid grid-cols-1 gap-4 p-4 sm:p-5 lg:grid-cols-2 2xl:grid-cols-3">
                     {paginatedPositions.map((pos) => {
-                      const statusEdgeClass = pos.status === 'Open'
-                        ? 'border-l-4 border-l-emerald-500'
-                        : pos.status === 'Pending Activation'
-                          ? 'border-l-4 border-l-amber-500'
-                          : pos.status === 'On Hold'
-                            ? 'border-l-4 border-l-slate-400'
-                            : 'border-l-4 border-l-slate-300 dark:border-l-slate-600';
-
                       return (
                         <VacancyCard
                           key={pos.id}
                           vacancy={pos}
                           onOpen={() => navigate(`/vacancies/${pos.id}`)}
-                          className={`min-h-[340px] hover:-translate-y-0.5 motion-reduce:transform-none ${statusEdgeClass}`}
                           footer={(
-                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
                               <button
                                 type="button"
                                 onClick={(event) => {
                                   event.stopPropagation();
                                   navigate(`/sourcing-match?vacancyId=${pos.id}`);
                                 }}
-                                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 text-sm font-semibold text-blue-700 transition-colors hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:text-blue-300 dark:hover:bg-blue-950/40"
+                                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 text-sm font-semibold text-rf-action transition-colors hover:bg-rf-action-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rf-action/40"
                               >
                                 <Icon name="sparkles" size={15} />
                                 Match sourcing
@@ -1095,7 +1075,7 @@ export function VacantListPage() {
                                     event.stopPropagation();
                                     navigate(`/vacancies/${pos.id}`);
                                   }}
-                                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-bold text-white shadow-sm transition-colors hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900"
+                                  className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-rf-action px-4 text-sm font-bold text-rf-on-action shadow-sm transition-colors hover:bg-rf-action-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rf-action/40 focus-visible:ring-offset-2 focus-visible:ring-offset-rf-surface"
                                 >
                                   View details
                                   <Icon name="arrow-right" size={15} />
@@ -1104,23 +1084,22 @@ export function VacantListPage() {
                             </div>
                           )}
                         >
-                          <div className="mt-4 space-y-4">
+                          <div className="space-y-3">
                             <VacancyCardMeta
                               location={pos.location}
                               experienceLabel={pos.minExperienceYears != null ? `${pos.minExperienceYears}+ years experience` : 'Experience not specified'}
                             />
                             <VacancyCardMetrics items={[
                               { key: 'applicants', label: 'Applicants', value: pos.applicationsCount, icon: 'users' },
-                              { key: 'headcount', label: 'Headcount', value: `${pos.joinedHeadcount}/${pos.approvedHeadcount}`, icon: 'briefcase' },
                               {
                                 key: 'owner',
                                 label: 'Owner',
                                 value: (
                                   <span className="flex min-w-0 items-center gap-2">
-                                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-100 text-[9px] font-bold text-blue-700 dark:bg-blue-950 dark:text-blue-300">
+                                    <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-rf-action-soft text-[10px] font-bold text-rf-action">
                                       {pos.recruiter.initials || '—'}
                                     </span>
-                                    <span className="truncate text-xs font-semibold text-slate-700 dark:text-slate-200">{pos.recruiter.name}</span>
+                                    <span className="truncate text-xs font-semibold text-rf-ink">{pos.recruiter.name}</span>
                                   </span>
                                 ),
                                 icon: 'user',
@@ -1135,7 +1114,7 @@ export function VacantListPage() {
                             const blockingReasons = getVacancyBlockingReasons(pos);
                             return (
                               <div
-                                className="mt-4 rounded-xl border border-amber-200 bg-amber-50/90 p-3 text-xs dark:border-amber-900/60 dark:bg-amber-950/40"
+                                className="rounded-xl border border-rf-warning-border bg-rf-warning-soft p-3 text-xs text-rf-ink"
                                 onClick={(event) => event.stopPropagation()}
                               >
                                 <div className="mb-2 flex items-center justify-between gap-2 font-bold text-amber-900 dark:text-amber-300">
@@ -1561,12 +1540,12 @@ export function VacantListPage() {
 
           <div>
             <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-              Select Recruiter
+              Assign to someone who reports to you
             </label>
             {recruiters.length === 0 ? (
               <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300 text-xs flex items-center gap-2">
                 <Icon name="alert-circle" size={16} className="text-rose-500 shrink-0" />
-                <span>No recruiters available. Please ensure recruiter accounts are configured in Master Data / User Roles.</span>
+                <span>No one reports to you yet. Link your team on the Reporting Tree before assigning.</span>
               </div>
             ) : (
               <Select

@@ -145,9 +145,8 @@ export class TasksService {
   }
 
   /**
-   * Team-scoped assignment: anyone may assign tasks to themselves, admins
-   * (USERS_MANAGE / VACANCY_MANAGE) may assign to anyone, and everyone else
-   * may only assign to their direct reports from the reporting tree.
+   * A task may be assigned to yourself, or to someone who reports to you
+   * through the reporting tree. Permission level does not widen that list.
    */
   private async assertCanAssign(
     organizationId: string,
@@ -155,13 +154,18 @@ export class TasksService {
     assignee: { id: string; managerId: string | null },
   ): Promise<void> {
     if (assignee.id === createdById) return;
-    const permissions = this.userPermissions
-      ? await this.userPermissions.getPermissionSet(createdById, organizationId)
-      : new Set<string>();
-    if (permissions.has('USERS_MANAGE') || permissions.has('VACANCY_MANAGE')) return;
-    if (assignee.managerId !== createdById) {
-      throw new ForbiddenException('Access denied: you can only assign tasks to yourself or your direct reports.');
+    let cursor: string | null = assignee.managerId;
+    const seen = new Set<string>();
+    while (cursor && !seen.has(cursor)) {
+      if (cursor === createdById) return;
+      seen.add(cursor);
+      const next = await this.prisma.user.findFirst({
+        where: { id: cursor, organizationId },
+        select: { managerId: true },
+      });
+      cursor = next?.managerId ?? null;
     }
+    throw new ForbiddenException('Access denied: you can only assign tasks to people who report to you.');
   }
 
   private async resolveReference(organizationId: string, entityType?: string, entityId?: string, user?: AuthUser) {

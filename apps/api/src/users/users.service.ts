@@ -8,6 +8,7 @@ import type { CreateUserDto, UpdateUserDto } from './users.dto';
 import * as bcrypt from 'bcryptjs';
 import type { UserRecord } from '@recruitflow/contracts';
 import type { Prisma } from '@recruitflow/database';
+import { reportIds } from './reporting-scope';
 
 type UserWithRoles = Prisma.UserGetPayload<{
   include: { userRoles: { include: { role: true } } };
@@ -142,17 +143,12 @@ export class UsersService {
   }
 
   /**
-   * Users the caller may assign tasks to: themselves plus their direct
-   * reports. Administrators (USERS_MANAGE / VACANCY_MANAGE) may assign to
-   * anyone active in the organization.
+   * People the caller may assign work to: active users who report to them,
+   * including reports of their reports. The caller is not in the list.
    */
   async listAssignable(organizationId: string, userId: string): Promise<UserRecord[]> {
-    const permissions = await this.userPermissions.getPermissionSet(userId, organizationId);
-    const isAdmin = permissions.has('USERS_MANAGE') || permissions.has('VACANCY_MANAGE');
     const users = await this.prisma.user.findMany({
-      where: isAdmin
-        ? { organizationId, status: 'Active' }
-        : { organizationId, status: 'Active', OR: [{ id: userId }, { managerId: userId }] },
+      where: { organizationId, status: 'Active' },
       include: {
         userRoles: {
           include: { role: true },
@@ -160,8 +156,9 @@ export class UsersService {
       },
       orderBy: { displayName: 'asc' },
     });
+    const allowed = reportIds(users, userId);
 
-    return users.map((user) => this.toUserRecord(user));
+    return users.filter((user) => allowed.has(user.id)).map((user) => this.toUserRecord(user));
   }
 
   /**

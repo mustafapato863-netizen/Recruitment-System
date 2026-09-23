@@ -1312,3 +1312,16 @@
     font-size: 16px;
   }
 }
+
+/* Keep vacancy cards neutral, with a subtle outer shadow for separation. */
+.rf-page article.rf-vacancy-card {
+  border: 1.5px solid transparent !important;
+  background:
+    linear-gradient(var(--color-surface), var(--color-surface)) padding-box,
+    var(--gradient-brand) border-box !important;
+  box-shadow: var(--shadow-sm) !important;
+}
+
+.rf-page article.rf-vacancy-card:hover {
+  box-shadow: var(--shadow-hover) !important;
+}

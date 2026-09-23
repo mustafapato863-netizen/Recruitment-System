@@ -239,7 +239,7 @@ export function ManagerDashboard() {
             new Date().toISOString().slice(0, 10),
         ),
         getApi<Interview[]>('/interviews'),
-        getApi<{ id: string; displayName?: string; name?: string; roleCode?: string }[]>('/users/interviewers'),
+        getApi<Array<{ id: string; displayName?: string; roles?: Array<{ name?: string }> }>>('/users/assignable'),
       ]);
 
       let loadedVacancies: Vacancy[] = [];
@@ -263,8 +263,8 @@ export function ManagerDashboard() {
       if (recruitersRes.status === 'fulfilled' && Array.isArray(recruitersRes.value)) {
         const mappedRecs = recruitersRes.value.map((r) => ({
           id: r.id,
-          name: r.displayName || r.name || 'Recruiter',
-          role: r.roleCode || 'Recruiter',
+          name: r.displayName || 'Team member',
+          role: r.roles?.[0]?.name || 'Team member',
         }));
         setRecruiterOptions(mappedRecs);
         if (mappedRecs.length > 0 && !selectedRecruiterId) {
@@ -1259,11 +1259,17 @@ export function ManagerDashboard() {
                       </div>
                     ) : null}
 
+                    {recruiterOptions.length === 0 && (
+                      <p className="rounded-xl border border-rf-border bg-rf-surface-subtle p-3 text-xs text-rf-ink-muted">
+                        No one reports to you yet. Link your team on the Reporting Tree before assigning.
+                      </p>
+                    )}
+
                     {/* Recruiter Selector */}
                     {recruiterOptions.length > 0 && (
                       <div>
                         <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300">
-                          {isReassignment ? 'Reassign To Recruiter' : 'Assign To Recruiter'}
+                          {isReassignment ? 'Reassign to someone who reports to you' : 'Assign to someone who reports to you'}
                         </label>
                         <select
                           value={selectedRecruiterId}

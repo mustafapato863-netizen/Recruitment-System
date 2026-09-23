@@ -298,7 +298,7 @@ describe('Vacancy Assignment and Activation Flow', () => {
               },
             ]);
           }
-          if (url.includes('/users/interviewers')) {
+          if (url.includes('/users/assignable')) {
             return Promise.resolve(mockInterviewers);
           }
           return Promise.resolve([]);
@@ -342,7 +342,7 @@ describe('Vacancy Assignment and Activation Flow', () => {
               },
             ]);
           }
-          if (url.includes('/users/interviewers')) {
+          if (url.includes('/users/assignable')) {
             return Promise.resolve(mockInterviewers);
           }
           return Promise.resolve([]);
@@ -420,7 +420,7 @@ describe('Vacancy Assignment and Activation Flow', () => {
               },
             ]);
           }
-          if (url.includes('/users/interviewers')) {
+          if (url.includes('/users/assignable')) {
             return Promise.resolve(mockInterviewers);
           }
           return Promise.resolve([]);

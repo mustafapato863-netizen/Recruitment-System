@@ -171,11 +171,11 @@ export function VacancyCard({
       aria-label={onOpen ? `Vacancy ${vacancy.title}. Press Enter to view details.` : undefined}
       onClick={onOpen}
       onKeyDown={handleKeyDown}
-      className={`group flex min-w-0 flex-col rounded-xl border border-slate-200/90 bg-white p-[8px] shadow-sm transition duration-200 hover:border-blue-200 hover:shadow-lg motion-reduce:transition-none dark:border-slate-800 dark:bg-slate-900 dark:hover:border-blue-900 ${onOpen ? 'cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-950' : ''} ${className}`}
+      className={`rf-vacancy-card group flex h-full min-w-0 flex-col gap-3.5 rounded-xl px-4 py-4 motion-reduce:transition-none ${onOpen ? 'cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rf-action/40 focus-visible:ring-offset-2 focus-visible:ring-offset-rf-surface' : ''} ${className}`}
     >
       <VacancyCardHeader vacancy={vacancy} roleIcon={roleIcon} />
       {children}
-      {footer && <div className="mt-auto border-t border-slate-100 pt-3 dark:border-slate-800">{footer}</div>}
+      {footer && <div className="mt-auto border-t border-rf-border-subtle pt-3">{footer}</div>}
     </article>
   );
 }
@@ -192,16 +192,16 @@ export function VacancyCardHeader({
 
   return (
     <div className="flex items-start gap-3">
-      <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1 ${appearance.tileClassName}`}>
-        <Icon name={appearance.icon} size={19} strokeWidth={1.8} aria-hidden="true" />
+      <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ring-1 ${appearance.tileClassName}`}>
+        <Icon name={appearance.icon} size={16} strokeWidth={1.8} aria-hidden="true" />
       </span>
       <div className="min-w-0 flex-1 pt-0.5">
-        <p className="truncate text-xs font-semibold tracking-wide text-slate-500 dark:text-slate-400">
+        <p className="truncate text-[11px] font-medium text-rf-ink-muted">
           <span>{vacancy.positionCode || vacancy.vacancyCode || 'Vacancy'}</span>
           <span className="px-1 text-slate-300" aria-hidden="true">·</span>
           <span>{vacancy.department}</span>
         </p>
-        <h3 className="mt-1 break-words text-base font-bold leading-snug text-slate-950 transition-colors group-hover:text-blue-700 dark:text-white dark:group-hover:text-blue-300">
+        <h3 className="mt-0.5 line-clamp-2 min-h-[2.75rem] break-words text-base font-bold leading-snug text-rf-ink">
           {vacancy.title}
         </h3>
       </div>
@@ -223,7 +223,7 @@ export function VacancyCardMeta({
   workType?: string;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs font-semibold text-rf-ink-muted">
       {experienceLabel && (
         <span className="inline-flex items-center gap-2">
           <Icon name="briefcase" size={16} className="text-slate-400" aria-hidden="true" />
@@ -261,12 +261,12 @@ export function VacancyCardMetrics({ items }: { items: VacancyCardMetricItem[] }
   return (
     <div className={`grid ${columns} gap-2`}>
       {items.map((item) => (
-        <div key={item.key} className="min-w-0 rounded-lg bg-slate-50 px-2.5 py-2 dark:bg-slate-800/60">
-          <span className="flex items-center gap-1.5 text-[9.5px] font-bold uppercase tracking-wider text-slate-400">
+        <div key={item.key} className="rf-vacancy-card__metric min-w-0 rounded-lg px-2.5 py-2">
+          <span className="flex items-center gap-1.5 text-[11px] font-semibold text-rf-ink-muted">
             {item.icon && <Icon name={item.icon} size={12} aria-hidden="true" />}
             {item.label}
           </span>
-          <div className="mt-1 min-w-0 text-sm font-bold leading-tight text-slate-900 dark:text-white">{item.value}</div>
+          <div className="mt-1 min-w-0 text-sm font-bold leading-tight text-rf-ink">{item.value}</div>
         </div>
       ))}
     </div>
@@ -283,27 +283,29 @@ export function VacancyCardHeadcountProgress({
   label?: string;
 }) {
   const percentage = target > 0 ? Math.max(0, Math.min(100, Math.round((filled / target) * 100))) : 0;
-  const barColor = percentage >= 100 ? 'bg-emerald-500' : percentage > 50 ? 'bg-blue-600' : 'bg-amber-500';
+  const barColor = percentage >= 100 ? 'rf-vacancy-card__fill is-complete' : percentage > 50 ? 'rf-vacancy-card__fill is-mid' : 'rf-vacancy-card__fill';
 
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-3 text-xs">
-        <span className="font-semibold text-slate-500 dark:text-slate-400">{label}</span>
-        <span className="font-bold text-slate-800 dark:text-slate-200">
-          {filled} / {target > 0 ? target : '—'} <span className="font-medium text-slate-500">({percentage}%)</span>
+        <span className="font-semibold text-rf-ink-muted">{label}</span>
+        <span className="font-bold text-rf-ink">
+          {filled} / {target > 0 ? target : '—'}
         </span>
       </div>
-      <div
-        role="progressbar"
-        aria-label={label}
-        aria-valuemin={0}
-        aria-valuemax={target || 1}
-        aria-valuenow={target > 0 ? Math.max(0, Math.min(target, filled)) : 0}
-        aria-valuetext={`${percentage}% filled`}
-        className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700"
-      >
-        <div className={`h-full rounded-full transition-[width] duration-300 motion-reduce:transition-none ${barColor}`} style={{ width: `${percentage}%` }} />
-      </div>
+      {percentage > 0 && (
+        <div
+          role="progressbar"
+          aria-label={label}
+          aria-valuemin={0}
+          aria-valuemax={target || 1}
+          aria-valuenow={target > 0 ? Math.max(0, Math.min(target, filled)) : 0}
+          aria-valuetext={`${percentage}% filled`}
+          className="rf-vacancy-card__track h-2 overflow-hidden rounded-full"
+        >
+          <div className={`h-full rounded-full transition-[width] duration-300 motion-reduce:transition-none ${barColor}`} style={{ width: `${percentage}%` }} />
+        </div>
+      )}
     </div>
   );
 }
@@ -324,13 +326,13 @@ export function VacancyCardSkills({
 
   return (
     <section aria-label="Key skills">
-      <h4 className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Key skills</h4>
+      <h4 className="text-xs font-semibold text-rf-ink-muted">Key skills</h4>
       <div className="mt-2 flex flex-wrap gap-2">
         {skills.length > 0 ? skills.slice(0, maxVisible).map((skill) => (
           <span key={skill} className={`inline-flex min-h-6 max-w-full items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold leading-5 ${appearance.skillClassName}`}>
             <span className="break-words">{skill}</span>
           </span>
-        )) : <span className="py-1 text-xs text-slate-400">No skills specified</span>}
+        )) : <span className="py-1 text-xs text-rf-ink-muted">No skills specified</span>}
         {skills.length > maxVisible && (
           <span className="inline-flex min-h-7 items-center rounded-full border border-slate-200 bg-slate-50 px-3 text-xs font-bold text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300">
             +{skills.length - maxVisible} more
@@ -343,13 +345,13 @@ export function VacancyCardSkills({
 
 export function VacancyCardEducation({ qualifications }: { qualifications?: string | null }) {
   return (
-    <section className="flex items-start gap-2.5 border-t border-slate-100 pt-3 dark:border-slate-800">
-      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+    <section className="flex items-start gap-2.5 border-t border-rf-border-subtle pt-3">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-rf-surface-muted text-rf-ink-muted">
         <Icon name="graduation-cap" size={15} aria-hidden="true" />
       </span>
       <div className="min-w-0">
-        <h4 className="text-[10.5px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Education</h4>
-        <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-700 dark:text-slate-300">
+        <h4 className="text-xs font-semibold text-rf-ink-muted">Education</h4>
+        <p className="mt-1 line-clamp-2 text-xs leading-5 text-rf-ink">
           {qualifications || 'Education requirements not specified.'}
         </p>
       </div>
