@@ -19,6 +19,33 @@ import type { AuthUser } from '@recruitflow/contracts';
 import type { ReportOverviewQueryDto } from './reports.dto';
 
 const DAY_MS = 86_400_000;
+const REPORTING_ROLE_CODES = ['ADMINISTRATOR', 'TALENT_MANAGER', 'HR_MANAGER', 'PERFORMANCE_ADMIN'];
+const RECRUITER_ACTIVITY_ACTION_CATEGORIES = {
+  APPLICATION_CREATE: 'applications',
+  APPLICATION_UPDATE: 'applications',
+  APPLICATION_NOTE_CREATE: 'applications',
+  CANDIDATE_CREATE: 'applications',
+  APPLICATION_MOVE_STAGE: 'screening',
+  SCREENING_SUBMIT: 'screening',
+  INTERVIEW_SCHEDULE: 'interviews',
+  INTERVIEW_UPDATE: 'interviews',
+  INTERVIEW_RESPONSE: 'interviews',
+  SCORECARD_SUBMIT: 'interviews',
+  OFFER_CREATE: 'offers',
+  OFFER_REVISION_CREATE: 'offers',
+  OFFER_STATUS_UPDATE: 'offers',
+  HIRING_CASE_CREATE: 'hiring',
+  HIRING_COMPLIANCE_UPDATE: 'hiring',
+  HIRING_FINAL_APPROVAL_SUBMIT: 'hiring',
+  HIRING_FINAL_APPROVAL_DECIDE: 'hiring',
+  HIRING_JOINING_UPDATE: 'hiring',
+} as const;
+type RecruiterActivityCategory = (typeof RECRUITER_ACTIVITY_ACTION_CATEGORIES)[keyof typeof RECRUITER_ACTIVITY_ACTION_CATEGORIES];
+type RecruiterActivityCounts = Record<RecruiterActivityCategory, number>;
+
+function emptyRecruiterActivity(): RecruiterActivityCounts {
+  return { applications: 0, screening: 0, interviews: 0, offers: 0, hiring: 0 };
+}
 
 interface ResolvedReportRange {
   from: Date;
@@ -51,6 +78,8 @@ export class ReportsService {
       query,
       visibility,
     );
+    const canViewRecruiterTeam = !user || user.roleCodes.some((roleCode) => REPORTING_ROLE_CODES.includes(roleCode));
+    const recruiterUserScope = user && !canViewRecruiterTeam ? { id: user.userId } : {};
 
     const [
       applications,
@@ -136,9 +165,10 @@ export class ReportsService {
       this.prisma.vacancy.findMany({
         where: {
           organizationId,
+          status: { not: 'Cancelled' },
           ...(query.branchId ? { branchId: query.branchId } : {}),
           ...(query.positionId ? { positionId: query.positionId } : {}),
-          ...(user ? { applications: { some: visibility } } : {}),
+          ...(user && !canViewRecruiterTeam ? { applications: { some: visibility } } : {}),
         },
         select: {
           approvedHeadcount: true,
@@ -153,14 +183,27 @@ export class ReportsService {
         where: {
           organizationId,
           status: 'Active',
-          ...(query.recruiterId ? { id: query.recruiterId } : {}),
+          ...(user && !canViewRecruiterTeam
+            ? { id: user.userId }
+            : query.recruiterId ? { id: query.recruiterId } : {}),
+          OR: [
+            { userRoles: { some: { role: { code: 'RECRUITER', status: 'Active' } } } },
+            { assignments: { some: { isActive: true, roleCode: 'RECRUITER', vacancy: { organizationId } } } },
+            { primaryApplications: { some: applicationWhere } },
+          ],
         },
         select: {
           id: true,
           displayName: true,
           _count: {
             select: {
-              assignments: { where: { isActive: true } },
+              assignments: {
+                where: {
+                  isActive: true,
+                  roleCode: 'RECRUITER',
+                  vacancy: { organizationId },
+                },
+              },
               primaryApplications: { where: applicationWhere },
               assignedTasks: {
                 where: {
@@ -187,15 +230,41 @@ export class ReportsService {
         where: {
           organizationId,
           status: 'Active',
+          ...recruiterUserScope,
           OR: [
-            { assignments: { some: { isActive: true } } },
-            { primaryApplications: { some: {} } },
+            { userRoles: { some: { role: { code: 'RECRUITER', status: 'Active' } } } },
+            { assignments: { some: { isActive: true, roleCode: 'RECRUITER', vacancy: { organizationId } } } },
+            { primaryApplications: { some: { organizationId } } },
           ],
         },
         orderBy: { displayName: 'asc' },
         select: { id: true, displayName: true },
       }),
     ]);
+
+    const activityByRecruiter = new Map<string, RecruiterActivityCounts>();
+    const recruiterIds = users.map((recruiter) => recruiter.id);
+    if (recruiterIds.length > 0) {
+      const groupedActivity = await this.prisma.auditLog.groupBy({
+        by: ['actorUserId', 'action'],
+        where: {
+          organizationId,
+          actorUserId: { in: recruiterIds },
+          createdAt: { gte: range.from, lte: range.to },
+          result: 'SUCCESS',
+          action: { in: Object.keys(RECRUITER_ACTIVITY_ACTION_CATEGORIES) },
+        },
+        _count: { _all: true },
+      });
+      for (const row of groupedActivity) {
+        if (!row.actorUserId) continue;
+        const category = RECRUITER_ACTIVITY_ACTION_CATEGORIES[row.action as keyof typeof RECRUITER_ACTIVITY_ACTION_CATEGORIES];
+        if (!category) continue;
+        const counts = activityByRecruiter.get(row.actorUserId) ?? emptyRecruiterActivity();
+        counts[category] += row._count._all;
+        activityByRecruiter.set(row.actorUserId, counts);
+      }
+    }
 
     const acceptedOffers = offers.filter((offer) => offer.status === 'Accepted').length;
     const completedInterviews = interviews.filter((interview) => ['Completed', 'No-show'].includes(interview.status));
@@ -210,14 +279,14 @@ export class ReportsService {
     }
     const topSource = [...sourceCounts.entries()].sort((left, right) => right[1].total - left[1].total)[0];
 
-    const timeToFill = joinedCases.length === 0
-      ? 0
-      : Math.round(joinedCases.reduce((total, hiringCase) => {
-          const start = hiringCase.application.vacancy.openedAt;
-          const end = hiringCase.actualJoiningDate;
-          if (!start || !end) return total;
-          return total + Math.max(0, (end.getTime() - start.getTime()) / DAY_MS);
-        }, 0) / joinedCases.length);
+    const timeToFillSamples = joinedCases.flatMap((hiringCase) => {
+      const start = hiringCase.application.vacancy.openedAt;
+      const end = hiringCase.actualJoiningDate;
+      return start && end ? [Math.max(0, (end.getTime() - start.getTime()) / DAY_MS)] : [];
+    });
+    const timeToFill = timeToFillSamples.length > 0
+      ? Math.round(timeToFillSamples.reduce((total, days) => total + days, 0) / timeToFillSamples.length)
+      : 0;
     const timeToOffer = offers.length === 0
       ? 0
       : Math.round(offers.reduce((total, offer) =>
@@ -242,7 +311,7 @@ export class ReportsService {
     }
 
     const kpis: ReportKpis = {
-      timeToFill: { value: timeToFill, change: 0 },
+      timeToFill: { value: timeToFill, change: 0, sampleCount: timeToFillSamples.length },
       timeToOffer: { value: timeToOffer, target: 25 },
       offerAcceptanceRate: {
         value: offers.length === 0 ? 0 : Math.round((acceptedOffers / offers.length) * 100),
@@ -309,6 +378,10 @@ export class ReportsService {
         vacancies: user._count.assignments,
         applications: user._count.primaryApplications,
         overdueTasks: user._count.assignedTasks,
+        activity: (() => {
+          const activity = activityByRecruiter.get(user.id) ?? emptyRecruiterActivity();
+          return { ...activity, total: Object.values(activity).reduce((total, count) => total + count, 0) };
+        })(),
       })),
       filterOptions: {
         branches: filterBranches.map((branch) => ({ id: branch.id, label: branch.name })),
@@ -316,24 +389,20 @@ export class ReportsService {
         recruiters: filterRecruiters.map((recruiter) => ({ id: recruiter.id, label: recruiter.displayName })),
       },
       recruitmentKpis: (() => {
-        const targetHeadcount = vacancies.reduce((acc, v) => acc + (v.approvedHeadcount || 1), 0) || 1;
-        const attendedInterviews = interviews.filter((i) => i.status === 'Completed').length;
-        const invitationRate = interviews.length === 0 ? 0 : Math.round((attendedInterviews / interviews.length) * 100);
-        const acceptedFinalRate = targetHeadcount === 0 ? 0 : Math.round((acceptedOffers / targetHeadcount) * 100);
-        const offersVsTargetRate = targetHeadcount === 0 ? 0 : Math.round((offers.length / targetHeadcount) * 100);
-        const hiresVsTargetRate = targetHeadcount === 0 ? 0 : Math.round((joinedCases.length / targetHeadcount) * 100);
-
-        const ninetyDaysAgo = new Date(Date.now() - (90 * DAY_MS));
-        const eligibleForProbation = joinedCases.filter((jc) => jc.actualJoiningDate && jc.actualJoiningDate <= ninetyDaysAgo);
-        const passedProbation = eligibleForProbation.length;
-        const probationRate = eligibleForProbation.length === 0 ? 100 : Math.round((passedProbation / eligibleForProbation.length) * 100);
+        const targetHeadcount = vacancies.reduce((acc, vacancy) => acc + Math.max(0, vacancy.approvedHeadcount), 0);
+        const attendedInterviews = interviews.filter((interview) => interview.status === 'Completed').length;
+        const attendanceDenominator = completedInterviews.length;
+        const invitationRate = attendanceDenominator > 0 ? Math.round((attendedInterviews / attendanceDenominator) * 100) : 0;
+        const acceptedFinalRate = targetHeadcount > 0 ? Math.round((acceptedOffers / targetHeadcount) * 100) : 0;
+        const offersVsTargetRate = targetHeadcount > 0 ? Math.round((offers.length / targetHeadcount) * 100) : 0;
+        const hiresVsTargetRate = targetHeadcount > 0 ? Math.round((joinedCases.length / targetHeadcount) * 100) : 0;
 
         const kpiItems: RecruitmentKpiItem[] = [
           {
             id: 'kpi-invitation',
             position: 'Recruitment',
-            name: 'Invitation',
-            definition: 'Measures the percentage of sourced candidate’s actual attending the interviews.',
+            name: 'Interview Attendance',
+            definition: 'The share of completed interview records marked Completed rather than No-show.',
             currentValue: invitationRate,
             formattedValue: `${invitationRate}%`,
             targetValue: 80,
@@ -341,7 +410,7 @@ export class ReportsService {
             unit: '%',
             achievementRate: Math.min(100, Math.round((invitationRate / 80) * 100)),
             status: invitationRate >= 80 ? 'On Target' : 'Under Target',
-            notes: `${attendedInterviews} attended of ${interviews.length} scheduled`,
+            notes: `${attendedInterviews} attended of ${attendanceDenominator} completed or no-show interviews`,
           },
           {
             id: 'kpi-accepted-final',
@@ -389,7 +458,7 @@ export class ReportsService {
             id: 'kpi-time-to-fill',
             position: 'Recruitment',
             name: 'Time to Fill',
-            definition: 'The total number of calendar days from when a job requisition is approved to when a candidate accepts the Hire.',
+            definition: 'Average calendar days from vacancy opening to actual joining for hires in the selected period.',
             currentValue: timeToFill,
             formattedValue: `${timeToFill} Days`,
             targetValue: 30,
@@ -397,25 +466,16 @@ export class ReportsService {
             unit: 'Days',
             achievementRate: timeToFill === 0 ? 100 : Math.min(100, Math.round((30 / Math.max(1, timeToFill)) * 100)),
             status: timeToFill > 0 && timeToFill <= 30 ? 'On Target' : timeToFill > 30 ? 'Under Target' : 'On Target',
-            notes: 'Calculated from requisition approved opening to candidate hire acceptance/joining',
-          },
-          {
-            id: 'kpi-quality-of-hire',
-            position: 'Recruitment',
-            name: 'Quality of Hire (Probation Success Rate)',
-            definition: 'The percentage of new hires who successfully complete their probation period and meet performance expectations.',
-            currentValue: probationRate,
-            formattedValue: `${probationRate}%`,
-            targetValue: 90,
-            formattedTarget: '≥ 90%',
-            unit: '%',
-            achievementRate: Math.min(100, Math.round((probationRate / 90) * 100)),
-            status: probationRate >= 90 ? 'On Target' : 'Under Target',
-            notes: 'Standard 90-day post-joining retention & performance success',
+            notes: 'Calculated from vacancy opening date to actual joining date; hires without either date are excluded.',
           },
         ];
 
-        return kpiItems;
+        return kpiItems.filter((item) => {
+          if (item.id === 'kpi-invitation') return attendanceDenominator > 0;
+          if (['kpi-accepted-final', 'kpi-offers', 'kpi-hires'].includes(item.id)) return targetHeadcount > 0;
+          if (item.id === 'kpi-time-to-fill') return timeToFillSamples.length > 0;
+          return false;
+        });
       })(),
     };
   }
@@ -432,6 +492,10 @@ export class ReportsService {
           joined: totals.joined + point.joined,
         }),
         { applications: 0, interviews: 0, offers: 0, joined: 0 },
+      );
+      const recruiterActionTotal = overview.recruiterWorkload.reduce(
+        (total, recruiter) => total + (recruiter.activity?.total ?? 0),
+        0,
       );
       XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
         ['RecruitFlow Recruitment Performance Report'],
@@ -450,6 +514,7 @@ export class ReportsService {
         ['Offer acceptance rate (%)', overview.kpis.offerAcceptanceRate.value, ''],
         ['Interview no-show rate (%)', overview.kpis.interviewNoShowRate.value, ''],
         ['Top source', overview.kpis.topSource.name, ''],
+        ['Successful recruiter actions', recruiterActionTotal, ''],
       ]), 'Summary');
 
       if (overview.recruitmentKpis && overview.recruitmentKpis.length > 0) {
@@ -479,7 +544,18 @@ export class ReportsService {
         conversionFromPrevious: stage.conversionRate ?? 'Not comparable',
       }))), 'Funnel');
       XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(overview.hiringByPosition), 'Hiring by Position');
-      XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(overview.recruiterWorkload), 'Recruiter Workload');
+      XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(overview.recruiterWorkload.map((recruiter) => ({
+        recruiter: recruiter.name,
+        openPositions: recruiter.vacancies,
+        applicationsOwned: recruiter.applications,
+        overdueTasks: recruiter.overdueTasks,
+        successfulActions: recruiter.activity?.total ?? 0,
+        applicationActions: recruiter.activity?.applications ?? 0,
+        screeningActions: recruiter.activity?.screening ?? 0,
+        interviewActions: recruiter.activity?.interviews ?? 0,
+        offerActions: recruiter.activity?.offers ?? 0,
+        hiringActions: recruiter.activity?.hiring ?? 0,
+      }))), 'Recruiter Workload');
       return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
     } catch (error) {
       if (error instanceof HttpException) throw error;

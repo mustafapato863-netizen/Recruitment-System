@@ -8,29 +8,33 @@ import { useAuth } from '../auth/AuthContext';
 export function usePermissions() {
   const { user } = useAuth();
   const permissions = useMemo(() => new Set(user?.permissions ?? []), [user?.permissions]);
+  const isAdministrator = useMemo(
+    () => user?.roles?.some((role) => role.code === 'ADMINISTRATOR') ?? false,
+    [user?.roles],
+  );
 
   const hasPermission = useCallback(
     (code?: string | null) => {
-      if (!code) return true;
+      if (!code || isAdministrator) return true;
       return permissions.has(code);
     },
-    [permissions],
+    [isAdministrator, permissions],
   );
 
   const hasAnyPermission = useCallback(
     (codes?: readonly string[] | null) => {
-      if (!codes?.length) return true;
+      if (!codes?.length || isAdministrator) return true;
       return codes.some((code) => permissions.has(code));
     },
-    [permissions],
+    [isAdministrator, permissions],
   );
 
   const hasAllPermissions = useCallback(
     (codes?: readonly string[] | null) => {
-      if (!codes?.length) return true;
+      if (!codes?.length || isAdministrator) return true;
       return codes.every((code) => permissions.has(code));
     },
-    [permissions],
+    [isAdministrator, permissions],
   );
 
   const canAccess = useCallback(

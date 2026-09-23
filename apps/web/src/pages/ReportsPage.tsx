@@ -17,10 +17,9 @@ import { getApi, downloadApi } from '../api/client';
 import './PageEnhancementsV2.css';
 
 type SourceDatum = { name: string; value: number; pct: string; color: string };
-type TimeToHireDatum = { period: string; days: number };
 type OfferDatum = { name: string; value: number; pct: string; color: string };
 type FunnelDatum = { stage: string; count: number; pct: string; color: string; width: string };
-type DepartmentDatum = { name: string; count: number; pct: number; color: string; activePositions: number; timeToHire: number | null };
+type PositionHiringDatum = { name: string; target: number; joined: number; fillRate: number; color: string };
 
 function formatChip(label: string, value: string | number, detail?: string) {
   return (
@@ -32,99 +31,17 @@ function formatChip(label: string, value: string | number, detail?: string) {
   );
 }
 
-const defaultRecruitmentKpis: RecruitmentKpiItem[] = [
-  {
-    id: 'kpi-invitation',
-    position: 'Recruitment',
-    name: 'Invitation',
-    definition: 'Measures the percentage of sourced candidate’s actual attending the interviews.',
-    currentValue: 85,
-    formattedValue: '85%',
-    targetValue: 80,
-    formattedTarget: '80%',
-    unit: '%',
-    achievementRate: 100,
-    status: 'On Target',
-    notes: 'Calculated from attended candidate interviews vs scheduled',
-  },
-  {
-    id: 'kpi-accepted-final',
-    position: 'Recruitment',
-    name: 'Accepted Final',
-    definition: 'Measures the percentage of candidates who accepted the final offer Vs target',
-    currentValue: 92,
-    formattedValue: '92%',
-    targetValue: 100,
-    formattedTarget: '100%',
-    unit: '%',
-    achievementRate: 92,
-    status: 'On Target',
-    notes: 'Accepted final job offers vs approved department requisition target',
-  },
-  {
-    id: 'kpi-offers',
-    position: 'Recruitment',
-    name: 'Offers',
-    definition: 'Measures the percentage of offers Vs. target.',
-    currentValue: 96,
-    formattedValue: '96%',
-    targetValue: 100,
-    formattedTarget: '100%',
-    unit: '%',
-    achievementRate: 96,
-    status: 'On Target',
-    notes: 'Extended offers vs approved headcount target',
-  },
-  {
-    id: 'kpi-hires',
-    position: 'Recruitment',
-    name: 'Hires',
-    definition: 'Measures the percentage of hires vs the target',
-    currentValue: 88,
-    formattedValue: '88%',
-    targetValue: 100,
-    formattedTarget: '100%',
-    unit: '%',
-    achievementRate: 88,
-    status: 'On Target',
-    notes: 'Confirmed on-boarded hires vs target requisitions',
-  },
-  {
-    id: 'kpi-time-to-fill',
-    position: 'Recruitment',
-    name: 'Time to Fill',
-    definition: 'The total number of calendar days from when a job requisition is approved to when a candidate accepts the Hire.',
-    currentValue: 24,
-    formattedValue: '24 Days',
-    targetValue: 30,
-    formattedTarget: '≤ 30 Days',
-    unit: 'Days',
-    achievementRate: 100,
-    status: 'On Target',
-    notes: 'Calendar days elapsed from vacancy approval to offer acceptance',
-  },
-  {
-    id: 'kpi-quality-of-hire',
-    position: 'Recruitment',
-    name: 'Quality of Hire (Probation Success Rate)',
-    definition: 'The percentage of new hires who successfully complete their probation period and meet performance expectations.',
-    currentValue: 94,
-    formattedValue: '94%',
-    targetValue: 90,
-    formattedTarget: '≥ 90%',
-    unit: '%',
-    achievementRate: 100,
-    status: 'On Target',
-    notes: 'New hires completing probation period and meeting performance criteria',
-  },
-];
+function formatPeriodChange(current: number, previous: number): string {
+  if (previous === 0) return current === 0 ? 'No activity in either period' : 'New activity vs previous period';
+  const change = Math.round(((current - previous) / previous) * 100);
+  return `${change > 0 ? '+' : ''}${change}% vs previous period`;
+}
 
 // ── Department Breakdown Data ──
 export function ReportsPage() {
   const [reportViewMode, setReportViewMode] = useState<'overview' | 'kpis'>('overview');
   const [dateRangePreset, setDateRangePreset] = useState<'7d' | '30d' | 'quarter' | 'ytd'>('7d');
   const [timeGranularity, setTimeGranularity] = useState<'Daily' | 'Weekly' | 'Monthly'>('Daily');
-  const [timeToHireGranularity, setTimeToHireGranularity] = useState<'Weekly' | 'Monthly'>('Weekly');
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isDateModalOpen, setIsDateModalOpen] = useState(false);
   const [isDeptModalOpen, setIsDeptModalOpen] = useState(false);
@@ -202,57 +119,33 @@ export function ReportsPage() {
     return `${new Date(range.from).toLocaleDateString('en-GB')} – ${new Date(range.to).toLocaleDateString('en-GB')}`;
   }, [dateRangePreset, reportOverview]);
 
-  // Dynamic KPI Metrics based on Live Backend Telemetry with Graceful Fallbacks
+  // Period metrics are derived only from the selected range and actual comparison data.
   const kpis = useMemo(() => {
     if (reportOverview) {
-      const trendApps = reportOverview.trend.reduce((sum, p) => sum + (p.applications || 0), 0);
-      const appCount = trendApps > 0 ? trendApps : reportOverview.comparison.applications;
-      const trendInts = reportOverview.trend.reduce((sum, p) => sum + (p.interviews || 0), 0);
-      const intCount = trendInts > 0 ? trendInts : reportOverview.comparison.interviews;
-      const trendOffers = reportOverview.trend.reduce((sum, p) => sum + (p.offers || 0), 0);
-      const offCount = trendOffers > 0 ? trendOffers : reportOverview.comparison.offers;
-      const hireCount = reportOverview.kpis.totalJoined.count || reportOverview.comparison.joined;
+      const appCount = reportOverview.trend.reduce((sum, point) => sum + (point.applications || 0), 0);
+      const intCount = reportOverview.trend.reduce((sum, point) => sum + (point.interviews || 0), 0);
+      const offCount = reportOverview.trend.reduce((sum, point) => sum + (point.offers || 0), 0);
+      const hireCount = reportOverview.kpis.totalJoined.count;
       const ttf = reportOverview.kpis.timeToFill.value;
-
-      const appDiff =
-        reportOverview.comparison.applications > 0
-          ? Math.round(
-              ((appCount - reportOverview.comparison.applications) /
-                reportOverview.comparison.applications) *
-                100,
-            )
-          : 0;
-      const intDiff =
-        reportOverview.comparison.interviews > 0
-          ? Math.round(
-              ((intCount - reportOverview.comparison.interviews) /
-                reportOverview.comparison.interviews) *
-                100,
-            )
-          : 0;
-      const offDiff =
-        reportOverview.comparison.offers > 0
-          ? Math.round(
-              ((offCount - reportOverview.comparison.offers) /
-                reportOverview.comparison.offers) *
-                100,
-            )
-          : 0;
+      const hasTimeToFill = reportOverview.kpis.timeToFill.sampleCount === undefined
+        ? ttf > 0
+        : reportOverview.kpis.timeToFill.sampleCount > 0;
 
       return {
         applications: appCount,
-        appTrend: `${appDiff >= 0 ? '+' : ''}${appDiff}% vs comparison`,
+        appTrend: formatPeriodChange(appCount, reportOverview.comparison.applications),
         interviews: intCount,
-        intTrend: `${intDiff >= 0 ? '+' : ''}${intDiff}% vs comparison`,
+        intTrend: formatPeriodChange(intCount, reportOverview.comparison.interviews),
         offers: offCount,
-        offTrend: `${offDiff >= 0 ? '+' : ''}${offDiff}% vs comparison`,
+        offTrend: formatPeriodChange(offCount, reportOverview.comparison.offers),
         hires: hireCount,
-        hireTrend: `${hireCount > 0 ? '+' : ''}${hireCount} filled in period`,
-        timeToHire: ttf,
+        hireTrend: hireCount > 0 ? `${hireCount} joined in period` : 'No hires in period',
+        timeToFill: ttf,
+        hasTimeToFill,
         timeTrend:
           (reportOverview.kpis?.timeToOffer?.value ?? 0) > 0
-            ? `${reportOverview.kpis.timeToOffer.value}d time to offer`
-            : 'No comparison data',
+            ? `${reportOverview.kpis.timeToOffer.value}d average from application to offer`
+            : 'No offer timing data',
       };
     }
     return {
@@ -264,7 +157,8 @@ export function ReportsPage() {
       offTrend: 'No data',
       hires: 0,
       hireTrend: 'No data',
-      timeToHire: 0,
+      timeToFill: 0,
+      hasTimeToFill: false,
       timeTrend: 'No data',
     };
   }, [reportOverview, dateRangePreset]);
@@ -272,11 +166,25 @@ export function ReportsPage() {
   // Dynamic Time Series for Applications Over Time
   const applicationsOverTime = useMemo(() => {
     if (reportOverview && reportOverview.trend.length > 0) {
-      return reportOverview.trend.map((pt) => ({
-        date: pt.label,
-        applications: pt.applications,
-        previousPeriod: Math.max(0, Math.round(pt.applications * 0.82)),
-      }));
+      const grouped = new Map<string, { date: string; applications: number }>();
+      for (const point of reportOverview.trend) {
+        const start = new Date(point.periodStart);
+        let key = point.periodStart;
+        let label = point.label;
+        if (timeGranularity === 'Weekly') {
+          const weekStart = new Date(start);
+          weekStart.setUTCDate(weekStart.getUTCDate() - ((weekStart.getUTCDay() + 6) % 7));
+          key = weekStart.toISOString().slice(0, 10);
+          label = weekStart.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+        } else if (timeGranularity === 'Monthly') {
+          key = `${start.getUTCFullYear()}-${start.getUTCMonth()}`;
+          label = start.toLocaleDateString('en-GB', { month: 'short', year: '2-digit', timeZone: 'UTC' });
+        }
+        const bucket = grouped.get(key) ?? { date: label, applications: 0 };
+        bucket.applications += point.applications;
+        grouped.set(key, bucket);
+      }
+      return [...grouped.values()];
     }
     return [];
   }, [reportOverview, timeGranularity]);
@@ -294,11 +202,6 @@ export function ReportsPage() {
     }));
   }, [reportOverview]);
 
-  // Time to Hire Trend Data
-  const timeToHireData = useMemo<TimeToHireDatum[]>(() => {
-    return [];
-  }, [timeToHireGranularity, kpis.timeToHire]);
-
   // Offer Acceptance Rate Data
   const offerAcceptanceData = useMemo<OfferDatum[]>(() => {
     if (reportOverview?.kpis?.offerAcceptanceRate) {
@@ -310,7 +213,7 @@ export function ReportsPage() {
         return [
           { name: 'Accepted', value: accepted, pct: `${rate}%`, color: '#10b981' },
           {
-            name: 'Declined / Withdrawn',
+            name: 'Not accepted',
             value: declined,
             pct: `${Math.round((declined / total) * 100)}%`,
             color: '#ef4444',
@@ -336,30 +239,44 @@ export function ReportsPage() {
     return [];
   }, [reportOverview, kpis]);
 
-  // Departments Breakdown Data
-  const departmentsData = useMemo<DepartmentDatum[]>(() => {
+  // Approved headcount and joined hires by position, from vacancy and hiring data.
+  const positionHiringData = useMemo<PositionHiringDatum[]>(() => {
     if (reportOverview && reportOverview.hiringByPosition.length > 0) {
       const colors = ['#3b82f6', '#10b981', '#f97316', '#a855f7', '#06b6d4', '#ec4899', '#eab308', '#6366f1'];
-      const total = reportOverview.hiringByPosition.reduce((s, p) => s + (p.target || 0), 0) || 1;
       return reportOverview.hiringByPosition.map((pos, idx) => ({
         name: pos.position,
-        count: pos.target,
-        pct: Math.round((pos.target / total) * 100),
+        target: pos.target,
+        joined: pos.joined,
+        fillRate: pos.target > 0 ? Math.min(100, Math.round((pos.joined / pos.target) * 100)) : 0,
         color: colors[idx % colors.length],
-        activePositions: pos.target,
-        timeToHire: null,
       }));
     }
     return [];
   }, [reportOverview]);
 
-  // Recruitment KPIs Data (6 Core Metrics)
+  // Only KPIs that the backend can calculate from recorded data are shown.
   const activeRecruitmentKpis = useMemo<RecruitmentKpiItem[]>(() => {
-    if (reportOverview?.recruitmentKpis && reportOverview.recruitmentKpis.length > 0) {
-      return reportOverview.recruitmentKpis;
-    }
-    return defaultRecruitmentKpis;
+    return reportOverview?.recruitmentKpis ?? [];
   }, [reportOverview]);
+
+  const recruiterActivityRows = useMemo(
+    () => [...(reportOverview?.recruiterWorkload ?? [])].sort((left, right) => (right.activity?.total ?? 0) - (left.activity?.total ?? 0)),
+    [reportOverview],
+  );
+  const recruiterActivityTotals = useMemo(
+    () => recruiterActivityRows.reduce(
+      (totals, recruiter) => ({
+        actions: totals.actions + (recruiter.activity?.total ?? 0),
+        applications: totals.applications + (recruiter.activity?.applications ?? 0),
+        screening: totals.screening + (recruiter.activity?.screening ?? 0),
+        interviews: totals.interviews + (recruiter.activity?.interviews ?? 0),
+        offers: totals.offers + (recruiter.activity?.offers ?? 0),
+        hiring: totals.hiring + (recruiter.activity?.hiring ?? 0),
+      }),
+      { actions: 0, applications: 0, screening: 0, interviews: 0, offers: 0, hiring: 0 },
+    ),
+    [recruiterActivityRows],
+  );
 
   const handleExportKpisCSV = () => {
     const headers = ['Position', 'KPI Name', 'Definition', 'Current Value', 'Target', 'Achievement Rate', 'Status', 'Notes'];
@@ -411,13 +328,26 @@ export function ReportsPage() {
       ['Interviews Conducted', kpis.interviews, kpis.intTrend],
       ['Offers Extended', kpis.offers, kpis.offTrend],
       ['Hires Finalized', kpis.hires, kpis.hireTrend],
-      ['Avg Time to Hire (Days)', kpis.timeToHire, kpis.timeTrend],
+      ['Avg Time to Fill (Days)', kpis.hasTimeToFill ? kpis.timeToFill : 'No data', kpis.timeTrend],
+      [],
+      ['Recruiter Activity', 'Successful actions in selected period'],
+      ['Recruiter', 'Applications', 'Screening', 'Interviews', 'Offers', 'Hiring', 'Open Positions', 'Overdue Tasks'],
+      ...recruiterActivityRows.map((recruiter) => [
+        recruiter.name,
+        recruiter.activity?.applications ?? 0,
+        recruiter.activity?.screening ?? 0,
+        recruiter.activity?.interviews ?? 0,
+        recruiter.activity?.offers ?? 0,
+        recruiter.activity?.hiring ?? 0,
+        recruiter.vacancies,
+        recruiter.overdueTasks,
+      ]),
       [],
       ['Source Breakdown', 'Volume', 'Percentage'],
       ...sourcesData.map((s) => [s.name, s.value, s.pct]),
       [],
-      ['Department Breakdown', 'Applications', 'Percentage', 'Active Positions', 'Avg Days to Fill'],
-      ...departmentsData.map((d) => [d.name, d.count, `${d.pct}%`, d.activePositions, d.timeToHire]),
+      ['Hiring Progress by Position', 'Approved Headcount', 'Joined Hires', 'Fill Rate'],
+      ...positionHiringData.map((position) => [position.name, position.target, position.joined, `${position.fillRate}%`]),
     ]
       .map((row) => row.join(','))
       .join('\n');
@@ -542,8 +472,71 @@ export function ReportsPage() {
             {formatChip('Interviews', kpis.interviews, kpis.intTrend)}
             {formatChip('Offers', kpis.offers, kpis.offTrend)}
             {formatChip('Hires', kpis.hires, kpis.hireTrend)}
-            {formatChip('Time to hire', kpis.timeToHire > 0 ? `${kpis.timeToHire} days` : '—', kpis.timeTrend)}
+            {formatChip('Time to fill', kpis.hasTimeToFill ? `${kpis.timeToFill} days` : '—', kpis.timeTrend)}
           </div>
+
+          <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-xs dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex flex-col gap-1 border-b border-slate-100 px-5 py-4 dark:border-slate-800 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="text-sm font-extrabold text-slate-900 dark:text-white">Recruiter Activity & Workload</h2>
+                <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                  Successful recorded actions during {dateLabel}; open positions and overdue tasks show current workload.
+                </p>
+              </div>
+              <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                {recruiterActivityRows.length} recruiters · {recruiterActivityTotals.actions} recorded actions
+              </span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[900px] text-left text-xs">
+                <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
+                  <tr>
+                    <th className="px-5 py-3">Recruiter</th>
+                    <th className="px-3 py-3 text-right">App actions</th>
+                    <th className="px-3 py-3 text-right">Screening</th>
+                    <th className="px-3 py-3 text-right">Interviews</th>
+                    <th className="px-3 py-3 text-right">Offers</th>
+                    <th className="px-3 py-3 text-right">Hiring</th>
+                    <th className="px-3 py-3 text-right">Open positions</th>
+                    <th className="px-5 py-3 text-right">Overdue tasks</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {recruiterActivityRows.length > 0 ? recruiterActivityRows.map((recruiter) => (
+                    <tr key={recruiter.id ?? recruiter.name} className="text-slate-700 dark:text-slate-300">
+                      <td className="px-5 py-3 font-bold text-slate-900 dark:text-white">{recruiter.name}</td>
+                      <td className="px-3 py-3 text-right">{recruiter.activity?.applications ?? 0}</td>
+                      <td className="px-3 py-3 text-right">{recruiter.activity?.screening ?? 0}</td>
+                      <td className="px-3 py-3 text-right">{recruiter.activity?.interviews ?? 0}</td>
+                      <td className="px-3 py-3 text-right">{recruiter.activity?.offers ?? 0}</td>
+                      <td className="px-3 py-3 text-right">{recruiter.activity?.hiring ?? 0}</td>
+                      <td className="px-3 py-3 text-right">{recruiter.vacancies}</td>
+                      <td className="px-5 py-3 text-right">{recruiter.overdueTasks}</td>
+                    </tr>
+                  )) : (
+                    <tr>
+                      <td colSpan={8} className="px-5 py-8 text-center text-slate-500 dark:text-slate-400">
+                        {isLoadingReport ? 'Loading recruiter activity…' : 'No recruiter activity is available for this period.'}
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+                {recruiterActivityRows.length > 0 && (
+                  <tfoot className="border-t border-slate-200 bg-slate-50/80 font-bold text-slate-700 dark:border-slate-800 dark:bg-slate-800/40 dark:text-slate-200">
+                    <tr>
+                      <td className="px-5 py-3">Team activity</td>
+                      <td className="px-3 py-3 text-right">{recruiterActivityTotals.applications}</td>
+                      <td className="px-3 py-3 text-right">{recruiterActivityTotals.screening}</td>
+                      <td className="px-3 py-3 text-right">{recruiterActivityTotals.interviews}</td>
+                      <td className="px-3 py-3 text-right">{recruiterActivityTotals.offers}</td>
+                      <td className="px-3 py-3 text-right">{recruiterActivityTotals.hiring}</td>
+                      <td colSpan={2} className="px-5 py-3 text-right">{recruiterActivityTotals.actions} successful actions</td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+          </section>
       {/* ── Row 2: 3 Analytics Visual Charts with Recharts ── */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
         {/* Chart 1: Applications Over Time (Recharts AreaChart) (5 cols) */}
@@ -587,15 +580,6 @@ export function ReportsPage() {
                 />
                 <Area
                   type="monotone"
-                  dataKey="previousPeriod"
-                  stroke="#94a3b8"
-                  strokeDasharray="3 3"
-                  strokeWidth={1.5}
-                  fill="transparent"
-                  name="Previous Period"
-                />
-                <Area
-                  type="monotone"
                   dataKey="applications"
                   stroke="#3b82f6"
                   strokeWidth={2.5}
@@ -610,9 +594,6 @@ export function ReportsPage() {
           <div className="flex items-center gap-4 text-[11px] text-slate-600 dark:text-slate-400 pt-2 border-t border-slate-100 dark:border-slate-800">
             <span className="flex items-center gap-1.5">
               <span className="w-2.5 h-1 bg-blue-500 rounded" /> Applications
-            </span>
-            <span className="flex items-center gap-1.5">
-              <span className="w-2.5 h-1 bg-slate-400 border border-dashed" /> Previous Period
             </span>
           </div>
         </div>
@@ -715,11 +696,11 @@ export function ReportsPage() {
 
       {/* ── Row 3: 3 Secondary Visual Charts matching reference ── */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-        {/* Metric 1: Applications by Department (4 cols) */}
+        {/* Metric 1: Hiring progress by position (4 cols) */}
         <div className="lg:col-span-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs flex flex-col justify-between space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-extrabold text-slate-900 dark:text-white">
-              Applications by Department
+              Hiring Progress by Position
             </h2>
             <button
               type="button"
@@ -731,18 +712,18 @@ export function ReportsPage() {
           </div>
 
           <div className="space-y-3 py-1">
-            {departmentsData.slice(0, 5).map((dept) => (
-              <div key={dept.name} className="space-y-1">
+            {positionHiringData.slice(0, 5).map((position) => (
+              <div key={position.name} className="space-y-1">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="font-semibold text-slate-700 dark:text-slate-200">{dept.name}</span>
+                  <span className="font-semibold text-slate-700 dark:text-slate-200">{position.name}</span>
                   <span className="font-bold text-slate-900 dark:text-white">
-                    {dept.count} <span className="text-slate-600 dark:text-slate-400 font-normal">({dept.pct}%)</span>
+                    {position.joined}/{position.target} <span className="text-slate-600 dark:text-slate-400 font-normal">({position.fillRate}% filled)</span>
                   </span>
                 </div>
                 <div className="w-full bg-slate-100 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
                   <div
                     className="h-full rounded-full transition-all duration-500"
-                    style={{ width: `${Math.min(100, dept.pct * 2.5)}%`, backgroundColor: dept.color }}
+                    style={{ width: `${position.fillRate}%`, backgroundColor: position.color }}
                   />
                 </div>
               </div>
@@ -750,63 +731,35 @@ export function ReportsPage() {
           </div>
 
           <div className="text-[11px] text-slate-600 dark:text-slate-400 border-t border-slate-100 dark:border-slate-800 pt-2 flex items-center justify-between">
-            <span>{Math.min(5, departmentsData.length)} departments displayed</span>
-            <span className="font-bold text-blue-600 dark:text-blue-400">{departmentsData.length} total departments</span>
+            <span>{Math.min(5, positionHiringData.length)} positions displayed</span>
+            <span className="font-bold text-blue-600 dark:text-blue-400">{positionHiringData.length} total positions</span>
           </div>
         </div>
 
-        {/* Metric 2: Time to Hire Trend (Recharts AreaChart) (4 cols) */}
+        {/* Metric 2: Average time to fill from completed hiring records (4 cols) */}
         <div className="lg:col-span-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs flex flex-col justify-between space-y-4">
-          <div className="flex items-center justify-between">
+          <div>
             <h2 className="text-sm font-extrabold text-slate-900 dark:text-white">
-              Time to Hire Trend
+              Average Time to Fill
             </h2>
-            <select aria-label="Time to hire interval"
-              value={timeToHireGranularity}
-              onChange={(e) => setTimeToHireGranularity(e.target.value as typeof timeToHireGranularity)}
-              className="bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1 text-[11px] font-bold text-slate-700 dark:text-slate-200 cursor-pointer"
-            >
-              <option value="Weekly">Weekly</option>
-              <option value="Monthly">Monthly</option>
-            </select>
+            <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">Completed hires with both vacancy and joining dates</p>
           </div>
 
-          <div className="h-44 w-full pt-2">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={timeToHireData} margin={{ top: 12, right: 10, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="tthGradient" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.4} />
-                    <stop offset="95%" stopColor="#06b6d4" stopOpacity={0.0} />
-                  </linearGradient>
-                </defs>
-                <XAxis dataKey="period" stroke="#94a3b8" fontSize={11} tickLine={false} />
-                <YAxis domain={[0, 50]} stroke="#94a3b8" fontSize={11} tickLine={false} axisLine={false} />
-                <Tooltip
-                  formatter={(val) => [`${val} days`, 'Avg Time to Hire']}
-                  contentStyle={{
-                    backgroundColor: '#0f172a',
-                    borderRadius: '8px',
-                    borderColor: '#334155',
-                    color: '#fff',
-                    fontSize: '11px',
-                  }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="days"
-                  stroke="#06b6d4"
-                  strokeWidth={2.5}
-                  fill="url(#tthGradient)"
-                  name="Days to Hire"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+          <div className="flex flex-1 flex-col items-center justify-center py-3">
+            <div className="text-4xl font-black tracking-tight text-slate-900 dark:text-white">
+              {kpis.hasTimeToFill ? kpis.timeToFill : '—'}
+              {kpis.hasTimeToFill && <span className="ml-1 text-base font-bold text-slate-500">days</span>}
+            </div>
+            <p className="mt-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
+              {kpis.hasTimeToFill ? 'Average calendar days to fill' : 'No completed hires with dates in this period'}
+            </p>
           </div>
 
           <div className="flex items-center justify-between text-[11px] text-slate-600 dark:text-slate-400 border-t border-slate-100 dark:border-slate-800 pt-2">
             <span>SLA Target: &le; 30 days</span>
-            <span className="font-bold text-emerald-700">Pacing: {kpis.timeToHire} days ({kpis.timeToHire <= 30 ? 'On track' : 'Action needed'})</span>
+            <span className={`font-bold ${kpis.hasTimeToFill && kpis.timeToFill <= 30 ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-500 dark:text-slate-400'}`}>
+              {kpis.hasTimeToFill ? (kpis.timeToFill <= 30 ? 'On target' : 'Above target') : 'Not available'}
+            </span>
           </div>
         </div>
 
@@ -911,7 +864,7 @@ export function ReportsPage() {
             </div>
             <div>
               <span className="block font-bold text-slate-900 dark:text-white text-xs">
-                Time to Hire is averaging {kpis.timeToHire > 0 ? `${kpis.timeToHire} days` : 'unavailable'}.
+                Average time to fill is {kpis.hasTimeToFill ? `${kpis.timeToFill} days` : 'unavailable'}.
               </span>
               <span className="block text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
                 {kpis.timeTrend}.
@@ -997,7 +950,13 @@ export function ReportsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {activeRecruitmentKpis.map((item) => {
+                  {activeRecruitmentKpis.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="px-4 py-10 text-center text-slate-500 dark:text-slate-400">
+                        {isLoadingReport ? 'Loading measured indicators…' : 'No KPI can be calculated from recorded data in this period.'}
+                      </td>
+                    </tr>
+                  ) : activeRecruitmentKpis.map((item) => {
                     const isExceeded = item.status === 'Exceeded';
                     const isOnTarget = item.status === 'On Target';
                     const statusClass = isExceeded
@@ -1093,7 +1052,7 @@ export function ReportsPage() {
                 <Icon name="award" size={20} />
               </div>
               <span className="text-slate-900 dark:text-white text-[11px]">KPI CSV</span>
-              <span className="text-[10px] text-slate-600 dark:text-slate-400 font-normal">6 indicators</span>
+              <span className="text-[10px] text-slate-600 dark:text-slate-400 font-normal">{activeRecruitmentKpis.length} measured indicators</span>
             </button>
 
             <button
@@ -1165,40 +1124,34 @@ export function ReportsPage() {
       <Modal
         isOpen={isDeptModalOpen}
         onClose={() => setIsDeptModalOpen(false)}
-        title="Departments"
+        title="Hiring Progress by Position"
         maxWidthClass="max-w-2xl"
       >
         <div className="space-y-4 text-xs">
           <p className="text-slate-500 dark:text-slate-400">
-            Applications, open jobs, and days to hire by department.
+            Approved headcount and confirmed joined hires by position.
           </p>
 
           <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
             <table className="w-full text-left">
               <thead>
                 <tr className="bg-slate-50 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800 text-[11px] font-bold">
-                  <th className="p-3">Department</th>
-                  <th className="p-3">Applications</th>
-                  <th className="p-3">Share</th>
-                  <th className="p-3">Open Requisitions</th>
-                  <th className="p-3">Avg Days to Hire</th>
+                  <th className="p-3">Position</th>
+                  <th className="p-3">Approved headcount</th>
+                  <th className="p-3">Joined hires</th>
+                  <th className="p-3">Fill rate</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                {departmentsData.map((dept) => (
-                  <tr key={dept.name} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
+                {positionHiringData.map((position) => (
+                  <tr key={position.name} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/30">
                     <td className="p-3 font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: dept.color }} />
-                      <span>{dept.name}</span>
+                      <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: position.color }} />
+                      <span>{position.name}</span>
                     </td>
-                    <td className="p-3 font-extrabold text-slate-800 dark:text-slate-200">{dept.count}</td>
-                    <td className="p-3">
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-                        {dept.pct}%
-                      </span>
-                    </td>
-                    <td className="p-3 font-semibold text-blue-600 dark:text-blue-400">{dept.activePositions} positions</td>
-                    <td className="p-3 font-semibold text-slate-700 dark:text-slate-300">{dept.timeToHire === null ? 'No data' : `${dept.timeToHire} days`}</td>
+                    <td className="p-3 font-extrabold text-slate-800 dark:text-slate-200">{position.target}</td>
+                    <td className="p-3 font-semibold text-blue-600 dark:text-blue-400">{position.joined}</td>
+                    <td className="p-3 font-semibold text-slate-700 dark:text-slate-300">{position.fillRate}%</td>
                   </tr>
                 ))}
               </tbody>

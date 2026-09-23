@@ -62,6 +62,13 @@ export class PermissionsGuard implements CanActivate {
       throw new ForbiddenException('Access denied: user record is inactive or missing');
     }
 
+    // The Administrator role is defined as full access by the system seed and
+    // admin visibility policy. Preserve that guarantee if a tenant's role-
+    // permission links are incomplete or stale.
+    if (userWithRoles.userRoles.some((userRole) => userRole.role.code === 'ADMINISTRATOR')) {
+      return true;
+    }
+
     const userPermissions = userWithRoles.userRoles.flatMap((ur) =>
       ur.role.permissions.map((rp) => rp.permission.code),
     );
