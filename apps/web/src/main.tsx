@@ -4,12 +4,10 @@ import './index.css'
 import './pages/RecruitFlowUi.css'
 import './pages/CommandCenterPolish.css'
 import './pages/ApplicantProfilePolish.css'
-import './pages/ApplicationCardPolish.css'
 import './i18n'
 import App from './App.tsx'
 import { CollapseInitialMatchSkills } from './components/candidate/CollapseInitialMatchSkills'
 import { ApplicantProfilePolish } from './components/candidate/ApplicantProfilePolish'
-import { ApplicationCardPolish } from './components/candidate/ApplicationCardPolish'
 
 window.addEventListener('vite:preloadError', (event) => {
   event.preventDefault();
@@ -25,7 +23,6 @@ window.addEventListener('vite:preloadError', (event) => {
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ApplicantProfilePolish />
-    <ApplicationCardPolish />
     <CollapseInitialMatchSkills />
     <App />
   </StrictMode>,

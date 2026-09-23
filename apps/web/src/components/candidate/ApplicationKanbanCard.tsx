@@ -19,6 +19,7 @@ export type ApplicationKanbanCardModel = {
   source: string;
   stage: ApplicationStage | string;
   nextAction: string;
+  nextActionKind?: KanbanNextActionKind;
   experienceYears?: number | null;
   matchScore: number;
   owner: KanbanOwner;
@@ -29,6 +30,7 @@ export type ApplicationKanbanCardModel = {
 };
 
 export type CardStatusSignal = 'ready' | 'in_progress' | 'blocked';
+export type KanbanNextActionKind = 'assign' | 'advance' | 'schedule' | 'offer' | 'hire' | 'view';
 
 type ApplicationKanbanCardProps = {
   card: ApplicationKanbanCardModel;
@@ -39,7 +41,7 @@ type ApplicationKanbanCardProps = {
   onAddNote: () => void;
   onMoveStage: () => void;
   onAssignToMe: () => void;
-  onNextAction?: (kind: 'assign' | 'advance' | 'schedule' | 'offer' | 'hire' | 'view') => void;
+  onNextAction?: (kind: KanbanNextActionKind) => void;
   onDragStart: (event: DragEvent) => void;
   onSignalChange: (next: CardStatusSignal) => void;
 };
@@ -59,6 +61,11 @@ function formatRelativeTime(dateStr?: string | null): string {
   return `${diffDays}d ago`;
 }
 
+function formatDisplayText(value: string): string {
+  if (!value || value !== value.toUpperCase()) return value;
+  return value.toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
 function nextSignal(signal: CardStatusSignal): CardStatusSignal {
   if (signal === 'in_progress') return 'ready';
   if (signal === 'ready') return 'blocked';
@@ -74,6 +81,7 @@ export function ApplicationKanbanCard({
   onAddNote,
   onMoveStage,
   onAssignToMe,
+  onNextAction,
   onDragStart,
   onSignalChange,
 }: ApplicationKanbanCardProps) {
@@ -91,13 +99,24 @@ export function ApplicationKanbanCard({
       : signal === 'blocked'
         ? 'bg-rose-500 ring-2 ring-rose-300 dark:ring-rose-700'
         : 'bg-amber-400 ring-2 ring-amber-200 dark:ring-amber-700';
+  const signalLabel = signal === 'ready' ? 'Ready' : signal === 'blocked' ? 'Blocked' : 'In progress';
+  const signalTextClass = signal === 'in_progress' ? 'text-slate-900' : 'text-white';
 
   return (
     <article
       draggable
       onDragStart={onDragStart}
       onClick={onOpen}
-      className="group relative flex cursor-grab select-none flex-col gap-2.5 rounded-xl border border-slate-200/85 bg-white p-3 shadow-2xs transition-all duration-150 hover:-translate-y-0.5 hover:border-blue-400/80 hover:shadow-md active:cursor-grabbing dark:border-slate-800 dark:bg-slate-900 dark:hover:border-blue-600"
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          onOpen();
+        }
+      }}
+      role="group"
+      tabIndex={0}
+      aria-label={`Open application for ${card.name}`}
+      className="rf-application-kanban-card group relative flex cursor-grab select-none flex-col gap-2.5 rounded-xl border border-slate-200/85 bg-white p-3 shadow-2xs transition-all duration-150 hover:border-blue-400/80 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 active:cursor-grabbing dark:border-slate-800 dark:bg-slate-900 dark:hover:border-blue-600"
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 flex-1 items-center gap-2.5">
@@ -114,7 +133,7 @@ export function ApplicationKanbanCard({
           )}
           <div className="min-w-0 flex-1">
             <span className="block truncate text-[13px] font-bold leading-tight text-slate-900 group-hover:text-blue-600 dark:text-white" title={card.name}>
-              {card.name}
+              {formatDisplayText(card.name)}
             </span>
             <div className="mt-0.5 flex items-center gap-1.5 font-mono text-[10.5px] text-slate-600 dark:text-slate-400">
               <span className="max-w-[120px] truncate">{card.applicationCode}</span>
@@ -131,17 +150,20 @@ export function ApplicationKanbanCard({
               event.stopPropagation();
               onSignalChange(nextSignal(signal));
             }}
-            className={`h-3 w-3 shrink-0 cursor-pointer rounded-full shadow-xs transition hover:scale-125 ${signalDotClass}`}
+            className={`inline-flex min-h-7 shrink-0 cursor-pointer items-center gap-1.5 rounded-full px-2 text-[10px] font-bold shadow-xs transition hover:brightness-95 ${signalDotClass}`}
             title={signalTitle}
             aria-label={signalTitle}
-          />
+          >
+            <span className="h-1.5 w-1.5 rounded-full bg-white/90" aria-hidden="true" />
+            <span className={signalTextClass}>{signalLabel}</span>
+          </button>
           <button
             type="button"
             onClick={(event) => {
               event.stopPropagation();
               onAddNote();
             }}
-            className="cursor-pointer rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-blue-600 dark:hover:bg-slate-800"
+            className="inline-flex min-h-8 min-w-8 cursor-pointer items-center justify-center rounded-md p-1 text-slate-400 transition hover:bg-slate-100 hover:text-blue-600 dark:hover:bg-slate-800"
             title="Quick note"
           >
             <Icon name="edit" size={12} />
@@ -152,7 +174,7 @@ export function ApplicationKanbanCard({
               event.stopPropagation();
               onMoveStage();
             }}
-            className="cursor-pointer rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800"
+            className="inline-flex min-h-8 min-w-8 cursor-pointer items-center justify-center rounded-md p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800"
             title="Move stage"
           >
             <Icon name="more-horizontal" size={12} />
@@ -163,7 +185,7 @@ export function ApplicationKanbanCard({
       <div className="space-y-1.5">
         <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200">
           <Icon name="briefcase" size={11} className="shrink-0 text-slate-400" />
-          <span className="truncate">{card.positionTitle}</span>
+          <span className="truncate">{formatDisplayText(card.positionTitle)}</span>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
           <span
@@ -177,23 +199,34 @@ export function ApplicationKanbanCard({
               {card.stage}
             </span>
           )}
-          {card.source && card.source !== '—' && (
-            <span className="inline-flex max-w-[95px] items-center truncate rounded-md border border-slate-200/60 bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600 dark:border-slate-700/60 dark:bg-slate-800 dark:text-slate-400">
-              {card.source}
-            </span>
-          )}
-          {card.experienceYears ? (
-            <span className="inline-flex items-center rounded-md border border-blue-200/60 bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-600 dark:border-blue-800/60 dark:bg-blue-950/40 dark:text-blue-300">
-              {card.experienceYears}y exp
-            </span>
-          ) : null}
         </div>
+        {((card.source && card.source !== '—') || card.experienceYears) && (
+          <p
+            className="truncate text-[10.5px] text-slate-500 dark:text-slate-400"
+            title={[card.source !== '—' ? card.source : '', card.experienceYears ? `${card.experienceYears} years experience` : ''].filter(Boolean).join(' · ')}
+          >
+            {[card.source !== '—' ? formatDisplayText(card.source) : '', card.experienceYears ? `${card.experienceYears} yrs experience` : ''].filter(Boolean).join(' · ')}
+          </p>
+        )}
       </div>
 
       <div className="flex items-center justify-between gap-2 border-t border-slate-100 pt-2 text-[11px] dark:border-slate-800/80">
         <div className="flex min-w-0 flex-1 items-center gap-1.5 text-slate-600 dark:text-slate-400">
           <Icon name="calendar" size={11} className="shrink-0 text-slate-400" />
-          <span className="truncate font-medium">{card.nextAction}</span>
+          {onNextAction ? (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onNextAction(card.nextActionKind || 'view');
+              }}
+              className="truncate rounded-md text-left font-semibold text-blue-700 underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 dark:text-blue-300"
+            >
+              {card.nextAction}
+            </button>
+          ) : (
+            <span className="truncate font-medium">{card.nextAction}</span>
+          )}
         </div>
         {unassigned ? (
           <button
@@ -203,7 +236,7 @@ export function ApplicationKanbanCard({
               event.stopPropagation();
               onAssignToMe();
             }}
-            className="inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[10.5px] font-bold text-blue-700 shadow-2xs transition hover:bg-blue-100 disabled:opacity-60 dark:border-blue-800 dark:bg-blue-950/50 dark:text-blue-300 dark:hover:bg-blue-900/60"
+            className="inline-flex min-h-8 shrink-0 cursor-pointer items-center gap-1 rounded-lg border border-blue-200 bg-blue-50 px-2.5 py-1 text-[10.5px] font-bold text-blue-700 shadow-2xs transition hover:bg-blue-100 disabled:opacity-60 dark:border-blue-800 dark:bg-blue-950/50 dark:text-blue-300 dark:hover:bg-blue-900/60"
             title="Assign yourself as recruiter"
           >
             <Icon name="user-check" size={10} />

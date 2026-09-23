@@ -36,6 +36,7 @@ interface KanbanCard {
     color: string;
   };
   nextAction: string;
+  nextActionKind: NextActionKind;
   nextDue: string;
   nextDueTone: 'blue' | 'purple' | 'amber' | 'gray';
   lastActivity: string;
@@ -359,7 +360,6 @@ function getStageBadgeColor(stage: string): string {
 function mapApplicationToKanbanCard(
   a: Application,
   colStageKey: ApplicationStage,
-  colId: string,
   targetVacancy?: Vacancy | VacancyDetailView | null,
 ): KanbanCard {
   const candidateName = a.candidate
@@ -401,12 +401,10 @@ function mapApplicationToKanbanCard(
   );
   const matchScore = fitBreakdown.score;
 
-  let nextAction = 'Review Profile';
-  if (colId === 'screening') nextAction = 'Review Application';
-  else if (colId === 'interview') nextAction = 'Interview Evaluation';
-  else if (colId === 'offer') nextAction = 'Draft Offer';
-  else if (colId === 'pre_hire') nextAction = 'Onboarding Checks';
-  else if (colId === 'hired') nextAction = 'Joined Team';
+  const nextPlan = getNextActionPlan(
+    a.stage || colStageKey,
+    !a.primaryRecruiterId || ownerName === 'Unassigned',
+  );
 
   return {
     id: a.id,
@@ -420,7 +418,8 @@ function mapApplicationToKanbanCard(
       initials: ownerInitials,
       color: 'bg-teal-800',
     },
-    nextAction,
+    nextAction: nextPlan.label,
+    nextActionKind: nextPlan.kind,
     nextDueTone: a.nextFollowUpAt ? 'amber' : 'gray',
     lastActivity: a.lastActivityLabel || 'Application updated',
     lastActivityTime: a.lastActivityAt ? formatRelativeTime(a.lastActivityAt) : 'Recently',
@@ -752,7 +751,7 @@ export function ApplicationsPage() {
 
         const cards = matchedApps.map((a) => {
           const targetVacancy = (a.vacancyId ? vacMap.get(a.vacancyId) : null) || curVac;
-          return mapApplicationToKanbanCard(a, col.stageKey, col.id, targetVacancy);
+          return mapApplicationToKanbanCard(a, col.stageKey, targetVacancy);
         });
         return {
           id: col.id,
@@ -2296,6 +2295,7 @@ export function ApplicationsPage() {
                           source: card.source,
                           stage: card.stage,
                           nextAction: card.nextAction,
+                          nextActionKind: card.nextActionKind,
                           experienceYears: card.experienceYears,
                           matchScore: card.matchScore,
                           owner: card.owner,
@@ -2315,9 +2315,9 @@ export function ApplicationsPage() {
                             appCode: card.applicationCode,
                           })
                         }
-                        onMoveStage={() => navigate(`/applications/${card.id}`)}
+                          onMoveStage={() => navigate(`/applications/${card.id}/transition`)}
                         onAssignToMe={() => void handleClaimApplication(card.id)}
-                        onNextAction={(kind) => handleNextAction(card.id, kind)}
+                          onNextAction={(kind) => handleNextAction(card.id, kind)}
                         onDragStart={(event) => handleDragStart(event, card.id, column.id)}
                         onSignalChange={(next) => setCardSignalValue(card.id, next)}
                       />

@@ -83,7 +83,7 @@ tbody td {
 }
 
 /* Applicant kanban card */
-.cursor-grab.group {
+.rf-application-kanban-card {
   gap: 10px !important;
   padding: 12px !important;
   box-shadow: none !important;
@@ -91,35 +91,25 @@ tbody td {
   transform: none !important;
 }
 
-.cursor-grab.group:hover {
+.rf-application-kanban-card:hover {
   border-color: rgb(125 211 252) !important;
   box-shadow: 0 1px 2px rgb(15 23 42 / 0.05) !important;
 }
 
-.cursor-grab.group .text-\[13px\].font-bold {
+.rf-application-kanban-card .text-\[13px\].font-bold {
   text-transform: none !important;
   font-size: 14px !important;
   font-weight: 700 !important;
   letter-spacing: -0.02em;
 }
 
-.cursor-grab.group .text-xs.font-semibold {
+.rf-application-kanban-card .text-xs.font-semibold {
   text-transform: none !important;
   font-weight: 500 !important;
   color: var(--color-ink-700) !important;
 }
 
-.cursor-grab.group button[title^="Status:"] {
-  display: none !important;
-}
-
-.cursor-grab.group button[title="Quick note"],
-.cursor-grab.group button[title="Move stage"] {
-  min-width: 28px;
-  min-height: 28px;
-}
-
-.cursor-grab.group [title^="1-Click Claim"] {
+.rf-application-kanban-card [title^="1-Click Claim"] {
   border-radius: 8px !important;
   padding: 5px 10px !important;
   font-size: 11px !important;
@@ -127,9 +117,9 @@ tbody td {
 }
 
 /* Fit badge should not dominate */
-.cursor-grab.group [class*="Fit"],
-.cursor-grab.group span[class*="rose-"],
-.cursor-grab.group span[class*="bg-rose"] {
+.rf-application-kanban-card [class*="Fit"],
+.rf-application-kanban-card span[class*="rose-"],
+.rf-application-kanban-card span[class*="bg-rose"] {
   font-size: 10px !important;
   font-weight: 700 !important;
 }
