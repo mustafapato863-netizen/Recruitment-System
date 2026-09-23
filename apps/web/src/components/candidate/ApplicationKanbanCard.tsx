@@ -116,7 +116,7 @@ export function ApplicationKanbanCard({
       role="group"
       tabIndex={0}
       aria-label={`Open application for ${card.name}`}
-      className="rf-application-kanban-card group relative flex cursor-grab select-none flex-col gap-2.5 rounded-xl border border-slate-200/85 bg-white p-3 shadow-2xs transition-all duration-150 hover:border-blue-400/80 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 active:cursor-grabbing dark:border-slate-800 dark:bg-slate-900 dark:hover:border-blue-600"
+      className="rf-application-kanban-card group relative flex cursor-grab select-none flex-col gap-2.5 rounded-xl border border-slate-200/85 bg-white p-[8px] shadow-2xs transition-all duration-150 hover:border-blue-400/80 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 active:cursor-grabbing dark:border-slate-800 dark:bg-slate-900 dark:hover:border-blue-600"
     >
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 flex-1 items-center gap-2.5">

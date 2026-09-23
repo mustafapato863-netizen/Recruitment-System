@@ -21,6 +21,7 @@ export const DateInput = React.forwardRef<HTMLInputElement, DateInputProps>(
         <input
           type="date"
           id={inputId}
+          data-slot="date-input"
           ref={ref}
           className={cn(
             'flex h-9 w-full rounded-lg border border-rf-border bg-rf-field px-3 py-2 text-sm font-medium text-rf-ink outline-none transition-[border-color,background-color] duration-150 hover:border-rf-border-strong focus:border-rf-action focus:bg-rf-surface focus:ring-2 focus:ring-[var(--primary)] focus:ring-offset-1 disabled:cursor-not-allowed disabled:bg-rf-field-disabled disabled:opacity-65',

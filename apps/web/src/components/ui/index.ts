@@ -16,6 +16,7 @@ export * from './FormSection';
 export * from './IconButton';
 export * from './Input';
 export * from './MetricCard';
+export * from './OverflowMenu';
 export * from './PageFrame';
 export * from './PageState';
 export * from './Pagination';

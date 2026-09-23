@@ -100,7 +100,11 @@ export function CandidateComparisonPage() {
     setIsLoading(true);
     try {
       const selectedVacancy = vacancies.find((vacancy) => vacancy.id === selectedVacancyId);
-      if (selectedVacancyId) {
+      // When the user arrived with an explicit comparison set, keep those
+      // candidates and calculate their fit for the selected vacancy. The
+      // vacancy's applicant list is not the comparison set: it may contain
+      // only one of the candidates being compared.
+      if (selectedVacancyId && !queryIds) {
         // Load applicants for selected position
         const appRes = await getApi<PaginatedResult<Application>>(
           `/applications?vacancyId=${selectedVacancyId}&page=1&pageSize=50`
@@ -228,6 +232,17 @@ export function CandidateComparisonPage() {
     }
   };
 
+  const syncComparisonCandidateIds = (ids: string[]) => {
+    const next = new URLSearchParams(searchParams);
+    const uniqueIds = [...new Set(ids)];
+    if (uniqueIds.length > 0) {
+      next.set('ids', uniqueIds.join(','));
+    } else {
+      next.delete('ids');
+    }
+    setSearchParams(next, { replace: true });
+  };
+
   const handleAddCandidate = (cand: Candidate) => {
     const nextIdx = candidates.length;
     const name = `${cand.firstName} ${cand.lastName}`;
@@ -249,6 +264,7 @@ export function CandidateComparisonPage() {
       recommendation: 'No recommendation',
     };
     setCandidates((prev) => [...prev, newEntry]);
+    syncComparisonCandidateIds([...candidates.map((candidate) => candidate.id), newEntry.id]);
     setIsAddModalOpen(false);
     showToast(`✓ Added ${name} to comparison matrix`);
   };
@@ -259,14 +275,22 @@ export function CandidateComparisonPage() {
       return;
     }
     setCandidates((prev) => prev.filter((c) => c.id !== id));
+    syncComparisonCandidateIds(
+      candidates.filter((candidate) => candidate.id !== id).map((candidate) => candidate.id),
+    );
   };
 
   const handleVacancyChange = (newVacId: string) => {
     setSelectedVacancyId(newVacId);
     const next = new URLSearchParams(searchParams);
+    const comparisonIds = [...new Set(candidates.map((candidate) => candidate.id))];
+    if (comparisonIds.length > 0) {
+      next.set('ids', comparisonIds.join(','));
+    } else {
+      next.delete('ids');
+    }
     if (newVacId) {
       next.set('vacancyId', newVacId);
-      next.delete('ids');
     } else {
       next.delete('vacancyId');
     }

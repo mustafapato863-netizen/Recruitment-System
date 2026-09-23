@@ -59,25 +59,28 @@ export function CandidateFitScoreBadge({
   score,
   matchLevel,
   summaryText,
+  size = 'default',
   className = '',
 }: {
   score: number;
   matchLevel?: MatchLevel;
   summaryText?: string;
+  size?: 'default' | 'compact';
   className?: string;
 }) {
   const inferredMatchLevel: MatchLevel = score >= 80 ? 'high' : score >= 60 ? 'moderate' : 'low';
   const tone = getScoreTone(score, matchLevel || inferredMatchLevel);
+  const compact = size === 'compact';
 
   return (
     <span
       role="img"
       aria-label={`Candidate fit score: ${score}% (${tone.label})`}
       title={`Candidate Fit Score: ${score}% (${tone.label})${summaryText ? `\n${summaryText}` : ''}`}
-      className={`inline-flex h-11 w-11 shrink-0 select-none flex-col items-center justify-center rounded-xl border shadow-xs ${tone.border} ${tone.bg} ${tone.text} ${className}`}
+      className={`inline-flex ${compact ? 'h-8 w-8 rounded-md' : 'h-10 w-10 rounded-lg'} shrink-0 select-none flex-col items-center justify-center border shadow-xs ${tone.border} ${tone.bg} ${tone.text} ${className}`}
     >
-      <span className="text-[15px] font-black leading-none tracking-tight">{score}%</span>
-      <span className="mt-0.5 text-[8px] font-extrabold uppercase leading-none tracking-[0.14em] opacity-80">
+      <span className={`${compact ? 'text-[11px]' : 'text-[13.5px]'} font-black leading-none tracking-tight`}>{score}%</span>
+      <span className={`${compact ? 'text-[6.5px]' : 'text-[7.5px]'} mt-0.5 font-extrabold uppercase leading-none tracking-[0.14em] opacity-80`}>
         Fit
       </span>
     </span>
@@ -120,13 +123,13 @@ export function CandidateFitScorecard({
   if (variant === 'compact') {
     return (
       <div
-        className={`flex items-center justify-between gap-3 p-3 rounded-xl border ${tone.bg} ${tone.border} ${className}`}
+        className={`flex items-center justify-between gap-2.5 p-2.5 rounded-lg border ${tone.bg} ${tone.border} ${className}`}
       >
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2">
           <CandidateFitScoreBadge
             score={result.score}
             matchLevel={result.matchLevel}
-            className="h-10 w-10 rounded-lg"
+            className="h-9 w-9 rounded-md"
           />
           <div>
             <div className={`text-xs font-bold ${tone.text}`}>{tone.label}</div>
@@ -152,12 +155,12 @@ export function CandidateFitScorecard({
 
   return (
     <div
-      className={`rounded-2xl border ${tone.border} bg-white dark:bg-slate-900 p-5 shadow-xs transition-all space-y-4 ${className}`}
+      className={`rounded-xl border ${tone.border} bg-white dark:bg-slate-900 p-[8px] shadow-xs transition-all space-y-3.5 ${className}`}
     >
       {/* Header Metric & Tier */}
-      <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
-        <div className="flex items-center gap-3">
-          <CandidateFitScoreBadge score={result.score} matchLevel={result.matchLevel} className="h-12 w-12 rounded-[14px]" />
+      <div className="flex items-center justify-between pb-2.5 border-b border-slate-200 dark:border-slate-800">
+        <div className="flex items-center gap-2.5">
+          <CandidateFitScoreBadge score={result.score} matchLevel={result.matchLevel} className="h-10 w-10 rounded-lg" />
           <div>
             <div className="flex items-center gap-2">
               <h3 className="text-sm font-extrabold text-slate-900 dark:text-white m-0">
@@ -186,9 +189,9 @@ export function CandidateFitScorecard({
 
       {/* Criteria Breakdown Grid */}
       {isExpanded && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 pt-1">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
           {/* 1. Clinical & Technical Skills */}
-          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/60 p-3.5 flex flex-col justify-between shadow-2xs">
+          <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-800/60 p-3 flex flex-col justify-between shadow-2xs">
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <span className="text-xs font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">

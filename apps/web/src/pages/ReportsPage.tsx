@@ -540,7 +540,7 @@ export function ReportsPage() {
       {/* ── Row 2: 3 Analytics Visual Charts with Recharts ── */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
         {/* Chart 1: Applications Over Time (Recharts AreaChart) (5 cols) */}
-        <div className="lg:col-span-5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs flex flex-col justify-between space-y-4">
+        <div className="lg:col-span-5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-[8px] shadow-xs flex flex-col justify-between space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-extrabold text-slate-900 dark:text-white">
               Applications Over Time
@@ -599,7 +599,7 @@ export function ReportsPage() {
         </div>
 
         {/* Chart 2: Applications by Source (Recharts Donut) (4 cols) */}
-        <div className="lg:col-span-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs flex flex-col justify-between space-y-4">
+        <div className="lg:col-span-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-[8px] shadow-xs flex flex-col justify-between space-y-4">
           <h2 className="text-sm font-extrabold text-slate-900 dark:text-white">
             Applications by Source
           </h2>
@@ -664,7 +664,7 @@ export function ReportsPage() {
         </div>
 
         {/* Chart 3: Funnel Conversion Pipeline (3 cols) */}
-        <div className="lg:col-span-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs flex flex-col justify-between space-y-4">
+        <div className="lg:col-span-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-[8px] shadow-xs flex flex-col justify-between space-y-4">
           <h2 className="text-sm font-extrabold text-slate-900 dark:text-white">
             Funnel Conversion
           </h2>
@@ -697,7 +697,7 @@ export function ReportsPage() {
       {/* ── Row 3: 3 Secondary Visual Charts matching reference ── */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
         {/* Metric 1: Hiring progress by position (4 cols) */}
-        <div className="lg:col-span-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs flex flex-col justify-between space-y-4">
+        <div className="lg:col-span-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-[8px] shadow-xs flex flex-col justify-between space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-extrabold text-slate-900 dark:text-white">
               Hiring Progress by Position
@@ -737,7 +737,7 @@ export function ReportsPage() {
         </div>
 
         {/* Metric 2: Average time to fill from completed hiring records (4 cols) */}
-        <div className="lg:col-span-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs flex flex-col justify-between space-y-4">
+        <div className="lg:col-span-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-[8px] shadow-xs flex flex-col justify-between space-y-4">
           <div>
             <h2 className="text-sm font-extrabold text-slate-900 dark:text-white">
               Average Time to Fill
@@ -764,7 +764,7 @@ export function ReportsPage() {
         </div>
 
         {/* Metric 3: Offer Acceptance Rate (Recharts Donut) (4 cols) */}
-        <div className="lg:col-span-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs flex flex-col justify-between space-y-4">
+        <div className="lg:col-span-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-[8px] shadow-xs flex flex-col justify-between space-y-4">
           <h2 className="text-sm font-extrabold text-slate-900 dark:text-white">
             Offer Acceptance Rate
           </h2>
@@ -831,7 +831,7 @@ export function ReportsPage() {
       </div>
 
       {/* ── Row 4: Key Insights matching 07-recruitment-reports-dark.png ── */}
-      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-4">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-[8px] shadow-xs space-y-4">
         <div className="flex items-center gap-2">
           <div className="w-6 h-6 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 flex items-center justify-center">
             <Icon name="report" size={14} />
@@ -843,7 +843,7 @@ export function ReportsPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {/* Insight 1 */}
-          <div className="p-4 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 flex items-start gap-3.5">
+          <div className="p-[8px] rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 flex items-start gap-3.5">
             <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 flex items-center justify-center shrink-0">
               <Icon name="arrow-up" size={15} />
             </div>
@@ -858,7 +858,7 @@ export function ReportsPage() {
           </div>
 
           {/* Insight 2 */}
-          <div className="p-4 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 flex items-start gap-3.5">
+          <div className="p-[8px] rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 flex items-start gap-3.5">
             <div className="w-8 h-8 rounded-full bg-orange-100 dark:bg-orange-950/60 text-orange-600 dark:text-orange-400 flex items-center justify-center shrink-0">
               <Icon name="clock" size={15} />
             </div>
@@ -873,7 +873,7 @@ export function ReportsPage() {
           </div>
 
           {/* Insight 3 */}
-          <div className="p-4 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 flex items-start gap-3.5">
+          <div className="p-[8px] rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800 flex items-start gap-3.5">
             <div className="w-8 h-8 rounded-full bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
               <Icon name="offer" size={15} />
             </div>
@@ -923,7 +923,7 @@ export function ReportsPage() {
             </div>
           </div>
           {/* ── Detailed Scorecard Table matching exact user fields (No Weights) ── */}
-          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 sm:p-6 shadow-xs space-y-4">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-[8px] shadow-xs space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
                 <h3 className="text-base font-semibold text-slate-900 dark:text-white">

@@ -1,5 +1,7 @@
 import { useState, useId, type CSSProperties } from 'react';
 import { Badge } from './Badge';
+import { showCategoryLabel, trendLineGridStops } from './chartLayout';
+import { useElementWidth } from './useMediaQuery';
 
 export interface DataPoint {
   label: string;
@@ -34,6 +36,8 @@ export function TrendLineChart({
 }: TrendLineChartProps) {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const gradientId = useId();
+  const [plotRef, plotWidth] = useElementWidth<HTMLDivElement>();
+  const gridStops = trendLineGridStops(plotWidth);
 
   if (!data || data.length < 2) return null;
 
@@ -86,7 +90,7 @@ export function TrendLineChart({
   const activeData = hoverIndex !== null ? data[hoverIndex] : null;
 
   return (
-    <div className={`rounded-xl border border-rf-border-subtle bg-rf-surface p-5 shadow-[var(--shadow-card)] ${className}`} style={style}>
+    <div className={`min-w-0 max-w-full rounded-xl border border-rf-border-subtle bg-rf-surface p-5 shadow-[var(--shadow-card)] ${className}`} style={style}>
       {(title || subtitle || badgeLabel) && (
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
           <div>
@@ -102,10 +106,10 @@ export function TrendLineChart({
         </div>
       )}
 
-      <div className="relative w-full overflow-hidden">
+      <div ref={plotRef} className="relative w-full min-w-0 overflow-hidden">
         <svg
           viewBox={`0 0 ${svgWidth} ${svgHeight}`}
-          className="w-full h-auto overflow-visible select-none"
+          className="h-auto w-full max-w-full select-none"
           onMouseLeave={() => setHoverIndex(null)}
         >
           <defs>
@@ -116,7 +120,7 @@ export function TrendLineChart({
           </defs>
 
           {/* Horizontal Grid lines */}
-          {[0, 0.33, 0.66, 1].map((pct, i) => {
+          {gridStops.map((pct, i) => {
             const y = paddingTop + chartHeight * pct;
             const labelVal = Math.round(maxVal - pct * valRange);
             return (
@@ -168,7 +172,7 @@ export function TrendLineChart({
                 fontWeight={hoverIndex === i ? 'bold' : 'normal'}
                 fill={hoverIndex === i ? 'var(--color-ink)' : 'var(--color-ink-muted)'}
               >
-                {data[i].label}
+                {showCategoryLabel(i, data.length, plotWidth) ? data[i].label : ''}
               </text>
               {/* Invisible touch/hover column */}
               <rect

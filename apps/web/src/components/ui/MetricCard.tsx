@@ -127,7 +127,7 @@ export function MetricCard({
     >
       <article className={[
         'flex flex-1 flex-col justify-between relative z-10 w-full',
-        density === 'compact' ? 'min-h-[92px] rf-metric-card-pad' : 'min-h-[116px] p-5',
+        density === 'compact' ? 'min-h-[82px] rf-metric-card-pad' : 'min-h-[104px] p-[8px]',
         featured ? 'bg-rf-action-soft/5' : '',
       ].filter(Boolean).join(' ')}>
         {action && (
@@ -179,12 +179,12 @@ export function MetricCard({
           </div>
         </div>
 
-        <div className="mt-3">
+        <div className="mt-2.5">
           <div className="flex items-end justify-between gap-2">
-            <strong className={density === 'compact' ? 'rf-metric-value block' : 'block font-rf-heading text-[22px] font-black leading-none tracking-[-0.03em] text-rf-ink tabular-nums'}>{value}</strong>
+            <strong className={density === 'compact' ? 'rf-metric-value block' : 'block font-rf-heading text-[20px] font-black leading-none tracking-[-0.03em] text-rf-ink tabular-nums'}>{value}</strong>
             {sparkline && sparkline.length > 1 && <div className="shrink-0 -mb-1"><Sparkline data={sparkline} color={sparklineColor ?? toneSparkColors[tone]} width={82} height={24} /></div>}
           </div>
-          {(detail || trend) && <div className="mt-2 flex min-w-0 items-center justify-between gap-2">
+          {(detail || trend) && <div className="mt-1.5 flex min-w-0 items-center justify-between gap-2">
             {detail && <span className="min-w-0 truncate text-[11px] font-medium text-rf-ink-muted">{detail}</span>}
             {trend && <span className={['shrink-0 text-[11px] font-bold', trendClasses].join(' ')}>{trend.isPositive === true ? '↑ ' : trend.isPositive === false ? '↓ ' : ''}{trend.value}</span>}
           </div>}

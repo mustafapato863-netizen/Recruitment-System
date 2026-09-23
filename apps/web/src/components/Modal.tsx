@@ -74,7 +74,7 @@ export function Modal({ isOpen, onClose, title, children, footer, maxWidthClass 
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--color-overlay)] p-4 backdrop-blur-[2px] animate-in fade-in duration-150 sm:p-6"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-[var(--color-overlay)] p-0 backdrop-blur-[2px] animate-in fade-in duration-150 sm:items-center sm:p-5"
       role="presentation"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose();
@@ -85,23 +85,23 @@ export function Modal({ isOpen, onClose, title, children, footer, maxWidthClass 
         aria-describedby={descriptionId}
         aria-modal="true"
         className={[
-          'relative flex max-h-[90vh] w-full flex-col overflow-hidden rounded-[18px] border border-rf-border-subtle bg-rf-surface shadow-[var(--shadow-float)] animate-in zoom-in-95 duration-150',
+          'relative flex h-dvh max-h-dvh w-full max-sm:max-w-none flex-col overflow-hidden rounded-none border border-rf-border-subtle bg-rf-surface shadow-[var(--shadow-float)] animate-in duration-150 sm:h-auto sm:max-h-[90vh] sm:rounded-[16px] sm:zoom-in-95',
           maxWidthClass,
         ].join(' ')}
         ref={dialogRef}
         role="dialog"
       >
-        <div className="flex shrink-0 items-center justify-between border-b border-rf-border-subtle bg-rf-surface-subtle/65 px-5 py-4 sm:px-6">
-          <h2 className="m-0 font-rf-heading text-[13px] font-extrabold tracking-[-0.015em] text-rf-ink" id={titleId}>{title}</h2>
+        <div className="sticky top-0 z-[1] flex shrink-0 items-center justify-between border-b border-rf-border-subtle bg-rf-surface-subtle/65 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:static sm:px-5 sm:pt-3">
+          <h2 className="m-0 font-rf-heading text-[12px] font-extrabold tracking-[-0.015em] text-rf-ink" id={titleId}>{title}</h2>
           <IconButton label="Close dialog" tone="ghost" size="sm" onClick={onClose}>
-            <Icon name="close" size={16} />
+            <Icon name="close" size={15} />
           </IconButton>
         </div>
-        <div className="rf-scrollbar min-h-0 flex-1 overflow-y-auto p-5 text-rf-ink sm:p-6">
+        <div className="rf-scrollbar min-h-0 flex-1 overflow-y-auto p-4 text-rf-ink sm:p-5">
           {children}
         </div>
         {footer ? (
-          <div className="shrink-0 border-t border-rf-border-subtle bg-rf-surface px-5 py-4 sm:px-6">
+          <div className="sticky bottom-0 z-[1] shrink-0 border-t border-rf-border-subtle bg-rf-surface px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:static sm:px-5 sm:pb-3">
             {footer}
           </div>
         ) : null}

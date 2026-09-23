@@ -43,7 +43,7 @@ export function RadioGroup({
             key={opt.value}
             htmlFor={id}
             className={cn(
-              'flex items-start gap-2.5 cursor-pointer select-none text-sm',
+              'rf-radio flex items-start gap-2.5 cursor-pointer select-none text-sm',
               opt.disabled && 'opacity-50 cursor-not-allowed'
             )}
           >

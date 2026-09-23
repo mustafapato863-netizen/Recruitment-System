@@ -49,4 +49,17 @@ describe('Drawer component', () => {
     await userEvent.keyboard('{Escape}');
     expect(onClose).toHaveBeenCalledTimes(2);
   });
+
+  it('marks the bottom placement as a sheet without dropping the dialog contract', () => {
+    render(
+      <Drawer isOpen title="Filters" placement="bottom" onClose={vi.fn()}>
+        <div>Filter fields</div>
+      </Drawer>,
+    );
+
+    const dialog = screen.getByRole('dialog');
+    expect(dialog).toHaveClass('is-sheet');
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    expect(screen.getByText('Filter fields')).toBeVisible();
+  });
 });

@@ -2,47 +2,47 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 .filter {
   display: flex;
-  gap: 12px;
+  gap: 10px;
 }
 .filter select, .filter input {
-  padding: 8px 12px;
+  padding: 6px 10px;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: var(--surface);
-  font-size: 11px;
+  font-size: 10.5px;
 }
 table.data-table {
   width: 100%;
   border-collapse: collapse;
 }
 table.data-table th, table.data-table td {
-  padding: 12px 16px;
+  padding: 10px 14px;
   text-align: left;
   border-bottom: 1px solid var(--border);
-  font-size: 11px;
+  font-size: 10.5px;
 }
 table.data-table th {
   color: var(--muted);
   font-weight: 700;
   text-transform: uppercase;
-  font-size: 9px;
+  font-size: 8.5px;
   letter-spacing: 0.05em;
 }
 .page-layout {
   display: flex;
-  gap: 24px;
+  gap: 20px;
 }
 .sidebar-panel {
-  width: 250px;
+  width: 225px;
   flex-shrink: 0;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 16px;
+  padding: 14px;
 }
 .content-area {
   flex: 1;
@@ -50,7 +50,7 @@ table.data-table th {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 24px;
+  padding: 20px;
 }
 .nav-list {
   display: flex;
@@ -93,7 +93,7 @@ table.data-table th {
 .filter-row { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
 .filter-heading { align-items: flex-start; }
 .inline-search { flex: 0 1 280px; margin: 0; }
-.inline-search input { min-height: 36px; }
+.inline-search input { min-height: 32px; }
 
 @media (max-width: 900px) {
   .page-layout { flex-direction: column; }

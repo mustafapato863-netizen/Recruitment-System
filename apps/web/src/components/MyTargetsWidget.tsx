@@ -61,7 +61,7 @@ export function MyTargetsWidget() {
   if (progress.length === 0) return null;
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs space-y-4">
+    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-[8px] shadow-xs space-y-4">
       {/* Header */}
       <div className="flex items-center gap-3 border-b border-slate-100 dark:border-slate-800 pb-3.5">
         <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/50 flex items-center justify-center text-lg">
@@ -106,7 +106,7 @@ export function MyTargetsWidget() {
                 return (
                   <div
                     key={m.key}
-                    className="p-3 rounded-xl border border-slate-200/60 dark:border-slate-700/60 bg-slate-50/50 dark:bg-slate-800/30"
+                    className="p-[8px] rounded-xl border border-slate-200/60 dark:border-slate-700/60 bg-slate-50/50 dark:bg-slate-800/30"
                   >
                     <div className="flex items-center justify-between mb-1.5">
                       <div className="flex items-center gap-1.5">

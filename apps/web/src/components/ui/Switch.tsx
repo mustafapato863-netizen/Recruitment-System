@@ -17,12 +17,12 @@ export const Switch = React.forwardRef<HTMLInputElement, SwitchProps>(
       <label
         htmlFor={inputId}
         className={cn(
-          'inline-flex items-center gap-3 select-none cursor-pointer',
+          'rf-switch inline-flex items-center gap-3 select-none cursor-pointer',
           disabled && 'opacity-50 cursor-not-allowed',
           className
         )}
       >
-        <div className="relative inline-flex items-center">
+        <div className="rf-switch__control relative inline-flex items-center">
           <input
             type="checkbox"
             id={inputId}

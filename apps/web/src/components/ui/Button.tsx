@@ -23,11 +23,11 @@ export const buttonVariants = cva(
         link: 'border-transparent bg-transparent px-0 text-rf-action underline-offset-4 hover:text-rf-action-strong hover:underline',
       },
       size: {
-        default: 'h-9 min-h-9 px-3.5 text-[11.5px]',
-        sm: 'h-8 min-h-8 px-2.5 text-[11px] max-md:h-10 max-md:min-h-10',
-        md: 'h-9 min-h-9 px-3.5 text-[11.5px]',
-        lg: 'h-10 min-h-10 px-4 text-xs',
-        icon: 'h-9 w-9 p-0',
+        default: 'h-8 min-h-8 px-3 text-[11px]',
+        sm: 'h-7 min-h-7 px-2 text-[10px] max-md:h-9 max-md:min-h-9',
+        md: 'h-8 min-h-8 px-3 text-[11px]',
+        lg: 'h-9 min-h-9 px-3.5 text-[11.5px]',
+        icon: 'h-8 w-8 p-0',
       },
     },
     defaultVariants: {

@@ -50,7 +50,7 @@ export function DonutChart({
     : centerLabel;
 
   return (
-    <div className={`rounded-xl border border-rf-border-subtle bg-rf-surface p-5 shadow-[var(--shadow-card)] ${className}`} style={style}>
+    <div className={`min-w-0 max-w-full rounded-xl border border-rf-border-subtle bg-rf-surface p-5 shadow-[var(--shadow-card)] ${className}`} style={style}>
       {(title || subtitle) && (
         <div className="mb-4">
           {title && <h3 className="text-sm font-extrabold text-rf-ink m-0 tracking-tight">{title}</h3>}
@@ -58,10 +58,10 @@ export function DonutChart({
         </div>
       )}
 
-      <div className="flex flex-col sm:flex-row items-center gap-4 justify-between">
+      <div className="flex min-w-0 flex-col items-center justify-between gap-4 sm:flex-row">
         {/* SVG Donut */}
-        <div className="relative shrink-0 flex items-center justify-center" style={{ width: size, height: size }}>
-          <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90">
+        <div className="relative shrink-0" style={{ width: `min(100%, ${size}px)`, aspectRatio: '1' }}>
+          <svg viewBox={`0 0 ${size} ${size}`} className="h-auto w-full max-w-full -rotate-90">
             {/* Background ring */}
             <circle
               cx={size / 2}

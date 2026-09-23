@@ -160,7 +160,7 @@ export function NavigationItem({
     >
       <span className="ico"><Icon name={icon} size={17} /></span>
       {!isCollapsed && (
-        <span className="nav-label font-semibold text-[13.5px] leading-tight normal-case tracking-normal flex-1 flex items-center justify-between">
+        <span className="nav-label font-semibold text-[12px] leading-tight normal-case tracking-normal flex-1 flex items-center justify-between">
           <span>{displayLabel}</span>
           {badge !== undefined && Number(badge) > 0 && (
             <span
@@ -512,8 +512,8 @@ export function AppShellInner() {
       </aside>
 
       <header className="header">
-        <div className="flex items-center justify-between w-full max-w-[1720px] mx-auto gap-4 px-4 sm:px-6 lg:px-7 h-full">
-          <div className="flex items-center gap-3">
+        <div className="header-bar flex min-w-0 w-full max-w-[var(--rf-page-max)] mx-auto items-center justify-between gap-2 px-3 sm:gap-4 sm:px-6 lg:px-7 h-full">
+          <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
             <IconButton
               ref={mobileMenuTriggerRef as unknown as React.Ref<HTMLButtonElement>}
               className="lg:hidden"
@@ -536,7 +536,7 @@ export function AppShellInner() {
             <button
               ref={searchTriggerRef}
               type="button"
-              className="search-bar-unified flex items-center gap-2 px-3 sm:px-4 py-2 bg-rf-surface-subtle border border-rf-border rounded-xl text-xs text-rf-ink-muted hover:border-rf-border-strong transition flex-1 min-w-[120px] max-w-[460px] shadow-2xs cursor-text"
+              className="search-bar-unified flex items-center gap-2 px-3 sm:px-3.5 py-1.5 bg-rf-surface-subtle border border-rf-border rounded-lg text-xs text-rf-ink-muted hover:border-rf-border-strong transition flex-1 min-w-0 sm:min-w-[120px] max-w-[420px] shadow-2xs cursor-text"
               onClick={() => setIsCommandPaletteOpen(true)}
               aria-haspopup="dialog"
               aria-expanded={isCommandPaletteOpen}
@@ -555,7 +555,7 @@ export function AppShellInner() {
             <button
               type="button"
               onClick={openGuide}
-              className="hidden md:flex w-9 h-9 items-center justify-center rounded-xl bg-rf-surface border border-rf-border text-rf-ink-muted hover:text-rf-ink hover:bg-rf-surface-hover transition shadow-xs text-xs font-bold cursor-pointer"
+              className="hidden md:flex w-8 h-8 items-center justify-center rounded-lg bg-rf-surface border border-rf-border text-rf-ink-muted hover:text-rf-ink hover:bg-rf-surface-hover transition shadow-xs text-[11px] font-bold cursor-pointer"
               title="Page guide"
             >
               ?
@@ -565,11 +565,11 @@ export function AppShellInner() {
             <button
               type="button"
               onClick={() => navigate('/my-work')}
-              className="hidden md:flex w-9 h-9 items-center justify-center rounded-xl bg-rf-surface border border-rf-border text-rf-ink-muted hover:text-rf-ink hover:bg-rf-surface-hover transition shadow-xs cursor-pointer"
+              className="hidden md:flex w-8 h-8 items-center justify-center rounded-lg bg-rf-surface border border-rf-border text-rf-ink-muted hover:text-rf-ink hover:bg-rf-surface-hover transition shadow-xs cursor-pointer"
               title={canViewTasks ? 'Recent Activity & Task Queue' : 'Open My Work'}
               aria-label={canViewTasks ? 'Recent Activity and Task Queue' : 'Open My Work'}
             >
-              <Icon name="clock" size={16} />
+              <Icon name="clock" size={15} />
             </button>
 
             {/* Notifications Bell */}
@@ -579,7 +579,7 @@ export function AppShellInner() {
 
             <ThemeToggle className="hidden sm:flex" />
 
-            <div className="h-6 w-px bg-rf-border mx-0.5 hidden sm:block" aria-hidden="true" />
+            <div className="h-5 w-px bg-rf-border mx-0.5 hidden sm:block" aria-hidden="true" />
             <UserProfileDropdown />
           </div>
         </div>

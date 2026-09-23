@@ -171,11 +171,11 @@ export function VacancyCard({
       aria-label={onOpen ? `Vacancy ${vacancy.title}. Press Enter to view details.` : undefined}
       onClick={onOpen}
       onKeyDown={handleKeyDown}
-      className={`group flex min-w-0 flex-col rounded-2xl border border-slate-200/90 bg-white p-5 shadow-sm transition duration-200 hover:border-blue-200 hover:shadow-lg motion-reduce:transition-none dark:border-slate-800 dark:bg-slate-900 dark:hover:border-blue-900 ${onOpen ? 'cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-950' : ''} ${className}`}
+      className={`group flex min-w-0 flex-col rounded-xl border border-slate-200/90 bg-white p-[8px] shadow-sm transition duration-200 hover:border-blue-200 hover:shadow-lg motion-reduce:transition-none dark:border-slate-800 dark:bg-slate-900 dark:hover:border-blue-900 ${onOpen ? 'cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-950' : ''} ${className}`}
     >
       <VacancyCardHeader vacancy={vacancy} roleIcon={roleIcon} />
       {children}
-      {footer && <div className="mt-auto border-t border-slate-100 pt-4 dark:border-slate-800">{footer}</div>}
+      {footer && <div className="mt-auto border-t border-slate-100 pt-3 dark:border-slate-800">{footer}</div>}
     </article>
   );
 }
@@ -191,9 +191,9 @@ export function VacancyCardHeader({
   const statusAppearance = getStatusAppearance(vacancy.status);
 
   return (
-    <div className="flex items-start gap-3.5">
-      <span className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ring-1 ${appearance.tileClassName}`}>
-        <Icon name={appearance.icon} size={22} strokeWidth={1.8} aria-hidden="true" />
+    <div className="flex items-start gap-3">
+      <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1 ${appearance.tileClassName}`}>
+        <Icon name={appearance.icon} size={19} strokeWidth={1.8} aria-hidden="true" />
       </span>
       <div className="min-w-0 flex-1 pt-0.5">
         <p className="truncate text-xs font-semibold tracking-wide text-slate-500 dark:text-slate-400">
@@ -201,11 +201,11 @@ export function VacancyCardHeader({
           <span className="px-1 text-slate-300" aria-hidden="true">·</span>
           <span>{vacancy.department}</span>
         </p>
-        <h3 className="mt-1 break-words text-lg font-bold leading-snug text-slate-950 transition-colors group-hover:text-blue-700 dark:text-white dark:group-hover:text-blue-300">
+        <h3 className="mt-1 break-words text-base font-bold leading-snug text-slate-950 transition-colors group-hover:text-blue-700 dark:text-white dark:group-hover:text-blue-300">
           {vacancy.title}
         </h3>
       </div>
-      <span className={`inline-flex min-h-8 shrink-0 items-center gap-2 rounded-full border px-3 text-[11px] font-bold ${statusAppearance.badge}`}>
+      <span className={`inline-flex min-h-7 shrink-0 items-center gap-1.5 rounded-full border px-2.5 text-[10px] font-bold ${statusAppearance.badge}`}>
         <span className={`h-2 w-2 rounded-full ${statusAppearance.dot}`} aria-hidden="true" />
         {vacancy.status}
       </span>
@@ -223,7 +223,7 @@ export function VacancyCardMeta({
   workType?: string;
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm font-semibold text-slate-600 dark:text-slate-300">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300">
       {experienceLabel && (
         <span className="inline-flex items-center gap-2">
           <Icon name="briefcase" size={16} className="text-slate-400" aria-hidden="true" />
@@ -261,12 +261,12 @@ export function VacancyCardMetrics({ items }: { items: VacancyCardMetricItem[] }
   return (
     <div className={`grid ${columns} gap-2`}>
       {items.map((item) => (
-        <div key={item.key} className="min-w-0 rounded-xl bg-slate-50 px-3 py-2.5 dark:bg-slate-800/60">
-          <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-            {item.icon && <Icon name={item.icon} size={13} aria-hidden="true" />}
+        <div key={item.key} className="min-w-0 rounded-lg bg-slate-50 px-2.5 py-2 dark:bg-slate-800/60">
+          <span className="flex items-center gap-1.5 text-[9.5px] font-bold uppercase tracking-wider text-slate-400">
+            {item.icon && <Icon name={item.icon} size={12} aria-hidden="true" />}
             {item.label}
           </span>
-          <div className="mt-1 min-w-0 text-base font-bold leading-tight text-slate-900 dark:text-white">{item.value}</div>
+          <div className="mt-1 min-w-0 text-sm font-bold leading-tight text-slate-900 dark:text-white">{item.value}</div>
         </div>
       ))}
     </div>
@@ -327,7 +327,7 @@ export function VacancyCardSkills({
       <h4 className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Key skills</h4>
       <div className="mt-2 flex flex-wrap gap-2">
         {skills.length > 0 ? skills.slice(0, maxVisible).map((skill) => (
-          <span key={skill} className={`inline-flex min-h-7 max-w-full items-center rounded-full border px-3 py-1 text-xs font-semibold leading-5 ${appearance.skillClassName}`}>
+          <span key={skill} className={`inline-flex min-h-6 max-w-full items-center rounded-full border px-2.5 py-0.5 text-[11px] font-semibold leading-5 ${appearance.skillClassName}`}>
             <span className="break-words">{skill}</span>
           </span>
         )) : <span className="py-1 text-xs text-slate-400">No skills specified</span>}
@@ -343,13 +343,13 @@ export function VacancyCardSkills({
 
 export function VacancyCardEducation({ qualifications }: { qualifications?: string | null }) {
   return (
-    <section className="flex items-start gap-3 border-t border-slate-100 pt-4 dark:border-slate-800">
-      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-        <Icon name="graduation-cap" size={17} aria-hidden="true" />
+    <section className="flex items-start gap-2.5 border-t border-slate-100 pt-3 dark:border-slate-800">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+        <Icon name="graduation-cap" size={15} aria-hidden="true" />
       </span>
       <div className="min-w-0">
-        <h4 className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Education</h4>
-        <p className="mt-1 line-clamp-2 text-sm leading-5 text-slate-700 dark:text-slate-300">
+        <h4 className="text-[10.5px] font-bold uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">Education</h4>
+        <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-700 dark:text-slate-300">
           {qualifications || 'Education requirements not specified.'}
         </p>
       </div>

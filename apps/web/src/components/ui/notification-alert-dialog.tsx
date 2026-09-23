@@ -247,10 +247,10 @@ export function NotificationAlertDialog({
           role="dialog"
           tabIndex={-1}
           aria-label="Notifications Dropdown"
-          className="absolute right-0 top-full mt-2 w-[calc(100vw-32px)] sm:w-[410px] max-w-[420px] bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl z-[100] overflow-hidden flex flex-col outline-none animate-in fade-in-0 zoom-in-95 duration-150 origin-top-right"
+          className="absolute right-0 top-full mt-2 w-[calc(100vw-32px)] sm:w-[410px] max-w-[420px] bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-2xl z-[100] overflow-hidden flex flex-col outline-none animate-in fade-in-0 zoom-in-95 duration-150 origin-top-right max-sm:fixed max-sm:inset-0 max-sm:right-auto max-sm:top-0 max-sm:mt-0 max-sm:h-dvh max-sm:max-h-dvh max-sm:w-full max-sm:max-w-none max-sm:rounded-none max-sm:pt-[env(safe-area-inset-top)] max-sm:pb-[env(safe-area-inset-bottom)]"
         >
           {/* Popover Header */}
-          <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-slate-900">
+          <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-white dark:bg-slate-900 max-sm:sticky max-sm:top-0 max-sm:z-[1]">
             <div className="flex items-center gap-2">
               <h3 className="text-sm font-extrabold text-slate-900 dark:text-white m-0">Notifications</h3>
               {unreadCount > 0 && (
@@ -321,7 +321,7 @@ export function NotificationAlertDialog({
 
           {/* Notification Items List */}
           <div
-            className="max-h-[360px] overflow-y-auto flex flex-col divide-y divide-slate-100 dark:divide-slate-800"
+            className="max-h-[360px] overflow-y-auto flex flex-col divide-y divide-slate-100 dark:divide-slate-800 max-sm:max-h-none max-sm:flex-1"
             role="status"
             aria-live="polite"
           >
@@ -409,7 +409,7 @@ export function NotificationAlertDialog({
           </div>
 
           {/* Footer */}
-          <div className="p-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 text-center">
+          <div className="p-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 text-center max-sm:sticky max-sm:bottom-0 max-sm:z-[1] max-sm:mt-auto">
             <Link
               to="/tasks"
               onClick={closeDropdown}

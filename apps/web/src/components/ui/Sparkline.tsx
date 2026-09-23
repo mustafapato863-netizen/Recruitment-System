@@ -47,11 +47,10 @@ export function Sparkline({
 
   return (
     <svg
-      width={width}
-      height={height}
       viewBox={`0 0 ${width} ${height}`}
-      className={`overflow-visible ${className}`}
-      style={style}
+      preserveAspectRatio="xMidYMid meet"
+      className={`block h-auto max-w-full ${className}`}
+      style={{ width: '100%', maxWidth: width, ...style }}
       aria-hidden="true"
     >
       <defs>

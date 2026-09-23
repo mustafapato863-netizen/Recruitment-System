@@ -42,34 +42,34 @@ export const ComparisonMatrixCard: React.FC<ComparisonMatrixCardProps> = ({
   const scoreDetail = awaitingPosition ? 'Select a position' : 'Position fit';
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-5 shadow-xs flex flex-col justify-between space-y-4 relative">
+    <div className="relative flex flex-col gap-3.5 rounded-xl border border-slate-200/80 bg-white p-[8px] shadow-xs dark:border-slate-800 dark:bg-slate-900 sm:p-[8px]">
       {/* Remove button */}
       <button
         type="button"
         onClick={() => onRemove(c.id)}
         title="Remove from comparison"
-        className="absolute top-3.5 right-3.5 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 p-1 text-xs cursor-pointer transition"
+        className="absolute top-3 right-3 text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 p-1 text-xs cursor-pointer transition"
       >
         ✕
       </button>
 
       {/* Header Profile with 360 Link */}
-      <div className="flex items-center gap-3">
-        <div className={`w-11 h-11 rounded-2xl ${c.avatarColor} font-black text-sm flex items-center justify-center shrink-0 shadow-xs`}>
+      <div className="flex items-center gap-2.5">
+        <div className={`w-9 h-9 rounded-xl ${c.avatarColor} font-black text-xs flex items-center justify-center shrink-0 shadow-xs`}>
           {c.name.split(' ').filter(Boolean).map((n) => n[0]).join('').slice(0, 2).toUpperCase()}
         </div>
         <div className="min-w-0 pr-4">
           <Link
             to={`/candidates/${c.id}`}
-            className="text-sm font-bold text-slate-900 dark:text-white leading-tight truncate hover:text-blue-600 block no-underline"
+            className="text-xs font-bold text-slate-900 dark:text-white leading-tight truncate hover:text-blue-600 block no-underline"
             title="Open Candidate 360 Profile"
           >
             {c.name}
           </Link>
-          <div className="flex items-center gap-1.5 mt-0.5">
-            <span className="text-[11px] text-slate-400 font-medium truncate">{c.role}</span>
+          <div className="flex items-center gap-1 mt-0.5">
+            <span className="text-[10.5px] text-slate-400 font-medium truncate">{c.role}</span>
             {c.candidateCode && (
-              <span className="font-mono text-[9.5px] font-bold px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+              <span className="font-mono text-[9px] font-bold px-1.5 py-0.2 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
                 {c.candidateCode}
               </span>
             )}
@@ -78,16 +78,16 @@ export const ComparisonMatrixCard: React.FC<ComparisonMatrixCardProps> = ({
       </div>
 
       {/* Compact Match Score */}
-      <div className="py-2.5 px-3 flex items-center justify-center gap-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200/60 dark:border-slate-700/60">
+      <div className="flex items-center gap-2 rounded-lg border border-slate-200/60 bg-slate-50 px-2.5 py-1.5 dark:border-slate-700/60 dark:bg-slate-800/50">
         {awaitingPosition ? (
-          <span className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white text-sm font-black text-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-500">
+          <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-white text-xs font-black text-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-500">
             {scoreLabel}
           </span>
         ) : (
-          <CandidateFitScoreBadge score={c.matchScore} />
+          <CandidateFitScoreBadge score={c.matchScore} size="compact" />
         )}
-        <div>
-          <span className="text-xs font-bold text-slate-900 dark:text-white block">{scoreDetail}</span>
+        <div className="min-w-0">
+          <span className="block text-[11px] font-bold text-slate-900 dark:text-white">{scoreDetail}</span>
           <span className={`text-[10px] font-semibold ${awaitingPosition ? "text-slate-500 dark:text-slate-400" : "text-emerald-600 dark:text-emerald-400"}`}>{c.matchGrade}</span>
         </div>
       </div>

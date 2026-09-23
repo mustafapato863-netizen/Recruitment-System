@@ -142,11 +142,11 @@ export function FunnelChart({
 
   return (
     <div
-      className={`rounded-2xl border border-rf-border-subtle bg-rf-surface p-5 shadow-xs flex flex-col justify-between h-full ${className}`}
+      className={`flex h-full min-w-0 max-w-full flex-col justify-between rounded-2xl border border-rf-border-subtle bg-rf-surface p-5 shadow-xs ${className}`}
       style={style}
     >
       {/* 1. Header with title, date range, and Bottleneck Badge */}
-      <div className="flex items-center justify-between gap-3 pb-4 border-b border-rf-border-subtle mb-4">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-rf-border-subtle pb-4">
         <div className="flex items-center gap-2.5 flex-wrap">
           <h2 className="text-[15px] font-black tracking-tight text-rf-ink m-0">{title}</h2>
           {dateRangeText && (
@@ -193,14 +193,14 @@ export function FunnelChart({
           return (
             <div
               key={idx}
-              className={`flex items-center w-full gap-3 px-3 py-2 rounded-xl transition-all relative ${
+              className={`relative flex w-full min-w-0 flex-wrap items-center gap-3 rounded-xl px-3 py-2 transition-all sm:flex-nowrap ${
                 isBottleneck
                   ? 'bg-rf-danger-soft/60 border border-rf-danger/30 shadow-2xs pl-3.5 before:absolute before:left-0 before:top-1.5 before:bottom-1.5 before:w-1 before:bg-rf-danger before:rounded-r'
                   : 'hover:bg-rf-surface-subtle/70'
               }`}
             >
               {/* Icon and Name */}
-              <div className="flex items-center gap-2.5 w-[110px] shrink-0">
+              <div className="flex w-[110px] min-w-0 shrink items-center gap-2.5">
                 <div
                   className={`w-7 h-7 rounded-full ${cfg.iconBg} ${cfg.iconColor} flex items-center justify-center shadow-2xs shrink-0`}
                 >
@@ -215,7 +215,7 @@ export function FunnelChart({
               </div>
 
               {/* Thick Gradient Progress Bar */}
-              <div className="flex-1 h-6 flex items-center">
+              <div className="flex h-6 min-w-0 flex-1 basis-24 items-center">
                 <div
                   className={`h-full bg-gradient-to-r ${cfg.gradient} rounded-lg transition-all duration-500 ease-out shadow-xs`}
                   style={{ width: `${widthPercent}%` }}
@@ -223,7 +223,7 @@ export function FunnelChart({
               </div>
 
               {/* Right Stats Column */}
-              <div className="w-24 shrink-0 text-right flex flex-col justify-center leading-tight">
+              <div className="flex w-24 min-w-0 shrink flex-col justify-center text-right leading-tight">
                 {isFirst ? (
                   <>
                     <span className="text-xs font-bold text-rf-ink">100% of funnel</span>

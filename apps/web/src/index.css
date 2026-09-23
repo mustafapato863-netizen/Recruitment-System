@@ -19,6 +19,9 @@
 
 /* shadcn utilities are mapped to the canonical RecruitFlow semantic tokens. */
 @theme inline {
+  --color-blue-600: oklch(0.51 0.14 249.51);
+  --color-blue-700: oklch(0.44 0.14 249.51);
+  --color-blue-500: oklch(0.58 0.14 249.51);
   --font-rf: var(--font-sans);
   --font-rf-heading: var(--font-heading);
   --color-rf-canvas: var(--color-canvas);
@@ -141,4 +144,18 @@
   [role="button"]:not(:disabled) {
     cursor: pointer;
   }
+}
+
+/* User brand color: replace bg-blue-600 with brand color oklch(0.51 0.14 249.51) */
+.bg-blue-600,
+button.bg-blue-600,
+[role="button"].bg-blue-600,
+.btn.bg-blue-600 {
+  background-color: oklch(0.51 0.14 249.51);
+}
+
+.hover\:bg-blue-700:hover,
+button.hover\:bg-blue-700:hover,
+[role="button"].hover\:bg-blue-700:hover {
+  background-color: oklch(0.44 0.14 249.51);
 }

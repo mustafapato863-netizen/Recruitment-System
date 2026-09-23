@@ -65,7 +65,7 @@ export const InterviewAgendaCard: React.FC<InterviewAgendaCardProps> = ({
   return (
     <div
       onClick={() => navigate(`/interviews/${item.id}`)}
-      className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 hover:border-blue-400 hover:shadow-md transition-all cursor-pointer space-y-3 group"
+      className="p-[8px] bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 hover:border-blue-400 hover:shadow-md transition-all cursor-pointer space-y-3 group"
     >
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">

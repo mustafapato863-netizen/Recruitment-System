@@ -1,37 +1,42 @@
-# Progress Log
+# Progress
 
-## 2026-09-21 — Requisition planning fields
-
-- Started schema/API/UI audit. Current screenshot and user wording recorded in findings.md; existing prior-task notes preserved.
-- Added nullable requisition planning fields, server validation, Prisma persistence, and a local migration. Currency is restricted to AED or EGP.
-- Updated create, request-detail, and vacancy-overview screens with budget range, currency, target fill date, and After Approval/Deferred timing. Deferred conversions start On Hold.
-- Added API coverage for incomplete plans, AED/EGP updates, deferred conversion, and successful submission.
-- Verification: Prisma generate/validate/migrate deploy/status passed; API planning tests passed (4/4); API/web typechecks passed; production build passed; focused lint passed; git diff check passed. Repository-wide lint still has two pre-existing errors in packages/validation.
-
----
-
-- Final permission audit: users without `VACANCY_VIEW` no longer trigger interview list requests and see a restricted-state message in the Interview stage instead of interview records. Focused Applicant Profile tests (6/6), workspace type checks, and lint passed after this fix.
-- Preserved in-progress offer drafts while switching workspace stages; saved server offer versions still refresh the form. Focused UI, API, and workspace type checks passed again afterward.
-
-## 2026-09-15
-
-- Completed the unified Applicant Profile workspace implementation and reviewed the backend/frontend integration.
-- Added a no-template fallback for the next-stage action so legacy applications do not become read-only during pipeline setup.
-- Aligned Screening editing with `CANDIDATE_EDIT`; stage movement remains controlled by `APPLICATION_MOVE_STAGE`.
-- Added confirmation at the point where a stage move, rejection, or interview schedule can refetch data and discard unsaved screening input. Stage-tab and requirement links use the same guard.
-- Added UI-side permission guards for legacy note, interview, rejection, and stage-move handlers, plus a CV details action inside the Applied workspace.
-- Reduced first-load duplication by hiding the legacy overview/interview detail grid while the unified workspace is active; Resume, Activity, and Tasks remain available as support views.
-- Conflict retries now refresh the application, workspace requirements, timeline, and related records together.
-- Kept pipeline ordering authoritative when selecting the next stage and added unsaved-change protection to SPA navigation and keyboard candidate switching.
-- Interview scorecard entry follows the existing interview view permission, and Offer/Pre-Hire loading is isolated so one restricted endpoint does not hide the other record.
-- Guarded stage transition validation for applications whose persisted stage is a custom pipeline value, so a missing canonical transition map cannot crash the API.
-- Added API coverage for required gate blocking and the no-default-pipeline fallback.
-- Accepted bounded custom pipeline stage labels for transition requests; the server still rejects arbitrary jumps and only permits the immediate persisted next stage.
-- Verified API tests (19 files/92 tests), all web tests (47 files/166 tests), worker tests (2 files/6 tests), focused Applicant Profile UI tests (6 tests), API/web/worker type checks, lint, production build, Prisma validation/generation/migration status, bundle budgets, and local browser workspace smoke. The final build still reports advisory Vite chunk-size warnings while completing successfully.
-- Restored the user’s ignored deployed-API browser configuration after local smoke testing; generated browser screenshots are temporary verification artifacts.
-# 2026-09-22 — Product readiness plan update
-
-- Located the current plan at `docs/version-one-simplification-plan.md`; the previously referenced `docs/development/PROJECT_EXECUTION_PLAN.md` is not present.
-- Audited the release notes, UAT plan, full-app audit, handover guide, current branch history, build output, and web test result.
-- Added the dated ready-for-controlled-UAT, delayed-scope, and production-cutover tables to the current plan.
-- Validation: documentation diff check passed; only the plan and planning evidence files changed, with no product-code changes. Changes remain local and are not pushed.
+## 2026-09-23
+- Started diagnosis of Administrator access to Reports and requested recruiter/overall performance reporting.
+- Read `planning-with-files`, `senior-fullstack`, and `code-reviewer` skill guidance.
+- Recorded prior uncommitted candidate comparison UI/logic edits to preserve.
+- One PowerShell search command failed due to unsupported `2>$null` parsing; reran as separate commands successfully.
+- First report-page inspection found fallback hard-coded KPI figures, a fabricated prior-period trend, an empty time-to-hire series, and no recruiter leaderboard/activity section.
+- Confirmed Reports route, shared navigation metadata, and backend report APIs all use `APPLICATION_VIEW`; confirmed recruiter workload data is already computed on the server but is not displayed on ReportsPage.
+- Service review confirms existing recruiter workload counts are basic workload, not audited actions. Confirmed AuditLog records successful actions for key recruiter workflows (application create/note/move, screening, interview schedule/update/scorecard, offer create/status, and hiring changes).
+- Identified menu defect: `AppShell` had no Reports `NavigationItem`. Added Reports item to Governance.
+- Added explicit Administrator full-access check in frontend `usePermissions` and backend `PermissionsGuard` after active-user and tenant validation.
+- Added date-filtered recruiter action aggregates from successful audit records, scoped to manager/admin roles for team-wide reporting and to self for other report viewers. Added a recruiter table and included the activity breakdown in CSV and Excel exports.
+- Removed fabricated KPI fallbacks, inferred probation pass rates, and synthetic prior-period chart data. The empty time-to-fill chart is now a measured average tile; headcount by position now shows approved target, joined hires, and fill rate.
+- Committed Reports improvements as `1818f64 fix(reports): restore admin access and show recruiter performance`.
+- Implemented unified responsive `VacancyCard` component (`VacancyCard.tsx`, `VacancyCard.test.ts`) across `RecruitmentCommandCenter.tsx` and `VacantListPage.tsx`.
+- Committed unified vacancy cards as `b249d9f feat(web): unify responsive vacancy cards`.
+- Candidate Comparison Matrix and Fit Scorecard Refinements:
+  - Updated `CandidateFitScorecard.tsx` to introduce a `compact` size variant (`size="compact"`, `h-9 w-9`) with scaled typography to prevent overflow in dense multi-column comparison cards.
+  - Refactored `ComparisonMatrixCard.tsx` with compact match score badge, awaiting-position state, and streamlined responsive card padding.
+  - Enhanced `CandidateComparisonPage.tsx` to preserve user's comparison set when selecting or switching positions (instead of wiping with vacancy applicants), dynamic fit recalculation against the selected position, and real-time synchronization of candidate `ids` in URL search parameters (`syncComparisonCandidateIds`).
+- Verification completed:
+  - Monorepo full typecheck (`pnpm -r typecheck`): 8 of 8 projects compiled cleanly with 0 errors (`apps/worker`, `apps/api`, `apps/web`, and packages).
+  - Web linter check (`pnpm lint:web`): 0 errors, 23 warnings within allowable project threshold.
+  - Web unit tests executed and passed (`skillTags.test.ts`, `VacancyCard.test.ts`).
+  - System-Wide 10% Visual Compaction & 8px Card Padding (/goal):
+  - Achieved ~10% proportional visual compaction at 100% browser zoom without using CSS `zoom` or `transform: scale()`.
+  - Updated root typography token `html { font-size: 12px; }` in `tokens.css` for natural ~7.7% proportional shrink across all rem-based Tailwind utilities.
+  - Scaled layout tokens: `--sidebar: 208px`, `--sidebar-collapsed: 72px`, `--header: 48px`, `--page-gutter: 20px`, `--control-height: 32px`, `--control-height-compact: 28px`, `--control-height-touch: 40px`.
+  - Scaled UI primitives and components: `PageFrame`, `Button`, `Input`, `Card`, `Badge`, `DataTable`, `MetricCard`, `BreadcrumbsBar`, `Modal`, `AlertDialog`, `AppShell`, `VacancyCard`, `CandidateFitScorecard`, `ComparisonMatrixCard`, `InterviewAgendaCard`, and `MyTargetsWidget`.
+  - Set card padding to 8px from all sides (`--space-card: 8px;`, `--rf-space-card: 8px;`, `p-[8px]`) across cards, metric cards, vacancy cards, kanban cards, and reports cards.
+  - Verification results:
+    - `pnpm --dir apps/web check:design-tokens`: 0 violations across 93 strict boundary files.
+    - `pnpm -r typecheck`: 8 of 8 projects compiled with 0 errors.
+    - User visual confirmation in Chrome DevTools showing vacancy cards with 8px padding and sleek high-density layout.
+  - Brand Button Color Alignment:
+    - Configured `--color-blue-600: oklch(0.51 0.14 249.51);`, `--color-blue-700: oklch(0.44 0.14 249.51);`, and `--color-blue-500: oklch(0.58 0.14 249.51);` in `index.css` under `@theme inline` and global CSS utilities.
+    - Updated `--color-action` and related tokens in `tokens.css` to match `oklch(0.51 0.14 249.51)`.
+    - Resolved `PageFrame.tsx` responsive fragment unwrapping in `flattenChildren` helper so actions wrapped in Fragments cleanly separate primary and overflow menus.
+    - Monorepo full typecheck (`pnpm -r typecheck`): 8 of 8 projects compiled cleanly with 0 errors.
+    - Design tokens check (`pnpm --dir apps/web check:design-tokens`): Passed (97 strict files; 0 violations).
+    - Full Web test suite (`pnpm --dir apps/web test`): 69 test files passed (287/287 tests passed, 0 failures).

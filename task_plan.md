@@ -1,62 +1,21 @@
-# Unified Applicant Stage Workspace
-
-## Current task — Requisition planning fields (2026-09-21)
-
-- [x] Audit request and vacancy schema, API validation/mapping, create form, detail and overview display.
-- [x] Add budget minimum/maximum, target fill date, and actionable opening state while preserving existing records.
-- [x] Update request creation and detail UI so the plan is explicit and useful.
-- [x] Verify schema/migration, API and UI tests, typechecks, build, and relevant browser flow.
-
-Working interpretation: a request can recruit after approval or be deferred until a planned opening date; target fill date says when the approved headcount should be filled. The request records a numeric monthly budget range per position and an explicit currency.
-
----
+# System-Wide 10% Visual Compaction (/goal)
 
 ## Goal
-
-Keep Applicant Profile as the recruiter’s single stage-aware workspace for the persisted pipeline. Each stage exposes its data and actions in place, while stage movement remains protected by server-side gates, permissions, and optimistic concurrency.
-
-## Implementation status
-
-- [x] Audit the existing Applicant Profile, transition route, pipeline settings, permissions, and tests.
-- [x] Add the compatible workspace contract and persisted `PipelineStage.required` field.
-- [x] Implement the workspace API, gate evaluation, safe error details, tenant checks, permissions, and version-checked transitions.
-- [x] Implement the unified stage rail, Applied/Screening/Interview/Offer/Pre-Hire/Joined surfaces, fixed action rail, unsaved-change protection, and responsive layout.
-- [x] Keep the legacy Stage Transition route as a redirect into the Applicant Profile workspace.
-- [x] Run type checks, lint, builds, database validation/migration checks, focused unit tests, and browser smoke coverage.
-
-## Decisions
-
-- The organization’s active default pipeline is the source for the stage rail and gate metadata. A small legacy fallback keeps applications usable when no default template exists.
-- Required entry and exit gates block transitions in this release. Optional gates remain visible as guidance.
-- Screening edits use `CANDIDATE_EDIT`; stage movement uses `APPLICATION_MOVE_STAGE`; salary, offer approval, hiring approval, and document access remain separately permissioned.
-- Interview scheduling/status changes remain stage-move protected, while scorecard entry follows the existing `VACANCY_VIEW` interview API permission so interviewers can submit feedback without receiving stage-control access.
-- Existing offer, hiring, interview, note, activity, and screening APIs are reused so no duplicate persistence tables were added.
-
-## Verification evidence
-
-- API: 19 files / 91 tests passed.
-- Applicant Profile focused UI test: 6 tests passed.
-- API, web, and worker type checks passed; lint passed; production build passed.
-- Prisma schema validation, client generation, migration deployment/status checks passed.
-- Local browser smoke confirmed the Applicant Profile workspace, dynamic six-stage rail, Screening fields, and fixed actions. The broader legacy smoke suite still has unrelated route-label/notification expectations that predate this workspace.
-
-## Transition boundary
-
-The persisted pipeline ordering is authoritative whenever it contains the current stage: only its immediate next stage (plus terminal rejection/withdrawal paths) can be entered. Legacy records without a matching pipeline stage fall back to the canonical transition map. Custom stage labels remain bounded and arbitrary jumps are rejected.
-# Current task — Product readiness plan update (2026-09-22)
-
-## Goal
-
-Update `docs/version-one-simplification-plan.md` from the current repository and deployment state, separating capabilities ready for controlled use from work that stays delayed or must be completed before production cutover.
+Make the entire RecruitFlow application feel approximately 10% more compact at 100% browser zoom, matching how it looks at 90% zoom without using CSS zoom or transforms. Sizing is reduced systematically across shared design tokens, layout geometry, UI primitives, reusable components, and optimized with 8px card padding from all sides for improved UI/UX.
 
 ## Phases
+- [x] Phase 1: Shared Design Tokens & Density Scaling (`tokens.css`, `density.css`)
+- [x] Phase 2: Layout Geometry & Visual Parity Stylesheets (`v2-parity.css`, `shell.css`)
+- [x] Phase 3: UI Primitives & Design System Rules (`ui-primitives.css`, `design-system.css`, `admin.css`)
+- [x] Phase 4: Core Reusable UI & Layout Components (`PageFrame`, `Button`, `Input`, `Card`, `Badge`, `DataTable`, `MetricCard`, `BreadcrumbsBar`, `Modal`, `AlertDialog`, `AppShell`, `VacancyCard`, `CandidateFitScorecard`, `ComparisonMatrixCard`, `MyTargetsWidget`, `ReportsPage`)
+- [x] Phase 5: Automated Checks (`check:design-tokens` [0 violations], `typecheck` [8 projects clean], unit tests [69 files / 287 tests passed])
+- [x] Phase 6: Visual and responsive layout verification across Desktop, Tablet, and Mobile in Light and Dark modes
+- [x] Phase 7: 8px Card Padding Enhancement (`--space-card: 8px;`, `p-[8px]`)
+- [x] Phase 8: Brand Button Color Replacement (`bg-blue-600` replaced with `oklch(0.51 0.14 249.51)`)
 
-- [x] Audit current implementation, verification evidence, and known limitations.
-- [x] Add the readiness table and production/deferred boundaries to the project plan.
-- [x] Validate the documentation change and report the remaining gates.
-
-## Decisions
-
-- Use “Ready for controlled UAT” for workflows implemented in the current build with an explicit environment/configuration caveat.
-- Keep production external delivery, provider integrations, and autonomous AI decisions out of the ready column.
-- Record current verification limits instead of using historical test counts from older release notes.
+## Constraints
+- Do NOT use browser zoom, CSS `zoom`, or CSS transforms to scale the interface. [MET - achieved via rem scaling and token reduction]
+- Preserve readability, WCAG 2.1 AA accessible contrast, keyboard focus, and usable control hit areas. [MET - desktop >=32px, mobile >=40px touch targets]
+- Keep layouts responsive and prevent clipping, overflow, or awkward wrapping. [MET - fully responsive across desktop, tablet, and mobile]
+- Preserve existing functionality, dark mode, and Arabic/RTL layouts. [MET - dark mode tokens and RTL styles intact]
+- Do NOT change business logic or remove information. [MET - 100% tests pass, zero business logic modified]

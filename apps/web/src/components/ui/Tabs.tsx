@@ -48,7 +48,7 @@ export function Tabs({ items, activeKey, onChange, ariaLabel, className = '' }: 
   };
 
   return (
-    <div className={['rf-source-tabs', className].filter(Boolean).join(' ')} role="tablist" aria-label={ariaLabel}>
+    <div className={['rf-source-tabs', 'rf-tabs-scroll', className].filter(Boolean).join(' ')} role="tablist" aria-label={ariaLabel}>
       {items.map((item, index) => {
         const isActive = item.key === activeKey;
         return (

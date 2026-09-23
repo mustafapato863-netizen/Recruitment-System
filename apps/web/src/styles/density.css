@@ -5,24 +5,24 @@
 
 :root {
   /* Type */
-  --rf-type-brand: 13px;
+  --rf-type-brand: 12px;
   --rf-type-brand-weight: 750;
-  --rf-type-page-title: 18px;
+  --rf-type-page-title: 16px;
   --rf-type-page-title-weight: 750;
-  --rf-type-metric: 18px;
+  --rf-type-metric: 16px;
   --rf-type-metric-weight: 800;
-  --rf-type-metric-label: 10px;
-  --rf-type-user-name: 12px;
+  --rf-type-metric-label: 9.5px;
+  --rf-type-user-name: 11px;
   --rf-type-user-name-weight: 650;
-  --rf-type-user-role: 10px;
+  --rf-type-user-role: 9px;
 
   /* Space / chrome */
-  --rf-space-card: 12px;
-  --rf-header-height: 54px;
-  --rf-brand-height: 54px;
-  --rf-metric-icon: 36px;
-  --rf-brand-mark: 28px;
-  --rf-user-avatar: 30px;
+  --rf-space-card: 8px;
+  --rf-header-height: 48px;
+  --rf-brand-height: 48px;
+  --rf-metric-icon: 32px;
+  --rf-brand-mark: 25px;
+  --rf-user-avatar: 27px;
 
   /* Legacy layout aliases used by shell.css */
   --header: var(--rf-header-height);
@@ -31,10 +31,10 @@
 
 @media (min-width: 1024px) {
   :root {
-    --rf-type-page-title: 20px;
-    --rf-type-metric: 20px;
-    --rf-type-metric-label: 11px;
-    --rf-space-card: 14px;
+    --rf-type-page-title: 18px;
+    --rf-type-metric: 18px;
+    --rf-type-metric-label: 10px;
+    --rf-space-card: 8px;
   }
 }
 

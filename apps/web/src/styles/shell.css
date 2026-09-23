@@ -113,15 +113,15 @@
 
 /* Workspace Switcher */
 .workspace-switcher {
-  margin: 10px 12px 6px;
-  padding: 8px 12px;
+  margin: 8px 10px 5px;
+  padding: 6px 10px;
   border: 1px solid var(--color-border-subtle);
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--color-surface);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   cursor: pointer;
   transition: all var(--motion-fast);
 }
@@ -206,8 +206,8 @@
 }
 
 .group {
-  padding: 12px 10px 4px;
-  font-size: 10.5px;
+  padding: 10px 9px 3px;
+  font-size: 9.5px;
   font-weight: 750;
   text-transform: uppercase;
   letter-spacing: 0.08em;
@@ -222,12 +222,12 @@
 .nav-item-disabled {
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-height: 38px;
-  padding: 6px 10px;
-  border-radius: 10px;
+  gap: 8px;
+  min-height: 34px;
+  padding: 5px 9px;
+  border-radius: 9px;
   text-decoration: none;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 600;
   color: var(--color-ink-700);
   transition: all var(--motion-standard) var(--ease-standard);
@@ -239,9 +239,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
+  width: 25px;
+  height: 25px;
+  border-radius: 7px;
   color: var(--color-ink-500);
   flex-shrink: 0;
   transition: all var(--motion-fast);
@@ -535,15 +535,15 @@
 .search {
   display: flex;
   align-items: center;
-  gap: 8px;
-  width: 440px;
-  height: 38px;
+  gap: 7px;
+  width: 400px;
+  height: 34px;
   background: var(--color-surface-subtle);
   border: 1px solid var(--color-border);
-  border-radius: 8px;
-  padding: 0 12px;
+  border-radius: 7px;
+  padding: 0 10px;
   color: var(--color-ink-500);
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .search:focus-within {
@@ -557,7 +557,7 @@
   background: transparent;
   border: 0;
   outline: none;
-  font-size: 12.5px;
+  font-size: 11.5px;
   color: var(--color-ink-950);
 }
 
@@ -793,12 +793,13 @@
 
 .page {
   flex: 1;
-  padding: 28px 32px 48px;
-  max-width: 1720px;
+  padding: 20px 24px 36px;
+  max-width: var(--rf-page-max);
   width: 100%;
   margin: 0 auto;
 }
 
+/* Below lg (1024). Already on the canonical scale. */
 @media (max-width: 1023px) {
   .sidebar {
     transform: translateX(-100%);
@@ -813,6 +814,15 @@
     transform: translateX(0);
     visibility: visible;
   }
+
+  .sidebar {
+    height: 100dvh;
+    max-height: 100dvh;
+    bottom: auto;
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
   
   .header {
     left: 0;
@@ -822,7 +832,7 @@
     margin-left: 0;
   }
   .page {
-    padding: 20px 16px 36px;
+    padding: 16px 14px 28px;
   }
   .search {
     width: 100%;
@@ -830,7 +840,8 @@
   }
 }
 
-@media (max-width: 720px) {
+/* Below md (768). Was max-width: 720px. */
+@media (max-width: 767px) {
   .header {
     gap: 8px;
     padding: 0;
@@ -887,5 +898,43 @@
   .main,
   .page {
     min-width: 0;
+  }
+}
+
+/* Below sm (640). Top bar stays in flow so a wrapped row cannot slide under the page. */
+@media (max-width: 639px) {
+  .app {
+    flex-direction: column;
+  }
+
+  .header {
+    position: sticky;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: auto;
+    min-height: calc(var(--header) + env(safe-area-inset-top, 0px));
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  .header > .header-bar {
+    height: auto;
+    min-height: var(--header);
+    flex-wrap: wrap;
+    row-gap: 8px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    padding-left: max(12px, env(safe-area-inset-left, 0px));
+    padding-right: max(12px, env(safe-area-inset-right, 0px));
+  }
+
+  .header .search-bar-unified {
+    min-width: 0;
+  }
+
+  .main {
+    width: 100%;
+    margin-left: 0;
+    padding-top: 0;
   }
 }

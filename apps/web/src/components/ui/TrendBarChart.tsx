@@ -1,6 +1,8 @@
 import { useState, type CSSProperties, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Icon } from '../Icon';
+import { showCategoryLabel, trendBarAxisTicks } from './chartLayout';
+import { useElementWidth } from './useMediaQuery';
 
 export interface TrendDataPoint {
   label: string;
@@ -58,7 +60,8 @@ export function TrendBarChart({
     effectiveGoal !== undefined && effectiveGoal > 0 && chartData.length > 0
       ? Math.min(100, Math.round((Number(average) / effectiveGoal) * 100))
       : 0;
-  const yTicks = [10, 8, 6, 4, 2, 0];
+  const [plotRef, plotWidth] = useElementWidth<HTMLDivElement>();
+  const yTicks = trendBarAxisTicks(plotWidth);
 
   // Calculate 3-period moving average for the spline
   const maData = chartData.map((_item, i, arr) => {
@@ -95,11 +98,11 @@ export function TrendBarChart({
 
   return (
     <div
-      className={`rounded-2xl border border-rf-border-subtle bg-rf-surface p-5 shadow-xs flex flex-col justify-between h-full ${className}`}
+      className={`flex h-full min-w-0 max-w-full flex-col justify-between rounded-2xl border border-rf-border-subtle bg-rf-surface p-5 shadow-xs ${className}`}
       style={style}
     >
       {/* 1. Header with Title, Date Range and Range Segmented Control */}
-      <div className="flex items-center justify-between gap-3 pb-3 border-b border-rf-border-subtle mb-4">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 border-b border-rf-border-subtle pb-3">
         <div className="flex items-center gap-2.5 flex-wrap">
           <h2 className="text-[15px] font-black tracking-tight text-rf-ink m-0">{title}</h2>
           {dateRangeText && (
@@ -127,7 +130,7 @@ export function TrendBarChart({
       </div>
 
       {/* 2. Scorecard 3-Column Stats Row matching Image 2 */}
-      <div className="grid grid-cols-3 gap-3 pt-1 pb-3.5 border-b border-rf-border-subtle">
+      <div className="grid grid-cols-1 gap-3 border-b border-rf-border-subtle pb-3.5 pt-1 sm:grid-cols-3">
         {/* TOTAL HIRES */}
         <div className="flex flex-col">
           <span className="text-[10px] font-bold uppercase tracking-wider text-rf-ink-muted mb-0.5">
@@ -142,7 +145,7 @@ export function TrendBarChart({
         </div>
 
         {/* AVG / MONTH */}
-        <div className="flex flex-col pl-3 border-l border-rf-border-subtle">
+        <div className="flex flex-col sm:border-l sm:border-rf-border-subtle sm:pl-3">
           <span className="text-[10px] font-bold uppercase tracking-wider text-rf-ink-muted mb-0.5">
             Avg / month
           </span>
@@ -155,7 +158,7 @@ export function TrendBarChart({
         </div>
 
         {/* GOAL LINE */}
-        <div className="flex flex-col pl-3 border-l border-rf-border-subtle">
+        <div className="flex flex-col sm:border-l sm:border-rf-border-subtle sm:pl-3">
           <span className="text-[10px] font-bold uppercase tracking-wider text-rf-ink-muted mb-0.5">
             Goal line
           </span>
@@ -169,7 +172,7 @@ export function TrendBarChart({
       </div>
 
       {/* 3. Legend Row */}
-      <div className="flex items-center gap-5 pt-3 pb-1 text-xs font-medium text-rf-ink-muted">
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 pb-1 pt-3 text-xs font-medium text-rf-ink-muted">
         <div className="flex items-center gap-2">
           <span className="w-2.5 h-2.5 rounded-full bg-rf-action inline-block shadow-2xs" />
           <span className="text-rf-ink">Hires</span>
@@ -185,7 +188,7 @@ export function TrendBarChart({
       </div>
 
       {/* 4. Chart Area with Y-Axis, Dashed Goal Line, Gradient Bars & Moving Average Spline */}
-      <div className="relative flex h-52 w-full pt-2">
+      <div ref={plotRef} className="relative flex h-52 w-full min-w-0 pt-2">
         {/* Y-Axis Scale */}
         <div className="flex flex-col justify-between text-[11px] font-medium text-rf-ink-muted pr-3 py-1 select-none shrink-0 w-6 text-right">
           {yTicks.map((tick, idx) => (
@@ -196,7 +199,7 @@ export function TrendBarChart({
         </div>
 
         {/* Chart Area */}
-        <div className="relative flex-1 h-full border-b border-rf-border-subtle">
+        <div className="relative h-full min-w-0 flex-1 overflow-hidden border-b border-rf-border-subtle">
           {/* Dotted horizontal grid lines */}
           <div className="absolute inset-0 flex flex-col justify-between pointer-events-none">
             {yTicks.map((_tick, idx) => (
@@ -215,7 +218,7 @@ export function TrendBarChart({
           {/* SVG moving average line */}
           <div className="absolute inset-0 z-10 pointer-events-none">
             <svg
-              className="w-full h-full overflow-visible"
+              className="h-full w-full"
               preserveAspectRatio="none"
               viewBox="0 0 100 100"
             >
@@ -269,7 +272,7 @@ export function TrendBarChart({
       <div className="flex w-full items-center justify-between pl-6 pr-3 pt-2 text-xs font-bold text-rf-ink-muted">
         {chartData.map((item, idx) => (
           <div key={idx} className="flex-1 text-center truncate">
-            {item.label}
+            {showCategoryLabel(idx, chartData.length, plotWidth) ? item.label : ''}
           </div>
         ))}
       </div>

@@ -4,12 +4,16 @@ import { IconButton } from './IconButton';
 
 export type DrawerWidth = 'narrow' | 'standard' | 'evidence';
 
+export type DrawerPlacement = 'end' | 'bottom';
+
 interface DrawerProps {
   isOpen: boolean;
   onClose: () => void;
   title: ReactNode;
   subtitle?: ReactNode;
   width?: DrawerWidth;
+  /** `end` is the side drawer. `bottom` is a full-width sheet. */
+  placement?: DrawerPlacement;
   footer?: ReactNode;
   children: ReactNode;
 }
@@ -22,6 +26,7 @@ export function Drawer({
   title,
   subtitle,
   width = 'standard',
+  placement = 'end',
   footer,
   children,
 }: DrawerProps) {
@@ -74,11 +79,12 @@ export function Drawer({
   if (!isOpen) return null;
 
   const widthClass = width === 'narrow' ? 'is-narrow' : width === 'evidence' ? 'is-evidence' : 'is-standard';
+  const sheetClass = placement === 'bottom' ? 'is-sheet' : '';
 
   return (
-    <div className="drawer-scrim" onMouseDown={(event) => event.target === event.currentTarget && onClose()} role="presentation">
+    <div className={['drawer-scrim', sheetClass].filter(Boolean).join(' ')} onMouseDown={(event) => event.target === event.currentTarget && onClose()} role="presentation">
       <div
-        className={['drawer-demo', 'ui-drawer', widthClass, 'bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100'].join(' ')}
+        className={['drawer-demo', 'ui-drawer', widthClass, sheetClass, 'bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100'].filter(Boolean).join(' ')}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}

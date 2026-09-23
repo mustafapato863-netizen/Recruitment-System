@@ -748,8 +748,8 @@
 .rf-icon-button,
 .ui-icon-button {
   display: inline-grid;
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   place-items: center;
   flex: 0 0 auto;
   border: 1px solid var(--color-border-subtle);
@@ -790,7 +790,7 @@
   opacity: 0.5;
 }
 
-.rf-icon-button--sm { width: 34px; height: 34px; border-radius: var(--radius-sm); }
+.rf-icon-button--sm { width: 30px; height: 30px; border-radius: var(--radius-sm); }
 .rf-icon-button--ghost { border-color: transparent; background: transparent; box-shadow: none; }
 .rf-icon-button--ghost:hover:not(:disabled) { background: var(--color-action-soft); color: var(--color-action); }
 .rf-icon-button--danger { border-color: color-mix(in srgb, var(--color-danger) 18%, var(--color-border-subtle)); background: var(--color-danger-soft); color: var(--color-danger); box-shadow: none; }
@@ -1237,7 +1237,8 @@ button.rf-filter-chip__label { cursor: pointer; }
   .rf-upload-dropzone { transition: none; }
 }
 
-@media (max-width: 720px) {
+/* Below md (768). Was max-width: 720px. Shared pagination, toolbar, and icon-button rules. */
+@media (max-width: 767px) {
   .rf-section-header,
   .rf-pagination {
     flex-direction: column;
