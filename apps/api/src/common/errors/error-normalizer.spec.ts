@@ -110,6 +110,60 @@ describe('Error Normalizer', () => {
     expect(result.retryAfterSeconds).toBe(120);
   });
 
+  it('normalizes ParseUUIDPipe failures to the shared validation message', () => {
+    const error = new HttpException('Validation failed (uuid is expected)', 400);
+    const result = normalizeError(error);
+    expect(result.statusCode).toBe(400);
+    expect(result.code).toBe('VALIDATION_ERROR');
+    expect(result.message).toBe('Please correct the highlighted fields.');
+  });
+
+  it('maps a Prisma UUID storage error to a safe validation response', () => {
+    const error = Object.assign(new Error('Inconsistent column data: Error creating UUID, invalid character: found `n` at 1'), {
+      name: 'PrismaClientKnownRequestError',
+      code: 'P2023',
+    });
+    const result = normalizeError(error);
+    expect(result.statusCode).toBe(400);
+    expect(result.code).toBe('VALIDATION_ERROR');
+    expect(result.message).toBe('Please correct the highlighted fields.');
+    expect(result.message).not.toMatch(/prisma|sql|uuid|column|table/i);
+  });
+
+  it('maps a driver invalid-uuid error to a safe validation response', () => {
+    const error = Object.assign(new Error('invalid input syntax for type uuid: "not-a-uuid"'), {
+      name: 'PrismaClientUnknownRequestError',
+    });
+    const result = normalizeError(error);
+    expect(result.statusCode).toBe(400);
+    expect(result.code).toBe('VALIDATION_ERROR');
+    expect(JSON.stringify(result)).not.toContain('not-a-uuid');
+  });
+
+  it('keeps unrelated Prisma column errors as internal failures', () => {
+    const error = Object.assign(new Error('Value out of range for type integer'), {
+      name: 'PrismaClientKnownRequestError',
+      code: 'P2023',
+    });
+    const result = normalizeError(error);
+    expect(result.statusCode).toBe(500);
+    expect(result.code).toBe('INTERNAL_ERROR');
+    expect(result.message).not.toMatch(/integer|prisma/i);
+  });
+
+  it('normalizes the guard validation envelope without diagnostics', () => {
+    const error = new HttpException({
+      statusCode: 400,
+      code: 'VALIDATION_ERROR',
+      message: 'Please correct the highlighted fields.',
+      fields: { id: ['A valid identifier is required.'] },
+    }, 400);
+    const result = normalizeError(error);
+    expect(result.statusCode).toBe(400);
+    expect(result.code).toBe('VALIDATION_ERROR');
+    expect(result.fields).toEqual({ id: ['A valid identifier is required.'] });
+  });
+
   it('preserves safe stage gate details for a blocked transition', () => {
     const error = new HttpException({
       code: 'STAGE_GATE_BLOCKED',

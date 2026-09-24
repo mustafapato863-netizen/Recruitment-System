@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { MasterDataBatchDto } from './master-data.dto';
 import { MasterDataService } from './master-data.service';
@@ -37,7 +37,7 @@ export class MasterDataCatalogController {
   remove(
     @CurrentUser() user: AuthUser,
     @Param('category') category: string,
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
   ) {
     return this.masterDataService.deleteCatalogValue(user.organizationId, category, id);
   }

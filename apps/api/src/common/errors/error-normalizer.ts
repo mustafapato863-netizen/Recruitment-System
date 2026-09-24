@@ -86,11 +86,38 @@ function isPrismaKnownError(err: unknown): err is PrismaErrorLike {
   );
 }
 
+function messageIndicatesInvalidUuid(message: string | undefined): boolean {
+  if (!message) return false;
+  return (
+    /invalid input syntax for type uuid/i.test(message) ||
+    /error creating uuid/i.test(message)
+  );
+}
+
+function invalidUuidValidationError(logContext: string): NormalizedError {
+  return {
+    statusCode: HttpStatus.BAD_REQUEST,
+    code: 'VALIDATION_ERROR',
+    message: VALIDATION_MESSAGE,
+    retryable: false,
+    retryAfterSeconds: null,
+    logContext,
+  };
+}
+
 function isPrismaValidationError(err: unknown): boolean {
   return (
     typeof err === 'object' &&
     err !== null &&
     (err as PrismaErrorLike).name === 'PrismaClientValidationError'
+  );
+}
+
+function isPrismaUnknownRequestError(err: unknown): err is PrismaErrorLike {
+  return (
+    typeof err === 'object' &&
+    err !== null &&
+    (err as PrismaErrorLike).name === 'PrismaClientUnknownRequestError'
   );
 }
 
@@ -326,6 +353,18 @@ export function normalizeError(
           retryAfterSeconds: null,
           logContext,
         };
+      case 'P2023':
+        if (messageIndicatesInvalidUuid(exception.message)) {
+          return invalidUuidValidationError('Rejected a malformed UUID stored as a database error');
+        }
+        return {
+          statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
+          code: 'INTERNAL_ERROR',
+          message: GENERIC_500_MESSAGE,
+          retryable: false,
+          retryAfterSeconds: null,
+          logContext,
+        };
       default:
         return {
           statusCode: HttpStatus.INTERNAL_SERVER_ERROR,
@@ -404,6 +443,7 @@ export function normalizeError(
 
     if (typeof res === 'string') {
       const code = stableCodeByStatus(status);
+      const uuidPipeMessage = status === HttpStatus.BAD_REQUEST && /^validation failed \(uuid\b/i.test(res);
       return {
         statusCode: status,
         code,
@@ -411,7 +451,9 @@ export function normalizeError(
           ? code === 'INTEGRATION_UNAVAILABLE'
             ? GENERIC_503_MESSAGE
             : GENERIC_500_MESSAGE
-          : safeMessage(res, safeFallbackMessage(status, code)),
+          : uuidPipeMessage
+            ? VALIDATION_MESSAGE
+            : safeMessage(res, safeFallbackMessage(status, code)),
         retryable: isRetryableStatus(status),
         retryAfterSeconds: null,
         ...(status >= 500
@@ -508,6 +550,14 @@ export function normalizeError(
       retryAfterSeconds:
         status === HttpStatus.TOO_MANY_REQUESTS ? null : null,
     };
+  }
+
+  // ── Driver errors that bypassed the UUID pipe ──────────────────────────
+  if (
+    isPrismaUnknownRequestError(exception) &&
+    messageIndicatesInvalidUuid(exception.message)
+  ) {
+    return invalidUuidValidationError('Rejected a malformed UUID reported by the database driver');
   }
 
   // ── Unknown runtime errors ──────────────────────────────────────────────

@@ -1,11 +1,15 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import type { CanActivate, ExecutionContext } from '@nestjs/common';
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { Reflector } from '@nestjs/core';
 import { PrismaService } from '../../database/prisma.service';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import type { Request } from 'express';
+import { isUuid } from '../validation/is-uuid';
 import { TENANT_RESOURCE_POLICIES } from './tenant-resource-policies';
+
+/** Route params whose values are database UUIDs, including nested ids. */
+const UUID_PARAM_NAME = /^(?:id|.+Id)$/;
 
 /**
  * M1-G4 Tenant-Scoped Guard
@@ -20,6 +24,7 @@ import { TENANT_RESOURCE_POLICIES } from './tenant-resource-policies';
  *
  * Behavior:
  * - If `resource` is not in the policy registry → ForbiddenException (fail closed).
+ * - Malformed UUID route params are rejected with HTTP 400 before any database read.
  * - If the record does not exist or belongs to another tenant → NotFoundException (safe 404).
  * - If tenantId is not set on the request → ForbiddenException.
  */
@@ -58,8 +63,29 @@ export class TenantScopedGuard implements CanActivate {
       );
     }
 
-    const rawId = req.params?.[param];
-    const id = Array.isArray(rawId) ? rawId[0] : rawId;
+    const params = req.params ?? {};
+    const namesToCheck = new Set<string>([param]);
+    for (const name of Object.keys(params)) {
+      if (UUID_PARAM_NAME.test(name)) namesToCheck.add(name);
+    }
+
+    const invalidFields: Record<string, string[]> = {};
+    for (const name of namesToCheck) {
+      const value = firstParam(params[name]);
+      if (value && !isUuid(value)) {
+        invalidFields[name] = ['A valid identifier is required.'];
+      }
+    }
+    if (Object.keys(invalidFields).length > 0) {
+      throw new BadRequestException({
+        statusCode: 400,
+        code: 'VALIDATION_ERROR',
+        message: 'Please correct the highlighted fields.',
+        fields: invalidFields,
+      });
+    }
+
+    const id = firstParam(params[param]);
     if (!id) {
       throw new NotFoundException('Resource identifier not provided');
     }
@@ -73,4 +99,9 @@ export class TenantScopedGuard implements CanActivate {
 
     return true;
   }
+}
+
+function firstParam(value: string | string[] | undefined): string | undefined {
+  if (Array.isArray(value)) return value[0];
+  return value;
 }

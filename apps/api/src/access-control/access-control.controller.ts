@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Param,
+  ParseUUIDPipe,
   Put,
   Query,
   UseGuards,
@@ -108,7 +109,7 @@ export class AccessControlController {
   @AuditAction('USER_RESPONSIBILITIES_UPDATE')
   updateUserResponsibility(
     @CurrentUser() user: AuthUser,
-    @Param('userId') userId: string,
+    @Param('userId', ParseUUIDPipe) userId: string,
     @Body() body: UpdateUserResponsibilityDto,
   ) {
     return this.accessControlService.updateUserResponsibility(user.organizationId, userId, body);

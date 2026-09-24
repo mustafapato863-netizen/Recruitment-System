@@ -220,14 +220,22 @@ async function runP36Suite() {
   console.log('\n[F] INPUT VALIDATION — Expected: safe error responses (400/422), no internal leakage');
 
   const invalidUuidCases = [
-    { label: 'Invalid UUID in candidate path', path: '/api/v1/candidates/not-a-uuid', cookie: ahmed.cookie },
-    { label: 'Invalid UUID in application path', path: '/api/v1/applications/not-a-uuid', cookie: ahmed.cookie },
-    { label: 'Invalid UUID in vacancy-request path', path: '/api/v1/vacancy-requests/not-a-uuid', cookie: ahmed.cookie },
+    { label: 'Invalid UUID in candidate path', path: '/api/v1/candidates/not-a-uuid', method: 'GET' },
+    { label: 'Invalid UUID in application path', path: '/api/v1/applications/not-a-uuid', method: 'GET' },
+    { label: 'Invalid UUID in vacancy-request path', path: '/api/v1/vacancy-requests/not-a-uuid', method: 'GET' },
+    { label: 'Invalid nested candidate activity id', path: '/api/v1/candidates/not-a-uuid/activities', method: 'GET' },
+    { label: 'Invalid nested task id', path: '/api/v1/candidates/10000000-0000-4000-8000-000000000099/activities/not-a-uuid/complete', method: 'POST' },
+    { label: 'Invalid import job id', path: '/api/v1/candidates/import/not-a-uuid', method: 'GET' },
+    { label: 'Invalid bulk import job id', path: '/api/v1/imports/candidates/jobs/not-a-uuid', method: 'GET' },
+    { label: 'Invalid nested import row id', path: '/api/v1/candidates/import/10000000-0000-4000-8000-000000000099/rows/not-a-uuid/decision', method: 'POST' },
+    { label: 'Invalid access-control user id', path: '/api/v1/access-control/user-responsibilities/not-a-uuid', method: 'PUT' },
+    { label: 'Invalid master-data catalog id', path: '/api/v1/master-data/catalog/skills/not-a-uuid', method: 'DELETE' },
   ];
 
-  for (const { label, path, cookie } of invalidUuidCases) {
-    const res = await request({ hostname: 'localhost', port: 3000, path, method: 'GET', headers: { Cookie: cookie } });
-    check(`${label} returns non-200`, res.status !== 200, `got ${res.status}`);
+  for (const { label, path, method } of invalidUuidCases) {
+    const res = await request({ hostname: 'localhost', port: 3000, path, method, headers: { Cookie: ahmed.cookie } });
+    check(`${label} returns 400 or 422`, res.status === 400 || res.status === 422, `got ${res.status}`);
+    check(`${label} uses the validation envelope`, res.body?.code === 'VALIDATION_ERROR' && res.body?.statusCode === res.status, `body: ${JSON.stringify(res.body)?.slice(0, 160)}`);
     check(`${label} body is safe (no SQL/Prisma)`, isSafe(res.body), `body: ${JSON.stringify(res.body)?.slice(0, 100)}`);
   }
 
