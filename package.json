@@ -10,7 +10,7 @@
     "dev:api": "pnpm --dir apps/api start:dev",
     "dev:worker": "pnpm --dir apps/worker dev",
     "build": "pnpm -r build",
-    "typecheck": "pnpm -r typecheck",
+    "typecheck": "pnpm --dir apps/api typecheck && pnpm --dir apps/web typecheck && pnpm --dir apps/worker typecheck",
     "test": "pnpm test:web && pnpm test:api && pnpm test:worker",
     "test:web": "pnpm --dir apps/web test",
     "test:api": "pnpm --dir apps/api test",
