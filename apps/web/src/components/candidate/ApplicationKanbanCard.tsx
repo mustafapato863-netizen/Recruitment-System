@@ -100,7 +100,7 @@ export function ApplicationKanbanCard({
         ? 'bg-rose-500 ring-2 ring-rose-300 dark:ring-rose-700'
         : 'bg-amber-400 ring-2 ring-amber-200 dark:ring-amber-700';
   const signalLabel = signal === 'ready' ? 'Ready' : signal === 'blocked' ? 'Blocked' : 'In progress';
-  const signalTextClass = signal === 'in_progress' ? 'text-slate-900' : 'text-white';
+  const signalTextClass = signal === 'in_progress' ? 'text-black' : 'text-white';
 
   return (
     <article

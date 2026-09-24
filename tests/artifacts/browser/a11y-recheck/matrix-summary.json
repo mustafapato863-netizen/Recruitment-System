@@ -1,0 +1,175 @@
+{
+  "checks": 24,
+  "passed": 24,
+  "failed": 0,
+  "results": [
+    {
+      "theme": "light",
+      "width": 375,
+      "route": "/reports",
+      "result": "PASS",
+      "issues": []
+    },
+    {
+      "theme": "light",
+      "width": 375,
+      "route": "/applications",
+      "result": "PASS",
+      "issues": []
+    },
+    {
+      "theme": "light",
+      "width": 430,
+      "route": "/reports",
+      "result": "PASS",
+      "issues": []
+    },
+    {
+      "theme": "light",
+      "width": 430,
+      "route": "/applications",
+      "result": "PASS",
+      "issues": []
+    },
+    {
+      "theme": "light",
+      "width": 768,
+      "route": "/reports",
+      "result": "PASS",
+      "issues": []
+    },
+    {
+      "theme": "light",
+      "width": 768,
+      "route": "/applications",
+      "result": "PASS",
+      "issues": []
+    },
+    {
+      "theme": "light",
+      "width": 1024,
+      "route": "/reports",
+      "result": "PASS",
+      "issues": []
+    },
+    {
+      "theme": "light",
+      "width": 1024,
+      "route": "/applications",
+      "result": "PASS",
+      "issues": []
+    },
+    {
+      "theme": "light",
+      "width": 1280,
+      "route": "/reports",
+      "result": "PASS",
+      "issues": []
+    },
+    {
+      "theme": "light",
+      "width": 1280,
+      "route": "/applications",
+      "result": "PASS",
+      "issues": []
+    },
+    {
+      "theme": "light",
+      "width": 1440,
+      "route": "/reports",
+      "result": "PASS",
+      "issues": []
+    },
+    {
+      "theme": "light",
+      "width": 1440,
+      "route": "/applications",
+      "result": "PASS",
+      "issues": []
+    },
+    {
+      "theme": "dark",
+      "width": 375,
+      "route": "/reports",
+      "result": "PASS",
+      "issues": []
+    },
+    {
+      "theme": "dark",
+      "width": 375,
+      "route": "/applications",
+      "result": "PASS",
+      "issues": []
+    },
+    {
+      "theme": "dark",
+      "width": 430,
+      "route": "/reports",
+      "result": "PASS",
+      "issues": []
+    },
+    {
+      "theme": "dark",
+      "width": 430,
+      "route": "/applications",
+      "result": "PASS",
+      "issues": []
+    },
+    {
+      "theme": "dark",
+      "width": 768,
+      "route": "/reports",
+      "result": "PASS",
+      "issues": []
+    },
+    {
+      "theme": "dark",
+      "width": 768,
+      "route": "/applications",
+      "result": "PASS",
+      "issues": []
+    },
+    {
+      "theme": "dark",
+      "width": 1024,
+      "route": "/reports",
+      "result": "PASS",
+      "issues": []
+    },
+    {
+      "theme": "dark",
+      "width": 1024,
+      "route": "/applications",
+      "result": "PASS",
+      "issues": []
+    },
+    {
+      "theme": "dark",
+      "width": 1280,
+      "route": "/reports",
+      "result": "PASS",
+      "issues": []
+    },
+    {
+      "theme": "dark",
+      "width": 1280,
+      "route": "/applications",
+      "result": "PASS",
+      "issues": []
+    },
+    {
+      "theme": "dark",
+      "width": 1440,
+      "route": "/reports",
+      "result": "PASS",
+      "issues": []
+    },
+    {
+      "theme": "dark",
+      "width": 1440,
+      "route": "/applications",
+      "result": "PASS",
+      "issues": []
+    }
+  ]
+}

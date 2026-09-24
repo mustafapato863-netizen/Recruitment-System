@@ -26,6 +26,8 @@ interface Interview extends BaseInterview {
 
 type BackendRecommendation = 'Strong Hire' | 'Hire' | 'Neutral' | 'No Hire' | 'Strong No Hire';
 
+const EMPTY_SCORECARDS: NonNullable<Interview['scorecards']> = [];
+
 function attendeeResponseTone(response?: string): string {
   if (response === 'Declined') return 'text-rose-600';
   if (response === 'Reschedule Requested') return 'text-amber-600';
@@ -548,7 +550,7 @@ export function InterviewDetailPage() {
   const appIdDisplay = interview?.applicationCode || (rawAppId ? (rawAppId.startsWith('APP-') ? rawAppId : `APP-${rawAppId.slice(0, 8).toUpperCase()}`) : '—');
 
   const attendees = interview?.attendees || [];
-  const scorecards = interview?.scorecards || [];
+  const scorecards = interview?.scorecards ?? EMPTY_SCORECARDS;
 
   const primaryOwner = attendees.find((a) => a.role === 'Lead' || a.role === 'Host' || a.role === 'Organizer') || attendees[0];
   const ownerName = primaryOwner?.userName || scorecards[0]?.interviewerName || interview?.interviewerName || 'Unassigned';

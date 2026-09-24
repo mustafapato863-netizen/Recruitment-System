@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { VacancyCoreContext, VacancyRequest, VacancyRequestStatus } from '@recruitflow/contracts';
 import { fetchApi } from '../api/client';
@@ -58,13 +58,15 @@ export function VacancyRequestsPage() {
       .catch(() => undefined);
   }, []);
 
-  const getPositionLabel = (request: VacancyRequest) =>
+  const getPositionLabel = useCallback((request: VacancyRequest) =>
     context?.positions?.find((position) => position.id === request.positionId)?.title ??
-    (context?.position?.id === request.positionId ? context.position.title : request.positionId);
+    (context?.position?.id === request.positionId ? context.position.title : request.positionId),
+  [context]);
 
-  const getBranchLabel = (request: VacancyRequest) =>
+  const getBranchLabel = useCallback((request: VacancyRequest) =>
     context?.branches?.find((branch) => branch.id === request.branchId)?.name ??
-    (context?.branch?.id === request.branchId ? context.branch.name : request.branchId);
+    (context?.branch?.id === request.branchId ? context.branch.name : request.branchId),
+  [context]);
 
   const filtered = useMemo(
     () =>
@@ -72,7 +74,7 @@ export function VacancyRequestsPage() {
         const searchable = `${request.requestCode} ${getPositionLabel(request)} ${getBranchLabel(request)} ${request.reason || ''}`.toLowerCase();
         return (!search || searchable.includes(search.toLowerCase())) && (!status || request.status === status);
       }),
-    [requests, search, status, context]
+    [requests, search, status, getPositionLabel, getBranchLabel],
   );
 
   const count = (value: VacancyRequestStatus) => requests.filter((request) => request.status === value).length;

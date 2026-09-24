@@ -161,7 +161,7 @@ export function ReportsPage() {
       hasTimeToFill: false,
       timeTrend: 'No data',
     };
-  }, [reportOverview, dateRangePreset]);
+  }, [reportOverview]);
 
   // Dynamic Time Series for Applications Over Time
   const applicationsOverTime = useMemo(() => {
@@ -237,7 +237,7 @@ export function ReportsPage() {
       }));
     }
     return [];
-  }, [reportOverview, kpis]);
+  }, [reportOverview]);
 
   // Approved headcount and joined hires by position, from vacancy and hiring data.
   const positionHiringData = useMemo<PositionHiringDatum[]>(() => {
@@ -487,7 +487,7 @@ export function ReportsPage() {
                 {recruiterActivityRows.length} recruiters · {recruiterActivityTotals.actions} recorded actions
               </span>
             </div>
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rf-action" tabIndex={0} role="region" aria-label="Recruiter activity and workload">
               <table className="w-full min-w-[900px] text-left text-xs">
                 <thead className="bg-slate-50 text-[10px] font-bold uppercase tracking-wide text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
                   <tr>
@@ -935,7 +935,7 @@ export function ReportsPage() {
               </div>
             </div>
 
-            <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+            <div className="overflow-x-auto rounded-xl border border-rf-border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rf-action" tabIndex={0} role="region" aria-label="KPI details">
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className="bg-slate-50 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800 text-[11px] font-bold">
@@ -1132,7 +1132,7 @@ export function ReportsPage() {
             Approved headcount and confirmed joined hires by position.
           </p>
 
-          <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+          <div className="overflow-x-auto rounded-xl border border-rf-border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rf-action" tabIndex={0} role="region" aria-label="Hiring progress by position">
             <table className="w-full text-left">
               <thead>
                 <tr className="bg-slate-50 dark:bg-slate-800/60 text-slate-600 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800 text-[11px] font-bold">
