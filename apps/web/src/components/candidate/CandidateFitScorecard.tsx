@@ -77,10 +77,12 @@ export function CandidateFitScoreBadge({
       role="img"
       aria-label={`Candidate fit score: ${score}% (${tone.label})`}
       title={`Candidate Fit Score: ${score}% (${tone.label})${summaryText ? `\n${summaryText}` : ''}`}
-      className={`inline-flex ${compact ? 'h-8 w-8 rounded-md' : 'h-10 w-10 rounded-lg'} shrink-0 select-none flex-col items-center justify-center border shadow-xs ${tone.border} ${tone.bg} ${tone.text} ${className}`}
+      className={`inline-flex ${compact ? 'h-8 w-8 rounded-md' : 'h-9 w-9 rounded-lg'} shrink-0 select-none flex-col items-center justify-center gap-0.5 border ${tone.border} ${tone.bg} ${tone.text} ${className}`}
     >
-      <span className={`${compact ? 'text-[11px]' : 'text-[13.5px]'} font-black leading-none tracking-tight`}>{score}%</span>
-      <span className={`${compact ? 'text-[6.5px]' : 'text-[7.5px]'} mt-0.5 font-extrabold uppercase leading-none tracking-[0.14em] opacity-80`}>
+      <span className={`${compact ? 'text-[10px]' : 'text-[11px]'} whitespace-nowrap font-bold leading-none tabular-nums`}>
+        {score}<span className="text-[8px] font-semibold">%</span>
+      </span>
+      <span className="text-[6.5px] font-semibold uppercase leading-none tracking-[0.1em] opacity-80">
         Fit
       </span>
     </span>

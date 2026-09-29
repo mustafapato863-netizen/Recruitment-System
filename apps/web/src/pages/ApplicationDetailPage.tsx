@@ -76,7 +76,7 @@ export function ApplicationDetailPage() {
   const [otherActiveApplications, setOtherActiveApplications] = useState<Application[]>([]);
   const [isFeedLoading, setIsFeedLoading] = useState(false);
   const [feedError, setFeedError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'resume' | 'interviews' | 'activity' | 'tasks'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'resume' | 'interviews' | 'activity' | 'tasks'>('resume');
   const [workspace, setWorkspace] = useState<ApplicationWorkspaceResponse | null>(null);
   const [workspaceStage, setWorkspaceStage] = useState<string | null>(() => requestedStage);
   const [activityIntent, setActivityIntent] = useState<{ kind: 'Call' | 'Email' | 'Offer Follow-up'; scheduled: boolean } | null>(null);
@@ -90,7 +90,6 @@ export function ApplicationDetailPage() {
   const [modalNoteContent, setModalNoteContent] = useState('');
   const [isSavingNote, setIsSavingNote] = useState(false);
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
-  const [isViewResumeModalOpen, setIsViewResumeModalOpen] = useState(false);
   const [isAddTagModalOpen, setIsAddTagModalOpen] = useState(false);
   const [tags, setTags] = useState<string[]>([]);
   const [newTagInput, setNewTagInput] = useState('');
@@ -1094,7 +1093,7 @@ export function ApplicationDetailPage() {
           setModalNoteContent('');
           setIsAddNoteModalOpen(true);
         }}
-        onViewResume={() => setIsViewResumeModalOpen(true)}
+        onViewResume={() => selectApplicantTab('resume')}
         onActivity={(kind) => {
           if (!confirmDiscardChanges(isScreeningDirty)) return;
           setActivityIntent({ kind, scheduled: kind === 'Offer Follow-up' });
@@ -1304,7 +1303,7 @@ export function ApplicationDetailPage() {
               <div className="pt-2">
                 <button
                   type="button"
-                  onClick={() => setIsViewResumeModalOpen(true)}
+                  onClick={() => selectApplicantTab('resume')}
                   className="w-full py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition shadow-xs flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <Icon name="file-text" size={14} className="text-slate-400" />
@@ -2262,75 +2261,6 @@ export function ApplicationDetailPage() {
         isSubmitting={isSubmittingRejection}
         onConfirm={() => void handleConfirmRejection()}
       />
-
-      {/* 5. View Resume Modal */}
-      <Modal
-        isOpen={isViewResumeModalOpen}
-        onClose={() => setIsViewResumeModalOpen(false)}
-        title={`${candidateName} - R\u00e9sum\u00e9`}
-        maxWidthClass="max-w-2xl"
-      >
-        <div className="space-y-4 text-xs p-2">
-          {!application?.candidate ? (
-            <PageState
-              kind="empty"
-              title="Candidate data unavailable"
-              description="No candidate profile is attached to this application."
-            />
-          ) : (
-            <>
-              <div className="border-b pb-3">
-                <h3 className="text-sm font-bold">{candidateName}</h3>
-                <p className="text-slate-500">
-                  {[roleName !== 'No position' ? roleName : null, candidateLocation, candidateEmail]
-                    .filter(Boolean)
-                    .join(' \u2022 ') || 'No contact details available'}
-                </p>
-              </div>
-              <div>
-                <h4 className="font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider text-[11px] mb-1">
-                  Summary
-                </h4>
-                <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
-                  {application.candidate.skills && application.candidate.skills.length > 0
-                    ? `Candidate with verified skills in ${application.candidate.skills.join(', ')}.`
-                    : 'No summary provided.'}
-                </p>
-              </div>
-              <div>
-                <h4 className="font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider text-[11px] mb-1">
-                  Experience
-                </h4>
-                <div className="space-y-2">
-                  {application.candidate.currentCompany || application.candidate.currentTitle ? (
-                    <div>
-                      <span className="font-bold block">
-                        {application.candidate.currentTitle || 'Role'} &bull; {application.candidate.currentCompany || 'Company'}
-                      </span>
-                      <span className="text-[11px] text-slate-400 block">
-                        {application.candidate.experienceYears != null
-                          ? `${application.candidate.experienceYears} ${application.candidate.experienceYears === 1 ? 'year' : 'years'} experience`
-                          : 'Experience recorded'}
-                      </span>
-                    </div>
-                  ) : (
-                    <p className="text-slate-400 italic">No experience records available.</p>
-                  )}
-                </div>
-              </div>
-            </>
-          )}
-          <div className="flex justify-end pt-2 border-t border-slate-200">
-            <button
-              type="button"
-              onClick={() => setIsViewResumeModalOpen(false)}
-              className="px-4 py-1.5 bg-slate-100 text-slate-700 rounded-xl font-bold cursor-pointer"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      </Modal>
 
       {/* 6. Add Tag Modal */}
       <Modal

@@ -105,6 +105,19 @@ beforeEach(() => {
 });
 
 describe('ApplicationDetailPage — stage transitions', () => {
+  it('opens the resume summary by default and returns to it without opening a dialog', async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    expect(await screen.findByRole('heading', { name: 'Resume & Experience' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /^activity$/i }));
+    expect(screen.queryByRole('heading', { name: 'Resume & Experience' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'View résumé' }));
+    expect(screen.getByRole('heading', { name: 'Resume & Experience' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
   it('renders the candidate name and current stage after successful load', async () => {
     renderPage();
     await waitFor(() => {
