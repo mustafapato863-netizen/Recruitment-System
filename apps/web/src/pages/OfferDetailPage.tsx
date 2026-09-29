@@ -10,6 +10,7 @@ import { PageState } from '../components/ui/PageState';
 import { useAuth } from '../auth/AuthContext';
 import { useSetBreadcrumbTitle } from '../context/BreadcrumbContext';
 import { QuickGuideTrigger } from '../quickguide';
+import { formatOfferAmount, getOfferCurrency } from '../utils/offerCurrency';
 import './PageEnhancementsV2.css';
 
 interface Offer extends BaseOffer {
@@ -183,11 +184,12 @@ export function OfferDetailPage() {
     const positionTitle = offer?.positionTitle ?? 'No position';
     const offerCode = offer?.offerCode || offer?.id || 'OFFER';
     const version = offer?.currentVersion;
+    const packageCurrency = getOfferCurrency(version?.components);
 
     const compLines = (version?.components || [])
       .map(
         (c) =>
-          `  - ${c.name} (${c.type}): ${c.currency || 'SAR'} ${(c.amount ?? 0).toLocaleString()}${c.frequency ? ` (${c.frequency})` : ''}`
+          `  - ${c.name} (${c.type}): ${formatOfferAmount(c.amount, c.currency)}${c.frequency ? ` (${c.frequency})` : ''}`
       )
       .join('\n');
 
@@ -213,8 +215,8 @@ export function OfferDetailPage() {
       '------------------------------------------------------------',
       compLines || '  No individual components itemized.',
       '',
-      version?.monthlyPackage ? `Total Monthly Package: SAR ${version.monthlyPackage.toLocaleString()}` : null,
-      version?.annualFixed ? `Total Annual Package: SAR ${version.annualFixed.toLocaleString()}` : null,
+      version?.monthlyPackage ? `Total Monthly Package: ${formatOfferAmount(version.monthlyPackage, packageCurrency)}` : null,
+      version?.annualFixed ? `Total Annual Package: ${formatOfferAmount(version.annualFixed, packageCurrency)}` : null,
       '',
       '============================================================',
     ]
@@ -698,7 +700,7 @@ export function OfferDetailPage() {
                     {comp.name} <span className="text-[10px] text-slate-400">({comp.type})</span>
                   </span>
                   <span className="font-bold text-slate-900 dark:text-white">
-                    {comp.currency || 'SAR'} {(comp.amount ?? 0).toLocaleString()}{comp.frequency ? ` / ${comp.frequency.toLowerCase()}` : ''}
+                    {formatOfferAmount(comp.amount, comp.currency)}{comp.frequency ? ` / ${comp.frequency.toLowerCase()}` : ''}
                   </span>
                 </div>
               ))
@@ -712,7 +714,7 @@ export function OfferDetailPage() {
               <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex justify-between">
                 <span className="font-bold text-slate-900 dark:text-white">Gross Monthly Salary</span>
                 <span className="font-black text-slate-900 dark:text-white text-sm">
-                  SAR {offer.currentVersion.monthlyPackage.toLocaleString()}
+                  {formatOfferAmount(offer.currentVersion.monthlyPackage, getOfferCurrency(offer.currentVersion.components))}
                 </span>
               </div>
             ) : null}
@@ -721,7 +723,7 @@ export function OfferDetailPage() {
               <div className="pt-1 flex justify-between">
                 <span className="font-bold text-slate-900 dark:text-white">Annual Fixed Package</span>
                 <span className="font-black text-emerald-600 dark:text-emerald-400 text-sm">
-                  SAR {offer.currentVersion.annualFixed.toLocaleString()}
+                  {formatOfferAmount(offer.currentVersion.annualFixed, getOfferCurrency(offer.currentVersion.components))}
                 </span>
               </div>
             ) : null}
@@ -741,7 +743,7 @@ export function OfferDetailPage() {
                       </span>
                       {b.amount ? (
                         <span className="text-slate-400 text-[11px]">
-                          {b.currency || 'SAR'} {Number(b.amount).toLocaleString()}
+                          {formatOfferAmount(Number(b.amount), b.currency)}
                         </span>
                       ) : null}
                     </div>
@@ -1126,7 +1128,7 @@ export function OfferDetailPage() {
                           <td className="p-2.5 text-slate-500">{c.type}</td>
                           <td className="p-2.5 text-slate-500">{c.frequency || 'Monthly'}</td>
                           <td className="p-2.5 pr-3 text-right font-bold text-slate-900 dark:text-white">
-                            {c.currency || 'SAR'} {(c.amount ?? 0).toLocaleString()}
+                            {formatOfferAmount(c.amount, c.currency)}
                           </td>
                         </tr>
                       ))}
@@ -1144,7 +1146,7 @@ export function OfferDetailPage() {
               <div className="flex justify-between items-center p-3 bg-blue-50/50 dark:bg-blue-950/30 rounded-xl border border-blue-100 dark:border-blue-900/40">
                 <span className="font-bold text-slate-700 dark:text-slate-300">Total Monthly Package</span>
                 <span className="font-black text-blue-700 dark:text-blue-300 text-sm">
-                  SAR {offer.currentVersion.monthlyPackage.toLocaleString()}
+                  {formatOfferAmount(offer.currentVersion.monthlyPackage, getOfferCurrency(offer.currentVersion.components))}
                 </span>
               </div>
             ) : null}

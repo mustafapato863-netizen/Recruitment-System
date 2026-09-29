@@ -48,7 +48,7 @@ const baseOffer = {
     workLocation: "Riyadh",
     probationPeriod: "3 months",
     components: [
-      { name: "Basic Salary", type: "Fixed", amount: 25000, currency: "SAR", frequency: "Monthly" },
+      { name: "Basic Salary", type: "Fixed", amount: 25000, currency: "AED", frequency: "Monthly" },
     ],
     approvals: [
       { id: "appr-1", roleCode: "HR_MANAGER", status: "Pending", approverName: null, decidedAt: null, comment: null },

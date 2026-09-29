@@ -40,10 +40,10 @@ describe('Quick Guide Page Resolution', () => {
     expect(appDetail.hardPartCaution.title).toContain('AI Match vs. Regulatory Reality');
   });
 
-  it('resolves Saudi offer creation path', () => {
+  it('resolves offer creation path', () => {
     const guide = getPageGuideForPath('/offers/create');
     expect(guide.id).toBe('create-offer');
-    expect(guide.hardPartCaution.title).toContain('Saudi Salary Breakdown Math');
+    expect(guide.hardPartCaution.title).toContain('Local Compensation Rules');
   });
 
   it('resolves candidate comparison matrix path', () => {
@@ -117,7 +117,7 @@ describe('QuickGuideModal Component & User Interaction', () => {
     fireEvent.click(screen.getByText('Launch Manual Guide'));
 
     // Modal should be visible with offer title
-    expect(screen.getByText('Saudi Compensation & Offer Builder')).toBeInTheDocument();
+    expect(screen.getByText('Compensation & Offer Builder')).toBeInTheDocument();
     expect(screen.getByText('Offer & Compensation')).toBeInTheDocument();
 
     // Check Overview tab content
@@ -125,18 +125,18 @@ describe('QuickGuideModal Component & User Interaction', () => {
 
     // Click on 3-Step Workflow tab
     fireEvent.click(screen.getByRole('tab', { name: /3-step workflow/i }));
-    expect(screen.getByText('Structure the Saudi Package (SAR)')).toBeInTheDocument();
+    expect(screen.getByText('Structure the Package (AED / EGP)')).toBeInTheDocument();
 
     // Click on Golden Rules tab
     fireEvent.click(screen.getByRole('tab', { name: /golden rules/i }));
-    expect(screen.getByText(/saudi salary breakdown math/i)).toBeInTheDocument();
+    expect(screen.getByText(/confirm local compensation rules/i)).toBeInTheDocument();
 
     // Click "Got It, Let’s Start!"
     const dismissBtn = screen.getByRole('button', { name: /got it/i });
     fireEvent.click(dismissBtn);
 
     // Modal should be closed and saved in localStorage
-    expect(screen.queryByText('Saudi Compensation & Offer Builder')).not.toBeInTheDocument();
+    expect(screen.queryByText('Compensation & Offer Builder')).not.toBeInTheDocument();
     expect(localStorage.getItem('rf_seen_guide_create-offer')).toBe('true');
   });
 });

@@ -15,6 +15,7 @@ import { SectionHeader } from '../components/ui/SectionHeader';
 import { TableSkeleton } from '../components/ui/Skeleton';
 import { useFeedback } from '../hooks/useFeedback';
 import { useTranslation } from 'react-i18next';
+import { formatOfferAmount } from '../utils/offerCurrency';
 import './PageEnhancementsV2.css';
 
 type OfferApprovalRow = OfferApprovalInboxItem;
@@ -73,7 +74,7 @@ const offerApprovalColumns: ResponsiveDataColumn<OfferApprovalRow>[] = [
     priority: 'secondary',
     render: (row) => (
       <div className="grid gap-0.5">
-        <span className="font-bold text-rf-ink">{row.monthlyPackage === null ? 'Restricted' : `SAR ${row.monthlyPackage.toLocaleString()}`}</span>
+        <span className="font-bold text-rf-ink">{row.monthlyPackage === null ? 'Restricted' : formatOfferAmount(row.monthlyPackage, row.packageCurrency)}</span>
         <span className="font-medium text-rf-ink-muted">{row.monthlyPackage === null ? 'Salary hidden by policy' : 'Monthly gross'}</span>
       </div>
     ),

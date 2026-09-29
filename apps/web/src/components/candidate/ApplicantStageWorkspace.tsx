@@ -21,6 +21,7 @@ import { Select } from '../ui/Select';
 import { PageState } from '../ui/PageState';
 import { Icon } from '../Icon';
 import { FastScorecardModal } from '../interview/FastScorecardModal';
+import { formatOfferAmount, normalizeOfferCurrency } from '../../utils/offerCurrency';
 
 export type ApplicantWorkspaceStage = 'Applied' | 'Screening' | 'Interview' | 'Offer' | 'Pre-Hire' | 'Joined';
 
@@ -269,7 +270,7 @@ export function ApplicantStageWorkspace({
             amount: version?.components?.find((item) => item.type === 'Salary')?.amount == null
               ? ''
               : String(version.components.find((item) => item.type === 'Salary')?.amount),
-            currency: version?.components?.find((item) => item.type === 'Salary')?.currency ?? current.currency,
+            currency: normalizeOfferCurrency(version?.components?.find((item) => item.type === 'Salary')?.currency ?? current.currency),
           }));
         }
       } else {
@@ -325,7 +326,7 @@ export function ApplicantStageWorkspace({
       type: 'Salary',
       name: 'Base Salary',
       amount,
-      currency: offerDraft.currency.trim().toUpperCase() || 'AED',
+      currency: normalizeOfferCurrency(offerDraft.currency),
       frequency: 'Monthly',
       isTaxable: true,
     };
@@ -648,7 +649,7 @@ export function ApplicantStageWorkspace({
                 {offer ? (
                   <div className="space-y-4 rounded-xl border border-slate-200 bg-white/80 p-4 text-xs dark:border-slate-800 dark:bg-slate-900/80">
                     <div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="font-bold text-slate-900 dark:text-white">{offer.offerCode}</h3><p className="mt-1 text-slate-500">{offer.currentVersion?.contractType || 'Contract terms pending'} · {offer.currentVersion?.workLocation || inheritedLocation}</p></div><Badge variant={offer.status === 'Accepted' ? 'success' : offer.status === 'Declined' || offer.status === 'Withdrawn' ? 'danger' : 'info'}>{offer.status}</Badge></div>
-                    {showSensitiveOffer && <div className="grid gap-3 sm:grid-cols-3"><div><span className="block text-slate-500">Monthly package</span><strong>{offer.currentVersion?.monthlyPackage?.toLocaleString() ?? '—'} {offer.currentVersion?.components?.[0]?.currency || 'SAR'}</strong></div><div><span className="block text-slate-500">Proposed joining</span><strong>{formatDate(offer.currentVersion?.proposedJoiningDate)}</strong></div><div><span className="block text-slate-500">Approval</span><strong>{offer.currentVersion?.approvalStatus || 'Pending'}</strong></div></div>}
+                    {showSensitiveOffer && <div className="grid gap-3 sm:grid-cols-3"><div><span className="block text-slate-500">Monthly package</span><strong>{formatOfferAmount(offer.currentVersion?.monthlyPackage, offer.currentVersion?.components?.find((item) => item.type === 'Salary')?.currency)}</strong></div><div><span className="block text-slate-500">Proposed joining</span><strong>{formatDate(offer.currentVersion?.proposedJoiningDate)}</strong></div><div><span className="block text-slate-500">Approval</span><strong>{offer.currentVersion?.approvalStatus || 'Pending'}</strong></div></div>}
                     <div className="border-t border-slate-100 pt-3 dark:border-slate-800"><span className="text-slate-500">Approvals</span><div className="mt-2 flex flex-wrap gap-2">{offer.currentVersion?.approvals?.length ? offer.currentVersion.approvals.map((approval) => <Badge key={approval.id} variant={approval.status === 'Approved' ? 'success' : approval.status === 'Rejected' ? 'danger' : 'warning'}>{approval.roleCode}: {approval.status}</Badge>) : <span className="text-slate-400">No approval record</span>}</div></div>
                     <div className="flex flex-wrap gap-2">{canApproveOffers && offer.currentVersion?.approvals?.some((item) => item.status === 'Pending') && <><Button type="button" size="sm" variant="primary" loading={busyAction === 'offer-Approve'} onClick={() => void handleOfferDecision('Approve')}>Approve offer</Button><Button type="button" size="sm" variant="danger" loading={busyAction === 'offer-Reject'} onClick={() => void handleOfferDecision('Reject')}>Reject offer</Button></>}{canMoveStage && offer.status === 'Approved' && <Button type="button" size="sm" variant="secondary" loading={busyAction === 'offer-status-Sent'} onClick={() => void handleOfferStatus('Sent')}>Mark sent</Button>}{canMoveStage && offer.status === 'Sent' && <Button type="button" size="sm" variant="primary" loading={busyAction === 'offer-status-Accepted'} onClick={() => void handleOfferStatus('Accepted')}>Mark accepted</Button>}</div>
                   </div>

@@ -13,6 +13,7 @@ import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { PipelineStepper } from '../components/PipelineStepper';
 import { Icon } from '../components/Icon';
+import { DEFAULT_OFFER_CURRENCY, type OfferCurrency } from '../utils/offerCurrency';
 import './PageEnhancementsV2.css';
 
 type OfferComponentDraft = {
@@ -54,9 +55,10 @@ export function CreateOfferPage() {
   });
 
   const [components, setComponents] = useState<OfferComponentDraft[]>([
-    { type: 'Salary', name: 'Basic Salary', amount: 0, currency: 'SAR', frequency: 'Monthly', isTaxable: true },
+    { type: 'Salary', name: 'Basic Salary', amount: 0, currency: DEFAULT_OFFER_CURRENCY, frequency: 'Monthly', isTaxable: true },
   ]);
 
+  const [currency, setCurrency] = useState<OfferCurrency>(DEFAULT_OFFER_CURRENCY);
   const [targetGrossSalary, setTargetGrossSalary] = useState<number>(0);
 
   useEffect(() => {
@@ -107,11 +109,11 @@ export function CreateOfferPage() {
   const addComponent = () => {
     setComponents([
       ...components,
-      { type: 'Allowance', name: 'Other Allowance', amount: 1000, currency: 'SAR', frequency: 'Monthly', isTaxable: true },
+      { type: 'Allowance', name: 'Other Allowance', amount: 1000, currency, frequency: 'Monthly', isTaxable: true },
     ]);
   };
 
-  const applySaudiStandardPackage = (gross: number) => {
+  const applyCompensationSplit = (gross: number) => {
     if (!gross || gross <= 0) return;
     const basic = Math.round(gross * 0.60);
     const housing = Math.round(gross * 0.25);
@@ -119,9 +121,9 @@ export function CreateOfferPage() {
     const other = gross - (basic + housing + transport);
 
     const newComps: OfferComponentDraft[] = [
-      { type: 'Salary', name: 'Basic Salary (60%)', amount: basic, currency: 'SAR', frequency: 'Monthly', isTaxable: true },
-      { type: 'Allowance', name: 'Housing Allowance (25%)', amount: housing, currency: 'SAR', frequency: 'Monthly', isTaxable: true },
-      { type: 'Allowance', name: 'Transportation Allowance (10%)', amount: transport, currency: 'SAR', frequency: 'Monthly', isTaxable: true },
+      { type: 'Salary', name: 'Basic Salary (60%)', amount: basic, currency, frequency: 'Monthly', isTaxable: true },
+      { type: 'Allowance', name: 'Housing Allowance (25%)', amount: housing, currency, frequency: 'Monthly', isTaxable: true },
+      { type: 'Allowance', name: 'Transportation Allowance (10%)', amount: transport, currency, frequency: 'Monthly', isTaxable: true },
     ];
 
     if (other > 0) {
@@ -129,7 +131,7 @@ export function CreateOfferPage() {
         type: 'Allowance',
         name: 'Special / Medical Allowance (5%)',
         amount: other,
-        currency: 'SAR',
+        currency,
         frequency: 'Monthly',
         isTaxable: true,
       });
@@ -164,7 +166,7 @@ export function CreateOfferPage() {
         ...formData,
         offerExpiry: formData.offerExpiry ? new Date(formData.offerExpiry).toISOString() : undefined,
         proposedJoiningDate: formData.proposedJoiningDate ? new Date(formData.proposedJoiningDate).toISOString() : undefined,
-        components,
+        components: components.map((component) => ({ ...component, currency })),
       };
 
       if (isRevision && offerId) {
@@ -216,10 +218,10 @@ Save offer
 
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 font-semibold text-slate-600">
-          Monthly <span className="text-slate-900">SAR {calculateMonthlyTotal().toLocaleString()}</span>
+          Monthly <span className="text-slate-900">{currency} {calculateMonthlyTotal().toLocaleString()}</span>
         </span>
         <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 font-semibold text-slate-600">
-          Annual <span className="text-slate-900">SAR {calculateAnnualTotal().toLocaleString()}</span>
+          Annual <span className="text-slate-900">{currency} {calculateAnnualTotal().toLocaleString()}</span>
         </span>
         <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 font-semibold text-slate-600">
           {formData.contractType}
@@ -283,7 +285,7 @@ Save offer
 
             <FormSection
               title="Compensation Breakdown"
-              description="Define salary, housing, transport and variable allowances in Saudi Riyals (SAR)."
+              description="Choose AED or EGP, then define salary, benefits and allowances in that currency."
               actions={
                 <Button variant="secondary" size="sm" type="button" onClick={addComponent}>
                   <Icon name="plus" size={13} />
@@ -291,20 +293,31 @@ Save offer
                 </Button>
               }
             >
-              {/* Saudi Standard 1-Click Calculator Helper */}
+              <FormField id="offer-currency" label="Offer currency" hint="All salary and allowance components use this currency.">
+                <Select
+                  id="offer-currency"
+                  value={currency}
+                  onChange={(event) => setCurrency(event.target.value as OfferCurrency)}
+                >
+                  <option value="AED">AED — UAE Dirham</option>
+                  <option value="EGP">EGP — Egyptian Pound</option>
+                </Select>
+              </FormField>
+
+              {/* Quick editable compensation split helper */}
               <div className="p-3.5 rounded-xl bg-gradient-to-r from-blue-50/80 via-emerald-50/60 to-white dark:from-slate-800/80 dark:via-slate-800/40 dark:to-slate-900 border border-rf-info-border/80 dark:border-blue-900/50 mb-3 space-y-2.5">
                 <div className="flex items-center justify-between gap-2 flex-wrap">
                   <div className="flex items-center gap-2">
                     <span className="text-rf-warning font-bold">⚡</span>
                     <strong className="text-xs font-bold text-rf-ink">
-                      Saudi Labor Law Standard Package Calculator
+                      Quick Compensation Split
                     </strong>
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rf-info-soft text-rf-info">
-                      SAR Currency
+                      {currency}
                     </span>
                   </div>
                   <span className="text-[11px] text-rf-ink-muted">
-                    Auto-split: 60% Basic • 25% Housing • 10% Transport • 5% Other
+                    Suggested split: 60 / 25 / 10 / 5 • editable; confirm local policy
                   </span>
                 </div>
 
@@ -322,9 +335,9 @@ Save offer
                     size="sm"
                     type="button"
                     disabled={!targetGrossSalary || targetGrossSalary <= 0}
-                    onClick={() => applySaudiStandardPackage(targetGrossSalary)}
+                    onClick={() => applyCompensationSplit(targetGrossSalary)}
                   >
-                    Apply 1-Click Saudi Breakdown
+                    Apply Compensation Split
                   </Button>
                   <div className="flex items-center gap-1.5 text-[11px] text-rf-ink-muted ml-auto">
                     <span>Presets:</span>
@@ -334,11 +347,11 @@ Save offer
                         type="button"
                         onClick={() => {
                           setTargetGrossSalary(amt);
-                          applySaudiStandardPackage(amt);
+                          applyCompensationSplit(amt);
                         }}
                         className="px-2 py-0.5 rounded bg-white dark:bg-rf-surface-muted border border-rf-border dark:border-rf-border-strong text-rf-ink hover:border-rf-action transition text-[10px] font-bold cursor-pointer"
                       >
-                        {amt.toLocaleString()} SAR
+                        {amt.toLocaleString()} {currency}
                       </button>
                     ))}
                   </div>
@@ -371,7 +384,7 @@ Save offer
                     <div className="sm:col-span-3">
                       <Input
                         type="number"
-                        placeholder="Amount (SAR)"
+                        placeholder={`Amount (${currency})`}
                         value={comp.amount}
                         onChange={(e) => handleComponentChange(idx, 'amount', Number(e.target.value))}
                       />
@@ -416,7 +429,7 @@ Save offer
                 <FormField
                   id="offer-probation"
                   label="Probation Period"
-                  hint="Saudi Labor Law default is commonly 90 days; extend only when the role warrants it."
+                  hint="Confirm the applicable local requirement before issuing the offer."
                 >
                   <Select
                     id="offer-probation"
@@ -489,7 +502,7 @@ Save offer
             </section>
 
             <Alert tone="info" title="Approval requirement">
-              Compensation packages above SAR 20,000/mo require secondary approval by the HR Director.
+              Final approval requirements follow your organization’s configured approval workflow.
             </Alert>
           </aside>
         </div>

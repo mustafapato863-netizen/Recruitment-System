@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getApi } from '../api/client';
 import type { Offer as BaseOffer, VacancyDetailView } from '@recruitflow/contracts';
 import { Icon } from '../components/Icon';
+import { formatOfferAmount, getOfferCurrency } from '../utils/offerCurrency';
 import { Modal } from '../components/Modal';
 import { PageState } from '../components/ui/PageState';
 import { QuickGuideTrigger } from '../quickguide';
@@ -118,16 +119,16 @@ export function OffersPage() {
           let bonus = '';
 
           if (currentVer) {
+            const currency = getOfferCurrency(currentVer.components);
             if (typeof currentVer.monthlyPackage === 'number' && currentVer.monthlyPackage > 0) {
-              monthlySalary = `SAR ${currentVer.monthlyPackage.toLocaleString()} / month`;
+              monthlySalary = `${formatOfferAmount(currentVer.monthlyPackage, currency)} / month`;
             } else if (Array.isArray(currentVer.components) && currentVer.components.length > 0) {
               const sum = currentVer.components.reduce(
                 (acc: number, c) => acc + (Number(c.amount) || 0),
                 0
               );
               if (sum > 0) {
-                const cur = currentVer.components[0]?.currency || 'SAR';
-                monthlySalary = `${cur} ${sum.toLocaleString()} / month`;
+                monthlySalary = `${formatOfferAmount(sum, currency)} / month`;
               }
             }
 
@@ -136,7 +137,7 @@ export function OffersPage() {
                 c.name?.toLowerCase().includes('bonus')
               );
               if (bonusComp && bonusComp.amount) {
-                bonus = `+ ${bonusComp.currency || 'SAR'} ${Number(bonusComp.amount).toLocaleString()} bonus`;
+                bonus = `+ ${formatOfferAmount(Number(bonusComp.amount), bonusComp.currency)} bonus`;
               }
             }
           }
@@ -614,7 +615,7 @@ export function OffersPage() {
             />
           </div>
           <div>
-            <label className="font-bold block mb-1">Basic Monthly Salary (SAR)</label>
+            <label className="font-bold block mb-1">Basic Monthly Salary (AED or EGP)</label>
             <input
               type="number"
               placeholder="e.g. 20000"

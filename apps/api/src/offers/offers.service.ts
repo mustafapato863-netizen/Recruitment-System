@@ -178,6 +178,7 @@ export class OffersService {
           },
         },
         versions: {
+          include: { components: true },
           orderBy: { versionNumber: 'desc' },
           take: 1,
         },
@@ -256,7 +257,7 @@ export class OffersService {
               type: c.type,
               name: c.name,
               amount: c.amount ?? null,
-              currency: c.currency ?? null,
+              currency: c.currency ?? 'AED',
               frequency: c.frequency ?? null,
               isTaxable: c.isTaxable,
             })),
@@ -331,7 +332,7 @@ export class OffersService {
               type: c.type,
               name: c.name,
               amount: c.amount ?? null,
-              currency: c.currency ?? null,
+              currency: c.currency ?? 'AED',
               frequency: c.frequency ?? null,
               isTaxable: c.isTaxable,
             })),
@@ -396,6 +397,7 @@ export class OffersService {
       include: {
         offerVersion: {
           include: {
+            components: { where: { type: 'Salary' }, take: 1 },
             offer: {
               include: {
                 application: {
@@ -425,6 +427,9 @@ export class OffersService {
       versionNumber: app.offerVersion.versionNumber,
       monthlyPackage: disclosure.viewSalary && app.offerVersion.monthlyPackage !== null
         ? Number(app.offerVersion.monthlyPackage)
+        : null,
+      packageCurrency: disclosure.viewSalary
+        ? (app.offerVersion.components[0]?.currency?.toUpperCase() === 'EGP' ? 'EGP' : 'AED')
         : null,
       roleCode: app.roleCode,
       status: app.status,
@@ -671,7 +676,7 @@ export class OffersService {
           type: c.type,
           name: c.name,
           amount: showCompensation && c.amount ? Number(c.amount) : null,
-          currency: c.currency,
+          currency: c.currency?.toUpperCase() === 'EGP' ? 'EGP' : 'AED',
           frequency: c.frequency,
           isTaxable: c.isTaxable,
         })) || [],

@@ -23,7 +23,7 @@ export class OfferComponentDto {
   amount?: number | null;
 
   @IsOptional()
-  @IsString()
+  @IsEnum(['AED', 'EGP'], { message: 'Offer currency must be AED or EGP' })
   currency?: string | null;
 
   @IsOptional()

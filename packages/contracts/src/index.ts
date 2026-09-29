@@ -1130,13 +1130,14 @@ export interface BookSelfScheduleResult {
 export type OfferStatus = 'Draft' | 'Pending Approval' | 'Approved' | 'Sent' | 'Accepted' | 'Declined' | 'Withdrawn' | 'Expired';
 export type OfferVersionApprovalStatus = 'Draft' | 'Pending' | 'Approved' | 'Rejected' | 'Changes Requested';
 export type OfferComponentType = 'Salary' | 'Allowance' | 'Benefit';
+export type OfferCurrency = 'AED' | 'EGP';
 
 export interface OfferComponentItem {
   id?: string;
   type: OfferComponentType;
   name: string;
   amount?: number | null;
-  currency?: string | null;
+  currency?: OfferCurrency | null;
   frequency?: string | null;
   isTaxable: boolean;
 }
@@ -1163,6 +1164,7 @@ export interface OfferApprovalInboxItem {
   branchName?: string | null;
   versionNumber: number;
   monthlyPackage: number | null;
+  packageCurrency?: OfferCurrency | null;
   roleCode: string;
   status: string;
   step: number;
