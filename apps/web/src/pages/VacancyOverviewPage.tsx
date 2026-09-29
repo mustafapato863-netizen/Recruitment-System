@@ -48,6 +48,8 @@ export function VacancyOverviewPage() {
   const [assignRecruiterOpen, setAssignRecruiterOpen] = useState(false);
   const [selectedRecruiterId, setSelectedRecruiterId] = useState('');
   const [recruiters, setRecruiters] = useState<Array<{ id: string; name: string }>>([]);
+  const [recruiterLoadState, setRecruiterLoadState] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [recruiterRetryKey, setRecruiterRetryKey] = useState(0);
   const [isAssigningRecruiter, setIsAssigningRecruiter] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
@@ -272,36 +274,28 @@ export function VacancyOverviewPage() {
 
   useEffect(() => {
     let isMounted = true;
+    setRecruiterLoadState('loading');
     const fetchRecruiters = async () => {
       try {
-        const res = await getApi<Array<{ id: string; displayName?: string; name?: string }>>('/users/interviewers');
-        if (isMounted && Array.isArray(res) && res.length > 0) {
-          setRecruiters(res.map((r) => ({ id: r.id, name: r.displayName || r.name || 'Recruiter' })));
-          return;
+        const res = await getApi<Array<{ id: string; displayName?: string; name?: string }>>('/users/assignable');
+        if (isMounted) {
+          setRecruiters(Array.isArray(res)
+            ? res.map((r) => ({ id: r.id, name: r.displayName || r.name || 'Team member' }))
+            : []);
+          setRecruiterLoadState('ready');
         }
       } catch {
-        // Fallback to /users?role=RECRUITER
-      }
-      try {
-        const res = await getApi<Array<{ id: string; displayName?: string; name?: string }>>('/users?role=RECRUITER');
-        if (isMounted && Array.isArray(res) && res.length > 0) {
-          setRecruiters(res.map((r) => ({ id: r.id, name: r.displayName || r.name || 'Recruiter' })));
+        if (isMounted) {
+          setRecruiters([]);
+          setRecruiterLoadState('error');
         }
-      } catch {
-        // ignore
       }
     };
     void fetchRecruiters();
     return () => {
       isMounted = false;
     };
-  }, []);
-
-  useEffect(() => {
-    if (recruiters.length === 0 && interviewers.length > 0) {
-      setRecruiters(interviewers.map((r) => ({ id: r.id, name: r.displayName || r.name || 'Recruiter' })));
-    }
-  }, [interviewers, recruiters.length]);
+  }, [recruiterRetryKey]);
 
   useEffect(() => {
     if (currentRecruiterAssignment?.userId) {
@@ -310,7 +304,7 @@ export function VacancyOverviewPage() {
   }, [currentRecruiterAssignment?.userId]);
 
   const handleAssignAndNavigate = async () => {
-    if (!selectedRecruiterId || !vacancy) return;
+    if (recruiterLoadState !== 'ready' || !selectedRecruiterId || !recruiters.some((recruiter) => recruiter.id === selectedRecruiterId) || !vacancy) return;
     setIsAssigningRecruiter(true);
     try {
       const updated = await postApi<{ status?: string }>(`/vacancies/${vacancy.id}/assignments`, {
@@ -1685,10 +1679,17 @@ export function VacancyOverviewPage() {
             <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
               Recruiter
             </label>
-            {recruiters.length === 0 ? (
+            {recruiterLoadState === 'loading' ? (
+              <p className="p-3 text-xs text-slate-500" role="status">Loading your reporting team…</p>
+            ) : recruiterLoadState === 'error' ? (
+              <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 text-xs flex items-center justify-between gap-3" role="alert">
+                <span>Unable to load your reporting team.</span>
+                <button type="button" onClick={() => setRecruiterRetryKey((key) => key + 1)} className="font-bold underline cursor-pointer">Retry</button>
+              </div>
+            ) : recruiters.length === 0 ? (
               <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300 text-xs flex items-center gap-2">
                 <Icon name="alert-circle" size={16} className="text-rose-500 shrink-0" />
-                <span>No recruiters available. Please ensure recruiter accounts are configured in Master Data / User Roles.</span>
+                <span>No one reports to you yet. Link your team on the Reporting Tree before assigning.</span>
               </div>
             ) : (
               <Select
@@ -1718,7 +1719,7 @@ export function VacancyOverviewPage() {
             <Button
               variant="primary"
               onClick={handleAssignAndNavigate}
-              disabled={!selectedRecruiterId || recruiters.length === 0 || isAssigningRecruiter}
+              disabled={recruiterLoadState !== 'ready' || !selectedRecruiterId || !recruiters.some((recruiter) => recruiter.id === selectedRecruiterId) || isAssigningRecruiter}
               loading={isAssigningRecruiter}
               loadingLabel="Assigning..."
             >
