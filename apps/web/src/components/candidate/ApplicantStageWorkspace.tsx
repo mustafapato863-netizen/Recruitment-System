@@ -222,15 +222,19 @@ export function ApplicantStageWorkspace({
   const currentItem = stageItems.find((item) => item.name === effectiveStage);
   const nextStage = workspace?.nextStage ?? application.allowedTransitions[0] ?? null;
   const latestScreening = screeningLogs[0] ?? null;
-  const candidateId = application.candidateId;
+  const candidateId = application.candidateId || application.candidate?.id;
   const inheritedLocation = application.vacancyLocation || application.vacancyBranchName || 'Inherited from job position';
 
   const loadStageRecords = async () => {
     setRecordLoading(true);
     setRecordError(null);
     try {
+      const validCandidateId =
+        candidateId && candidateId !== 'undefined' && candidateId !== 'null' ? candidateId : null;
       const [offerResult, hiringResult] = await Promise.allSettled([
-        getApi<Offer[]>(`/offers?candidateId=${encodeURIComponent(candidateId)}`),
+        validCandidateId
+          ? getApi<Offer[]>(`/offers?candidateId=${encodeURIComponent(validCandidateId)}`)
+          : Promise.resolve([]),
         getApi<HiringCase[]>('/hiring'),
       ]);
       let offerLoadError: unknown = null;

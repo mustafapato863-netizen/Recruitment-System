@@ -27,6 +27,15 @@ import { RequirePermissions } from '../common/decorators/require-permissions.dec
 import { AuditAction } from '../common/decorators/audit-action.decorator';
 import type { AuthUser } from '@recruitflow/contracts';
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function cleanUuidParam(value?: string | null): string | null | undefined {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed === 'undefined' || trimmed === 'null') return undefined;
+  return UUID_REGEX.test(trimmed) ? trimmed : null;
+}
+
 @UseGuards(JwtAuthGuard)
 @Controller('offers')
 export class OffersController {
@@ -48,11 +57,31 @@ export class OffersController {
     @Query('status') status?: string,
     @Query('search') search?: string,
     @Query('candidateId') candidateId?: string,
+    @Query('vacancyId') vacancyId?: string,
   ) {
-    const query: { status?: string; search?: string; candidateId?: string } = {};
-    if (status !== undefined) query.status = status;
-    if (search !== undefined) query.search = search;
-    if (candidateId !== undefined) query.candidateId = candidateId;
+    const cleanCandidateId = cleanUuidParam(candidateId);
+    const cleanVacancyId = cleanUuidParam(vacancyId);
+
+    // If candidateId or vacancyId was explicitly supplied but is not a valid UUID,
+    // safely return an empty list rather than triggering a database UUID syntax error.
+    if ((candidateId && cleanCandidateId === null) || (vacancyId && cleanVacancyId === null)) {
+      return [];
+    }
+
+    const query: { status?: string; search?: string; candidateId?: string; vacancyId?: string } = {};
+    if (status && status !== 'ALL' && status !== 'undefined' && status !== 'null') {
+      query.status = status.trim();
+    }
+    if (search && search !== 'undefined' && search !== 'null') {
+      query.search = search.trim();
+    }
+    if (cleanCandidateId) {
+      query.candidateId = cleanCandidateId;
+    }
+    if (cleanVacancyId) {
+      query.vacancyId = cleanVacancyId;
+    }
+
     return this.offersService.getOffers(user, query, await this.compensationDisclosure(user));
   }
 

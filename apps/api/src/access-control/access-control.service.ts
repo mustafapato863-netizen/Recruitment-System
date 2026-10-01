@@ -161,6 +161,20 @@ const DEFAULT_ROLE_POLICIES: Record<string, RoleRlsPolicy> = {
     canDownloadDocs: true,
     canApprove: false,
   },
+  'RECRUITER-OFFSHORE': {
+    dataScope: 'ALL',
+    canViewPii: true,
+    canViewSalary: false,
+    canDownloadDocs: true,
+    canApprove: false,
+  },
+  'RECRUITER_OFFSHORE': {
+    dataScope: 'ALL',
+    canViewPii: true,
+    canViewSalary: false,
+    canDownloadDocs: true,
+    canApprove: false,
+  },
   HIRING_MANAGER: {
     dataScope: 'DEPARTMENT',
     canViewPii: false,
@@ -317,7 +331,7 @@ export class AccessControlService {
     const responsibility = config?.userResponsibilities?.[user.userId];
     const overrideScope = policies.userOverrides[user.userId]?.dataScope;
     const roleScopes = user.roleCodes
-      .map((code) => policies.roles[code]?.dataScope ?? DEFAULT_ROLE_POLICIES[code]?.dataScope)
+      .map((code) => policies.roles[code]?.dataScope ?? DEFAULT_ROLE_POLICIES[code]?.dataScope ?? (code.toUpperCase().includes('RECRUITER') ? DEFAULT_ROLE_POLICIES.RECRUITER?.dataScope : undefined))
       .filter((scope): scope is DataVisibilityScope => Boolean(scope));
     return {
       scopes: overrideScope ? [overrideScope] : roleScopes.length > 0 ? roleScopes : ['ASSIGNED_ONLY'],

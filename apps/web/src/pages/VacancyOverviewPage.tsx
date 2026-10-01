@@ -630,7 +630,7 @@ export function VacancyOverviewPage() {
           Interviews
           <span className="text-slate-900 dark:text-white">{interviewsCount}</span>
         </button>
-        <button type="button" onClick={() => navigate(`/offers?vacancyId=${id || ''}`)} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
+        <button type="button" onClick={() => navigate(id ? `/offers?vacancyId=${encodeURIComponent(id)}` : '/offers')} className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300">
           Offers
           <span className="text-slate-900 dark:text-white">{offersCount}</span>
         </button>
@@ -694,7 +694,7 @@ export function VacancyOverviewPage() {
 
         <button
           type="button"
-          onClick={() => navigate(`/offers?vacancyId=${id || ''}`)}
+          onClick={() => navigate(id ? `/offers?vacancyId=${encodeURIComponent(id)}` : '/offers')}
           className="pb-3.5 border-b-2 border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white transition cursor-pointer flex items-center gap-1.5 shrink-0"
         >
           <span>Offers</span>

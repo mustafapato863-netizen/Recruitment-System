@@ -24,6 +24,15 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { AccessControlService } from '../access-control/access-control.service';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function cleanUuidParam(value?: string | null): string | null | undefined {
+  if (!value) return undefined;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed === 'undefined' || trimmed === 'null') return undefined;
+  return UUID_REGEX.test(trimmed) ? trimmed : null;
+}
+
 type CompensationDisclosure = { viewSalary: boolean };
 
 type OfferVersionRecord = {
@@ -148,23 +157,39 @@ export class OffersService {
     return { monthlyPackage: monthly, annualFixed: annual };
   }
 
-  async getOffers(user: AuthUser, query: { status?: string; search?: string; candidateId?: string }, disclosure: CompensationDisclosure) {
+  async getOffers(
+    user: AuthUser,
+    query: { status?: string; search?: string; candidateId?: string; vacancyId?: string },
+    disclosure: CompensationDisclosure,
+  ) {
+    const cleanCandidateId = cleanUuidParam(query.candidateId);
+    const cleanVacancyId = cleanUuidParam(query.vacancyId);
+
+    // If candidateId or vacancyId was provided but is not a valid UUID,
+    // safely return empty list rather than triggering database UUID syntax errors.
+    if ((query.candidateId && cleanCandidateId === null) || (query.vacancyId && cleanVacancyId === null)) {
+      return [];
+    }
+
     const visibility = await this.applicationVisibility(user);
-    if (query.candidateId) visibility.candidateId = query.candidateId;
+    if (cleanCandidateId) visibility.candidateId = cleanCandidateId;
+    if (cleanVacancyId) visibility.vacancyId = cleanVacancyId;
+
     const where: Prisma.OfferWhereInput = {
       organizationId: user.organizationId,
       application: visibility,
     };
 
-    if (query.status) {
-      where.status = query.status;
+    if (query.status && query.status !== 'ALL' && query.status !== 'undefined' && query.status !== 'null') {
+      where.status = query.status.trim();
     }
 
-    if (query.search) {
+    if (query.search && query.search !== 'undefined' && query.search !== 'null') {
+      const term = query.search.trim();
       where.OR = [
-        { offerCode: { contains: query.search, mode: 'insensitive' } },
-        { application: { candidate: { firstName: { contains: query.search, mode: 'insensitive' } } } },
-        { application: { candidate: { lastName: { contains: query.search, mode: 'insensitive' } } } },
+        { offerCode: { contains: term, mode: 'insensitive' } },
+        { application: { candidate: { firstName: { contains: term, mode: 'insensitive' } } } },
+        { application: { candidate: { lastName: { contains: term, mode: 'insensitive' } } } },
       ];
     }
 

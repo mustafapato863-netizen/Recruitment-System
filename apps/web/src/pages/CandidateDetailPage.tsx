@@ -129,10 +129,17 @@ export function CandidateDetailPage() {
 
     // Fetch candidate-specific linked records server-side so private or later-page
     // records are not exposed through whole-collection client filtering.
+    const validCandidateId = id && id !== 'undefined' && id !== 'null' ? id : null;
     const [appsRes, interviewsRes, offersRes, vacsRes] = await Promise.allSettled([
-      getApi<PaginatedResult<Application>>(`/applications?candidateId=${id}&page=1&pageSize=100`),
-      getApi<Interview[]>(`/interviews?candidateId=${id}`),
-      getApi<Offer[]>(`/offers?candidateId=${id}`),
+      validCandidateId
+        ? getApi<PaginatedResult<Application>>(`/applications?candidateId=${encodeURIComponent(validCandidateId)}&page=1&pageSize=100`)
+        : Promise.resolve({ data: [], total: 0, page: 1, pageSize: 100, totalPages: 0 } as PaginatedResult<Application>),
+      validCandidateId
+        ? getApi<Interview[]>(`/interviews?candidateId=${encodeURIComponent(validCandidateId)}`)
+        : Promise.resolve([]),
+      validCandidateId
+        ? getApi<Offer[]>(`/offers?candidateId=${encodeURIComponent(validCandidateId)}`)
+        : Promise.resolve([]),
       getApi<Vacancy[]>('/vacancies'),
     ]);
 
@@ -213,10 +220,15 @@ export function CandidateDetailPage() {
   };
 
   const retryOffersWithAppIds = async () => {
+    if (!id || id === 'undefined' || id === 'null') {
+      setOffers([]);
+      setOffersLoading(false);
+      return;
+    }
     setOffersLoading(true);
     setOffersError(null);
     try {
-      const allOffers = await getApi<Offer[]>(`/offers?candidateId=${id}`);
+      const allOffers = await getApi<Offer[]>(`/offers?candidateId=${encodeURIComponent(id)}`);
       setOffers(Array.isArray(allOffers) ? allOffers : []);
     } catch (err: unknown) {
       setOffersError((err as Error).message || 'Failed to load offers.');

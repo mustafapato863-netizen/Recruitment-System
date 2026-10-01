@@ -240,6 +240,7 @@ describe('Vacancy Assignment and Activation Flow', () => {
           if (url.includes('/interviews')) return Promise.resolve([]);
           if (url.includes('/offers')) return Promise.resolve([]);
           if (url.includes('/users/interviewers')) return Promise.resolve(mockInterviewers);
+          if (url.includes('/users/assignable')) return Promise.resolve(mockInterviewers);
           return Promise.resolve([]);
         }) as unknown as typeof getApi,
       );
