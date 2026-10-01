@@ -203,7 +203,7 @@ function App() {
                   <Route
                     path="/email-templates"
                     element={
-                      <PermissionGate requiredPermission="MASTER_DATA_MANAGE">
+                      <PermissionGate requiredAnyPermission={['MASTER_DATA_MANAGE', 'MASTER_DATA_VIEW', 'APPLICATION_VIEW', 'VACANCY_VIEW']}>
                         <EmailTemplatesPage />
                       </PermissionGate>
                     }
@@ -211,7 +211,7 @@ function App() {
                   <Route
                     path="/whatsapp-templates"
                     element={
-                      <PermissionGate requiredPermission="MASTER_DATA_MANAGE">
+                      <PermissionGate requiredAnyPermission={['MASTER_DATA_MANAGE', 'MASTER_DATA_VIEW', 'APPLICATION_VIEW', 'VACANCY_VIEW']}>
                         <WhatsAppTemplatesPage />
                       </PermissionGate>
                     }

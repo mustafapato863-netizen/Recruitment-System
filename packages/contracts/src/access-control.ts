@@ -57,7 +57,7 @@ export function formatPermissionRequirement(options: {
  * sidebar items, and admin navigation settings cannot drift.
  */
 export const NAVIGATION_CATALOG = [
-  { key: 'dashboard', route: '/', label: 'Command Center', icon: 'dashboard', group: 'Workspace', sortOrder: 10, visible: true, requiredAnyPermissions: ['VACANCY_REQUEST_APPROVE', 'USERS_MANAGE', 'VACANCY_MANAGE', 'MASTER_DATA_VIEW'] },
+  { key: 'dashboard', route: '/', label: 'Command Center', icon: 'dashboard', group: 'Workspace', sortOrder: 10, visible: true, requiredAnyPermissions: ['VACANCY_REQUEST_APPROVE', 'USERS_MANAGE', 'VACANCY_MANAGE', 'MASTER_DATA_VIEW', 'VACANCY_VIEW', 'APPLICATION_VIEW'] },
   { key: 'vacancy-requests', route: '/vacancy-requests', label: 'Requisitions', icon: 'file-text', group: 'Workspace', sortOrder: 20, visible: true, requiredPermission: 'VACANCY_REQUEST_VIEW' },
   { key: 'vacancies', route: '/vacancies', label: 'Job Positions', icon: 'briefcase', group: 'Workspace', sortOrder: 30, visible: true, requiredPermission: 'VACANCY_VIEW' },
   { key: 'applications', route: '/applications', label: 'Applications', icon: 'users', group: 'Recruitment', sortOrder: 40, visible: true, requiredPermission: 'APPLICATION_VIEW' },
@@ -75,8 +75,8 @@ export const NAVIGATION_CATALOG = [
   { key: 'reporting-tree', route: '/reporting-tree', label: 'Reporting Tree', icon: 'pipeline', group: 'Governance', sortOrder: 145, visible: true, requiredPermission: 'USERS_VIEW' },
   { key: 'master-data', route: '/master-data', label: 'Master Data', icon: 'database', group: 'Governance', sortOrder: 150, visible: true, requiredPermission: 'MASTER_DATA_VIEW' },
   { key: 'audit-log', route: '/audit-log', label: 'Audit Log', icon: 'history', group: 'Governance', sortOrder: 160, visible: true, requiredPermission: 'AUDIT_VIEW' },
-  { key: 'email-templates', route: '/email-templates', label: 'Email Templates', icon: 'mail', group: 'Governance', sortOrder: 170, visible: true, requiredPermission: 'MASTER_DATA_MANAGE' },
-  { key: 'whatsapp-templates', route: '/whatsapp-templates', label: 'WhatsApp Templates', icon: 'chat', group: 'Governance', sortOrder: 175, visible: true, requiredPermission: 'MASTER_DATA_MANAGE' },
+  { key: 'email-templates', route: '/email-templates', label: 'Email Templates', icon: 'mail', group: 'Governance', sortOrder: 170, visible: true, requiredAnyPermissions: ['MASTER_DATA_MANAGE', 'MASTER_DATA_VIEW', 'APPLICATION_VIEW', 'VACANCY_VIEW'] },
+  { key: 'whatsapp-templates', route: '/whatsapp-templates', label: 'WhatsApp Templates', icon: 'chat', group: 'Governance', sortOrder: 175, visible: true, requiredAnyPermissions: ['MASTER_DATA_MANAGE', 'MASTER_DATA_VIEW', 'APPLICATION_VIEW', 'VACANCY_VIEW'] },
   { key: 'integrations', route: '/integrations', label: 'Integrations', icon: 'integrations', group: 'Governance', sortOrder: 180, visible: true, requiredPermission: 'MASTER_DATA_VIEW' },
   { key: 'settings', route: '/settings', label: 'Settings', icon: 'settings', group: 'Governance', sortOrder: 190, visible: true, requiredAnyPermissions: ['USERS_VIEW', 'MASTER_DATA_VIEW', 'OVERRIDE_WORKFLOW', 'AUDIT_VIEW'] },
   { key: 'notifications', route: '/notifications', label: 'Notifications', icon: 'bell', group: 'Governance', sortOrder: 200, visible: true, requiredPermission: 'NOTIFICATION_VIEW' },

@@ -32,7 +32,7 @@ export class WhatsAppTemplatesController {
   constructor(private readonly service: WhatsAppTemplatesService) {}
 
   @Get()
-  @RequirePermissions('MASTER_DATA_VIEW')
+  @RequireAnyPermissions('MASTER_DATA_VIEW', 'MASTER_DATA_MANAGE', 'APPLICATION_VIEW', 'VACANCY_VIEW')
   async listTemplates(@CurrentUser() user: AuthUser) {
     return this.service.listTemplates(user.organizationId);
   }
@@ -48,7 +48,7 @@ export class WhatsAppTemplatesController {
   }
 
   @Get(':id')
-  @RequirePermissions('MASTER_DATA_VIEW')
+  @RequireAnyPermissions('MASTER_DATA_VIEW', 'MASTER_DATA_MANAGE', 'APPLICATION_VIEW', 'VACANCY_VIEW')
   async getTemplate(
     @CurrentUser() user: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,
@@ -57,7 +57,7 @@ export class WhatsAppTemplatesController {
   }
 
   @Post()
-  @RequirePermissions('MASTER_DATA_MANAGE')
+  @RequireAnyPermissions('MASTER_DATA_MANAGE', 'APPLICATION_VIEW', 'VACANCY_VIEW')
   @AuditAction('whatsapp_template.create')
   async createTemplate(
     @CurrentUser() user: AuthUser,
@@ -67,7 +67,7 @@ export class WhatsAppTemplatesController {
   }
 
   @Patch(':id')
-  @RequirePermissions('MASTER_DATA_MANAGE')
+  @RequireAnyPermissions('MASTER_DATA_MANAGE', 'APPLICATION_VIEW', 'VACANCY_VIEW')
   @AuditAction('whatsapp_template.update')
   async updateTemplate(
     @CurrentUser() user: AuthUser,
@@ -78,7 +78,7 @@ export class WhatsAppTemplatesController {
   }
 
   @Post(':id/duplicate')
-  @RequirePermissions('MASTER_DATA_MANAGE')
+  @RequireAnyPermissions('MASTER_DATA_MANAGE', 'APPLICATION_VIEW', 'VACANCY_VIEW')
   @AuditAction('whatsapp_template.duplicate')
   async duplicateTemplate(
     @CurrentUser() user: AuthUser,
@@ -114,7 +114,7 @@ export class WhatsAppTemplatesController {
   }
 
   @Delete(':id')
-  @RequirePermissions('MASTER_DATA_MANAGE')
+  @RequireAnyPermissions('MASTER_DATA_MANAGE', 'APPLICATION_VIEW', 'VACANCY_VIEW')
   @AuditAction('whatsapp_template.archive')
   @HttpCode(HttpStatus.NO_CONTENT)
   async archiveTemplate(

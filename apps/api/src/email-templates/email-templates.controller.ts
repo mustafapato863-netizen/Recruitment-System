@@ -18,7 +18,7 @@ import { CreateEmailTemplateDto, UpdateEmailTemplateDto } from './email-template
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { AuthUser } from '@recruitflow/contracts';
-import { RequirePermissions } from '../common/decorators/require-permissions.decorator';
+import { RequireAnyPermissions, RequirePermissions } from '../common/decorators/require-permissions.decorator';
 import { AuditAction } from '../common/decorators/audit-action.decorator';
 
 @Controller('email-templates')
@@ -27,13 +27,13 @@ export class EmailTemplatesController {
   constructor(private readonly service: EmailTemplatesService) {}
 
   @Get()
-  @RequirePermissions('MASTER_DATA_VIEW')
+  @RequireAnyPermissions('MASTER_DATA_VIEW', 'MASTER_DATA_MANAGE', 'APPLICATION_VIEW', 'VACANCY_VIEW')
   async listTemplates(@CurrentUser() user: AuthUser) {
     return this.service.listTemplates(user.organizationId);
   }
 
   @Get(':id')
-  @RequirePermissions('MASTER_DATA_VIEW')
+  @RequireAnyPermissions('MASTER_DATA_VIEW', 'MASTER_DATA_MANAGE', 'APPLICATION_VIEW', 'VACANCY_VIEW')
   async getTemplate(
     @CurrentUser() user: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,
@@ -42,7 +42,7 @@ export class EmailTemplatesController {
   }
 
   @Post()
-  @RequirePermissions('MASTER_DATA_MANAGE')
+  @RequireAnyPermissions('MASTER_DATA_MANAGE', 'APPLICATION_VIEW', 'VACANCY_VIEW')
   @AuditAction('email_template.create')
   async createTemplate(
     @CurrentUser() user: AuthUser,
@@ -52,7 +52,7 @@ export class EmailTemplatesController {
   }
 
   @Patch(':id')
-  @RequirePermissions('MASTER_DATA_MANAGE')
+  @RequireAnyPermissions('MASTER_DATA_MANAGE', 'APPLICATION_VIEW', 'VACANCY_VIEW')
   @AuditAction('email_template.update')
   async updateTemplate(
     @CurrentUser() user: AuthUser,
@@ -63,7 +63,7 @@ export class EmailTemplatesController {
   }
 
   @Post(':id/duplicate')
-  @RequirePermissions('MASTER_DATA_MANAGE')
+  @RequireAnyPermissions('MASTER_DATA_MANAGE', 'APPLICATION_VIEW', 'VACANCY_VIEW')
   @AuditAction('email_template.duplicate')
   async duplicateTemplate(
     @CurrentUser() user: AuthUser,
@@ -73,7 +73,7 @@ export class EmailTemplatesController {
   }
 
   @Delete(':id')
-  @RequirePermissions('MASTER_DATA_MANAGE')
+  @RequireAnyPermissions('MASTER_DATA_MANAGE', 'APPLICATION_VIEW', 'VACANCY_VIEW')
   @AuditAction('email_template.archive')
   @HttpCode(HttpStatus.NO_CONTENT)
   async archiveTemplate(

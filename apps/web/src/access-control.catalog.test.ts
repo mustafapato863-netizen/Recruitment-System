@@ -20,12 +20,16 @@ describe('permission labels', () => {
 });
 
 describe('NAVIGATION_CATALOG', () => {
-  it('keeps email-templates on MASTER_DATA_MANAGE', () => {
-    expect(getNavigationCatalogItem('email-templates')?.requiredPermission).toBe('MASTER_DATA_MANAGE');
+  it('allows template access with MASTER_DATA_MANAGE or operational recruitment permissions', () => {
+    expect(getNavigationCatalogItem('email-templates')?.requiredAnyPermissions).toContain('MASTER_DATA_MANAGE');
+    expect(getNavigationCatalogItem('email-templates')?.requiredAnyPermissions).toContain('APPLICATION_VIEW');
+    expect(getNavigationCatalogItem('whatsapp-templates')?.requiredAnyPermissions).toContain('MASTER_DATA_MANAGE');
+    expect(getNavigationCatalogItem('whatsapp-templates')?.requiredAnyPermissions).toContain('APPLICATION_VIEW');
   });
 
-  it('keeps whatsapp-templates on MASTER_DATA_MANAGE', () => {
-    expect(getNavigationCatalogItem('whatsapp-templates')?.requiredPermission).toBe('MASTER_DATA_MANAGE');
+  it('allows command center access with operational recruitment permissions', () => {
+    expect(getNavigationCatalogItem('dashboard')?.requiredAnyPermissions).toContain('VACANCY_VIEW');
+    expect(getNavigationCatalogItem('dashboard')?.requiredAnyPermissions).toContain('APPLICATION_VIEW');
   });
 
   it('has unique keys and routes', () => {
