@@ -28,3 +28,12 @@ describe('v2 primitives CSS scoping (flag-off parity)', () => {
     expect(app + main).not.toMatch(/components\/v2/);
   });
 });
+
+describe('drawer title type token', () => {
+  it('uses the 18px section step of the type scale', () => {
+    const rule = css.match(/\.rf2-drawer__title\s*\{([^}]*)\}/)?.[1] ?? '';
+    expect(rule).toContain('font-size: var(--rf2-text-section)');
+    expect(rule).toContain('line-height: var(--rf2-leading-section)');
+    expect(rule).not.toMatch(/\d+px/);
+  });
+});
