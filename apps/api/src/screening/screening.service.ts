@@ -94,9 +94,15 @@ export class ScreeningService {
       outcome: record.outcome as ScreeningOutcome,
       notes: record.notes,
       noticePeriodDays: record.noticePeriodDays,
-      expectedSalary: options.viewSalary && record.expectedSalary !== null ? Number(record.expectedSalary) : null,
-      currentSalary: options.viewSalary && record.currentSalary !== null ? Number(record.currentSalary) : null,
-      salaryCurrency: record.salaryCurrency,
+      // Compensation keys are omitted entirely (not null) for callers without
+      // VIEW_CURRENT_SALARY so Employee payloads never carry the fields.
+      ...(options.viewSalary
+        ? {
+            expectedSalary: record.expectedSalary !== null ? Number(record.expectedSalary) : null,
+            currentSalary: record.currentSalary !== null ? Number(record.currentSalary) : null,
+            salaryCurrency: record.salaryCurrency,
+          }
+        : {}),
       screenedAt: record.screenedAt.toISOString(),
       createdAt: record.createdAt.toISOString(),
     };

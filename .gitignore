@@ -34,3 +34,6 @@ apps/api/storage/
 graphify-out/
 tests/artifacts/*
 !tests/artifacts/browser/
+
+# Access exports contain user PII; never commit them
+/exports/

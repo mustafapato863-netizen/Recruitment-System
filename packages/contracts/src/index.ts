@@ -1163,7 +1163,7 @@ export interface OfferApprovalInboxItem {
   positionTitle: string;
   branchName?: string | null;
   versionNumber: number;
-  monthlyPackage: number | null;
+  monthlyPackage?: number | null;
   packageCurrency?: OfferCurrency | null;
   roleCode: string;
   status: string;

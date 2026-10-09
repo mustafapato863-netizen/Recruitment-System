@@ -450,12 +450,13 @@ export class OffersService {
       positionTitle: app.offerVersion.offer.application.vacancy.position.title,
       branchName: app.offerVersion.offer.application.vacancy.branch?.name,
       versionNumber: app.offerVersion.versionNumber,
-      monthlyPackage: disclosure.viewSalary && app.offerVersion.monthlyPackage !== null
-        ? Number(app.offerVersion.monthlyPackage)
-        : null,
-      packageCurrency: disclosure.viewSalary
-        ? (app.offerVersion.components[0]?.currency?.toUpperCase() === 'EGP' ? 'EGP' : 'AED')
-        : null,
+      // Pay keys are omitted entirely for callers without the salary permission.
+      ...(disclosure.viewSalary
+        ? {
+            monthlyPackage: app.offerVersion.monthlyPackage !== null ? Number(app.offerVersion.monthlyPackage) : null,
+            packageCurrency: (app.offerVersion.components[0]?.currency?.toUpperCase() === 'EGP' ? 'EGP' : 'AED') as 'EGP' | 'AED',
+          }
+        : {}),
       roleCode: app.roleCode,
       status: app.status,
       step: 1,
@@ -685,8 +686,13 @@ export class OffersService {
       id: v.id,
       offerId: v.offerId,
       versionNumber: v.versionNumber,
-      monthlyPackage: showCompensation && v.monthlyPackage ? Number(v.monthlyPackage) : null,
-      annualFixed: showCompensation && v.annualFixed ? Number(v.annualFixed) : null,
+      // Pay keys are omitted entirely (not null) when compensation is hidden.
+      ...(showCompensation
+        ? {
+            monthlyPackage: v.monthlyPackage ? Number(v.monthlyPackage) : null,
+            annualFixed: v.annualFixed ? Number(v.annualFixed) : null,
+          }
+        : {}),
       contractType: v.contractType,
       probationPeriod: v.probationPeriod,
       offerExpiry: v.offerExpiry ? v.offerExpiry.toISOString() : null,
@@ -700,7 +706,7 @@ export class OffersService {
           id: c.id,
           type: c.type,
           name: c.name,
-          amount: showCompensation && c.amount ? Number(c.amount) : null,
+          ...(showCompensation ? { amount: c.amount ? Number(c.amount) : null } : {}),
           currency: c.currency?.toUpperCase() === 'EGP' ? 'EGP' : 'AED',
           frequency: c.frequency,
           isTaxable: c.isTaxable,
