@@ -15,3 +15,7 @@ export type { CardV2Props } from './Card';
 export { TableV2, TableRowV2, TableCellV2 } from './Table';
 export type { TableV2Props, TableRowV2Props } from './Table';
 export { EmptyStateV2, ForbiddenStateV2, SkeletonV2 } from './PageStates';
+export { DrawerV2 } from './Drawer';
+export type { DrawerV2Props, DrawerStatus } from './Drawer';
+export { UserPicker, createUsersAdapter, assignableUsersAdapter, interviewersAdapter, toUserOption, initials } from './UserPicker';
+export type { UserPickerProps, UserPickerAdapter, UserOption } from './UserPicker';

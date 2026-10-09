@@ -178,3 +178,76 @@
   [data-ui='v2'] .rf2-skeleton__line, [data-ui='v2'] .rf2-spin { animation: none; }
   [data-ui='v2'] .rf2-btn, [data-ui='v2'] .rf2-nav-item, [data-ui='v2'] .rf2-field__box, [data-ui='v2'] .rf2-card { transition: none; }
 }
+
+/* ---------- Drawer (F3) ---------- */
+[data-ui='v2'] .rf2-drawer-root { position: fixed; inset: 0; z-index: 1000; }
+[data-ui='v2'] .rf2-drawer__scrim { position: absolute; inset: 0; background: var(--rf2-scrim); animation: rf2-fade var(--rf2-motion-standard) var(--rf2-ease); }
+[data-ui='v2'] .rf2-drawer {
+  position: absolute; top: 0; right: 0; bottom: 0; width: 520px; max-width: 100vw;
+  display: flex; flex-direction: column; background: var(--rf2-card); color: var(--rf2-ink); font-family: var(--rf2-font);
+  border-left: 1px solid var(--rf2-border); border-radius: var(--rf2-radius-drawer) 0 0 var(--rf2-radius-drawer);
+  box-shadow: var(--rf2-shadow-overlay); outline: none;
+  animation: rf2-slide-in var(--rf2-motion-standard) var(--rf2-ease);
+}
+[data-ui='v2'] .rf2-drawer__header { display: flex; gap: var(--rf2-space-1-5); align-items: flex-start; padding: 20px var(--rf2-space-3); border-bottom: 1px solid var(--rf2-divider); }
+[data-ui='v2'] .rf2-drawer__heading { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--rf2-space-0-5); }
+[data-ui='v2'] .rf2-drawer__kicker { margin: 0; font-size: var(--rf2-text-caption); line-height: var(--rf2-leading-caption); font-weight: 600; color: var(--rf2-action); text-transform: uppercase; letter-spacing: 0.02em; }
+[data-ui='v2'] .rf2-drawer__title { margin: 0; font-size: 20px; line-height: 28px; font-weight: 700; }
+[data-ui='v2'] .rf2-drawer__subtitle { margin: 0; font-size: var(--rf2-text-body); line-height: var(--rf2-leading-body); color: var(--rf2-ink-2); }
+[data-ui='v2'] .rf2-drawer__close {
+  display: grid; place-items: center; width: 36px; height: 36px; margin: -6px -8px 0 0; border: 0; border-radius: var(--rf2-radius-control);
+  background: transparent; color: var(--rf2-ink); cursor: pointer;
+}
+@media (pointer: coarse) { [data-ui='v2'] .rf2-drawer__close { width: 44px; height: 44px; } }
+[data-ui='v2'] .rf2-drawer__close svg { width: 16px; height: 16px; }
+[data-ui='v2'] .rf2-drawer__close:hover { background: var(--rf2-neutral-tint); }
+[data-ui='v2'] .rf2-drawer__close:active { background: var(--rf2-divider); }
+[data-ui='v2'] .rf2-drawer__close:focus-visible { outline: var(--rf2-focus-width) solid var(--rf2-focus-color); outline-offset: var(--rf2-focus-offset); }
+[data-ui='v2'] .rf2-drawer__body { flex: 1; min-height: 0; overflow-y: auto; padding: var(--rf2-space-3); display: flex; flex-direction: column; gap: var(--rf2-space-2); }
+[data-ui='v2'] .rf2-drawer__footer { display: flex; justify-content: flex-end; gap: var(--rf2-space-1-5); padding: var(--rf2-space-2) var(--rf2-space-3); border-top: 1px solid var(--rf2-divider); background: var(--rf2-card); }
+@keyframes rf2-slide-in { from { transform: translateX(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes rf2-fade { from { opacity: 0; } to { opacity: 1; } }
+
+/* ---------- Avatar + UserPicker (F3) ---------- */
+[data-ui='v2'] .rf2-avatar {
+  display: inline-grid; place-items: center; width: 24px; height: 24px; flex: none; border-radius: var(--rf2-radius-drawer);
+  background: var(--rf2-ink-2); color: var(--rf2-on-action); font-size: var(--rf2-text-caption); font-weight: 600; line-height: 1;
+}
+[data-ui='v2'] .rf2-avatar--xs { width: 18px; height: 18px; font-size: 10px; }
+[data-ui='v2'] .rf2-picker { position: relative; }
+[data-ui='v2'] .rf2-picker__box { flex-wrap: wrap; cursor: text; }
+[data-ui='v2'] .rf2-picker__box > .rf2-field__control { min-width: 120px; }
+[data-ui='v2'] .rf2-picker__detail { font-size: var(--rf2-text-caption); color: var(--rf2-ink-2); white-space: nowrap; }
+[data-ui='v2'] .rf2-picker__chips { display: contents; list-style: none; margin: 0; padding: 0; }
+[data-ui='v2'] .rf2-picker__chip {
+  display: inline-flex; align-items: center; gap: 6px; margin: 4px 0; padding: 2px 4px 2px 3px; border-radius: var(--rf2-radius-control);
+  background: var(--rf2-info-tint); color: var(--rf2-ink); font-size: var(--rf2-text-caption); font-weight: 600;
+}
+[data-ui='v2'] .rf2-picker__chip-x { display: grid; place-items: center; width: 20px; height: 20px; border: 0; border-radius: 4px; background: transparent; color: var(--rf2-ink-2); cursor: pointer; padding: 0; }
+[data-ui='v2'] .rf2-picker__chip-x svg { width: 12px; height: 12px; }
+[data-ui='v2'] .rf2-picker__chip-x:hover { background: var(--rf2-divider); }
+[data-ui='v2'] .rf2-picker__chip-x:focus-visible { outline: var(--rf2-focus-width) solid var(--rf2-focus-color); outline-offset: 1px; }
+[data-ui='v2'] .rf2-picker__list {
+  position: absolute; z-index: 20; top: 100%; left: 0; right: 0; margin: 4px 0 0; padding: 4px; list-style: none;
+  max-height: 280px; overflow-y: auto; background: var(--rf2-card); border: 1px solid var(--rf2-border);
+  border-radius: var(--rf2-radius-card); box-shadow: var(--rf2-shadow-menu);
+}
+[data-ui='v2'] .rf2-picker__list[hidden] { display: none; }
+[data-ui='v2'] .rf2-picker__state { padding: var(--rf2-space-1-5); font-size: var(--rf2-text-body); color: var(--rf2-ink-2); }
+[data-ui='v2'] .rf2-picker__option { display: flex; align-items: center; gap: var(--rf2-space-1); padding: var(--rf2-space-1); border-radius: var(--rf2-radius-control); cursor: pointer; min-height: 40px; }
+[data-ui='v2'] .rf2-picker__option[data-active] { background: var(--rf2-neutral-tint); outline: 1px solid var(--rf2-action); outline-offset: -1px; }
+[data-ui='v2'] .rf2-picker__option[aria-selected='true'] { background: var(--rf2-info-tint); }
+[data-ui='v2'] .rf2-picker__option[aria-disabled='true'] { cursor: not-allowed; color: var(--rf2-muted); }
+[data-ui='v2'] .rf2-picker__option[aria-disabled='true'] .rf2-avatar { background: var(--rf2-muted); }
+[data-ui='v2'] .rf2-picker__text { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+[data-ui='v2'] .rf2-picker__name { font-size: var(--rf2-text-body); font-weight: 500; }
+[data-ui='v2'] .rf2-picker__meta { font-size: var(--rf2-text-caption); color: var(--rf2-ink-2); }
+[data-ui='v2'] .rf2-picker__reason { font-size: var(--rf2-text-caption); color: var(--rf2-warning); }
+[data-ui='v2'] .rf2-picker__check { color: var(--rf2-action); font-weight: 700; }
+
+@media (prefers-reduced-motion: reduce) {
+  [data-ui='v2'] .rf2-drawer, [data-ui='v2'] .rf2-drawer__scrim { animation: none; }
+}
+
+/* The field box draws the focus ring (focus-within); suppress the inner control's own ring. */
+[data-ui='v2'] .rf2-field__control:focus, [data-ui='v2'] .rf2-field__control:focus-visible { outline: none; box-shadow: none; }
