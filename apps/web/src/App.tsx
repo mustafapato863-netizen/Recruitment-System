@@ -69,7 +69,7 @@ const SettingsPage = lazy(() => import('./pages/SettingsPage').then((m) => ({ de
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage').then((m) => ({ default: m.NotFoundPage })));
 const CandidateComparisonPage = lazy(() => import('./pages/CandidateComparisonPage').then((m) => ({ default: m.CandidateComparisonPage })));
 const ApplicantPortalPage = lazy(() => import('./pages/ApplicantPortalPage').then((m) => ({ default: m.ApplicantPortalPage })));
-const AppShell = lazy(() => import('./layout/AppShell').then((m) => ({ default: m.AppShell })));
+const SeatShellSwitch = lazy(() => import('./layout/SeatShellSwitch').then((m) => ({ default: m.SeatShellSwitch })));
 
 const ForgotPasswordPage = lazy(() => import('./auth/ForgotPasswordPage').then((m) => ({ default: m.ForgotPasswordPage })));
 const ResetPasswordPage = lazy(() => import('./auth/ResetPasswordPage').then((m) => ({ default: m.ResetPasswordPage })));
@@ -99,7 +99,7 @@ function App() {
                 <Route path="/careers/:organizationCode/jobs/:vacancyCode/apply" element={<PublicApplyPage />} />
                 <Route path="/careers/:organizationCode/jobs/:vacancyCode" element={<PublicJobDetailPage />} />
                 <Route element={<ProtectedRoute />}>
-                  <Route element={<AppShell />}>
+                  <Route element={<SeatShellSwitch />}>
 
                   <Route path="/" element={<DashboardPage />} />
                   <Route path="/my-work" element={<MyWorkPage />} />
