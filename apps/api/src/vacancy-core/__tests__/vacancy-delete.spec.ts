@@ -25,10 +25,11 @@ function createService(status = 'Open') {
 const adminUser = { userId: 'admin-1', organizationId: 'org-1' } as AuthUser;
 
 describe('VacancyCoreService DELETE deactivates (B2)', () => {
-  it('sets the job and its open requisition to Cancelled and deletes nothing', async () => {
+  it('closes the job (never Cancelled), cancels its open requisition, and deletes nothing', async () => {
     const { service, transaction } = createService();
-    await expect(service.deleteVacancy('vacancy-1', 'org-1', adminUser)).resolves.toEqual({ id: 'vacancy-1', deactivated: true, status: 'Cancelled' });
-    expect(transaction.vacancy.update).toHaveBeenCalledWith({ where: { id: 'vacancy-1' }, data: { status: 'Cancelled' } });
+    await expect(service.deleteVacancy('vacancy-1', 'org-1', adminUser)).resolves.toEqual({ id: 'vacancy-1', deactivated: true, status: 'Closed' });
+    expect(transaction.vacancy.update).toHaveBeenCalledWith({ where: { id: 'vacancy-1' }, data: { status: 'Closed' } });
+    expect(JSON.stringify(transaction.vacancy.update.mock.calls)).not.toContain('Cancelled');
     expect(transaction.vacancyRequest.updateMany).toHaveBeenCalledWith(expect.objectContaining({ data: { status: 'Cancelled' } }));
     for (const fn of [transaction.vacancy.delete, transaction.vacancyRequest.delete, transaction.vacancyAssignment.deleteMany, transaction.vacancyRequestApproval.deleteMany]) {
       expect(fn).not.toHaveBeenCalled();
@@ -36,7 +37,7 @@ describe('VacancyCoreService DELETE deactivates (B2)', () => {
   });
 
   it('is idempotent for an already deactivated job', async () => {
-    const { service, prisma } = createService('Cancelled');
+    const { service, prisma } = createService('Closed');
     await expect(service.deleteVacancy('vacancy-1', 'org-1', adminUser)).resolves.toMatchObject({ deactivated: true });
     expect(prisma.$transaction).not.toHaveBeenCalled();
   });

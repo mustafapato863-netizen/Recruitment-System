@@ -185,10 +185,18 @@ export class CandidateQueryDto {
   pageSize?: number;
 }
 
-/** B2: legal-erasure request. The reason is stored in the audit log, so keep PII out of it. */
+/** API description for the anonymize reason (no Swagger in this repo; surfaced in docs and validation errors). */
+export const ANONYMIZE_REASON_DESCRIPTION =
+  'Why this candidate is being anonymized (e.g. legal erasure ticket number). 10-1000 characters. Do not include personal data in the reason.';
+
+/**
+ * B2: legal-erasure request for POST /candidates/:id/anonymize.
+ * The reason is stored verbatim in the immutable audit log.
+ */
 export class AnonymizeCandidateDto {
-  @IsString()
-  @MinLength(10, { message: 'A reason of at least 10 characters is required.' })
-  @MaxLength(1000)
+  /** Do not include personal data in the reason. 10-1000 characters, stored in the audit log. */
+  @IsString({ message: ANONYMIZE_REASON_DESCRIPTION })
+  @MinLength(10, { message: `A reason of at least 10 characters is required. ${ANONYMIZE_REASON_DESCRIPTION}` })
+  @MaxLength(1000, { message: `The reason must be at most 1000 characters. ${ANONYMIZE_REASON_DESCRIPTION}` })
   reason!: string;
 }

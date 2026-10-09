@@ -90,6 +90,8 @@ export const vacancyStatuses = [
   'On Hold',
   'Partially Filled',
   'Filled',
+  // B2: a deactivated job is Closed. Cancelled is legacy here (requisition-only per v2 §3; removed in B3).
+  'Closed',
   'Cancelled',
 ] as const;
 
@@ -503,6 +505,8 @@ export interface PermissionRecord {
   description: string | null;
   /** 'system' permissions are shared catalog entries; organization permissions are tenant-local. */
   scope?: 'system' | 'organization';
+  /** B2: Active | Inactive | Retired. Only Active is effective. */
+  status?: string;
 }
 
 export interface CreatePermissionInput {

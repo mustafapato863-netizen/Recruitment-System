@@ -69,14 +69,17 @@ export class RolesService {
    * Tenants see shared system roles plus their own custom roles. Custom roles
    * belonging to other organizations are never exposed.
    */
-  async list(organizationId: string): Promise<RoleRecord[]> {
+  async list(organizationId: string, options: { includeInactive?: boolean } = {}): Promise<RoleRecord[]> {
+    const includeInactive = options.includeInactive === true;
     const [roles, catalog] = await Promise.all([
       this.prisma.role.findMany({
       where: {
         OR: [{ organizationId: null }, { organizationId }],
+        ...(includeInactive ? {} : { status: 'Active' }),
       },
       include: {
         permissions: {
+          ...(includeInactive ? {} : { where: { permission: { status: 'Active' } } }),
           include: { permission: true },
         },
       },
@@ -138,10 +141,11 @@ export class RolesService {
     return this.getById(organizationId, id);
   }
 
-  async listPermissions(organizationId: string): Promise<PermissionRecord[]> {
+  async listPermissions(organizationId: string, options: { includeInactive?: boolean } = {}): Promise<PermissionRecord[]> {
     const perms = await this.prisma.permission.findMany({
       where: {
         OR: [{ organizationId: null }, { organizationId }],
+        ...(options.includeInactive === true ? {} : { status: 'Active' }),
       },
       orderBy: { code: 'asc' },
     });
@@ -154,6 +158,7 @@ export class RolesService {
         name: (p.name && p.name.trim().length > 0 && p.name !== p.code ? p.name.trim() : meta?.name) || p.code,
         description: p.description?.trim() || meta?.description || null,
         scope: p.organizationId === null ? 'system' : 'organization',
+        status: p.status,
       };
     });
   }

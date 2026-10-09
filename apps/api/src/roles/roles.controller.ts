@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, ParseUUIDPipe, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, ParseUUIDPipe, Query, UseGuards } from '@nestjs/common';
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { RolesService } from './roles.service';
 import {
@@ -23,14 +23,16 @@ export class RolesController {
 
   @Get()
   @RequirePermissions('ROLES_VIEW')
-  list(@CurrentUser() user: AuthUser) {
-    return this.rolesService.list(user.organizationId);
+  list(@CurrentUser() user: AuthUser, @Query('includeInactive') includeInactive?: string) {
+    // B2: inactive roles (and inactive permissions inside them) are hidden unless includeInactive=true.
+    return this.rolesService.list(user.organizationId, { includeInactive: includeInactive === 'true' });
   }
 
   @Get('permissions')
   @RequirePermissions('ROLES_VIEW')
-  listPermissions(@CurrentUser() user: AuthUser) {
-    return this.rolesService.listPermissions(user.organizationId);
+  listPermissions(@CurrentUser() user: AuthUser, @Query('includeInactive') includeInactive?: string) {
+    // B2: inactive/retired permissions are hidden unless includeInactive=true.
+    return this.rolesService.listPermissions(user.organizationId, { includeInactive: includeInactive === 'true' });
   }
 
   @Post('permissions')

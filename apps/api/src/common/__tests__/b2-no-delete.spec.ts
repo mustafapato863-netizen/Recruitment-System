@@ -6,7 +6,8 @@ import { validate } from 'class-validator';
 import { describe, expect, it, vi } from 'vitest';
 import { PERMISSIONS_KEY } from '../decorators/require-permissions.decorator';
 import { CandidatesController } from '../../candidates/candidates.controller';
-import { AnonymizeCandidateDto } from '../../candidates/candidates.dto';
+import { ANONYMIZE_REASON_DESCRIPTION, AnonymizeCandidateDto } from '../../candidates/candidates.dto';
+import { RolesController } from '../../roles/roles.controller';
 import { CandidatesService } from '../../candidates/candidates.service';
 import { RolesService } from '../../roles/roles.service';
 import { TalentPoolService } from '../../talent-pool/talent-pool.service';
@@ -111,12 +112,51 @@ describe('B2: owner block on user deactivation', () => {
   });
 });
 
+describe('B2: inactive roles and permissions hidden by default', () => {
+  function rolesWith() {
+    const prisma = {
+      role: { findMany: vi.fn().mockResolvedValue([]) },
+      permission: { findMany: vi.fn().mockResolvedValue([{ id: 'p', code: 'X', name: null, description: null, organizationId: null, status: 'Inactive' }]) },
+      integration: { findFirst: vi.fn().mockResolvedValue(null) },
+    };
+    return { prisma, service: new RolesService(prisma as never) };
+  }
+  it('lists only Active roles (and Active permissions inside them) unless includeInactive', async () => {
+    const { prisma, service } = rolesWith();
+    await service.list('org').catch(() => undefined);
+    const args = prisma.role.findMany.mock.calls[0]![0];
+    expect(args.where).toMatchObject({ status: 'Active' });
+    expect(args.include.permissions.where).toEqual({ permission: { status: 'Active' } });
+    await service.list('org', { includeInactive: true }).catch(() => undefined);
+    const all = prisma.role.findMany.mock.calls[1]![0];
+    expect(all.where.status).toBeUndefined();
+    expect(all.include.permissions.where).toBeUndefined();
+  });
+  it('lists only Active permissions unless includeInactive, and exposes status', async () => {
+    const { prisma, service } = rolesWith();
+    await service.listPermissions('org');
+    expect(prisma.permission.findMany.mock.calls[0]![0].where).toMatchObject({ status: 'Active' });
+    const all = await service.listPermissions('org', { includeInactive: true });
+    expect(prisma.permission.findMany.mock.calls[1]![0].where.status).toBeUndefined();
+    expect(all[0]!.status).toBe('Inactive');
+  });
+  it('controller maps ?includeInactive=true only for the literal "true"', () => {
+    const calls: unknown[] = [];
+    const ctrl = new RolesController({ list: (_: string, o: unknown) => calls.push(o), listPermissions: (_: string, o: unknown) => calls.push(o) } as never);
+    const user = { organizationId: 'org' } as never;
+    ctrl.list(user, 'true'); ctrl.list(user, undefined); ctrl.listPermissions(user, 'yes');
+    expect(calls).toEqual([{ includeInactive: true }, { includeInactive: false }, { includeInactive: false }]);
+  });
+});
+
 describe('B2: anonymize contract', () => {
   it('requires CANDIDATE_ANONYMIZE on the route and a reason of at least 10 characters', async () => {
     const handler = Object.getOwnPropertyDescriptor(CandidatesController.prototype, 'anonymizeCandidate')!.value as object;
     expect(Reflect.getMetadata(PERMISSIONS_KEY, handler)).toEqual(['CANDIDATE_ANONYMIZE']);
     expect(await validate(plainToInstance(AnonymizeCandidateDto, {}))).not.toHaveLength(0);
-    expect(await validate(plainToInstance(AnonymizeCandidateDto, { reason: 'short' }))).not.toHaveLength(0);
+    const short = await validate(plainToInstance(AnonymizeCandidateDto, { reason: 'short' }));
+    expect(JSON.stringify(short)).toContain('Do not include personal data in the reason.');
+    expect(ANONYMIZE_REASON_DESCRIPTION).toContain('Do not include personal data in the reason.');
     expect(await validate(plainToInstance(AnonymizeCandidateDto, { reason: 'GDPR erasure request #123' }))).toHaveLength(0);
   });
 

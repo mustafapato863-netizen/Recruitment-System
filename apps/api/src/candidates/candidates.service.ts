@@ -441,6 +441,9 @@ export class CandidatesService {
       select: {
         id: true,
         email: true,
+        phone: true,
+        firstName: true,
+        lastName: true,
         anonymizedAt: true,
         applications: { select: { id: true } },
         documents: { select: { id: true, storageKey: true, storageProvider: true } },
@@ -522,6 +525,42 @@ export class CandidatesService {
         counts.emailOutbox = (await tx.emailOutbox.updateMany({
           where: { organizationId, toEmail: { equals: candidate.email, mode: 'insensitive' } },
           data: { toEmail: 'anonymized@invalid.local', subject: ANONYMIZED_TEXT, payload: {} },
+        })).count;
+      }
+      // Cached / indexed CV and candidate text (B2 fix c). Search is a live
+      // query over these tables (no separate index), so scrubbing the source
+      // rows also scrubs search. Extracted text and parsed CV JSON were
+      // cleared above (candidate_documents.extractionText, candidates.metadata);
+      // the email outbox (worker queue) rows are cleared above and here.
+      const importMatches = [
+        ...(candidate.email ? [{ email: { equals: candidate.email, mode: 'insensitive' as const } }] : []),
+        ...(candidate.phone ? [{ phone: candidate.phone }] : []),
+      ];
+      // Worker queue: any outbox payload that carries this candidate's id,
+      // application ids, email or full name (e.g. staff notifications).
+      const needles = [
+        id,
+        ...applicationIds,
+        ...(candidate.email ? [candidate.email] : []),
+        ...(`${candidate.firstName} ${candidate.lastName}`.trim().length > 3 ? [`${candidate.firstName} ${candidate.lastName}`.trim()] : []),
+      ];
+      let outboxPayloads = 0;
+      for (const needle of needles) {
+        outboxPayloads += await tx.$executeRaw`
+          UPDATE "email_outbox" SET "payload" = '{}'::jsonb, "subject" = ${ANONYMIZED_TEXT}
+          WHERE "organizationId" = ${organizationId}::uuid
+            AND ("payload"::text ILIKE ${'%' + needle + '%'} OR "subject" ILIKE ${'%' + needle + '%'})`;
+      }
+      counts.emailOutboxPayloads = outboxPayloads;
+      // Scrubbed messages must never be sent: park unsent ones as Dead.
+      await tx.emailOutbox.updateMany({
+        where: { organizationId, subject: ANONYMIZED_TEXT, status: { notIn: ['Sent', 'Dead'] } },
+        data: { status: 'Dead', lastError: 'Suppressed: candidate anonymized' },
+      });
+      if (importMatches.length) {
+        counts.importRows = (await tx.candidateImportRow.updateMany({
+          where: { job: { organizationId }, OR: importMatches },
+          data: { rawData: {}, firstName: null, lastName: null, email: null, phone: null, details: null },
         })).count;
       }
       await tx.auditLog.create({

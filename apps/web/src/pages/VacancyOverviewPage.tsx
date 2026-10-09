@@ -599,7 +599,7 @@ export function VacancyOverviewPage() {
                 <div className="px-3.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
                   Status
                 </div>
-                {(['Open', 'On Hold', 'Cancelled'] as VacancyStatus[]).map((st) => (
+                {(['Open', 'On Hold', 'Closed'] as VacancyStatus[]).map((st) => (
                   <button
                     key={st}
                     type="button"

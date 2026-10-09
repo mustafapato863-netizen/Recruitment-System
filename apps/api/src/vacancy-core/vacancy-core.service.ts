@@ -162,9 +162,9 @@ export class VacancyCoreService {
   }
 
   async listVacancies(organizationId: string, user?: AuthUser): Promise<Vacancy[]> {
-    // B2: deactivated (Cancelled) jobs drop out of default lists and pickers;
-    // they stay readable by id and in history.
-    const vacancies = (await this.repository.listVacancies(organizationId)).filter((vacancy) => vacancy.status !== 'Cancelled');
+    // B2: deactivated (Closed) jobs drop out of default lists and pickers;
+    // they stay readable by id and in history. Legacy Cancelled jobs too.
+    const vacancies = (await this.repository.listVacancies(organizationId)).filter((vacancy) => !INACTIVE_JOB_STATUSES.includes(vacancy.status));
     if (!user || !this.accessControl || vacancies.length === 0) return vacancies;
     const visibility = await this.accessControl.getVacancyVisibilityWhere(user);
     const visible = await this.prisma.vacancy.findMany({
@@ -186,7 +186,7 @@ export class VacancyCoreService {
       ? await this.accessControl.getVacancyVisibilityWhere(user)
       : { organizationId };
     if (query.status) where.status = query.status;
-    else where.status = { not: 'Cancelled' };
+    else where.status = { notIn: INACTIVE_JOB_STATUSES };
     if (query.search?.trim()) {
       const term = query.search.trim();
       where.OR = [
@@ -964,14 +964,14 @@ export class VacancyCoreService {
 
   /**
    * B2 (v2 §3): no delete for anyone, including Admin. DELETE /vacancies/:id
-   * deactivates the job (status Cancelled) and cancels its requisition when
-   * that is still open. Assignments, approvals and history are kept.
+   * deactivates the job (status Closed; Cancelled is a requisition-only
+   * state per v2 §3) and cancels its requisition when that is still open. Assignments, approvals and history are kept.
    */
   async deleteVacancy(
     id: string,
     organizationId: string,
     user?: AuthUser,
-  ): Promise<{ id: string; deactivated: true; status: 'Cancelled' }> {
+  ): Promise<{ id: string; deactivated: true; status: 'Closed' }> {
     void user;
     const vacancy = await this.prisma.vacancy.findFirst({
       where: { id, organizationId },
@@ -992,9 +992,9 @@ export class VacancyCoreService {
       });
     }
 
-    if (vacancy.status !== 'Cancelled') {
+    if (vacancy.status !== 'Closed') {
       await this.prisma.$transaction(async (transaction) => {
-        await transaction.vacancy.update({ where: { id }, data: { status: 'Cancelled' } });
+        await transaction.vacancy.update({ where: { id }, data: { status: 'Closed' } });
         await transaction.vacancyRequest.updateMany({
           where: { id: vacancy.vacancyRequestId, status: { notIn: ['Cancelled', 'Rejected'] } },
           data: { status: 'Cancelled' },
@@ -1002,7 +1002,7 @@ export class VacancyCoreService {
       });
     }
 
-    return { id, deactivated: true, status: 'Cancelled' };
+    return { id, deactivated: true, status: 'Closed' };
   }
 
   private async assertVacancyVisible(organizationId: string, id: string, user?: AuthUser): Promise<void> {
@@ -1012,6 +1012,9 @@ export class VacancyCoreService {
     if (!vacancy) throw new NotFoundException(`Vacancy ${id} was not found.`);
   }
 }
+
+/** B2: jobs in these states are deactivated (hidden from default lists). */
+const INACTIVE_JOB_STATUSES: string[] = ['Closed', 'Cancelled'];
 
 function createPipelineCounts(): Record<ApplicationStage, number> {
   return {

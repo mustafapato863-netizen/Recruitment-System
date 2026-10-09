@@ -26,7 +26,7 @@ describe.skipIf(!url)('B2 no delete, deactivate, anonymize (scratch Postgres)', 
   let prisma: PrismaService;
   let candidates: CandidatesService;
   let storage: DocumentStorageService;
-  const ids = { candidate: randomUUID(), application: randomUUID(), doc: randomUUID(), note: randomUUID(), screening: randomUUID(), interview: randomUUID(), owner: randomUUID() };
+  const ids: Record<string, string> = { candidate: randomUUID(), application: randomUUID(), doc: randomUUID(), note: randomUUID(), screening: randomUUID(), interview: randomUUID(), owner: randomUUID() };
   let storageKey = '';
   let adminId = '';
   const admin = () => ({ userId: adminId, organizationId: ORG, tokenVersion: 0, roleCodes: ['ADMINISTRATOR'] });
@@ -53,6 +53,12 @@ describe.skipIf(!url)('B2 no delete, deactivate, anonymize (scratch Postgres)', 
     const start = new Date(Date.now() + 86_400_000);
     await prisma.interview.create({ data: { id: ids.interview, organizationId: ORG, applicationId: ids.application, interviewCode: `B2-${tag}`, title: 'Interview with Fatima Zahra', interviewType: 'HR', scheduledStart: start, scheduledEnd: new Date(start.getTime() + 3_600_000) } });
     await prisma.task.create({ data: { organizationId: ORG, assigneeUserId: adminId, createdById: adminId, type: 'FollowUp', title: 'Call Fatima Zahra', description: PHONE, entityType: 'Candidate', entityId: ids.candidate } });
+    const job = await prisma.candidateImportJob.create({ data: { organizationId: ORG, fileName: `import-${tag}.xlsx` } });
+    ids.importJob = job.id;
+    await prisma.candidateImportRow.create({ data: { jobId: job.id, rowNumber: 1, rawData: { name: 'Fatima Zahra', email: EMAIL, cvText: 'Fatima Zahra CV text 784-1990-1234567' }, firstName: 'Fatima', lastName: 'Zahra', email: EMAIL.toUpperCase(), phone: PHONE } });
+    await prisma.candidateImportRow.create({ data: { jobId: job.id, rowNumber: 2, rawData: { name: 'Someone Else' }, firstName: 'Someone', lastName: 'Else', email: `other-${tag}@x.test` } });
+    await prisma.emailOutbox.create({ data: { organizationId: ORG, toEmail: EMAIL, subject: 'Your interview', template: 'interview', payload: { candidateName: 'Fatima Zahra' } } });
+    await prisma.emailOutbox.create({ data: { organizationId: ORG, toEmail: 'recruiter@b2.test', subject: 'New applicant Fatima Zahra', template: 'staff', payload: { candidateName: 'Fatima Zahra', applicationId: ids.application } } });
     const put = await storage.put(ORG, ids.candidate, 'cv.pdf', Buffer.from('%PDF secret CV for Fatima'));
     storageKey = put.storageKey;
     await prisma.candidateDocument.create({ data: { id: ids.doc, organizationId: ORG, candidateId: ids.candidate, documentType: 'CV', fileName: 'Fatima_Zahra_CV.pdf', fileSize: 10, mimeType: 'application/pdf', storageKey, storageProvider: 'local-private', extractionText: `Fatima Zahra ${EMAIL}` } });
@@ -125,6 +131,17 @@ describe.skipIf(!url)('B2 no delete, deactivate, anonymize (scratch Postgres)', 
     // no PII left anywhere we touched
     const blob = JSON.stringify(await prisma.candidate.findUniqueOrThrow({ where: { id: ids.candidate }, include: { documents: true, applications: { include: { notes: true, screeningLogs: true, interviews: true } } } }));
     for (const pii of ['Fatima', 'Zahra', EMAIL, PHONE, '784-1990', 'Palm St', '1990-01-01', 'Dubai Marina']) expect(blob).not.toContain(pii);
+
+    // cached / queued / imported CV and candidate text (B2 fix c)
+    const rows = await prisma.candidateImportRow.findMany({ where: { jobId: ids.importJob }, orderBy: { rowNumber: 'asc' } });
+    expect(rows[0]).toMatchObject({ rawData: {}, firstName: null, lastName: null, email: null, phone: null });
+    expect(rows[1]).toMatchObject({ firstName: 'Someone' });
+    const outbox = await prisma.emailOutbox.findMany({ where: { organizationId: ORG, OR: [{ toEmail: 'anonymized@invalid.local' }, { toEmail: 'recruiter@b2.test' }] } });
+    expect(outbox.length).toBeGreaterThanOrEqual(2);
+    for (const row of outbox) {
+      expect(JSON.stringify(row)).not.toMatch(/Fatima|pii\.test/);
+      expect(row.status).toBe('Dead');
+    }
 
     const audit = await prisma.auditLog.findFirstOrThrow({ where: { action: 'CANDIDATE_ANONYMIZE', entityId: ids.candidate } });
     expect(audit).toMatchObject({ actorUserId: adminId, organizationId: ORG, entityType: 'Candidate', reason, result: 'SUCCESS' });
