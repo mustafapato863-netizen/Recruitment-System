@@ -36,6 +36,13 @@ import { DocumentsService } from '../documents/documents.service';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import type { AuthUser } from '@recruitflow/contracts';
 
+/** RSVP result for an attendee who does not own the file (no interview detail). */
+export interface InterviewRsvpReceipt {
+  id: string;
+  response: string;
+  redacted: true;
+}
+
 @Injectable()
 export class InterviewsService {
   constructor(
@@ -478,7 +485,13 @@ export class InterviewsService {
       ? await this.accessControl.getApplicationVisibilityWhere(user)
       : { organizationId };
     const interview = await this.prisma.interview.findFirst({
-      where: { id, organizationId, application: visibility },
+      // B1 follow-up: attendees of this interview keep RSVP and the .ics file
+      // even when they do not own the file (the guard already enforced this).
+      where: {
+        id,
+        organizationId,
+        ...(user ? { OR: [{ application: visibility }, { attendees: { some: { userId: user.userId } } }] } : { application: visibility }),
+      },
       include: {
         application: {
           include: {
@@ -532,12 +545,18 @@ export class InterviewsService {
     userId: string,
     dto: UpdateInterviewResponseDto,
     user?: AuthUser,
-  ): Promise<Interview> {
+  ): Promise<Interview | InterviewRsvpReceipt> {
     const visibility = user
       ? await this.accessControl.getApplicationVisibilityWhere(user)
       : { organizationId };
     const interview = await this.prisma.interview.findFirst({
-      where: { id: interviewId, organizationId, application: visibility },
+      // B1 follow-up: attendees of this interview keep RSVP and the .ics file
+      // even when they do not own the file (the guard already enforced this).
+      where: {
+        id: interviewId,
+        organizationId,
+        ...(user ? { OR: [{ application: visibility }, { attendees: { some: { userId: user.userId } } }] } : { application: visibility }),
+      },
       include: {
         attendees: { include: { user: true } },
         application: {
@@ -597,6 +616,15 @@ export class InterviewsService {
       });
     }
 
+    // B1 follow-up: an attendee who does not own the file gets only an RSVP
+    // receipt; the interview detail stays 403/hidden for them.
+    if (user) {
+      const ownsFile = await this.prisma.interview.findFirst({
+        where: { id: interviewId, organizationId, application: visibility },
+        select: { id: true },
+      });
+      if (!ownsFile) return { id: interviewId, response: dto.response, redacted: true };
+    }
     return this.getInterview(organizationId, interviewId, user);
   }
 

@@ -274,8 +274,9 @@ export class ApplicationsService {
     const policy = user
       ? await this.accessControl.getUserEffectiveScope(organizationId, user.userId, user.roleCodes)
       : null;
+    // Read-only file view: also open to the current offer/final-hire approver (B1 follow-up).
     const visibility = user
-      ? await this.accessControl.getApplicationVisibilityWhere(user)
+      ? await this.accessControl.getApplicationReadVisibilityWhere(user)
       : { organizationId };
     const application = await this.prisma.application.findFirst({
       where: { id, ...visibility },

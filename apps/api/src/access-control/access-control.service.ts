@@ -17,6 +17,7 @@ import type {
 } from './access-control.dto';
 import type { AuthUser } from '@recruitflow/contracts';
 import {
+  applicationApprovalWhere,
   applicationOwnershipWhere,
   canAccessApplication,
   loadAccessProfile,
@@ -251,6 +252,32 @@ export class AccessControlService {
     const profile = await loadAccessProfile(this.prisma, user);
     if (profile.isOversight) return scoped;
     return { AND: [scoped, applicationOwnershipWhere(user.userId)] };
+  }
+
+  /**
+   * B1 follow-up (Mustafa #2): READ-ONLY visibility for the approver-readable
+   * routes (application view, offer, hiring case, approval inboxes/decision).
+   * Same as getApplicationVisibilityWhere, plus the files the caller is
+   * currently approving. Never use this for writes on the file.
+   */
+  async getApplicationReadVisibilityWhere(user: AuthUser): Promise<Prisma.ApplicationWhereInput> {
+    const profile = await loadAccessProfile(this.prisma, user);
+    const scoped = await this.getApplicationScopeWhere(user);
+    if (profile.isOversight) return scoped;
+    const approval = applicationApprovalWhere(profile);
+    const owned: Prisma.ApplicationWhereInput = { AND: [scoped, applicationOwnershipWhere(user.userId)] };
+    if (!approval) return owned;
+    return { OR: [owned, { AND: [{ organizationId: user.organizationId }, approval] }] };
+  }
+
+  /** Candidate visibility for CV/document reads: the bank scope plus candidates whose file the caller is approving. */
+  async getCandidateReadVisibilityWhere(user: AuthUser): Promise<Prisma.CandidateWhereInput> {
+    const base = await this.getCandidateVisibilityWhere(user);
+    if (user.roleCodes.includes('ADMINISTRATOR')) return base;
+    const profile = await loadAccessProfile(this.prisma, user);
+    const approval = applicationApprovalWhere(profile);
+    if (!approval) return base;
+    return { organizationId: user.organizationId, OR: [base, { applications: { some: approval } }] };
   }
 
   /** B1 access profile (admin / oversight flags) for the caller. */

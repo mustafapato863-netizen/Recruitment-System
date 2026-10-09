@@ -7,9 +7,11 @@ import { PrismaService } from '../../database/prisma.service';
 import type { Request } from 'express';
 import { isUuid } from '../validation/is-uuid';
 import { TENANT_RESOURCE_POLICIES } from './tenant-resource-policies';
-import { ALLOW_INTERVIEW_ATTENDEE } from '../decorators/tenant-resource.decorator';
+import { ALLOW_FILE_APPROVER, ALLOW_INTERVIEW_ATTENDEE } from '../decorators/tenant-resource.decorator';
 import {
   canAccessApplication,
+  canReadAsApprover,
+  canReadCandidateAsApprover,
   isFileResource,
   isInterviewAttendee,
   loadAccessProfile,
@@ -105,25 +107,52 @@ export class TenantScopedGuard implements CanActivate {
       throw new NotFoundException('Resource not found');
     }
 
+    const allowApprover = this.reflector.get<boolean>(ALLOW_FILE_APPROVER, context.getHandler()) === true;
+    const user = (req as Request & { user?: { userId: string; organizationId: string } }).user;
+
     // B1: another owner's file is a 403 on reads and writes (Roadmap v2 §5).
     if (isFileResource(resource)) {
-      const user = (req as Request & { user?: { userId: string; organizationId: string } }).user;
       if (!user?.userId) throw new ForbiddenException('Access denied: unauthenticated request');
       const profile = await loadAccessProfile(this.prisma, user);
       if (!profile.isOversight) {
         const applicationId = await resolveFileApplicationId(this.prisma, resource, id);
-        const owns = applicationId ? await canAccessApplication(this.prisma, profile, applicationId) : false;
+        // On approver-readable routes, a user without APPLICATION_VIEW got past
+        // PermissionsGuard only through an approval permission, so they must be
+        // a current approver of this file regardless of ownership.
+        const approverOnly = allowApprover && !profile.permissions.includes('APPLICATION_VIEW');
+        const owns = !approverOnly && applicationId ? await canAccessApplication(this.prisma, profile, applicationId) : false;
         if (!owns) {
           const attendeeAllowed =
             resource === 'interview' &&
             this.reflector.get<boolean>(ALLOW_INTERVIEW_ATTENDEE, context.getHandler()) === true &&
             (await isInterviewAttendee(this.prisma, id, user.userId));
-          if (!attendeeAllowed) {
+          const approverAllowed =
+            allowApprover && applicationId !== null && (await canReadAsApprover(this.prisma, profile, applicationId));
+          if (!attendeeAllowed && !approverAllowed) {
             throw new ForbiddenException({
               code: 'FILE_NOT_OWNED',
               message: 'Access denied: this file belongs to another owner.',
             });
           }
+        }
+      }
+    } else if (allowApprover && (resource === 'candidate' || resource === 'candidateDocument')) {
+      // B1 follow-up: CV/documents review for approvers. Users holding
+      // CANDIDATE_VIEW keep the existing bank behaviour; anyone else reached
+      // this route through an approval permission and must be approving a
+      // file of this candidate.
+      if (!user?.userId) throw new ForbiddenException('Access denied: unauthenticated request');
+      const profile = await loadAccessProfile(this.prisma, user);
+      if (!profile.isOversight && !profile.permissions.includes('CANDIDATE_VIEW')) {
+        const candidateId =
+          resource === 'candidate'
+            ? id
+            : ((await this.prisma.candidateDocument.findUnique({ where: { id }, select: { candidateId: true } }))?.candidateId ?? null);
+        if (!candidateId || !(await canReadCandidateAsApprover(this.prisma, profile, candidateId))) {
+          throw new ForbiddenException({
+            code: 'FILE_NOT_OWNED',
+            message: 'Access denied: you are not approving a file for this candidate.',
+          });
         }
       }
     }

@@ -88,6 +88,7 @@ export class InterviewsController {
   @RequirePermissions('VACANCY_VIEW')
   @UseGuards(TenantScopedGuard)
   @TenantResource({ resource: 'interview', param: 'id' })
+  @AllowInterviewAttendee()
   @Header('Content-Type', 'text/calendar; charset=utf-8')
   @Header('Content-Disposition', 'attachment; filename="interview.ics"')
   getInterviewIcs(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
@@ -122,6 +123,7 @@ export class InterviewsController {
   @AuditAction('INTERVIEW_RESPONSE')
   @UseGuards(TenantScopedGuard)
   @TenantResource({ resource: 'interview', param: 'id' })
+  @AllowInterviewAttendee()
   respondToInterview(
     @CurrentUser() user: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,

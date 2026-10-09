@@ -4,7 +4,7 @@ import type { CanActivate, ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { PrismaService } from '../../database/prisma.service';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
-import { ANY_PERMISSIONS_KEY, PERMISSIONS_KEY } from '../decorators/require-permissions.decorator';
+import { ADMIN_ONLY_KEY, ANY_PERMISSIONS_KEY, PERMISSIONS_KEY } from '../decorators/require-permissions.decorator';
 
 /**
  * Guard that checks required permissions and ensures the request tenant matches the
@@ -24,7 +24,12 @@ export class PermissionsGuard implements CanActivate {
       context.getClass(),
     ]);
 
-    if ((!requiredPermissions || requiredPermissions.length === 0) && (!anyPermissions || anyPermissions.length === 0)) {
+    const adminOnly = this.reflector.getAllAndOverride<boolean>(ADMIN_ONLY_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]) === true;
+
+    if (!adminOnly && (!requiredPermissions || requiredPermissions.length === 0) && (!anyPermissions || anyPermissions.length === 0)) {
       return true;
     }
 
@@ -67,6 +72,10 @@ export class PermissionsGuard implements CanActivate {
     // permission links are incomplete or stale.
     if (userWithRoles.userRoles.some((userRole) => userRole.role.code === 'ADMINISTRATOR')) {
       return true;
+    }
+
+    if (adminOnly) {
+      throw new ForbiddenException({ code: 'ADMIN_ONLY', message: 'Access denied: only administrators can manage templates.' });
     }
 
     const userPermissions = userWithRoles.userRoles.flatMap((ur) =>

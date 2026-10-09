@@ -11,7 +11,9 @@
  * - Everyone else sees a file only when they own it, work it, own its job,
  *   requested its job, or manage (directly) its owner.
  * - Interviewers on a specific interview get only that candidate's CV and
- *   their own scorecard (see INTERVIEWER_ATTENDEE_ACCESS routes).
+ *   their own scorecard, plus RSVP and the .ics file (@AllowInterviewAttendee).
+ * - Offer / final-hire approvers read only the files they are currently
+ *   approving (@AllowFileApprover read routes; applicationApprovalWhere).
  */
 import { BadRequestException } from '@nestjs/common';
 import type { Prisma } from '@recruitflow/database';
@@ -26,6 +28,9 @@ export interface AccessProfile {
   organizationId: string;
   isAdmin: boolean;
   isOversight: boolean;
+  /** Active role codes and permission codes (from the database, not the token). */
+  roleCodes: string[];
+  permissions: string[];
 }
 
 type PrismaLike = Pick<PrismaService, 'user'>;
@@ -51,6 +56,8 @@ export async function loadAccessProfile(
     organizationId: user.organizationId,
     isAdmin,
     isOversight: isAdmin || OVERSIGHT_PERMISSIONS.some((code) => permissions.has(code)),
+    roleCodes: roles.map((ur) => ur.role.code),
+    permissions: [...permissions],
   };
 }
 
@@ -128,6 +135,66 @@ export async function canAccessApplication(
   if (profile.isOversight) return true;
   const found = await prisma.application.findFirst({
     where: { id: applicationId, organizationId: profile.organizationId, ...applicationOwnershipWhere(profile.userId) },
+    select: { id: true },
+  });
+  return Boolean(found);
+}
+
+/**
+ * B1 follow-up (Mustafa #2): approvers read ONLY the files they are currently
+ * approving. Mirrors the approval inbox / decision logic:
+ * - APPROVE_OFFERS: a Pending OfferApproval on any version of an offer on the
+ *   file, assigned to the user or to one of the user's role codes.
+ * - FINAL_HIRING_APPROVAL: the file's hiring case is "Pending Final Approval"
+ *   with a Pending HiringCaseApproval assigned to the user or to one of the
+ *   user's role codes.
+ * Returns null when the user holds neither approval permission.
+ */
+export const APPROVER_PERMISSIONS = ['APPROVE_OFFERS', 'FINAL_HIRING_APPROVAL'] as const;
+
+export function applicationApprovalWhere(
+  profile: Pick<AccessProfile, 'userId' | 'roleCodes' | 'permissions'>,
+): Prisma.ApplicationWhereInput | null {
+  const assignedToMe = { OR: [{ approverUserId: profile.userId }, { roleCode: { in: profile.roleCodes } }] };
+  const clauses: Prisma.ApplicationWhereInput[] = [];
+  if (profile.permissions.includes('APPROVE_OFFERS')) {
+    clauses.push({ offers: { some: { versions: { some: { approvals: { some: { status: 'Pending', ...assignedToMe } } } } } } });
+  }
+  if (profile.permissions.includes('FINAL_HIRING_APPROVAL')) {
+    clauses.push({
+      hiringCase: {
+        is: { status: 'Pending Final Approval', approvals: { some: { status: 'Pending', ...assignedToMe } } },
+      },
+    });
+  }
+  return clauses.length ? { OR: clauses } : null;
+}
+
+/** True when the user is the assigned/pending approver on an offer or hiring approval for this file. */
+export async function canReadAsApprover(
+  prisma: PrismaService,
+  profile: AccessProfile,
+  applicationId: string,
+): Promise<boolean> {
+  const approval = applicationApprovalWhere(profile);
+  if (!approval) return false;
+  const found = await prisma.application.findFirst({
+    where: { id: applicationId, organizationId: profile.organizationId, ...approval },
+    select: { id: true },
+  });
+  return Boolean(found);
+}
+
+/** True when the user is currently approving any file of this candidate (CV / documents review). */
+export async function canReadCandidateAsApprover(
+  prisma: PrismaService,
+  profile: AccessProfile,
+  candidateId: string,
+): Promise<boolean> {
+  const approval = applicationApprovalWhere(profile);
+  if (!approval) return false;
+  const found = await prisma.application.findFirst({
+    where: { candidateId, organizationId: profile.organizationId, ...approval },
     select: { id: true },
   });
   return Boolean(found);
