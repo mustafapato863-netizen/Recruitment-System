@@ -18,6 +18,7 @@ import './styles/shell.css';
 import './styles/polish.css';
 import './styles/source-integration.css';
 import './styles/v2-parity.css';
+import './styles/tokens-v2.css';
 
 // Lazy loaded page components for optimal bundle splitting
 const DashboardPage = lazy(() => import('./pages/DashboardPage').then((m) => ({ default: m.DashboardPage })));
