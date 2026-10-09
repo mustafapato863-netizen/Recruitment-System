@@ -30,6 +30,11 @@
   --rf2-info-tint: #f0f9ff;
   --rf2-neutral-tint: #f1f5f9;
   --rf2-on-action: #ffffff;
+  /* F2: pressed / hover shades for primitives */
+  --rf2-action-pressed: #1e40af;
+  --rf2-danger-hover: #991b1b;
+  --rf2-danger-pressed: #7f1d1d;
+  --rf2-danger-tint-strong: #fee2e2;
 
   --rf2-font: 'Plus Jakarta Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --rf2-numeric: tabular-nums;
