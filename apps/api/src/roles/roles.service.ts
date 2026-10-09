@@ -204,17 +204,22 @@ export class RolesService {
     };
   }
 
+  /**
+   * B2 (v2 §3): permissions are never deleted. DELETE deactivates the
+   * permission (status Inactive); role links are kept as history but an
+   * inactive permission is never effective (guards only count Active ones).
+   */
   async deletePermission(organizationId: string, permissionId: string): Promise<void> {
     const permission = await this.getMutablePermission(organizationId, permissionId);
-    await this.prisma.$transaction([
-      this.prisma.rolePermission.deleteMany({ where: { permissionId: permission.id } }),
-      this.prisma.permission.delete({ where: { id: permission.id } }),
-    ]);
+    await this.prisma.permission.update({ where: { id: permission.id }, data: { status: 'Inactive' } });
   }
 
   async assignPermission(organizationId: string, roleId: string, permissionId: string): Promise<RoleRecord> {
-    await this.getMutableRole(organizationId, roleId);
-    await this.getAssignablePermission(organizationId, permissionId);
+    const role = await this.getMutableRole(organizationId, roleId);
+    const permission = await this.getAssignablePermission(organizationId, permissionId);
+    if ((permission as { code?: string } | undefined)?.code === 'CANDIDATE_ANONYMIZE' && role.code !== 'ADMINISTRATOR') {
+      throw new BadRequestException('CANDIDATE_ANONYMIZE is reserved for the Administrator role.');
+    }
 
     await this.prisma.rolePermission.upsert({
       where: { roleId_permissionId: { roleId, permissionId } },
@@ -235,13 +240,14 @@ export class RolesService {
     return this.getById(organizationId, roleId);
   }
 
-  async delete(organizationId: string, roleId: string): Promise<void> {
+  /**
+   * B2 (v2 §3): roles are never deleted. DELETE deactivates the role (status
+   * Inactive). User and permission links are kept as history; inactive roles
+   * grant nothing (guards only load Active roles) and leave the navigation catalog.
+   */
+  async deactivate(organizationId: string, roleId: string): Promise<void> {
     const role = await this.getMutableRole(organizationId, roleId);
-    await this.prisma.$transaction([
-      this.prisma.userRole.deleteMany({ where: { roleId: role.id } }),
-      this.prisma.rolePermission.deleteMany({ where: { roleId: role.id } }),
-      this.prisma.role.delete({ where: { id: role.id } }),
-    ]);
+    await this.prisma.role.update({ where: { id: role.id }, data: { status: 'Inactive' } });
     await this.removeRoleFromCatalog(organizationId, role.code);
   }
 

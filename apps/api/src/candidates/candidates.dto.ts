@@ -8,6 +8,7 @@ import {
   Max,
   MaxLength,
   Min,
+  MinLength,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 
@@ -182,4 +183,12 @@ export class CandidateQueryDto {
   @Min(1)
   @Max(100)
   pageSize?: number;
+}
+
+/** B2: legal-erasure request. The reason is stored in the audit log, so keep PII out of it. */
+export class AnonymizeCandidateDto {
+  @IsString()
+  @MinLength(10, { message: 'A reason of at least 10 characters is required.' })
+  @MaxLength(1000)
+  reason!: string;
 }

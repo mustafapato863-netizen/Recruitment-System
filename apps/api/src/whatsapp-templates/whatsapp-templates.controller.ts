@@ -23,7 +23,7 @@ import {
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { AuthUser } from '@recruitflow/contracts';
-import { RequireAnyPermissions, RequirePermissions } from '../common/decorators/require-permissions.decorator';
+import { RequireAnyPermissions } from '../common/decorators/require-permissions.decorator';
 import { AuditAction } from '../common/decorators/audit-action.decorator';
 
 @Controller('whatsapp-templates')

@@ -162,7 +162,9 @@ export class VacancyCoreService {
   }
 
   async listVacancies(organizationId: string, user?: AuthUser): Promise<Vacancy[]> {
-    const vacancies = await this.repository.listVacancies(organizationId);
+    // B2: deactivated (Cancelled) jobs drop out of default lists and pickers;
+    // they stay readable by id and in history.
+    const vacancies = (await this.repository.listVacancies(organizationId)).filter((vacancy) => vacancy.status !== 'Cancelled');
     if (!user || !this.accessControl || vacancies.length === 0) return vacancies;
     const visibility = await this.accessControl.getVacancyVisibilityWhere(user);
     const visible = await this.prisma.vacancy.findMany({
@@ -184,6 +186,7 @@ export class VacancyCoreService {
       ? await this.accessControl.getVacancyVisibilityWhere(user)
       : { organizationId };
     if (query.status) where.status = query.status;
+    else where.status = { not: 'Cancelled' };
     if (query.search?.trim()) {
       const term = query.search.trim();
       where.OR = [
@@ -959,55 +962,47 @@ export class VacancyCoreService {
     return detail!;
   }
 
+  /**
+   * B2 (v2 §3): no delete for anyone, including Admin. DELETE /vacancies/:id
+   * deactivates the job (status Cancelled) and cancels its requisition when
+   * that is still open. Assignments, approvals and history are kept.
+   */
   async deleteVacancy(
     id: string,
     organizationId: string,
     user?: AuthUser,
-  ): Promise<{ deleted: true; id: string }> {
-    if (!user) {
-      throw new ForbiddenException('Only administrators can delete vacancies.');
-    }
-
-    // Keep this check server-side and authoritative. The UI hides the action for
-    // non-admins, but the role guard must still protect direct API requests.
-    const administrator = await this.prisma.user.findFirst({
-      where: {
-        id: user.userId,
-        organizationId,
-        status: 'Active',
-        userRoles: {
-          some: { role: { code: 'ADMINISTRATOR', status: 'Active' } },
-        },
-      },
-      select: { id: true },
-    });
-    if (!administrator) {
-      throw new ForbiddenException('Only administrators can delete vacancies.');
-    }
-
+  ): Promise<{ id: string; deactivated: true; status: 'Cancelled' }> {
+    void user;
     const vacancy = await this.prisma.vacancy.findFirst({
       where: { id, organizationId },
-      select: { id: true, vacancyRequestId: true },
+      select: { id: true, status: true, vacancyRequestId: true },
     });
     if (!vacancy) {
       throw new NotFoundException(`Vacancy ${id} was not found.`);
     }
 
-    const applicationCount = await this.prisma.application.count({ where: { vacancyId: id } });
-    if (applicationCount > 0) {
-      throw new ConflictException(
-        'This vacancy has applications and cannot be deleted. Cancel or archive it instead.',
-      );
+    const openApplications = await this.prisma.application.count({
+      where: { vacancyId: id, stage: { notIn: ['Joined', 'Rejected', 'Withdrawn'] } },
+    });
+    if (openApplications > 0) {
+      throw new ConflictException({
+        code: 'JOB_HAS_OPEN_APPLICATIONS',
+        message: `This job has ${openApplications} open application(s). Close or move them before deactivating the job.`,
+        counts: { openApplications },
+      });
     }
 
-    await this.prisma.$transaction(async (transaction) => {
-      await transaction.vacancyAssignment.deleteMany({ where: { vacancyId: id } });
-      await transaction.vacancyRequestApproval.deleteMany({ where: { vacancyRequestId: vacancy.vacancyRequestId } });
-      await transaction.vacancy.delete({ where: { id } });
-      await transaction.vacancyRequest.delete({ where: { id: vacancy.vacancyRequestId } });
-    });
+    if (vacancy.status !== 'Cancelled') {
+      await this.prisma.$transaction(async (transaction) => {
+        await transaction.vacancy.update({ where: { id }, data: { status: 'Cancelled' } });
+        await transaction.vacancyRequest.updateMany({
+          where: { id: vacancy.vacancyRequestId, status: { notIn: ['Cancelled', 'Rejected'] } },
+          data: { status: 'Cancelled' },
+        });
+      });
+    }
 
-    return { deleted: true, id };
+    return { id, deactivated: true, status: 'Cancelled' };
   }
 
   private async assertVacancyVisible(organizationId: string, id: string, user?: AuthUser): Promise<void> {

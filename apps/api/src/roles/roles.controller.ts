@@ -53,13 +53,13 @@ export class RolesController {
 
   @Delete('permissions/:permissionId')
   @RequirePermissions('ROLES_MANAGE')
-  @AuditAction('PERMISSION_DELETE')
+  @AuditAction('PERMISSION_DEACTIVATE')
   async deletePermission(
     @CurrentUser() user: AuthUser,
     @Param('permissionId', ParseUUIDPipe) permissionId: string,
   ) {
     await this.rolesService.deletePermission(user.organizationId, permissionId);
-    return { deleted: true };
+    return { id: permissionId, deactivated: true, status: 'Inactive' };
   }
 
   @Get(':id')
@@ -118,11 +118,11 @@ export class RolesController {
 
   @Delete(':id')
   @RequirePermissions('ROLES_MANAGE')
-  @AuditAction('ROLE_DELETE')
+  @AuditAction('ROLE_DEACTIVATE')
   @UseGuards(TenantScopedGuard)
   @TenantResource({ resource: 'role', param: 'id' })
   async delete(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
-    await this.rolesService.delete(user.organizationId, id);
-    return { deleted: true };
+    await this.rolesService.deactivate(user.organizationId, id);
+    return { id, deactivated: true, status: 'Inactive' };
   }
 }

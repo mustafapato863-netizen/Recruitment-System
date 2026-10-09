@@ -24,6 +24,10 @@ import type {
   UpdateCandidateDto,
 } from './candidates.dto';
 
+export const ANONYMIZED_FIRST_NAME = 'Anonymized';
+export const ANONYMIZED_LAST_NAME = 'candidate';
+export const ANONYMIZED_TEXT = '[Anonymized]';
+
 @Injectable()
 export class CandidatesService {
   constructor(
@@ -147,6 +151,9 @@ export class CandidatesService {
 
     if (query.status) {
       where.status = query.status;
+    } else {
+      // B2: archived candidates drop out of default lists and pickers.
+      where.status = { not: 'Archived' };
     }
     if (query.source) {
       where.source = query.source;
@@ -218,6 +225,7 @@ export class CandidatesService {
             talentPoolMemberships: {
               some: {
                 talentPool: { organizationId, status: 'Active' },
+                removedAt: null,
                 consentStatus: 'Active',
                 eligibility: 'Eligible',
               },
@@ -394,85 +402,155 @@ export class CandidatesService {
   }
 
   /**
-   * Permanently remove a candidate and the recruitment records that only exist
-   * to support that candidate. This operation is deliberately administrator-only
-   * because it bypasses the normal document archive/retention workflow.
+   * B2 (v2 §3): no delete for anyone, including Admin. DELETE /candidates/:id
+   * archives the candidate: the row, applications and history stay, and the
+   * candidate drops out of default lists and pickers.
    */
-  async deleteCandidate(organizationId: string, id: string, user: AuthUser): Promise<{ deleted: true; candidateId: string; candidateCode: string }> {
-    if (!user.roleCodes.includes('ADMINISTRATOR')) {
-      throw new ForbiddenException('Only administrators can permanently delete candidate data.');
+  async archiveCandidate(organizationId: string, id: string): Promise<{ id: string; deactivated: true; status: 'Archived' }> {
+    const candidate = await this.prisma.candidate.findFirst({ where: { id, organizationId }, select: { id: true, status: true } });
+    if (!candidate) throw new NotFoundException(`Candidate ${id} was not found.`);
+    if (candidate.status !== 'Archived') {
+      await this.prisma.candidate.update({ where: { id }, data: { status: 'Archived' } });
     }
+    return { id, deactivated: true, status: 'Archived' };
+  }
 
+  /** Anonymize is for the Administrator role only, whatever permissions a custom role holds. */
+  async assertAdministrator(organizationId: string, userId: string): Promise<void> {
+    const admin = await this.prisma.user.findFirst({
+      where: { id: userId, organizationId, status: 'Active', userRoles: { some: { role: { code: 'ADMINISTRATOR', status: 'Active' } } } },
+      select: { id: true },
+    });
+    if (!admin) throw new ForbiddenException({ code: 'ADMIN_ONLY', message: 'Only an administrator can anonymize a candidate.' });
+  }
+
+  /**
+   * B2 legal erasure. Irreversibly replaces the candidate's personal data with
+   * placeholders across the candidate and linked records, removes stored file
+   * bytes, and writes a PII-free audit entry. Rows, ids, statuses, dates and
+   * non-PII history are kept so reports still count. Idempotent.
+   */
+  async anonymizeCandidate(
+    organizationId: string,
+    id: string,
+    reason: string,
+    actor: AuthUser,
+  ): Promise<{ id: string; status: 'anonymized' | 'already_anonymized'; anonymizedAt: string }> {
     const candidate = await this.prisma.candidate.findFirst({
       where: { id, organizationId },
       select: {
         id: true,
-        candidateCode: true,
-        documents: { select: { storageKey: true } },
+        email: true,
+        anonymizedAt: true,
         applications: { select: { id: true } },
+        documents: { select: { id: true, storageKey: true, storageProvider: true } },
       },
     });
-
-    if (!candidate) {
-      throw new NotFoundException(`Candidate ${id} was not found.`);
+    if (!candidate) throw new NotFoundException(`Candidate ${id} was not found.`);
+    if (candidate.anonymizedAt) {
+      return { id, status: 'already_anonymized', anonymizedAt: candidate.anonymizedAt.toISOString() };
     }
 
+    const now = new Date();
     const applicationIds = candidate.applications.map((application) => application.id);
-    const storageKeys = candidate.documents.map((document) => document.storageKey);
+    const linkedEntities = [
+      { entityType: 'Candidate', entityId: { in: [id] } },
+      ...(applicationIds.length ? [{ entityType: 'Application', entityId: { in: applicationIds } }] : []),
+    ];
+    const counts: Record<string, number> = {};
 
     await this.prisma.$transaction(async (tx) => {
-      // Candidate activities are stored as entity references rather than foreign keys.
-      await tx.task.deleteMany({
-        where: {
-          organizationId,
-          OR: [
-            { entityType: 'Candidate', entityId: candidate.id },
-            ...(applicationIds.length > 0
-              ? [{ entityType: 'Application', entityId: { in: applicationIds } }]
-              : []),
-          ],
+      await tx.candidate.update({
+        where: { id },
+        data: {
+          firstName: ANONYMIZED_FIRST_NAME,
+          lastName: ANONYMIZED_LAST_NAME,
+          email: null,
+          phone: null,
+          currentTitle: null,
+          currentCompany: null,
+          summary: null,
+          location: null,
+          availability: null,
+          consentSource: null,
+          metadata: Prisma.DbNull,
+          anonymizedAt: now,
         },
       });
-
-      if (applicationIds.length > 0) {
-        const [interviews, offers] = await Promise.all([
-          tx.interview.findMany({ where: { organizationId, applicationId: { in: applicationIds } }, select: { id: true } }),
-          tx.offer.findMany({ where: { organizationId, applicationId: { in: applicationIds } }, select: { id: true } }),
-        ]);
+      counts.documents = (await tx.candidateDocument.updateMany({
+        where: { candidateId: id, organizationId },
+        data: {
+          fileName: 'anonymized-document',
+          fileSize: 0,
+          sha256: null,
+          extractionText: null,
+          scanMessage: null,
+          storageProvider: 'anonymized',
+          storageKey: 'anonymized',
+          anonymizedAt: now,
+        },
+      })).count;
+      if (applicationIds.length) {
+        counts.applicationNotes = (await tx.applicationNote.updateMany({
+          where: { applicationId: { in: applicationIds } },
+          data: { content: ANONYMIZED_TEXT },
+        })).count;
+        counts.screeningLogs = (await tx.screeningLog.updateMany({
+          where: { applicationId: { in: applicationIds } },
+          data: { notes: null },
+        })).count;
+        const interviews = await tx.interview.findMany({ where: { applicationId: { in: applicationIds } }, select: { id: true } });
         const interviewIds = interviews.map((interview) => interview.id);
-        const offerIds = offers.map((offer) => offer.id);
-
-        if (interviewIds.length > 0) {
-          // Scorecards restrict interview deletion; attendees cascade with interviews.
-          await tx.interviewScorecard.deleteMany({ where: { interviewId: { in: interviewIds } } });
-          await tx.interview.deleteMany({ where: { id: { in: interviewIds }, organizationId } });
-        }
-
-        // Hiring cases reference offers restrictively, so remove the case before its offer.
-        await tx.hiringCase.deleteMany({ where: { organizationId, applicationId: { in: applicationIds } } });
-        if (offerIds.length > 0) {
-          await tx.offer.deleteMany({ where: { id: { in: offerIds }, organizationId } });
-        }
-
-        await tx.applicationStatusHistory.deleteMany({ where: { applicationId: { in: applicationIds } } });
-        await tx.applicationNote.deleteMany({ where: { organizationId, applicationId: { in: applicationIds } } });
-        await tx.screeningLog.deleteMany({ where: { organizationId, applicationId: { in: applicationIds } } });
-        await tx.application.deleteMany({ where: { id: { in: applicationIds }, organizationId, candidateId: candidate.id } });
+        counts.interviews = (await tx.interview.updateMany({
+          where: { id: { in: interviewIds } },
+          data: { title: 'Interview (anonymized candidate)' },
+        })).count;
+        counts.scorecards = (await tx.interviewScorecard.updateMany({
+          where: { interviewId: { in: interviewIds } },
+          data: { strengths: null, concerns: null, notes: ANONYMIZED_TEXT },
+        })).count;
       }
-
-      await tx.candidateDocument.deleteMany({ where: { organizationId, candidateId: candidate.id } });
-      await tx.talentPoolCandidate.deleteMany({ where: { candidateId: candidate.id } });
-      await tx.candidate.delete({ where: { id: candidate.id } });
+      counts.tasks = (await tx.task.updateMany({
+        where: { organizationId, OR: linkedEntities },
+        data: { title: 'Task for anonymized candidate', description: null },
+      })).count;
+      counts.notifications = (await tx.notification.updateMany({
+        where: { organizationId, OR: linkedEntities },
+        data: { title: 'Notification about an anonymized candidate', message: ANONYMIZED_TEXT },
+      })).count;
+      if (candidate.email) {
+        counts.emailOutbox = (await tx.emailOutbox.updateMany({
+          where: { organizationId, toEmail: { equals: candidate.email, mode: 'insensitive' } },
+          data: { toEmail: 'anonymized@invalid.local', subject: ANONYMIZED_TEXT, payload: {} },
+        })).count;
+      }
+      await tx.auditLog.create({
+        data: {
+          organizationId,
+          actorUserId: actor.userId,
+          action: 'CANDIDATE_ANONYMIZE',
+          entityType: 'Candidate',
+          entityId: id,
+          result: 'SUCCESS',
+          reason,
+          afterData: { anonymizedAt: now.toISOString(), applications: applicationIds.length, ...counts },
+        },
+      });
     });
 
-    // Database state is authoritative. Clean up private files after the transaction
-    // so a storage failure cannot leave a partially deleted candidate record.
-    const documentStorage = this.documentStorage;
-    if (documentStorage && storageKeys.length > 0) {
-      await Promise.allSettled(storageKeys.map((storageKey) => documentStorage.remove(storageKey)));
+    // Database state is authoritative; then remove the stored bytes. The rows
+    // already point at the 'anonymized' placeholder, so a storage failure
+    // leaves an orphan file but never a readable link.
+    const storage = this.documentStorage;
+    if (storage) {
+      await Promise.allSettled(
+        candidate.documents
+          .filter((document) => document.storageKey && !document.storageKey.startsWith('metadata-only/') && document.storageKey !== 'anonymized')
+          .map((document) => storage.remove(document.storageKey)),
+      );
     }
 
-    return { deleted: true, candidateId: candidate.id, candidateCode: candidate.candidateCode };
+    return { id, status: 'anonymized', anonymizedAt: now.toISOString() };
   }
 
   private async nextCandidateCode(): Promise<string> {
