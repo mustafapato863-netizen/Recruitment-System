@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '@recruitflow/database';
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { PrismaService } from '../database/prisma.service';
@@ -16,6 +16,13 @@ import type {
   UpdateRoleNavigationVisibilityDto,
 } from './access-control.dto';
 import type { AuthUser } from '@recruitflow/contracts';
+import {
+  applicationOwnershipWhere,
+  canAccessApplication,
+  loadAccessProfile,
+  vacancyFullAccessWhere,
+  type AccessProfile,
+} from '../common/access/file-access';
 import { NAVIGATION_CATALOG } from './navigation.catalog';
 import type { NavigationItemRecord } from '@recruitflow/contracts';
 
@@ -239,6 +246,37 @@ export class AccessControlService {
    * Administrators are handled by their effective ALL scope.
    */
   async getApplicationVisibilityWhere(user: AuthUser): Promise<Prisma.ApplicationWhereInput> {
+    const scoped = await this.getApplicationScopeWhere(user);
+    // B1 (v2 §5): non-oversight users only see files they own or work.
+    const profile = await loadAccessProfile(this.prisma, user);
+    if (profile.isOversight) return scoped;
+    return { AND: [scoped, applicationOwnershipWhere(user.userId)] };
+  }
+
+  /** B1 access profile (admin / oversight flags) for the caller. */
+  getAccessProfile(user: AuthUser): Promise<AccessProfile> {
+    return loadAccessProfile(this.prisma, user);
+  }
+
+  /**
+   * B1: body-addressed writes (e.g. POST /screening with applicationId) get the
+   * same answer as id-addressed routes: 404 when the file is not in this
+   * organization, 403 when it belongs to another owner.
+   */
+  async assertApplicationAccess(user: AuthUser, applicationId: string): Promise<void> {
+    const exists = await this.prisma.application.findFirst({
+      where: { id: applicationId, organizationId: user.organizationId },
+      select: { id: true },
+    });
+    if (!exists) throw new NotFoundException(`Application ${applicationId} was not found.`);
+    const profile = await loadAccessProfile(this.prisma, user);
+    if (!(await canAccessApplication(this.prisma, profile, applicationId))) {
+      throw new ForbiddenException({ code: 'FILE_NOT_OWNED', message: 'Access denied: this file belongs to another owner.' });
+    }
+  }
+
+  /** Scope-only application predicate (data scope, branch, department), before ownership. */
+  async getApplicationScopeWhere(user: AuthUser): Promise<Prisma.ApplicationWhereInput> {
     const { scopes, responsibility } = await this.resolveScopes(user);
 
     if (scopes.includes('ALL')) return { organizationId: user.organizationId };
@@ -276,6 +314,14 @@ export class AccessControlService {
 
   /** Build the matching vacancy predicate for list/detail/export endpoints. */
   async getVacancyVisibilityWhere(user: AuthUser): Promise<Prisma.VacancyWhereInput> {
+    const scoped = await this.getVacancyScopeWhere(user);
+    // B1 (v2 §5): non-oversight users see other owners' jobs only in redacted form.
+    const profile = await loadAccessProfile(this.prisma, user);
+    if (profile.isOversight) return scoped;
+    return { AND: [scoped, vacancyFullAccessWhere(user.userId)] };
+  }
+
+  async getVacancyScopeWhere(user: AuthUser): Promise<Prisma.VacancyWhereInput> {
     const { scopes, responsibility } = await this.resolveScopes(user);
     if (scopes.includes('ALL')) return { organizationId: user.organizationId };
 
@@ -309,7 +355,9 @@ export class AccessControlService {
       organizationId: user.organizationId,
       OR: [
         { createdById: user.userId },
-        { applications: { some: await this.getApplicationVisibilityWhere(user) } },
+        // The bank stays visible by data scope (v2 §5 "the bank"); file
+        // ownership is enforced on application-level records instead.
+        { applications: { some: await this.getApplicationScopeWhere(user) } },
       ],
     };
   }

@@ -12,3 +12,11 @@ import { SetMetadata } from '@nestjs/common';
  */
 export const TenantResource = (options: { resource: string; param: string }) =>
   SetMetadata('TENANT_RESOURCE', options);
+
+/**
+ * B1 interviewer exception: on an `interview` file route, an attendee of that
+ * interview who does not otherwise own the file is allowed through. Only the
+ * CV read and the attendee's own scorecard routes carry this marker.
+ */
+export const ALLOW_INTERVIEW_ATTENDEE = 'ALLOW_INTERVIEW_ATTENDEE';
+export const AllowInterviewAttendee = () => SetMetadata(ALLOW_INTERVIEW_ATTENDEE, true);

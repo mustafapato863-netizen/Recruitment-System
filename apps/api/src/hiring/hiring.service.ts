@@ -35,6 +35,8 @@ export class HiringService {
   }
 
   async createHiringCase(organizationId: string, dto: CreateHiringCaseDto, user: AuthUser) {
+    const offerFile = await this.prisma.offer.findFirst({ where: { id: dto.offerId, organizationId }, select: { applicationId: true } });
+    if (offerFile && this.accessControl) await this.accessControl.assertApplicationAccess(user, offerFile.applicationId);
     const visibility = await this.applicationVisibility(user);
     const offer = await this.prisma.offer.findFirst({
       where: { id: dto.offerId, organizationId, ...(visibility ? { application: visibility } : {}) },

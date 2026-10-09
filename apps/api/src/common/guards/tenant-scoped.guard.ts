@@ -7,6 +7,14 @@ import { PrismaService } from '../../database/prisma.service';
 import type { Request } from 'express';
 import { isUuid } from '../validation/is-uuid';
 import { TENANT_RESOURCE_POLICIES } from './tenant-resource-policies';
+import { ALLOW_INTERVIEW_ATTENDEE } from '../decorators/tenant-resource.decorator';
+import {
+  canAccessApplication,
+  isFileResource,
+  isInterviewAttendee,
+  loadAccessProfile,
+  resolveFileApplicationId,
+} from '../access/file-access';
 
 /** Route params whose values are database UUIDs, including nested ids. */
 const UUID_PARAM_NAME = /^(?:id|.+Id)$/;
@@ -95,6 +103,29 @@ export class TenantScopedGuard implements CanActivate {
     if (!result.exists || !result.belongsToTenant) {
       // Safe 404 — do not reveal whether the record exists in another tenant.
       throw new NotFoundException('Resource not found');
+    }
+
+    // B1: another owner's file is a 403 on reads and writes (Roadmap v2 §5).
+    if (isFileResource(resource)) {
+      const user = (req as Request & { user?: { userId: string; organizationId: string } }).user;
+      if (!user?.userId) throw new ForbiddenException('Access denied: unauthenticated request');
+      const profile = await loadAccessProfile(this.prisma, user);
+      if (!profile.isOversight) {
+        const applicationId = await resolveFileApplicationId(this.prisma, resource, id);
+        const owns = applicationId ? await canAccessApplication(this.prisma, profile, applicationId) : false;
+        if (!owns) {
+          const attendeeAllowed =
+            resource === 'interview' &&
+            this.reflector.get<boolean>(ALLOW_INTERVIEW_ATTENDEE, context.getHandler()) === true &&
+            (await isInterviewAttendee(this.prisma, id, user.userId));
+          if (!attendeeAllowed) {
+            throw new ForbiddenException({
+              code: 'FILE_NOT_OWNED',
+              message: 'Access denied: this file belongs to another owner.',
+            });
+          }
+        }
+      }
     }
 
     return true;

@@ -240,6 +240,7 @@ export class OffersService {
   }
 
   async createOffer(user: AuthUser, dto: CreateOfferDto) {
+    await this.accessControl.assertApplicationAccess(user, dto.applicationId);
     const visibility = await this.applicationVisibility(user);
     const application = await this.prisma.application.findFirst({
       where: { id: dto.applicationId, ...visibility },

@@ -165,9 +165,23 @@ export interface Vacancy {
   joinedHeadcount: number;
   openedAt: string | null;
   targetStartDate: string | null;
+  /** B1: the single job owner (never an administrator). */
+  primaryRecruiterId?: string | null;
   assignments: VacancyAssignment[];
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * B1 (Roadmap v2 §5): another owner's job as seen by a non-oversight user.
+ * Only title, site and seats; every other field is withheld server-side.
+ */
+export interface RedactedVacancy {
+  id: string;
+  redacted: true;
+  title: string | null;
+  site: { id: string; name: string } | null;
+  seats: { filled: number; target: number };
 }
 
 export * from './candidate-activity.ts';
