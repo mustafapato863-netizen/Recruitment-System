@@ -438,6 +438,22 @@ Table applications {
   }
 }
 
+Table due_date_reminders {
+  id String [pk]
+  organizationId String [not null]
+  entityType String [not null]
+  entityId String [not null]
+  kind String [not null]
+  reminderDate DateTime [not null]
+  recipientUserId String [not null]
+  notificationId String
+  createdAt DateTime [default: `now()`, not null]
+
+  indexes {
+    (entityType, entityId, kind, reminderDate, recipientUserId) [unique]
+  }
+}
+
 Table vacancy_status_histories {
   id String [pk]
   vacancyId String [not null]

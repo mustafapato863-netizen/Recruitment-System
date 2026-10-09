@@ -1,0 +1,169 @@
+import { buildTargetChip, type TargetChip } from '@recruitflow/contracts';
+
+/**
+ * B4 (v2 §7 My Work): pure bucketing so it can be tested with a frozen clock.
+ *
+ * Defaults chosen where v2 is silent (see PR, open questions):
+ * - Day boundaries are Africa/Cairo calendar days.
+ * - Overdue: something the user must do whose due time is before the start of today (Cairo):
+ *   open tasks, owned live jobs and owned (not yet activated) requisitions past their due date,
+ *   and the user's own scorecards for interviews that ended before today.
+ * - Today: the same kinds of items due today, interviews on the user's files or with the user
+ *   as attendee scheduled today, the user's scorecards for interviews that ended today, and
+ *   Draft requisitions without a due date (v2 §8: the task stays open until the date is set).
+ * - Waiting on others: the user's requisitions in Pending Approval (approver), interviews on
+ *   the user's files that ended with scorecards missing from other attendees (interviewer),
+ *   offers on the user's files Pending Approval (approver) or Sent (candidate).
+ * - Held jobs (and their files) are off My Work (v2 §3). Filled/Closed jobs too.
+ */
+export const MY_WORK_TIMEZONE = 'Africa/Cairo';
+
+export type WorkItemType = 'job' | 'requisition' | 'task' | 'interview' | 'scorecard' | 'offer';
+export type WaitingOn = 'approver' | 'interviewer' | 'candidate';
+
+export interface WorkItem {
+  id: string;
+  type: WorkItemType;
+  title: string;
+  dueAt: string | null;
+  reason: string;
+  nextAction: { code: string; label: string };
+  entity: { type: string; id: string };
+  waitingOn?: WaitingOn;
+}
+
+export interface MyWorkResponse {
+  timezone: string;
+  today: string;
+  generatedAt: string;
+  counts: { overdue: number; today: number; waitingOnOthers: number };
+  overdue: WorkItem[];
+  dueToday: WorkItem[];
+  waitingOnOthers: WorkItem[];
+  targets: Array<TargetChip & { vacancyId: string; vacancyCode: string }>;
+  empty: boolean;
+  emptyMessage: string | null;
+}
+
+export interface MyWorkInput {
+  jobs: Array<{ id: string; code: string; title: string; status: string; joined: number; target: number; dueDate: string | null }>;
+  requisitions: Array<{ id: string; code: string; title: string; status: string; dueDate: string | null }>;
+  tasks: Array<{ id: string; title: string; dueAt: Date | null; entityType: string | null; entityId: string | null }>;
+  interviews: Array<{ id: string; title: string; start: Date; end: Date; applicationId: string }>;
+  myMissingScorecards: Array<{ interviewId: string; title: string; end: Date }>;
+  othersMissingScorecards: Array<{ interviewId: string; title: string; end: Date; missing: number }>;
+  offers: Array<{ id: string; code: string; status: string; applicationId: string; updatedAt: Date }>;
+}
+
+export function cairoDate(now: Date): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: MY_WORK_TIMEZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+}
+
+/** Cairo date of an instant, or of a date-only value. */
+function dayOf(value: Date | string): string {
+  return typeof value === 'string' ? value.slice(0, 10) : cairoDate(value);
+}
+
+const iso = (value: Date | string | null): string | null => (value == null ? null : typeof value === 'string' ? value : value.toISOString());
+
+export function buildMyWork(input: MyWorkInput, now: Date): MyWorkResponse {
+  const today = cairoDate(now);
+  const overdue: WorkItem[] = [];
+  const dueToday: WorkItem[] = [];
+  const waiting: WorkItem[] = [];
+  const place = (item: WorkItem, due: Date | string | null) => {
+    if (due == null) return;
+    const day = dayOf(due);
+    if (day < today) overdue.push(item);
+    else if (day === today) dueToday.push(item);
+  };
+
+  for (const job of input.jobs) {
+    if (!['Open', 'Partially Filled'].includes(job.status)) continue;
+    place({
+      id: job.id, type: 'job', title: `${job.title} (${job.code})`, dueAt: job.dueDate,
+      reason: `${job.joined} of ${job.target} seats filled`, nextAction: { code: 'review-applicants', label: 'Review applicants' },
+      entity: { type: 'Vacancy', id: job.id },
+    }, job.dueDate);
+  }
+
+  for (const req of input.requisitions) {
+    const base = { id: req.id, type: 'requisition' as const, title: `${req.title} (${req.code})`, dueAt: req.dueDate, entity: { type: 'VacancyRequest', id: req.id } };
+    if (req.status === 'Pending Approval') {
+      waiting.push({ ...base, reason: 'Waiting for approval', nextAction: { code: 'view-requisition', label: 'View requisition' }, waitingOn: 'approver' });
+      continue;
+    }
+    const action = req.status === 'Approved'
+      ? { code: 'activate-requisition', label: 'Activate' }
+      : { code: 'submit-requisition', label: 'Submit for approval' };
+    if (!['Draft', 'Changes Requested', 'Approved'].includes(req.status)) continue;
+    if (!req.dueDate) {
+      if (req.status === 'Draft') dueToday.push({ ...base, reason: 'Set a due date', nextAction: { code: 'set-due-date', label: 'Set due date' } });
+      continue;
+    }
+    place({ ...base, reason: `Requisition ${req.status}`, nextAction: action }, req.dueDate);
+  }
+
+  for (const task of input.tasks) {
+    place({
+      id: task.id, type: 'task', title: task.title, dueAt: iso(task.dueAt), reason: 'Task',
+      nextAction: { code: 'complete-task', label: 'Complete task' },
+      entity: { type: task.entityType ?? 'Task', id: task.entityId ?? task.id },
+    }, task.dueAt);
+  }
+
+  for (const interview of input.interviews) {
+    if (dayOf(interview.start) !== today) continue;
+    dueToday.push({
+      id: interview.id, type: 'interview', title: interview.title, dueAt: iso(interview.start), reason: 'Interview today',
+      nextAction: { code: 'open-interview', label: 'Open interview' }, entity: { type: 'Application', id: interview.applicationId },
+    });
+  }
+
+  for (const sc of input.myMissingScorecards) {
+    if (sc.end > now) continue;
+    place({
+      id: sc.interviewId, type: 'scorecard', title: sc.title, dueAt: iso(sc.end), reason: 'Your scorecard is missing',
+      nextAction: { code: 'submit-scorecard', label: 'Submit scorecard' }, entity: { type: 'Interview', id: sc.interviewId },
+    }, sc.end);
+  }
+
+  for (const sc of input.othersMissingScorecards) {
+    if (sc.end > now || sc.missing <= 0) continue;
+    waiting.push({
+      id: sc.interviewId, type: 'scorecard', title: sc.title, dueAt: iso(sc.end), reason: `${sc.missing} scorecard(s) missing`,
+      nextAction: { code: 'open-interview', label: 'Open interview' }, entity: { type: 'Interview', id: sc.interviewId }, waitingOn: 'interviewer',
+    });
+  }
+
+  for (const offer of input.offers) {
+    const waitingOn: WaitingOn | null = offer.status === 'Pending Approval' ? 'approver' : offer.status === 'Sent' ? 'candidate' : null;
+    if (!waitingOn) continue;
+    waiting.push({
+      id: offer.id, type: 'offer', title: `Offer ${offer.code}`, dueAt: null,
+      reason: waitingOn === 'approver' ? 'Offer waiting for approval' : 'Offer waiting for the candidate',
+      nextAction: { code: 'open-offer', label: 'Open offer' }, entity: { type: 'Application', id: offer.applicationId }, waitingOn,
+    });
+  }
+
+  const byDue = (a: WorkItem, b: WorkItem) => (a.dueAt ?? '9999').localeCompare(b.dueAt ?? '9999') || a.title.localeCompare(b.title);
+  overdue.sort(byDue); dueToday.sort(byDue); waiting.sort(byDue);
+
+  const targets = input.jobs
+    .filter((job) => ['Open', 'Partially Filled'].includes(job.status))
+    .map((job) => ({ ...buildTargetChip({ title: job.title, filled: job.joined, target: job.target, dueDate: job.dueDate }), vacancyId: job.id, vacancyCode: job.code }));
+
+  const empty = overdue.length + dueToday.length + waiting.length + targets.length === 0;
+  return {
+    timezone: MY_WORK_TIMEZONE,
+    today,
+    generatedAt: now.toISOString(),
+    counts: { overdue: overdue.length, today: dueToday.length, waitingOnOthers: waiting.length },
+    overdue,
+    dueToday,
+    waitingOnOthers: waiting,
+    targets,
+    empty,
+    emptyMessage: empty ? 'No open work assigned to you.' : null,
+  };
+}

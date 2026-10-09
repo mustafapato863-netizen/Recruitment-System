@@ -493,6 +493,24 @@ model Application {
   @@map("applications")
 }
 
+// B4: sent-log for due-date reminders. One row per item, kind, Cairo day and
+// recipient; the unique key makes the reminder worker idempotent.
+model DueDateReminder {
+  id              String   @id @default(uuid()) @db.Uuid
+  organizationId  String   @db.Uuid
+  entityType      String   @db.VarChar(40)
+  entityId        String   @db.Uuid
+  kind            String   @db.VarChar(20) // before | due | overdue
+  reminderDate    DateTime @db.Date // Africa/Cairo calendar day
+  recipientUserId String   @db.Uuid
+  notificationId  String?  @db.Uuid
+  createdAt       DateTime @default(now()) @db.Timestamptz(6)
+
+  @@unique([entityType, entityId, kind, reminderDate, recipientUserId])
+  @@index([organizationId, reminderDate])
+  @@map("due_date_reminders")
+}
+
 // B3: every job status change (hold, reopen, close, fill, migration).
 model VacancyStatusHistory {
   id          String   @id @default(uuid()) @db.Uuid

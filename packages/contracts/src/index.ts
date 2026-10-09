@@ -88,6 +88,21 @@ export const vacancyRequestStatusLabels: Record<VacancyRequestStatus, string> = 
   'Converted to Vacancy': 'Active',
 };
 
+/** B4 (v2 §7): "HRIS Developer, 1 of 3, due 19 Oct". Seats filled vs the requisition's target. */
+export interface TargetChip {
+  title: string;
+  filled: number;
+  target: number;
+  label: string;
+  dueDate: string | null;
+}
+
+export function buildTargetChip(input: { title: string; filled: number; target: number; dueDate: string | null }): TargetChip {
+  const target = Math.max(0, Math.trunc(input.target || 0));
+  const filled = Math.max(0, Math.trunc(input.filled || 0));
+  return { title: input.title, filled, target, label: `${filled} of ${target}`, dueDate: input.dueDate };
+}
+
 export function vacancyRequestStatusLabel(status: string): string {
   return (vacancyRequestStatusLabels as Record<string, string>)[status] ?? status;
 }
@@ -136,6 +151,8 @@ export interface VacancyRequest {
   status: VacancyRequestStatus;
   /** B3: display label for status ('Converted to Vacancy' -> 'Active'). */
   statusLabel?: string;
+  /** B4: seats filled (job joined headcount) of the requisition target. */
+  targetChip?: TargetChip;
   requestedHeadcount: number;
   employmentType: string | null;
   reason: string | null;
@@ -192,6 +209,8 @@ export interface Vacancy {
   status: VacancyStatus;
   approvedHeadcount: number;
   joinedHeadcount: number;
+  /** B4: seats filled of the requisition target, with its due date. */
+  targetChip?: TargetChip;
   openedAt: string | null;
   targetStartDate: string | null;
   assignments: VacancyAssignment[];

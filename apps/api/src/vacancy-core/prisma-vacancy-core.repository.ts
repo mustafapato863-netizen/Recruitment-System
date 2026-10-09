@@ -1,4 +1,4 @@
-import { vacancyRequestStatusLabel } from '@recruitflow/contracts';
+import { buildTargetChip, vacancyRequestStatusLabel } from '@recruitflow/contracts';
 import { randomUUID } from 'node:crypto';
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import type { Prisma } from '@recruitflow/database';
@@ -17,6 +17,9 @@ import type { VacancyCoreRepository } from './vacancy-core.repository';
 type RequestWithApprovals = Prisma.VacancyRequestGetPayload<{
   include: { approvals: true };
 }>;
+
+// B4: requisition fields needed for the target chip.
+const chipRequestSelect = { select: { requestedHeadcount: true, targetFillDate: true } } as const;
 
 type VacancyWithAssignments = Prisma.VacancyGetPayload<{
   include: {
@@ -98,7 +101,7 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
   async listRequests(organizationId: string): Promise<VacancyRequest[]> {
     const requests = await this.prisma.vacancyRequest.findMany({
       where: { organizationId },
-      include: { approvals: true },
+      include: { approvals: true, vacancy: { select: { joinedHeadcount: true } } },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -108,7 +111,7 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
   async getRequest(organizationId: string, id: string): Promise<VacancyRequest | null> {
     const request = await this.prisma.vacancyRequest.findUnique({
       where: { id },
-      include: { approvals: true },
+      include: { approvals: true, vacancy: { select: { joinedHeadcount: true } } },
     });
 
     return request && request.organizationId === organizationId ? this.toVacancyRequest(request) : null;
@@ -185,7 +188,7 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
         submittedAt: null,
         approvalRevision: 1,
       },
-      include: { approvals: true },
+      include: { approvals: true, vacancy: { select: { joinedHeadcount: true } } },
     });
 
     return this.toVacancyRequest(request);
@@ -194,7 +197,7 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
   async listVacancies(organizationId: string): Promise<Vacancy[]> {
     const vacancies = await this.prisma.vacancy.findMany({
       where: { organizationId },
-      include: { assignments: { include: assignmentInclude }, position: true, branch: true },
+      include: { assignments: { include: assignmentInclude }, position: true, branch: true, vacancyRequest: chipRequestSelect },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -204,7 +207,7 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
   async getVacancyByRequestId(organizationId: string, requestId: string): Promise<Vacancy | null> {
     const vacancy = await this.prisma.vacancy.findUnique({
       where: { vacancyRequestId: requestId },
-      include: { assignments: { include: assignmentInclude }, position: true, branch: true },
+      include: { assignments: { include: assignmentInclude }, position: true, branch: true, vacancyRequest: chipRequestSelect },
     });
 
     return vacancy && vacancy.organizationId === organizationId ? this.toVacancy(vacancy) : null;
@@ -213,7 +216,7 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
   async getVacancy(organizationId: string, id: string): Promise<Vacancy | null> {
     const vacancy = await this.prisma.vacancy.findUnique({
       where: { id },
-      include: { assignments: { include: assignmentInclude }, position: true, branch: true },
+      include: { assignments: { include: assignmentInclude }, position: true, branch: true, vacancyRequest: chipRequestSelect },
     });
 
     return vacancy && vacancy.organizationId === organizationId ? this.toVacancy(vacancy) : null;
@@ -279,7 +282,7 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
               },
             }),
       },
-      include: { approvals: true },
+      include: { approvals: true, vacancy: { select: { joinedHeadcount: true } } },
     });
     // Filter to ensure the *current* step matches
     return requests
@@ -300,7 +303,7 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
       include: {
         assignments: { include: assignmentInclude },
         vacancyRequest: {
-          include: { approvals: true },
+          include: { approvals: true, vacancy: { select: { joinedHeadcount: true } } },
         },
         organization: true,
         branch: true,
@@ -396,7 +399,7 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
 
     const saved = await transaction.vacancyRequest.findUnique({
       where: { id: request.id },
-      include: { approvals: true },
+      include: { approvals: true, vacancy: { select: { joinedHeadcount: true } } },
     });
 
     if (!saved) {
@@ -462,7 +465,7 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
 
     const saved = await transaction.vacancy.findUnique({
       where: { id: vacancy.id },
-      include: { assignments: { include: assignmentInclude }, position: true, branch: true },
+      include: { assignments: { include: assignmentInclude }, position: true, branch: true, vacancyRequest: chipRequestSelect },
     });
     if (!saved) {
       throw new Error(`Vacancy ${vacancy.id} disappeared during save.`);
@@ -480,7 +483,7 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
     return `${prefix}-${year}-${String(seq.lastIssued).padStart(3, '0')}`;
   }
 
-  private toVacancyRequest(request: NonNullable<RequestWithApprovals>): VacancyRequest {
+  private toVacancyRequest(request: NonNullable<RequestWithApprovals> & { vacancy?: { joinedHeadcount: number } | null }): VacancyRequest {
     return {
       id: request.id,
       organizationId: request.organizationId,
@@ -490,6 +493,12 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
       requestCode: request.requestCode,
       status: request.status as VacancyRequest['status'],
       statusLabel: vacancyRequestStatusLabel(request.status),
+      targetChip: buildTargetChip({
+        title: request.requestCode,
+        filled: request.vacancy?.joinedHeadcount ?? 0,
+        target: request.requestedHeadcount,
+        dueDate: toDateOnlyString(request.targetFillDate),
+      }),
       requestedHeadcount: request.requestedHeadcount,
       employmentType: request.employmentType,
       reason: request.reason,
@@ -538,7 +547,7 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
     };
   }
 
-  private toVacancy(vacancy: NonNullable<VacancyWithAssignments>): Vacancy {
+  private toVacancy(vacancy: NonNullable<VacancyWithAssignments> & { vacancyRequest?: { requestedHeadcount: number; targetFillDate: Date | null } | null }): Vacancy {
     const position = vacancy.position
       ? { id: vacancy.position.id, title: vacancy.position.title, code: vacancy.position.code }
       : null;
@@ -566,6 +575,12 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
       status: vacancy.status as Vacancy['status'],
       approvedHeadcount: vacancy.approvedHeadcount,
       joinedHeadcount: vacancy.joinedHeadcount,
+      targetChip: buildTargetChip({
+        title: position?.title ?? vacancy.vacancyCode,
+        filled: vacancy.joinedHeadcount,
+        target: vacancy.vacancyRequest?.requestedHeadcount ?? vacancy.approvedHeadcount,
+        dueDate: toDateOnlyString(vacancy.vacancyRequest?.targetFillDate ?? null),
+      }),
       openedAt: toIsoString(vacancy.openedAt),
       targetStartDate: toDateOnlyString(vacancy.targetStartDate),
       requiredSkills: vacancy.requiredSkills ?? [],

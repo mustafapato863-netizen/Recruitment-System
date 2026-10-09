@@ -5,12 +5,15 @@ import { createOutboxProcessor } from './processor';
 import { assertOutboxEncryptionKey } from './outbox-crypto';
 import { createTransportFromEnv } from './transport';
 import { sweepStaleApplicants, sweepConsentExpiry } from './sweepers';
+import { dueReminderConfigFromEnv, sweepDueDateReminders } from './due-reminders';
 
 const BATCH_SIZE = positiveInt(process.env.WORKER_BATCH_SIZE, 20, 100);
 const POLL_INTERVAL_MS = positiveInt(process.env.WORKER_POLL_INTERVAL_MS, 2_000, 60_000);
 const SWEEPER_INTERVAL_MS = positiveInt(process.env.SWEEPER_INTERVAL_MS, 5 * 60_000, 60 * 60_000);
 const HEARTBEAT_INTERVAL_MS = positiveInt(process.env.WORKER_HEARTBEAT_INTERVAL_MS, 10_000, 60_000);
 const IDLE_DELAY_MS = 250;
+// B4: due-date reminders run inside the sweeper loop; they send at most once per item/kind/Cairo day.
+const DUE_REMINDER_CONFIG = dueReminderConfigFromEnv(process.env);
 const QUEUE_NAME = 'recruitflow-email-outbox';
 const MAIL_DELIVERY_ENABLED = !['false', '0'].includes(process.env.MAIL_DELIVERY_ENABLED?.trim().toLowerCase() ?? 'true');
 
@@ -42,6 +45,7 @@ async function main(): Promise<void> {
     `[worker] email outbox ${MAIL_DELIVERY_ENABLED ? 'drain started' : 'paused'} — transport=${transport.name}, batch=${BATCH_SIZE}, poll=${POLL_INTERVAL_MS}ms, scheduler=${MAIL_DELIVERY_ENABLED ? (bullRuntime ? 'bullmq' : 'db-poll-fallback') : 'paused'}`,
   );
   console.log(`[worker] sweeper loop started — interval=${SWEEPER_INTERVAL_MS}ms`);
+  console.log(`[worker] due-date reminders ${DUE_REMINDER_CONFIG.enabled ? 'on' : 'off'} — daily from ${DUE_REMINDER_CONFIG.hour}:00 Africa/Cairo, lead days ${DUE_REMINDER_CONFIG.leadDays.join(',')}`);
 
   // Run outbox drain and sweeper loops concurrently
   await Promise.all([
@@ -86,12 +90,13 @@ async function runSweeperLoop(): Promise<void> {
   await sleep(30_000);
   while (!stopping) {
     try {
-      const [nudges, expiries] = await Promise.all([
+      const [nudges, expiries, reminders] = await Promise.all([
         sweepStaleApplicants(prisma),
         sweepConsentExpiry(prisma),
+        sweepDueDateReminders(prisma, new Date(), DUE_REMINDER_CONFIG),
       ]);
-      if (nudges > 0 || expiries > 0) {
-        console.log(`[sweeper] stale-nudges=${nudges} consent-expiries=${expiries}`);
+      if (nudges > 0 || expiries > 0 || reminders > 0) {
+        console.log(`[sweeper] stale-nudges=${nudges} consent-expiries=${expiries} due-reminders=${reminders}`);
       }
     } catch (err) {
       console.error(`[sweeper] error: ${err instanceof Error ? err.message : err}`);
