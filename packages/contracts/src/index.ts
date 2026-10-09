@@ -74,6 +74,24 @@ export const vacancyRequestStatuses = [
 
 export type VacancyRequestStatus = (typeof vacancyRequestStatuses)[number];
 
+/**
+ * B3: display labels for requisition statuses. The stored/API value
+ * 'Converted to Vacancy' is unchanged (no data mapping); it is shown as "Active".
+ */
+export const vacancyRequestStatusLabels: Record<VacancyRequestStatus, string> = {
+  Draft: 'Draft',
+  'Pending Approval': 'Pending Approval',
+  'Changes Requested': 'Changes Requested',
+  Approved: 'Approved',
+  Rejected: 'Rejected',
+  Cancelled: 'Cancelled',
+  'Converted to Vacancy': 'Active',
+};
+
+export function vacancyRequestStatusLabel(status: string): string {
+  return (vacancyRequestStatusLabels as Record<string, string>)[status] ?? status;
+}
+
 export const vacancyRequestApprovalStatuses = [
   'Pending',
   'Approved',
@@ -116,6 +134,8 @@ export interface VacancyRequest {
   requesterId: string;
   requestCode: string;
   status: VacancyRequestStatus;
+  /** B3: display label for status ('Converted to Vacancy' -> 'Active'). */
+  statusLabel?: string;
   requestedHeadcount: number;
   employmentType: string | null;
   reason: string | null;

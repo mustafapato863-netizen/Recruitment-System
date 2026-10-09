@@ -9,6 +9,7 @@ import { PrismaService } from '../../database/prisma.service';
 import { VacancyCoreService } from '../vacancy-core.service';
 import { PrismaVacancyCoreRepository } from '../prisma-vacancy-core.repository';
 import { ApplicationsService } from '../../applications/applications.service';
+import { PublicJobsService } from '../../public-jobs/public-jobs.service';
 
 const url = process.env.B3_TEST_DATABASE_URL;
 const ORG = '10000000-0000-4000-8000-000000000001';
@@ -92,6 +93,49 @@ describe.skipIf(!url)('B3 requisition and job lifecycle (scratch Postgres)', () 
   it('a Cancelled requisition cannot activate (409)', async () => {
     const id = await makeRequest('Cancelled', { assignedEmployeeId: ids.owner });
     await expect(service.activateRequest(id, ORG, ids.manager, {})).rejects.toThrow(ConflictException);
+  });
+
+  it('an administrator can never hold, reopen or close a job (even as requester)', async () => {
+    const id = await makeRequest('Approved', { assignedEmployeeId: ids.owner, requesterId: ids.admin });
+    const job = (await service.activateRequest(id, ORG, ids.manager, {})).vacancy!;
+    const admin = { userId: ids.admin!, organizationId: ORG, tokenVersion: 0, roleCodes: ['ADMINISTRATOR'] };
+    await expect(service.holdVacancy(job.id, ORG, 'admin hold', admin)).rejects.toThrow(/administrator cannot/);
+    await expect(service.closeVacancy(job.id, ORG, 'admin close', admin)).rejects.toThrow(ForbiddenException);
+    await service.holdVacancy(job.id, ORG, 'owner hold', as(ids.owner!));
+    await expect(service.reopenVacancy(job.id, ORG, 'admin reopen', admin)).rejects.toThrow(/administrator cannot/);
+    expect((await prisma.vacancy.findUniqueOrThrow({ where: { id: job.id } })).status).toBe('On Hold');
+  });
+
+  it('requisition label: stored Converted to Vacancy is shown as Active', async () => {
+    const id = await makeRequest('Approved', { assignedEmployeeId: ids.owner });
+    const result = await service.activateRequest(id, ORG, ids.manager, {});
+    expect(result.request.status).toBe('Converted to Vacancy');
+    expect(result.request.statusLabel).toBe('Active');
+  });
+
+  it('a requisition cannot leave Draft without a due date (400 DUE_DATE_REQUIRED)', async () => {
+    const id = await makeRequest('Draft', { targetFillDate: null, recruitmentTiming: 'After Approval', budgetMin: 1000, budgetMax: 2000, budgetCurrency: 'AED' });
+    await expect(service.submitRequest(id, ORG, ids.manager!)).rejects.toMatchObject({ response: { code: 'DUE_DATE_REQUIRED' } });
+    expect((await prisma.vacancyRequest.findUniqueOrThrow({ where: { id } })).status).toBe('Draft');
+    await service.updateRequest(id, ORG, { dueDate: '2026-10-19' });
+    expect((await service.submitRequest(id, ORG, ids.manager!)).status).toBe('Pending Approval');
+  });
+
+  it('public apply accepts Open and Partially Filled jobs, not held ones', async () => {
+    const org = await prisma.organization.findUniqueOrThrow({ where: { id: ORG } });
+    const pub = new PublicJobsService(prisma, { enforcePublicRequestLimit: async () => undefined } as never, {} as never, {} as never);
+    const id = await makeRequest('Approved', { assignedEmployeeId: ids.owner });
+    const job = (await service.activateRequest(id, ORG, ids.manager, {})).vacancy!;
+    await prisma.vacancy.update({ where: { id: job.id }, data: { status: 'Partially Filled', joinedHeadcount: 1, openedAt: new Date(Date.now() - 60_000) } });
+    expect((await pub.getJob(org.code, job.vacancyCode)).vacancyCode).toBe(job.vacancyCode);
+    const listed = await pub.listJobs(org.code, { pageSize: 100 } as never);
+    expect(listed.data.some((j) => j.vacancyCode === job.vacancyCode)).toBe(true);
+    const applied = await pub.apply(org.code, job.vacancyCode, { firstName: 'Pub', lastName: 'Applicant', email: `pub-${tag}@b3.test`, consentAccepted: true } as never, '127.0.0.1');
+    expect(applied).toBeTruthy();
+    expect(await prisma.application.count({ where: { vacancyId: job.id } })).toBe(1);
+    await prisma.vacancy.update({ where: { id: job.id }, data: { status: 'On Hold' } });
+    await expect(pub.getJob(org.code, job.vacancyCode)).rejects.toThrow();
+    await expect(pub.apply(org.code, job.vacancyCode, { firstName: 'Pub', lastName: 'Two', email: `pub2-${tag}@b3.test`, consentAccepted: true } as never, '127.0.0.1')).rejects.toThrow();
   });
 
   it('hold/reopen: owner or manager only, reason required, history written, held job blocks new applications', async () => {

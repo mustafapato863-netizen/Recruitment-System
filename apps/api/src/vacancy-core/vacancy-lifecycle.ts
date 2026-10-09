@@ -130,6 +130,12 @@ export async function assertJobOwnerOrManager(
     },
   });
   if (!vacancy) return;
+  // B3: an administrator never holds, reopens or closes a job, even when they
+  // are also the requester. An audited Admin override with a reason is A5.
+  const actorIsAdmin = await tx.userRole.count({ where: { userId: actorUserId, role: { code: 'ADMINISTRATOR' } } });
+  if (actorIsAdmin > 0) {
+    throw new ForbiddenException({ code: 'ADMIN_CANNOT_CHANGE_JOB_STATUS', message: 'An administrator cannot hold, reopen or close a job.' });
+  }
   const owners = vacancy.assignments.map((a) => a.userId);
   const managers = vacancy.assignments.map((a) => a.user.managerId).filter((id): id is string => Boolean(id));
   if (owners.length === 0 && vacancy.vacancyRequest.assignedEmployeeId) owners.push(vacancy.vacancyRequest.assignedEmployeeId);

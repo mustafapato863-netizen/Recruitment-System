@@ -416,6 +416,13 @@ export class VacancyCoreService {
       );
     }
 
+    // B3 (v2 §7/§8): a requisition cannot leave Draft without a due date.
+    if (!request.targetFillDate) {
+      throw new BadRequestException({
+        code: 'DUE_DATE_REQUIRED',
+        message: `Request ${request.requestCode} needs a due date (dueDate / targetFillDate) before it can leave Draft.`,
+      });
+    }
     this.validateRequestPlan(request, true);
 
     const now = new Date().toISOString();

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { BadRequestException, ConflictException } from '@nestjs/common';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { vacancyStatuses } from '@recruitflow/contracts';
+import { vacancyRequestStatusLabel, vacancyRequestStatuses, vacancyStatuses } from '@recruitflow/contracts';
 import {
   ACCEPTING_JOB_STATUSES,
   JOB_STATUSES,
@@ -46,6 +46,19 @@ describe('B3 transition table: every pair', () => {
     }
   }
   it('Closed is terminal', () => expect(JOB_TRANSITIONS.Closed).toEqual([]));
+});
+
+describe('B3 requisition label and public statuses', () => {
+  it('labels Converted to Vacancy as Active without changing the value', () => {
+    expect(vacancyRequestStatusLabel('Converted to Vacancy')).toBe('Active');
+    expect(vacancyRequestStatusLabel('Approved')).toBe('Approved');
+    expect(vacancyRequestStatuses).toContain('Converted to Vacancy');
+  });
+  it('public careers query Open and Partially Filled jobs everywhere', () => {
+    const src = readFileSync(path.resolve(__dirname, '../../public-jobs/public-jobs.service.ts'), 'utf8');
+    expect(src).not.toMatch(/status: 'Open'|status" = 'Open'|status !== 'Open'/);
+    expect(src).toContain(`IN ('Open', 'Partially Filled')`);
+  });
 });
 
 describe('B3 helpers', () => {

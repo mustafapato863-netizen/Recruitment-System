@@ -1,3 +1,4 @@
+import { vacancyRequestStatusLabel } from '@recruitflow/contracts';
 import { randomUUID } from 'node:crypto';
 import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import type { Prisma } from '@recruitflow/database';
@@ -488,6 +489,7 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
       requesterId: request.requesterId,
       requestCode: request.requestCode,
       status: request.status as VacancyRequest['status'],
+      statusLabel: vacancyRequestStatusLabel(request.status),
       requestedHeadcount: request.requestedHeadcount,
       employmentType: request.employmentType,
       reason: request.reason,
