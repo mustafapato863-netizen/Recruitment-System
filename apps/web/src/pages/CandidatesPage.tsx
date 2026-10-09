@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { fetchVacancyList } from '../utils/vacancyAccess';
+import type { RedactedVacancy } from '../types/redactedVacancy';
+import { RedactedJobPickerRows } from '../components/access/RedactedJobOptions';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import type { Candidate, CandidateMetrics, PaginatedResult, Vacancy } from '@recruitflow/contracts';
 import { downloadApi, fetchApi, postApi, patchApi, deleteApi, getApi } from '../api/client';
@@ -95,6 +98,7 @@ export function CandidatesPage() {
   const [assignCandidate, setAssignCandidate] = useState<Candidate | null>(null);
   const [assignCandidateIds, setAssignCandidateIds] = useState<string[]>([]);
   const [vacancies, setVacancies] = useState<Vacancy[]>([]);
+  const [redactedVacancies, setRedactedVacancies] = useState<RedactedVacancy[]>([]);
   const [vacanciesLoading, setVacanciesLoading] = useState(false);
   const [selectedVacancyId, setSelectedVacancyId] = useState('');
   const [assignSubmitting, setAssignSubmitting] = useState(false);
@@ -279,9 +283,10 @@ export function CandidatesPage() {
     if (vacancies.length === 0) {
       setVacanciesLoading(true);
       try {
-        const res = await getApi<Vacancy[] | { data: Vacancy[] }>('/vacancies?pageSize=100');
-        const list = Array.isArray(res) ? res : res.data ?? [];
+        // B1: other owners' jobs are listed disabled; they can't receive candidates from here.
+        const { full: list, redacted } = await fetchVacancyList('/vacancies?pageSize=100');
         setVacancies(list);
+        setRedactedVacancies(redacted);
         if (list.length > 0) {
           setSelectedVacancyId((prev) => prev || list[0].id);
         }
@@ -1398,6 +1403,7 @@ export function CandidatesPage() {
                         </div>
                       );
                     })}
+                  <RedactedJobPickerRows jobs={redactedVacancies} />
                 </div>
               )}
             </div>

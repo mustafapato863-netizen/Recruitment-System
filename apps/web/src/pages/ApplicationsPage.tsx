@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { fetchVacancyContext, fetchVacancyList } from '../utils/vacancyAccess';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getApi, patchApi, ApiError } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
@@ -799,12 +800,11 @@ export function ApplicationsPage() {
           let list = allVacanciesRef.current;
           if (!list.length) {
             try {
-              const res = await getApi<Vacancy[]>('/vacancies');
-              if (Array.isArray(res)) {
-                list = res;
-                setAllVacancies(res);
-                allVacanciesRef.current = res;
-              }
+              // B1: redacted jobs are excluded from the job switcher.
+              const { full } = await fetchVacancyList();
+              list = full;
+              setAllVacancies(full);
+              allVacanciesRef.current = full;
             } catch {
               // ignore
             }
@@ -823,7 +823,7 @@ export function ApplicationsPage() {
         const [res, vacRes] = await Promise.allSettled([
           fetchAllApplicationPages({ vacancyId: resolvedVacancyId }),
           /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(resolvedVacancyId)
-            ? getApi<VacancyDetailView>(`/vacancies/${resolvedVacancyId}`)
+            ? fetchVacancyContext(resolvedVacancyId)
             : Promise.reject(new Error('Invalid vacancy identifier')),
         ]);
 
@@ -873,12 +873,10 @@ export function ApplicationsPage() {
   }, [loadApplications]);
 
   useEffect(() => {
-    void getApi<Vacancy[]>('/vacancies')
-      .then((res) => {
-        if (Array.isArray(res)) {
-          setAllVacancies(res);
-          allVacanciesRef.current = res;
-        }
+    void fetchVacancyList()
+      .then(({ full }) => {
+        setAllVacancies(full);
+        allVacanciesRef.current = full;
       })
       .catch(() => {});
   }, []);

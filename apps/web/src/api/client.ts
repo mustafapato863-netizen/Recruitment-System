@@ -75,6 +75,9 @@ function normalizeFieldErrors(value: unknown): ErrorFieldErrors | undefined {
   return Object.keys(result).length > 0 ? result : undefined;
 }
 
+/** 403 codes from B1 ownership checks whose server message is shown as-is. */
+const OWNERSHIP_403_CODES = new Set(['JOB_NOT_OWNED', 'FILE_NOT_OWNED', 'ADMIN_CANNOT_REASSIGN', 'OWNER_NOT_ELIGIBLE']);
+
 let refreshPromise: Promise<boolean> | null = null;
 
 function shouldRefreshSession(path: string): boolean {
@@ -133,6 +136,9 @@ async function handleResponseError(response: Response, path: string): Promise<ne
       message += minutes !== null
         ? ` Try again in ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}.`
         : ' Please try again later.';
+    } else if (code && OWNERSHIP_403_CODES.has(code) && typeof problem?.message === 'string' && problem.message.trim()) {
+      // B1: ownership denials carry a specific, user-safe message.
+      message = problem.message.trim();
     } else {
       message = 'Access denied: you do not have permission to perform this action.';
     }
