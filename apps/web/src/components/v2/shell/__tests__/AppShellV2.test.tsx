@@ -3,11 +3,16 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { UserProfile } from '@recruitflow/contracts';
-import { axeViolations as runAxe } from '../../__tests__/axe';
+import { axeViolations as runAxe, axeViolations } from '../../__tests__/axe';
 
 const getApi = vi.fn();
 vi.mock('../../../../api/client', () => ({ getApi: (p: string) => getApi(p) }));
-vi.mock('../../../../quickguide', () => ({ QuickGuideProvider: ({ children }: { children: React.ReactNode }) => <>{children}</> }));
+const openGuide = vi.fn();
+vi.mock('../../../../quickguide', () => ({
+  QuickGuideProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  QuickGuideModal: () => null,
+  useQuickGuide: () => ({ openGuide }),
+}));
 
 import { AppShellV2 } from '../AppShellV2';
 import { activeNavKey, permittedNavItems, SEAT_NAV } from '../navConfig';
@@ -33,13 +38,13 @@ function renderShell(seat: Seat, u = user(), path = '/my-work', onSignOut = vi.f
   );
 }
 
-beforeEach(() => { getApi.mockReset(); getApi.mockResolvedValue({ unreadCount: 0 }); });
+beforeEach(() => { getApi.mockReset(); getApi.mockResolvedValue({ unreadCount: 0 }); openGuide.mockReset(); window.localStorage.clear(); });
 afterEach(() => { document.documentElement.removeAttribute('data-ui'); });
 
 describe('nav per seat', () => {
   it.each([
     ['employee', ['My Work', 'Open jobs', 'Candidates']],
-    ['manager', ['Team work', 'Requisitions', 'Approvals', 'Team result']],
+    ['manager', ['Team work', 'Requisitions', 'Team result']],
     ['admin', ['Users', 'Roles', 'Pipeline template', 'Master data', 'Templates', 'Reports', 'Audit', 'Integrations']],
   ] as const)('%s shows the Figma items', (seat, labels) => {
     renderShell(seat);
@@ -54,8 +59,9 @@ describe('nav per seat', () => {
     expect(screen.queryByText(/locked/i)).not.toBeInTheDocument();
   });
 
-  it('manager approvals need an approve permission', () => {
-    expect(permittedNavItems('manager', ['VACANCY_REQUEST_VIEW', 'APPLICATION_VIEW']).map((i) => i.key)).toEqual(['team-work', 'requisitions', 'team-result']);
+  it('manager has no Approvals item (v2: not a destination)', () => {
+    expect(permittedNavItems('manager', ['VACANCY_REQUEST_VIEW', 'APPLICATION_VIEW', 'APPROVE_OFFERS', 'VACANCY_REQUEST_APPROVE']).map((i) => i.key)).toEqual(['team-work', 'requisitions', 'team-result']);
+    expect(SEAT_NAV.manager.items.some((i) => /approval/i.test(i.label))).toBe(false);
   });
 
   it('administrators pass every gate like PermissionGate', () => {
@@ -141,5 +147,49 @@ describe('a11y', () => {
     expect(screen.getByRole('link', { name: 'Skip to main content' })).toHaveAttribute('href', '#rf2-main');
     await waitFor(() => expect(getApi).toHaveBeenCalled());
     expect(await runAxe(container)).toEqual([]);
+  });
+});
+
+describe('F4 follow-ups', () => {
+  it('Help opens the existing quick guide', async () => {
+    const u = userEvent.setup();
+    renderShell('employee');
+    await u.click(screen.getByRole('button', { name: /Help/ }));
+    expect(openGuide).toHaveBeenCalledTimes(1);
+  });
+
+  it('sidebar collapses to an icon rail, keeps accessible names, and persists', async () => {
+    const u = userEvent.setup();
+    const { unmount } = renderShell('employee');
+    const toggle = screen.getByRole('button', { name: 'Collapse sidebar' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    toggle.focus();
+    await u.keyboard('{Enter}');
+    expect(screen.getByRole('button', { name: 'Expand sidebar' })).toHaveAttribute('aria-expanded', 'false');
+    expect(document.querySelector('.rf2-shell')).toHaveClass('rf2-shell--collapsed');
+    const link = screen.getByRole('link', { name: 'Open jobs' });
+    expect(link).toHaveAttribute('title', 'Open jobs');
+    expect(window.localStorage.getItem('recruitflow.ui.v2.sidebar')).toBe('collapsed');
+    unmount();
+    renderShell('employee');
+    expect(document.querySelector('.rf2-shell')).toHaveClass('rf2-shell--collapsed');
+    expect(await axeViolations(document.body)).toEqual([]);
+  });
+
+  it('shows a static workspace label for the real /auth/me shape (one org)', () => {
+    renderShell('employee', { ...user(), organizationName: 'IT Recruiting' });
+    expect(screen.getByTestId('workspace-label')).toHaveTextContent('IT Recruiting');
+    expect(screen.queryByRole('button', { name: /Change workspace/ })).not.toBeInTheDocument();
+  });
+
+  it('shows the switcher only when /auth/me lists more than one org', async () => {
+    const u = userEvent.setup();
+    const me = { ...user(), organizationId: 'o1', organizationName: 'IT Recruiting',
+      organizations: [{ id: 'o1', name: 'IT Recruiting' }, { id: 'o2', name: 'Nursing' }] } as never;
+    renderShell('employee', me);
+    await u.click(screen.getByRole('button', { name: 'Workspace: IT Recruiting. Change workspace' }));
+    const list = screen.getByRole('listbox', { name: 'Workspaces' });
+    expect(within(list).getByRole('option', { name: 'IT Recruiting' })).toHaveAttribute('aria-selected', 'true');
+    expect(within(list).getByRole('option', { name: 'Nursing' })).toHaveAttribute('aria-disabled', 'true');
   });
 });

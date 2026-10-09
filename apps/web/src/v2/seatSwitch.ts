@@ -5,8 +5,9 @@ import { resolveUiVersion } from '../theme/uiVersion';
  * Seat-by-seat v2 rollout (Roadmap v2 §3, §10): v2 renders only when the v2
  * flag is on AND the user's seat is enabled. Default: Employee first.
  *
- * Seats precedence: ?v2seats=employee,manager (persisted) > localStorage
- * "recruitflow.ui.v2seats" > VITE_UI_V2_SEATS > "employee".
+ * Seats precedence: SERVER (/auth/me `v2Seats` or `flags.v2Seats`, B10) >
+ * ?v2seats=employee,manager (persisted) > localStorage "recruitflow.ui.v2seats"
+ * > VITE_UI_V2_SEATS > "employee".
  */
 export const V2_SEATS_STORAGE_KEY = 'recruitflow.ui.v2seats';
 export const DEFAULT_V2_SEATS: readonly Seat[] = ['employee'];
@@ -22,8 +23,24 @@ export function parseSeats(raw: string | null | undefined): Seat[] | null {
 
 type Store = Pick<Storage, 'getItem' | 'setItem'> | null;
 
-export function resolveV2Seats(options: { search?: string; storage?: Store; envSeats?: string } = {}): Set<Seat> {
-  const { search = '', storage = null, envSeats } = options;
+/**
+ * Server-side seat list from /auth/me. B10 ("per-seat flag, org setting") has no
+ * field name yet; we read `v2Seats` or `flags.v2Seats` as string[] or a
+ * comma string. Returns null when absent so client sources apply.
+ */
+export function serverV2Seats(me: unknown): Seat[] | null {
+  if (!me || typeof me !== 'object') return null;
+  const m = me as { v2Seats?: unknown; flags?: { v2Seats?: unknown } | null };
+  const raw = m.v2Seats ?? m.flags?.v2Seats;
+  if (Array.isArray(raw)) return parseSeats(raw.filter((v) => typeof v === 'string').join(',') || 'none');
+  if (typeof raw === 'string') return parseSeats(raw);
+  return null;
+}
+
+export function resolveV2Seats(options: { search?: string; storage?: Store; envSeats?: string; me?: unknown } = {}): Set<Seat> {
+  const { search = '', storage = null, envSeats, me } = options;
+  const fromServer = serverV2Seats(me);
+  if (fromServer) return new Set(fromServer);
   const q = new URLSearchParams(search).get('v2seats');
   const fromQuery = parseSeats(q);
   if (fromQuery) {
@@ -39,13 +56,13 @@ export function resolveV2Seats(options: { search?: string; storage?: Store; envS
   return new Set(DEFAULT_V2_SEATS);
 }
 
-export function shouldUseV2Shell(seat: Seat, options: { search?: string; storage?: Store; envFlag?: string | boolean; envSeats?: string }): boolean {
+export function shouldUseV2Shell(seat: Seat, options: { search?: string; storage?: Store; envFlag?: string | boolean; envSeats?: string; me?: unknown }): boolean {
   const version = resolveUiVersion({ search: options.search, storage: options.storage, envFlag: options.envFlag });
   return version === 'v2' && resolveV2Seats(options).has(seat);
 }
 
 /** Browser wiring. */
-export function shouldUseV2ShellInBrowser(seat: Seat): boolean {
+export function shouldUseV2ShellInBrowser(seat: Seat, me?: unknown): boolean {
   if (typeof window === 'undefined') return false;
   let storage: Storage | null;
   try { storage = window.localStorage; } catch { storage = null; }
@@ -54,5 +71,6 @@ export function shouldUseV2ShellInBrowser(seat: Seat): boolean {
     storage,
     envFlag: import.meta.env.VITE_UI_V2,
     envSeats: import.meta.env.VITE_UI_V2_SEATS,
+    me,
   });
 }

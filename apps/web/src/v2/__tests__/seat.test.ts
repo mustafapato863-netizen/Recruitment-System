@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { resolveSeat } from '../seat';
-import { parseSeats, resolveV2Seats, shouldUseV2Shell, V2_SEATS_STORAGE_KEY } from '../seatSwitch';
+import { parseSeats, resolveV2Seats, serverV2Seats, shouldUseV2Shell, V2_SEATS_STORAGE_KEY } from '../seatSwitch';
 
 const me = (codes: string[], permissions: string[] = [], extra: Record<string, unknown> = {}) => ({
   roles: codes.map((code, i) => ({ id: `r${i}`, code, name: code })), permissions, ...extra,
@@ -94,5 +94,25 @@ describe('seat-by-seat switch', () => {
     [true, 'employee', 'none', false],
   ] as const)('flag=%s seat=%s seats=%s → v2=%s', (flag, seat, seats, expected) => {
     expect(shouldUseV2Shell(seat, { envFlag: flag, envSeats: seats })).toBe(expected);
+  });
+});
+
+describe('server-side seats from /auth/me', () => {
+  it('reads v2Seats or flags.v2Seats (array or string), else null', () => {
+    expect(serverV2Seats({ v2Seats: ['EMPLOYEE', 'manager'] })).toEqual(['employee', 'manager']);
+    expect(serverV2Seats({ flags: { v2Seats: 'admin' } })).toEqual(['admin']);
+    expect(serverV2Seats({ v2Seats: [] })).toEqual([]);
+    expect(serverV2Seats({})).toBeNull();
+    expect(serverV2Seats(null)).toBeNull();
+  });
+
+  it('takes precedence over query, storage and env', () => {
+    const storage = { getItem: () => 'admin', setItem: () => {} };
+    expect([...resolveV2Seats({ me: { v2Seats: ['manager'] }, search: '?v2seats=employee', storage, envSeats: 'admin' })]).toEqual(['manager']);
+    expect(shouldUseV2Shell('employee', { envFlag: true, envSeats: 'employee', me: { v2Seats: [] } })).toBe(false);
+  });
+
+  it('falls back to client sources when absent', () => {
+    expect([...resolveV2Seats({ me: { id: 'x' }, envSeats: 'admin' })]).toEqual(['admin']);
   });
 });

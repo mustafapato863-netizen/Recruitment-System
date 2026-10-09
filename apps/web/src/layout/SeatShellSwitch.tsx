@@ -14,7 +14,7 @@ import { AppShellV2 } from '../components/v2/shell/AppShellV2';
 export function SeatShellSwitch({ decide = shouldUseV2ShellInBrowser }: { decide?: typeof shouldUseV2ShellInBrowser } = {}) {
   const { user, logout } = useAuth();
   const seat = resolveSeat(user);
-  const useV2 = Boolean(user) && decide(seat);
+  const useV2 = Boolean(user) && decide(seat, user);
 
   useLayoutEffect(() => {
     applyUiVersion(useV2 ? 'v2' : 'v1');

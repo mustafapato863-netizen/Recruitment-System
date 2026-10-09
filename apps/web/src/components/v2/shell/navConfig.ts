@@ -2,7 +2,7 @@ import type { Seat } from '../../../v2/seat';
 
 export type NavIconName =
   | 'my-work' | 'jobs' | 'candidates'
-  | 'team' | 'requisitions' | 'approvals' | 'result'
+  | 'team' | 'requisitions' | 'result'
   | 'users' | 'roles' | 'pipeline' | 'master-data' | 'templates' | 'reports' | 'audit' | 'integrations';
 
 export interface SeatNavItem {
@@ -38,7 +38,7 @@ export const SEAT_NAV: Record<Seat, { heading: string; searchPlaceholder: string
     items: [
       { key: 'team-work', label: 'Team work', to: '/my-work', icon: 'team' },
       { key: 'requisitions', label: 'Requisitions', to: '/vacancy-requests', icon: 'requisitions', requires: ['VACANCY_REQUEST_VIEW'] },
-      { key: 'approvals', label: 'Approvals', to: '/approval-inbox', icon: 'approvals', requiresAny: ['VACANCY_REQUEST_APPROVE', 'APPROVE_OFFERS', 'FINAL_HIRING_APPROVAL'] },
+      // Approvals dropped (v2 §6: not a destination; the offer decision opens from Team work).
       { key: 'team-result', label: 'Team result', to: '/reports', icon: 'result', requires: ['APPLICATION_VIEW'] },
     ],
   },
