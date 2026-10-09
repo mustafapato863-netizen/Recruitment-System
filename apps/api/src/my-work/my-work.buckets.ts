@@ -14,6 +14,8 @@ import { buildTargetChip, type TargetChip } from '@recruitflow/contracts';
  * - Waiting on others: the user's requisitions in Pending Approval (approver), interviews on
  *   the user's files that ended with scorecards missing from other attendees (interviewer),
  *   offers on the user's files Pending Approval (approver) or Sent (candidate).
+ * - Approved (not yet activated) requisitions are the requester's AND the requester's
+ *   manager's work: Today, or Overdue past the due date, with next action Activate.
  * - Held jobs (and their files) are off My Work (v2 §3). Filled/Closed jobs too.
  */
 export const MY_WORK_TIMEZONE = 'Africa/Cairo';

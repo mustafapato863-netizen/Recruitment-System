@@ -43,7 +43,14 @@ export class MyWorkService {
         },
       }),
       this.prisma.vacancyRequest.findMany({
-        where: { organizationId: org, requesterId: me, status: { in: ['Draft', 'Changes Requested', 'Pending Approval', 'Approved'] } },
+        where: {
+          organizationId: org,
+          OR: [
+            { requesterId: me, status: { in: ['Draft', 'Changes Requested', 'Pending Approval', 'Approved'] } },
+            // Approved, not yet activated: also the requester's manager's work (next action Activate).
+            { requester: { managerId: me }, status: 'Approved' },
+          ],
+        },
         select: { id: true, requestCode: true, status: true, targetFillDate: true, position: { select: { title: true } } },
       }),
       this.prisma.task.findMany({

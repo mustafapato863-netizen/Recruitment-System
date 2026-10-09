@@ -92,6 +92,29 @@ describe.skipIf(!url)('B4 My Work, target chip and reminders (scratch Postgres)'
     expect(m.waitingOnOthers).toEqual([expect.objectContaining({ id: pending, waitingOn: 'approver' })]);
   });
 
+  it('Approved, not activated: requester and the requester\'s manager see it (Today / Overdue, Activate)', async () => {
+    const boss = randomUUID();
+    const recruiter = await prisma.role.findFirstOrThrow({ where: { code: 'RECRUITER' } });
+    await prisma.user.create({ data: { id: boss, organizationId: ORG, email: `boss-${tag}@b4.test`, emailNormalized: `boss-${tag}@b4.test`, displayName: 'B4 boss', passwordHash: 'x', userRoles: { create: { roleId: recruiter.id } } } });
+    await prisma.user.update({ where: { id: ids.manager }, data: { managerId: boss } });
+    const branch = await prisma.branch.findFirstOrThrow({ where: { organizationId: ORG } });
+    const position = await prisma.position.findFirstOrThrow({ where: { organizationId: ORG } });
+    const dueToday = randomUUID();
+    const late = randomUUID();
+    const draft = randomUUID();
+    for (const [id, status, due] of [[dueToday, 'Approved', TODAY], [late, 'Approved', '2031-03-01'], [draft, 'Draft', TODAY]] as const) {
+      await prisma.vacancyRequest.create({ data: { id, organizationId: ORG, branchId: branch.id, positionId: position.id, requesterId: ids.manager!, requestCode: `B4A-${tag}-${id.slice(0, 4)}`, status, requestedHeadcount: 1, targetFillDate: new Date(`${due}T00:00:00Z`) } });
+    }
+    for (const viewer of [ids.manager!, boss]) {
+      const w = await myWork.getMyWork(user(viewer), NOW);
+      expect(w.dueToday.find((i) => i.id === dueToday)?.nextAction).toEqual({ code: 'activate-requisition', label: 'Activate' });
+      expect(w.overdue.find((i) => i.id === late)?.nextAction.label).toBe('Activate');
+    }
+    const bossWork = await myWork.getMyWork(user(boss), NOW);
+    expect(JSON.stringify(bossWork)).not.toContain(draft); // drafts stay the requester's
+    expect(JSON.stringify(await myWork.getMyWork(user(ids.a!), NOW))).not.toContain(dueToday);
+  });
+
   it('reminder worker: once per item/day, owner only, nothing for held/closed/cancelled', async () => {
     const { requestId: cancelledReq } = await activated(ids.a!, TODAY);
     await vacancies.cancelRequest(cancelledReq, ORG, ids.manager!, 'budget gone');
