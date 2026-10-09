@@ -49,7 +49,7 @@ describe.skipIf(!url)('B1 follow-ups (scratch Postgres)', () => {
     owner: randomUUID(), other: randomUUID(), interviewer: randomUUID(), offerApprover: randomUUID(),
     hireApprover: randomUUID(), admin: randomUUID(),
     candidate: randomUUID(), otherCandidate: randomUUID(), application: randomUUID(), otherApplication: randomUUID(),
-    interview: randomUUID(), cv: randomUUID(), otherCv: randomUUID(),
+    interview: randomUUID(), cv: randomUUID(), otherCv: randomUUID(), passport: randomUUID(),
     offer: randomUUID(), offerVersion: randomUUID(), offerApproval: randomUUID(), hiringCase: randomUUID(), hiringApproval: randomUUID(),
   };
   const users = () => [ids.owner, ids.other, ids.interviewer, ids.offerApprover, ids.hireApprover, ids.admin];
@@ -108,6 +108,7 @@ describe.skipIf(!url)('B1 follow-ups (scratch Postgres)', () => {
       await prisma.candidateDocument.create({ data: { id: docId, organizationId: ORG, candidateId: cid, documentType: 'CV', fileName: 'cv.pdf', mimeType: 'application/pdf', fileSize: 1, storageKey: `b1f/${tag}/${docId}`, storageProvider: 'local' } });
     }
 
+    await prisma.candidateDocument.create({ data: { id: ids.passport, organizationId: ORG, candidateId: ids.candidate, documentType: 'Passport', fileName: 'p.pdf', mimeType: 'application/pdf', fileSize: 1, storageKey: `b1f/${tag}/passport`, storageProvider: 'local' } });
     const start = new Date(Date.now() + 86_400_000);
     await prisma.interview.create({ data: { id: ids.interview, organizationId: ORG, applicationId: ids.application, interviewCode: `B1F-${tag}`, title: 'B1F', interviewType: 'Technical', scheduledStart: start, scheduledEnd: new Date(start.getTime() + 3_600_000), attendees: { create: { userId: ids.interviewer } } } });
 
@@ -214,6 +215,59 @@ describe.skipIf(!url)('B1 follow-ups (scratch Postgres)', () => {
       await expect(call(ap, ApplicationsController, 'getApplication', { id: ids.application })).rejects.toBeInstanceOf(ForbiddenException);
       await expect(call(ap, OffersController, 'getOfferById', { id: ids.offer })).rejects.toBeInstanceOf(ForbiddenException);
       await prisma.offerApproval.update({ where: { id: ids.offerApproval }, data: { status: 'Pending' } });
+    });
+  });
+
+  describe('approver CV download while the approval is Pending', () => {
+    const download = (u: AuthUser, docId: string) => call(u, DocumentsController, 'downloadFile', { id: docId });
+
+    it('pending offer approver (no DOWNLOAD_DOCUMENTS) downloads the CV; 403 after the decision', async () => {
+      const ap = auth(ids.offerApprover, ['OFFER_APPROVER']);
+      const perms = await prisma.rolePermission.findMany({ where: { role: { code: 'OFFER_APPROVER' } }, select: { permission: { select: { code: true } } } });
+      expect(perms.map((p) => p.permission.code)).not.toContain('DOWNLOAD_DOCUMENTS');
+      await expect(download(ap, ids.cv)).resolves.toBe(true);
+      await prisma.offerApproval.update({ where: { id: ids.offerApproval }, data: { status: 'Approved', decidedAt: new Date() } });
+      try {
+        await expect(download(ap, ids.cv)).rejects.toBeInstanceOf(ForbiddenException);
+      } finally {
+        await prisma.offerApproval.update({ where: { id: ids.offerApproval }, data: { status: 'Pending', decidedAt: null } });
+      }
+    });
+
+    it('pending final-hire approver downloads the CV; 403 after the decision', async () => {
+      const ap = auth(ids.hireApprover, ['FINAL_HIRING_APPROVER']);
+      await expect(download(ap, ids.cv)).resolves.toBe(true);
+      await prisma.hiringCaseApproval.update({ where: { id: ids.hiringApproval }, data: { status: 'Approved', decidedAt: new Date() } });
+      try {
+        await expect(download(ap, ids.cv)).rejects.toBeInstanceOf(ForbiddenException);
+        await expect(download(ap, ids.passport)).rejects.toBeInstanceOf(ForbiddenException);
+      } finally {
+        await prisma.hiringCaseApproval.update({ where: { id: ids.hiringApproval }, data: { status: 'Pending', decidedAt: null } });
+      }
+    });
+
+    it('non-approvers get 403 on the CV', async () => {
+      await expect(download(auth(ids.interviewer, ['INTERVIEWER']), ids.cv)).rejects.toBeInstanceOf(ForbiddenException);
+      // An approver of one file cannot pull another candidate's CV.
+      await expect(download(auth(ids.offerApprover, ['OFFER_APPROVER']), ids.otherCv)).rejects.toBeInstanceOf(ForbiddenException);
+      await expect(download(auth(ids.hireApprover, ['FINAL_HIRING_APPROVER']), ids.otherCv)).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('other document types follow the current rules', async () => {
+      // No DOWNLOAD_DOCUMENTS: CV only, even while pending.
+      await expect(download(auth(ids.offerApprover, ['OFFER_APPROVER']), ids.passport)).rejects.toBeInstanceOf(ForbiddenException);
+      // FINAL_HIRING_APPROVER holds DOWNLOAD_DOCUMENTS (seed), so the existing rule applies:
+      // documents of the candidate whose file they are approving.
+      await expect(download(auth(ids.hireApprover, ['FINAL_HIRING_APPROVER']), ids.passport)).resolves.toBe(true);
+      // CANDIDATE_VIEW + DOWNLOAD_DOCUMENTS holders are unchanged; admins unchanged.
+      await expect(download(auth(ids.admin, ['ADMINISTRATOR']), ids.passport)).resolves.toBe(true);
+      const recruiterPerms = (await prisma.rolePermission.findMany({ where: { role: { code: 'RECRUITER' } }, select: { permission: { select: { code: true } } } })).map((p) => p.permission.code);
+      const recruiter = auth(ids.other, ['RECRUITER']);
+      if (recruiterPerms.includes('CANDIDATE_VIEW') && recruiterPerms.includes('DOWNLOAD_DOCUMENTS')) {
+        await expect(download(recruiter, ids.passport)).resolves.toBe(true);
+      } else {
+        await expect(download(recruiter, ids.passport)).rejects.toBeInstanceOf(ForbiddenException);
+      }
     });
   });
 

@@ -31,3 +31,12 @@ export const AllowInterviewAttendee = () => SetMetadata(ALLOW_INTERVIEW_ATTENDEE
  */
 export const ALLOW_FILE_APPROVER = 'ALLOW_FILE_APPROVER';
 export const AllowFileApprover = () => SetMetadata(ALLOW_FILE_APPROVER, true);
+
+/**
+ * B1 follow-up: on GET /documents/:id/download, a caller WITHOUT
+ * DOWNLOAD_DOCUMENTS may still download a CV/Resume while they are the
+ * pending offer or final-hire approver for that candidate's application.
+ * Everything else on the route keeps requiring DOWNLOAD_DOCUMENTS.
+ */
+export const ALLOW_APPROVER_CV_DOWNLOAD = 'ALLOW_APPROVER_CV_DOWNLOAD';
+export const AllowApproverCvDownload = () => SetMetadata(ALLOW_APPROVER_CV_DOWNLOAD, true);

@@ -7,7 +7,7 @@ import { PrismaService } from '../../database/prisma.service';
 import type { Request } from 'express';
 import { isUuid } from '../validation/is-uuid';
 import { TENANT_RESOURCE_POLICIES } from './tenant-resource-policies';
-import { ALLOW_FILE_APPROVER, ALLOW_INTERVIEW_ATTENDEE } from '../decorators/tenant-resource.decorator';
+import { ALLOW_APPROVER_CV_DOWNLOAD, ALLOW_FILE_APPROVER, ALLOW_INTERVIEW_ATTENDEE } from '../decorators/tenant-resource.decorator';
 import {
   canAccessApplication,
   canReadAsApprover,
@@ -17,6 +17,9 @@ import {
   loadAccessProfile,
   resolveFileApplicationId,
 } from '../access/file-access';
+
+/** Document types a pending approver may download without DOWNLOAD_DOCUMENTS. */
+const CV_DOCUMENT_TYPES = ['CV', 'Resume'];
 
 /** Route params whose values are database UUIDs, including nested ids. */
 const UUID_PARAM_NAME = /^(?:id|.+Id)$/;
@@ -143,6 +146,22 @@ export class TenantScopedGuard implements CanActivate {
       // file of this candidate.
       if (!user?.userId) throw new ForbiddenException('Access denied: unauthenticated request');
       const profile = await loadAccessProfile(this.prisma, user);
+      const cvDownloadRoute =
+        resource === 'candidateDocument' &&
+        this.reflector.get<boolean>(ALLOW_APPROVER_CV_DOWNLOAD, context.getHandler()) === true;
+      if (cvDownloadRoute && !profile.isAdmin && !profile.permissions.includes('DOWNLOAD_DOCUMENTS')) {
+        // Without DOWNLOAD_DOCUMENTS the only way through is the pending
+        // approver's CV/resume download for the candidate under approval.
+        const doc = await this.prisma.candidateDocument.findUnique({ where: { id }, select: { candidateId: true, documentType: true } });
+        const isCv = doc ? CV_DOCUMENT_TYPES.includes(doc.documentType) : false;
+        if (!doc || !isCv || !(await canReadCandidateAsApprover(this.prisma, profile, doc.candidateId))) {
+          throw new ForbiddenException({
+            code: 'DOCUMENT_DOWNLOAD_DENIED',
+            message: 'Access denied: downloading this document requires DOWNLOAD_DOCUMENTS, or a pending approval on this candidate (CV only).',
+          });
+        }
+        return true;
+      }
       if (!profile.isOversight && !profile.permissions.includes('CANDIDATE_VIEW')) {
         const candidateId =
           resource === 'candidate'
