@@ -10,6 +10,7 @@ import {
   Min,
   IsUUID,
   IsEnum,
+  MinLength,
   IsIn,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -119,6 +120,20 @@ export class CreateVacancyRequestDto {
   @IsString()
   @MaxLength(5000)
   benefits?: string | null;
+
+  // B3 (v2 §4/§7): due date (alias of targetFillDate), grade, assigned employee.
+  @IsOptional()
+  @IsDateString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  dueDate?: string | null;
+
+  @IsOptional()
+  @IsUUID()
+  gradeId?: string | null;
+
+  @IsOptional()
+  @IsUUID()
+  assignedEmployeeId?: string | null;
 }
 
 export class UpdateVacancyRequestDto {
@@ -221,11 +236,27 @@ export class UpdateVacancyRequestDto {
   @IsString()
   @MaxLength(5000)
   benefits?: string | null;
+
+  // B3 (v2 §4/§7): due date (alias of targetFillDate), grade, assigned employee.
+  @IsOptional()
+  @IsDateString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  dueDate?: string | null;
+
+  @IsOptional()
+  @IsUUID()
+  gradeId?: string | null;
+
+  @IsOptional()
+  @IsUUID()
+  assignedEmployeeId?: string | null;
 }
 
 export class UpdateVacancyStatusDto {
-  @IsEnum(['Open', 'On Hold', 'Cancelled'])
-  status!: 'Open' | 'On Hold' | 'Cancelled';
+  // B3: Open (= reopen), On Hold (= hold), Closed (= close). Reason required.
+  // Partially Filled / Filled are set by seats; Cancelled is requisition-only.
+  @IsEnum(['Open', 'On Hold', 'Closed'])
+  status!: 'Open' | 'On Hold' | 'Closed';
 
   @IsOptional()
   @IsString()
@@ -314,9 +345,32 @@ export class AssignTeamMemberDto {
   assignmentKind?: 'PRIMARY' | 'SUPPORT';
 }
 
+/** B3: hold / reopen / close a job. */
+export class JobStatusReasonDto {
+  @IsString()
+  @MinLength(3, { message: 'A reason is required.' })
+  @MaxLength(1000)
+  reason!: string;
+}
+
+/** B3: cancel a requisition. Reason required once approved (enforced in the service). */
+export class CancelVacancyRequestDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  reason?: string;
+}
+
+/** B3: activate an approved requisition. */
+export class ActivateVacancyRequestDto {
+  @IsOptional()
+  @IsUUID()
+  assignedEmployeeId?: string;
+}
+
 export class VacancyWorkQueueQueryDto {
   @IsOptional()
-  @IsEnum(['Pending Activation', 'Open', 'On Hold', 'Partially Filled', 'Filled', 'Cancelled'])
+  @IsEnum(['Open', 'On Hold', 'Partially Filled', 'Filled', 'Closed'])
   status?: string;
 
   @IsOptional()

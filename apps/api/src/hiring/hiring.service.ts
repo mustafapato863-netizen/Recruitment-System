@@ -1,3 +1,4 @@
+import { recordJoin } from '../vacancy-core/vacancy-lifecycle';
 import {
   BadRequestException,
   ForbiddenException,
@@ -398,16 +399,8 @@ export class HiringService {
           throw new BadRequestException('Vacancy headcount is already full');
         }
 
-        const newJoined = vacancy.joinedHeadcount + 1;
-        const shouldClose = newJoined >= vacancy.approvedHeadcount;
-
-        await tx.vacancy.update({
-          where: { id: vacancy.id },
-          data: {
-            joinedHeadcount: { increment: 1 },
-            ...(shouldClose ? { status: 'Closed' } : {}),
-          },
-        });
+        // B3: Joined fills one seat -> Partially Filled / Filled, with history.
+        await recordJoin(tx, vacancy, user.userId);
 
         await tx.application.update({
           where: { id: hiringCase.applicationId },

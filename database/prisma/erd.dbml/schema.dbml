@@ -107,6 +107,8 @@ Table users {
   taskReminders Boolean [not null, default: true]
   userRoles user_roles [not null]
   vacancyRequests vacancy_requests [not null]
+  assignedVacancyRequests vacancy_requests [not null]
+  vacancyStatusChanges vacancy_status_histories [not null]
   approvals vacancy_request_approvals [not null]
   assignments vacancy_assignments [not null]
   primaryApplications applications [not null]
@@ -250,6 +252,13 @@ Table vacancy_requests {
   benefits String
   submittedAt DateTime
   approvalRevision Int [not null, default: 1]
+  gradeId String
+  grade master_data_values
+  assignedEmployeeId String
+  assignedEmployee users
+  activatedAt DateTime
+  cancelledAt DateTime
+  cancelReason String
   approvals vacancy_request_approvals [not null]
   vacancy vacancies
   createdAt DateTime [default: `now()`, not null]
@@ -286,7 +295,7 @@ Table vacancies {
   vacancyRequestId String [unique, not null]
   vacancyRequest vacancy_requests [not null]
   vacancyCode String [unique, not null]
-  status String [not null, default: 'Pending Activation']
+  status String [not null, default: 'Open']
   approvedHeadcount Int [not null]
   joinedHeadcount Int [not null, default: 0]
   openedAt DateTime
@@ -302,6 +311,7 @@ Table vacancies {
   benefits String
   assignments vacancy_assignments [not null]
   applications applications [not null]
+  statusHistory vacancy_status_histories [not null]
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [not null]
 }
@@ -426,6 +436,18 @@ Table applications {
   indexes {
     (vacancyId, candidateId) [unique]
   }
+}
+
+Table vacancy_status_histories {
+  id String [pk]
+  vacancyId String [not null]
+  vacancy vacancies [not null]
+  fromStatus String
+  toStatus String [not null]
+  reason String
+  changedById String
+  changedBy users
+  createdAt DateTime [default: `now()`, not null]
 }
 
 Table application_status_histories {
@@ -888,6 +910,7 @@ Table master_data_values {
   version Int [not null, default: 1]
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [default: `now()`, not null]
+  gradeRequests vacancy_requests [not null]
 
   indexes {
     (organizationId, category, code) [unique]
@@ -955,6 +978,10 @@ Ref: vacancy_requests.positionId > positions.id [delete: Restrict]
 
 Ref: vacancy_requests.requesterId > users.id [delete: Restrict]
 
+Ref: vacancy_requests.gradeId > master_data_values.id [delete: Restrict]
+
+Ref: vacancy_requests.assignedEmployeeId > users.id [delete: Restrict]
+
 Ref: vacancy_request_approvals.vacancyRequestId > vacancy_requests.id [delete: Restrict]
 
 Ref: vacancy_request_approvals.assigneeUserId > users.id [delete: Restrict]
@@ -984,6 +1011,10 @@ Ref: applications.candidateId > candidates.id [delete: Restrict]
 Ref: applications.primaryRecruiterId > users.id [delete: Restrict]
 
 Ref: applications.taskOwnerId > users.id [delete: Restrict]
+
+Ref: vacancy_status_histories.vacancyId > vacancies.id [delete: Restrict]
+
+Ref: vacancy_status_histories.changedById > users.id [delete: Restrict]
 
 Ref: application_status_histories.applicationId > applications.id [delete: Restrict]
 

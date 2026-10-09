@@ -40,6 +40,17 @@ import { NotificationsService } from '../notifications/notifications.service';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import { exportFailed } from '../common/errors/api-error';
 import { AccessControlService } from '../access-control/access-control.service';
+import {
+  CLOSED_APPLICATION_STAGES,
+  REQUISITION_CANCELLED_REASON,
+  assertEligibleAssignee,
+  assertGrade,
+  assertJobOwnerOrManager,
+  requireReason,
+  seatStatus,
+  writeJobStatus,
+  type JobStatus,
+} from './vacancy-lifecycle';
 import { MasterDataService } from '../master-data/master-data.service';
 import type { AuthUser } from '@recruitflow/contracts';
 
@@ -236,8 +247,8 @@ export class VacancyCoreService {
           : null;
       const nextAction = newApplicants > 0
         ? { code: 'review-applicants', label: 'Review applicants', enabled: true, targetStage: 'Screening' as const, requiresReason: false }
-        : vacancy.status === 'Pending Activation'
-          ? { code: 'activate-job', label: 'Activate job', enabled: true, requiresReason: false }
+        : vacancy.status === 'On Hold'
+          ? { code: 'reopen-job', label: 'Reopen job', enabled: true, requiresReason: true }
           : { code: 'open-job', label: 'Open job', enabled: true, requiresReason: false };
       const latestApplication = vacancy.applications.reduce<Date | null>(
         (latest, app) => !latest || app.updatedAt > latest ? app.updatedAt : latest,
@@ -307,10 +318,24 @@ export class VacancyCoreService {
       responsibilities: input.responsibilities ?? null,
       qualifications: input.qualifications ?? null,
       benefits: input.benefits ?? null,
+      gradeId: input.gradeId ?? null,
+      assignedEmployeeId: input.assignedEmployeeId ?? null,
     };
+    // v2 §7: "due date" is the requisition's targetFillDate; accept either name.
+    if (input.dueDate !== undefined) payload.targetFillDate = input.dueDate;
 
     this.validateRequestPlan(payload, false);
+    await this.assertRequisitionRefs(organizationId, payload);
     return this.repository.createRequest(payload);
+  }
+
+  /** B3: grade from master data; assigned employee active and non-admin. */
+  private async assertRequisitionRefs(
+    organizationId: string,
+    request: { gradeId?: string | null; assignedEmployeeId?: string | null },
+  ): Promise<void> {
+    if (request.gradeId) await assertGrade(this.prisma, organizationId, request.gradeId);
+    if (request.assignedEmployeeId) await assertEligibleAssignee(this.prisma, organizationId, request.assignedEmployeeId);
   }
 
   private validateRequestPlan(
@@ -367,7 +392,11 @@ export class VacancyCoreService {
     if (input.responsibilities !== undefined) request.responsibilities = input.responsibilities;
     if (input.qualifications !== undefined) request.qualifications = input.qualifications;
     if (input.benefits !== undefined) request.benefits = input.benefits;
+    if (input.dueDate !== undefined) request.targetFillDate = input.dueDate;
+    if (input.gradeId !== undefined) request.gradeId = input.gradeId;
+    if (input.assignedEmployeeId !== undefined) request.assignedEmployeeId = input.assignedEmployeeId;
     this.validateRequestPlan(request, false);
+    await this.assertRequisitionRefs(organizationId, request);
     request.updatedAt = new Date().toISOString();
 
     return this.repository.saveRequest(request);
@@ -460,92 +489,182 @@ export class VacancyCoreService {
     return this.decideRequest(id, organizationId, actorUserId, actorRoleCodes, 'Rejected', action);
   }
 
+  /**
+   * B3 (v2 §3/§4): cancel a requisition, with a reason once it is approved.
+   * When it has a live job, in ONE transaction: the job becomes Closed and
+   * every live file (not Joined/Rejected/Withdrawn) is Rejected with
+   * "Requisition cancelled" plus history. Idempotent: a Cancelled requisition
+   * is returned unchanged.
+   */
   async cancelRequest(
     id: string,
     organizationId: string,
     actorUserId: string,
-  ): Promise<VacancyRequest> {
+    reason?: string | null,
+  ): Promise<VacancyRequestActionResult & { rejectedApplications?: number; closedJob?: boolean }> {
     const request = await this.requireRequest(id, organizationId);
-    if (request.status !== 'Draft' && request.status !== 'Pending Approval') {
+    if (request.status === 'Cancelled') return { request, idempotent: true };
+    if (request.status === 'Rejected') {
       throw new ConflictException(`Request ${request.requestCode} cannot be cancelled from ${request.status}.`);
     }
+    const afterApproval = request.status === 'Approved' || request.status === 'Converted to Vacancy';
+    const cancelReason = afterApproval ? requireReason(reason, 'cancel an approved requisition') : (reason?.trim() || null);
 
-    // Auto-reject pending approval if it exists
-    const approval = [...request.approvals]
-      .reverse()
-      .find(
-        (c) => c.revision === request.approvalRevision && c.status === 'Pending',
-      );
-    if (approval) {
-      approval.status = 'Rejected';
-      approval.comment = 'Cancelled by requester';
-      approval.decidedAt = new Date().toISOString();
-      approval.assigneeUserId = actorUserId;
-    }
+    const result = await this.prisma.$transaction(async (tx) => {
+      // Re-read under the transaction so a concurrent cancel is a no-op.
+      const current = await tx.vacancyRequest.findUniqueOrThrow({ where: { id }, select: { status: true, approvalRevision: true } });
+      if (current.status === 'Cancelled') return { idempotent: true, rejected: 0, closed: false };
+      const now = new Date();
+      await tx.vacancyRequestApproval.updateMany({
+        where: { vacancyRequestId: id, revision: current.approvalRevision, status: 'Pending' },
+        data: { status: 'Rejected', comment: 'Cancelled by requester', decidedAt: now, assigneeUserId: actorUserId },
+      });
+      await tx.vacancyRequest.update({
+        where: { id },
+        data: { status: 'Cancelled', cancelledAt: now, cancelReason },
+      });
+      const job = await tx.vacancy.findUnique({ where: { vacancyRequestId: id }, select: { id: true, status: true } });
+      let rejected = 0;
+      let closed = false;
+      if (job && job.status !== 'Closed') {
+        closed = await writeJobStatus(tx, job, 'Closed', `${REQUISITION_CANCELLED_REASON}: ${cancelReason ?? 'no reason given'}`, actorUserId);
+        const live = await tx.application.findMany({
+          where: { vacancyId: job.id, stage: { notIn: [...CLOSED_APPLICATION_STAGES] } },
+          select: { id: true, stage: true },
+        });
+        for (const application of live) {
+          await tx.application.update({ where: { id: application.id }, data: { stage: 'Rejected', version: { increment: 1 } } });
+          await tx.applicationStatusHistory.create({
+            data: { applicationId: application.id, fromStage: application.stage, toStage: 'Rejected', changedById: actorUserId, reason: REQUISITION_CANCELLED_REASON },
+          });
+        }
+        rejected = live.length;
+      }
+      return { idempotent: false, rejected, closed };
+    });
 
-    request.status = 'Cancelled';
-    request.updatedAt = new Date().toISOString();
-    return this.repository.saveRequest(request);
+    const saved = await this.requireRequest(id, organizationId);
+    const vacancy = await this.repository.getVacancyByRequestId(organizationId, id);
+    return {
+      request: saved,
+      ...(vacancy ? { vacancy } : {}),
+      idempotent: result.idempotent,
+      rejectedApplications: result.rejected,
+      closedJob: result.closed,
+    };
   }
 
+  /** Back-compat alias for POST /vacancy-requests/:id/convert. Use activate. */
   async convertToVacancy(
     id: string,
     organizationId: string,
     actorUserId?: string,
   ): Promise<VacancyRequestActionResult> {
-    const request = await this.requireRequest(id, organizationId);
-    const existingVacancy = await this.repository.getVacancyByRequestId(organizationId, id);
+    return this.activateRequest(id, organizationId, actorUserId ?? null, {});
+  }
 
-    if (existingVacancy) {
+  /**
+   * B3 (v2 §4/§7): activating an approved requisition creates its job and
+   * assigns the employee in one step. No Pending Activation. Cancelled -> 409.
+   * Idempotent once activated.
+   */
+  async activateRequest(
+    id: string,
+    organizationId: string,
+    actorUserId: string | null,
+    input: { assignedEmployeeId?: string | null },
+  ): Promise<VacancyRequestActionResult> {
+    const request = await this.requireRequest(id, organizationId);
+    if (request.status === 'Cancelled') {
+      throw new ConflictException({ code: 'REQUISITION_CANCELLED', message: `Request ${request.requestCode} is Cancelled and cannot be activated.` });
+    }
+    const existingVacancy = await this.repository.getVacancyByRequestId(organizationId, id);
+    if (request.status === 'Converted to Vacancy' && existingVacancy) {
       return { request, vacancy: existingVacancy, idempotent: true };
     }
-
     if (request.status !== 'Approved') {
-      throw new ConflictException(
-        `Request ${request.requestCode} must be approved before conversion.`,
-      );
+      throw new ConflictException(`Request ${request.requestCode} must be approved before activation.`);
+    }
+    if (!request.targetFillDate) {
+      throw new BadRequestException({ code: 'DUE_DATE_REQUIRED', message: `Request ${request.requestCode} needs a due date before activation.` });
+    }
+    const assigneeId = input.assignedEmployeeId ?? request.assignedEmployeeId ?? null;
+    if (!assigneeId) {
+      throw new BadRequestException({ code: 'ASSIGNEE_REQUIRED', message: `Request ${request.requestCode} needs an assigned employee before activation.` });
     }
 
-    const now = new Date().toISOString();
-    const vacancy: Vacancy = {
-      id: randomUUID(),
-      organizationId: request.organizationId,
-      branchId: request.branchId,
-      positionId: request.positionId,
-      vacancyRequestId: request.id,
-      vacancyCode: await this.repository.nextVacancyCode(),
-      status: request.recruitmentTiming === 'Deferred' ? 'On Hold' : 'Pending Activation',
-      approvedHeadcount: request.requestedHeadcount,
-      joinedHeadcount: 0,
-      openedAt: null,
-      targetStartDate: request.targetStartDate,
-      jobSummary: request.jobSummary,
-      description: request.description,
-      responsibilities: request.responsibilities,
-      qualifications: request.qualifications,
-      benefits: request.benefits,
-      assignments: [],
-      createdAt: now,
-      updatedAt: now,
-    };
+    const deferred = request.recruitmentTiming === 'Deferred';
+    const vacancyCode = existingVacancy ? null : await this.repository.nextVacancyCode();
+    const vacancyId = await this.prisma.$transaction(async (tx) => {
+      await assertEligibleAssignee(tx, organizationId, assigneeId);
+      const now = new Date();
+      let jobId: string;
+      if (existingVacancy) {
+        // Placeholder kept by the B3 migration (was Pending Activation): reuse it.
+        jobId = existingVacancy.id;
+        await tx.vacancy.update({ where: { id: jobId }, data: { status: deferred ? 'On Hold' : 'Open', openedAt: now } });
+        await tx.vacancyStatusHistory.create({
+          data: { vacancyId: jobId, fromStatus: existingVacancy.status, toStatus: deferred ? 'On Hold' : 'Open', reason: 'Requisition activated', changedById: actorUserId },
+        });
+      } else {
+        jobId = randomUUID();
+        await tx.vacancy.create({
+          data: {
+            id: jobId,
+            organizationId,
+            branchId: request.branchId,
+            positionId: request.positionId,
+            vacancyRequestId: request.id,
+            vacancyCode: vacancyCode!,
+            status: deferred ? 'On Hold' : 'Open',
+            approvedHeadcount: request.requestedHeadcount,
+            joinedHeadcount: 0,
+            openedAt: now,
+            targetStartDate: request.targetStartDate ? new Date(request.targetStartDate) : null,
+            jobSummary: request.jobSummary,
+            description: request.description,
+            responsibilities: request.responsibilities,
+            qualifications: request.qualifications,
+            benefits: request.benefits,
+          },
+        });
+        await tx.vacancyStatusHistory.create({
+          data: { vacancyId: jobId, fromStatus: null, toStatus: 'Open', reason: 'Requisition activated', changedById: actorUserId },
+        });
+        if (deferred) {
+          await tx.vacancyStatusHistory.create({
+            data: { vacancyId: jobId, fromStatus: 'Open', toStatus: 'On Hold', reason: `Deferred recruitment until ${request.plannedOpenDate ?? 'the planned open date'}`, changedById: actorUserId },
+          });
+        }
+      }
+      await tx.vacancyAssignment.updateMany({ where: { vacancyId: jobId, assignmentKind: 'PRIMARY', isActive: true, NOT: { userId: assigneeId } }, data: { isActive: false } });
+      const already = await tx.vacancyAssignment.findFirst({ where: { vacancyId: jobId, assignmentKind: 'PRIMARY', isActive: true, userId: assigneeId } });
+      if (!already) {
+        await tx.vacancyAssignment.create({
+          data: { id: randomUUID(), vacancyId: jobId, userId: assigneeId, roleCode: 'RECRUITER', assignmentKind: 'PRIMARY', isActive: true, assignedAt: now },
+        });
+      }
+      await tx.vacancyRequest.update({
+        where: { id: request.id },
+        data: { status: 'Converted to Vacancy', activatedAt: now, assignedEmployeeId: assigneeId },
+      });
+      return jobId;
+    });
 
-    request.status = 'Converted to Vacancy';
-    request.updatedAt = now;
-    await this.repository.saveRequestAndVacancy(request, vacancy);
-
+    const savedRequest = await this.requireRequest(id, organizationId);
+    const vacancy = await this.repository.getVacancy(organizationId, vacancyId);
     if (request.requesterId !== actorUserId) {
       await this.notify({
         organizationId,
         recipientUserId: request.requesterId,
         type: 'VacancyRequestConverted',
-        title: 'Vacancy request converted',
-        message: `Request ${request.requestCode} was converted into vacancy ${vacancy.vacancyCode}.`,
+        title: 'Requisition activated',
+        message: `Request ${request.requestCode} was activated as job ${vacancy?.vacancyCode ?? ''}.`,
         entityType: 'VacancyRequest',
         entityId: request.id,
       });
     }
-
-    return { request, vacancy, idempotent: false };
+    return { request: savedRequest, ...(vacancy ? { vacancy } : {}), idempotent: false };
   }
 
   private async decideRequest(
@@ -688,36 +807,76 @@ export class VacancyCoreService {
     return detail;
   }
 
+  /**
+   * B3: job status changes go through the transition table. Hold, reopen and
+   * close are owner/manager actions with a required reason and a history row.
+   */
   async updateVacancyStatus(
     id: string,
     organizationId: string,
-    status: Vacancy['status'],
+    status: string,
     user?: AuthUser,
+    reason?: string | null,
+  ): Promise<Vacancy> {
+    if (status === 'On Hold') return this.holdVacancy(id, organizationId, reason, user);
+    if (status === 'Open') return this.reopenVacancy(id, organizationId, reason, user);
+    if (status === 'Closed') return this.closeVacancy(id, organizationId, reason, user);
+    throw new BadRequestException(`Status ${status} is set by the system (seats) and cannot be chosen.`);
+  }
+
+  async holdVacancy(id: string, organizationId: string, reason: string | null | undefined, user?: AuthUser): Promise<Vacancy> {
+    return this.changeJobStatus(id, organizationId, user, 'hold', reason, () => 'On Hold');
+  }
+
+  async reopenVacancy(id: string, organizationId: string, reason: string | null | undefined, user?: AuthUser): Promise<Vacancy> {
+    return this.changeJobStatus(id, organizationId, user, 'reopen', reason, (job) => {
+      if (job.status !== 'On Hold') {
+        throw new ConflictException({ code: 'ILLEGAL_JOB_TRANSITION', message: `Only a held job can be reopened (job is ${job.status}).` });
+      }
+      return seatStatus(job.joinedHeadcount, job.approvedHeadcount);
+    });
+  }
+
+  async closeVacancy(id: string, organizationId: string, reason: string | null | undefined, user?: AuthUser): Promise<Vacancy> {
+    return this.changeJobStatus(id, organizationId, user, 'close', reason, () => 'Closed');
+  }
+
+  private async changeJobStatus(
+    id: string,
+    organizationId: string,
+    user: AuthUser | undefined,
+    action: 'hold' | 'reopen' | 'close',
+    reason: string | null | undefined,
+    target: (job: { status: string; joinedHeadcount: number; approvedHeadcount: number }) => JobStatus,
   ): Promise<Vacancy> {
     await this.assertVacancyVisible(organizationId, id, user);
-    const vacancy = await this.repository.getVacancy(organizationId, id);
-    if (!vacancy) {
-      throw new NotFoundException(`Vacancy ${id} was not found.`);
-    }
+    const text = requireReason(reason, `${action} this job`);
+    if (!user) throw new ForbiddenException('Only the job owner or their manager can change job status.');
+    await this.prisma.$transaction(async (tx) => {
+      const job = await tx.vacancy.findFirst({
+        where: { id, organizationId },
+        select: { id: true, status: true, joinedHeadcount: true, approvedHeadcount: true },
+      });
+      if (!job) throw new NotFoundException(`Vacancy ${id} was not found.`);
+      await assertJobOwnerOrManager(tx, organizationId, id, user.userId);
+      const to = target(job);
+      if (job.status === to) {
+        throw new ConflictException({ code: 'ILLEGAL_JOB_TRANSITION', message: `Job is already ${to}.` });
+      }
+      await writeJobStatus(tx, job, to, text, user.userId);
+    });
+    const updated = await this.repository.getVacancy(organizationId, id);
+    if (!updated) throw new NotFoundException(`Vacancy ${id} was not found.`);
+    return updated;
+  }
 
-    if (status === 'Open' && !vacancy.jobSummary?.trim()) {
-      throw new BadRequestException(
-        `Vacancy ${vacancy.vacancyCode} needs a job summary before it can be opened. Edit the vacancy and add the role requirements first.`,
-      );
-    }
-
-    if (status === 'Open' && !this.hasPrimaryAssignment(vacancy)) {
-      throw new BadRequestException(
-        `Vacancy ${vacancy.vacancyCode} needs an assigned primary recruiter before it can be opened. Assign the vacancy and try again.`,
-      );
-    }
-
-    vacancy.status = status;
-    if (status === 'Open' && !vacancy.openedAt) {
-      vacancy.openedAt = new Date().toISOString();
-    }
-    vacancy.updatedAt = new Date().toISOString();
-    return this.repository.saveVacancy(vacancy);
+  async getVacancyStatusHistory(organizationId: string, id: string, user?: AuthUser) {
+    await this.assertVacancyVisible(organizationId, id, user);
+    return this.prisma.vacancyStatusHistory.findMany({
+      where: { vacancyId: id, vacancy: { organizationId } },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true, fromStatus: true, toStatus: true, reason: true, changedById: true, createdAt: true },
+    });
   }
 
   async assignTeamMember(
@@ -776,30 +935,9 @@ export class VacancyCoreService {
       }
     });
 
-    // A converted request starts in Pending Activation because it must have a
-    // primary owner before recruiters can work it. Once that owner is set, a
-    // complete vacancy can become live immediately; this removes the dead-end
-    // where the assignment screen only offered open vacancies while opening
-    // itself required an assignment.
-    if (assignmentKind === 'PRIMARY' && vacancy.status === 'Pending Activation' && vacancy.jobSummary?.trim()) {
-      const now = new Date().toISOString();
-      await this.repository.saveVacancy({
-        ...vacancy,
-        status: 'Open',
-        openedAt: vacancy.openedAt ?? now,
-        updatedAt: now,
-      });
-    }
-
     const updated = await this.repository.getVacancy(organizationId, id);
     if (!updated) throw new NotFoundException(`Vacancy ${id} was not found.`);
     return updated;
-  }
-
-  private hasPrimaryAssignment(vacancy: Pick<Vacancy, 'assignments'>): boolean {
-    return vacancy.assignments?.some(
-      (assignment) => assignment.isActive && (assignment.assignmentKind ?? 'PRIMARY') === 'PRIMARY',
-    ) ?? false;
   }
 
   /**

@@ -3,6 +3,8 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -14,7 +16,7 @@ import {
 import type { AuthUser } from '@recruitflow/contracts';
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { VacancyCoreService } from './vacancy-core.service';
-import { UpdateVacancyStatusDto, UpdateVacancyDto, AssignTeamMemberDto, VacancyWorkQueueQueryDto } from './vacancy-core.dto';
+import { UpdateVacancyStatusDto, UpdateVacancyDto, AssignTeamMemberDto, VacancyWorkQueueQueryDto, JobStatusReasonDto } from './vacancy-core.dto';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { TenantScopedGuard } from '../common/guards/tenant-scoped.guard';
@@ -60,7 +62,8 @@ export class VacanciesController {
   }
 
   @Patch(':id/status')
-  @RequirePermissions('VACANCY_MANAGE')
+  // B3: owner/manager is enforced in the service (v2 §3 Hold); recruiters own jobs without VACANCY_MANAGE.
+  @RequireAnyPermissions('VACANCY_MANAGE', 'VACANCY_VIEW')
   @AuditAction('VACANCY_STATUS_UPDATE')
   @UseGuards(TenantScopedGuard)
   @TenantResource({ resource: 'vacancy', param: 'id' })
@@ -74,7 +77,46 @@ export class VacanciesController {
       user.organizationId,
       body.status,
       user,
+      body.reason,
     );
+  }
+
+  @Post(':id/hold')
+  @HttpCode(HttpStatus.OK)
+  @RequireAnyPermissions('VACANCY_MANAGE', 'VACANCY_VIEW')
+  @AuditAction('VACANCY_HOLD')
+  @UseGuards(TenantScopedGuard)
+  @TenantResource({ resource: 'vacancy', param: 'id' })
+  hold(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Body() body: JobStatusReasonDto) {
+    return this.vacancyCoreService.holdVacancy(id, user.organizationId, body.reason, user);
+  }
+
+  @Post(':id/reopen')
+  @HttpCode(HttpStatus.OK)
+  @RequireAnyPermissions('VACANCY_MANAGE', 'VACANCY_VIEW')
+  @AuditAction('VACANCY_REOPEN')
+  @UseGuards(TenantScopedGuard)
+  @TenantResource({ resource: 'vacancy', param: 'id' })
+  reopen(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Body() body: JobStatusReasonDto) {
+    return this.vacancyCoreService.reopenVacancy(id, user.organizationId, body.reason, user);
+  }
+
+  @Post(':id/close')
+  @HttpCode(HttpStatus.OK)
+  @RequireAnyPermissions('VACANCY_MANAGE', 'VACANCY_VIEW')
+  @AuditAction('VACANCY_CLOSE')
+  @UseGuards(TenantScopedGuard)
+  @TenantResource({ resource: 'vacancy', param: 'id' })
+  close(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Body() body: JobStatusReasonDto) {
+    return this.vacancyCoreService.closeVacancy(id, user.organizationId, body.reason, user);
+  }
+
+  @Get(':id/status-history')
+  @RequirePermissions('VACANCY_VIEW')
+  @UseGuards(TenantScopedGuard)
+  @TenantResource({ resource: 'vacancy', param: 'id' })
+  statusHistory(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.vacancyCoreService.getVacancyStatusHistory(user.organizationId, id, user);
   }
 
   @Patch(':id')

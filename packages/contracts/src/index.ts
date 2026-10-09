@@ -84,13 +84,13 @@ export const vacancyRequestApprovalStatuses = [
 export type VacancyRequestApprovalStatus =
   (typeof vacancyRequestApprovalStatuses)[number];
 
+// B3 (v2 §3/§4): Cancelled lives only on the requisition; Pending Activation is gone.
 export const vacancyStatuses = [
-  'Pending Activation',
   'Open',
   'On Hold',
   'Partially Filled',
   'Filled',
-  'Cancelled',
+  'Closed',
 ] as const;
 
 export type VacancyStatus = (typeof vacancyStatuses)[number];
@@ -136,6 +136,15 @@ export interface VacancyRequest {
   benefits: string | null;
   submittedAt: string | null;
   approvalRevision: number;
+  /** B3: v2 due date (same value as targetFillDate). */
+  dueDate?: string | null;
+  /** B3: master-data grade (category 'grades'). */
+  gradeId?: string | null;
+  /** B3: active, non-admin user who owns the job once activated. */
+  assignedEmployeeId?: string | null;
+  activatedAt?: string | null;
+  cancelledAt?: string | null;
+  cancelReason?: string | null;
   approvals: VacancyRequestApproval[];
   createdAt: string;
   updatedAt: string;
@@ -241,6 +250,9 @@ export interface CreateVacancyRequestInput {
   responsibilities?: string | null;
   qualifications?: string | null;
   benefits?: string | null;
+  dueDate?: string | null;
+  gradeId?: string | null;
+  assignedEmployeeId?: string | null;
 }
 
 export interface VacancyRequestActionInput {
@@ -277,6 +289,9 @@ export interface UpdateVacancyRequestInput {
   responsibilities?: string | null;
   qualifications?: string | null;
   benefits?: string | null;
+  dueDate?: string | null;
+  gradeId?: string | null;
+  assignedEmployeeId?: string | null;
 }
 
 export interface VacancyRequestFilterInput {

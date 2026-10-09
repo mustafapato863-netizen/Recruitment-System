@@ -1,3 +1,4 @@
+import { assertJobAcceptsApplications, recordJoin } from '../vacancy-core/vacancy-lifecycle';
 import {
   BadRequestException,
   ConflictException,
@@ -485,6 +486,9 @@ export class ApplicationsService {
       throw new NotFoundException(`Vacancy ${dto.vacancyId} was not found.`);
     }
 
+    // B3 (v2 §3 Hold): a held, filled or closed job accepts no new applications.
+    assertJobAcceptsApplications(vacancy);
+
     if (vacancy.status === 'Open' && vacancy.assignments.length === 0) {
       throw new BadRequestException(
         `Vacancy ${vacancy.vacancyCode} has no assigned primary recruiter. Assign the vacancy before adding candidates.`,
@@ -643,15 +647,8 @@ export class ApplicationsService {
           where: { id: application.vacancyId },
         });
         if (vacancy) {
-          const newJoined = vacancy.joinedHeadcount + 1;
-          const shouldClose = newJoined >= vacancy.approvedHeadcount;
-          await tx.vacancy.update({
-            where: { id: vacancy.id },
-            data: {
-              joinedHeadcount: { increment: 1 },
-              ...(shouldClose ? { status: 'Closed' } : {}),
-            },
-          });
+          // B3: Joined fills one seat -> Partially Filled / Filled, with history.
+          await recordJoin(tx, vacancy, actorUserId ?? null);
         }
       }
 

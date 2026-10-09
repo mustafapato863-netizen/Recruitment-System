@@ -17,7 +17,7 @@ import { Prisma } from '@recruitflow/database';
 import type { MasterDataCategory, MasterDataValueRecord } from '@recruitflow/contracts';
 import { catalogKey, normalizeBranchCity, normalizeCatalogText, uniqueCatalogNames } from './catalog-normalization';
 
-const CATALOG_CATEGORIES = new Set<MasterDataCategory>(['departments', 'skills', 'candidate-sources', 'interview-types']);
+const CATALOG_CATEGORIES = new Set<MasterDataCategory>(['departments', 'skills', 'candidate-sources', 'interview-types', 'grades' as MasterDataCategory]);
 const SUPPORTED_CATALOGS = new Set(['branches', 'job-titles', ...CATALOG_CATEGORIES]);
 
 type MasterDataBatchRow = {

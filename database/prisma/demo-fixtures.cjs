@@ -481,6 +481,8 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
       requiredSkills: ['DHA/MOH License', 'Clinical Experience'],
     });
     vacMap[v.code] = createdVac;
+    // B3: a requisition with a live job has been activated.
+    await tx.vacancyRequest.update({ where: { id: vr.id }, data: { status: 'Converted to Vacancy' } });
   }
 
   // ── 7. Real Applications ───────────────────────────────────
