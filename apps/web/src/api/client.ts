@@ -4,6 +4,12 @@ export interface ErrorFieldErrors {
   [field: string]: string[];
 }
 
+/** B1 ownership codes (main) + the v2 domain 403s whose server message is shown as-is. Other 403s stay generic. */
+const OWNERSHIP_403_CODES = new Set([
+  'JOB_NOT_OWNED', 'FILE_NOT_OWNED', 'ADMIN_CANNOT_REASSIGN', 'OWNER_NOT_ELIGIBLE', 'DOCUMENT_DOWNLOAD_DENIED', 'ADMIN_ONLY',
+  'NOT_JOB_OWNER', 'FOLLOW_UP_NOT_OWNER', 'ADMIN_CANNOT_CHANGE_JOB_STATUS', 'REASSIGN_ADMIN_FORBIDDEN', 'REASSIGN_NOT_MANAGER',
+]);
+
 export class ApiError extends Error {
   readonly statusCode: number;
   readonly details?: unknown;
@@ -142,8 +148,8 @@ async function handleResponseError(response: Response, path: string): Promise<ne
       message += minutes !== null
         ? ` Try again in ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}.`
         : ' Please try again later.';
-    } else if (code && code !== 'FORBIDDEN' && typeof problem?.message === 'string' && problem.message.trim()) {
-      // Domain 403s (FILE_NOT_OWNED, NOT_JOB_OWNER, FOLLOW_UP_NOT_OWNER, …) reach the client with a specific message.
+    } else if (code && OWNERSHIP_403_CODES.has(code) && typeof problem?.message === 'string' && problem.message.trim()) {
+      // B1 + v2 domain 403s carry a specific, user-safe message; any other 403 stays generic.
       message = problem.message.trim();
     } else {
       message = 'Access denied: you do not have permission to perform this action.';

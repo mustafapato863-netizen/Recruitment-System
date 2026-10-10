@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeftRight, Star, CalendarClock, CircleAlert, CircleCheck, Clock, Eye, Info, RotateCw, TriangleAlert, Users } from 'lucide-react';
+import { ArrowLeftRight, Briefcase, Pause, XCircle, Star, CalendarClock, CircleAlert, CircleCheck, Clock, Eye, Info, RotateCw, TriangleAlert, Users } from 'lucide-react';
 import { ButtonV2, EmptyStateV2, ForbiddenStateV2, initials, SkeletonV2, StatusChip } from '../../components/v2';
 import { useAuth } from '../../auth/AuthContext';
-import { fetchTeamWork, fileHref, type ReportWork, type TaskTone, type TeamTask, type TeamWork, type WaitingOffer } from '../api/teamWork';
+import { fetchTeamJobs, fetchTeamWork, fileHref, teamJobDetail, type ReportWork, type TeamJob, type TaskTone, type TeamTask, type TeamWork, type WaitingOffer } from '../api/teamWork';
 import { ReassignDrawer } from '../drawers/ReassignDrawer';
 import { OfferDecisionDrawer } from '../drawers/OfferDecisionDrawer';
 import { canSeePay } from '../api/offerDecision';
+import { JobStatusDrawer } from '../drawers/JobStatusDrawer';
+import { jobActions, type JobAction } from '../api/jobs';
 import './jobs.css';
 import './team.css';
 
@@ -33,6 +35,8 @@ export function TeamWorkV2() {
   const [state, setState] = useState<{ kind: 'loading' } | { kind: 'ready'; data: TeamWork } | { kind: 'forbidden' } | { kind: 'error'; message: string }>({ kind: 'loading' });
   const [attempt, setAttempt] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
+  const [jobs, setJobs] = useState<TeamJob[] | null>(null);
+  const [jobAction, setJobAction] = useState<{ job: TeamJob; action: JobAction } | null>(null);
 
   useEffect(() => {
     let live = true;
@@ -51,6 +55,13 @@ export function TeamWorkV2() {
 
   const data = state.kind === 'ready' ? state.data : null;
   const reports = data?.reports ?? null;
+  const reportKey = reports?.map((r) => r.person.id).join(',') ?? '';
+  useEffect(() => {
+    if (!reportKey) { setJobs(null); return; }
+    let live = true;
+    fetchTeamJobs(new Set(reportKey.split(','))).then((j) => live && setJobs(j)).catch(() => live && setJobs(null));
+    return () => { live = false; };
+  }, [reportKey, attempt]);
   const from = reports?.find((r) => r.person.id === params.get('reassign')) ?? null;
   const waiting = data?.waiting ?? [];
   const deciding: WaitingOffer | null = waiting.find((w) => w.offerId === params.get('offer')) ?? null;
@@ -104,11 +115,15 @@ export function TeamWorkV2() {
             <EmptyStateV2 title="No direct reports" body="People whose manager is you appear here with their open files." />
           ) : (
             <div className="rf2-team__grid">
-              {reports.map((r) => <ReportCard key={r.person.id} r={r} onReassign={() => go({ reassign: r.person.id, file: null })} canReassign={reports.length > 1} />)}
+              {reports.map((r) => <ReportCard key={r.person.id} r={r} jobs={jobs?.filter((j) => j.ownerId === r.person.id) ?? []} onJob={(job, action) => setJobAction({ job, action })} onReassign={() => go({ reassign: r.person.id, file: null })} canReassign={reports.length > 1} />)}
             </div>
           )}
           {deciding ? <OfferDecisionDrawer offerId={deciding.offerId} ownerName={deciding.ownerName} showPay={showPay} onClose={() => go({ offer: null })} onDone={done} /> : null}
-          <p className="rf2-inline-note"><Users aria-hidden="true" /> Only your direct reports appear here. Reassign moves files to a new primary recruiter — one file, a person’s files on one job, or all their open files. Jobs keep their owner.</p>
+          <p className="rf2-inline-note"><Users aria-hidden="true" /> Only your direct reports appear here. Reassign moves files to a new primary recruiter — one file, a person’s files on one job, or all their open files. Jobs keep their owner; as their manager you can hold or close a report’s job.</p>
+          {jobAction ? (
+            <JobStatusDrawer job={teamJobDetail(jobAction.job)} initial={jobAction.action} onClose={() => setJobAction(null)}
+              onDone={() => { const t = jobAction.job.title; setJobAction(null); setToast(`${t}: status changed.`); setAttempt((n) => n + 1); }} />
+          ) : null}
           {from && reports ? <ReassignDrawer from={from} reports={reports} fileId={params.get('file')} managerName={user?.displayName ?? 'you'} onClose={() => go({ reassign: null, file: null })} onDone={done} /> : null}
         </>
       ) : null}
@@ -116,7 +131,7 @@ export function TeamWorkV2() {
   );
 }
 
-function ReportCard({ r, onReassign, canReassign }: { r: ReportWork; onReassign: () => void; canReassign: boolean }) {
+function ReportCard({ r, jobs: owned, onJob, onReassign, canReassign }: { r: ReportWork; jobs: TeamJob[]; onJob: (j: TeamJob, a: JobAction) => void; onReassign: () => void; canReassign: boolean }) {
   const jobs = [...new Set(r.files.map((f) => f.job))];
   const shown = r.tasks.slice(0, MAX_TASKS);
   return (
@@ -141,6 +156,19 @@ function ReportCard({ r, onReassign, canReassign }: { r: ReportWork; onReassign:
           ))}
         </ul>
       )}
+      {owned.length ? (
+        <ul className="rf2-team__list" aria-label={`${r.person.name}’s jobs`}>
+          {owned.map((j) => (
+            <li key={j.id} className="rf2-team__task" data-kind="job">
+              <span className="rf2-team__ticon"><Briefcase aria-hidden="true" /></span>
+              <div className="rf2-team__ttext"><p className="rf2-jtable__name">{j.title}</p><p className="rf2-jtable__sub">{[j.code, j.site, `${j.filled} of ${j.target} seats`].filter(Boolean).join(' · ')}</p></div>
+              {j.status === 'On Hold' ? <StatusChip tone="warning" label="On hold" /> : null}
+              {jobActions(j.status).includes('hold') ? <ButtonV2 kind="tertiary" size="sm" icon={<Pause />} onClick={() => onJob(j, 'hold')} aria-label={`Hold ${j.title}`}>Hold</ButtonV2> : null}
+              {jobActions(j.status).includes('close') ? <ButtonV2 kind="tertiary" size="sm" icon={<XCircle />} onClick={() => onJob(j, 'close')} aria-label={`Close ${j.title}`}>Close</ButtonV2> : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
       {r.tasks.length > MAX_TASKS ? <p className="rf2-jtable__sub"><Info aria-hidden="true" /> {r.tasks.length - MAX_TASKS} more in {r.person.name.split(' ')[0]}’s Open jobs.</p> : null}
     </section>
   );
