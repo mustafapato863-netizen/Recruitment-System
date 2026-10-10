@@ -254,6 +254,8 @@ Table vacancy_requests {
   approvalRevision Int [not null, default: 1]
   gradeId String
   grade master_data_values
+  departmentId String [note: 'M1: department from master data (category \'departments\').']
+  department master_data_values
   assignedEmployeeId String
   assignedEmployee users
   activatedAt DateTime
@@ -913,6 +915,7 @@ Table master_data_values {
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [default: `now()`, not null]
   gradeRequests vacancy_requests [not null]
+  departmentRequests vacancy_requests [not null]
 
   indexes {
     (organizationId, category, code) [unique]
@@ -981,6 +984,8 @@ Ref: vacancy_requests.positionId > positions.id [delete: Restrict]
 Ref: vacancy_requests.requesterId > users.id [delete: Restrict]
 
 Ref: vacancy_requests.gradeId > master_data_values.id [delete: Restrict]
+
+Ref: vacancy_requests.departmentId > master_data_values.id [delete: Restrict]
 
 Ref: vacancy_requests.assignedEmployeeId > users.id [delete: Restrict]
 
