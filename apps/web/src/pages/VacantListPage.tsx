@@ -21,6 +21,9 @@ import {
   VacancyCardSkills,
 } from '../components/vacancy/VacancyCard';
 import { getVacancyBlockingReasons } from '../utils/vacancyActivation';
+import { partitionVacancies, unwrapList } from '../utils/vacancyAccess';
+import type { MaybeRedacted, RedactedVacancy } from '../types/redactedVacancy';
+import { RedactedJobsSection } from '../components/access/RedactedJobs';
 
 interface JobPositionRow {
   id: string;
@@ -113,6 +116,8 @@ export function VacantListPage() {
   };
 
   const [apiVacancies, setApiVacancies] = useState<JobPositionRow[]>([]);
+  // B1: other owners' jobs arrive redacted; shown read-only, never in the actionable list.
+  const [redactedJobs, setRedactedJobs] = useState<RedactedVacancy[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
 
@@ -231,8 +236,9 @@ export function VacantListPage() {
   const loadVacancies = useCallback(async () => {
     setIsLoading(true);
     try {
-      const res = await getApi<RawVacancyResponseItem[] | { data: RawVacancyResponseItem[] }>('/vacancies');
-      const rawList = Array.isArray(res) ? res : res?.data || [];
+      const res = await getApi<Array<MaybeRedacted<RawVacancyResponseItem>> | { data?: Array<MaybeRedacted<RawVacancyResponseItem>> }>('/vacancies');
+      const { full: rawList, redacted } = partitionVacancies(unwrapList(res));
+      setRedactedJobs(redacted);
       const statusMap: Record<string, JobPositionRow['status']> = {
         Open: 'Open',
         'Pending Activation': 'Pending Activation',
@@ -291,6 +297,7 @@ export function VacantListPage() {
       setApiVacancies(mapped);
     } catch {
       setApiVacancies([]);
+      setRedactedJobs([]);
     } finally {
       setIsLoading(false);
     }
@@ -1378,6 +1385,7 @@ export function VacantListPage() {
               </>
             )}
           </div>
+          {!isLoading && <div className="mt-4"><RedactedJobsSection jobs={redactedJobs} /></div>}
         </>
       )}
 

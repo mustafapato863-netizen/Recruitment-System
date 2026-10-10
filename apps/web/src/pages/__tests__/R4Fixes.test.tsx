@@ -67,8 +67,8 @@ const interview = {
     { id: 't2', userId: 'u-ivan', userName: 'Ivan Interviewer', role: 'Panelist', response: 'Accepted' },
   ],
   scorecards: [
-    { id: 's1', interviewerId: 'u-maya', interviewerName: 'Maya Lead', overallRating: 4, recommendation: 'Hire', status: 'Submitted' },
-    { id: 's2', interviewerId: 'u-ivan', interviewerName: 'Ivan Interviewer', overallRating: 2, recommendation: 'No Hire', status: 'Draft' },
+    { id: 's1', interviewerId: 'u-maya', interviewerName: 'Maya Lead', overallRating: 4, recommendation: 'Hire', isLocked: true },
+    { id: 's2', interviewerId: 'u-ivan', interviewerName: 'Ivan Interviewer', overallRating: 2, recommendation: 'No Hire', isLocked: false },
   ],
 };
 

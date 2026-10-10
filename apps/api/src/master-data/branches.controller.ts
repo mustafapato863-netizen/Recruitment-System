@@ -59,7 +59,7 @@ export class BranchesController {
   @RequirePermissions('MASTER_DATA_MANAGE')
   @UseGuards(TenantScopedGuard)
   @TenantResource({ resource: 'branch', param: 'id' })
-  @AuditAction('BRANCH_DELETE')
+  @AuditAction('BRANCH_DEACTIVATE')
   remove(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.masterDataService.deleteBranch(user.organizationId, id);
   }
