@@ -53,3 +53,20 @@ describe('B2F-3 /my-interviews in the v2 shell', () => {
     expect(keys(false)).not.toContain('my-interviews');
   });
 });
+
+describe('B2V-2 interviewer-only URLs', () => {
+  it('forbidden pages go to /my-interviews; My Work, My interviews and shell pages stay', async () => {
+    const { v2Redirect, isInterviewerOnly } = await import('../destinations');
+    const ivan = { permissions: ['VACANCY_VIEW', 'INTERVIEW_PARTICIPATE'] };
+    expect(isInterviewerOnly(ivan, true)).toBe(true);
+    expect(isInterviewerOnly({ permissions: ['APPLICATION_VIEW'] }, true)).toBe(false);
+    const o = { interviews: true, interviewerOnly: true };
+    expect(v2Redirect('employee', '/candidates', o)).toBe('/my-interviews');
+    expect(v2Redirect('employee', '/applications/a1', o)).toBe('/my-interviews');
+    expect(v2Redirect('employee', '/vacancies/v1', o)).toBe('/my-interviews');
+    expect(v2Redirect('employee', '/my-work', o)).toBeNull();
+    expect(v2Redirect('employee', '/my-interviews', o)).toBeNull();
+    expect(v2Redirect('employee', '/profile', o)).toBeNull();
+    expect(v2Redirect('employee', '/candidates', { interviews: true })).toBeNull();
+  });
+});
