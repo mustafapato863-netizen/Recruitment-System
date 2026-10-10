@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { fetchVacancyContext } from '../utils/vacancyAccess';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getApi, postApi } from '../api/client';
 import type { Interview, InterviewType, Application, PaginatedResult, VacancyDetailView } from '@recruitflow/contracts';
@@ -116,7 +117,7 @@ export function InterviewsPage() {
         const [intRes, appRes, vacRes] = await Promise.allSettled([
           getApi<InterviewListItem[] | { data?: InterviewListItem[] }>('/interviews'),
           getApi<PaginatedResult<Application>>(`/applications?vacancyId=${vacancyId}&page=1&pageSize=100`),
-          getApi<VacancyDetailView>(`/vacancies/${vacancyId}`),
+          fetchVacancyContext(vacancyId),
         ]);
 
         const appList = appRes.status === 'fulfilled' && appRes.value?.data ? appRes.value.data : [];

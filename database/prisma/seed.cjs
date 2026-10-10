@@ -301,7 +301,8 @@ async function main() {
       { code: 'CANDIDATE_VIEW', description: 'View candidate profile and list.' },
       { code: 'CANDIDATE_CREATE', description: 'Create candidate records.' },
       { code: 'CANDIDATE_EDIT', description: 'Edit candidate profile details.' },
-      { code: 'CANDIDATE_DELETE', name: 'Delete candidate data', description: 'Permanently delete a candidate and linked test data.' },
+      // B2: hard delete retired; legal erasure is anonymize (Administrator only).
+      { code: 'CANDIDATE_ANONYMIZE', name: 'Anonymize candidate (legal erasure)', description: "Irreversibly replace a candidate's personal data with placeholders. Administrator only." },
       { code: 'APPLICATION_VIEW', description: 'View recruitment applications.' },
       { code: 'APPLICATION_CREATE', description: 'Apply candidate to a vacancy.' },
       { code: 'APPLICATION_MOVE_STAGE', description: 'Advance or move application stage.' },
@@ -328,6 +329,9 @@ async function main() {
         create: { code: p.code, ...(p.name ? { name: p.name } : {}), description: p.description },
       });
     }
+
+    // B2: CANDIDATE_DELETE is retired (kept for history, never effective).
+    await tx.permission.updateMany({ where: { code: 'CANDIDATE_DELETE' }, data: { status: 'Retired' } });
 
     // ── Role → Permission assignments ─────────────────────────
     const rolePermMap = {

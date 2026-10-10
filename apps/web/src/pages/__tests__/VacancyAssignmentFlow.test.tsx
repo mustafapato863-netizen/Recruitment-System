@@ -148,7 +148,7 @@ describe('Vacancy Assignment and Activation Flow', () => {
       expect(changeBtn).toBeInTheDocument();
     });
 
-    it('shows permanent deletion only to administrators', async () => {
+    it('shows job deactivation (B2, no delete) only to administrators', async () => {
       const user = userEvent.setup();
       mockIsAdministrator = true;
       mockPermissions = ['VACANCY_VIEW', 'VACANCY_MANAGE'];
@@ -173,10 +173,10 @@ describe('Vacancy Assignment and Activation Flow', () => {
       );
 
       await user.click(await screen.findByRole('button', { name: /^More$/ }));
-      await user.click(screen.getByRole('button', { name: /delete requisition/i }));
-      expect(screen.getByRole('button', { name: /delete permanently/i })).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: /deactivate job/i }));
+      expect(screen.getByRole('button', { name: /^deactivate job$/i })).toBeInTheDocument();
 
-      await user.click(screen.getByRole('button', { name: /delete permanently/i }));
+      await user.click(screen.getByRole('button', { name: /^deactivate job$/i }));
       await waitFor(() => expect(mockDeleteApi).toHaveBeenCalledWith('/vacancies/vac-2'));
     });
 
@@ -202,7 +202,7 @@ describe('Vacancy Assignment and Activation Flow', () => {
       );
 
       await user.click(await screen.findByRole('button', { name: /^More$/ }));
-      expect(screen.queryByRole('button', { name: /delete requisition/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /deactivate job/i })).not.toBeInTheDocument();
     });
 
     it('displays blocking reasons banner when vacancy is Pending Activation', async () => {
