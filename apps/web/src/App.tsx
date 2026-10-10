@@ -22,7 +22,7 @@ import './styles/tokens-v2.css';
 
 // Lazy loaded page components for optimal bundle splitting
 const DashboardPage = lazy(() => import('./pages/DashboardPage').then((m) => ({ default: m.DashboardPage })));
-const MyWorkPage = lazy(() => import('./pages/MyWorkPage').then((m) => ({ default: m.MyWorkPage })));
+const MyWorkRoute = lazy(() => import('./v2/pages/MyWorkRoute').then((m) => ({ default: m.MyWorkRoute })));
 const UsersRolesPage = lazy(() => import('./pages/UsersRolesPage').then((m) => ({ default: m.UsersRolesPage })));
 const ReportingTreePage = lazy(() => import('./pages/ReportingTreePage').then((m) => ({ default: m.ReportingTreePage })));
 const MasterDataPage = lazy(() => import('./pages/MasterDataPage').then((m) => ({ default: m.MasterDataPage })));
@@ -102,7 +102,7 @@ function App() {
                   <Route element={<SeatShellSwitch />}>
 
                   <Route path="/" element={<DashboardPage />} />
-                  <Route path="/my-work" element={<MyWorkPage />} />
+                  <Route path="/my-work" element={<MyWorkRoute />} />
                   <Route
                     path="/users"
                     element={

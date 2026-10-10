@@ -19,3 +19,4 @@ export { DrawerV2 } from './Drawer';
 export type { DrawerV2Props, DrawerStatus } from './Drawer';
 export { UserPicker, createUsersAdapter, assignableUsersAdapter, interviewersAdapter, toUserOption, initials } from './UserPicker';
 export type { UserPickerProps, UserPickerAdapter, UserOption } from './UserPicker';
+export * from './Task';

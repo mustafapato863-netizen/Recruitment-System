@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   BarChart3, Bell, BriefcaseBusiness, Building2, ChevronsUpDown, CircleHelp, ClipboardList, Columns3, Database, FileText, History,
@@ -114,6 +114,10 @@ function UserMenu({ user, seat, onSignOut }: { user: UserProfile; seat: Seat; on
   );
 }
 
+
+/** Which seat the v2 shell is rendering for (null outside the v2 shell). */
+const V2ShellContext = createContext<{ seat: Seat } | null>(null);
+export function useV2Shell() { return useContext(V2ShellContext); }
 
 export const SIDEBAR_STORAGE_KEY = 'recruitflow.ui.v2.sidebar';
 
@@ -273,7 +277,9 @@ export function AppShellV2(props: AppShellV2Props) {
   return (
     <QuickGuideProvider>
       <BreadcrumbProvider>
-        <ShellFrame {...props} />
+        <V2ShellContext.Provider value={{ seat: props.seat }}>
+          <ShellFrame {...props} />
+        </V2ShellContext.Provider>
         <QuickGuideModal />
       </BreadcrumbProvider>
     </QuickGuideProvider>
