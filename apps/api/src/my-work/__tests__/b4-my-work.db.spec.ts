@@ -46,6 +46,8 @@ describe.skipIf(!url)('B4 My Work, target chip and reminders (scratch Postgres)'
       ids[key] = randomUUID();
       await prisma.user.create({ data: { id: ids[key], organizationId: ORG, email: `${key}-${tag}@b4.test`, emailNormalized: `${key}-${tag}@b4.test`, displayName: `B4 ${key}`, passwordHash: 'x', userRoles: { create: { roleId: recruiter.id } } } });
     }
+    // B2R-5 / NEW-3: the requesting manager picks (and manages) his own reports.
+    await prisma.user.updateMany({ where: { id: { in: [ids.a!, ids.b!] } }, data: { managerId: ids.manager! } });
   });
   afterAll(async () => { await prisma?.$disconnect(); });
 
@@ -144,9 +146,9 @@ describe.skipIf(!url)('B4 My Work, target chip and reminders (scratch Postgres)'
     const boss = randomUUID();
     const role = await prisma.role.findFirstOrThrow({ where: { code: 'RECRUITER' } });
     await prisma.user.create({ data: { id: boss, organizationId: ORG, email: `tb-${tag}@b4.test`, emailNormalized: `tb-${tag}@b4.test`, displayName: 'B4 teamboss', passwordHash: 'x', userRoles: { create: { roleId: role.id } } } });
-    await prisma.user.update({ where: { id: ids.a! }, data: { managerId: boss } });
     const { job } = await activated(ids.a!, TODAY);
     const { job: other } = await activated(ids.b!, TODAY);
+    await prisma.user.update({ where: { id: ids.a! }, data: { managerId: boss } });
     const team = await myWork.getTeamWork(user(boss), NOW);
     expect(team.people).toEqual([{ id: ids.a, name: 'B4 a' }]);
     const items = [...team.overdue, ...team.dueToday, ...team.waitingOnOthers];
@@ -155,7 +157,7 @@ describe.skipIf(!url)('B4 My Work, target chip and reminders (scratch Postgres)'
     expect(JSON.stringify(team)).not.toContain(other.id); // b is not a report
     expect((await myWork.getTeamWork(user(ids.b!), NOW))).toMatchObject({ people: [], empty: true, emptyMessage: 'You have no direct reports.' });
     for (const j of [job.id, other.id]) await prisma.vacancy.update({ where: { id: j }, data: { status: 'Closed' } });
-    await prisma.user.update({ where: { id: ids.a! }, data: { managerId: null } });
+    await prisma.user.update({ where: { id: ids.a! }, data: { managerId: ids.manager! } });
   });
 
   it('E1 (DB): candidate/stage on file items, department/site/owner on targets, ?day=tomorrow, worker heartbeat', async () => {
