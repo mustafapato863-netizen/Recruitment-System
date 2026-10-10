@@ -111,3 +111,25 @@ WHERE v."vacancyRequestId" = r."id" AND r."assignedEmployeeId" IS NULL
 
 -- Hire-target tasks (v2 §8) are not rewritten here: their seats already live on the
 -- requisition (requestedHeadcount) and the target chip moves in B4. Counts are in the mapping report.
+
+
+-- B3 (E3 gaps): optional hold-until date on the job and in its history (data only, no auto-reopen).
+ALTER TABLE "vacancies" ADD COLUMN "holdUntil" DATE;
+ALTER TABLE "vacancy_status_histories" ADD COLUMN "holdUntil" DATE;
+
+-- B3 (E3 gaps): master-data reason lists for hold and close (deactivate-only), minimal set per org.
+INSERT INTO "master_data_values" ("id", "organizationId", "category", "code", "name", "status", "version", "createdAt", "updatedAt")
+SELECT gen_random_uuid(), o."id", v.category, v.code, v.name, 'Active', 1, now(), now()
+FROM "organizations" o
+CROSS JOIN (VALUES
+  ('hold-reasons', 'BUDGET_REVIEW', 'Budget review'),
+  ('hold-reasons', 'HIRING_FREEZE', 'Hiring freeze'),
+  ('hold-reasons', 'ROLE_UNDER_REVIEW', 'Role under review'),
+  ('hold-reasons', 'AWAITING_INTERNAL_CANDIDATE', 'Awaiting internal candidate'),
+  ('hold-reasons', 'OTHER', 'Other'),
+  ('close-reasons', 'POSITION_NO_LONGER_NEEDED', 'Position no longer needed'),
+  ('close-reasons', 'BUDGET_WITHDRAWN', 'Budget withdrawn'),
+  ('close-reasons', 'FILLED_INTERNALLY', 'Filled internally'),
+  ('close-reasons', 'OTHER', 'Other')
+) AS v(category, code, name)
+ON CONFLICT DO NOTHING;

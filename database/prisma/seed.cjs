@@ -56,6 +56,20 @@ async function seedRejectionReasons(tx, organizationId) {
   });
 }
 
+/** B3: hold and close reason lists (deactivate-only master data). "Other" needs a note. */
+async function seedJobStatusReasons(organizationId) {
+  const lists = { 'hold-reasons': ['Budget review', 'Hiring freeze', 'Role under review', 'Awaiting internal candidate', 'Other'], 'close-reasons': ['Position no longer needed', 'Budget withdrawn', 'Filled internally', 'Other'] };
+  for (const [category, names] of Object.entries(lists)) {
+    for (const name of names) {
+      await prisma.masterDataValue.upsert({
+        where: { organizationId_category_name: { organizationId, category, name } },
+        create: { organizationId, category, name, code: name.toUpperCase().replace(/ /g, '_') },
+        update: {},
+      });
+    }
+  }
+}
+
 async function main() {
   const result = await prisma.$transaction(async (tx) => {
     // ── Organization ──────────────────────────────────────────
@@ -565,6 +579,7 @@ async function main() {
     return { organization, branch, position, users, roles, demo, orgB, userB, candidateB, branchB };
   }, { timeout: 30000 });
 
+  for (const org of await prisma.organization.findMany({ select: { id: true } })) await seedJobStatusReasons(org.id);
   await resyncCodeSequences();
 
   console.log(

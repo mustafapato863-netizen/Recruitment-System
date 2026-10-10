@@ -54,7 +54,7 @@ function domainErrorCodes() {
     // B3 requisition / job lifecycle
     'ADMIN_CANNOT_CHANGE_JOB_STATUS', 'ASSIGNEE_NOT_ELIGIBLE', 'ASSIGNEE_REQUIRED', 'DUE_DATE_REQUIRED',
     'GRADE_NOT_FOUND', 'ILLEGAL_JOB_TRANSITION', 'JOB_NOT_ACCEPTING_APPLICATIONS', 'NOT_JOB_OWNER',
-    'REASON_REQUIRED', 'REQUISITION_CANCELLED',
+    'REASON_REQUIRED', 'REQUISITION_CANCELLED', 'REASON_NOT_IN_LIST', 'HOLD_UNTIL_NOT_FUTURE',
     // B5 gates
     'GATE_SCREEN_NOTE_MISSING', 'GATE_SCORECARD_NOT_SUBMITTED', 'GATE_OFFER_NOT_ACCEPTED',
     'GATE_JOINING_CHECKS_INCOMPLETE', 'GATE_REJECT_REASON_REQUIRED',
@@ -293,6 +293,11 @@ export interface JobWorkQueueItem {
   health: WorkHealth | null;
   lastActivity: { at: string; label: string } | null;
   nextAction: NextActionDescriptor | null;
+  /** B3/E3: requisition due date (YYYY-MM-DD, plain fact) and department. */
+  dueDate?: string | null;
+  department?: string | null;
+  /** B3: optional hold-until date (data only). */
+  holdUntil?: string | null;
 }
 
 export interface CreateVacancyRequestInput {
