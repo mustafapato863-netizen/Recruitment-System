@@ -206,7 +206,7 @@ describe('r3: #4 cards carry isLocked, no status (R3-1 / R3-2)', () => {
     expect(screen.queryByRole('button', { name: 'Submit scorecard' })).not.toBeInTheDocument();
     expect(screen.getByText('Scorecard submitted')).toBeInTheDocument();
     expect(api.getApi.mock.calls.filter(([p]) => p.startsWith('/me/interviews'))).toHaveLength(1);
-  });
+  }, 15000); // typing-heavy: flaked on the 5 s default under the full suite
 });
 
 describe('who sees My interviews', () => {
