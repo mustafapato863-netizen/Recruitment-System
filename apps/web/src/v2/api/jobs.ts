@@ -16,7 +16,7 @@
 import { getApi, postApi } from '../../api/client';
 import { stripPay } from './paySafety';
 import { domainError, type DomainError, type GateCode } from './gates';
-import type { FileStage } from './applicationFile';
+import { isClosedStage, type FileStage } from './applicationFile';
 
 const enc = encodeURIComponent;
 
@@ -211,6 +211,7 @@ export function jobOwner(job: JobDetail): { id: string; name: string } | null {
  */
 export function moveCheck(app: BoardApplication, target: BoardStage, job: JobDetail | RedactedJob): { ok: boolean; reason?: string } {
   if (isRedactedJob(job)) return { ok: false, reason: 'Only the job owner can move files.' };
+  if (isClosedStage(app.stage)) return { ok: false, reason: `${app.stage} files are closed and do not move.` };
   if (job.status === 'Closed') return { ok: false, reason: 'This job is closed.' };
   if (target === app.stage) return { ok: false, reason: 'Already here.' };
   const from = BOARD_STAGES.indexOf(app.stage as BoardStage);
@@ -227,6 +228,28 @@ export const MOVE_GATE_HINT: Partial<Record<BoardStage, string>> = {
   Offer: 'Needs a submitted scorecard',
   'Pre-Hire': 'Needs an accepted offer',
 };
+
+// ── Who may change the job status (#23 NEW-3) ─────────────────────────────────
+/** A person from GET /users/assignable (the caller's reporting tree; managerId = their line manager). */
+export interface AssignablePerson { id: string; displayName: string; managerId?: string | null; status?: string }
+/** GET /users/assignable: any signed-in user (#21 B2-16), only the caller's own reports. */
+export async function fetchAssignable(): Promise<AssignablePerson[]> {
+  const res = await getApi<AssignablePerson[] | { data: AssignablePerson[] }>('/users/assignable');
+  return Array.isArray(res) ? res : res?.data ?? [];
+}
+/**
+ * = assertJobOwnerOrManager (#23 @5aef66c): hold, reopen, close and delete are for the job's owner (active PRIMARY
+ * assignee) or that owner's line manager only; anyone else gets 403 JOB_NOT_OWNED, so the actions are hidden.
+ * Administrators never change a job status (ADMIN_CANNOT_CHANGE_JOB_STATUS).
+ */
+export function canChangeJobStatus(job: JobDetail, me: { id: string; isAdmin?: boolean } | null | undefined, reports: readonly AssignablePerson[] | null): boolean {
+  if (!me || me.isAdmin) return false;
+  const owner = jobOwner(job);
+  if (!owner) return false;
+  if (owner.id === me.id) return true;
+  return (reports ?? []).some((p) => p.id === owner.id && p.managerId === me.id);
+}
+export const JOB_NOT_OWNED_TEXT = 'Only the job owner or their manager can hold, reopen, close or delete this job.';
 
 // ── Job status (E12, B3) ─────────────────────────────────────────────────────
 export type JobAction = 'hold' | 'reopen' | 'close';
@@ -264,6 +287,9 @@ export function isStaleStage(error: unknown): boolean {
 
 export const errorMessage = (error: unknown, fallback: string) => {
   const d = jobErrorFromError(error);
+  // The client replaces every 403 message with a generic one; the code says what happened.
+  if (d?.code === 'JOB_NOT_OWNED') return JOB_NOT_OWNED_TEXT;
+  if (d?.code === 'FILE_CLOSED') return d.message || 'This file is closed and does not move.';
   if (d?.message) return d.message;
   const m = (error as { message?: unknown })?.message;
   return typeof m === 'string' && m ? m : fallback;

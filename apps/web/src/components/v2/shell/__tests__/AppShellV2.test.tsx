@@ -42,12 +42,18 @@ beforeEach(() => { getApi.mockReset(); getApi.mockResolvedValue({ unreadCount: 0
 afterEach(() => { document.documentElement.removeAttribute('data-ui'); });
 
 describe('nav per seat', () => {
+  it('#21 B2-3: a Recruiter-only user never sees Requisitions, and its route goes home', () => {
+    renderShell('manager', user(ALL, ['RECRUITER']), '/vacancy-requests');
+    const nav = screen.getByRole('navigation', { name: SEAT_NAV.manager.heading });
+    expect(within(nav).queryByRole('link', { name: 'Requisitions' })).toBeNull();
+  });
+
   it.each([
     ['employee', ['My Work', 'Open jobs', 'Candidates']],
     ['manager', ['Team work', 'Requisitions', 'Team result']],
     ['admin', ['Users', 'Roles', 'Pipeline template', 'Master data', 'Templates', 'Reports', 'Audit', 'Integrations']],
   ] as const)('%s shows the Figma items', (seat, labels) => {
-    renderShell(seat);
+    renderShell(seat, user(ALL, [seat === 'manager' ? 'HIRING_MANAGER' : seat === 'admin' ? 'ADMINISTRATOR' : 'RECRUITER']));
     const nav = screen.getByRole('navigation', { name: SEAT_NAV[seat].heading });
     expect(within(nav).getAllByRole('link').map((a) => a.textContent)).toEqual(labels);
   });

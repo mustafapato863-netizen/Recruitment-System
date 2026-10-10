@@ -70,6 +70,6 @@ export function fileResponses(scenario: Scenario, opts: { me?: string } = {}): R
       { id: 't-mail-old', name: 'Old offer', category: 'offer', subject: 's', bodyTemplate: 'b', isDefault: false, status: 'Inactive' },
     ],
     '/whatsapp-templates/for-send': [{ id: 't-wa-offer', name: 'Offer next step', category: 'offer_next_step', interviewType: 'Any', bodyTemplate: 'b', isDefault: true, status: 'Active' }],
-    '/master-data/catalog/rejection-reasons': [{ id: 'rr1', name: 'Not enough experience', status: 'Active' }, { id: 'rr2', name: 'Failed technical interview', status: 'Active' }],
+    '/master-data/catalog/rejection-reasons': [{ id: 'rr1', name: 'Not enough experience', status: 'Active' }, { id: 'rr2', name: 'Failed technical interview', status: 'Active' }, { id: 'rr9', name: 'Other', status: 'Active' }],
   };
 }
