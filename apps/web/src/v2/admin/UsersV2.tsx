@@ -1,15 +1,16 @@
-import { bannerError, fieldError, serverFormErrors, type ServerFormErrors } from '../forms/serverErrors';
+import { bannerError, fieldError, serverFormErrors } from '../forms/serverErrors';
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ArrowRight, CircleCheck, Info, Network, RotateCw, Search, ShieldCheck, UserMinus, UserPlus, UserCheck, TriangleAlert } from 'lucide-react';
 import { ButtonV2, DangerConfirmButton, DrawerV2, EmptyStateV2, initials, InputV2, SelectV2, SkeletonV2, StatusChip, TextareaV2 } from '../../components/v2';
 import { SEAT_LABEL, SEATS, type Seat } from '../seat';
 import { domainError } from '../api/gates';
+import { fetchReassignReasons, reassignError } from '../api/teamWork';
 import { fetchRoles, type AdminRole } from './rolesApi';
 import {
   buildTree, fetchUsers, flatten, inviteUser, isActive, isDescendant, ownedWork, seatOf, setManager, setStatus, statusTone, subLine,
   type AdminUser, type OwnedWork,
-  overrideReassign, OVERRIDE_REASON_MIN,
+  overrideReassign,
 } from './usersApi';
 import '../pages/jobs.css';
 import './admin.css';
@@ -143,29 +144,41 @@ function UserDrawer({ user, users, onClose, onDone }: { user: AdminUser; users: 
 function OwnedWorkPanel({ user, users, manager, owned, onMoved }: { user: AdminUser; users: AdminUser[]; manager: AdminUser | null; owned: OwnedWork; onMoved: (m: string) => void }) {
   const [to, setTo] = useState('');
   const [reason, setReason] = useState('');
+  const [note, setNote] = useState('');
+  // #21: the reason comes from master data 'reassign-reasons' ("Other" + note), same as the manager's Reassign.
+  const [reasons, setReasons] = useState<string[] | null>(null);
+  useEffect(() => { let live = true; void fetchReassignReasons().then((r) => live && setReasons(r)); return () => { live = false; }; }, []);
+  const isOther = !!reasons && /^other$/i.test(reason);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ text: string; adminBlocked?: boolean } | null>(null);
-  const [inline, setInline] = useState<ServerFormErrors | null>(null);
+  const [fieldErr, setFieldErr] = useState<{ to?: string; reason?: string; note?: string }>({});
   const files = owned.openApplicationsPrimary + owned.openApplicationsTaskOwner;
   const peers = users.filter((u) => u.id !== user.id && isActive(u) && seatOf(u) !== 'admin').sort((a, b) => a.displayName.localeCompare(b.displayName));
+  const clear = () => { setMsg(null); setFieldErr({}); };
   const move = async () => {
     if (!to) return setMsg({ text: 'Pick who takes the files.' });
-    if (reason.trim().length < OVERRIDE_REASON_MIN) return setMsg({ text: `An override needs a reason of at least ${OVERRIDE_REASON_MIN} characters; it is kept in the audit log.` });
-    setBusy(true); setMsg(null); setInline(null);
+    if (reasons && !reason) return setFieldErr({ reason: 'Pick a reason.' });
+    if (!reasons && reason.trim().length < 3) return setFieldErr({ reason: 'A reason is required (at least 3 characters); it is kept in the audit log.' });
+    if (isOther && note.trim().length < 3) return setFieldErr({ note: '"Other" needs a short note (at least 3 characters).' });
+    setBusy(true); clear();
     try {
-      await overrideReassign(user.id, to, reason.trim());
+      await overrideReassign(user.id, to, reason.trim(), isOther ? note : undefined);
       onMoved(`Files moved to ${users.find((u) => u.id === to)?.displayName ?? 'the new owner'} (admin override, in Audit). Deactivate again.`);
     } catch (e) {
       const d = domainError(e);
       const x = e as { statusCode?: number; message?: string };
-      // #23: 400 field/fields go on the inputs (toUserId → person, reason → reason).
-      const f = serverFormErrors(e);
-      if (Object.keys(f.byField).length) { setInline(f); const b = bannerError(f, ['toUserId', 'reason']); if (b) setMsg({ text: b }); return; }
-      setMsg(d?.code === 'OVERRIDE_REASON_REQUIRED'
-        ? { text: `An override needs a reason of at least ${OVERRIDE_REASON_MIN} characters.` }
-        : d?.code === 'OVERRIDE_NOT_ALLOWED'
-          ? { adminBlocked: true, text: `${x.message || 'This override is not available yet.'} ${manager ? `Meanwhile ${manager.displayName} (their manager) can move them from Team work → Reassign.` : ''}`.trim() }
-          : x.statusCode === 403 ? { text: 'Only an administrator can use an override.' } : { text: x.message || 'Could not move the files. Try again.' });
+      if (d?.code === 'OVERRIDE_NOT_ALLOWED') {
+        setMsg({ adminBlocked: true, text: `${x.message || 'This override is not available yet.'} ${manager ? `Meanwhile ${manager.displayName} (their manager) can move them from Team work → Reassign.` : ''}`.trim() });
+      } else if (d?.code === 'REASON_REQUIRED' || fieldError(serverFormErrors(e), 'note')) {
+        setFieldErr({ note: fieldError(serverFormErrors(e), 'note') ?? '"Other" needs a short note (at least 3 characters).' });
+      } else if (x.statusCode === 403 && !d?.code?.startsWith('REASSIGN_')) {
+        setMsg({ text: 'Only an administrator can use an override.' });
+      } else {
+        // #23 400 field/fields and the B7 reassign codes share the manager Reassign mapping.
+        const r = reassignError(e);
+        if (r.field === 'to' || r.field === 'reason') setFieldErr({ [r.field]: r.text });
+        else setMsg({ text: r.text });
+      }
     } finally { setBusy(false); }
   };
   return (
@@ -175,11 +188,19 @@ function OwnedWorkPanel({ user, users, manager, owned, onMoved }: { user: AdminU
       <p className="rf2-jtable__sub">Move it first, then deactivate. Jobs and requisitions are changed on the job or requisition itself.</p>
       {files > 0 || owned.countsUnknown ? (
         <>
-          <SelectV2 label="Move their open files to" value={to} onChange={(e) => { setTo(e.target.value); setMsg(null); setInline(null); }} error={fieldError(inline, 'toUserId')}>
+          <SelectV2 label="Move their open files to" value={to} onChange={(e) => { setTo(e.target.value); clear(); }} error={fieldErr.to}>
             <option value="">Choose a person</option>
             {peers.map((p) => <option key={p.id} value={p.id}>{p.displayName} · {SEAT_LABEL[seatOf(p)]}</option>)}
           </SelectV2>
-          <TextareaV2 label="Reason (admin override, kept in Audit)" required rows={2} value={reason} onChange={(e) => { setReason(e.target.value); setMsg(null); setInline(null); }} placeholder={`${user.displayName.split(' ')[0]} is leaving`} error={fieldError(inline, 'reason')} />
+          {reasons ? (
+            <SelectV2 label="Reason (admin override, kept in Audit)" required value={reason} onChange={(e) => { setReason(e.target.value); clear(); }} error={fieldErr.reason} hint="From the Reassign reasons list in Master data.">
+              <option value="">Choose a reason</option>
+              {reasons.map((r) => <option key={r} value={r}>{r}</option>)}
+            </SelectV2>
+          ) : (
+            <TextareaV2 label="Reason (admin override, kept in Audit)" required rows={2} value={reason} onChange={(e) => { setReason(e.target.value); clear(); }} placeholder={`${user.displayName.split(' ')[0]} is leaving`} error={fieldErr.reason} />
+          )}
+          {isOther ? <TextareaV2 label="Say why" required rows={2} value={note} onChange={(e) => { setNote(e.target.value); clear(); }} error={fieldErr.note} /> : null}
           {msg ? <p className={msg.adminBlocked ? 'rf2-inline-note' : 'rf2-form-error'}>{msg.adminBlocked ? <Info aria-hidden="true" /> : null}{msg.text}</p> : null}
           <ButtonV2 kind="secondary" icon={<ArrowRight />} loading={busy} onClick={() => void move()}>{owned.countsUnknown ? 'Reassign all open files' : `Reassign ${plural(files, 'file')}`}</ButtonV2>
           <p className="rf2-jtable__sub">Uses the admin override (file.reassign). Jobs keep their owner.</p>

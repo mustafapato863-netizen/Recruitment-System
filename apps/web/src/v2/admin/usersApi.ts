@@ -4,8 +4,9 @@
  * Deactivate only: PATCH {status:'Inactive'} (DELETE /users/:id → 405 USER_DELETE_NOT_ALLOWED, never called).
  * B2 #6 owner block: 409 USER_OWNS_OPEN_WORK {counts:{openApplicationsPrimary, openApplicationsTaskOwner, openJobsPrimary, openRequisitions}}.
  * Reassign offered from that 409 (B2-9, CoS): Admin file moves go through the B9 override ONLY:
- *   POST /admin/overrides {action:'file.reassign', entityId:<the user leaving>, reason (>= 10 chars), toUserId}. Audited as ADMIN_OVERRIDE.
- *   Codes: 400 OVERRIDE_REASON_REQUIRED, 400/409 OVERRIDE_NOT_ALLOWED (server message shown, e.g. while Backend enables it), 403.
+ *   POST /admin/overrides/file-reassign = ReassignFilesDto {fromUserId:<the user leaving>, toUserId, reason (reassign-reasons value), note? ("Other")}.
+ *   (B9 file.reassign via B7; the generic POST /admin/overrides answers OVERRIDE_NOT_ALLOWED for file.reassign.) Audited as ADMIN_OVERRIDE.
+ *   Codes: REASSIGN_TARGET_INELIGIBLE, REASSIGN_FILE_CLOSED, REASSIGN_CONFLICT, REASSIGN_REASON_REQUIRED, REASON_NOT_IN_LIST, REASON_REQUIRED, 403.
  */
 import { patchApi, postApi } from '../../api/client';
 import { domainError } from '../api/gates';
@@ -76,5 +77,5 @@ export function isDescendant(users: AdminUser[], userId: string, managerId: stri
 
 /** B2-9: the Admin moves a leaving user's open files via the B9 override (never /files/reassign). */
 export const OVERRIDE_REASON_MIN = 10;
-export const overrideReassign = (fromUserId: string, toUserId: string, reason: string) =>
-  postApi<unknown>('/admin/overrides', { action: 'file.reassign', entityId: fromUserId, toUserId, reason });
+export const overrideReassign = (fromUserId: string, toUserId: string, reason: string, note?: string) =>
+  postApi<unknown>('/admin/overrides/file-reassign', { fromUserId, toUserId, reason, ...(note?.trim() ? { note: note.trim() } : {}) });

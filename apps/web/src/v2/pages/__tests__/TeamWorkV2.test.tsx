@@ -179,4 +179,19 @@ describe('M2 CoS follow-ups', () => {
     await u.click(within(d).getByRole('button', { name: 'Reassign' }));
     await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/files/reassign', { applicationIds: ['n1'], toUserId: 'u-youssef', reason: 'Leave' }));
   });
+  it('#21: "Other" goes as reason "Other" + note (never "Other: …" in reason); REASON_REQUIRED lands on the note', async () => {
+    const u = userEvent.setup();
+    serve({ '/master-data/catalog/reassign-reasons': fx.reassignReasons });
+    api.postApi.mockRejectedValueOnce(new ApiError(400, '"Other" needs a short note.', { statusCode: 400, code: 'REASON_REQUIRED', message: '"Other" needs a short note.' }, { code: 'REASON_REQUIRED' }))
+      .mockResolvedValue({ batchId: 'b', toUserId: 'u-youssef', moved: [{ applicationId: 'n1' }], unchanged: [] });
+    renderAt('/my-work?reassign=u-noura&file=n1');
+    const d = await screen.findByRole('dialog');
+    const sel = await within(d).findByRole('combobox', { name: /^Reason/ });
+    await u.selectOptions(within(d).getByLabelText(/^New primary recruiter/), 'u-youssef');
+    await u.selectOptions(sel, 'Other');
+    await u.type(within(d).getByLabelText(/^Say why/), 'Covering a peak');
+    await u.click(within(d).getByRole('button', { name: 'Reassign' }));
+    await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/files/reassign', { applicationIds: ['n1'], toUserId: 'u-youssef', reason: 'Other', note: 'Covering a peak' }));
+    expect(await within(d).findByText('"Other" needs a short note (at least 3 characters).')).toBeInTheDocument();
+  });
 });
