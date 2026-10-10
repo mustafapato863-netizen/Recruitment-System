@@ -1,4 +1,5 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
+import { errorCodes } from '@recruitflow/contracts';
 import type {
   ErrorCode,
   ErrorEnvelope,
@@ -602,30 +603,9 @@ function resolveStableCode(
   return stableCodeByStatus(status);
 }
 
+/** Allowlist = the shared registry in @recruitflow/contracts (incl. B6 domain codes). */
 function isStableCode(value: string): boolean {
-  const stableCodes: readonly string[] = [
-    'VALIDATION_ERROR',
-    'UNAUTHENTICATED',
-    'SESSION_EXPIRED',
-    'FORBIDDEN',
-    'NOT_FOUND',
-    'CONFLICT',
-    'STAGE_GATE_BLOCKED',
-    'RATE_LIMITED',
-    'INVALID_CREDENTIALS',
-    'TOKEN_INVALID',
-    'TOKEN_EXPIRED',
-    'FILE_INVALID',
-    'FILE_TOO_LARGE',
-    'FILE_UNSAFE',
-    'IMPORT_INVALID',
-    'IMPORT_CONFLICT',
-    'EXPORT_FAILED',
-    'ASYNC_JOB_FAILED',
-    'INTEGRATION_UNAVAILABLE',
-    'INTERNAL_ERROR',
-  ];
-  return stableCodes.includes(value);
+  return (errorCodes as readonly string[]).includes(value);
 }
 
 function isFieldErrors(value: unknown): value is ErrorFieldErrors {

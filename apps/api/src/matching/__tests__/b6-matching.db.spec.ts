@@ -250,4 +250,24 @@ describe.skipIf(!url)('B6 suggest, compare, evidence, duplicates (scratch Postgr
     expect(ev.map((e) => e.sourceType)).toEqual(['IMPORT']);
     expect(res.duplicateReport.find((r) => r.rowId === rows[1]!.id)?.action).toBe('created');
   });
+
+  it('E3: linking fills empty fields from the parsed CV (summary, certifications, languages, title...), never overwrites; conflicts listed', async () => {
+    const id = await cand('CVF', { email: `cvf-${tag}@b6.test`, phone: null, currentTitle: null, currentCompany: 'Old Co', summary: null, certifications: [], languages: ['Arabic'], skills: [] });
+    await repairContactKeys(prisma, '966');
+    const { jobId } = await imports.upload(ORG, ids.owner!, { fileName: 'cv.pdf', rows: [
+      { firstName: 'B6', lastName: 'CVF', email: `cvf-${tag}@b6.test`, currentTitle: 'ICU Nurse', currentCompany: 'New Co', summary: 'Ten years ICU.', certifications: ['BLS', 'ACLS'], languages: ['Arabic', 'English'], experienceYears: 10 },
+    ] } as never);
+    const [row] = await prisma.candidateImportRow.findMany({ where: { jobId } });
+    await imports.saveDecision(ORG, jobId, row!.id, { decision: 'Update' } as never);
+    const res = await imports.confirmJob(ORG, jobId, ids.owner!);
+    const linked = res.duplicateReport.find((r) => r.rowId === row!.id)!;
+    expect(linked.action).toBe('linked');
+    expect(linked.filled.sort()).toEqual(['certifications', 'currentTitle', 'experienceYears', 'summary'].sort());
+    expect(linked.conflicts).toEqual([
+      { field: 'currentCompany', existing: 'Old Co', incoming: 'New Co' },
+      { field: 'languages', existing: ['Arabic'], incoming: ['Arabic', 'English'] },
+    ]);
+    const after = await prisma.candidate.findUniqueOrThrow({ where: { id } });
+    expect(after).toMatchObject({ currentTitle: 'ICU Nurse', currentCompany: 'Old Co', summary: 'Ten years ICU.', certifications: ['BLS', 'ACLS'], languages: ['Arabic'], experienceYears: 10 });
+  });
 });

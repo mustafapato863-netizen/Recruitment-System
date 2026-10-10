@@ -384,6 +384,7 @@ export class ImportService {
           currentTitle: str(raw.currentTitle), currentCompany: str(raw.currentCompany),
           experienceYears: typeof raw.experienceYears === 'number' ? raw.experienceYears : null,
           location: str(raw.location), source: str(raw.source), availability: str(raw.availability),
+          summary: str(raw.summary),
         };
         const skills = Array.isArray(raw.skills) ? (raw.skills as string[]).filter((x) => typeof x === 'string' && x.trim()) : [];
         const certifications = Array.isArray(raw.certifications) ? (raw.certifications as string[]) : [];
@@ -409,6 +410,15 @@ export class ImportService {
               : field === 'phone' ? normalizePhoneKey(String(current)) === value
               : String(current).trim().toLowerCase() === String(value).trim().toLowerCase();
             if (!same) conflicts.push({ field, existing: current, incoming: value });
+          }
+          // E3: list fields from the parsed CV fill an EMPTY list only; a different non-empty list is a conflict.
+          for (const [field, list] of [['certifications', certifications], ['languages', languages]] as const) {
+            const clean = [...new Set(list.filter((x) => typeof x === 'string' && x.trim()).map((x) => x.trim()))];
+            if (!clean.length) continue;
+            const current = Array.isArray(existing[field]) ? (existing[field] as string[]) : [];
+            if (current.length === 0) { fill[field] = clean; filled.push(field); continue; }
+            const same = current.length === clean.length && current.every((c) => clean.some((x) => catalogKey(x) === catalogKey(c)));
+            if (!same) conflicts.push({ field, existing: current, incoming: clean });
           }
           const mergedSkills = [...existing.skills];
           for (const sk of skills) if (!mergedSkills.some((x) => catalogKey(x) === catalogKey(sk))) mergedSkills.push(sk.trim());

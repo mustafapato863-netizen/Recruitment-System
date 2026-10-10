@@ -41,6 +41,9 @@ export const errorCodes = [
   'ASYNC_JOB_FAILED',
   'INTEGRATION_UNAVAILABLE',
   'INTERNAL_ERROR',
+  // B6 suggest / compare / skill evidence / duplicates (kept as-is by the API error normalizer)
+  'COMPARE_CANDIDATE_NOT_FOUND', 'COMPARE_COUNT', 'CONTACT_REQUIRED', 'EVIDENCE_SNIPPET_REQUIRED',
+  'EVIDENCE_SOURCE_INVALID', 'NOT_JOB_OWNER', 'SKILL_INACTIVE', 'SKILL_NOT_IN_LIBRARY',
 ] as const;
 
 export type ErrorCode = (typeof errorCodes)[number];

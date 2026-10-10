@@ -190,3 +190,13 @@ describe('Error Normalizer', () => {
     expect(result.details?.requirements).toHaveLength(1);
   });
 });
+
+describe('B6 domain codes are registered', () => {
+  it('keeps B6 codes instead of collapsing them', async () => {
+    const { ConflictException, BadRequestException } = await import('@nestjs/common');
+    for (const c of ['COMPARE_CANDIDATE_NOT_FOUND', 'COMPARE_COUNT', 'CONTACT_REQUIRED', 'EVIDENCE_SNIPPET_REQUIRED', 'EVIDENCE_SOURCE_INVALID', 'NOT_JOB_OWNER', 'SKILL_INACTIVE', 'SKILL_NOT_IN_LIBRARY']) {
+      expect(normalizeError(new BadRequestException({ code: c, message: 'x' })).code).toBe(c);
+    }
+    expect(normalizeError(new ConflictException({ code: 'NOPE_UNKNOWN' })).code).toBe('CONFLICT');
+  });
+});
