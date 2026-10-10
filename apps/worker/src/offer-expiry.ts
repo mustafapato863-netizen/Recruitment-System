@@ -1,18 +1,17 @@
 import type { PrismaClient } from '@recruitflow/database';
 
 /**
- * B5: hook for time-based offer expiry. OFF by default (OFFER_AUTO_EXPIRE=true
- * turns it on): v2 leaves the expiry rule open, so expiry is manual for now
- * (PATCH /offers/:id/status {status: "Expired"}). When on, a Sent offer whose
- * current version's offerExpiry has passed becomes Expired (offer + version).
+ * B5: hook for time-based offer expiry. Decision (Mustafa): expiry stays MANUAL
+ * (PATCH /offers/:id/status {status: "Expired"}). The hook is called by the
+ * sweeper but is hard-off: no env switch; enabling it is a code change.
+ * When enabled, a Sent offer whose current version's offerExpiry has passed
+ * becomes Expired (offer + version); the application stays in Offer.
  */
-export function offerAutoExpireFromEnv(env: NodeJS.ProcessEnv = process.env): boolean {
-  return (env.OFFER_AUTO_EXPIRE ?? 'false').toLowerCase() === 'true';
-}
+export const OFFER_AUTO_EXPIRE_ENABLED = false;
 
 type ExpiryPrisma = Pick<PrismaClient, 'offer' | 'offerVersion' | '$transaction'>;
 
-export async function expireOverdueOffers(prisma: ExpiryPrisma, now: Date, enabled = offerAutoExpireFromEnv()): Promise<number> {
+export async function expireOverdueOffers(prisma: ExpiryPrisma, now: Date, enabled = OFFER_AUTO_EXPIRE_ENABLED): Promise<number> {
   if (!enabled) return 0;
   const sent = await prisma.offer.findMany({
     where: { status: 'Sent', versions: { some: { offerExpiry: { lt: now } } } },

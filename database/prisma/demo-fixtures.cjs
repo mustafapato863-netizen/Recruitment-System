@@ -574,7 +574,7 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
   // ── 9. Real Offer + Approval Chain ─────────────────────────
   const offerNour = await upsertOffer(tx, fixtureId(801), {
     organizationId: orgId, applicationId: nourAppId,
-    offerCode: 'OFF-2024-0142', status: 'Sent to Candidate',
+    offerCode: 'OFF-2024-0142', status: 'Sent',
   });
 
   const offerV1 = await upsertOfferVersion(tx, fixtureId(821), {

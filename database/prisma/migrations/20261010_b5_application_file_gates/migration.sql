@@ -19,6 +19,14 @@ ALTER TABLE "interviews"
 
 ALTER TABLE "offer_versions" ADD COLUMN "status" VARCHAR(30) NOT NULL DEFAULT 'Draft';
 
+-- ─── Normalize legacy offer status (v2 name) ──────────────────
+-- "Sent to Candidate" -> "Sent". An audit row per offer marks it for the rollback.
+INSERT INTO "audit_logs" ("id", "organizationId", "action", "entityType", "entityId", "result", "reason", "beforeData", "afterData")
+SELECT gen_random_uuid(), "organizationId", 'B5_MIGRATION_OFFER_STATUS_NORMALIZED', 'Offer', "id"::text, 'Success',
+  'B5 migration: legacy offer status normalized', jsonb_build_object('status', "status"), jsonb_build_object('status', 'Sent')
+FROM "offers" WHERE "status" = 'Sent to Candidate';
+UPDATE "offers" SET "status" = 'Sent' WHERE "status" = 'Sent to Candidate';
+
 -- ─── Backfill isLocked -> explicit statuses ───────────────────
 UPDATE "interview_scorecards" SET "status" = CASE WHEN "isLocked" THEN 'Submitted' ELSE 'Draft' END;
 UPDATE "interview_scorecards" SET "submittedAt" = NULL WHERE "status" = 'Draft';

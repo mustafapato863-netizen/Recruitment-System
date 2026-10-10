@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ConflictException,
   ForbiddenException,
 } from '@nestjs/common';
 /* eslint-disable @typescript-eslint/consistent-type-imports */
@@ -334,6 +335,11 @@ export class OffersService {
 
     if (!offer) throw new NotFoundException('Offer not found');
 
+    // B5: an Expired offer leaves the file in Offer; the owner drafts a new version
+    // (allowed) or rejects. Closed outcomes cannot be revised.
+    if (['Accepted', 'Declined', 'Withdrawn'].includes(offer.status)) {
+      throw new ConflictException({ code: 'OFFER_CLOSED', message: `An ${offer.status.toLowerCase()} offer cannot get a new version.` });
+    }
     const lastVersion = offer.versions[0];
     const newVersionNumber = lastVersion ? lastVersion.versionNumber + 1 : 1;
     const { monthlyPackage, annualFixed } = this.calculatePackage(dto.components);

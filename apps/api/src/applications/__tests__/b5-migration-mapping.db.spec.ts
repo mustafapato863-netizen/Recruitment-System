@@ -46,6 +46,13 @@ describe.skipIf(!url)('B5 migration: stage remap and backfills', () => {
     expect(none).toMatchObject({ legacyInterviewerName: 'Dr. Unknown Panelist' });
     expect(none.attendees).toEqual([]);
   });
+  it('legacy offer status "Sent to Candidate" normalized to "Sent", with an audit marker per offer', async () => {
+    expect(await prisma.offer.count({ where: { status: 'Sent to Candidate' } })).toBe(0);
+    const marked = await prisma.auditLog.findMany({ where: { action: 'B5_MIGRATION_OFFER_STATUS_NORMALIZED' } });
+    expect(marked.length).toBeGreaterThan(0);
+    for (const m of marked) expect((await prisma.offer.findUniqueOrThrow({ where: { id: m.entityId } })).status).toBe('Sent');
+  });
+
   it('rejection reasons seeded per organization', async () => {
     const orgs = await prisma.organization.findMany({ select: { id: true } });
     for (const o of orgs) {

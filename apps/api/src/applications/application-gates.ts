@@ -1,4 +1,4 @@
-import { ConflictException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
 import type { Prisma } from '@recruitflow/database';
 
 /**
@@ -86,4 +86,33 @@ export async function assertStageGate(tx: Tx, application: { id: string; stage: 
     if (accepted === 0) throw blocked(GATE_CODES.offer, 'Offer accepted', 'Pre-Hire needs an accepted offer.');
   }
   if (to === 'Joined') await assertJoiningChecks(tx, application.id);
+}
+
+export const REOPEN_TARGETS = ['Applied', 'Screening', 'Interview'];
+
+/**
+ * B5 (Mustafa): reopening a Rejected file to Applied/Screening/Interview is
+ * allowed only for the file's owner or the owner's manager (403 otherwise),
+ * with a reason (400 otherwise). The caller writes the history row and clears
+ * Application.rejectionReason (the rejection stays in history with its reason).
+ * Owner signals (B1 not on this base): primaryRecruiterId, taskOwnerId, or the
+ * job's active PRIMARY assignee. TODO(B1): use file-access.ts ownership once #4 merges.
+ */
+export async function assertReopenAllowed(
+  tx: Tx,
+  application: { id: string; vacancyId: string; primaryRecruiterId?: string | null | undefined; taskOwnerId?: string | null | undefined },
+  actorUserId: string,
+  reason: string | null | undefined,
+): Promise<string> {
+  const text = reason?.trim() ?? '';
+  if (!text) throw new BadRequestException({ code: 'REOPEN_REASON_REQUIRED', message: 'A reason is required to reopen a rejected application.' });
+  const primary = await tx.vacancyAssignment.findMany({
+    where: { vacancyId: application.vacancyId, isActive: true, assignmentKind: 'PRIMARY' },
+    select: { userId: true },
+  });
+  const owners = new Set([application.primaryRecruiterId, application.taskOwnerId, ...primary.map((p) => p.userId)].filter((x): x is string => Boolean(x)));
+  if (owners.has(actorUserId)) return text;
+  const managed = await tx.user.count({ where: { id: { in: [...owners] }, managerId: actorUserId } });
+  if (managed > 0) return text;
+  throw new ForbiddenException({ code: 'REOPEN_NOT_OWNER', message: 'Only the owner of this file or their manager can reopen it.' });
 }

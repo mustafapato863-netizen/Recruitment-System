@@ -41,6 +41,8 @@ async function main() {
     const joined = hired.filter((h) => h.id_ok && h.contract_ok && h.licence_ok);
     p(`                  Hired -> Joined (3 checks done): ${joined.length}; Hired -> Pre-Hire: ${hired.length - joined.length}`);
     for (const h of hired) p(`    ${h.code}: ID ${h.id_ok ? 'ok' : 'missing'}, contract ${h.contract_ok ? 'ok' : 'missing'}, licence ${h.licence_ok ? 'ok' : 'missing'}`);
+    const [sent] = await q(`SELECT count(*)::int c FROM offers WHERE status='Sent to Candidate'`);
+    p(`Offer status plan: "Sent to Candidate" -> "Sent": ${sent.c}`);
     const [wd] = await q(`SELECT count(*)::int c FROM applications WHERE stage='Withdrawn'`);
     p(`                  Withdrawn -> Rejected ("Withdrawn by candidate"): ${wd.c}`);
     if (await hasColumn('interview_scorecards', 'isLocked')) {
@@ -65,6 +67,9 @@ async function main() {
   } else {
     const hist = await q(`SELECT reason, count(*)::int c FROM application_status_histories WHERE reason LIKE 'B5 migration:%' GROUP BY 1 ORDER BY 1`);
     p('Migration history rows:'); for (const r of hist) p(`    ${r.reason}: ${r.c}`);
+    const [norm] = await q(`SELECT count(DISTINCT "entityId")::int c FROM audit_logs WHERE action='B5_MIGRATION_OFFER_STATUS_NORMALIZED'`);
+    const os = await q(`SELECT status, count(*)::int c FROM offers GROUP BY 1 ORDER BY 1`);
+    p(`Offers normalized "Sent to Candidate" -> "Sent": ${norm.c}; offer status now: ${os.map((r) => `${r.status}=${r.c}`).join(', ') || 'none'}`);
     const s = await q(`SELECT status, count(*)::int c FROM interview_scorecards GROUP BY 1 ORDER BY 1`);
     p('Scorecard status: ' + (s.map((r) => `${r.status}=${r.c}`).join(', ') || 'none'));
     const o = await q(`SELECT status, count(*)::int c FROM offer_versions GROUP BY 1 ORDER BY 1`);

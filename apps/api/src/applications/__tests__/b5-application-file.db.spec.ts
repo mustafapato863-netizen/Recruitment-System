@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PrismaService } from '../../database/prisma.service';
 import { InterviewsService } from '../../interviews/interviews.service';
 import { OffersService } from '../../offers/offers.service';
-import { GATE_CODES, assertStageGate, resolveRejectionReason } from '../application-gates';
+import { GATE_CODES, assertReopenAllowed, assertStageGate, resolveRejectionReason } from '../application-gates';
 import { expireOverdueOffers } from '../../../../worker/src/offer-expiry';
 
 const url = process.env.B5_TEST_DATABASE_URL;
@@ -149,6 +149,37 @@ describe.skipIf(!url)('B5 application file: gates, scorecards, offers, interview
     expect(await expireOverdueOffers(prisma, now, true)).toBeGreaterThanOrEqual(1);
     expect((await prisma.offer.findUniqueOrThrow({ where: { id: b.offer.id } })).status).toBe('Expired');
     expect((await prisma.offerVersion.findUniqueOrThrow({ where: { id: b.version.id } })).status).toBe('Expired');
+  });
+
+  it('Expired offer leaves the file in Offer; a new version can be drafted; closed offers cannot be revised', async () => {
+    const app = await newApplication('Offer');
+    const { offer } = await offerFor(app.id, 'Sent');
+    await offers.updateOfferStatus(user(ids.rec!), offer.id, { status: 'Expired' } as never);
+    expect((await prisma.application.findUniqueOrThrow({ where: { id: app.id } })).stage).toBe('Offer');
+    const versionId = await offers.createOfferRevision(user(ids.rec!), offer.id, { components: [] } as never);
+    const v2 = await prisma.offerVersion.findUniqueOrThrow({ where: { id: versionId } });
+    expect(v2).toMatchObject({ versionNumber: 2, status: 'Pending Approval' });
+    expect((await prisma.offer.findUniqueOrThrow({ where: { id: offer.id } })).currentVersionId).toBe(versionId);
+    const declinedApp = await newApplication('Offer');
+    const declined = await offerFor(declinedApp.id, 'Sent');
+    await offers.updateOfferStatus(user(ids.rec!), declined.offer.id, { status: 'Declined' } as never);
+    expect(await codeOf(offers.createOfferRevision(user(ids.rec!), declined.offer.id, { components: [] } as never))).toBe('OFFER_CLOSED');
+  });
+
+  it('reopen from Rejected: owner or manager only (403), reason required (400)', async () => {
+    const app = await newApplication('Rejected');
+    const other = randomUUID();
+    const boss = randomUUID();
+    const recruiter = await prisma.role.findFirstOrThrow({ where: { code: 'RECRUITER' } });
+    for (const [id, key] of [[other, 'other'], [boss, 'boss']]) {
+      await prisma.user.create({ data: { id, organizationId: ORG, email: `${key}-${tag}@b5.test`, emailNormalized: `${key}-${tag}@b5.test`, displayName: key, passwordHash: 'x', userRoles: { create: { roleId: recruiter.id } } } });
+    }
+    await prisma.user.update({ where: { id: ids.rec! }, data: { managerId: boss } });
+    const status = (p: Promise<unknown>) => p.then(() => 200, (e: { getStatus: () => number }) => e.getStatus());
+    expect(await status(assertReopenAllowed(prisma, app, ids.rec!, '  '))).toBe(400);
+    expect(await status(assertReopenAllowed(prisma, app, other, 'New info'))).toBe(403);
+    expect(await assertReopenAllowed(prisma, app, ids.rec!, ' Candidate re-applied ')).toBe('Candidate re-applied');
+    expect(await assertReopenAllowed(prisma, app, boss, 'Manager override')).toBe('Manager override');
   });
 
   it('gate 4: Joined needs ID, contract and SCFHS licence Verified', async () => {

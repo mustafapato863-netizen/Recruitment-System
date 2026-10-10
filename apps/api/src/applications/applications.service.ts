@@ -1,4 +1,4 @@
-import { WITHDRAWN_BY_CANDIDATE_REASON, assertStageGate, resolveRejectionReason } from './application-gates';
+import { REOPEN_TARGETS, WITHDRAWN_BY_CANDIDATE_REASON, assertReopenAllowed, assertStageGate, resolveRejectionReason } from './application-gates';
 import { assertJobAcceptsApplications, recordJoin } from '../vacancy-core/vacancy-lifecycle';
 import {
   BadRequestException,
@@ -612,6 +612,9 @@ export class ApplicationsService {
     }
 
     // B5: the five v2 gates are API checks, independent of the pipeline config.
+    const reopenReason = application.stage === 'Rejected' && REOPEN_TARGETS.includes(dto.stage)
+      ? await assertReopenAllowed(this.prisma, application, actorUserId, dto.reason)
+      : null;
     const rejectionReason = dto.stage === 'Rejected'
       ? await resolveRejectionReason(this.prisma, organizationId, dto.reason)
       : null;
@@ -652,6 +655,8 @@ export class ApplicationsService {
           stage: dto.stage,
           version: { increment: 1 },
           ...(rejectionReason ? { rejectionReason } : {}),
+          // Reopen clears the current rejection reason; history keeps the rejection row.
+          ...(reopenReason ? { rejectionReason: null } : {}),
         },
       });
 
@@ -673,7 +678,7 @@ export class ApplicationsService {
           fromStage: dto.expectedStage,
           toStage: dto.stage,
           changedById: actorUserId,
-          reason: rejectionReason ?? dto.reason?.trim() ?? null,
+          reason: rejectionReason ?? reopenReason ?? dto.reason?.trim() ?? null,
         },
       });
 

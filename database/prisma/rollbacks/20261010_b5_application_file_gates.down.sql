@@ -25,6 +25,11 @@ ALTER TABLE "offer_versions" ADD COLUMN "isLocked" BOOLEAN NOT NULL DEFAULT fals
 UPDATE "offer_versions" SET "isLocked" = ("status" IN ('Approved', 'Sent', 'Accepted', 'Declined', 'Expired'));
 ALTER TABLE "offer_versions" DROP COLUMN "status";
 
+-- offers normalized by the migration go back to "Sent to Candidate" (audit rows stay: append-only)
+UPDATE "offers" o SET "status" = 'Sent to Candidate'
+WHERE o."status" = 'Sent' AND EXISTS (
+  SELECT 1 FROM "audit_logs" a WHERE a."action" = 'B5_MIGRATION_OFFER_STATUS_NORMALIZED' AND a."entityType" = 'Offer' AND a."entityId" = o."id"::text);
+
 ALTER TABLE "interviews" ADD COLUMN "interviewerName" VARCHAR(200);
 UPDATE "interviews" SET "interviewerName" = "legacyInterviewerName";
 ALTER TABLE "interviews" DROP COLUMN "legacyInterviewerName", DROP COLUMN "roomName";
