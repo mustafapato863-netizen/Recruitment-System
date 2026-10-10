@@ -5,6 +5,7 @@ import { ArrowRight, CircleCheck, Info, Network, RotateCw, Search, ShieldCheck, 
 import { ButtonV2, DangerConfirmButton, DrawerV2, EmptyStateV2, initials, InputV2, SelectV2, SkeletonV2, StatusChip, TextareaV2 } from '../../components/v2';
 import { SEAT_LABEL, SEATS, type Seat } from '../seat';
 import { domainError } from '../api/gates';
+import { override403Text } from './overrideErrors';
 import { fetchReassignReasons, reassignError } from '../api/teamWork';
 import { fetchRoles, type AdminRole } from './rolesApi';
 import {
@@ -172,7 +173,7 @@ function OwnedWorkPanel({ user, users, manager, owned, onMoved }: { user: AdminU
       } else if (d?.code === 'REASON_REQUIRED' || fieldError(serverFormErrors(e), 'note')) {
         setFieldErr({ note: fieldError(serverFormErrors(e), 'note') ?? '"Other" needs a short note (at least 3 characters).' });
       } else if (x.statusCode === 403 && !d?.code?.startsWith('REASSIGN_')) {
-        setMsg({ text: 'Only an administrator can use an override.' });
+        setMsg({ text: override403Text(e) });
       } else {
         // #23 400 field/fields and the B7 reassign codes share the manager Reassign mapping.
         const r = reassignError(e);
