@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, ParseUUIDPipe, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, ParseUUIDPipe, UseGuards, HttpException, HttpStatus } from '@nestjs/common';
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { UsersService } from './users.service';
 import { CreateUserDto, UpdateUserDto, CreateInvitationDto } from './users.dto';
@@ -98,5 +98,12 @@ export class UsersController {
     @Param('roleId', ParseUUIDPipe) roleId: string,
   ) {
     return this.usersService.removeRole(user.organizationId, id, roleId);
+  }
+
+  /** B9 (B2 pattern): users are never deleted. Deactivate with PATCH /users/:id { status: 'Inactive' }. */
+  @Delete(':id')
+  @RequirePermissions('USERS_MANAGE')
+  deleteUser() {
+    throw new HttpException({ code: 'USER_DELETE_NOT_ALLOWED', message: 'Users cannot be deleted. Deactivate the user instead (status Inactive).' }, HttpStatus.METHOD_NOT_ALLOWED);
   }
 }

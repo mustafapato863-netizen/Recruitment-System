@@ -32,6 +32,7 @@ import { WhatsAppTemplatesModule } from './whatsapp-templates/whatsapp-templates
 import { AccessControlModule } from './access-control/access-control.module';
 import { RecruiterTargetsModule } from './recruiter-targets/recruiter-targets.module';
 import { ResumeModule } from './resume/resume.module';
+import { AdminOverrideModule } from './admin-override/admin-override.module';
 import { MatchingModule } from './matching/matching.module';
 import { CorrelationIdMiddleware, TenantContextMiddleware } from './common/middleware';
 
@@ -72,6 +73,7 @@ import { CorrelationIdMiddleware, TenantContextMiddleware } from './common/middl
     WhatsAppTemplatesModule,
     RecruiterTargetsModule,
     MatchingModule,
+    AdminOverrideModule,
   ],
   controllers: [HealthController],
 })

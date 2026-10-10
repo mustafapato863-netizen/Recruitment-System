@@ -44,6 +44,8 @@ export const errorCodes = [
   // B6 suggest / compare / skill evidence / duplicates (kept as-is by the API error normalizer)
   'COMPARE_CANDIDATE_NOT_FOUND', 'COMPARE_COUNT', 'CONTACT_REQUIRED', 'EVIDENCE_SNIPPET_REQUIRED',
   'EVIDENCE_SOURCE_INVALID', 'NOT_JOB_OWNER', 'SKILL_INACTIVE', 'SKILL_NOT_IN_LIBRARY',
+  // B9 admin
+  'SINGLE_PIPELINE_TEMPLATE', 'OVERRIDE_REASON_REQUIRED', 'OVERRIDE_NOT_ALLOWED', 'USER_DELETE_NOT_ALLOWED',
 ] as const;
 
 export type ErrorCode = (typeof errorCodes)[number];

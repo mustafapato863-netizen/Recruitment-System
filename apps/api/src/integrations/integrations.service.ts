@@ -7,18 +7,16 @@ import type { UpdateIntegrationDto } from './integrations.dto';
 import type { IntegrationItem } from '@recruitflow/contracts';
 import { encryptSecureSecret } from '../email/outbox-crypto';
 
+/**
+ * B9 (v2 §11): integrations are limited to careers publishing and mail status.
+ * Other providers stay in the table (no data loss) but are hidden from the API and cannot be edited or tested.
+ */
+export const ALLOWED_INTEGRATION_PROVIDERS = ['careers_site', 'smtp'] as const;
 const DEFAULT_INTEGRATIONS = [
-  { name: 'Google Calendar', provider: 'google_calendar', category: 'Calendar & Scheduling' },
-  { name: 'Microsoft Outlook 365', provider: 'outlook_calendar', category: 'Calendar & Scheduling' },
-  { name: 'Microsoft 365', provider: 'microsoft', category: 'Authentication' },
-  { name: 'Google Workspace', provider: 'google', category: 'Authentication' },
-  { name: 'S3 Storage', provider: 'aws', category: 'Storage' },
-  { name: 'HRIS Payroll', provider: 'hris', category: 'HRIS' },
-  { name: 'LinkedIn Recruiter', provider: 'linkedin', category: 'Sourcing' },
+  { name: 'Careers site publishing', provider: 'careers_site', category: 'Publishing' },
   { name: 'Email Provider', provider: 'smtp', category: 'Communication' },
-  { name: 'Job Boards', provider: 'job_boards', category: 'Sourcing' },
-  { name: 'Webhooks', provider: 'webhooks', category: 'Developer' },
 ];
+const allowedWhere = { provider: { in: [...ALLOWED_INTEGRATION_PROVIDERS] as string[] } };
 
 @Injectable()
 export class IntegrationsService {
@@ -26,7 +24,7 @@ export class IntegrationsService {
 
   async listIntegrations(organizationId: string): Promise<IntegrationItem[]> {
     let integrations = await this.prisma.integration.findMany({
-      where: { organizationId },
+      where: { organizationId, ...allowedWhere },
     });
 
     if (integrations.length === 0) {
@@ -44,11 +42,11 @@ export class IntegrationsService {
       });
 
       integrations = await this.prisma.integration.findMany({
-        where: { organizationId },
+        where: { organizationId, ...allowedWhere },
       });
     } else {
       // Check if new calendar providers need to be added to existing org
-      const existingProviders = new Set(integrations.map((i) => i.provider));
+      const existingProviders = new Set((await this.prisma.integration.findMany({ where: { organizationId }, select: { provider: true } })).map((i) => i.provider));
       const missing = DEFAULT_INTEGRATIONS.filter((i) => !existingProviders.has(i.provider));
       if (missing.length > 0) {
         await this.prisma.integration.createMany({
@@ -61,7 +59,7 @@ export class IntegrationsService {
           })),
         });
         integrations = await this.prisma.integration.findMany({
-          where: { organizationId },
+          where: { organizationId, ...allowedWhere },
         });
       }
     }
@@ -78,7 +76,7 @@ export class IntegrationsService {
 
   async getIntegration(organizationId: string, id: string) {
     const integration = await this.prisma.integration.findFirst({
-      where: { id, organizationId },
+      where: { id, organizationId, ...allowedWhere },
     });
 
     if (!integration) {
@@ -97,7 +95,7 @@ export class IntegrationsService {
 
   async updateIntegration(organizationId: string, id: string, dto: UpdateIntegrationDto) {
     const integration = await this.prisma.integration.findFirst({
-      where: { id, organizationId },
+      where: { id, organizationId, ...allowedWhere },
     });
 
     if (!integration) {
@@ -135,7 +133,7 @@ export class IntegrationsService {
 
   async testIntegration(organizationId: string, id: string) {
     const integration = await this.prisma.integration.findFirst({
-      where: { id, organizationId },
+      where: { id, organizationId, ...allowedWhere },
     });
 
     if (!integration) {
