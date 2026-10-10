@@ -61,7 +61,12 @@ describe.skipIf(!url)('B2R job scope and actions (scratch Postgres)', () => {
     expect(await code(svc.deleteVacancy(job, ORG, as('emp')))).toBe('JOB_NOT_OWNED');
     expect(await code(svc.deleteVacancy(job, ORG, as('otherHm')))).toBe('JOB_NOT_OWNED');
     expect(await code(svc.deleteVacancy(randomUUID(), ORG, as('emp')))).toBe('404');
-    expect((await svc.closeVacancy(job, ORG, 'Position no longer needed', as('hm'))).status).toBe('Closed');
+    expect(await code(svc.deleteVacancy(job, ORG, as('hm')))).toBe('REASON_REQUIRED'); // owner's manager too
+    expect(await code(svc.deleteVacancy(job, ORG, as('hm'), { reason: 'Other' }))).toBe('REASON_REQUIRED');
+    expect(await svc.deleteVacancy(job, ORG, as('hm'), { reason: 'Position no longer needed' })).toMatchObject({ status: 'Closed' });
+    const hist = await prisma.vacancyStatusHistory.findFirstOrThrow({ where: { vacancyId: job, toStatus: 'Closed' } });
+    expect(hist).toMatchObject({ reason: 'Position no longer needed', changedById: u.hm });
+    expect(await prisma.auditLog.count({ where: { entityId: job, action: 'VACANCY_CLOSE', reason: 'Position no longer needed', actorUserId: u.hm } })).toBe(1);
     const del = VacanciesController.prototype.deleteVacancy;
     expect(Reflect.getMetadata(ANY_PERMISSIONS_KEY, del)).toEqual(['VACANCY_MANAGE', 'VACANCY_VIEW']);
     expect(Reflect.getMetadata(PERMISSIONS_KEY, del)).toBeUndefined();
@@ -76,5 +81,6 @@ describe.skipIf(!url)('B2R job scope and actions (scratch Postgres)', () => {
     const audit = await prisma.auditLog.findMany({ where: { entityId: job, action: 'ADMIN_OVERRIDE' } });
     expect(audit).toHaveLength(1);
     expect(audit[0]).toMatchObject({ actorUserId: u.admin, entityType: 'Vacancy', reason: 'Other: Duplicate job' });
+    expect((await prisma.vacancyStatusHistory.findFirstOrThrow({ where: { vacancyId: job, toStatus: 'Closed' } })).reason).toBe('Other: Duplicate job');
   });
 });

@@ -133,7 +133,7 @@ export class VacanciesController {
   }
 
   /** B2: DELETE deactivates (status Cancelled); nothing is removed. */
-  /** B2R-2/3: owner or owner's manager; an Administrator must send {reason, note?} (audited override). */
+  /** B2R-2/3: owner or owner's manager (admin = audited override); everyone sends {reason, note?} from close-reasons. */
   @Delete(':id')
   @RequireAnyPermissions('VACANCY_MANAGE', 'VACANCY_VIEW')
   @AuditAction('VACANCY_DEACTIVATE')
