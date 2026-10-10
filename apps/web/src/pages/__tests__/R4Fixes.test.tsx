@@ -1,7 +1,7 @@
 /** QA r4: R4-1 (admins never see Claim on Board cards) and R4-2 (draft scorecards are not feedback). */
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type * as ClientModule from '../../api/client';
 
 const mockNavigate = vi.fn();
