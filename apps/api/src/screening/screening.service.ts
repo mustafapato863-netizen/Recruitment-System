@@ -29,7 +29,7 @@ export class ScreeningService {
     const visibility = user
       ? await this.accessControl.getApplicationVisibilityWhere(user)
       : { organizationId };
-    const app = await this.prisma.application.findFirst({ where: { id: applicationId, ...visibility } });
+    const app = await this.prisma.application.findFirst({ where: { AND: [visibility, { id: applicationId }] } });
 
     if (!app || app.organizationId !== organizationId) {
       throw new NotFoundException(`Application ${applicationId} was not found.`);
@@ -55,7 +55,7 @@ export class ScreeningService {
     const visibility = user
       ? await this.accessControl.getApplicationVisibilityWhere(user)
       : { organizationId };
-    const app = await this.prisma.application.findFirst({ where: { id: dto.applicationId, ...visibility } });
+    const app = await this.prisma.application.findFirst({ where: { AND: [visibility, { id: dto.applicationId }] } });
 
     if (!app || app.organizationId !== organizationId) {
       throw new NotFoundException(`Application ${dto.applicationId} was not found.`);

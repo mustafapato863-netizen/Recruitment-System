@@ -1,8 +1,9 @@
-import { BadRequestException, Logger, ValidationPipe } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import type { Request, Response, NextFunction } from 'express';
 import { AppModule } from './app.module';
+import { validationExceptionFactory } from './common/errors/validation-exception';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import * as cookieParser from 'cookie-parser';
 
@@ -98,21 +99,7 @@ async function bootstrap(): Promise<void> {
       transform: true,
       whitelist: true,
       forbidNonWhitelisted: true,
-      exceptionFactory: (validationErrors) => {
-        const fields: Record<string, string[]> = {};
-        for (const error of validationErrors) {
-          const constraints = Object.values(error.constraints ?? {});
-          if (constraints.length > 0) {
-            fields[error.property] = constraints;
-          }
-        }
-        return new BadRequestException({
-          statusCode: 400,
-          code: 'VALIDATION_ERROR',
-          message: 'Please correct the highlighted fields.',
-          fields,
-        });
-      },
+      exceptionFactory: validationExceptionFactory, // B2-15: flattened nested fields + `field`
     }),
   );
 

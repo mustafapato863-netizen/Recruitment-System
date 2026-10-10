@@ -34,7 +34,7 @@ describe('Candidate activity measurement', () => {
     prisma.interviewScorecard.findMany.mockResolvedValue([{ id: 'score', interviewerId: 'me', interviewer: { displayName: 'Recruiter' }, submittedAt: now, interview: { applicationId: 'app' } }]);
     const result = await service.list(user, 'candidate', {});
     expect(result).toMatchObject({ completed: 1, completedByMe: 1, byKind: { 'Interview assessment': 1 } });
-    expect(prisma.interviewScorecard.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { isLocked: true, interview: { organizationId: 'org', applicationId: { in: ['app'] } } } }));
+    expect(prisma.interviewScorecard.findMany).toHaveBeenCalledWith(expect.objectContaining({ where: { status: 'Submitted', interview: { organizationId: 'org', applicationId: { in: ['app'] } } } }));
   });
   it('counts completed work separately from scheduled and system events, across applications', () => {
     const result = summarizeCandidateActivity([

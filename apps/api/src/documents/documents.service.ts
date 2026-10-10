@@ -10,6 +10,7 @@ import * as path from 'node:path';
 import * as XLSX from 'xlsx';
 import type { Prisma } from '@recruitflow/database';
 import type { CandidateDocument, CvBankBackupStatus } from '@recruitflow/contracts';
+import { MatchingService } from '../matching/matching.service';
 import { PrismaService } from '../database/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { DocumentScannerService } from './document-scanner.service';
@@ -29,6 +30,7 @@ export class DocumentsService {
     @Inject(DocumentScannerService) private readonly scanner: DocumentScannerService,
     @Inject(DocumentStorageService) private readonly storage: DocumentStorageService,
     @Optional() @Inject(AccessControlService) private readonly accessControl?: AccessControlService,
+    @Optional() @Inject(MatchingService) private readonly matching?: MatchingService,
   ) {}
 
   private async candidateWhere(organizationId: string, candidateId: string, user?: AuthUser, read = false): Promise<Prisma.CandidateWhereInput> {
@@ -140,6 +142,7 @@ export class DocumentsService {
       include: { uploadedBy: true, candidate: true },
     });
 
+    if (created.extractionText) void this.matching?.deriveEvidenceInBackground(organizationId, { candidateId: dto.candidateId }, uploadedById, 'CV text stored');
     return this.toCandidateDocument(created);
   }
 
@@ -216,6 +219,8 @@ export class DocumentsService {
         },
         include: { uploadedBy: true, candidate: true },
       });
+      // B6: CV text stored (where parsing completes on this base) -> derive evidence after commit.
+      if (created.extractionText) void this.matching?.deriveEvidenceInBackground(organizationId, { candidateId: candidate.id }, uploadedById, 'CV text stored');
       void this.auditService.log({
         action: 'CV_SCAN_RESULT',
         actorUserId: uploadedById,
