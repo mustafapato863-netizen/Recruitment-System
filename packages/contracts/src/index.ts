@@ -856,6 +856,12 @@ export interface Application {
   lastActivityLabel?: string | null | undefined;
   /** Earliest persisted follow-up due date, when one is visible to the caller. */
   nextFollowUpAt?: string | null | undefined;
+  /** B5: owner-editable follow-up date (YYYY-MM-DD). */
+  followUpDate?: string | null | undefined;
+  /** E3 (list only): the five gates for this file. */
+  gates?: Array<{ gate: 'screen-note' | 'scorecard' | 'offer-accepted' | 'joining-checks' | 'reject-reason'; code: string; met: boolean; missing: string[] }> | undefined;
+  /** E3 (list/board card only): next upcoming interview, else the last one. */
+  interview?: { when: 'next' | 'last'; startAt: string; endAt: string; room: { name: string | null; url: string | null } } | null | undefined;
   appliedAt: string;
   createdAt: string;
   updatedAt: string;

@@ -179,13 +179,16 @@ export class OffersService {
     }
 
     const visibility = await this.applicationVisibility(user);
-    if (cleanCandidateId) visibility.candidateId = cleanCandidateId;
-    if (cleanVacancyId) visibility.vacancyId = cleanVacancyId;
+    // Id filters are ANDed with the access scope; they never replace it.
+    const idFilters: Prisma.ApplicationWhereInput[] = [];
+    if (cleanCandidateId) idFilters.push({ candidateId: cleanCandidateId });
+    if (cleanVacancyId) idFilters.push({ vacancyId: cleanVacancyId });
+    if (cleanApplicationId) idFilters.push({ id: cleanApplicationId });
 
     const where: Prisma.OfferWhereInput = {
       organizationId: user.organizationId,
       // applicationId is ANDed with visibility (never overrides an id-based scope).
-      application: cleanApplicationId ? { AND: [visibility, { id: cleanApplicationId }] } : visibility,
+      application: idFilters.length ? { AND: [visibility, ...idFilters] } : visibility,
     };
 
     if (query.status && query.status !== 'ALL' && query.status !== 'undefined' && query.status !== 'null') {
@@ -250,7 +253,7 @@ export class OffersService {
   async createOffer(user: AuthUser, dto: CreateOfferDto) {
     const visibility = await this.applicationVisibility(user);
     const application = await this.prisma.application.findFirst({
-      where: { id: dto.applicationId, ...visibility },
+      where: { AND: [visibility, { id: dto.applicationId }] },
       include: { vacancy: { include: { branch: true } } },
     });
 

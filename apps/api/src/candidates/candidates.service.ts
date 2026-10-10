@@ -248,7 +248,7 @@ export class CandidatesService {
   ): Promise<Candidate> {
     const visibility = await this.visibilityWhere(organizationId, user);
     const candidate = await this.prisma.candidate.findFirst({
-      where: { id, ...visibility },
+      where: { AND: [visibility, { id }] },
     });
 
     if (!candidate || candidate.organizationId !== organizationId) {
@@ -348,7 +348,7 @@ export class CandidatesService {
     user?: AuthUser,
   ): Promise<Candidate> {
     const visibility = await this.visibilityWhere(organizationId, user);
-    const candidate = await this.prisma.candidate.findFirst({ where: { id, ...visibility } });
+    const candidate = await this.prisma.candidate.findFirst({ where: { AND: [visibility, { id }] } });
     if (!candidate || candidate.organizationId !== organizationId) {
       throw new NotFoundException(`Candidate ${id} was not found.`);
     }

@@ -1185,7 +1185,7 @@ export class VacancyCoreService {
   private async assertVacancyVisible(organizationId: string, id: string, user?: AuthUser): Promise<void> {
     if (!user || !this.accessControl) return;
     const visibility = await this.accessControl.getVacancyVisibilityWhere(user);
-    const vacancy = await this.prisma.vacancy.findFirst({ where: { id, ...visibility }, select: { id: true } });
+    const vacancy = await this.prisma.vacancy.findFirst({ where: { AND: [visibility, { id }] }, select: { id: true } });
     if (!vacancy) throw new NotFoundException(`Vacancy ${id} was not found.`);
   }
 }

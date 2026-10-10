@@ -8,6 +8,7 @@ import { PrismaService } from '../../database/prisma.service';
 import { OffersService } from '../../offers/offers.service';
 import { HiringService } from '../../hiring/hiring.service';
 import { ApplicationFileService } from '../application-file.service';
+import { ApplicationsService } from '../applications.service';
 import { GATE_CODES, assertStageGate } from '../application-gates';
 
 const url = process.env.B5_TEST_DATABASE_URL;
@@ -160,5 +161,54 @@ describe.skipIf(!url)('B5 follow-ups: offer Draft/submit/send, approver note + g
     try {
       expect((await err(file.listDocuments(user(ids.other!), ids.docApp!))).status).toBe(404);
     } finally { visibleOnly.ids = null; }
+  });
+
+  it('A1: id filters never widen the access scope (out-of-scope id -> empty list)', async () => {
+    const inScope = await newApplication('Offer');
+    const outScope = await newApplication('Offer');
+    const offIn = await create(inScope.id);
+    const offOut = await create(outScope.id);
+    await prisma.hiringCase.create({ data: { organizationId: ORG, applicationId: outScope.id, offerId: offOut } });
+    const apps = new ApplicationsService(prisma, {} as never, {} as never, { ...access, getUserEffectiveScope: async () => ({ canViewPii: true }) } as never);
+    const hiring = new HiringService(prisma as never, notifications as never, access as never);
+    visibleOnly.ids = [inScope.id];
+    try {
+      const u = user(ids.owner!);
+      const d = { viewSalary: true } as never;
+      expect(await offers.getOffers(u, { candidateId: outScope.candidateId }, d)).toEqual([]);
+      expect(await offers.getOffers(u, { vacancyId: outScope.vacancyId }, d).then((l) => l.map((o) => o.id))).toEqual([offIn]);
+      expect(await offers.getOffers(u, { applicationId: outScope.id }, d)).toEqual([]);
+      expect(await hiring.listHiringCases(ORG, undefined, u as never, outScope.id)).toEqual([]);
+      expect((await apps.listApplications(ORG, { candidateId: outScope.candidateId } as never, u as never)).data).toEqual([]);
+      expect((await apps.listApplications(ORG, { vacancyId: outScope.vacancyId, pageSize: 100 } as never, u as never)).data.map((a) => a.id)).toEqual([inScope.id]);
+      await expect(apps.getApplication(ORG, outScope.id, u as never)).rejects.toThrow();
+      await expect(offers.createOffer(u, { applicationId: outScope.id, components: [] } as never)).rejects.toThrow();
+    } finally { visibleOnly.ids = null; }
+  });
+
+  it('A2 + E3: list/detail carry followUpDate, gates[] (five gates) and the card interview (time + room)', async () => {
+    const app = await newApplication('Interview');
+    await file.setFollowUp(user(ids.owner!), app.id, '2031-05-04');
+    await prisma.screeningLog.create({ data: { organizationId: ORG, applicationId: app.id, screenerId: ids.owner!, outcome: 'Passed', notes: 'Good' } as never });
+    await prisma.joiningCheck.create({ data: { applicationId: app.id, type: 'ID', verified: true } });
+    const past = await prisma.interview.create({ data: { organizationId: ORG, applicationId: app.id, interviewCode: `IV-${tag}-p`, title: 'Past', interviewType: 'Technical', scheduledStart: new Date('2020-01-01T08:00:00Z'), scheduledEnd: new Date('2020-01-01T09:00:00Z'), roomName: 'Room 2' } as never });
+    const apps = new ApplicationsService(prisma, {} as never, {} as never, { ...access, getUserEffectiveScope: async () => ({ canViewPii: true }) } as never);
+    const find = async () => (await apps.listApplications(ORG, { candidateId: app.candidateId } as never, user(ids.owner!) as never)).data[0]!;
+    let item = await find();
+    expect(item.followUpDate).toBe('2031-05-04');
+    expect((await apps.getApplication(ORG, app.id, user(ids.owner!) as never)).followUpDate).toBe('2031-05-04');
+    expect(item.gates!.map((g) => [g.gate, g.met, g.missing])).toEqual([
+      ['screen-note', true, []],
+      ['scorecard', false, ['submitted scorecard']],
+      ['offer-accepted', false, ['accepted offer']],
+      ['joining-checks', false, ['CONTRACT', 'SCFHS_LICENCE']],
+      ['reject-reason', false, ['reason']],
+    ]);
+    expect(item.interview).toEqual({ when: 'last', startAt: past.scheduledStart.toISOString(), endAt: past.scheduledEnd.toISOString(), room: { name: 'Room 2', url: null } });
+    await prisma.interview.create({ data: { organizationId: ORG, applicationId: app.id, interviewCode: `IV-${tag}-n`, title: 'Next', interviewType: 'Technical', scheduledStart: new Date('2031-01-01T08:00:00Z'), scheduledEnd: new Date('2031-01-01T09:00:00Z'), locationUrl: 'https://meet.google.com/abc-defg-hij' } as never });
+    item = await find();
+    expect(item.interview).toMatchObject({ when: 'next', startAt: '2031-01-01T08:00:00.000Z', room: { name: null, url: 'https://meet.google.com/abc-defg-hij' } });
+    await prisma.application.update({ where: { id: app.id }, data: { stage: 'Rejected', rejectionReason: 'Not qualified' } });
+    expect((await find()).gates!.find((g) => g.gate === 'reject-reason')).toMatchObject({ met: true, missing: [] });
   });
 });
