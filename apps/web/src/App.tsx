@@ -27,7 +27,6 @@ const JobDetailRoute = lazy(() => import('./v2/pages/JobsRoute').then((m) => ({ 
 const ApplicationRoute = lazy(() => import('./v2/pages/ApplicationRoute').then((m) => ({ default: m.ApplicationRoute })));
 const MyWorkRoute = lazy(() => import('./v2/pages/MyWorkRoute').then((m) => ({ default: m.MyWorkRoute })));
 const ReportingTreePage = lazy(() => import('./pages/ReportingTreePage').then((m) => ({ default: m.ReportingTreePage })));
-const MasterDataPage = lazy(() => import('./pages/MasterDataPage').then((m) => ({ default: m.MasterDataPage })));
 const AuditLogPage = lazy(() => import('./pages/AuditLogPage').then((m) => ({ default: m.AuditLogPage })));
 const RequisitionsRoute = lazy(() => import('./v2/pages/RequisitionsRoute').then((m) => ({ default: m.RequisitionsRoute })));
 const CreateVacancyRequestPage = lazy(() => import('./pages/CreateVacancyRequestPage').then((m) => ({ default: m.CreateVacancyRequestPage })));
@@ -60,6 +59,9 @@ const BulkImportPage = lazy(() => import('./pages/BulkImportPage').then((m) => (
 const CVIntakePage = lazy(() => import('./pages/CVIntakePage').then((m) => ({ default: m.CVIntakePage })));
 const ReportsRoute = lazy(() => import('./v2/pages/ReportsRoute').then((m) => ({ default: m.ReportsRoute })));
 const UsersRoute = lazy(() => import('./v2/admin/AdminRoutes').then((m) => ({ default: m.UsersRoute })));
+const MasterDataRoute = lazy(() => import('./v2/admin/AdminRoutes').then((m) => ({ default: m.MasterDataRoute })));
+const PipelineRoute = lazy(() => import('./v2/admin/AdminRoutes').then((m) => ({ default: m.PipelineRoute })));
+const TemplatesRoute = lazy(() => import('./v2/admin/AdminRoutes').then((m) => ({ default: m.TemplatesRoute })));
 const RolesRoute = lazy(() => import('./v2/admin/AdminRoutes').then((m) => ({ default: m.RolesRoute })));
 const PipelineSettingsPage = lazy(() => import('./pages/PipelineSettingsPage').then((m) => ({ default: m.PipelineSettingsPage })));
 const EmailTemplatesPage = lazy(() => import('./pages/EmailTemplatesPage').then((m) => ({ default: m.EmailTemplatesPage })));
@@ -136,7 +138,7 @@ function App() {
                     path="/master-data"
                     element={
                       <PermissionGate requiredPermission="MASTER_DATA_VIEW">
-                        <MasterDataPage />
+                        <MasterDataRoute />
                       </PermissionGate>
                     }
                   />
@@ -210,7 +212,7 @@ function App() {
                     path="/pipeline-settings"
                     element={
                       <PermissionGate requiredPermission="OVERRIDE_WORKFLOW">
-                        <PipelineSettingsPage />
+                        <PipelineRoute v1={<PipelineSettingsPage />} />
                       </PermissionGate>
                     }
                   />
@@ -218,7 +220,7 @@ function App() {
                     path="/email-templates"
                     element={
                       <PermissionGate requiredAnyPermission={['MASTER_DATA_MANAGE', 'MASTER_DATA_VIEW', 'APPLICATION_VIEW', 'VACANCY_VIEW']}>
-                        <EmailTemplatesPage />
+                        <TemplatesRoute v1={<EmailTemplatesPage />} />
                       </PermissionGate>
                     }
                   />
@@ -226,7 +228,7 @@ function App() {
                     path="/whatsapp-templates"
                     element={
                       <PermissionGate requiredAnyPermission={['MASTER_DATA_MANAGE', 'MASTER_DATA_VIEW', 'APPLICATION_VIEW', 'VACANCY_VIEW']}>
-                        <WhatsAppTemplatesPage />
+                        <TemplatesRoute channel="whatsapp" v1={<WhatsAppTemplatesPage />} />
                       </PermissionGate>
                     }
                   />
