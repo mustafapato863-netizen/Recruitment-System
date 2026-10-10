@@ -32,3 +32,7 @@
 [data-ui='v2'] .rf2-admin__owned { display: flex; flex-direction: column; gap: var(--rf2-space-1); padding: var(--rf2-space-1-5); border: 1px solid var(--rf2-danger); border-radius: var(--rf2-radius-card); background: var(--rf2-danger-tint); }
 [data-ui='v2'] .rf2-admin__owned p, [data-ui='v2'] .rf2-admin__owned ul { margin: 0; }
 [data-ui='v2'] .rf2-admin__owned .rf2-jtable__name svg { width: 16px; height: 16px; vertical-align: -3px; color: var(--rf2-danger); }
+[data-ui='v2'] .rf2-admin th[scope='row'] { background: transparent; }
+[data-ui='v2'] .rf2-admin__matrix td svg { display: inline-block; margin-inline-end: 4px; }
+[data-ui='v2'] .rf2-admin__matrix td { white-space: nowrap; }
+[data-ui='v2'] .rf2-admin__card > .rf2-jtable__sub:last-child { margin: 0; padding: var(--rf2-space-1) var(--rf2-space-2); }
