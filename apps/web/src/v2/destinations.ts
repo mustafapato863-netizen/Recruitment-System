@@ -41,9 +41,25 @@ export function isV2Destination(seat: Seat, pathname: string): boolean {
   return [...COMMON, ...SEAT_DESTINATIONS[seat]].some((p) => matches(p, pathname));
 }
 
-/** null = stay; otherwise where to go instead. */
-export function v2Redirect(seat: Seat, pathname: string): string | null {
+/**
+ * Backend #21 (B2-3, migration b3e): the RECRUITER role no longer holds VACANCY_REQUEST_VIEW/CREATE,
+ * so requisitions answer 403. A user whose only role is Recruiter never sees them (nav or route),
+ * even with a stale permission list; otherwise VACANCY_REQUEST_VIEW decides, like the API.
+ */
+export function isRecruiterOnly(roles: ReadonlyArray<{ code: string }> | undefined): boolean {
+  const codes = (roles ?? []).map((r) => r.code);
+  return codes.length > 0 && codes.every((c) => c === 'RECRUITER');
+}
+export function canUseRequisitions(user: { roles?: ReadonlyArray<{ code: string }>; permissions?: readonly string[] } | null | undefined): boolean {
+  if (!user || isRecruiterOnly(user.roles)) return false;
+  return (user.roles ?? []).some((r) => r.code === 'ADMINISTRATOR') || (user.permissions ?? []).includes('VACANCY_REQUEST_VIEW');
+}
+const REQUISITIONS = /^\/vacancy-requests(\/|$)/;
+
+/** null = stay; otherwise where to go instead. `opts.requisitions === false` drops /vacancy-requests (Recruiter role). */
+export function v2Redirect(seat: Seat, pathname: string, opts: { requisitions?: boolean } = {}): string | null {
   if (pathname === '/' || pathname === '') return SEAT_HOME[seat];
+  if (opts.requisitions === false && REQUISITIONS.test(pathname)) return SEAT_HOME[seat];
   if (isV2Destination(seat, pathname)) return null;
   for (const rule of EQUIVALENT) if (rule.from.test(pathname) && rule.to[seat]) return rule.to[seat]!;
   return SEAT_HOME[seat];

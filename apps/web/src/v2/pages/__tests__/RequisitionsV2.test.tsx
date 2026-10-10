@@ -15,7 +15,7 @@ vi.mock('../../../auth/AuthContext', () => ({ useAuth: () => ({ user: { id: 'u-k
 vi.mock('../../../pages/VacancyRequestsPage', () => ({ VacancyRequestsPage: () => <p>v1 requisitions</p> }));
 import { RequisitionsV2 } from '../RequisitionsV2';
 import { RequisitionsRoute } from '../RequisitionsRoute';
-import { draftActivateRefused, mineOrTeam, reqError, TARGET_UPDATE_LIVE } from '../../api/requisitions';
+import { draftActivateRefused, mineOrTeam, ownerOf, reqError, TARGET_UPDATE_LIVE } from '../../api/requisitions';
 import { TargetDrawer } from '../../drawers/RequisitionDrawers';
 
 let responses: Record<string, unknown> = {};
@@ -292,5 +292,31 @@ describe('M1 CoS follow-ups', () => {
     const d = await screen.findByRole('dialog');
     expect(within(d).queryByRole('button', { name: 'Activate job' })).toBeNull();
     expect(within(d).getByRole('button', { name: 'Submit for approval' })).toBeEnabled();
+  });
+});
+
+describe('Backend #21/#23 batch 2', () => {
+  it('#21 B2-16: primaryRecruiter{id,name} names the owner; no client fill when the server sends it', () => {
+    const r = { ...fx.requisitions[0], assignedEmployeeId: 'u-mariam', primaryRecruiter: { id: 'u-noura', name: 'Noura Al-Dosari' } } as never;
+    expect(ownerOf(r, [{ id: 'u-mariam', name: 'Mariam Farag' }])).toBe('Noura Al-Dosari');
+    expect(ownerOf({ ...fx.requisitions[0], assignedEmployeeId: 'u-mariam', primaryRecruiter: null } as never, [{ id: 'u-mariam', name: 'Mariam Farag' }])).toBe('—');
+    expect(ownerOf({ ...fx.requisitions[0], assignedEmployeeId: 'u-mariam' } as never, [{ id: 'u-mariam', name: 'Mariam Farag' }])).toBe('Mariam Farag');
+    expect(mineOrTeam([{ ...fx.requisitions[5], primaryRecruiter: { id: 'u-mariam', name: 'Mariam Farag' } } as never], 'u-karim', [{ id: 'u-mariam', name: 'Mariam Farag' }])).toHaveLength(1);
+  });
+  it('#23: a 400 with fields lands on Seats and Due date; the banner stays empty', async () => {
+    const u = userEvent.setup();
+    const fields = { requestedHeadcount: ['requestedHeadcount must not be greater than 500'], dueDate: ['dueDate must be a valid ISO 8601 date string'] };
+    api.postApi.mockRejectedValue(new ApiError(400, 'x', { statusCode: 400, code: 'VALIDATION_ERROR', message: 'Please correct the highlighted fields.', field: 'requestedHeadcount', fields }, { code: 'VALIDATION_ERROR', fields }));
+    renderAt();
+    await u.click(await screen.findByRole('button', { name: 'New requisition' }));
+    const d = await screen.findByRole('dialog', { name: 'New requisition' });
+    await u.selectOptions(within(d).getByLabelText(/^Title/), 'p-payroll');
+    await u.selectOptions(within(d).getByLabelText(/^Site/), 'b-riyadh');
+    await u.type(within(d).getByLabelText(/^Due date/), '2099-11-20');
+    await u.click(within(d).getByRole('button', { name: 'Save draft' }));
+    expect(await within(d).findByText('requestedHeadcount must not be greater than 500')).toBeInTheDocument();
+    expect(within(d).getByText('dueDate must be a valid ISO 8601 date string')).toBeInTheDocument();
+    expect(within(d).getByLabelText(/^Seats/)).toHaveAttribute('aria-invalid', 'true');
+    expect(within(d).queryByText('Please correct the highlighted fields.')).toBeNull();
   });
 });
