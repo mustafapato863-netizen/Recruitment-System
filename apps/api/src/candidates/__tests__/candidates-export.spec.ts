@@ -2,7 +2,6 @@ import { describe, expect, it, vi } from 'vitest';
 import * as XLSX from 'xlsx';
 import { CandidatesService } from '../candidates.service';
 import type { PrismaService } from '../../database/prisma.service';
-import type { AuthUser } from '@recruitflow/contracts';
 
 describe('Candidates Export Service', () => {
   const mockCandidates = [
@@ -152,22 +151,16 @@ describe('Candidates Export Service', () => {
     );
   });
 
-  it('rejects permanent candidate deletion for non-administrator roles', async () => {
-    const findFirstMock = vi.fn();
+  it('DELETE archives the candidate instead of deleting it (B2)', async () => {
+    const update = vi.fn().mockResolvedValue({});
+    const remove = vi.fn();
     const mockPrisma = {
-      candidate: { findFirst: findFirstMock },
+      candidate: { findFirst: vi.fn().mockResolvedValue({ id: 'candidate-1', status: 'Active' }), update, delete: remove },
     } as unknown as PrismaService;
     const service = new CandidatesService(mockPrisma);
-    const user: AuthUser = {
-      userId: 'user-1',
-      organizationId: 'org-1',
-      tokenVersion: 1,
-      roleCodes: ['RECRUITER'],
-    };
-
-    await expect(service.deleteCandidate('org-1', 'candidate-1', user)).rejects.toThrow(
-      'Only administrators can permanently delete candidate data.',
-    );
-    expect(findFirstMock).not.toHaveBeenCalled();
+    await expect(service.archiveCandidate('org-1', 'candidate-1')).resolves.toEqual({ id: 'candidate-1', deactivated: true, status: 'Archived' });
+    expect(update).toHaveBeenCalledWith({ where: { id: 'candidate-1' }, data: { status: 'Archived' } });
+    expect(remove).not.toHaveBeenCalled();
+    expect('deleteCandidate' in service).toBe(false);
   });
 });

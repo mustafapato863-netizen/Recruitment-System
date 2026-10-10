@@ -33,7 +33,7 @@ export class MasterDataCatalogController {
 
   @Delete(':category/:id')
   @RequirePermissions('MASTER_DATA_MANAGE')
-  @AuditAction('MASTER_DATA_VALUE_DELETE')
+  @AuditAction('MASTER_DATA_VALUE_DEACTIVATE')
   remove(
     @CurrentUser() user: AuthUser,
     @Param('category') category: string,

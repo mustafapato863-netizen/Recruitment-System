@@ -27,6 +27,7 @@ const JobsListRoute = lazy(() => import('./v2/pages/JobsRoute').then((m) => ({ d
 const JobDetailRoute = lazy(() => import('./v2/pages/JobsRoute').then((m) => ({ default: m.JobDetailRoute })));
 const ApplicationRoute = lazy(() => import('./v2/pages/ApplicationRoute').then((m) => ({ default: m.ApplicationRoute })));
 const MyWorkRoute = lazy(() => import('./v2/pages/MyWorkRoute').then((m) => ({ default: m.MyWorkRoute })));
+const MyInterviewsGate = lazy(() => import('./pages/MyInterviewsGate').then((m) => ({ default: m.MyInterviewsGate })));
 const UsersRolesPage = lazy(() => import('./pages/UsersRolesPage').then((m) => ({ default: m.UsersRolesPage })));
 const ReportingTreePage = lazy(() => import('./pages/ReportingTreePage').then((m) => ({ default: m.ReportingTreePage })));
 const MasterDataPage = lazy(() => import('./pages/MasterDataPage').then((m) => ({ default: m.MasterDataPage })));
@@ -171,6 +172,7 @@ function App() {
                   <Route path="/applications" element={<PermissionGate requiredPermission="APPLICATION_VIEW"><ApplicationsPage /></PermissionGate>} />
                   <Route path="/applications/:id" element={<PermissionGate requiredPermission="APPLICATION_VIEW"><ApplicationRoute /></PermissionGate>} />
                   <Route path="/applications/:id/transition" element={<PermissionGate requiredPermission="APPLICATION_MOVE_STAGE"><StageTransitionPage /></PermissionGate>} />
+                  <Route path="/my-interviews" element={<PermissionGate requiredPermission="VACANCY_VIEW"><MyInterviewsGate /></PermissionGate>} />
                   <Route path="/interviews" element={<PermissionGate requiredPermission="VACANCY_VIEW"><InterviewsPage /></PermissionGate>} />
                   <Route path="/interviews/calendar" element={<PermissionGate requiredPermission="VACANCY_VIEW"><InterviewCalendarPage /></PermissionGate>} />
                   <Route path="/interviews/:id" element={<PermissionGate requiredPermission="VACANCY_VIEW"><InterviewDetailPage /></PermissionGate>} />
