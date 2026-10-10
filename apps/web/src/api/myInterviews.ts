@@ -13,7 +13,7 @@
 import { ApiError, downloadFileApi, getApi, postApi } from './client';
 
 export type MyRsvp = 'Pending' | 'Accepted' | 'Confirmed' | 'Reschedule Requested' | 'Declined';
-export type MyScorecardStatus = 'missing' | 'submitted' | 'locked';
+export type MyScorecardStatus = 'missing' | 'draft' | 'submitted';
 
 /** PROVISIONAL — mirror whatever Backend ships. Only name + job: no other file data. */
 export interface MyInterview {
@@ -27,6 +27,8 @@ export interface MyInterview {
   positionTitle: string | null;
   /** v2: a room URL only. */
   locationUrl: string | null;
+  /** Physical/named room, shown next to the room link. */
+  roomName: string | null;
   myResponse: MyRsvp;
   scorecardStatus: MyScorecardStatus;
   status: 'Scheduled' | 'Completed' | 'Cancelled' | 'Rescheduled';
@@ -34,7 +36,7 @@ export interface MyInterview {
 
 export type ListResult = { available: true; items: MyInterview[] } | { available: false };
 
-const ALLOWED_KEYS: ReadonlyArray<keyof MyInterview> = ['id', 'title', 'interviewType', 'scheduledStart', 'scheduledEnd', 'timezone', 'candidateName', 'positionTitle', 'locationUrl', 'myResponse', 'scorecardStatus', 'status'];
+const ALLOWED_KEYS: ReadonlyArray<keyof MyInterview> = ['id', 'title', 'interviewType', 'scheduledStart', 'scheduledEnd', 'timezone', 'candidateName', 'positionTitle', 'locationUrl', 'roomName', 'myResponse', 'scorecardStatus', 'status'];
 
 /** Keeps ONLY the whitelisted fields, so stray PII/pay/file data can never render. */
 export function pickInterview(raw: Record<string, unknown>): MyInterview {
@@ -72,6 +74,8 @@ export interface MyScorecard {
   concerns?: string | null;
   notes?: string | null;
   isLocked: boolean;
+  /** B5: Draft | Submitted. */
+  status?: 'Draft' | 'Submitted';
   submittedAt: string;
 }
 /** = SubmitScorecardDto. */

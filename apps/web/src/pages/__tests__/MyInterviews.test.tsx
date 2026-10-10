@@ -12,7 +12,7 @@ import { MyInterviewsPage } from '../MyInterviewsPage';
 
 const row = (over: Record<string, unknown> = {}) => ({
   id: 'iv1', title: 'Technical interview', interviewType: 'Technical', scheduledStart: '2026-10-13T07:00:00Z', scheduledEnd: '2026-10-13T08:00:00Z',
-  timezone: 'Africa/Cairo', candidateName: 'Ahmed Embaby', positionTitle: 'HRIS Developer', locationUrl: 'https://rooms.example.test/sg-4',
+  timezone: 'Africa/Cairo', candidateName: 'Ahmed Embaby', positionTitle: 'HRIS Developer', locationUrl: 'https://rooms.example.test/sg-4', roomName: 'Room SG-4',
   myResponse: 'Pending', scorecardStatus: 'missing', status: 'Scheduled', ...over,
 });
 const renderPage = () => render(<MemoryRouter><MyInterviewsPage /></MemoryRouter>);
@@ -25,7 +25,7 @@ describe('adapter (provisional GET /me/interviews)', () => {
     api.getApi.mockResolvedValue({ data: [row({ candidateEmail: 'a@x.com', phone: '+20', expectedSalary: 9000, applicationId: 'app1', notes: 'secret' })] });
     const r = await listMyInterviews();
     expect(api.getApi).toHaveBeenCalledWith('/me/interviews?scope=upcoming');
-    expect(r.available && Object.keys(r.items[0]).sort()).toEqual(['candidateName', 'id', 'interviewType', 'locationUrl', 'myResponse', 'positionTitle', 'scheduledEnd', 'scheduledStart', 'scorecardStatus', 'status', 'timezone', 'title']);
+    expect(r.available && Object.keys(r.items[0]).sort()).toEqual(['candidateName', 'id', 'interviewType', 'locationUrl', 'myResponse', 'positionTitle', 'roomName', 'scheduledEnd', 'scheduledStart', 'scorecardStatus', 'status', 'timezone', 'title']);
   });
   it.each([404, 405, 501])('%i → not available yet', async (s) => {
     api.getApi.mockRejectedValue(new ApiError(s, 'x'));
@@ -138,6 +138,35 @@ describe('My interviews page', () => {
     expect(await screen.findByTestId('my-scorecard')).toHaveTextContent('Strong Hire');
     expect(api.getApi).toHaveBeenCalledWith('/interviews/iv1/scorecard');
     expect(screen.queryByRole('button', { name: 'Submit scorecard' })).not.toBeInTheDocument();
+  });
+});
+
+describe('draft scorecard + room name', () => {
+  it('pickInterview keeps roomName; status is missing|draft|submitted', () => {
+    expect(pickInterview({ id: 'x', roomName: 'Room 4B', scorecardStatus: 'draft' })).toMatchObject({ roomName: 'Room 4B', scorecardStatus: 'draft' });
+  });
+  it('shows the room name next to the room link', async () => {
+    api.getApi.mockResolvedValue({ data: [row()] });
+    renderPage();
+    expect(await screen.findByTestId('room-name')).toHaveTextContent('Room SG-4');
+    expect(screen.getByRole('link', { name: 'Room link' })).toBeInTheDocument();
+  });
+  it('draft: badge "Draft saved", the form reopens prefilled and can be submitted', async () => {
+    const u = userEvent.setup();
+    api.getApi.mockImplementation(async (p: string) => (p.endsWith('/scorecard')
+      ? [{ id: 's1', interviewId: 'iv1', interviewerId: 'me', overallRating: 3, recommendation: 'Neutral', notes: 'Half done', status: 'Draft', isLocked: false, submittedAt: '2026-10-13T09:00:00Z' }]
+      : { data: [row({ scorecardStatus: 'draft' })] }));
+    api.postApi.mockResolvedValue({ id: 's1', interviewId: 'iv1', interviewerId: 'me', overallRating: 3, recommendation: 'Neutral', notes: 'Half done, finished', status: 'Submitted', isLocked: true, submittedAt: '2026-10-13T10:00:00Z' });
+    renderPage();
+    expect(await screen.findByText('Draft saved')).toBeInTheDocument();
+    await u.click(screen.getByRole('button', { name: 'Continue scorecard' }));
+    expect(await screen.findByTestId('draft-note')).toBeInTheDocument();
+    const evidence = screen.getByLabelText(/Written evidence/);
+    expect(evidence).toHaveValue('Half done');
+    await u.type(evidence, ', finished');
+    await u.click(screen.getByRole('button', { name: 'Submit scorecard' }));
+    expect(api.postApi).toHaveBeenCalledWith('/interviews/iv1/scorecard', { overallRating: 3, recommendation: 'Neutral', notes: 'Half done, finished' });
+    await waitFor(() => expect(screen.getByText('Scorecard submitted')).toBeInTheDocument());
   });
 });
 

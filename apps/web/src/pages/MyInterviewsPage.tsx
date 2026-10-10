@@ -107,18 +107,18 @@ function InterviewCard({ item, onPatch, onScorecard }: { item: MyInterview; onPa
           <h2 id={`iv-${item.id}`} className="text-sm font-bold text-rf-ink">{item.candidateName}{item.positionTitle ? <span className="font-semibold text-rf-ink-muted"> · {item.positionTitle}</span> : null}</h2>
           <p className="mt-0.5 text-xs text-rf-ink-muted">{item.title} · {when(item.scheduledStart, item.timezone)}–{when(item.scheduledEnd, item.timezone).split(', ').pop()}</p>
           {item.locationUrl ? (
-            <p className="mt-1 text-xs"><a className="text-rf-action underline-offset-2 hover:underline" href={item.locationUrl} target="_blank" rel="noreferrer">Room link</a></p>
-          ) : <p className="mt-1 text-xs text-rf-ink-muted">No room link yet</p>}
+            <p className="mt-1 text-xs"><a className="text-rf-action underline-offset-2 hover:underline" href={item.locationUrl} target="_blank" rel="noreferrer">Room link</a>{item.roomName ? <span className="text-rf-ink-muted" data-testid="room-name"> · {item.roomName}</span> : null}</p>
+          ) : item.roomName ? <p className="mt-1 text-xs text-rf-ink-muted" data-testid="room-name">{item.roomName}</p> : <p className="mt-1 text-xs text-rf-ink-muted">No room link yet</p>}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {cancelled ? <Badge variant="danger">Cancelled</Badge> : null}
           <Badge variant={rsvp.variant}>{rsvp.label}</Badge>
-          <Badge variant={item.scorecardStatus === 'missing' ? 'warning' : 'success'}>{item.scorecardStatus === 'missing' ? 'Scorecard due' : 'Scorecard submitted'}</Badge>
+          <Badge variant={item.scorecardStatus === 'submitted' ? 'success' : item.scorecardStatus === 'draft' ? 'neutral' : 'warning'}>{item.scorecardStatus === 'submitted' ? 'Scorecard submitted' : item.scorecardStatus === 'draft' ? 'Draft saved' : 'Scorecard due'}</Badge>
         </div>
       </div>
       <div className="mt-3 flex flex-wrap gap-2">
         <Button size="sm" variant="secondary" onClick={() => run('cv')} disabled={busy !== null} aria-label={`Download CV for ${item.candidateName}`}><Icon name="download" size={13} /> {busy === 'cv' ? 'Downloading…' : 'Download CV'}</Button>
-        <Button size="sm" variant={item.scorecardStatus === 'missing' ? 'primary' : 'secondary'} onClick={onScorecard} disabled={cancelled}>{item.scorecardStatus === 'missing' ? 'Fill scorecard' : 'View my scorecard'}</Button>
+        <Button size="sm" variant={item.scorecardStatus === 'submitted' ? 'secondary' : 'primary'} onClick={onScorecard} disabled={cancelled}>{item.scorecardStatus === 'submitted' ? 'View my scorecard' : item.scorecardStatus === 'draft' ? 'Continue scorecard' : 'Fill scorecard'}</Button>
         <Button size="sm" variant="secondary" onClick={() => run('Confirmed')} disabled={busy !== null || cancelled || item.myResponse === 'Confirmed' || item.myResponse === 'Accepted'}>Accept</Button>
         <Button size="sm" variant="secondary" onClick={() => run('Declined')} disabled={busy !== null || cancelled || item.myResponse === 'Declined'}>Decline</Button>
         <Button size="sm" variant="ghost" onClick={() => run('ics')} disabled={busy !== null}><Icon name="calendar" size={13} /> Add to calendar (.ics)</Button>
@@ -126,6 +126,12 @@ function InterviewCard({ item, onPatch, onScorecard }: { item: MyInterview; onPa
       {notice ? <p role={notice.tone === 'error' ? 'alert' : 'status'} className={`mt-2 text-xs ${notice.tone === 'error' ? 'text-rf-danger' : 'text-rf-success'}`}>{notice.text}</p> : null}
     </li>
   );
+}
+
+/** A saved, unsubmitted scorecard stays editable (no 'locked' state). */
+function isDraft(card: MyScorecard, interview: MyInterview): boolean {
+  if (card.status) return card.status === 'Draft';
+  return !card.isLocked && interview.scorecardStatus === 'draft';
 }
 
 function ScorecardModal({ interview, onClose, onSubmitted }: { interview: MyInterview; onClose: () => void; onSubmitted: () => void }) {
@@ -138,10 +144,15 @@ function ScorecardModal({ interview, onClose, onSubmitted }: { interview: MyInte
 
   useEffect(() => {
     getMyScorecards(interview.id)
-      .then((list) => setMine(Array.isArray(list) && list.length ? list[list.length - 1] : null))
+      .then((list) => {
+        const last = Array.isArray(list) && list.length ? list[list.length - 1] : null;
+        setMine(last);
+        if (last && isDraft(last, interview)) setForm({ overallRating: last.overallRating ?? 0, recommendation: last.recommendation ?? 'Hire', notes: last.notes ?? '', strengths: last.strengths ?? '', concerns: last.concerns ?? '' });
+      })
       .catch((e: unknown) => setLoadError(e instanceof Error ? e.message : 'Could not load your scorecard.'));
   }, [interview.id]);
 
+  const editing = mine === null || (mine !== undefined && isDraft(mine, interview));
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     const next: Record<string, string> = {};
@@ -166,7 +177,7 @@ function ScorecardModal({ interview, onClose, onSubmitted }: { interview: MyInte
 
   return (
     <Modal isOpen onClose={onClose} title={`Scorecard — ${interview.candidateName}`}
-      footer={mine === null ? (
+      footer={editing ? (
         <>
           <Button variant="secondary" onClick={onClose}>Cancel</Button>
           <Button variant="primary" type="submit" form="my-scorecard-form" disabled={saving}>{saving ? 'Submitting…' : 'Submit scorecard'}</Button>
@@ -174,7 +185,7 @@ function ScorecardModal({ interview, onClose, onSubmitted }: { interview: MyInte
       ) : <Button variant="secondary" onClick={onClose}>Close</Button>}>
       {loadError ? <p role="alert" className="text-sm text-rf-danger">{loadError}</p> : null}
       {mine === undefined && !loadError ? <p role="status" className="text-sm text-rf-ink-muted">Loading your scorecard…</p> : null}
-      {mine ? (
+      {mine && !editing ? (
         <dl className="grid grid-cols-[140px_1fr] gap-x-3 gap-y-2 text-sm" data-testid="my-scorecard">
           <dt className="text-rf-ink-muted">Rating</dt><dd>{mine.overallRating} of 5</dd>
           <dt className="text-rf-ink-muted">Recommendation</dt><dd>{mine.recommendation}</dd>
@@ -184,7 +195,8 @@ function ScorecardModal({ interview, onClose, onSubmitted }: { interview: MyInte
           <dt className="text-rf-ink-muted">Submitted</dt><dd>{when(mine.submittedAt)}{mine.isLocked ? ' · locked' : ''}</dd>
         </dl>
       ) : null}
-      {mine === null ? (
+      {mine && editing ? <p role="status" className="mb-2 text-xs text-rf-ink-muted" data-testid="draft-note">Draft saved. Continue editing and submit when ready.</p> : null}
+      {editing ? (
         <form id="my-scorecard-form" onSubmit={submit} noValidate className="space-y-3 text-sm">
           <fieldset aria-describedby={errors.overallRating ? 'sc-rating-err' : undefined}>
             <legend className="mb-1 font-semibold text-rf-ink">Overall rating <span aria-hidden="true">*</span></legend>
