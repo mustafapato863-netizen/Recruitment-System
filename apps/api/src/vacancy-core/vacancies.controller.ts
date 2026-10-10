@@ -16,7 +16,7 @@ import {
 import type { AuthUser } from '@recruitflow/contracts';
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { VacancyCoreService } from './vacancy-core.service';
-import { UpdateVacancyStatusDto, UpdateVacancyDto, AssignTeamMemberDto, VacancyWorkQueueQueryDto, JobStatusReasonDto } from './vacancy-core.dto';
+import { UpdateVacancyStatusDto, UpdateVacancyDto, AssignTeamMemberDto, VacancyWorkQueueQueryDto, JobStatusReasonDto, DeleteVacancyDto } from './vacancy-core.dto';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { TenantScopedGuard } from '../common/guards/tenant-scoped.guard';
@@ -133,16 +133,18 @@ export class VacanciesController {
   }
 
   /** B2: DELETE deactivates (status Cancelled); nothing is removed. */
+  /** B2R-2/3: owner or owner's manager; an Administrator must send {reason, note?} (audited override). */
   @Delete(':id')
-  @RequirePermissions('VACANCY_MANAGE')
+  @RequireAnyPermissions('VACANCY_MANAGE', 'VACANCY_VIEW')
   @AuditAction('VACANCY_DEACTIVATE')
   @UseGuards(TenantScopedGuard)
   @TenantResource({ resource: 'vacancy', param: 'id' })
   deleteVacancy(
     @CurrentUser() user: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: DeleteVacancyDto = {},
   ) {
-    return this.vacancyCoreService.deleteVacancy(id, user.organizationId, user);
+    return this.vacancyCoreService.deleteVacancy(id, user.organizationId, user, body ?? {});
   }
 
   @Post(':id/assignments')

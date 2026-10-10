@@ -137,8 +137,10 @@ export class MasterDataService {
       for (const row of rows) {
         const name = normalizeCatalogText(row.name);
         if (!name) throw new BadRequestException('Every Master Data row needs a name.');
-        const status = row.status?.trim() || 'Active';
+        let status = row.status?.trim() || 'Active';
         if (!['Active', 'Inactive', 'Archived'].includes(status)) throw new BadRequestException(`Invalid status for ${name}.`);
+        // B2R-7: 'Archived' is the single deactivated-skill status (B2-21); the batch maps Inactive -> Archived.
+        if (category === 'skills' && status === 'Inactive') status = 'Archived';
         if (category === 'branches') {
           const country = this.normalizeBranchCountry(row.country);
           const branchValues = await tx.branch.findMany({ where: { organizationId }, select: { id: true, code: true, name: true } });
@@ -238,7 +240,9 @@ export class MasterDataService {
     if (!['Active', 'Inactive'].includes(status)) throw new BadRequestException({ code: 'VALIDATION_ERROR', message: "status must be 'Active' or 'Inactive'." });
     const value = await this.prisma.masterDataValue.findFirst({ where: { id, organizationId, category }, select: { id: true } });
     if (!value) throw new NotFoundException('Master Data value not found.');
-    const r = await this.prisma.masterDataValue.update({ where: { id }, data: { status, version: { increment: 1 } } });
+    // B2R-7: a deactivated skill is 'Archived' (single status), whichever route deactivates it.
+    const stored = category === 'skills' && status === 'Inactive' ? 'Archived' : status;
+    const r = await this.prisma.masterDataValue.update({ where: { id }, data: { status: stored, version: { increment: 1 } } });
     return { id: r.id, category, name: r.name, status: r.status, version: r.version };
   }
 

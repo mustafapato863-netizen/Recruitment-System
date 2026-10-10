@@ -243,3 +243,14 @@ describe('B2-9 / NEW-3 codes and counts reach the client', () => {
     expect(buildErrorEnvelope(normalizeError(new ConflictException({ code: 'USER_OWNS_OPEN_WORK', message: 'x', counts: { email: 'a@b.c' } })), 'r').counts).toBeUndefined();
   });
 });
+
+describe('B2R-4 CANDIDATE_EXISTS keeps the existing person id/code', () => {
+  it('passes details {candidateId, candidateCode} and nothing else', async () => {
+    const { ConflictException } = await import('@nestjs/common');
+    const { buildErrorEnvelope } = await import('./error-normalizer');
+    const id = '11111111-2222-4333-8444-555555555555';
+    expect(buildErrorEnvelope(normalizeError(new ConflictException({ code: 'CANDIDATE_EXISTS', message: 'x', details: { candidateId: id, candidateCode: 'CND-2026-004' } })), 'r'))
+      .toMatchObject({ code: 'CANDIDATE_EXISTS', details: { candidateId: id, candidateCode: 'CND-2026-004' } });
+    expect(buildErrorEnvelope(normalizeError(new ConflictException({ code: 'CANDIDATE_EXISTS', message: 'x', details: { candidateId: id, candidateCode: 'C', email: 'a@b.c' } })), 'r').details).toBeUndefined();
+  });
+});
