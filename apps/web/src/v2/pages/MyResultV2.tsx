@@ -3,18 +3,17 @@ import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, Info, RotateCw } from 'lucide-react';
 import { ButtonV2, EmptyStateV2, ForbiddenStateV2, SkeletonV2 } from '../../components/v2';
 import { useV2Shell } from '../../components/v2/shell/AppShellV2';
-import { cairoMonth, fetchMyResult, monthLabel, MIN_SAMPLE, tooFew, type MyResult, type ResultTile } from '../api/myResult';
-import { formatDay } from './OpenJobsV2';
+import { cairoMonth, fetchMyResult, monthLabel, MIN_SAMPLE, tooFew, type MyResult, type ResultTile, type TileKey } from '../api/myResult';
 import './jobs.css';
 
-function Tile({ title, tile, headline, sub, foot }: { title: string; tile: ResultTile; headline: string; sub?: string | null; foot?: string | null }) {
-  const few = tooFew(tile);
+function Tile({ k, title, tile, headline, sub, foot }: { k: TileKey; title: string; tile: ResultTile; headline: string; sub?: string | null; foot?: string | null }) {
+  const few = tooFew(k, tile);
   return (
     <section className="rf2-panel rf2-kpi" aria-label={title}>
       <h2 className="rf2-kpi__title">{title}</h2>
       <p className="rf2-kpi__value" data-few={few || undefined}>{few ? 'Too few to judge' : headline}</p>
       <p className="rf2-kpi__sub">{few ? `${headline} so far` : sub}</p>
-      <p className="rf2-kpi__foot">{tile.detail ? <>{tile.detail}<br /></> : null}<span className="rf2-kpi__n">Based on {tile.sampleSize} {tile.sampleSize === 1 ? 'record' : 'records'}{few ? ` · needs ${MIN_SAMPLE}` : ''}</span>{foot ? <><br />{foot}</> : null}</p>
+      <p className="rf2-kpi__foot">{tile.detail ? <>{tile.detail}<br /></> : null}<span className="rf2-kpi__n">Based on {tile.sampleSize} {tile.sampleSize === 1 ? 'record' : 'records'}{few ? ` · needs ${MIN_SAMPLE}` : ''}{k === 'seats' ? ' · seats are always shown' : ''}</span>{foot ? <><br />{foot}</> : null}</p>
     </section>
   );
 }
@@ -47,13 +46,13 @@ export function MyResultV2() {
       {state.kind === 'forbidden' ? <ForbiddenStateV2 body="Your role does not include results." /> : null}
       {state.kind === 'error' ? <div role="alert"><EmptyStateV2 title="Could not load my result" body={state.message} action={<ButtonV2 kind="secondary" icon={<RotateCw />} onClick={() => setAttempt((n) => n + 1)}>Try again</ButtonV2>} /></div> : null}
       {state.kind === 'ready' ? (() => {
-        const d = state.data;
+        const t = state.data.tiles;
         return (
           <div className="rf2-kpis">
-            <Tile title="Seats" tile={d.seats} headline={`${d.seats.value} of ${d.seats.of ?? 0} filled`} sub={d.seats.dueDate ? `Due ${formatDay(d.seats.dueDate)}` : 'No due date'} foot={d.seats.of != null ? `Open seats: ${Math.max(0, d.seats.of - d.seats.value)}` : null} />
-            <Tile title="Overdue follow-ups" tile={d.overdueFollowUps} headline={String(d.overdueFollowUps.value)} sub={d.overdueFollowUps.value ? 'past their follow-up date' : 'none overdue'} foot="Follow-up dates are set on each file" />
-            <Tile title="Screens with a note" tile={d.screensReachedInterview} headline={String(d.screensReachedInterview.of ?? 0)} sub={`${d.screensReachedInterview.value} reached interview`} />
-            <Tile title="Offers accepted against sent" tile={d.offersAccepted} headline={`${d.offersAccepted.value} of ${d.offersAccepted.of ?? 0}`} sub={d.offersAccepted.of ? 'accepted of sent' : 'none sent yet'} />
+            <Tile k="seats" title="Seats" tile={t.seats} headline={`${t.seats.value} of ${t.seats.of} filled`} sub={`${Math.max(0, t.seats.of - t.seats.value)} open`} />
+            <Tile k="overdueFollowUps" title="Overdue follow-ups" tile={t.overdueFollowUps} headline={`${t.overdueFollowUps.value} of ${t.overdueFollowUps.of}`} sub={t.overdueFollowUps.value ? 'past their follow-up date' : 'none overdue'} foot="Follow-up dates are set on each file" />
+            <Tile k="screensReachedInterview" title="Screens with a note" tile={t.screensReachedInterview} headline={`${t.screensReachedInterview.value} of ${t.screensReachedInterview.of}`} sub="reached interview" />
+            <Tile k="offersAccepted" title="Offers accepted against sent" tile={t.offersAccepted} headline={`${t.offersAccepted.value} of ${t.offersAccepted.of}`} sub={t.offersAccepted.of ? 'accepted of sent' : 'none sent yet'} />
           </div>
         );
       })() : null}
