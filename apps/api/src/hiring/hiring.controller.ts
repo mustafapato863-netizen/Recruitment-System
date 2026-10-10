@@ -58,8 +58,11 @@ export class HiringController {
   listHiringCases(
     @CurrentUser() user: AuthUser,
     @Query('status') status?: string,
+    @Query('applicationId') applicationId?: string,
   ) {
-    return this.hiringService.listHiringCases(user.organizationId, status, user);
+    // B5 follow-up: filter by file. A malformed id matches nothing (no DB uuid error).
+    if (applicationId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(applicationId.trim())) return [];
+    return this.hiringService.listHiringCases(user.organizationId, status, user, applicationId?.trim() || undefined);
   }
 
   @Get(':id')

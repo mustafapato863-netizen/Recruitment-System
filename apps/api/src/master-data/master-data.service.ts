@@ -15,9 +15,12 @@ import type {
 } from '@recruitflow/contracts';
 import { Prisma } from '@recruitflow/database';
 import type { MasterDataCategory, MasterDataValueRecord } from '@recruitflow/contracts';
+import { REASON_CATEGORIES } from './reason-lists';
 import { catalogKey, normalizeBranchCity, normalizeCatalogText, uniqueCatalogNames } from './catalog-normalization';
 
-const CATALOG_CATEGORIES = new Set<MasterDataCategory>(['departments', 'skills', 'candidate-sources', 'interview-types']);
+const CATALOG_CATEGORIES = new Set<MasterDataCategory>(['departments', 'skills', 'candidate-sources', 'interview-types', ...(['grades', ...REASON_CATEGORIES] as unknown as MasterDataCategory[])]);
+/** C3: every reason list (hold, close, rejection, reassign) is deactivate-only (history rows quote them). */
+const DEACTIVATE_ONLY = new Set<string>(REASON_CATEGORIES);
 const SUPPORTED_CATALOGS = new Set(['branches', 'job-titles', ...CATALOG_CATEGORIES]);
 
 type MasterDataBatchRow = {
@@ -134,8 +137,10 @@ export class MasterDataService {
       for (const row of rows) {
         const name = normalizeCatalogText(row.name);
         if (!name) throw new BadRequestException('Every Master Data row needs a name.');
-        const status = row.status?.trim() || 'Active';
+        let status = row.status?.trim() || 'Active';
         if (!['Active', 'Inactive', 'Archived'].includes(status)) throw new BadRequestException(`Invalid status for ${name}.`);
+        // B2R-7: 'Archived' is the single deactivated-skill status (B2-21); the batch maps Inactive -> Archived.
+        if (category === 'skills' && status === 'Inactive') status = 'Archived';
         if (category === 'branches') {
           const country = this.normalizeBranchCountry(row.country);
           const branchValues = await tx.branch.findMany({ where: { organizationId }, select: { id: true, code: true, name: true } });
@@ -228,10 +233,30 @@ export class MasterDataService {
     return { saved: saved.length, data: await this.listCatalog(organizationId, category) };
   }
 
-  async deleteCatalogValue(organizationId: string, category: string, id: string): Promise<{ id: string; deactivated: true; status: 'Archived' }> {
+  /** C3: PATCH /master-data/catalog/:category/:id {status} — activate/deactivate one value (how reason lists are retired). */
+  async setCatalogValueStatus(organizationId: string, category: string, id: string, status: string) {
+    this.assertCatalog(category);
+    if (category === 'branches' || category === 'job-titles') throw new BadRequestException('Use the batch save for branches and job titles.');
+    if (!['Active', 'Inactive'].includes(status)) throw new BadRequestException({ code: 'VALIDATION_ERROR', message: "status must be 'Active' or 'Inactive'." });
+    const value = await this.prisma.masterDataValue.findFirst({ where: { id, organizationId, category }, select: { id: true } });
+    if (!value) throw new NotFoundException('Master Data value not found.');
+    // B2R-7: a deactivated skill is 'Archived' (single status), whichever route deactivates it.
+    const stored = category === 'skills' && status === 'Inactive' ? 'Archived' : status;
+    const r = await this.prisma.masterDataValue.update({ where: { id }, data: { status: stored, version: { increment: 1 } } });
+    return { id: r.id, category, name: r.name, status: r.status, version: r.version };
+  }
+
+  async deleteCatalogValue(organizationId: string, category: string, id: string): Promise<{ id: string; deactivated: true; status: 'Inactive' | 'Archived' }> {
     this.assertCatalog(category);
 
-    // Branches and job titles are backed by legacy entities; they archive too.
+    if (DEACTIVATE_ONLY.has(category)) {
+      const value = await this.prisma.masterDataValue.findFirst({ where: { id, organizationId, category }, select: { id: true } });
+      if (!value) throw new NotFoundException('Master Data value not found.');
+      await this.prisma.masterDataValue.update({ where: { id }, data: { status: 'Inactive', version: { increment: 1 } } });
+      return { id, deactivated: true, status: 'Inactive' };
+    }
+
+    // B2: branches and job titles are backed by legacy entities; they archive too.
     if (category === 'branches') return this.deleteBranch(organizationId, id);
     if (category === 'job-titles') return this.deletePosition(organizationId, id);
 
@@ -336,13 +361,9 @@ export class MasterDataService {
       const key = catalogKey(name);
       const current = byKey.get(key);
       if (current) {
+        // B6: never reactivate a skill an admin deactivated; the job keeps the text
+        // and suggestions report it under unmappedRequiredSkills.
         canonical.push(current.name);
-        if (current.status !== 'Active') {
-          await tx.masterDataValue.update({
-            where: { id: current.id },
-            data: { status: 'Active', version: { increment: 1 } },
-          });
-        }
         continue;
       }
 

@@ -51,7 +51,8 @@ describe('catalog normalization', () => {
     const result = await service.syncSkillsInTransaction(tx as never, 'org-1', [' ICU ', 'BLS', 'bls']);
 
     expect(result).toEqual(['ICU', 'BLS']);
-    expect(tx.masterDataValue.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'skill-1' } }));
+    // B6: an admin-deactivated skill is never reactivated by saving a job.
+    expect(tx.masterDataValue.update).not.toHaveBeenCalled();
     expect(create).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ name: 'BLS', category: 'skills' }) }));
   });
 });
