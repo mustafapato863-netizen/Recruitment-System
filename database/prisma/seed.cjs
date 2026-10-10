@@ -53,6 +53,18 @@ async function seedJobStatusReasons(organizationId) {
   }
 }
 
+/** M1: demo departments (master data 'departments'). Upsert by name: safe to run any number of times. */
+const DEMO_DEPARTMENTS = ['IT', 'Nursing', 'Pharmacy', 'Finance', 'HR'];
+async function seedDemoDepartments(organizationId) {
+  for (const name of DEMO_DEPARTMENTS) {
+    await prisma.masterDataValue.upsert({
+      where: { organizationId_category_name: { organizationId, category: 'departments', name } },
+      create: { organizationId, category: 'departments', name, code: `DEPT_${name.toUpperCase()}` },
+      update: {},
+    });
+  }
+}
+
 async function main() {
   const result = await prisma.$transaction(async (tx) => {
     // ── Organization ──────────────────────────────────────────
@@ -559,7 +571,7 @@ async function main() {
     return { organization, branch, position, users, roles, demo, orgB, userB, candidateB, branchB };
   }, { timeout: 30000 });
 
-  for (const org of await prisma.organization.findMany({ select: { id: true } })) await seedJobStatusReasons(org.id);
+  for (const org of await prisma.organization.findMany({ select: { id: true } })) { await seedJobStatusReasons(org.id); await seedDemoDepartments(org.id); }
   await resyncCodeSequences();
 
   console.log(
