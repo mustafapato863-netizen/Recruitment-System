@@ -112,11 +112,14 @@ async function linkFill(candidateId: string, cv: ExtractedCv): Promise<LinkResul
   return { filled, conflicts, compared: true };
 }
 
-/** Runs one row after the recruiter confirmed. Returns the candidate id, application id and, for a link, what was filled / not overwritten. */
+/**
+ * Runs one row after the recruiter confirmed. Returns the candidate id, application id and, for a link, what was filled / not overwritten.
+ * B2F-2: the application is created FIRST (POST /applications works for any bank person), because candidate reads,
+ * edits and POST /documents/upload are scoped to people on the caller's jobs (404 for a bank person on none).
+ */
 export async function importRow(vacancyId: string, file: File, cv: ExtractedCv, decision: ImportDecision): Promise<{ candidateId: string; applicationId: string | null; link?: LinkResult; alreadyOnJob?: boolean }> {
   let candidateId: string;
-  let link: LinkResult | undefined;
-  if (decision.kind === 'link') { candidateId = decision.candidateId; link = await linkFill(candidateId, cv); }
+  if (decision.kind === 'link') candidateId = decision.candidateId;
   else {
     const { firstName, lastName } = splitName(cv, file.name);
     const created = await postApi<{ id: string }>('/candidates', {
@@ -130,18 +133,25 @@ export async function importRow(vacancyId: string, file: File, cv: ExtractedCv, 
     });
     candidateId = created.id;
   }
-  const doc = new FormData();
-  doc.append('candidateId', candidateId);
-  doc.append('documentType', 'CV');
-  doc.append('file', file);
-  if (cv.rawText?.trim()) doc.append('extractionText', cv.rawText.trim().slice(0, 50000));
-  await postFormDataApi('/documents/upload', doc);
+  // 1) the file on this job (or the existing one: 409 APPLICATION_EXISTS links to it).
+  let applicationId: string | null; let alreadyOnJob = false;
   try {
     const app = await postApi<{ id?: string }>('/applications', { vacancyId, candidateId, source: 'CV import' });
-    return { candidateId, applicationId: app?.id ?? null, ...(link ? { link } : {}) };
+    applicationId = app?.id ?? null;
   } catch (e) {
-    // #23 409 APPLICATION_EXISTS: already on this job; link to that file instead of failing.
     if (!isApplicationExists(e)) throw e;
-    return { candidateId, applicationId: await findExistingFile(vacancyId, candidateId), alreadyOnJob: true, ...(link ? { link } : {}) };
+    alreadyOnJob = true;
+    applicationId = await findExistingFile(vacancyId, candidateId);
   }
+  // 2) now the person is in the caller's scope: fill blanks (link) and attach the CV.
+  const link = decision.kind === 'link' ? await linkFill(candidateId, cv) : undefined;
+  {
+    const doc = new FormData();
+    doc.append('candidateId', candidateId);
+    doc.append('documentType', 'CV');
+    doc.append('file', file);
+    if (cv.rawText?.trim()) doc.append('extractionText', cv.rawText.trim().slice(0, 50000));
+    await postFormDataApi('/documents/upload', doc);
+  }
+  return { candidateId, applicationId, ...(link ? { link } : {}), ...(alreadyOnJob ? { alreadyOnJob } : {}) };
 }
