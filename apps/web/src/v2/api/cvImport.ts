@@ -16,6 +16,7 @@
  */
 import { getApi, patchApi, postApi, postFormDataApi } from '../../api/client';
 import { stripPay } from './paySafety';
+import { findExistingFile, isApplicationExists } from './applicationExists';
 
 export interface ExtractedCv {
   firstName?: string; lastName?: string; email?: string; phone?: string; title?: string; currentCompany?: string;
@@ -112,7 +113,7 @@ async function linkFill(candidateId: string, cv: ExtractedCv): Promise<LinkResul
 }
 
 /** Runs one row after the recruiter confirmed. Returns the candidate id, application id and, for a link, what was filled / not overwritten. */
-export async function importRow(vacancyId: string, file: File, cv: ExtractedCv, decision: ImportDecision): Promise<{ candidateId: string; applicationId: string | null; link?: LinkResult }> {
+export async function importRow(vacancyId: string, file: File, cv: ExtractedCv, decision: ImportDecision): Promise<{ candidateId: string; applicationId: string | null; link?: LinkResult; alreadyOnJob?: boolean }> {
   let candidateId: string;
   let link: LinkResult | undefined;
   if (decision.kind === 'link') { candidateId = decision.candidateId; link = await linkFill(candidateId, cv); }
@@ -135,6 +136,12 @@ export async function importRow(vacancyId: string, file: File, cv: ExtractedCv, 
   doc.append('file', file);
   if (cv.rawText?.trim()) doc.append('extractionText', cv.rawText.trim().slice(0, 50000));
   await postFormDataApi('/documents/upload', doc);
-  const app = await postApi<{ id?: string }>('/applications', { vacancyId, candidateId, source: 'CV import' });
-  return { candidateId, applicationId: app?.id ?? null, ...(link ? { link } : {}) };
+  try {
+    const app = await postApi<{ id?: string }>('/applications', { vacancyId, candidateId, source: 'CV import' });
+    return { candidateId, applicationId: app?.id ?? null, ...(link ? { link } : {}) };
+  } catch (e) {
+    // #23 409 APPLICATION_EXISTS: already on this job; link to that file instead of failing.
+    if (!isApplicationExists(e)) throw e;
+    return { candidateId, applicationId: await findExistingFile(vacancyId, candidateId), alreadyOnJob: true, ...(link ? { link } : {}) };
+  }
 }
