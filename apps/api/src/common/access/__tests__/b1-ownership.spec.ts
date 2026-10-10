@@ -45,8 +45,8 @@ describe('B1 file ownership guard', () => {
   it('lets the owner through', async () => {
     await expect(makeGuard({ resource: 'application', owns: true })()).resolves.toBe(true);
   });
-  it('lets oversight (VACANCY_MANAGE) and administrators through', async () => {
-    await expect(makeGuard({ resource: 'application', owns: false, perms: ['VACANCY_MANAGE'] })()).resolves.toBe(true);
+  it('lets administrators through; VACANCY_MANAGE alone is not oversight (B2-8)', async () => {
+    await expect(makeGuard({ resource: 'application', owns: false, perms: ['VACANCY_MANAGE'] })()).rejects.toBeInstanceOf(ForbiddenException);
     await expect(makeGuard({ resource: 'application', owns: false, roles: ['ADMINISTRATOR'], perms: [] })()).resolves.toBe(true);
   });
   it('lets an attendee through only on routes marked @AllowInterviewAttendee', async () => {
