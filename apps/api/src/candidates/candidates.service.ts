@@ -1,3 +1,5 @@
+import { contactKeys } from './contact-keys';
+import { linkCandidateSkills } from '../matching/skill-links';
 import {
   ConflictException,
   BadRequestException,
@@ -329,6 +331,7 @@ export class CandidatesService {
         lastName: dto.lastName.trim(),
         email,
         phone,
+        ...contactKeys(email, phone),
         currentTitle: dto.currentTitle?.trim() ?? null,
         currentCompany: dto.currentCompany?.trim() ?? null,
         summary: dto.summary?.trim() ?? null,
@@ -345,6 +348,7 @@ export class CandidatesService {
           : {}),
       },
     });
+    if (created.skills.length > 0) await linkCandidateSkills(this.prisma, organizationId, created.id, created.skills);
 
     return created;
   }
@@ -378,6 +382,7 @@ export class CandidatesService {
     if (dto.lastName) dataToUpdate.lastName = dto.lastName.trim();
     if (dto.email !== undefined) dataToUpdate.email = nextEmail;
     if (dto.phone !== undefined) dataToUpdate.phone = nextPhone;
+    if (dto.email !== undefined || dto.phone !== undefined) Object.assign(dataToUpdate, contactKeys(nextEmail, nextPhone));
     if (dto.currentTitle !== undefined) dataToUpdate.currentTitle = dto.currentTitle?.trim() ?? null;
     if (dto.currentCompany !== undefined) dataToUpdate.currentCompany = dto.currentCompany?.trim() ?? null;
     if (dto.summary !== undefined) dataToUpdate.summary = dto.summary?.trim() ?? null;
@@ -397,6 +402,7 @@ export class CandidatesService {
       where: { id },
       data: dataToUpdate,
     });
+    if (dto.skills?.length) await linkCandidateSkills(this.prisma, organizationId, id, dto.skills);
 
     return this.toCandidate(updated, { viewPii: true });
   }

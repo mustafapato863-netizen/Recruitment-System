@@ -49,6 +49,9 @@ export const errorCodes = [
   'OWNER_NOT_ELIGIBLE',
   'ADMIN_ONLY',
   'DOCUMENT_DOWNLOAD_DENIED',
+  // B6 suggest / compare / skill evidence / duplicates (kept as-is by the API error normalizer)
+  'APPLICATION_EXISTS', 'COMPARE_CANDIDATE_NOT_FOUND', 'COMPARE_COUNT', 'CONTACT_REQUIRED', 'EVIDENCE_SNIPPET_REQUIRED',
+  'EVIDENCE_SOURCE_INVALID', 'NOT_JOB_OWNER', 'SKILL_INACTIVE', 'SKILL_NOT_IN_LIBRARY',
 ] as const;
 
 /**

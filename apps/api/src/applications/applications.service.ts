@@ -555,9 +555,10 @@ export class ApplicationsService {
     });
 
     if (existing) {
-      throw new ConflictException(
-        `Candidate ${candidate.firstName} ${candidate.lastName} has already applied to vacancy ${vacancy.vacancyCode}.`,
-      );
+      throw new ConflictException({
+        code: 'APPLICATION_EXISTS',
+        message: `Candidate ${candidate.firstName} ${candidate.lastName} has already applied to vacancy ${vacancy.vacancyCode}.`,
+      });
     }
 
     const applicationCode = await this.nextApplicationCode();

@@ -357,13 +357,9 @@ export class MasterDataService {
       const key = catalogKey(name);
       const current = byKey.get(key);
       if (current) {
+        // B6: never reactivate a skill an admin deactivated; the job keeps the text
+        // and suggestions report it under unmappedRequiredSkills.
         canonical.push(current.name);
-        if (current.status !== 'Active') {
-          await tx.masterDataValue.update({
-            where: { id: current.id },
-            data: { status: 'Active', version: { increment: 1 } },
-          });
-        }
         continue;
       }
 

@@ -16,6 +16,7 @@ import type {
   InterviewerConflict,
   AvailabilityResult,
 } from '@recruitflow/contracts';
+import { MatchingService } from '../matching/matching.service';
 import { PrismaService } from '../database/prisma.service';
 // Runtime service import must remain a value import for Nest DI metadata reflection.
 /* eslint-disable @typescript-eslint/consistent-type-imports */
@@ -52,6 +53,7 @@ export class InterviewsService {
     private readonly notifications: NotificationsService,
     private readonly accessControl: AccessControlService,
     @Optional() @Inject(DocumentsService) private readonly documents?: DocumentsService,
+    @Optional() @Inject(MatchingService) private readonly matching?: MatchingService,
   ) {}
 
   async listInterviews(
@@ -744,6 +746,9 @@ export class InterviewsService {
     const scorecard = latest
       ? await this.prisma.interviewScorecard.update({ where: { id: latest.id }, data: fields, include: { interviewer: true } })
       : await this.prisma.interviewScorecard.create({ data: { interviewId, interviewerId, revision: 1, ...fields }, include: { interviewer: true } });
+
+    // B6: scorecard is committed; derive skill evidence in the background (never blocks/throws).
+    void this.matching?.deriveEvidenceInBackground(organizationId, { interviewId }, interviewerId, 'scorecard submit');
 
     const [attendeeCount, submittedCount] = await Promise.all([
       this.prisma.interviewAttendee.count({ where: { interviewId } }),

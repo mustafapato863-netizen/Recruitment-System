@@ -615,7 +615,7 @@ function resolveStableCode(
   return stableCodeByStatus(status);
 }
 
-/** Allowlist = the shared registry in @recruitflow/contracts (incl. B3/B4/B5 domain codes). */
+/** Allowlist = the shared registry in @recruitflow/contracts (incl. B3/B4/B5/B6 domain codes). */
 function isStableCode(value: string): boolean {
   return (errorCodes as readonly string[]).includes(value);
 }

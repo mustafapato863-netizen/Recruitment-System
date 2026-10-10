@@ -1,5 +1,6 @@
 // B3: public careers show and accept Open and Partially Filled jobs (not held/filled/closed).
 import { ACCEPTING_JOB_STATUSES } from '../vacancy-core/vacancy-lifecycle';
+import { contactKeys } from '../candidates/contact-keys';
 import {
   BadRequestException,
   ConflictException,
@@ -264,6 +265,7 @@ export class PublicJobsService {
                 lastName: dto.lastName.trim(),
                 email,
                 phone,
+                ...contactKeys(email, phone),
                 currentTitle: cleanOptional(dto.currentTitle),
                 currentCompany: cleanOptional(dto.currentCompany),
                 location: cleanOptional(dto.location),
