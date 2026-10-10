@@ -24,9 +24,8 @@ export function parseSeats(raw: string | null | undefined): Seat[] | null {
 type Store = Pick<Storage, 'getItem' | 'setItem'> | null;
 
 /**
- * Server-side seat list from /auth/me. B10 ("per-seat flag, org setting") has no
- * field confirmed as `me.v2Seats` (flags.v2Seats dropped); string[] or a
- * comma string. Returns null when absent so client sources apply.
+ * Server-side seat list from /auth/me: `me.v2Seats` (field confirmed by Backend;
+ * the earlier `flags.v2Seats` guess is dropped), as string[] or a comma string. Returns null when absent so client sources apply.
  */
 export function serverV2Seats(me: unknown): Seat[] | null {
   if (!me || typeof me !== 'object') return null;
