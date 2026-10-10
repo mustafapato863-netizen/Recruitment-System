@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CircleCheck, CircleMinus, FileText, Info, Scale, UserPlus } from 'lucide-react';
 import { ButtonV2, DrawerV2, EmptyStateV2, SkeletonV2, StatusChip } from '../../components/v2';
-import { addToJob, fetchSuggestions, matchErrorFromError, sourceLabel, type Suggestion, type SuggestionsResponse } from '../api/matching';
+import { addToJob, canAdd, fetchSuggestions, matchErrorFromError, sourceLabel, type Suggestion, type SuggestionsResponse } from '../api/matching';
 import { jobTitle, type JobDetail } from '../api/jobs';
 import { formatDay } from '../pages/OpenJobsV2';
 
@@ -41,7 +41,7 @@ export function SuggestDrawer({ job, accepting, onClose, onAdded }: { job: JobDe
             <ul className="rf2-chips">{state.data.requiredSkills.map((s) => <li key={s.id ?? s.name} className="rf2-chip">{s.name}</li>)}</ul>
             {state.data.unmappedRequiredSkills.length ? <p className="rf2-jtable__sub">Not in the skill library, so not matched: {state.data.unmappedRequiredSkills.join(', ')}.</p> : null}
           </section>
-          <p className="rf2-inline-note"><Info aria-hidden="true" /> <span>Ordered by: {state.data.orderedBy.join('; ')}. Each match is backed by a written evidence line — never a score. People already on this job and inactive people are not listed.</span></p>
+          <p className="rf2-inline-note"><Info aria-hidden="true" /> <span>Ordered by: {state.data.orderedBy.join('; ')}. Each match is backed by a written evidence line — never a score. People already on this job show their stage and cannot be added again. Inactive people are not listed.</span></p>
           {!accepting ? <p className="rf2-inline-note" data-tone="warning"><Info aria-hidden="true" /> This job takes no new applications, so “Add to this job” is off.</p> : null}
           {state.data.suggestions.length === 0 ? <EmptyStateV2 headingLevel={3} title="No one in the bank matches yet" body={state.data.requiredSkills.length ? 'Nobody active has these skills linked.' : 'This job has no required skills from the library.'} /> : (
             <ul className="rf2-sugg" aria-label="Suggestions">
@@ -52,8 +52,9 @@ export function SuggestDrawer({ job, accepting, onClose, onAdded }: { job: JobDe
                     <div className="rf2-sugg__top">
                       <input type="checkbox" aria-label={`Select ${s.candidate.name} to compare`} checked={picked.includes(s.candidate.id)} disabled={!picked.includes(s.candidate.id) && picked.length >= 4} onChange={() => toggle(s.candidate.id)} />
                       <span className="rf2-kcard__avatar" aria-hidden="true">{initials(s.candidate.name)}</span>
-                      <div className="rf2-sugg__who"><p className="rf2-jtable__name">{s.candidate.name}</p><p className="rf2-jtable__sub">{[s.candidate.code, s.candidate.currentTitle, s.candidate.location].filter(Boolean).join(' · ')}</p></div>
+                      <div className="rf2-sugg__who"><p className="rf2-jtable__name">{s.candidate.name}</p>{!canAdd(s) ? <span className="rf2-sr-only"> Already on this job{s.stage ? ` in ${s.stage}` : ''}; cannot be added again.</span> : null}<p className="rf2-jtable__sub">{[s.candidate.code, s.candidate.currentTitle, s.candidate.location].filter(Boolean).join(' · ')}</p></div>
                       {st === 'done' ? <StatusChip tone="success" label="Added to Applied" />
+                        : !canAdd(s) ? <StatusChip tone="info" label={`On this job · ${s.stage ?? 'in progress'}`} />
                         : <ButtonV2 kind="secondary" size="sm" icon={<UserPlus />} loading={st === 'busy'} disabled={!accepting} onClick={() => void add(s)} aria-label={`Add ${s.candidate.name} to this job`}>Add to this job</ButtonV2>}
                     </div>
                     <ul className="rf2-chips">

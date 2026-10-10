@@ -69,6 +69,18 @@ describe('E4 adapters (B6 #13)', () => {
   });
 });
 
+describe('E23 bank adapter', () => {
+  it('pages through everyone Active (100 a page) and keeps no contact fields', async () => {
+    const row = (i: number) => ({ id: `c${i}`, candidateCode: `C${i}`, firstName: 'P', lastName: String(i), status: 'Active', email: 'x@y.z', phone: '1' });
+    api.getApi.mockImplementation(async (p: string) => (p.includes('page=1&') ? { data: Array.from({ length: 100 }, (_, i) => row(i)), total: 130 } : { data: Array.from({ length: 30 }, (_, i) => row(100 + i)), total: 130 }));
+    const { fetchBank } = await import('../../api/matching');
+    const rows = await fetchBank('');
+    expect(rows).toHaveLength(130);
+    expect(api.getApi).toHaveBeenCalledWith('/candidates?pageSize=100&page=2&status=Active');
+    expect(JSON.stringify(rows)).not.toMatch(/email|phone|x@y/);
+  });
+});
+
 describe('E10 Suggest from bank', () => {
   it('drawer from the board: required skills, ordering note, evidence lines, no %/score/pay/contact; axe', async () => {
     const u = userEvent.setup();
@@ -77,7 +89,10 @@ describe('E10 Suggest from bank', () => {
     const d = await screen.findByRole('dialog', { name: 'People in the bank who match this job' });
     expect(screen.getByTestId('loc')).toHaveTextContent('drawer=suggest');
     const cards = await within(d).findAllByRole('listitem', {}, { timeout: 2000 }).then(() => within(d).getByRole('list', { name: 'Suggestions' }).children);
-    expect(cards).toHaveLength(3);
+    expect(cards).toHaveLength(4);
+    expect(cards[3]).toHaveTextContent(/Nourhan Sami.*On this job · Screening/);
+    expect(within(cards[3] as HTMLElement).queryByRole('button', { name: /Add Nourhan Sami/ })).toBeNull();
+    expect(cards[3]).toHaveTextContent('Already on this job in Screening; cannot be added again.');
     expect(cards[0]).toHaveTextContent(/Heba Mansour.*CAN-2026-0031 · Payroll Specialist · Cairo/);
     expect(cards[0]).toHaveTextContent('“Owned HRIS master data for 2,000 staff.” — screening note');
     expect(cards[1]).toHaveTextContent('Payroll — no evidence');
@@ -155,9 +170,9 @@ describe('E23 Candidates', () => {
     await u.click(screen.getByRole('tab', { name: 'Bank' }));
     expect(screen.getByTestId('loc')).toHaveTextContent('/candidates?tab=bank');
     expect(await screen.findByText('Heba Mansour')).toBeInTheDocument();
-    expect(api.getApi).toHaveBeenCalledWith('/candidates?pageSize=50&status=Active');
+    expect(api.getApi).toHaveBeenCalledWith('/candidates?pageSize=100&page=1&status=Active');
     await u.type(screen.getByLabelText('Search people'), 'heba');
-    await waitFor(() => expect(api.getApi).toHaveBeenCalledWith('/candidates?pageSize=50&status=Active&search=heba'));
+    await waitFor(() => expect(api.getApi).toHaveBeenCalledWith('/candidates?pageSize=100&page=1&status=Active&search=heba'));
     expect(container.textContent).not.toMatch(NO_PAY);
     expect(container.textContent).not.toMatch(NO_PII);
   });
@@ -172,6 +187,8 @@ describe('E24 Compare on skills', () => {
     expect(rows[1]).toHaveTextContent(/HRIS.*Maintained in-house HRIS modules.*CV · 30 Sept 2026|HRIS.*Maintained in-house HRIS modules.*CV · 30 Sep 2026/);
     expect(rows[2]).toHaveTextContent('Has Payroll on the profile — no evidence yet.');
     expect(rows[3]).toHaveTextContent('No Oracle on the profile.');
+    expect(rows[4]).toHaveTextContent(/Notice period.*30 days.*screening.*Immediately.*profile/);
+    expect(rows[5]).toHaveTextContent(/Fit note.*“Strong Laravel; HRIS from leave\/attendance only\.”.*Mariam Farag.*Not recorded\./);
     expect(screen.getAllByRole('link', { name: 'Open file' })[0]).toHaveAttribute('href', '/applications/a7');
     const rej = screen.getAllByRole('link', { name: 'Reject for HRIS Developer' })[0];
     expect(rej).toHaveAttribute('href', '/applications/a7?drawer=reject');
