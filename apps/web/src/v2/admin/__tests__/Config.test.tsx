@@ -120,15 +120,19 @@ describe('A07 Templates (admin-only)', () => {
   });
   it('B2F-8: Archive (two-step) DELETEs = soft-archive; the template leaves the list; New drafts have no Archive', async () => {
     const u = userEvent.setup();
-    api.deleteApi.mockResolvedValue({ id: 'e1', status: 'Archived' });
+    api.deleteApi.mockResolvedValue({ id: 'e2', status: 'Archived' });
     renderAt('/email-templates');
-    await screen.findByRole('navigation', { name: 'Email templates' });
-    await u.click(screen.getByRole('button', { name: 'Archive' }));
+    const nav = await screen.findByRole('navigation', { name: 'Email templates' });
+    // PR33-4: the default template (opened first) offers no Archive and says why.
+    expect(screen.queryByRole('button', { name: 'Archive' })).toBeNull();
+    expect(screen.getByTestId('default-no-archive')).toHaveTextContent('Default templates can’t be archived.');
+    await u.click(within(nav).getByRole('button', { name: /Rejection — polite/ }));
+    await u.click(await screen.findByRole('button', { name: 'Archive' }));
     expect(api.deleteApi).not.toHaveBeenCalled();
     const before = api.getApi.mock.calls.length;
     await u.click(screen.getByRole('button', { name: 'Confirm archive' }));
-    await waitFor(() => expect(api.deleteApi).toHaveBeenCalledWith('/email-templates/e1'));
-    expect(await screen.findByRole('status')).toHaveTextContent('“Interview invite” archived.');
+    await waitFor(() => expect(api.deleteApi).toHaveBeenCalledWith('/email-templates/e2'));
+    expect(await screen.findByRole('status')).toHaveTextContent('“Rejection — polite” archived.');
     await waitFor(() => expect(api.getApi.mock.calls.length).toBeGreaterThan(before));
     await u.click(within(screen.getByRole('navigation', { name: 'Email templates' })).getByRole('button', { name: 'New' }));
     expect(screen.queryByRole('button', { name: 'Archive' })).toBeNull();

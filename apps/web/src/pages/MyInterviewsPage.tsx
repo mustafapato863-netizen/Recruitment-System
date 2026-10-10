@@ -13,7 +13,7 @@ import {
   type ListResult, type MyInterview, type MyScorecard, type SubmitScorecardBody,
 } from '../api/myInterviews';
 
-type Load = { kind: 'loading' } | { kind: 'ready'; result: ListResult; pending: MyInterview[] } | { kind: 'error'; message: string; forbidden: boolean };
+type Load = { kind: 'loading' } | { kind: 'ready'; result: ListResult; pending: MyInterview[]; done: MyInterview[] } | { kind: 'error'; message: string; forbidden: boolean };
 
 const when = (iso: string, tz?: string | null) => {
   const d = new Date(iso);
@@ -48,7 +48,7 @@ export function MyInterviewsPage({ load = listMyInterviews }: { load?: typeof li
   const [deepLinked, setDeepLinked] = useState(false);
   useEffect(() => {
     if (deepLinked || !focusId || state.kind !== 'ready' || !state.result.available) return;
-    const hit = [...state.pending, ...state.result.items].find((i) => i.id === focusId);
+    const hit = [...state.pending, ...state.done, ...state.result.items].find((i) => i.id === focusId);
     if (!hit) return;
     setDeepLinked(true);
     if (openScorecard && hit.status !== 'Cancelled') setScorecardFor(hit);
@@ -61,14 +61,19 @@ export function MyInterviewsPage({ load = listMyInterviews }: { load?: typeof li
     // B2V-1: ended interviews whose scorecard is still missing or a draft come from scope=past (the API's only filter);
     // the client keeps those. If the past list fails, upcoming still shows.
     Promise.all([load('upcoming'), load('past').catch(() => ({ available: false }) as ListResult)])
-      .then(([result, past]) => alive && setState({ kind: 'ready', result, pending: past.available ? past.items.filter((i) => needsMyScorecard(i) && !(result.available && result.items.some((u) => u.id === i.id))) : [] }))
+      .then(([result, past]) => {
+        if (!alive) return;
+        const ended = past.available ? past.items.filter((i) => !(result.available && result.items.some((u) => u.id === i.id))) : [];
+        // PR33-2: ended interviews with my submitted card stay findable (read-only) instead of disappearing.
+        setState({ kind: 'ready', result, pending: ended.filter(needsMyScorecard), done: ended.filter((i) => i.status !== 'Cancelled' && i.scorecardStatus === 'submitted') });
+      })
       .catch((e: unknown) => alive && setState({ kind: 'error', message: e instanceof Error ? e.message : 'Could not load your interviews.', forbidden: e instanceof ApiError && e.statusCode === 403 }));
     return () => { alive = false; };
   }, [load, attempt]);
 
   const patch = useCallback((id: string, change: Partial<MyInterview>) => {
     setState((s) => (s.kind === 'ready' && s.result.available
-      ? { kind: 'ready', result: { available: true, items: s.result.items.map((i) => (i.id === id ? { ...i, ...change } : i)) }, pending: s.pending.map((i) => (i.id === id ? { ...i, ...change } : i)) }
+      ? { kind: 'ready', result: { available: true, items: s.result.items.map((i) => (i.id === id ? { ...i, ...change } : i)) }, pending: s.pending.map((i) => (i.id === id ? { ...i, ...change } : i)), done: s.done.map((i) => (i.id === id ? { ...i, ...change } : i)) }
       : s));
   }, []);
 
@@ -93,7 +98,7 @@ export function MyInterviewsPage({ load = listMyInterviews }: { load?: typeof li
           </ul>
         </section>
       ) : null}
-      {state.kind === 'ready' && state.result.available && state.result.items.length === 0 && state.pending.length === 0 ? (
+      {state.kind === 'ready' && state.result.available && state.result.items.length === 0 && state.pending.length === 0 && state.done.length === 0 ? (
         <PageState kind="empty" title="No upcoming interviews" description="Interviews you are invited to will appear here." />
       ) : null}
       {state.kind === 'ready' && state.result.available && state.result.items.length > 0 ? (
@@ -102,6 +107,16 @@ export function MyInterviewsPage({ load = listMyInterviews }: { load?: typeof li
             <InterviewCard key={item.id} item={item} focused={item.id === focusId} onPatch={patch} onScorecard={() => setScorecardFor(item)} />
           ))}
         </ul>
+      ) : null}
+      {state.kind === 'ready' && state.result.available && state.done.length > 0 ? (
+        <section aria-labelledby="mi-done-h" className="space-y-2">
+          <h2 id="mi-done-h" className="text-sm font-semibold">Submitted scorecards — ended interviews</h2>
+          <ul className="space-y-3" aria-label="Ended interviews with my submitted scorecard">
+            {state.done.map((item) => (
+              <InterviewCard key={item.id} item={item} focused={item.id === focusId} onPatch={patch} onScorecard={() => setScorecardFor(item)} />
+            ))}
+          </ul>
+        </section>
       ) : null}
       {scorecardFor ? (
         <ScorecardModal interview={scorecardFor} onClose={() => setScorecardFor(null)}

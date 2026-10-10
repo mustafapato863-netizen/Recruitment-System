@@ -152,9 +152,12 @@ export const reviseScorecard = (interviewId: string, body: Omit<ScorecardBody, '
 /** Non-pay offer terms (CreateOfferDto minus components). CreateOfferDto has no grade / approver note field. */
 export interface OfferTerms { contractType?: string; probationPeriod?: string; offerExpiry?: string; proposedJoiningDate?: string; workLocation?: string; workingSchedule?: string }
 /** = CreateOfferDto with components: [] → the offer id. Offers start as Draft; the Manager adds pay at M3. */
-export const createOfferDraft = (applicationId: string, terms: OfferTerms) => postApi<string>('/offers', { applicationId, ...terms, components: [] });
+/** PRE-1: <input type=date> gives YYYY-MM-DD; the API (Prisma DateTime) needs a full ISO timestamp (UTC midnight). */
+export const isoDate = (d?: string) => (d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? `${d}T00:00:00.000Z` : d);
+const wireTerms = (t: OfferTerms): OfferTerms => ({ ...t, proposedJoiningDate: isoDate(t.proposedJoiningDate), offerExpiry: isoDate(t.offerExpiry) });
+export const createOfferDraft = (applicationId: string, terms: OfferTerms) => postApi<string>('/offers', { applicationId, ...wireTerms(terms), components: [] });
 /** = CreateOfferRevisionDto with components: [] → the version id. Allowed from Draft / Changes Requested / Expired (OFFER_CLOSED otherwise). */
-export const createOfferRevision = (offerId: string, terms: OfferTerms) => postApi<string>(`/offers/${enc(offerId)}/revisions`, { ...terms, components: [] });
+export const createOfferRevision = (offerId: string, terms: OfferTerms) => postApi<string>(`/offers/${enc(offerId)}/revisions`, { ...wireTerms(terms), components: [] });
 /** POST /offers/:id/submit: Draft or Changes Requested → Pending Approval (409 OFFER_NOT_DRAFT otherwise). */
 export const submitOffer = (offerId: string) => postApi<{ id: string; status: 'Pending Approval'; versionId: string }>(`/offers/${enc(offerId)}/submit`, {});
 export type SendChannel = 'email' | 'whatsapp';

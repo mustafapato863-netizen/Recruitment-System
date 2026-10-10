@@ -13,10 +13,10 @@ const COMMON = ['/profile', '/notifications', '/search'];
 
 /** Path prefixes per seat ("/x" allows "/x" and "/x/…"). Keep in step with navConfig + the v2 pages. */
 export const SEAT_DESTINATIONS: Record<Seat, string[]> = {
-  employee: ['/my-work', '/my-result', '/vacancies', '/vacancies/:id', '/candidates', '/candidates/compare', '/applications/:id'],
+  employee: ['/offers/:id', '/hires/:id', '/my-work', '/my-result', '/vacancies', '/vacancies/:id', '/candidates', '/candidates/compare', '/applications/:id'],
   // '/interviews/:id' stays for the Manager's own scorecard (Team work → Waiting on you → Submit scorecard).
   // v2 default: '/vacancy-requests' is the list only (the drawers carry ?req= / ?req=new); detail and create URLs redirect.
-  manager: ['/my-work', '/vacancy-requests', '/reports', '/applications/:id'],
+  manager: ['/offers/:id', '/hires/:id', '/my-work', '/vacancy-requests', '/reports', '/applications/:id'],
   admin: ['/users', '/roles', '/pipeline-settings', '/master-data', '/email-templates', '/whatsapp-templates', '/reports', '/audit-log', '/integrations'],
 };
 
@@ -27,6 +27,7 @@ export const SEAT_DESTINATIONS: Record<Seat, string[]> = {
 const PARAM_EQUIVALENT: Array<{ from: RegExp; to: Partial<Record<Seat, string>> }> = [
   // The v1 interview page → the v2 My interviews card + scorecard (Team work "Submit scorecard", My Work links).
   { from: /^\/interviews\/(?!calendar\/?$)([^/]+)\/?$/, to: { employee: '/my-interviews?interview=$1&scorecard=1', manager: '/my-interviews?interview=$1&scorecard=1' } },
+  { from: /^\/offers\/create\/?$/, to: { employee: '/my-work', manager: '/my-work' } },
   { from: /^\/vacancy-requests\/create\/?$/, to: { manager: '/vacancy-requests?req=new' } },
   { from: /^\/vacancy-requests\/([^/]+)\/?$/, to: { manager: '/vacancy-requests?req=$1' } },
   { from: /^\/vacancies\/([^/]+)\/.+$/, to: { employee: '/vacancies/$1' } },

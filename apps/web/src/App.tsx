@@ -44,6 +44,7 @@ const RolesRoute = lazy(() => import('./v2/admin/AdminRoutes').then((m) => ({ de
 const NotificationsPage = lazy(() => import('./pages/NotificationsPage').then((m) => ({ default: m.NotificationsPage })));
 const ProfilePage = lazy(() => import('./pages/ProfilePage').then((m) => ({ default: m.ProfilePage })));
 const ApplicantPortalPage = lazy(() => import('./pages/ApplicantPortalPage').then((m) => ({ default: m.ApplicantPortalPage })));
+const EntityLinkRoute = lazy(() => import('./v2/pages/EntityLinkRoute').then((m) => ({ default: m.EntityLinkRoute })));
 const V2Shell = lazy(() => import('./layout/V2Shell').then((m) => ({ default: m.V2Shell })));
 
 const ForgotPasswordPage = lazy(() => import('./auth/ForgotPasswordPage').then((m) => ({ default: m.ForgotPasswordPage })));
@@ -90,6 +91,8 @@ function App() {
                   <Route path="/vacancies/:id" element={<PermissionGate requiredPermission="VACANCY_VIEW"><JobDetailRoute /></PermissionGate>} />
                   <Route path="/candidates" element={<PermissionGate requiredPermission="CANDIDATE_VIEW"><CandidatesListRoute /></PermissionGate>} />
                   <Route path="/candidates/compare" element={<PermissionGate requiredPermission="CANDIDATE_VIEW"><CandidatesCompareRoute /></PermissionGate>} />
+                  <Route path="/offers/:id" element={<EntityLinkRoute kind="offer" />} />
+                  <Route path="/hires/:id" element={<EntityLinkRoute kind="hire" />} />
                   <Route path="/applications/:id" element={<PermissionGate requiredPermission="APPLICATION_VIEW"><ApplicationRoute /></PermissionGate>} />
 
                   {/* Manager */}
