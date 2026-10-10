@@ -18,6 +18,7 @@ import { CandidateFitScorecard } from '../components/candidate/CandidateFitScore
 import { Icon } from '../components/Icon';
 import { SendWhatsAppDialog } from '../components/whatsapp/SendWhatsAppDialog';
 import { useAuth } from '../auth/AuthContext';
+import { isAdministratorUser } from '../utils/isAdministrator';
 import { Modal } from '../components/Modal';
 import { Alert } from '../components/ui/Alert';
 import { Badge } from '../components/ui/Badge';
@@ -25,6 +26,9 @@ import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { PageState } from '../components/ui/PageState';
+import { ForbiddenState } from '../components/access/ForbiddenState';
+import { isForbiddenError, isRedactedVacancy } from '../utils/vacancyAccess';
+import type { MaybeRedacted } from '../types/redactedVacancy';
 import { ListSkeleton } from '../components/ui/Skeleton';
 import { StatusBadge } from '../components/StatusBadge';
 import { ActivityFeed, type FeedEntry } from '../components/candidate/ActivityFeed';
@@ -60,6 +64,7 @@ export function ApplicationDetailPage() {
   const [isWhatsAppOpen, setIsWhatsAppOpen] = useState(false);
   const [application, setApplication] = useState<Application | null>(null);
   const [vacancy, setVacancy] = useState<Vacancy | null>(null);
+  const [isForbidden, setIsForbidden] = useState(false);
   const [history, setHistory] = useState<ApplicationStatusHistoryItem[]>([]);
   const [notes, setNotes] = useState<ApplicationNote[]>([]);
   const [screeningLogs, setScreeningLogs] = useState<ScreeningLog[]>([]);
@@ -184,6 +189,8 @@ export function ApplicationDetailPage() {
           : Promise.resolve<Interview[]>([]),
         getApi<ApplicationWorkspaceResponse>(`/applications/${id}/workspace`),
       ]);
+      // B1: another owner's file returns 403 FILE_NOT_OWNED; show Forbidden, never redirect.
+      setIsForbidden(appRes.status === 'rejected' && isForbiddenError(appRes.reason));
       if (appRes.status === 'fulfilled' && appRes.value) {
         setApplication(appRes.value);
         if (appRes.value.candidate?.skills && appRes.value.candidate.skills.length > 0) {
@@ -206,10 +213,10 @@ export function ApplicationDetailPage() {
         if (appRes.value.vacancyId) {
           try {
             const [vacRes, sibsRes] = await Promise.allSettled([
-              getApi<Vacancy>(`/vacancies/${appRes.value.vacancyId}`),
+              getApi<MaybeRedacted<Vacancy>>(`/vacancies/${appRes.value.vacancyId}`),
               getApi<PaginatedResult<Application>>(`/applications?vacancyId=${appRes.value.vacancyId}&pageSize=100`),
             ]);
-            if (vacRes.status === 'fulfilled' && vacRes.value) setVacancy(vacRes.value);
+            if (vacRes.status === 'fulfilled' && vacRes.value) setVacancy(isRedactedVacancy(vacRes.value) ? null : vacRes.value);
             if (sibsRes.status === 'fulfilled' && sibsRes.value?.data) {
               setSiblingApplications(sibsRes.value.data);
             }
@@ -664,6 +671,17 @@ export function ApplicationDetailPage() {
     );
   }
 
+  if (!application && isForbidden) {
+    return (
+      <ForbiddenState
+        title="You do not have access to this application"
+        description="This file belongs to another owner. Ask the owner or your manager if it should be reassigned to you."
+        backLabel="Back to applications"
+        onBack={() => navigateWithUnsavedChanges('/applications')}
+      />
+    );
+  }
+
   if (!application) {
     return (
       <div className="flex w-full flex-col p-4 sm:p-6 lg:p-7 max-w-[1720px] mx-auto space-y-6">
@@ -1054,6 +1072,7 @@ export function ApplicationDetailPage() {
             stage={application?.stage}
             candidateName={candidateName}
             unassigned={!(application?.primaryRecruiterName || application?.taskOwnerName || application?.primaryRecruiterId)}
+            isAdmin={isAdministratorUser(user)}
             assigning={isAssigning}
             onAssign={() => void handleAssignToMe()}
             onAdvanceStage={() => setIsMoveStageModalOpen(true)}
@@ -1342,7 +1361,8 @@ export function ApplicationDetailPage() {
                 <span className="block text-xs font-semibold text-slate-800 dark:text-slate-100">
                   {getNextActionPlan(
                     application?.stage,
-                    !(application?.primaryRecruiterName || application?.taskOwnerName || application?.primaryRecruiterId)
+                    !(application?.primaryRecruiterName || application?.taskOwnerName || application?.primaryRecruiterId),
+                    isAdministratorUser(user),
                   ).label}
                 </span>
               </div>
