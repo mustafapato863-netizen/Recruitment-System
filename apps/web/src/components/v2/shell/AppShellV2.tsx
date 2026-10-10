@@ -9,7 +9,7 @@ import { getApi } from '../../../api/client';
 import { BreadcrumbProvider, useBreadcrumb } from '../../../context/BreadcrumbContext';
 import { QuickGuideModal, QuickGuideProvider, useQuickGuide } from '../../../quickguide';
 import { SEAT_LABEL, type Seat } from '../../../v2/seat';
-import { v2Redirect } from '../../../v2/destinations';
+import { canUseRequisitions, isRecruiterOnly, v2Redirect } from '../../../v2/destinations';
 import { NavItem } from '../NavItem';
 import { SEAT_NAV, activeNavKey, permittedNavItems, type NavIconName } from './navConfig';
 import { workspaceOptions, type WorkspaceOption } from './workspace';
@@ -196,10 +196,10 @@ export interface AppShellV2Props {
 function ShellFrame({ user, seat, onSignOut, children }: AppShellV2Props) {
   const location = useLocation();
   // B2-17/18: "/" goes to the seat's home; v1 pages the seat can't use redirect to their v2 equivalent.
-  const redirectTo = v2Redirect(seat, location.pathname);
+  const redirectTo = v2Redirect(seat, location.pathname, { requisitions: canUseRequisitions(user) });
   const { customLabels } = useBreadcrumb();
   const isAdministrator = (user.roles ?? []).some((r) => r.code === 'ADMINISTRATOR');
-  const items = permittedNavItems(seat, user.permissions, isAdministrator);
+  const items = permittedNavItems(seat, user.permissions, isAdministrator, isRecruiterOnly(user.roles));
   const activeKey = activeNavKey(items, location.pathname, location.hash);
   const canSeeNotifications = isAdministrator || (user.permissions ?? []).includes('NOTIFICATION_VIEW');
   const unread = useUnreadCount(true);
