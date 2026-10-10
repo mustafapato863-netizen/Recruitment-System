@@ -58,8 +58,18 @@ const REQUISITIONS = /^\/vacancy-requests(\/|$)/;
 const MY_INTERVIEWS = /^\/my-interviews\/?$/;
 
 /** null = stay; otherwise where to go instead. `opts.requisitions === false` drops /vacancy-requests (Recruiter role). */
-export function v2Redirect(seat: Seat, pathname: string, opts: { requisitions?: boolean; interviews?: boolean } = {}): string | null {
+/**
+ * B2V-2: an interviewer-only user (interviewer, no APPLICATION_VIEW) can use My Work, My interviews and the shell's
+ * own pages; every other URL (e.g. /candidates, /applications/:id) would be a v1 "Access Restricted" page, so it
+ * goes to /my-interviews instead.
+ */
+const INTERVIEWER_ONLY_OK = ['/my-work', '/my-interviews', ...COMMON];
+export function isInterviewerOnly(user: { permissions?: readonly string[] } | null | undefined, interviewer: boolean): boolean {
+  return interviewer && !(user?.permissions ?? []).includes('APPLICATION_VIEW');
+}
+export function v2Redirect(seat: Seat, pathname: string, opts: { requisitions?: boolean; interviews?: boolean; interviewerOnly?: boolean } = {}): string | null {
   if (pathname === '/' || pathname === '') return SEAT_HOME[seat];
+  if (opts.interviewerOnly && seat !== 'admin') return INTERVIEWER_ONLY_OK.some((p) => matches(p, pathname)) ? null : '/my-interviews';
   // B2F-3: an interviewer (any non-admin seat) reads the CV and submits their scorecard on /my-interviews, inside the v2 shell.
   if (MY_INTERVIEWS.test(pathname) && seat !== 'admin') return opts.interviews === false ? SEAT_HOME[seat] : null;
   if (opts.requisitions === false && REQUISITIONS.test(pathname)) return SEAT_HOME[seat];
