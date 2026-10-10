@@ -4,6 +4,7 @@ import { PrismaService } from '../database/prisma.service';
 import { EmailOutboxService } from '../email/email-outbox.service';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import type { NotificationRecord, PaginatedResult } from '@recruitflow/contracts';
+import { canSeeOfferPay, isFileNotification, resolveApplicationIds, stripPay } from './notification-safety';
 
 @Injectable()
 export class NotificationsService {
@@ -40,6 +41,12 @@ export class NotificationsService {
         },
       });
       if (!recipient) return;
+
+      // Offer/interview notifications never carry pay to a recipient without OFFER_PAY_VIEW
+      // (Employees). Applies to the in-app row and the email copy.
+      if (isFileNotification(data.type, data.entityType) && !(await canSeeOfferPay(tx, data.recipientUserId))) {
+        data = { ...data, title: stripPay(data.title), message: stripPay(data.message) };
+      }
 
       // Serialize the read-before-create idempotency check for a given event
       // so concurrent workflow requests cannot create duplicate alerts.
@@ -115,8 +122,20 @@ export class NotificationsService {
       this.prisma.notification.count({ where }),
     ]);
 
+    // File notifications carry applicationId (resolved from the entity, so worker-written rows get it too);
+    // pay is stripped again on read for recipients without OFFER_PAY_VIEW (covers older rows).
+    const appIds = await resolveApplicationIds(this.prisma, data);
+    const pay = data.some((n) => isFileNotification(n.type, n.entityType)) ? await canSeeOfferPay(this.prisma, recipientUserId) : true;
     return {
-      data: data.map(this.toRecord),
+      data: data.map((n) => {
+        const record = this.toRecord(n);
+        if (!isFileNotification(n.type, n.entityType)) return record;
+        return {
+          ...record,
+          applicationId: (n.entityId && appIds.get(n.entityId)) ?? null,
+          ...(pay ? {} : { title: stripPay(n.title), message: stripPay(n.message) }),
+        };
+      }),
       total,
       page,
       pageSize,
