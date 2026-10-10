@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowLeftRight, Star, CalendarClock, CircleAlert, CircleCheck, Clock, Eye, Info, RotateCw, TriangleAlert, Users } from 'lucide-react';
 import { ButtonV2, EmptyStateV2, ForbiddenStateV2, initials, SkeletonV2, StatusChip } from '../../components/v2';
 import { useAuth } from '../../auth/AuthContext';
@@ -29,6 +29,7 @@ const when = (iso: string | null) => (iso ? new Intl.DateTimeFormat('en-GB', { t
 export function TeamWorkV2() {
   const { user } = useAuth();
   const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
   const [state, setState] = useState<{ kind: 'loading' } | { kind: 'ready'; data: TeamWork } | { kind: 'forbidden' } | { kind: 'error'; message: string }>({ kind: 'loading' });
   const [attempt, setAttempt] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
@@ -80,7 +81,7 @@ export function TeamWorkV2() {
                       <p className="rf2-jtable__sub">Offer v{w.versionNumber} submitted{w.ownerName ? ` by ${w.ownerName}` : ''}{w.submittedAt ? ` · ${when(w.submittedAt)}` : ''}</p>
                     </div>
                     {ago(w.submittedAt) ? <StatusChip tone="neutral" label={ago(w.submittedAt)!} /> : null}
-                    <ButtonV2 size="sm" icon={<Eye />} onClick={() => go({ offer: w.offerId })} aria-label={`Review offer: ${w.candidate}`}>Review offer</ButtonV2>
+                    <ButtonV2 size="sm" icon={<Eye />} onClick={() => (w.applicationId ? navigate(`/applications/${encodeURIComponent(w.applicationId)}?decide=${encodeURIComponent(w.offerId)}`) : go({ offer: w.offerId }))} aria-label={`Review offer: ${w.candidate}`}>Review offer</ButtonV2>
                   </li>
                 ))}
                 {cards.map((c) => (

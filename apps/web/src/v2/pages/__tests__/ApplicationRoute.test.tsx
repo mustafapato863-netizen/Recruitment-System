@@ -13,6 +13,6 @@ const r = () => render(<MemoryRouter><Suspense fallback="…"><ApplicationRoute 
 
 describe('/applications/:id route', () => {
   it('v1 detail outside the v2 shell (flag off parity)', async () => { shell.value = null; r(); expect(await screen.findByText('v1 detail')).toBeInTheDocument(); });
-  it('v1 detail for the Manager seat', async () => { shell.value = { seat: 'manager' }; r(); expect(await screen.findByText('v1 detail')).toBeInTheDocument(); });
+  it('v2 file (manager mode) for the Manager seat (B2-18/B2-23)', () => { shell.value = { seat: 'manager' }; r(); expect(screen.getByText('v2 file')).toBeInTheDocument(); });
   it('v2 file (E13) for the Employee seat', () => { shell.value = { seat: 'employee' }; r(); expect(screen.getByText('v2 file')).toBeInTheDocument(); });
 });
