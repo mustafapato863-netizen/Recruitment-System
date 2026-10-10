@@ -16,6 +16,7 @@ import { TenantResource } from '../common/decorators/tenant-resource.decorator';
 // Runtime service and DTO imports must remain value imports for Nest DI metadata reflection.
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { CandidatesService } from './candidates.service';
+import { CandidateFillService } from './candidate-fill.service';
 import { CandidateActivityService } from './candidate-activity.service';
 import { CreateCandidateActivityDto, CandidateActivityQueryDto, RescheduleCandidateActivityDto } from './candidate-activity.dto';
 import {
@@ -39,6 +40,7 @@ export class CandidatesController {
     private readonly candidatesService: CandidatesService,
     private readonly userPermissions: UserPermissionsService,
     private readonly activityService: CandidateActivityService,
+    private readonly candidateFill: CandidateFillService,
   ) {}
 
   @Get()
@@ -148,6 +150,16 @@ export class CandidatesController {
     @Body() body: CreateCandidateDto,
   ) {
     return this.candidatesService.createCandidate(tenantId, body, user.userId);
+  }
+
+  /** E3: fill empty fields from the candidate's latest parsed CV. Never overwrites; returns { filled[], conflicts[] }. */
+  @Post(':id/fill-from-cv')
+  @RequirePermissions('CANDIDATE_EDIT')
+  @AuditAction('CANDIDATE_FILL_FROM_CV')
+  @UseGuards(TenantScopedGuard)
+  @TenantResource({ resource: 'candidate', param: 'id' })
+  fillFromCv(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.candidateFill.fillFromCv(user, id);
   }
 
   @Patch(':id')
