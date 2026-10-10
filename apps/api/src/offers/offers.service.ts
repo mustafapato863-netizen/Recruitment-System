@@ -795,6 +795,7 @@ export class OffersService {
         return a ? { byUserId: a.approverUserId, byName: a.approver?.displayName ?? null, at: a.decidedAt!.toISOString(), text: a.comment! } : null;
       })(),
       /** derived: a version is frozen once it left Draft/Pending/Changes Requested. */
+      // TODO(E3): remove isLocked once Frontend reads `status` (derived, read-only).
       isLocked: !['Draft', 'Pending Approval', 'Changes Requested'].includes(v.status),
       components:
         v.components?.map((c) => ({

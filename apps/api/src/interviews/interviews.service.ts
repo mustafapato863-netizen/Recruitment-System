@@ -695,7 +695,15 @@ export class InterviewsService {
     dto: ReviseScorecardDto,
     user?: AuthUser,
   ): Promise<InterviewScorecardItem> {
-    await this.getInterview(organizationId, interviewId, user);
+    // An interviewer revises their OWN submitted scorecard (never another's, never in place).
+    // Checked like submit: the caller must be an attendee of this interview. File visibility is not
+    // required, so an interviewer without access to the file can still revise their own card.
+    // TODO(B1): add @AllowInterviewAttendee() to POST :id/scorecard/revisions when #4 is merged under this branch.
+    void user;
+    const interview = await this.prisma.interview.findFirst({ where: { id: interviewId, organizationId }, select: { id: true } });
+    if (!interview) throw new NotFoundException(`Interview ${interviewId} was not found.`);
+    const attendee = await this.prisma.interviewAttendee.findUnique({ where: { interviewId_userId: { interviewId, userId: interviewerId } } });
+    if (!attendee) throw new ForbiddenException('Only an assigned interviewer can revise their own scorecard.');
     const latest = await this.prisma.interviewScorecard.findFirst({ where: { interviewId, interviewerId }, orderBy: { revision: 'desc' } });
     if (!latest || latest.status !== 'Submitted') {
       throw new ConflictException({ code: 'SCORECARD_NOT_SUBMITTED', message: 'Only a submitted scorecard can be revised; edit the draft instead.' });
@@ -732,6 +740,42 @@ export class InterviewsService {
       notes: scorecard.notes,
       ...scorecardState(scorecard),
     };
+  }
+
+  /**
+   * E3: owner nudges interviewers whose scorecard is not submitted. At most one per interview per Cairo day
+   * (409 SCORECARD_REMINDER_ALREADY_SENT), claimed in the B4 sent-log (due_date_reminders, kind "scorecard-nudge").
+   * Owner = the file's primary recruiter or the job's active PRIMARY assignee. TODO(B1): Vacancy.primaryRecruiterId.
+   */
+  async sendScorecardReminder(organizationId: string, interviewId: string, user: AuthUser, now = new Date()): Promise<{ sent: number; recipients: string[]; reminderDate: string }> {
+    const interview = await this.prisma.interview.findFirst({
+      where: { id: interviewId, organizationId },
+      select: { id: true, title: true, status: true, application: { select: { id: true, primaryRecruiterId: true, vacancy: { select: { assignments: { where: { isActive: true, assignmentKind: 'PRIMARY' }, select: { userId: true } } } } } }, attendees: { select: { userId: true } } },
+    });
+    if (!interview) throw new NotFoundException(`Interview ${interviewId} was not found.`);
+    const owners = new Set([interview.application.primaryRecruiterId, ...interview.application.vacancy.assignments.map((a) => a.userId)].filter(Boolean));
+    if (!owners.has(user.userId)) throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Only the owner of this file can send a scorecard reminder.' });
+    if (interview.status === 'Cancelled') throw new ConflictException({ code: 'CONFLICT', message: 'This interview was cancelled.' });
+    const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+    const reminderDate = new Date(`${day}T00:00:00Z`);
+    const submitted = await this.prisma.interviewScorecard.findMany({ where: { interviewId, status: 'Submitted' }, select: { interviewerId: true } });
+    const done = new Set(submitted.map((s) => s.interviewerId));
+    const recipients = interview.attendees.map((a) => a.userId).filter((id) => !done.has(id));
+    if (!recipients.length) return { sent: 0, recipients: [], reminderDate: day };
+    const claim = await this.prisma.dueDateReminder.createMany({
+      data: [{ organizationId, entityType: 'Interview', entityId: interviewId, kind: 'scorecard-nudge', reminderDate, recipientUserId: interviewId }],
+      skipDuplicates: true,
+    });
+    if (claim.count === 0) {
+      throw new ConflictException({ code: 'SCORECARD_REMINDER_ALREADY_SENT', message: 'A scorecard reminder was already sent for this interview today.' });
+    }
+    for (const recipientUserId of recipients) {
+      await this.notifications.create({
+        organizationId, recipientUserId, type: 'ScorecardReminder', title: 'Scorecard reminder',
+        message: `Please submit your scorecard for "${interview.title}".`, entityType: 'Interview', entityId: interviewId,
+      });
+    }
+    return { sent: recipients.length, recipients, reminderDate: day };
   }
 
   /** Interviewers whose latest scorecard revision is Submitted. */
