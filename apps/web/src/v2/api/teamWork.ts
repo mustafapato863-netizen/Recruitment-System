@@ -163,6 +163,8 @@ const REASSIGN_TEXT: Record<string, { field?: 'to' | 'reason' | 'what'; text: st
   REASSIGN_ADMIN_FORBIDDEN: { text: 'Administrators cannot reassign files.' },
   REASSIGN_NOT_MANAGER: { field: 'what', text: 'You can only move files owned by your direct reports.' },
   REASSIGN_TARGET_INELIGIBLE: { field: 'to', text: 'That person cannot own files (inactive or an administrator).' },
+  /** #23 603d44d: 400 {field:'toUserId'}: a manager can only hand files to someone in their own tree. */
+  REASSIGN_TARGET_NOT_IN_TEAM: { field: 'to', text: 'Pick someone from your own team (your reports and their reports).' },
   REASSIGN_FILE_CLOSED: { field: 'what', text: 'A closed file (Joined, Rejected or Withdrawn) cannot move. Nothing was moved.' },
   REASSIGN_CONFLICT: { text: 'A file changed while reassigning; nothing was moved. Reload and try again.' },
   REASSIGN_REASON_REQUIRED: { field: 'reason', text: 'A reason is required.' },
