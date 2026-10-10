@@ -6,6 +6,7 @@
 import { randomUUID } from 'node:crypto';
 import type { AuthUser } from '@recruitflow/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { privateVacancy } from '../../testing/private-vacancy';
 import { PrismaService } from '../../../database/prisma.service';
 import { AccessControlService } from '../../../access-control/access-control.service';
 import { SearchService } from '../../../search/search.service';
@@ -28,13 +29,15 @@ describe.skipIf(!url)('B1 search scope (scratch Postgres)', () => {
     for (const [id, name, role] of [[ids.owner, 'owner', 'RECRUITER'], [ids.other, 'other', 'RECRUITER'], [ids.admin, 'admin', 'ADMINISTRATOR']] as const) {
       await prisma.user.create({ data: { id, organizationId: ORG, email: `s-${name}-${tag}@b1.test`, emailNormalized: `s-${name}-${tag}@b1.test`, displayName: `S ${name}`, passwordHash: 'x', status: 'Active', userRoles: { create: { roleId: roles[role]! } } } });
     }
-    const jobs = await prisma.vacancy.findMany({ where: { organizationId: ORG }, orderBy: { vacancyCode: 'asc' }, skip: 2, take: 2 });
-    jobA = jobs[0]!.id; jobB = jobs[1]!.id;
+    jobA = await privateVacancy(prisma, ORG, 'SrA'); jobB = await privateVacancy(prisma, ORG, 'SrB'); // private: no cross-suite re-owning
     for (const [job, owner] of [[jobA, ids.owner], [jobB, ids.other]] as const) {
       // Same shape the API writes (one active PRIMARY mirrored in primaryRecruiterId) so the B1 backfill invariant holds.
-      await prisma.vacancyAssignment.updateMany({ where: { vacancyId: job, assignmentKind: 'PRIMARY', isActive: true }, data: { isActive: false } });
-      await prisma.vacancyAssignment.create({ data: { vacancyId: job, userId: owner, roleCode: 'RECRUITER', assignmentKind: 'PRIMARY', isActive: true } });
-      await prisma.vacancy.update({ where: { id: job }, data: { primaryRecruiterId: owner } });
+      // One transaction: other suites check the "single active PRIMARY = primaryRecruiterId" invariant concurrently.
+      await prisma.$transaction([
+        prisma.vacancyAssignment.updateMany({ where: { vacancyId: job, assignmentKind: 'PRIMARY', isActive: true }, data: { isActive: false } }),
+        prisma.vacancyAssignment.create({ data: { vacancyId: job, userId: owner, roleCode: 'RECRUITER', assignmentKind: 'PRIMARY', isActive: true } }),
+        prisma.vacancy.update({ where: { id: job }, data: { primaryRecruiterId: owner } }),
+      ]);
     }
     await prisma.candidate.create({ data: { id: ids.candA, organizationId: ORG, candidateCode: `SA-${tag}`, firstName: `Srch${tag}`, lastName: 'Alpha', email: `alpha-${tag}@b1.test` } });
     await prisma.candidate.create({ data: { id: ids.candB, organizationId: ORG, candidateCode: `SB-${tag}`, firstName: `Srch${tag}`, lastName: 'Beta', email: `beta-${tag}@b1.test` } });

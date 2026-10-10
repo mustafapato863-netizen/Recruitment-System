@@ -12,6 +12,8 @@ export interface NotificationRecord {
   entityId: string | null;
   readAt: string | null;
   createdAt: string;
+  /** Offer / interview / file notifications: the application (file) they are about. */
+  applicationId?: string | null;
 }
 
 export interface UnreadCountResponse {
