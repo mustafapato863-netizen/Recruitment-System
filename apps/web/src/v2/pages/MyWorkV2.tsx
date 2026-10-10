@@ -140,6 +140,9 @@ function rowTitle(item: WorkItem, bucket: Bucket): string {
   return `${item.candidate.name} — offer waiting ${on ? `on ${on}` : 'for approval'}`;
 }
 
+/** E02: a waiting row is read-only unless it has an enabled action beyond just opening the record (e.g. Record answer). */
+const readOnly = (item: WorkItem) => !item.actions.some((a) => !a.disabled && !a.key.startsWith('open-'));
+
 function greeting(): string {
   const h = new Date().getHours();
   return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
@@ -265,9 +268,9 @@ export function MyWorkV2({ load = getMyWork }: { load?: typeof getMyWork } = {})
                         title={rowTitle(item, key)}
                         meta={<ItemMeta item={item} />}
                         chip={<span className="rf2-mywork__chips">{item.waitingOn ? <StatusChip tone="neutral" label={item.waitingOn === 'approver' ? 'Waiting on approval' : WAITING_LABEL[item.waitingOn] ?? 'Waiting'} /> : <StatusChip tone={key === 'overdue' ? 'warning' : 'info'} label={TYPE_LABEL[item.type] ?? item.type} />}{sla ? <span data-testid="sla">{sla}</span> : null}</span>}
-                        due={key === 'waitingOnOthers' ? <span data-testid="due">No action for you</span> : due ? <span data-testid="due">{due}</span> : undefined}
+                        due={key === 'waitingOnOthers' && readOnly(item) ? <span data-testid="due">No action for you</span> : due ? <span data-testid="due">{due}</span> : undefined}
                         dueTone={key === 'overdue' ? 'danger' : 'default'}
-                        action={key === 'waitingOnOthers'
+                        action={key === 'waitingOnOthers' && readOnly(item)
                           ? <span className="rf2-mywork__readonly">Read-only</span>
                           : <ItemActions item={item} bucket={key} primary={key === 'dueToday' && index === 0} />}
                       />
