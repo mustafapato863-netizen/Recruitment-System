@@ -1,6 +1,6 @@
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { ApiError } from '../../../api/client';
-import { entityHref, getMyWork, isEndpointMissing, normalizeMyWork, resolveSourceMode, type MyWorkResponse, type WorkItem } from '../myWork';
+import { actionHref, entityHref, getMyWork, isEndpointMissing, normalizeMyWork, resolveSourceMode, type MyWorkResponse, type WorkItem } from '../myWork';
 import { myWorkFixture } from '../myWork.fixtures';
 
 const apiErr = (status: number) => new ApiError(status, `status ${status}`);
@@ -12,25 +12,32 @@ describe('My Work adapter: #9 contract typing', () => {
     expectTypeOf(fx).toEqualTypeOf<MyWorkResponse>();
     expectTypeOf<WorkItem['type']>().toEqualTypeOf<'job' | 'requisition' | 'task' | 'interview' | 'scorecard' | 'offer'>();
     expectTypeOf<NonNullable<WorkItem['waitingOn']>>().toEqualTypeOf<'approver' | 'interviewer' | 'candidate'>();
-    expect(Object.keys(fx).sort()).toEqual(['counts', 'dueToday', 'empty', 'emptyMessage', 'generatedAt', 'overdue', 'targets', 'timezone', 'today', 'waitingOnOthers']);
+    expectTypeOf<WorkItem['entity']['type']>().toEqualTypeOf<'application' | 'interview' | 'offer' | 'requisition' | 'job' | 'task'>();
+    expect(Object.keys(fx).sort()).toEqual(['counts', 'date', 'day', 'dueToday', 'empty', 'emptyMessage', 'generatedAt', 'overdue', 'reminderWorkerHealthy', 'targets', 'timezone', 'today', 'waitingOnOthers']);
     expect(Object.keys(fx.counts).sort()).toEqual(['overdue', 'today', 'waitingOnOthers']);
-    expect(Object.keys(fx.targets[0]).sort()).toEqual(['dueDate', 'filled', 'label', 'target', 'title', 'vacancyCode', 'vacancyId']);
-    const json = JSON.stringify(['mariam', 'empty', 'targets-only', 'multi-target'].map((variant) => myWorkFixture({ variant: variant as never })));
+    expect(Object.keys(fx.targets[0]).sort()).toEqual(['department', 'dueDate', 'filled', 'label', 'owner', 'site', 'target', 'title', 'vacancyCode', 'vacancyId']);
+    const json = JSON.stringify(['mariam', 'empty', 'targets-only', 'multi-target', 'stale-worker'].flatMap((variant) => (['today', 'tomorrow'] as const).map((day) => myWorkFixture({ variant: variant as never, day }))));
     expect(json).not.toMatch(/salary|"pay|compensation|currency|AED|EGP|SAR/i);
   });
 
   it('normalizes partial payloads without inventing data', () => {
-    expect(normalizeMyWork({})).toMatchObject({ timezone: 'Africa/Cairo', overdue: [], dueToday: [], waitingOnOthers: [], targets: [], empty: true, emptyMessage: null, counts: { overdue: 0, today: 0, waitingOnOthers: 0 } });
-    const fx = myWorkFixture();
-    expect(normalizeMyWork(fx)).toEqual(fx);
+    expect(normalizeMyWork({})).toMatchObject({ timezone: 'Africa/Cairo', day: 'today', overdue: [], dueToday: [], waitingOnOthers: [], targets: [], empty: true, emptyMessage: null, reminderWorkerHealthy: false, counts: { overdue: 0, today: 0, waitingOnOthers: 0 } });
+    for (const day of ['today', 'tomorrow'] as const) { const fx = myWorkFixture({ day }); expect(normalizeMyWork(fx, day)).toEqual(fx); }
+    // legacy (pre-829983a) casing is lowered rather than crashing; missing actions → []
+    const legacy = normalizeMyWork({ dueToday: [{ id: 'x', type: 'job', title: 't', dueAt: null, reason: 'r', nextAction: { code: 'c', label: 'l' }, entity: { type: 'Application' as never, id: 'a' } } as never] });
+    expect(legacy.dueToday[0].entity.type).toBe('application');
+    expect(legacy.dueToday[0].actions).toEqual([]);
   });
 
-  it('maps entity types to v1 routes, null when unknown', () => {
-    expect(entityHref({ type: 'Application', id: 'a 1' })).toBe('/applications/a%201');
-    expect(entityHref({ type: 'Vacancy', id: 'j1' })).toBe('/vacancies/j1');
-    expect(entityHref({ type: 'VacancyRequest', id: 'r1' })).toBe('/vacancy-requests/r1');
-    expect(entityHref({ type: 'Interview', id: 'i1' })).toBe('/interviews/i1');
-    expect(entityHref({ type: 'Task', id: 't1' })).toBeNull();
+  it('maps the #9 entity enum to v1 routes; tasks have no page', () => {
+    expect(entityHref({ type: 'application', id: 'a 1' })).toBe('/applications/a%201');
+    expect(entityHref({ type: 'job', id: 'j1' })).toBe('/vacancies/j1');
+    expect(entityHref({ type: 'requisition', id: 'r1' })).toBe('/vacancy-requests/r1');
+    expect(entityHref({ type: 'interview', id: 'i1' })).toBe('/interviews/i1');
+    expect(entityHref({ type: 'offer', id: 'o1' })).toBe('/offers/o1');
+    expect(entityHref({ type: 'task', id: 't1' })).toBeNull();
+    const item = myWorkFixture().waitingOnOthers[1];
+    expect(actionHref(item, { key: 'move-to-offer', label: 'Move to Offer', disabled: false })).toBe('/applications/a4');
   });
 });
 
@@ -44,32 +51,32 @@ describe('My Work adapter: source selection', () => {
     expect(resolveSourceMode({ prod: false })).toBe('auto');
   });
 
-  it('calls GET /me/work (no query params) through the api client', async () => {
+  it.each(['today', 'tomorrow'] as const)('calls GET /me/work?day=%s through the api client', async (day) => {
     vi.resetModules();
     const getApi = vi.fn().mockResolvedValue(myWorkFixture());
     vi.doMock('../../../api/client', async () => ({ ...(await vi.importActual<object>('../../../api/client')), getApi }));
     const mod = await import('../myWork');
-    const res = await mod.getMyWork({ env: { prod: true } });
-    expect(getApi).toHaveBeenCalledWith('/me/work');
+    const res = await mod.getMyWork(day, { env: { prod: true } });
+    expect(getApi).toHaveBeenCalledWith(`/me/work?day=${day}`);
     expect(res.source).toBe('api');
     vi.doUnmock('../../../api/client');
   });
 
   it('auto uses the API when it responds', async () => {
     const fixture = vi.fn();
-    const r = await getMyWork({ env: dev, api: vi.fn().mockResolvedValue(myWorkFixture()), fixture });
+    const r = await getMyWork('today', { env: dev, api: vi.fn().mockResolvedValue(myWorkFixture()), fixture });
     expect(r.source).toBe('api');
     expect(fixture).not.toHaveBeenCalled();
   });
   it.each([404, 405, 501])('auto falls back in dev on a missing endpoint (%i)', async (s) => {
-    expect((await getMyWork({ env: dev, api: vi.fn().mockRejectedValue(apiErr(s)), fixture: async () => myWorkFixture() })).source).toBe('fixture');
+    expect((await getMyWork('today', { env: dev, api: vi.fn().mockRejectedValue(apiErr(s)), fixture: async () => myWorkFixture() })).source).toBe('fixture');
   });
   it.each([401, 403, 500])('auto never masks a real error (%i)', async (s) => {
-    await expect(getMyWork({ env: dev, api: vi.fn().mockRejectedValue(apiErr(s)), fixture: async () => myWorkFixture() })).rejects.toMatchObject({ statusCode: s });
+    await expect(getMyWork('today', { env: dev, api: vi.fn().mockRejectedValue(apiErr(s)), fixture: async () => myWorkFixture() })).rejects.toMatchObject({ statusCode: s });
   });
   it('production: missing endpoint is an error, never fixtures', async () => {
     const fixture = vi.fn();
-    await expect(getMyWork({ env: { prod: true }, api: vi.fn().mockRejectedValue(apiErr(404)), fixture })).rejects.toBeInstanceOf(ApiError);
+    await expect(getMyWork('today', { env: { prod: true }, api: vi.fn().mockRejectedValue(apiErr(404)), fixture })).rejects.toBeInstanceOf(ApiError);
     expect(fixture).not.toHaveBeenCalled();
   });
   it('classifies missing endpoints', () => {

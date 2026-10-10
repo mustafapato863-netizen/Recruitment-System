@@ -26,43 +26,74 @@ export interface TargetChip {
   dueDate: string | null;
 }
 
+/** = myWorkEntityTypes (#9 @829983a). Interview/offer items point at the interview/offer itself. */
+export const MY_WORK_ENTITY_TYPES = ['application', 'interview', 'offer', 'requisition', 'job', 'task'] as const;
+export type MyWorkEntityType = (typeof MY_WORK_ENTITY_TYPES)[number];
+export type MyWorkDay = 'today' | 'tomorrow';
 export type WorkItemType = 'job' | 'requisition' | 'task' | 'interview' | 'scorecard' | 'offer';
 export type WaitingOn = 'approver' | 'interviewer' | 'candidate';
 
-/** nextAction.code values #9 emits today (string on the wire). */
-export type KnownNextActionCode =
-  | 'review-applicants' | 'view-requisition' | 'activate-requisition' | 'submit-requisition' | 'set-due-date'
-  | 'complete-task' | 'open-interview' | 'submit-scorecard' | 'open-offer';
+/** nextAction.code / actions[].key values #9 emits today (string on the wire). */
+export type KnownActionKey =
+  | 'review-applicants' | 'hold-job' | 'view-requisition' | 'activate-requisition' | 'submit-requisition' | 'set-due-date'
+  | 'cancel-requisition' | 'complete-task' | 'open-interview' | 'submit-scorecard' | 'move-to-offer' | 'open-offer'
+  | 'send-offer' | 'record-response';
 
+/** = MyWorkAction. */
+export interface MyWorkAction { key: string; label: string; disabled: boolean; reason?: string }
+/** = MyWorkPerson. */
+export interface MyWorkPerson { id: string | null; name: string }
+
+/** = MyWorkItem. */
 export interface WorkItem {
   id: string;
   type: WorkItemType;
   title: string;
-  /** Date-only (YYYY-MM-DD) for jobs/requisitions, ISO instant for tasks/interviews/scorecards; null for offers. */
+  /** Date-only (YYYY-MM-DD) for jobs/requisitions, ISO instant otherwise; null for offers. */
   dueAt: string | null;
   reason: string;
   nextAction: { code: string; label: string };
-  /** 'Vacancy' | 'VacancyRequest' | 'Interview' | 'Application' | a task's entityType | 'Task'. */
-  entity: { type: string; id: string };
+  entity: { type: MyWorkEntityType; id: string };
+  actions: MyWorkAction[];
   waitingOn?: WaitingOn;
+  startAt?: string;
+  endAt?: string;
+  /** v2: room URL only (no Meet, no self-schedule). */
+  room?: { name: string | null; url: string | null };
+  interviewer?: MyWorkPerson | null;
+  interviewers?: MyWorkPerson[];
+  applicationId?: string;
+  candidate?: { id: string; name: string };
+  stage?: string;
 }
 
-export type MyWorkTarget = TargetChip & { vacancyId: string; vacancyCode: string };
+/** = MyWorkTarget. */
+export interface MyWorkTarget extends TargetChip {
+  vacancyId: string;
+  vacancyCode: string;
+  department: string | null;
+  site: string | null;
+  owner: { id: string; name: string } | null;
+}
 
+/** = MyWorkResponse (#9 @829983a). */
 export interface MyWorkResponse {
-  /** Always "Africa/Cairo" in #9. */
   timezone: string;
-  /** Cairo calendar date, YYYY-MM-DD. */
   today: string;
+  day: MyWorkDay;
+  /** The Cairo date `dueToday` lists (today, or tomorrow with ?day=tomorrow). */
+  date: string;
   generatedAt: string;
   counts: { overdue: number; today: number; waitingOnOthers: number };
   overdue: WorkItem[];
   dueToday: WorkItem[];
   waitingOnOthers: WorkItem[];
   targets: MyWorkTarget[];
-  /** True only when all buckets AND targets are empty. */
+  /** True when there are no work items; targets alone do not count. */
   empty: boolean;
   emptyMessage: string | null;
+  /** Reminder worker swept within 2x its interval; SLA shown only when true. */
+  reminderWorkerHealthy: boolean;
 }
 
 export type MyWorkSource = 'api' | 'fixture';
@@ -89,58 +120,73 @@ export function isEndpointMissing(error: unknown): boolean {
 
 const arr = <T,>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
 
+function normItem(raw: WorkItem): WorkItem {
+  return { ...raw, actions: arr<MyWorkAction>(raw.actions), entity: { type: String(raw.entity?.type ?? '').toLowerCase() as MyWorkEntityType, id: raw.entity?.id ?? '' } };
+}
+
 /** Defensive normalisation so a partial payload can't crash the page. Invents nothing. */
-export function normalizeMyWork(raw: Partial<MyWorkResponse> | null | undefined): MyWorkResponse {
-  const overdue = arr<WorkItem>(raw?.overdue);
-  const dueToday = arr<WorkItem>(raw?.dueToday);
-  const waitingOnOthers = arr<WorkItem>(raw?.waitingOnOthers);
-  const targets = arr<MyWorkTarget>(raw?.targets);
-  const empty = typeof raw?.empty === 'boolean' ? raw.empty : overdue.length + dueToday.length + waitingOnOthers.length + targets.length === 0;
+export function normalizeMyWork(raw: Partial<MyWorkResponse> | null | undefined, asked: MyWorkDay = 'today'): MyWorkResponse {
+  const overdue = arr<WorkItem>(raw?.overdue).map(normItem);
+  const dueToday = arr<WorkItem>(raw?.dueToday).map(normItem);
+  const waitingOnOthers = arr<WorkItem>(raw?.waitingOnOthers).map(normItem);
+  const targets = arr<MyWorkTarget>(raw?.targets).map((t) => ({ ...t, department: t.department ?? null, site: t.site ?? null, owner: t.owner ?? null }));
+  const empty = typeof raw?.empty === 'boolean' ? raw.empty : overdue.length + dueToday.length + waitingOnOthers.length === 0;
+  const day: MyWorkDay = raw?.day === 'tomorrow' || raw?.day === 'today' ? raw.day : asked;
   return {
     timezone: raw?.timezone || 'Africa/Cairo',
     today: raw?.today ?? '',
+    day,
+    date: raw?.date ?? raw?.today ?? '',
     generatedAt: raw?.generatedAt ?? '',
     counts: raw?.counts ?? { overdue: overdue.length, today: dueToday.length, waitingOnOthers: waitingOnOthers.length },
     overdue, dueToday, waitingOnOthers, targets, empty,
     emptyMessage: raw?.emptyMessage ?? null,
+    // Missing flag = unknown health: treat as not healthy (hide SLA) rather than invent it.
+    reminderWorkerHealthy: raw?.reminderWorkerHealthy === true,
   };
 }
 
-export async function fetchMyWorkApi(): Promise<MyWorkResponse> {
-  return normalizeMyWork(await getApi<Partial<MyWorkResponse>>('/me/work'));
+export async function fetchMyWorkApi(day: MyWorkDay = 'today'): Promise<MyWorkResponse> {
+  return normalizeMyWork(await getApi<Partial<MyWorkResponse>>(`/me/work?day=${day}`), day);
 }
 
 export async function getMyWork(
-  deps: { env?: MyWorkEnv; api?: () => Promise<MyWorkResponse>; fixture?: () => Promise<MyWorkResponse> } = {},
+  day: MyWorkDay = 'today',
+  deps: { env?: MyWorkEnv; api?: (day: MyWorkDay) => Promise<MyWorkResponse>; fixture?: (day: MyWorkDay) => Promise<MyWorkResponse> } = {},
 ): Promise<MyWorkResult> {
   const env = deps.env ?? browserEnv();
   const api = deps.api ?? fetchMyWorkApi;
   // DEV-guarded so production builds drop the fixture chunk entirely.
   const fixture = deps.fixture ?? (import.meta.env.DEV
-    ? async () => (await import('./myWork.fixtures')).myWorkFixture()
+    ? async (d: MyWorkDay) => (await import('./myWork.fixtures')).myWorkFixture({ day: d })
     : async (): Promise<MyWorkResponse> => { throw new Error('My Work fixtures are development-only'); });
   const mode = resolveSourceMode(env);
-  if (mode === 'fixture') return { data: normalizeMyWork(await fixture()), source: 'fixture' };
-  if (mode === 'api') return { data: await api(), source: 'api' };
+  if (mode === 'fixture') return { data: normalizeMyWork(await fixture(day), day), source: 'fixture' };
+  if (mode === 'api') return { data: await api(day), source: 'api' };
   try {
-    return { data: await api(), source: 'api' };
+    return { data: await api(day), source: 'api' };
   } catch (error) {
     if (!isEndpointMissing(error)) throw error;
-    return { data: normalizeMyWork(await fixture()), source: 'fixture' };
+    return { data: normalizeMyWork(await fixture(day), day), source: 'fixture' };
   }
 }
 
-/** v1 route for a work item's entity; null when there is no page for it. */
+/** v1 route for a work item's entity; null when there is no page for it (tasks live on My Work). */
 export function entityHref(entity: WorkItem['entity']): string | null {
   const id = encodeURIComponent(entity.id);
   switch (entity.type) {
-    case 'Application': return `/applications/${id}`;
-    case 'Vacancy': return `/vacancies/${id}`;
-    case 'VacancyRequest': return `/vacancy-requests/${id}`;
-    case 'Interview': return `/interviews/${id}`;
-    case 'Candidate': return `/candidates/${id}`;
-    case 'Offer': return `/offers/${id}`;
-    case 'Hire': return `/hires/${id}`;
+    case 'application': return `/applications/${id}`;
+    case 'job': return `/vacancies/${id}`;
+    case 'requisition': return `/vacancy-requests/${id}`;
+    case 'interview': return `/interviews/${id}`;
+    case 'offer': return `/offers/${id}`;
     default: return null;
   }
+}
+
+/** Where an enabled action goes. Most open the entity; move-to-offer opens the application. */
+export function actionHref(item: WorkItem, action: MyWorkAction): string | null {
+  if (action.key === 'move-to-offer' && item.applicationId) return `/applications/${encodeURIComponent(item.applicationId)}`;
+  if (action.key === 'review-applicants' && item.entity.type === 'job') return `/vacancies/${encodeURIComponent(item.entity.id)}`;
+  return entityHref(item.entity);
 }

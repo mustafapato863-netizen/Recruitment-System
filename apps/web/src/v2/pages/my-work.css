@@ -53,3 +53,12 @@
 [data-ui='v2'] .rf2-jobstrip__title a { color: inherit; text-decoration: none; }
 [data-ui='v2'] .rf2-jobstrip__title a:hover { text-decoration: underline; }
 [data-ui='v2'] .rf2-jobstrip__title a:focus-visible { outline: var(--rf2-focus-width) solid var(--rf2-focus-color); outline-offset: var(--rf2-focus-offset); }
+
+/* #9 @829983a: day switch, actions[], SLA chips */
+[data-ui="v2"] .rf2-mywork__day { display: flex; flex-direction: column; align-items: flex-end; gap: var(--rf2-space-1, 4px); }
+[data-ui="v2"] .rf2-segmented { display: inline-flex; gap: var(--rf2-space-1, 4px); }
+[data-ui="v2"] .rf2-mywork__actions { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--rf2-space-1, 4px); }
+[data-ui="v2"] .rf2-mywork__chips { display: inline-flex; gap: var(--rf2-space-1, 4px); }
+[data-ui="v2"] .rf2-mywork__meta-bit a { color: var(--rf2-action); text-decoration: underline; }
+[data-ui="v2"] .rf2-visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+[data-ui="v2"] .rf2-mywork__meta-line { display: block; overflow: hidden; text-overflow: ellipsis; }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { BriefcaseBusiness, CalendarClock, Check, ClipboardCheck, ClipboardList, Clock, FileSignature, Info, ListChecks, RotateCw, TriangleAlert } from 'lucide-react';
 import { useAuth } from '../../auth/AuthContext';
@@ -9,7 +9,7 @@ import { EmptyStateV2, ForbiddenStateV2, SkeletonV2 } from '../../components/v2/
 import { TaskRow, TaskSection } from '../../components/v2/Task';
 import '../../components/v2/v2-primitives.css';
 import './my-work.css';
-import { entityHref, getMyWork, type MyWorkResult, type MyWorkTarget, type WorkItem, type WorkItemType } from '../api/myWork';
+import { actionHref, getMyWork, type MyWorkAction, type MyWorkDay, type MyWorkResult, type MyWorkTarget, type WorkItem, type WorkItemType } from '../api/myWork';
 
 type LoadState =
   | { kind: 'loading' }
@@ -20,7 +20,7 @@ type LoadState =
 type Bucket = 'overdue' | 'dueToday' | 'waitingOnOthers';
 const BUCKETS: Array<{ key: Bucket; title: string; empty: string }> = [
   { key: 'overdue', title: 'Overdue', empty: 'Nothing overdue.' },
-  { key: 'dueToday', title: 'Today', empty: 'Nothing due today.' },
+  { key: 'dueToday', title: 'Today', empty: 'Nothing due today.' }, // title replaced for tomorrow
   { key: 'waitingOnOthers', title: 'Waiting on others', empty: 'Nothing waiting on others.' },
 ];
 const TYPE_LABEL: Record<WorkItemType, string> = { job: 'Job', requisition: 'Requisition', task: 'Task', interview: 'Interview', scorecard: 'Scorecard', offer: 'Offer' };
@@ -45,22 +45,78 @@ function makeFormat(timeZone: string) {
   };
 }
 
-function dueText(item: WorkItem, bucket: Bucket, f: ReturnType<typeof makeFormat>): string | null {
+function dueText(item: WorkItem, bucket: Bucket, day: MyWorkDay, f: ReturnType<typeof makeFormat>): string | null {
+  if (item.startAt) return `${day === 'tomorrow' && bucket === 'dueToday' ? 'Tomorrow' : f.dayMonth(item.startAt)}, ${f.time(item.startAt)}${item.endAt ? `–${f.time(item.endAt)}` : ''}`;
   if (!item.dueAt) return null;
-  if (bucket === 'dueToday') return f.dateOnly(item.dueAt) ? 'Today' : `Today, ${f.time(item.dueAt)}`;
+  if (bucket === 'dueToday') {
+    const label = day === 'tomorrow' ? 'Tomorrow' : 'Today';
+    return f.dateOnly(item.dueAt) ? label : `${label}, ${f.time(item.dueAt)}`;
+  }
   if (bucket === 'overdue') return `Due ${f.dayMonth(item.dueAt)}`;
   return f.dateOnly(item.dueAt) ? `Due ${f.dayMonth(item.dueAt)}` : `Ended ${f.dayMonth(item.dueAt)}`;
 }
 
-function ItemAction({ item, bucket, primary }: { item: WorkItem; bucket: Bucket; primary: boolean }) {
-  const href = entityHref(item.entity);
-  if (!href) return null; // no v1 page for this entity type: show no button rather than a dead link
-  // One primary per page (VI): the first Today item; other actions are secondary/tertiary.
-  const kind = primary ? 'primary' : bucket === 'waitingOnOthers' ? 'tertiary' : 'secondary';
+/** SLA fact per row. Rendered only when #9's reminderWorkerHealthy is true. */
+function slaChip(item: WorkItem, bucket: Bucket, day: MyWorkDay) {
+  if (!item.dueAt && !item.startAt) return null;
+  if (bucket === 'overdue') return <StatusChip tone="danger" label="Overdue" />;
+  if (bucket === 'dueToday') return <StatusChip tone={day === 'today' ? 'warning' : 'info'} label={day === 'today' ? 'Due today' : 'Due tomorrow'} />;
+  return null;
+}
+
+function DisabledAction({ action }: { action: MyWorkAction }) {
+  const id = useId();
   return (
-    <Link className={`rf2-btn rf2-btn--${kind} rf2-btn--md`} to={href} aria-label={`${item.nextAction.label}: ${item.title}`}>
-      <span>{item.nextAction.label}</span>
-    </Link>
+    <span className="rf2-mywork__action-disabled">
+      <button type="button" className="rf2-btn rf2-btn--tertiary rf2-btn--md" disabled aria-describedby={action.reason ? id : undefined} title={action.reason}>
+        <span>{action.label}</span>
+      </button>
+      {action.reason ? <span id={id} className="rf2-visually-hidden">{action.reason}</span> : null}
+    </span>
+  );
+}
+
+/** #9 actions[]: enabled → link to the page; disabled → disabled button with the reason as tooltip + aria-describedby. */
+function ItemActions({ item, bucket, primary }: { item: WorkItem; bucket: Bucket; primary: boolean }) {
+  const actions = item.actions.length ? item.actions : [{ key: item.nextAction.code, label: item.nextAction.label, disabled: false }];
+  let usedPrimary = false;
+  return (
+    <span className="rf2-mywork__actions">
+      {actions.map((action) => {
+        if (action.disabled) return <DisabledAction key={action.key} action={action} />;
+        const href = actionHref(item, action);
+        if (!href) return null; // no page for this entity: no dead link
+        // One primary per page (VI): the first enabled action of the first Today item.
+        const kind = primary && !usedPrimary ? 'primary' : bucket === 'waitingOnOthers' ? 'tertiary' : 'secondary';
+        if (kind === 'primary') usedPrimary = true;
+        return (
+          <Link key={action.key} className={`rf2-btn rf2-btn--${kind} rf2-btn--md`} to={href} aria-label={`${action.label}: ${item.title}`}>
+            <span>{action.label}</span>
+          </Link>
+        );
+      })}
+    </span>
+  );
+}
+
+function ItemMeta({ item }: { item: WorkItem }) {
+  const join = (bits: React.ReactNode[]) => bits.map((b, i) => <span key={i}>{i > 0 ? ' · ' : ''}{b}</span>);
+  const first: React.ReactNode[] = [];
+  if (item.candidate) first.push(<span data-testid="candidate">{item.candidate.name}{item.stage ? ` · ${item.stage}` : ''}</span>);
+  first.push(<span>{item.reason}</span>);
+  const second: React.ReactNode[] = [];
+  if (item.startAt) {
+    const people = item.interviewers?.length ? item.interviewers : item.interviewer ? [item.interviewer] : [];
+    second.push(item.room?.url
+      ? <a href={item.room.url} target="_blank" rel="noreferrer">{item.room.name ?? 'Room link'}</a>
+      : <span>{item.room?.name ?? 'No room yet'}</span>);
+    if (people.length) second.push(<span data-testid="interviewers">With {people.map((p) => p.name).join(', ')}</span>);
+  }
+  return (
+    <>
+      <span className="rf2-mywork__meta-line">{join(first)}</span>
+      {second.length ? <span className="rf2-mywork__meta-line">{join(second)}</span> : null}
+    </>
   );
 }
 
@@ -71,16 +127,20 @@ function greeting(): string {
 
 export function MyWorkV2({ load = getMyWork }: { load?: typeof getMyWork } = {}) {
   const { user } = useAuth();
-  const [params] = useSearchParams();
-  // #9 has no day= parameter: the Tomorrow view (E05) is not available yet.
-  const askedTomorrow = params.get('day') === 'tomorrow';
+  const [params, setParams] = useSearchParams();
+  const day: MyWorkDay = params.get('day') === 'tomorrow' ? 'tomorrow' : 'today';
+  const setDay = (next: MyWorkDay) => setParams((prev) => {
+    const p = new URLSearchParams(prev);
+    if (next === 'tomorrow') p.set('day', 'tomorrow'); else p.delete('day');
+    return p;
+  }, { replace: false });
   const [state, setState] = useState<LoadState>({ kind: 'loading' });
   const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let alive = true;
     setState({ kind: 'loading' });
-    load()
+    load(day)
       .then((result) => { if (alive) setState({ kind: 'ready', result }); })
       .catch((error: unknown) => {
         if (!alive) return;
@@ -88,12 +148,12 @@ export function MyWorkV2({ load = getMyWork }: { load?: typeof getMyWork } = {})
         else setState({ kind: 'error', message: error instanceof Error && error.message ? error.message : 'Could not load your work.' });
       });
     return () => { alive = false; };
-  }, [load, attempt]);
+  }, [load, attempt, day]);
 
   const data = state.kind === 'ready' ? state.result.data : null;
   const f = makeFormat(data?.timezone || 'Africa/Cairo');
   const total = data ? data.counts.overdue + data.counts.today + data.counts.waitingOnOthers : 0;
-  const noWork = Boolean(data && data.overdue.length + data.dueToday.length + data.waitingOnOthers.length === 0);
+  const noWork = Boolean(data && (data.empty || data.overdue.length + data.dueToday.length + data.waitingOnOthers.length === 0));
   const firstName = (user?.displayName ?? '').split(' ')[0];
 
   let subtitle: string | null = null;
@@ -112,12 +172,18 @@ export function MyWorkV2({ load = getMyWork }: { load?: typeof getMyWork } = {})
           <h2 className="rf2-mywork__title">My Work</h2>
           {subtitle ? <p className="rf2-mywork__subtitle">{subtitle}</p> : null}
         </div>
-        {data?.today ? <p className="rf2-mywork__today">Today · {f.full(data.today)}</p> : null}
+        <div className="rf2-mywork__day">
+          <div className="rf2-segmented" role="group" aria-label="Day">
+            <ButtonV2 kind="secondary" size="sm" selected={day === 'today'} onClick={() => setDay('today')}>Today</ButtonV2>
+            <ButtonV2 kind="secondary" size="sm" selected={day === 'tomorrow'} onClick={() => setDay('tomorrow')}>Tomorrow</ButtonV2>
+          </div>
+          {data?.date ? <p className="rf2-mywork__today">{day === 'tomorrow' ? 'Tomorrow' : 'Today'} · {f.full(data.date)}</p> : null}
+        </div>
       </div>
 
-      {askedTomorrow ? (
-        <p className="rf2-mywork__note" role="note" data-testid="tomorrow-unavailable">
-          <Info aria-hidden="true" /> The Tomorrow view isn't available yet. Showing today.
+      {data && !data.reminderWorkerHealthy && !noWork ? (
+        <p className="rf2-mywork__note" role="note" data-testid="sla-hidden">
+          <Info aria-hidden="true" /> Reminders are paused right now, so SLA flags are hidden. Due dates below are still correct.
         </p>
       ) : null}
       {state.kind === 'ready' && state.result.source === 'fixture' ? (
@@ -152,27 +218,32 @@ export function MyWorkV2({ load = getMyWork }: { load?: typeof getMyWork } = {})
             />
           ) : (
             <>
-              {BUCKETS.map(({ key, title, empty }) => (
+              {BUCKETS.map(({ key, title: t0, empty: e0 }) => {
+                const title = key === 'dueToday' && day === 'tomorrow' ? 'Tomorrow' : t0;
+                const empty = key === 'dueToday' && day === 'tomorrow' ? 'Nothing booked for tomorrow.' : e0;
+                return (
                 <TaskSection key={key} title={title} count={data[key].length} tone={key === 'overdue' ? 'danger' : 'default'} emptyText={empty}>
                   {data[key].map((item, index) => {
-                    const due = dueText(item, key, f);
+                    const due = dueText(item, key, day, f);
+                    const sla = data.reminderWorkerHealthy ? slaChip(item, key, day) : null;
                     return (
                       <TaskRow key={`${item.type}-${item.id}`}
                         icon={key === 'overdue' ? <TriangleAlert /> : TYPE_ICON[item.type] ?? <Clock />}
                         iconTone={key === 'overdue' ? 'warning' : key === 'waitingOnOthers' ? 'neutral' : 'info'}
                         title={item.title}
-                        meta={item.reason}
-                        chip={item.waitingOn ? <StatusChip tone="neutral" label={WAITING_LABEL[item.waitingOn] ?? 'Waiting'} /> : <StatusChip tone={key === 'overdue' ? 'warning' : 'info'} label={TYPE_LABEL[item.type] ?? item.type} />}
+                        meta={<ItemMeta item={item} />}
+                        chip={<span className="rf2-mywork__chips">{item.waitingOn ? <StatusChip tone="neutral" label={WAITING_LABEL[item.waitingOn] ?? 'Waiting'} /> : <StatusChip tone={key === 'overdue' ? 'warning' : 'info'} label={TYPE_LABEL[item.type] ?? item.type} />}{sla ? <span data-testid="sla">{sla}</span> : null}</span>}
                         due={due ? <span data-testid="due">{due}</span> : undefined}
                         dueTone={key === 'overdue' ? 'danger' : 'default'}
-                        action={<ItemAction item={item} bucket={key} primary={key === 'dueToday' && index === 0} />}
+                        action={<ItemActions item={item} bucket={key} primary={key === 'dueToday' && index === 0} />}
                       />
                     );
                   })}
                 </TaskSection>
-              ))}
+                );
+              })}
               <dl className="rf2-mywork__counts" aria-label="Counts">
-                {([['Total open', total, 'Tasks assigned to you'], ['Overdue', data.counts.overdue, null], ['Due today', data.counts.today, null], ['Waiting on others', data.counts.waitingOnOthers, null]] as const).map(([label, value, hint]) => (
+                {([['Total open', total, 'Tasks assigned to you'], ['Overdue', data.counts.overdue, null], [day === 'tomorrow' ? 'Due tomorrow' : 'Due today', data.counts.today, null], ['Waiting on others', data.counts.waitingOnOthers, null]] as const).map(([label, value, hint]) => (
                   <div key={label} className="rf2-mywork__count" data-key={label}>
                     <dt>{label}</dt>
                     <dd data-count-value="">{value}</dd>
@@ -195,7 +266,7 @@ function TargetStrip({ target, format }: { target: MyWorkTarget; format: ReturnT
       <span className="rf2-jobstrip__icon" aria-hidden="true"><BriefcaseBusiness /></span>
       <div className="rf2-jobstrip__main">
         <h3 className="rf2-jobstrip__title"><Link to={`/vacancies/${encodeURIComponent(target.vacancyId)}`}>{target.title}</Link></h3>
-        <p className="rf2-jobstrip__meta">{target.vacancyCode}</p>
+        <p className="rf2-jobstrip__meta">{[target.vacancyCode, target.department, target.site, target.owner ? `Owner: ${target.owner.name}` : null].filter(Boolean).join(' · ')}</p>
       </div>
       <div className="rf2-jobstrip__seats">
         <span className="rf2-jobstrip__seats-label">{target.label} filled</span>
