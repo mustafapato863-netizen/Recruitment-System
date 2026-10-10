@@ -14,6 +14,7 @@ import { CandidatesService } from '../../candidates/candidates.service';
 import { DocumentStorageService } from '../../documents/document-storage.service';
 import { TalentPoolService } from '../../talent-pool/talent-pool.service';
 import { UsersService } from '../../users/users.service';
+import { privateVacancy } from '../testing/private-vacancy';
 import { UserPermissionsService } from '../user-permissions.service';
 
 const url = process.env.B2_TEST_DATABASE_URL;
@@ -99,7 +100,9 @@ describe.skipIf(!url)('B2 no delete, deactivate, anonymize (scratch Postgres)', 
     const recruiterRole = await prisma.role.findFirstOrThrow({ where: { code: 'RECRUITER' } });
     const jobOwner = randomUUID();
     await prisma.user.create({ data: { id: jobOwner, organizationId: ORG, email: `jobowner-${tag}@b2.test`, emailNormalized: `jobowner-${tag}@b2.test`, displayName: 'B2 Job Owner', passwordHash: 'x', userRoles: { create: { roleId: recruiterRole.id } } } });
-    const job = await prisma.vacancy.findFirstOrThrow({ where: { organizationId: ORG, primaryRecruiterId: null, status: { in: ['Open', 'On Hold', 'Pending Activation', 'Partially Filled'] } } });
+    // A private job (not a shared seeded one another suite may close meanwhile).
+    const job = { id: await privateVacancy(prisma, ORG, 'B2OWN') };
+    await prisma.vacancy.update({ where: { id: job.id }, data: { status: 'Open' } });
     await prisma.vacancy.update({ where: { id: job.id }, data: { primaryRecruiterId: jobOwner } });
     try {
       expect(await prisma.vacancyAssignment.count({ where: { userId: jobOwner } })).toBe(0);
