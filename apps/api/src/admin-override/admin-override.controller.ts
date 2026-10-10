@@ -11,9 +11,9 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 export class AdminOverrideController {
   constructor(private readonly service: AdminOverrideService) {}
 
-  /** body: { action: 'job.hold' | 'job.reopen', entityId, reason } */
+  /** body: { action: 'job.hold' | 'job.reopen' | 'job.close', entityId, reason, note?, holdUntil? } */
   @Post()
-  override(@CurrentUser() user: AuthUser, @Body() body: { action?: string; entityId?: string; reason?: string }) {
+  override(@CurrentUser() user: AuthUser, @Body() body: { action?: string; entityId?: string; reason?: string; note?: string; holdUntil?: string }) {
     return this.service.override(user, body ?? {});
   }
 }

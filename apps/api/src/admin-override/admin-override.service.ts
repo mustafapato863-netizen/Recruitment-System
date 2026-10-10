@@ -5,13 +5,12 @@ import { VacancyCoreService } from '../vacancy-core/vacancy-core.service';
 
 /**
  * B9 / A5: admin override. The only way an Administrator changes owned work.
- * Covered actions: job.hold, job.reopen, job.close; file.reassign is recognised but deferred (see below). Each needs a reason (>= 10 chars) and writes
- * an ADMIN_OVERRIDE audit row (who, when, action, reason, before/after) in the same request.
- * Deferred to stacking (B3 is not on #21's base, #13 → main):
- *   TODO(B3): route hold/reopen/close through B3's job lifecycle service so they also write vacancy_status_histories,
- *   take holdUntil, validate the reason against hold-reasons / close-reasons, and run the transition table.
- *   Until then they use VacancyCoreService.updateVacancyStatus + the ADMIN_OVERRIDE audit row.
- *   file.reassign lives on #15 (POST /admin/overrides/file-reassign via B7 ReassignService.adminOverride). Returns 400 here; this branch has no B7.
+ * job.hold / job.reopen / job.close go through B3's lifecycle (VacancyCoreService.overrideJobStatus, B2F-4): same
+ * transition table, hold/close reason lists and status history as the owner's path, past the owner check, with the
+ * ADMIN_OVERRIDE audit row written in the same transaction.
+ * Reason: hold/close take a list value (hold-reasons / close-reasons; "Other" + note). For the v2 drawer, free text of
+ * 10+ characters that isn't a list value is stored as "Other: <text>". Reopen keeps free text (10+ characters).
+ * file.reassign is POST /admin/overrides/file-reassign (B7 ReassignService.adminOverride); it is refused here.
  */
 export const OVERRIDE_ACTIONS = {
   'job.hold': { from: ['Open', 'Partially Filled'], to: 'On Hold' },
@@ -28,12 +27,12 @@ export class AdminOverrideService {
     @Inject(VacancyCoreService) private readonly vacancies: VacancyCoreService,
   ) {}
 
-  async override(user: AuthUser, body: { action?: string; entityId?: string; reason?: string }) {
+  async override(user: AuthUser, body: { action?: string; entityId?: string; reason?: string; note?: string; holdUntil?: string }) {
     if (!user.roleCodes.includes('ADMINISTRATOR')) throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Only an administrator can use an override.' });
     const reason = body.reason?.trim() ?? '';
-    if (reason.length < 10) throw new BadRequestException({ code: 'OVERRIDE_REASON_REQUIRED', message: 'An override needs a reason (at least 10 characters).' });
+    if (!reason) throw new BadRequestException({ code: 'OVERRIDE_REASON_REQUIRED', field: 'reason', message: 'An override needs a reason.' });
     if ((DEFERRED_OVERRIDE_ACTIONS as readonly string[]).includes(body.action ?? '')) {
-      throw new BadRequestException({ code: 'OVERRIDE_NOT_ALLOWED', message: 'file.reassign override is not available on this build (needs B7 reassign). It ships on #15 as POST /admin/overrides/file-reassign.' });
+      throw new BadRequestException({ code: 'OVERRIDE_NOT_ALLOWED', message: 'file.reassign is not taken here: use POST /admin/overrides/file-reassign (B7 reassign, audited).' });
     }
     const rule = OVERRIDE_ACTIONS[body.action as OverrideAction];
     if (!rule) throw new BadRequestException({ code: 'OVERRIDE_NOT_ALLOWED', message: `Allowed override actions: ${Object.keys(OVERRIDE_ACTIONS).join(', ')}.` });
@@ -42,13 +41,21 @@ export class AdminOverrideService {
     if (!(rule.from as readonly string[]).includes(job.status)) {
       throw new ConflictException({ code: 'OVERRIDE_NOT_ALLOWED', message: `${body.action} is not allowed from ${job.status}.` });
     }
-    const updated = await this.vacancies.updateVacancyStatus(job.id, user.organizationId, rule.to as never);
-    await this.prisma.auditLog.create({
-      data: {
-        organizationId: user.organizationId, actorUserId: user.userId, action: 'ADMIN_OVERRIDE', entityType: 'Vacancy', entityId: job.id,
-        result: 'Success', reason, beforeData: { action: body.action, status: job.status }, afterData: { action: body.action, status: rule.to },
-      },
-    });
+    const verb = (body.action ?? '').slice(4) as 'hold' | 'reopen' | 'close';
+    const updated = await this.runOverride(user, job.id, verb, reason, body);
     return { action: body.action, entityId: job.id, from: job.status, to: updated.status, reason };
+  }
+
+  private async runOverride(user: AuthUser, jobId: string, verb: 'hold' | 'reopen' | 'close', reason: string, body: { note?: string; holdUntil?: string }) {
+    const run = (r: string, note?: string) => this.vacancies.overrideJobStatus(jobId, user.organizationId, user, verb, r, { note: note ?? null, holdUntil: body.holdUntil ?? null });
+    const freeText = () => { if (reason.length < 10) throw new BadRequestException({ code: 'OVERRIDE_REASON_REQUIRED', field: 'reason', message: 'Pick a reason from the list, or give at least 10 characters.' }); };
+    if (verb === 'reopen') { freeText(); return run(reason); }
+    try {
+      return await run(reason, body.note);
+    } catch (e) {
+      // v2 drawer compatibility: free text that isn't a list value is recorded as "Other: <text>".
+      if ((e as { response?: { code?: string } }).response?.code === 'REASON_NOT_IN_LIST') { freeText(); return run('Other', reason); }
+      throw e;
+    }
   }
 }
