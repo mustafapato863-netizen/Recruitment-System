@@ -41,7 +41,21 @@ export const errorCodes = [
   'ASYNC_JOB_FAILED',
   'INTEGRATION_UNAVAILABLE',
   'INTERNAL_ERROR',
+  ...domainErrorCodes(),
 ] as const;
+
+/**
+ * Domain codes thrown by services as `{ code, message }`. The API error normalizer keeps
+ * these as-is instead of collapsing them to CONFLICT/FORBIDDEN/VALIDATION_ERROR.
+ */
+function domainErrorCodes() {
+  return [
+    // B3 requisition / job lifecycle
+    'ADMIN_CANNOT_CHANGE_JOB_STATUS', 'ASSIGNEE_NOT_ELIGIBLE', 'ASSIGNEE_REQUIRED', 'DUE_DATE_REQUIRED',
+    'GRADE_NOT_FOUND', 'ILLEGAL_JOB_TRANSITION', 'JOB_NOT_ACCEPTING_APPLICATIONS', 'NOT_JOB_OWNER',
+    'REASON_REQUIRED', 'REQUISITION_CANCELLED', 'REASON_NOT_IN_LIST', 'HOLD_UNTIL_NOT_FUTURE',
+  ] as const;
+}
 
 export type ErrorCode = (typeof errorCodes)[number];
 
@@ -245,6 +259,11 @@ export interface JobWorkQueueItem {
   health: WorkHealth | null;
   lastActivity: { at: string; label: string } | null;
   nextAction: NextActionDescriptor | null;
+  /** B3/E3: requisition due date (YYYY-MM-DD, plain fact) and department. */
+  dueDate?: string | null;
+  department?: string | null;
+  /** B3: optional hold-until date (data only). */
+  holdUntil?: string | null;
 }
 
 export interface CreateVacancyRequestInput {

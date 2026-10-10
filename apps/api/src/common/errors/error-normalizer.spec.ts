@@ -190,3 +190,16 @@ describe('Error Normalizer', () => {
     expect(result.details?.requirements).toHaveLength(1);
   });
 });
+
+describe('B3 domain codes are registered (kept, not collapsed)', () => {
+  it('keeps every B3 code in the envelope', async () => {
+    const { ConflictException, ForbiddenException, BadRequestException } = await import('@nestjs/common');
+    expect(normalizeError(new ConflictException({ code: 'ILLEGAL_JOB_TRANSITION', message: 'Job is already Closed.' })).code).toBe('ILLEGAL_JOB_TRANSITION');
+    expect(normalizeError(new ForbiddenException({ code: 'NOT_JOB_OWNER', message: 'x' })).code).toBe('NOT_JOB_OWNER');
+    expect(normalizeError(new BadRequestException({ code: 'HOLD_UNTIL_NOT_FUTURE', message: 'x' })).code).toBe('HOLD_UNTIL_NOT_FUTURE');
+    for (const c of ['ADMIN_CANNOT_CHANGE_JOB_STATUS', 'ASSIGNEE_NOT_ELIGIBLE', 'ASSIGNEE_REQUIRED', 'DUE_DATE_REQUIRED', 'GRADE_NOT_FOUND', 'JOB_NOT_ACCEPTING_APPLICATIONS', 'REASON_REQUIRED', 'REQUISITION_CANCELLED', 'REASON_NOT_IN_LIST']) {
+      expect(normalizeError(new ConflictException({ code: c, message: 'x' })).code).toBe(c);
+    }
+    expect(normalizeError(new ConflictException({ code: 'SOMETHING_UNKNOWN' })).code).toBe('CONFLICT');
+  });
+});

@@ -101,7 +101,7 @@ describe.skipIf(!url)('B3 requisition and job lifecycle (scratch Postgres)', () 
     const admin = { userId: ids.admin!, organizationId: ORG, tokenVersion: 0, roleCodes: ['ADMINISTRATOR'] };
     await expect(service.holdVacancy(job.id, ORG, 'admin hold', admin)).rejects.toThrow(/administrator cannot/);
     await expect(service.closeVacancy(job.id, ORG, 'admin close', admin)).rejects.toThrow(ForbiddenException);
-    await service.holdVacancy(job.id, ORG, 'owner hold', as(ids.owner!));
+    await service.holdVacancy(job.id, ORG, 'Budget review', as(ids.owner!));
     await expect(service.reopenVacancy(job.id, ORG, 'admin reopen', admin)).rejects.toThrow(/administrator cannot/);
     expect((await prisma.vacancy.findUniqueOrThrow({ where: { id: job.id } })).status).toBe('On Hold');
   });
@@ -141,8 +141,8 @@ describe.skipIf(!url)('B3 requisition and job lifecycle (scratch Postgres)', () 
   it('hold/reopen: owner or manager only, reason required, history written, held job blocks new applications', async () => {
     await expect(service.holdVacancy(ids.job!, ORG, 'budget freeze', as(ids.other!))).rejects.toThrow(ForbiddenException);
     await expect(service.holdVacancy(ids.job!, ORG, ' ', as(ids.owner!))).rejects.toThrow(BadRequestException);
-    expect((await service.holdVacancy(ids.job!, ORG, 'budget freeze', as(ids.owner!))).status).toBe('On Hold');
-    await expect(service.holdVacancy(ids.job!, ORG, 'again', as(ids.owner!))).rejects.toThrow(ConflictException);
+    expect((await service.holdVacancy(ids.job!, ORG, 'Hiring freeze', as(ids.owner!))).status).toBe('On Hold');
+    await expect(service.holdVacancy(ids.job!, ORG, 'Hiring freeze', as(ids.owner!))).rejects.toThrow(ConflictException);
 
     const candidate = await makeCandidate();
     await expect(applications.createApplication(ORG, { vacancyId: ids.job!, candidateId: candidate } as never)).rejects.toThrow(/accepts no new applications/);
@@ -151,7 +151,7 @@ describe.skipIf(!url)('B3 requisition and job lifecycle (scratch Postgres)', () 
     const history = await prisma.vacancyStatusHistory.findMany({ where: { vacancyId: ids.job }, orderBy: { createdAt: 'asc' } });
     expect(history.map((h) => [h.fromStatus, h.toStatus, h.reason, h.changedById])).toEqual([
       [null, 'Open', 'Requisition activated', ids.manager],
-      ['Open', 'On Hold', 'budget freeze', ids.owner],
+      ['Open', 'On Hold', 'Hiring freeze', ids.owner],
       ['On Hold', 'Open', 'budget back', ids.manager],
     ]);
     const app = await applications.createApplication(ORG, { vacancyId: ids.job!, candidateId: candidate } as never);
@@ -193,5 +193,47 @@ describe.skipIf(!url)('B3 requisition and job lifecycle (scratch Postgres)', () 
 
   it('the B3 data mapping left no Cancelled or Pending Activation jobs', async () => {
     expect(await prisma.vacancy.count({ where: { status: { in: ['Cancelled', 'Pending Activation'] } } })).toBe(0);
+  });
+
+  it('E3: hold takes a list reason ("Other" needs a note), optional future holdUntil stored on job + history; close reasons too', async () => {
+    const id = await makeRequest('Approved', { assignedEmployeeId: ids.owner });
+    const job = (await service.activateRequest(id, ORG, ids.manager, {})).vacancy!;
+    const code = async (p: Promise<unknown>) => p.then(() => 'ok', (e: { getResponse?: () => { code?: string } }) => e.getResponse?.()?.code ?? 'error');
+    expect(await code(service.holdVacancy(job.id, ORG, 'just because', as(ids.owner!)))).toBe('REASON_NOT_IN_LIST');
+    expect(await code(service.holdVacancy(job.id, ORG, 'Other', as(ids.owner!)))).toBe('REASON_REQUIRED');
+    expect(await code(service.holdVacancy(job.id, ORG, 'Budget review', as(ids.owner!), { holdUntil: '2020-01-01' }))).toBe('HOLD_UNTIL_NOT_FUTURE');
+    expect(await code(service.holdVacancy(job.id, ORG, 'Budget review', as(ids.owner!), { holdUntil: '01/02/2031' }))).toBe('VALIDATION_ERROR');
+    const held = await service.holdVacancy(job.id, ORG, 'other', as(ids.owner!), { note: 'Clinic renovation', holdUntil: '2031-02-01' });
+    expect(held.status).toBe('On Hold');
+    expect((await prisma.vacancy.findUniqueOrThrow({ where: { id: job.id } })).holdUntil?.toISOString().slice(0, 10)).toBe('2031-02-01');
+    const history = await service.getVacancyStatusHistory(ORG, job.id, as(ids.owner!));
+    expect(history.at(-1)).toMatchObject({ toStatus: 'On Hold', reason: 'Other: Clinic renovation' });
+    expect(history.at(-1)!.holdUntil?.toISOString().slice(0, 10)).toBe('2031-02-01');
+    // Deactivated reasons are no longer accepted (deactivate-only list).
+    const md = await prisma.masterDataValue.findFirstOrThrow({ where: { organizationId: ORG, category: 'close-reasons', name: 'Budget withdrawn' } });
+    await prisma.masterDataValue.update({ where: { id: md.id }, data: { status: 'Inactive' } });
+    try {
+      expect(await code(service.closeVacancy(job.id, ORG, 'Budget withdrawn', as(ids.owner!)))).toBe('REASON_NOT_IN_LIST');
+    } finally { await prisma.masterDataValue.update({ where: { id: md.id }, data: { status: 'Active' } }); }
+    expect((await service.reopenVacancy(job.id, ORG, 'renovation done', as(ids.owner!))).status).toBe('Open');
+    expect((await prisma.vacancy.findUniqueOrThrow({ where: { id: job.id } })).holdUntil).toBeNull();
+    expect((await service.closeVacancy(job.id, ORG, 'Position no longer needed', as(ids.owner!))).status).toBe('Closed');
+  });
+
+  it('E3: work queue items carry dueDate + department; ?mine=true returns only jobs the caller owns', async () => {
+    const id = await makeRequest('Approved', { assignedEmployeeId: ids.owner, targetFillDate: new Date('2031-03-15T00:00:00Z') });
+    const job = (await service.activateRequest(id, ORG, ids.manager, {})).vacancy!;
+    await prisma.vacancy.update({ where: { id: job.id }, data: { department: 'Nursing' } });
+    const all = await service.getWorkQueue(ORG, { pageSize: 100 } as never);
+    expect(all.data.find((j) => j.id === job.id)).toMatchObject({ dueDate: '2031-03-15', department: 'Nursing' });
+    await service.assignTeamMember(job.id, ORG, { userId: ids.owner!, roleCode: 'RECRUITER', assignmentKind: 'PRIMARY' } as never);
+    const mineQueue = await service.getWorkQueue(ORG, { pageSize: 100, mine: 'true' } as never, as(ids.owner!));
+    expect(mineQueue.data.length).toBeGreaterThan(0);
+    const owned = new Set((await prisma.vacancyAssignment.findMany({ where: { userId: ids.owner!, isActive: true, assignmentKind: 'PRIMARY' } })).map((a) => a.vacancyId));
+    expect(mineQueue.data.every((j) => owned.has(j.id))).toBe(true);
+    const mineList = await service.listVacancies(ORG, as(ids.owner!), { mine: true });
+    expect(mineList.map((v) => v.id)).toContain(job.id);
+    expect(mineList.every((v) => owned.has(v.id))).toBe(true);
+    expect(await service.listVacancies(ORG, as(ids.other!), { mine: true })).toEqual([]);
   });
 });

@@ -357,6 +357,7 @@ model Vacancy {
   @@index([organizationId, status])
   @@index([branchId, positionId, openedAt])
   @@map("vacancies")
+  holdUntil          DateTime?              @db.Date /// B3: optional hold-until date (data only; no auto-reopen)
 }
 
 model VacancyAssignment {
@@ -501,6 +502,7 @@ model VacancyStatusHistory {
   fromStatus  String?  @db.VarChar(40)
   toStatus    String   @db.VarChar(40)
   reason      String?
+  holdUntil   DateTime? @db.Date /// B3: optional "hold until" given with a hold (data only, no auto-reopen)
   changedById String?  @db.Uuid
   changedBy   User?    @relation("VacancyStatusChanges", fields: [changedById], references: [id], onDelete: Restrict)
   createdAt   DateTime @default(now()) @db.Timestamptz(6)

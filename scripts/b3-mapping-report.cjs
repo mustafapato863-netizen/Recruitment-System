@@ -49,6 +49,13 @@ const q = (sql) => prisma.$queryRawUnsafe(sql).then((rows) => rows.map((r) => Ob
     const left = await q(`SELECT count(*)::int AS n FROM vacancies WHERE status IN ('Cancelled', 'Pending Activation')`);
     lines.push(`Jobs still Cancelled / Pending Activation: ${left[0].n}`);
   }
+  if (!pre) {
+    // E3 additions: reason lists and hold-until.
+    const reasons = await prisma.$queryRawUnsafe(`SELECT category, status, count(*)::int c FROM master_data_values WHERE category IN ('hold-reasons','close-reasons') GROUP BY 1,2 ORDER BY 1,2`);
+    lines.push('Reason lists (category/status -> count): ' + (reasons.map((r) => `${r.category}/${r.status}=${r.c}`).join(', ') || 'none'));
+    const [hu] = await prisma.$queryRawUnsafe(`SELECT count(*) FILTER (WHERE "holdUntil" IS NOT NULL)::int c FROM vacancies`);
+    lines.push(`Jobs with holdUntil set: ${hu.c} (new column, starts empty)`);
+  }
   const text = lines.join('\n') + '\n';
   process.stdout.write(text);
   if (outPath) fs.appendFileSync(outPath, text + '\n');
