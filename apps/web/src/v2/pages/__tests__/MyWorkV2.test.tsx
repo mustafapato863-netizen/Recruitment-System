@@ -29,7 +29,10 @@ describe('My Work (E02) from the #9 contract', () => {
     expect(screen.getByText('Today · 19 Oct 2026')).toBeInTheDocument();
     expect(screen.getByText(/^Good (morning|afternoon|evening), Mariam\. 5 open tasks on your job HRIS Developer\.$/)).toBeInTheDocument();
     const strip = screen.getByRole('region', { name: 'Job: HRIS Developer' });
-    expect(within(strip).getByText('1 of 3 filled')).toBeInTheDocument();
+    expect(within(strip).getByText('Hire target')).toBeInTheDocument();
+    expect(within(strip).getByText('1 of 3 joined')).toBeInTheDocument();
+    expect(within(strip).getByRole('link', { name: 'Open pipeline: HRIS Developer' })).toHaveAttribute('href', '/vacancies/j1');
+    expect(screen.getByRole('link', { name: 'View open jobs' })).toHaveAttribute('href', '/vacancies');
     expect(within(strip).getByText('25 Oct 2026')).toBeInTheDocument();
     expect(within(strip).getByText('VAC-1 · Information Technology · Cairo HQ · Owner: Mariam Adel')).toBeInTheDocument();
     expect(within(strip).getByRole('link', { name: 'HRIS Developer' })).toHaveAttribute('href', '/vacancies/j1');
@@ -56,13 +59,20 @@ describe('My Work (E02) from the #9 contract', () => {
     expect(within(today).getByRole('link', { name: /^Review applicants/ })).toHaveClass('rf2-btn--primary');
 
     const waiting = screen.getByRole('region', { name: 'Waiting on others' });
-    expect(within(waiting).getByText('Waiting on approver')).toBeInTheDocument();
+    // B2-23 / E02: a waiting offer names the approver, is read-only, and offers no Send.
+    expect(within(waiting).getByText('Salma Farouk — offer waiting on Karim Hassan')).toBeInTheDocument();
+    expect(within(waiting).getByText('Waiting on approval')).toBeInTheDocument();
     expect(within(waiting).getByText('Waiting on interviewer')).toBeInTheDocument();
-
-    expect(within(waiting).getByRole('button', { name: 'Send offer' })).toHaveAccessibleDescription('Waiting for approval');
-    expect(within(waiting).getByRole('button', { name: 'Move to Offer' })).toHaveAccessibleDescription('Gate not met: scorecard not submitted');
+    expect(within(waiting).queryByRole('button', { name: 'Send offer' })).not.toBeInTheDocument();
+    expect(within(waiting).queryByRole('link')).toBeNull();
+    expect(within(waiting).getAllByText('Read-only')).toHaveLength(2);
+    expect(within(waiting).getAllByText('No action for you')).toHaveLength(2);
     const counts = screen.getByLabelText('Counts');
     expect(Array.from(counts.querySelectorAll('[data-count-value]')).map((d) => d.textContent)).toEqual(['5', '1', '2', '2']);
+    // E02: tiles sit above the sections and name the first item.
+    expect(counts.compareDocumentPosition(overdue) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(counts).toHaveTextContent('Ahmed Embaby — scorecard');
+    expect(counts).toHaveTextContent('Salma Farouk — with Karim Hassan');
     expect(screen.queryByTestId('sample-data-note')).not.toBeInTheDocument();
   });
 
@@ -162,13 +172,17 @@ describe('keyboard + a11y', () => {
     renderPage(ok());
     await screen.findByRole('region', { name: 'Overdue' });
     await u.tab();
+    expect(screen.getByRole('link', { name: 'View open jobs' })).toHaveFocus();
+    await u.tab();
     expect(screen.getByRole('button', { name: 'Today' })).toHaveFocus();
     await u.tab();
     await u.tab();
     expect(screen.getByRole('link', { name: 'HRIS Developer' })).toHaveFocus();
     await u.tab();
-    expect(screen.getByRole('link', { name: 'My result' })).toHaveAttribute('href', expect.stringMatching(/^\/my-result\?job=/));
-    expect(screen.getByRole('link', { name: 'My result' })).toHaveFocus();
+    expect(screen.getByRole('link', { name: 'My result →' })).toHaveAttribute('href', expect.stringMatching(/^\/my-result\?job=/));
+    expect(screen.getByRole('link', { name: 'My result →' })).toHaveFocus();
+    await u.tab();
+    expect(screen.getByRole('link', { name: /^Open pipeline/ })).toHaveFocus();
     await u.tab();
     expect(screen.getByRole('link', { name: /^Submit scorecard/ })).toHaveFocus();
   });

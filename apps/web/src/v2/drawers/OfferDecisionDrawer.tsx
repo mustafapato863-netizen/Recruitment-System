@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { CircleCheck, Info, PencilLine, Plus, ShieldCheck, Trash2, TriangleAlert } from 'lucide-react';
 import { ButtonV2, DangerConfirmButton, DrawerV2, initials, InputV2, SelectV2, StatusChip, TextareaV2 } from '../../components/v2';
 import {
-  bandFor, bandPosition, CURRENCIES, currentVersion, decide, decisionError, loadDecision, money, payOf,
+  bandFor, bandPosition, CURRENCIES, currentVersion, decide, decisionError, defaultCurrency, loadDecision, money, payOf,
   type Decision, type DecisionError, type DecisionPay, type DecisionOffer, type GradeBand,
 } from '../api/offerDecision';
 
@@ -35,8 +35,9 @@ export function OfferDecisionDrawer({ offerId, ownerName, showPay, onClose, onDo
   useEffect(() => {
     if (!showPay || !v || form) return;
     const allow = (v.components ?? []).filter((c) => ['allowance', 'benefit'].includes(c.type.trim().toLowerCase()) && typeof c.amount === 'number');
-    setForm({ base: pay?.base ? String(pay.base.amount) : '', currency: pay?.base?.currency ?? allow[0]?.currency ?? 'EGP', allowances: allow.map((c) => ({ name: c.name, amount: String(c.amount) })) });
-  }, [showPay, v, form, pay?.base]);
+    const fromBand = offer && state.kind === 'ready' ? defaultCurrency(state.bands, offer) : null;
+    setForm({ base: pay?.base ? String(pay.base.amount) : '', currency: pay?.base?.currency ?? fromBand ?? allow[0]?.currency ?? CURRENCIES[0], allowances: allow.map((c) => ({ name: c.name, amount: String(c.amount) })) });
+  }, [showPay, v, form, pay?.base, offer, state]);
   const baseNum = form && form.base.trim() !== '' && Number.isFinite(Number(form.base)) ? Number(form.base) : null;
   const band = offer && state.kind === 'ready' ? bandFor(state.bands, offer, form?.currency ?? pay?.base?.currency ?? null) : null;
   const pos = bandPosition(band, baseNum);
@@ -79,7 +80,6 @@ export function OfferDecisionDrawer({ offerId, ownerName, showPay, onClose, onDo
       confirmClose={() => !reason.trim() || window.confirm('Discard your comment?')}>
       {offer && v ? (
         <div className="rf2-drawer-form rf2-decide">
-          {err && !err.field ? <p className="rf2-form-error" role="alert">{err.text}</p> : null}
           <div className="rf2-decide__by">
             <span className="rf2-avatar" aria-hidden="true">{initials(owner)}</span>
             <div><p className="rf2-jtable__name">Submitted by {owner}</p><p className="rf2-jtable__sub">{fmtWhen(v.createdAt)}</p></div>
@@ -97,7 +97,7 @@ export function OfferDecisionDrawer({ offerId, ownerName, showPay, onClose, onDo
               {form ? (
                 <fieldset className="rf2-decide__payform" disabled={!pending}>
                   <legend className="rf2-field__label">Pay (set by you on Approve)</legend>
-                  {err?.field === 'pay' ? <p className="rf2-form-error" role="alert">{err.text}</p> : null}
+                  {err?.field === 'pay' ? <p className="rf2-form-error" role="alert" ref={(el) => el?.scrollIntoView?.({ block: 'nearest' })} data-testid="decision-error">{err.text}</p> : null}
                   {pay?.mixed ? <p className="rf2-jtable__sub">The version mixes currencies; pick one.</p> : null}
                   <div className="rf2-req__row">
                     <InputV2 label={`Monthly basic pay (${form.currency})`} required type="number" min={0} inputMode="numeric" value={form.base} onChange={(e) => { setForm({ ...form, base: e.target.value }); setErr(null); }} data-testid="base-pay" />
@@ -121,6 +121,7 @@ export function OfferDecisionDrawer({ offerId, ownerName, showPay, onClose, onDo
               <BandPanel band={shownBand} grade={offer.grade?.name ?? null} amount={amount} pos={shownPos} code={err?.code} bandsListed={state.kind === 'ready' && state.bands !== null} />
             </>
           ) : <p className="rf2-inline-note"><ShieldCheck aria-hidden="true" /> Pay and the band are visible to the Manager only.</p>}
+          {err && !err.field ? <p className="rf2-form-error" role="alert" ref={(el) => el?.scrollIntoView?.({ block: 'nearest' })} data-testid="decision-error">{err.text}</p> : null}
           <TextareaV2 label={`Comment to ${first} (required for Request changes or Reject)`} rows={2} value={reason} onChange={(e) => { setReason(e.target.value); setErr(null); }} error={err?.field === 'reason' ? err.text : undefined} disabled={!pending} />
           {pending ? (
             <div className="rf2-decide__reject">

@@ -46,7 +46,11 @@ export interface Workspace {
 }
 export interface HistoryItem { id: string; fromStage?: string | null; toStage: string; changedByName?: string; reason?: string | null; createdAt: string }
 export interface NoteItem { id: string; authorName?: string; content: string; createdAt: string }
-export interface ScreeningItem { id: string; screenerName?: string; outcome: 'Passed' | 'Failed' | 'On Hold'; notes?: string | null; noticePeriodDays?: number | null; screenedAt: string }
+export interface ScreeningItem {
+  id: string; screenerName?: string; outcome: 'Passed' | 'Failed' | 'On Hold'; notes?: string | null; noticePeriodDays?: number | null; screenedAt: string;
+  /** Pay: only kept for the Manager seat with OFFER_PAY_VIEW (B2-23 / Figma 09); stripped for everyone else. */
+  currentSalary?: number | string | null; expectedSalary?: number | string | null; salaryCurrency?: string | null;
+}
 export interface InterviewItem {
   id: string; interviewCode: string; applicationId: string; title: string; interviewType: string;
   scheduledStart: string; scheduledEnd: string; timezone: string; locationUrl?: string | null; roomName?: string | null;
@@ -90,16 +94,17 @@ export interface ApplicationFile {
 }
 
 const list = <T,>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : Array.isArray((v as { data?: unknown })?.data) ? ((v as { data: T[] }).data) : []);
-const safe = <T,>(p: Promise<unknown>, fallback: T): Promise<T> => p.then((v) => stripPay(v) as T).catch(() => fallback);
+const safe = <T,>(p: Promise<unknown>, fallback: T, keep = false): Promise<T> => p.then((v) => (keep ? v : stripPay(v)) as T).catch(() => fallback);
 const enc = encodeURIComponent;
 
-export async function loadApplicationFile(id: string): Promise<ApplicationFile> {
+/** keepScreeningPay: the Manager seat with OFFER_PAY_VIEW sees current/expected salary on the file (B2-23). Everything else stays pay-stripped. */
+export async function loadApplicationFile(id: string, opts: { keepScreeningPay?: boolean } = {}): Promise<ApplicationFile> {
   // The workspace call decides access: 403 (FILE_NOT_OWNED) / 404 propagate to the page.
   const workspace = stripPay(await getApi<Workspace>(`/applications/${enc(id)}/workspace`));
   const [history, notes, screening, interviews, offers, hiring, joiningChecks, documents] = await Promise.all([
     safe<HistoryItem[]>(getApi(`/applications/${enc(id)}/history`).then(list), []),
     safe<NoteItem[]>(getApi(`/applications/${enc(id)}/notes`).then(list), []),
-    safe<ScreeningItem[]>(getApi(`/screening/application/${enc(id)}`).then(list), []),
+    safe<ScreeningItem[]>(getApi(`/screening/application/${enc(id)}`).then(list), [], !!opts.keepScreeningPay),
     safe<InterviewItem[]>(getApi(`/interviews?applicationId=${enc(id)}`).then(list), []),
     // B5: ?applicationId= is ANDed with the access scope server-side; no client filtering.
     safe<OfferItem[]>(getApi(`/offers?applicationId=${enc(id)}`).then(list), []),
