@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CircleCheck, CircleMinus, FileText, Info, Scale, UserPlus } from 'lucide-react';
 import { ButtonV2, DrawerV2, EmptyStateV2, SkeletonV2, StatusChip } from '../../components/v2';
+import { findExistingFile, isApplicationExists } from '../api/applicationExists';
 import { addToJob, canAdd, fetchSuggestions, matchErrorFromError, sourceLabel, type Suggestion, type SuggestionsResponse } from '../api/matching';
 import { jobTitle, type JobDetail } from '../api/jobs';
 import { formatDay } from '../pages/OpenJobsV2';
@@ -12,6 +13,8 @@ const initials = (n: string) => n.split(/\s+/).filter(Boolean).slice(0, 2).map((
 export function SuggestDrawer({ job, accepting, onClose, onAdded }: { job: JobDetail; accepting: boolean; onClose: () => void; onAdded: () => void }) {
   const [state, setState] = useState<{ kind: 'loading' } | { kind: 'ready'; data: SuggestionsResponse } | { kind: 'error'; message: string; forbidden?: boolean }>({ kind: 'loading' });
   const [added, setAdded] = useState<Record<string, 'busy' | 'done' | string>>({});
+  // #23 409 APPLICATION_EXISTS: already on this job; link to that file (id looked up, the 409 carries none).
+  const [onJob, setOnJob] = useState<Record<string, string | null>>({});
   const [picked, setPicked] = useState<string[]>([]);
   useEffect(() => {
     fetchSuggestions(job.id).then((data) => setState({ kind: 'ready', data }))
@@ -20,7 +23,15 @@ export function SuggestDrawer({ job, accepting, onClose, onAdded }: { job: JobDe
   const add = async (s: Suggestion) => {
     setAdded((a) => ({ ...a, [s.candidate.id]: 'busy' }));
     try { await addToJob(job.id, s.candidate.id); setAdded((a) => ({ ...a, [s.candidate.id]: 'done' })); onAdded(); }
-    catch (e) { setAdded((a) => ({ ...a, [s.candidate.id]: matchErrorFromError(e)?.message || (e as Error)?.message || 'Could not add.' })); }
+    catch (e) {
+      if (isApplicationExists(e)) {
+        const fileId = await findExistingFile(job.id, s.candidate.id);
+        setOnJob((m) => ({ ...m, [s.candidate.id]: fileId }));
+        setAdded((a) => { const n = { ...a }; delete n[s.candidate.id]; return n; });
+        return;
+      }
+      setAdded((a) => ({ ...a, [s.candidate.id]: matchErrorFromError(e)?.message || (e as Error)?.message || 'Could not add.' }));
+    }
   };
   const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : p.length >= 4 ? p : [...p, id]));
   const compareHref = `/candidates/compare?job=${encodeURIComponent(job.id)}&ids=${picked.map(encodeURIComponent).join(',')}`;
@@ -53,7 +64,10 @@ export function SuggestDrawer({ job, accepting, onClose, onAdded }: { job: JobDe
                       <input type="checkbox" aria-label={`Select ${s.candidate.name} to compare`} checked={picked.includes(s.candidate.id)} disabled={!picked.includes(s.candidate.id) && picked.length >= 4} onChange={() => toggle(s.candidate.id)} />
                       <span className="rf2-kcard__avatar" aria-hidden="true">{initials(s.candidate.name)}</span>
                       <div className="rf2-sugg__who"><p className="rf2-jtable__name">{s.candidate.name}</p>{!canAdd(s) ? <span className="rf2-sr-only"> Already on this job{s.stage ? ` in ${s.stage}` : ''}; cannot be added again.</span> : null}<p className="rf2-jtable__sub">{[s.candidate.code, s.candidate.currentTitle, s.candidate.location].filter(Boolean).join(' · ')}</p></div>
-                      {st === 'done' ? <StatusChip tone="success" label="Added to Applied" />
+                      {s.candidate.id in onJob ? (onJob[s.candidate.id]
+                        ? <Link className="rf2-link" to={`/applications/${encodeURIComponent(onJob[s.candidate.id] as string)}`} data-testid="application-exists">Already on this job · open the file</Link>
+                        : <StatusChip tone="info" label="Already on this job" />)
+                        : st === 'done' ? <StatusChip tone="success" label="Added to Applied" />
                         : !canAdd(s) ? <StatusChip tone="info" label={`On this job · ${s.stage ?? 'in progress'}`} />
                         : <ButtonV2 kind="secondary" size="sm" icon={<UserPlus />} loading={st === 'busy'} disabled={!accepting} onClick={() => void add(s)} aria-label={`Add ${s.candidate.name} to this job`}>Add to this job</ButtonV2>}
                     </div>
