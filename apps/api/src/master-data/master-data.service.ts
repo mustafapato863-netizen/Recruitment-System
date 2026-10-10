@@ -228,19 +228,12 @@ export class MasterDataService {
     return { saved: saved.length, data: await this.listCatalog(organizationId, category) };
   }
 
-  async deleteCatalogValue(organizationId: string, category: string, id: string): Promise<{ deleted: true }> {
+  async deleteCatalogValue(organizationId: string, category: string, id: string): Promise<{ id: string; deactivated: true; status: 'Archived' }> {
     this.assertCatalog(category);
 
-    // Branches and job titles are backed by legacy entities with real foreign
-    // keys, so keep their existing reference checks and error messages.
-    if (category === 'branches') {
-      await this.deleteBranch(organizationId, id);
-      return { deleted: true };
-    }
-    if (category === 'job-titles') {
-      await this.deletePosition(organizationId, id);
-      return { deleted: true };
-    }
+    // Branches and job titles are backed by legacy entities; they archive too.
+    if (category === 'branches') return this.deleteBranch(organizationId, id);
+    if (category === 'job-titles') return this.deletePosition(organizationId, id);
 
     const record = await this.prisma.masterDataValue.findFirst({
       where: { id, organizationId, category },
@@ -248,17 +241,10 @@ export class MasterDataService {
     });
     if (!record) throw new NotFoundException('Master Data value not found.');
 
-    const references = await this.countCatalogValueReferences(organizationId, category, record.id, record.name, record.code);
-    if (references.total > 0) {
-      const details = Object.entries(references.breakdown)
-        .filter(([, count]) => count > 0)
-        .map(([type, count]) => `${count} ${type}`)
-        .join(', ');
-      throw new ConflictException(`Cannot delete ${category}: referenced by ${details}. Archive it instead.`);
-    }
-
-    await this.prisma.masterDataValue.delete({ where: { id } });
-    return { deleted: true };
+    // B2 (v2 §3): no delete. Archive instead; archived values leave pickers
+    // but stay on the records that reference them.
+    await this.prisma.masterDataValue.update({ where: { id }, data: { status: 'Archived' } });
+    return { id, deactivated: true, status: 'Archived' };
   }
 
   private async countCatalogValueReferences(
@@ -407,18 +393,14 @@ export class MasterDataService {
     return { ...updated, city: normalizeBranchCity(updated.city), createdAt: updated.createdAt.toISOString(), updatedAt: updated.updatedAt.toISOString() };
   }
 
-  async deleteBranch(organizationId: string, id: string): Promise<void> {
+  /** B2 (v2 §3): DELETE archives; nothing is removed. Idempotent. */
+  async deleteBranch(organizationId: string, id: string): Promise<{ id: string; deactivated: true; status: 'Archived' }> {
     const r = await this.prisma.branch.findFirst({ where: { id, organizationId } });
     if (!r) throw new NotFoundException('Branch not found.');
-    const refs = await this.countBranchReferences(id);
-    if (refs.total > 0) {
-      const details = Object.entries(refs.breakdown)
-        .filter(([, count]) => count > 0)
-        .map(([type, count]) => `${count} ${type}`)
-        .join(', ');
-      throw new ConflictException(`Cannot delete branch: referenced by ${details}. Archive it instead.`);
+    if (r.status !== 'Archived') {
+      await this.prisma.branch.update({ where: { id }, data: { status: 'Archived', version: { increment: 1 } } });
     }
-    await this.prisma.branch.delete({ where: { id } });
+    return { id, deactivated: true, status: 'Archived' };
   }
 
   private async countBranchReferences(id: string) {
@@ -524,18 +506,14 @@ export class MasterDataService {
     };
   }
 
-  async deletePosition(organizationId: string, id: string): Promise<void> {
+  /** B2 (v2 §3): DELETE archives; nothing is removed. Idempotent. */
+  async deletePosition(organizationId: string, id: string): Promise<{ id: string; deactivated: true; status: 'Archived' }> {
     const r = await this.prisma.position.findFirst({ where: { id, organizationId } });
     if (!r) throw new NotFoundException('Position not found.');
-    const refs = await this.countPositionReferences(id);
-    if (refs.total > 0) {
-      const details = Object.entries(refs.breakdown)
-        .filter(([, count]) => count > 0)
-        .map(([type, count]) => `${count} ${type}`)
-        .join(', ');
-      throw new ConflictException(`Cannot delete position: referenced by ${details}. Archive it instead.`);
+    if (r.status !== 'Archived') {
+      await this.prisma.position.update({ where: { id }, data: { status: 'Archived', version: { increment: 1 } } });
     }
-    await this.prisma.position.delete({ where: { id } });
+    return { id, deactivated: true, status: 'Archived' };
   }
 
   private async countPositionReferences(id: string) {
