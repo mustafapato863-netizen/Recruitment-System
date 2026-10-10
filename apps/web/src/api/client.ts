@@ -244,6 +244,6 @@ export function putApi<T>(path: string, body?: unknown): Promise<T> {
   });
 }
 
-export function deleteApi<T>(path: string): Promise<T> {
-  return fetchApi<T>(path, { method: 'DELETE' });
+export function deleteApi<T>(path: string, body?: unknown): Promise<T> {
+  return fetchApi<T>(path, { method: 'DELETE', ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
 }
