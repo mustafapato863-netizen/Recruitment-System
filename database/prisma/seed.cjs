@@ -56,6 +56,20 @@ async function seedRejectionReasons(tx, organizationId) {
   });
 }
 
+// B7: minimal grades (master data) and AED monthly-base bands for the demo branch.
+async function seedGradeBands(tx, organizationId, branchId) {
+  const grades = [['G5', 'Grade 5', 8000, 12000], ['G6', 'Grade 6', 12000, 18000], ['G7', 'Grade 7', 18000, 26000]];
+  for (const [code, name, min, max] of grades) {
+    const grade = await tx.masterDataValue.upsert({
+      where: { organizationId_category_name: { organizationId, category: 'grades', name } },
+      update: {},
+      create: { organizationId, category: 'grades', code, name, status: 'Active' },
+    });
+    const exists = await tx.gradeBand.findFirst({ where: { organizationId, gradeId: grade.id, branchId, currency: 'AED', status: 'Active' } });
+    if (!exists) await tx.gradeBand.create({ data: { organizationId, gradeId: grade.id, branchId, currency: 'AED', minMonthlyBase: min, maxMonthlyBase: max } });
+  }
+}
+
 async function main() {
   const result = await prisma.$transaction(async (tx) => {
     // ── Organization ──────────────────────────────────────────
@@ -89,6 +103,7 @@ async function main() {
         city: 'Cairo',
       },
     });
+    await seedGradeBands(tx, organization.id, branch.id);
 
     // ── Position ──────────────────────────────────────────────
     const position = await tx.position.upsert({
@@ -287,6 +302,8 @@ async function main() {
       { code: 'VIEW_CANDIDATE_PII', description: 'View candidate personally identifiable information.' },
       { code: 'VIEW_CURRENT_SALARY', description: 'View candidate current salary details.' },
       { code: 'APPROVE_OFFERS', description: 'Approve offer packages and salary bands.' },
+      // B7: offer pay (base, package, component amounts); distinct from VIEW_CURRENT_SALARY.
+      { code: 'OFFER_PAY_VIEW', name: 'View offer pay', description: 'See offer base pay, package and component amounts. Current/expected salary still needs VIEW_CURRENT_SALARY.' },
       { code: 'DOWNLOAD_DOCUMENTS', description: 'Download private candidate and hiring documents.' },
       { code: 'FINAL_HIRING_APPROVAL', description: 'Perform final hiring approval gate.' },
       { code: 'OVERRIDE_WORKFLOW', description: 'Override workflow rules and bypass validations.' },
@@ -306,7 +323,8 @@ async function main() {
 
     // ── Role → Permission assignments ─────────────────────────
     const rolePermMap = {
-      ADMINISTRATOR: Object.keys(permissions), // Administrator gets everything
+      // Administrator gets everything except offer pay (B7, v2 §7: pay visible to Manager only).
+      ADMINISTRATOR: Object.keys(permissions).filter((code) => code !== 'OFFER_PAY_VIEW'),
       PERFORMANCE_ADMIN: [
         'VACANCY_REQUEST_VIEW',
         'VACANCY_VIEW',
@@ -323,7 +341,7 @@ async function main() {
         'MASTER_DATA_VIEW',
         'CANDIDATE_VIEW', 'CANDIDATE_CREATE', 'CANDIDATE_EDIT',
         'APPLICATION_VIEW', 'APPLICATION_CREATE', 'APPLICATION_MOVE_STAGE',
-        'VIEW_CANDIDATE_PII', 'VIEW_CURRENT_SALARY', 'APPROVE_OFFERS', 'FINAL_HIRING_APPROVAL',
+        'VIEW_CANDIDATE_PII', 'VIEW_CURRENT_SALARY', 'APPROVE_OFFERS', 'FINAL_HIRING_APPROVAL', 'OFFER_PAY_VIEW',
         'DOWNLOAD_DOCUMENTS',
         'NOTIFICATION_VIEW', 'TASK_VIEW', 'TASK_UPDATE_STATUS',
       ],
@@ -345,14 +363,14 @@ async function main() {
         'AUDIT_VIEW',
         'CANDIDATE_VIEW', 'CANDIDATE_CREATE', 'CANDIDATE_EDIT',
         'APPLICATION_VIEW', 'APPLICATION_CREATE', 'APPLICATION_MOVE_STAGE',
-        'VIEW_CANDIDATE_PII', 'VIEW_CURRENT_SALARY', 'APPROVE_OFFERS',
+        'VIEW_CANDIDATE_PII', 'VIEW_CURRENT_SALARY', 'APPROVE_OFFERS', 'OFFER_PAY_VIEW',
         'NOTIFICATION_VIEW', 'TASK_VIEW', 'TASK_UPDATE_STATUS',
       ],
       HIRING_MANAGER: [
         'VACANCY_REQUEST_VIEW', 'VACANCY_REQUEST_CREATE', 'VACANCY_REQUEST_APPROVE',
         'VACANCY_VIEW',
         'MASTER_DATA_VIEW',
-        'CANDIDATE_VIEW', 'APPLICATION_VIEW', 'APPLICATION_MOVE_STAGE',
+        'CANDIDATE_VIEW', 'APPLICATION_VIEW', 'APPLICATION_MOVE_STAGE', 'OFFER_PAY_VIEW',
         'NOTIFICATION_VIEW', 'TASK_VIEW', 'TASK_UPDATE_STATUS',
       ],
       INTERVIEWER: [

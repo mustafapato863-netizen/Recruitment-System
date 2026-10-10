@@ -35,7 +35,12 @@ function cleanUuidParam(value?: string | null): string | null | undefined {
   return UUID_REGEX.test(trimmed) ? trimmed : null;
 }
 
-type CompensationDisclosure = { viewSalary: boolean };
+/**
+ * B7: offer pay (base, package, component amounts) needs OFFER_PAY_VIEW. Fields are
+ * OMITTED (absent), never null, without it. Current/expected salary is a different
+ * permission (VIEW_CURRENT_SALARY) and is not part of offer payloads.
+ */
+type CompensationDisclosure = { viewOfferPay: boolean };
 
 type OfferVersionRecord = {
   id: string;
@@ -459,12 +464,10 @@ export class OffersService {
       positionTitle: app.offerVersion.offer.application.vacancy.position.title,
       branchName: app.offerVersion.offer.application.vacancy.branch?.name,
       versionNumber: app.offerVersion.versionNumber,
-      monthlyPackage: disclosure.viewSalary && app.offerVersion.monthlyPackage !== null
-        ? Number(app.offerVersion.monthlyPackage)
-        : null,
-      packageCurrency: disclosure.viewSalary
-        ? (app.offerVersion.components[0]?.currency?.toUpperCase() === 'EGP' ? 'EGP' : 'AED')
-        : null,
+      ...(disclosure.viewOfferPay ? {
+        monthlyPackage: app.offerVersion.monthlyPackage !== null ? Number(app.offerVersion.monthlyPackage) : null,
+        packageCurrency: app.offerVersion.components[0]?.currency?.toUpperCase() === 'EGP' ? 'EGP' as const : 'AED' as const,
+      } : {}),
       roleCode: app.roleCode,
       status: app.status,
       step: 1,
@@ -702,13 +705,15 @@ export class OffersService {
   }
 
   private mapVersion(v: OfferVersionRecord, disclosure: CompensationDisclosure) {
-    const showCompensation = disclosure.viewSalary;
+    const showCompensation = disclosure.viewOfferPay;
     return {
       id: v.id,
       offerId: v.offerId,
       versionNumber: v.versionNumber,
-      monthlyPackage: showCompensation && v.monthlyPackage ? Number(v.monthlyPackage) : null,
-      annualFixed: showCompensation && v.annualFixed ? Number(v.annualFixed) : null,
+      ...(showCompensation ? {
+        monthlyPackage: v.monthlyPackage ? Number(v.monthlyPackage) : null,
+        annualFixed: v.annualFixed ? Number(v.annualFixed) : null,
+      } : {}),
       contractType: v.contractType,
       probationPeriod: v.probationPeriod,
       offerExpiry: v.offerExpiry ? v.offerExpiry.toISOString() : null,
@@ -724,7 +729,7 @@ export class OffersService {
           id: c.id,
           type: c.type,
           name: c.name,
-          amount: showCompensation && c.amount ? Number(c.amount) : null,
+          ...(showCompensation ? { amount: c.amount ? Number(c.amount) : null } : {}),
           currency: c.currency?.toUpperCase() === 'EGP' ? 'EGP' : 'AED',
           frequency: c.frequency,
           isTaxable: c.isTaxable,

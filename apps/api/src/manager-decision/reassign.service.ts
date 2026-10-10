@@ -1,0 +1,77 @@
+import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
+import type { AuthUser } from '@recruitflow/contracts';
+import { PrismaService } from '../database/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { isAdmin } from './file-ownership';
+
+/** A file is open until it reaches an exit stage; closed files never move (v2 §7 Reassign). */
+export const CLOSED_FILE_STAGES = ['Joined', 'Rejected', 'Withdrawn'];
+
+export interface ReassignInput { applicationIds?: string[]; fromUserId?: string; toUserId: string; reason: string }
+
+/**
+ * B7 reassign: the manager moves OPEN files owned by a direct report to another active,
+ * non-admin user, with a reason. Admin never can (403). Atomic: all files move or none.
+ * Owner field on this base: Application.primaryRecruiterId.
+ * TODO(B1): also move Vacancy.primaryRecruiterId-derived ownership once #4 merges.
+ * TODO(B2): this is what clears B2's deactivation 409 (open files owned) once #6 merges.
+ */
+@Injectable()
+export class ReassignService {
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(NotificationsService) private readonly notifications: NotificationsService,
+  ) {}
+
+  async reassign(user: AuthUser, input: ReassignInput) {
+    if (isAdmin(user.roleCodes)) throw new ForbiddenException({ code: 'REASSIGN_ADMIN_FORBIDDEN', message: 'Administrators cannot reassign files; the owner\'s manager does.' });
+    const reason = input.reason?.trim();
+    if (!reason) throw new BadRequestException({ code: 'REASSIGN_REASON_REQUIRED', message: 'A reason is required to reassign files.' });
+    const byIds = Array.isArray(input.applicationIds) && input.applicationIds.length > 0;
+    if (byIds === Boolean(input.fromUserId)) throw new BadRequestException({ code: 'REASSIGN_SCOPE', message: 'Give either applicationIds or fromUserId (all open files of that user).' });
+
+    const target = await this.prisma.user.findFirst({
+      where: { id: input.toUserId, organizationId: user.organizationId },
+      select: { id: true, status: true, displayName: true, userRoles: { where: { role: { status: 'Active' } }, select: { role: { select: { code: true } } } } },
+    });
+    if (!target || target.status !== 'Active' || target.userRoles.some((r) => r.role.code === 'ADMINISTRATOR')) {
+      throw new BadRequestException({ code: 'REASSIGN_TARGET_INELIGIBLE', message: 'The new owner must be an active, non-admin user in this organization.' });
+    }
+
+    const files = await this.prisma.application.findMany({
+      where: { organizationId: user.organizationId, ...(byIds ? { id: { in: [...new Set(input.applicationIds)] } } : { primaryRecruiterId: input.fromUserId!, stage: { notIn: CLOSED_FILE_STAGES } }) },
+      select: { id: true, applicationCode: true, stage: true, primaryRecruiterId: true, primaryRecruiter: { select: { managerId: true } } },
+    });
+    if (byIds && files.length !== new Set(input.applicationIds).size) throw new BadRequestException({ code: 'REASSIGN_FILE_NOT_FOUND', message: 'One or more files were not found.' });
+    const closed = files.filter((f) => CLOSED_FILE_STAGES.includes(f.stage));
+    if (closed.length) throw new ConflictException({ code: 'REASSIGN_FILE_CLOSED', message: 'Closed files do not move.', applicationIds: closed.map((f) => f.id) });
+    const notMine = files.filter((f) => !f.primaryRecruiterId || f.primaryRecruiter?.managerId !== user.userId);
+    if (notMine.length) throw new ForbiddenException({ code: 'REASSIGN_NOT_MANAGER', message: 'You can only reassign files owned by your direct reports.', applicationIds: notMine.map((f) => f.id) });
+    const moving = files.filter((f) => f.primaryRecruiterId !== target.id);
+
+    const batchId = randomUUID();
+    await this.prisma.$transaction(async (tx) => {
+      for (const f of moving) {
+        const res = await tx.application.updateMany({ where: { id: f.id, primaryRecruiterId: f.primaryRecruiterId, stage: { notIn: CLOSED_FILE_STAGES } }, data: { primaryRecruiterId: target.id } });
+        if (res.count !== 1) throw new ConflictException({ code: 'REASSIGN_CONFLICT', message: `File ${f.applicationCode} changed while reassigning; nothing was moved.` });
+      }
+      if (moving.length) {
+        await tx.fileReassignment.createMany({ data: moving.map((f) => ({ organizationId: user.organizationId, applicationId: f.id, fromUserId: f.primaryRecruiterId, toUserId: target.id, reason, reassignedById: user.userId, batchId })) });
+        await tx.auditLog.createMany({ data: moving.map((f) => ({ action: 'FILE_REASSIGN', actorUserId: user.userId, organizationId: user.organizationId, entityType: 'Application', entityId: f.id, result: 'SUCCESS', reason: `${f.primaryRecruiterId} -> ${target.id}: ${reason}` })) });
+      }
+    });
+
+    // In-app notifications after commit (old owners and the new owner).
+    const byOld = new Map<string, number>();
+    for (const f of moving) byOld.set(f.primaryRecruiterId!, (byOld.get(f.primaryRecruiterId!) ?? 0) + 1);
+    const notes = [
+      ...[...byOld.entries()].map(([recipientUserId, n]) => ({ recipientUserId, title: 'Files reassigned away from you', message: `${n} open file(s) moved to ${target.displayName}. Reason: ${reason}` })),
+      ...(moving.length ? [{ recipientUserId: target.id, title: 'Files reassigned to you', message: `${moving.length} open file(s) are now yours. Reason: ${reason}` }] : []),
+    ];
+    for (const n of notes) {
+      await this.notifications.create({ organizationId: user.organizationId, type: 'FileReassigned', entityType: 'FileReassignmentBatch', entityId: batchId, ...n }).catch(() => undefined);
+    }
+    return { batchId, toUserId: target.id, moved: moving.map((f) => ({ applicationId: f.id, fromUserId: f.primaryRecruiterId })), unchanged: files.filter((f) => !moving.includes(f)).map((f) => f.id) };
+  }
+}

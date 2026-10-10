@@ -1,3 +1,4 @@
+import { ManagerDecisionModule } from './manager-decision/manager-decision.module';
 import { MyWorkModule } from './my-work/my-work.module';
 import { Module } from '@nestjs/common';
 import type { NestModule, MiddlewareConsumer } from '@nestjs/common';
@@ -44,6 +45,7 @@ import { CorrelationIdMiddleware, TenantContextMiddleware } from './common/middl
     DatabaseModule,
     VacancyCoreModule,
     MyWorkModule,
+    ManagerDecisionModule,
     CommonModule,
     AuthModule,
     UsersModule,

@@ -36,6 +36,7 @@ Table organizations {
   recruiterTargets recruiter_targets [not null]
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [not null]
+  gradeBands grade_bands [not null]
 }
 
 Table branches {
@@ -52,6 +53,7 @@ Table branches {
   vacancies vacancies [not null]
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [not null]
+  gradeBands grade_bands [not null]
 
   indexes {
     (organizationId, code) [unique]
@@ -136,6 +138,10 @@ Table users {
   createdCandidates candidates [not null]
   recruiterTargetsReceived recruiter_targets [not null]
   recruiterTargetsSet recruiter_targets [not null]
+  offerDecisions offer_version_decisions [not null]
+  filesReassignedFrom file_reassignments [not null]
+  filesReassignedTo file_reassignments [not null]
+  filesReassignedBy file_reassignments [not null]
 
   indexes {
     (organizationId, emailNormalized) [unique]
@@ -434,6 +440,7 @@ Table applications {
   hiringCase hiring_cases
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [not null]
+  reassignments file_reassignments [not null]
 
   indexes {
     (vacancyId, candidateId) [unique]
@@ -643,6 +650,7 @@ Table offer_versions {
   approvals offer_approvals [not null]
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [not null]
+  decisions offer_version_decisions [not null]
 
   indexes {
     (offerId, versionNumber) [unique]
@@ -938,6 +946,7 @@ Table master_data_values {
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [default: `now()`, not null]
   gradeRequests vacancy_requests [not null]
+  gradeBands grade_bands [not null]
 
   indexes {
     (organizationId, category, code) [unique]
@@ -969,6 +978,62 @@ Table recruiter_targets {
   indexes {
     (organizationId, recruiterId, period, month) [unique]
   }
+}
+
+Table grade_bands {
+  id String [pk]
+  organizationId String [not null]
+  organization organizations [not null]
+  gradeId String [not null]
+  grade master_data_values [not null]
+  branchId String [not null]
+  branch branches [not null]
+  currency String [not null]
+  minMonthlyBase Decimal [not null]
+  maxMonthlyBase Decimal [not null]
+  status String [not null, default: 'Active']
+  version Int [not null, default: 1]
+  createdById String
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+
+  Note: 'B7: pay band per grade (master data "grades") + site (branch) + currency. Monthly BASE pay only;
+allowances are never part of the band check. Deactivate-only.'
+}
+
+Table offer_version_decisions {
+  id String [pk]
+  organizationId String [not null]
+  offerVersionId String [not null]
+  offerVersion offer_versions [not null]
+  decision String [not null]
+  fromStatus String [not null]
+  toStatus String [not null]
+  reason String
+  decidedById String [not null]
+  decidedBy users [not null]
+  gradeBandId String
+  createdAt DateTime [default: `now()`, not null]
+
+  Note: 'B7: a manager\'s decision on an offer version, taken from within the file.'
+}
+
+Table file_reassignments {
+  id String [pk]
+  organizationId String [not null]
+  applicationId String [not null]
+  application applications [not null]
+  fromUserId String
+  fromUser users
+  toUserId String [not null]
+  toUser users [not null]
+  reason String [not null]
+  reassignedById String [not null]
+  reassignedBy users [not null]
+  batchId String [not null]
+  createdAt DateTime [default: `now()`, not null]
+
+  Note: 'B7: owner change on an open file (application), with reason. One row per file moved.'
 }
 
 Ref: branches.organizationId > organizations.id [delete: Restrict]
@@ -1156,3 +1221,21 @@ Ref: recruiter_targets.organizationId > organizations.id [delete: Restrict]
 Ref: recruiter_targets.recruiterId > users.id [delete: Restrict]
 
 Ref: recruiter_targets.setById > users.id [delete: Restrict]
+
+Ref: grade_bands.organizationId > organizations.id [delete: Restrict]
+
+Ref: grade_bands.gradeId > master_data_values.id [delete: Restrict]
+
+Ref: grade_bands.branchId > branches.id [delete: Restrict]
+
+Ref: offer_version_decisions.offerVersionId > offer_versions.id [delete: Cascade]
+
+Ref: offer_version_decisions.decidedById > users.id [delete: Restrict]
+
+Ref: file_reassignments.applicationId > applications.id [delete: Cascade]
+
+Ref: file_reassignments.fromUserId > users.id [delete: Restrict]
+
+Ref: file_reassignments.toUserId > users.id [delete: Restrict]
+
+Ref: file_reassignments.reassignedById > users.id [delete: Restrict]
