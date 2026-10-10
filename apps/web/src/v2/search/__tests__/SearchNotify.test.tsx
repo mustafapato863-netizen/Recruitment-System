@@ -46,18 +46,21 @@ describe('scopedSearch (client mitigation of an unscoped /search)', () => {
       ['Ahmed Fathy', '/candidates?tab=bank'],
       ['HRIS Developer', '/vacancies/v1'],
       ['Pharmacist', '/vacancies/r1'],
+      ['Lab Technician', '/vacancies/r9'],
       ['Call Ahmed Embaby', '/my-work'],
     ]);
     expect(flat[0].meta).toBe('HRIS Developer · Interview · Owner: Mariam Farag');
     expect(flat[1].meta).toBe('Staff Nurse · In the bank');
     expect(flat[3]).toMatchObject({ kind: 'redacted-job', note: 'Owned by another recruiter' });
-    expect(flat[4].meta).toBe('High · Due 12 Oct');
+    expect(flat[4]).toMatchObject({ kind: 'redacted-job', meta: 'SGH Riyadh · 1 of 2 seats' });
+    expect(flat[5].meta).toBe('High · Due 12 Oct');
     expect(r.hidden).toBe(3);
-    expect(JSON.stringify(r)).not.toMatch(/@mail\.test|EGP|APP-2026-0200|NICU/);
+    expect(JSON.stringify(r)).not.toMatch(/@mail\.test|EGP|APP-2026-0200|NICU|VAC-2026-0099/);
   });
-  it('notificationHref: only Employee-safe pages', () => {
+  it('notificationHref: the file by applicationId first, else safe entity pages', () => {
     const [a, i, v, o] = sfx.notifications().data;
-    expect([a, i, v, o].map(notificationHref)).toEqual(['/applications/a10', null, '/vacancies/v1', null]);
+    expect([a, i, v, o].map(notificationHref)).toEqual(['/applications/a10', '/applications/a7', '/vacancies/v1', '/applications/a10']);
+    expect(notificationHref({ ...o, applicationId: null })).toBeNull();
   });
 });
 
@@ -70,7 +73,7 @@ describe('E07 header search', () => {
     const lb = await screen.findByRole('listbox', { name: 'Search results' });
     await within(lb).findAllByRole('option');
     expect(api.getApi.mock.calls.filter(([p]) => String(p).startsWith('/search')).length).toBe(1);
-    expect(screen.getByText(/5 results · items outside your scope are not shown/)).toBeInTheDocument();
+    expect(screen.getByText(/6 results · items outside your scope are not shown/)).toBeInTheDocument();
     expect(within(lb).getByRole('group', { name: 'Candidates' })).toBeInTheDocument();
     expect(lb.textContent).not.toMatch(LEAK_IN_RESULTS);
     expect(await axeViolations(container)).toEqual([]);
@@ -116,6 +119,7 @@ describe('E06 notifications panel', () => {
     expect(items[0]).toHaveTextContent(/Karim Hassan commented.*12 min ago.*New/);
     expect(items[3]).toHaveTextContent('Details are on the file.');
     expect(d.textContent).not.toMatch(/42,000|EGP/);
+    expect(within(d).getByRole('link', { name: 'See all notifications' })).toHaveAttribute('href', '/notifications'); // v1 page (CoS)
     expect(await axeViolations(container)).toEqual([]);
     await u.click(within(items[0]).getByRole('button'));
     expect(api.patchApi).toHaveBeenCalledWith('/notifications/n1/read', {});

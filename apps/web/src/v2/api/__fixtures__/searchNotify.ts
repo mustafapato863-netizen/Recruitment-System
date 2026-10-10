@@ -9,6 +9,7 @@ export const search = {
     { entityType: 'vacancy', label: 'Vacancies', items: [
       { entityType: 'vacancy', entityId: 'v1', title: 'HRIS Developer', subtitle: 'VAC-2026-0041 · Offshore Cairo', status: 'Open' },
       { entityType: 'vacancy', entityId: 'r1', title: 'Pharmacist', subtitle: 'VAC-2026-0050 · Offshore Cairo', status: 'Open' },
+      { entityType: 'vacancy', entityId: 'r9', title: 'Lab Technician', subtitle: 'SGH Riyadh · 1/2 seats', redacted: true, status: 'Open', vacancyCode: 'VAC-2026-0099' },
       { entityType: 'vacancy', entityId: 'v-nicu', title: 'Staff Nurse NICU', subtitle: 'VAC-2026-0077 · Riyadh', status: 'Open' },
     ] },
     { entityType: 'application', label: 'Applications', items: [
@@ -23,7 +24,7 @@ export const myApps = { data: [{ id: 'a7', candidateId: 'c-a7', stage: 'Intervie
 const iso = (minAgo: number) => new Date(Date.now() - minAgo * 60000).toISOString();
 export const notifications = () => ({ total: 4, page: 1, pageSize: 10, data: [
   { id: 'n1', organizationId: 'o', recipientUserId: 'u', type: 'OFFER_COMMENT', title: "Karim Hassan commented on Lina Hassan's offer", message: '“Confirm the 1 Nov start date before I decide.” · HRIS Developer', entityType: 'Application', entityId: 'a10', readAt: null, createdAt: iso(12) },
-  { id: 'n2', organizationId: 'o', recipientUserId: 'u', type: 'SCORECARD_DUE', title: 'Scorecard for Ahmed Embaby was due 7 Oct', message: 'Interview held 6 Oct · HRIS Developer', entityType: 'Interview', entityId: 'i1', readAt: null, createdAt: iso(60) },
+  { id: 'n2', organizationId: 'o', recipientUserId: 'u', type: 'SCORECARD_DUE', title: 'Scorecard for Ahmed Embaby was due 7 Oct', message: 'Interview held 6 Oct · HRIS Developer', entityType: 'Interview', entityId: 'i1', applicationId: 'a7', readAt: null, createdAt: iso(60) },
   { id: 'n3', organizationId: 'o', recipientUserId: 'u', type: 'FOLLOW_UP', title: 'Follow-up date passed — Salma Adel', message: 'HRIS Developer · follow-up date was 7 Oct', entityType: 'Vacancy', entityId: 'v1', readAt: '2026-10-09T08:00:00Z', createdAt: iso(300) },
-  { id: 'n4', organizationId: 'o', recipientUserId: 'u', type: 'OFFER_APPROVED', title: 'Offer approved', message: 'Package EGP 42,000 monthly', entityType: 'Offer', entityId: 'o1', readAt: '2026-10-09T08:00:00Z', createdAt: iso(2000) },
+  { id: 'n4', organizationId: 'o', recipientUserId: 'u', type: 'OFFER_APPROVED', title: 'Offer approved', message: 'Package EGP 42,000 monthly', entityType: 'Offer', entityId: 'o1', applicationId: 'a10', readAt: '2026-10-09T08:00:00Z', createdAt: iso(2000) },
 ] });

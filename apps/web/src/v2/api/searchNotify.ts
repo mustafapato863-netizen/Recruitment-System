@@ -2,15 +2,15 @@
  * E6 adapters: global search (E07) and notifications (E06), on EXISTING endpoints.
  *
  * GET /search?q=&limit= → GlobalSearchResponse {query, groups[{entityType,label,items[{entityType,entityId,title,subtitle?,status?}]}], total}
- *   Backend gap: /search is NOT B1-scoped (no open PR touches search.service.ts) and the candidate subtitle includes the email.
- *   Client mitigation here (the API must still fix it):
+ *   #4 @2aab3e3 scopes /search like the lists (other owners' files excluded, other owners' jobs redacted, email only
+ *   where the caller may see contact data). This client filter stays as defence-in-depth (CoS), the same for every seat:
  *   - vacancy: kept only if it is one of my jobs (full) or a B1-redacted team job (title · site · seats, read-only);
  *     anything else is dropped ("outside your scope").
  *   - application: kept only if GET /applications?search= (B1-scoped) returns it, i.e. a file I own.
  *   - candidate: subtitle reduced to the current title (email/code removed); opens my file for that person when I own one,
  *     otherwise the bank list. Never the v1 candidate detail (PII).
  *   - task: my own tasks (server filters by assignee); due ISO formatted.
- *   - other entity types: dropped on the Employee seat.
+ *   - other entity types: dropped.
  * GET /notifications?page=1&pageSize= → {data: NotificationRecord[], total, page, pageSize}
  * GET /notifications/unread-count → {unreadCount}; PATCH /notifications/:id/read; POST /notifications/read-all → {count}
  */
@@ -18,7 +18,8 @@ import { getApi, patchApi, postApi } from '../../api/client';
 import { stripPay } from './paySafety';
 import { fetchOpenJobs } from './jobs';
 
-export interface GlobalSearchItem { entityType: string; entityId: string; title: string; subtitle?: string; status?: string }
+/** #4 @2aab3e3: another owner's job comes back with redacted:true, subtitle "site · joined/target seats", no code, no status. */
+export interface GlobalSearchItem { entityType: string; entityId: string; title: string; subtitle?: string; status?: string; redacted?: boolean }
 export interface GlobalSearchResponse { query: string; groups: Array<{ entityType: string; label: string; items: GlobalSearchItem[] }>; total: number }
 
 export interface ScopedResult { key: string; kind: 'file' | 'person' | 'job' | 'redacted-job' | 'task'; title: string; meta: string; href: string | null; note?: string }
@@ -63,7 +64,10 @@ export async function scopedSearch(q: string, signal?: { aborted: boolean }): Pr
       }
       case 'vacancy': {
         const m = mine.get(it.entityId); const o = others.get(it.entityId);
-        if (m) jobRows.push({ key: `v:${it.entityId}`, kind: 'job', title: it.title, meta: [it.subtitle, it.status].filter(Boolean).join(' · '), href: `/vacancies/${enc(it.entityId)}` });
+        if (it.redacted && !m) {
+          // Server-redacted: never show a code or status even if the payload carried one.
+          jobRows.push({ key: `v:${it.entityId}`, kind: 'redacted-job', title: it.title, meta: o ? [o.site, `${o.seats.filled} of ${o.seats.target} seats`].filter(Boolean).join(' · ') : (it.subtitle ?? '').replace(/(\d+)\/(\d+) seats/, '$1 of $2 seats'), href: `/vacancies/${enc(it.entityId)}`, note: 'Owned by another recruiter' });
+        } else if (m) jobRows.push({ key: `v:${it.entityId}`, kind: 'job', title: it.title, meta: [it.subtitle, it.status].filter(Boolean).join(' · '), href: `/vacancies/${enc(it.entityId)}` });
         else if (o) jobRows.push({ key: `v:${it.entityId}`, kind: 'redacted-job', title: o.title, meta: [o.site, `${o.seats.filled} of ${o.seats.target} seats`].filter(Boolean).join(' · '), href: `/vacancies/${enc(it.entityId)}`, note: 'Owned by another recruiter' });
         else hidden++;
         break;
@@ -79,7 +83,7 @@ export async function scopedSearch(q: string, signal?: { aborted: boolean }): Pr
 }
 
 // ── notifications ───────────────────────────────────────────────────────────
-export interface NotificationRecord { id: string; type: string; title: string; message: string; entityType: string | null; entityId: string | null; readAt: string | null; createdAt: string }
+export interface NotificationRecord { id: string; type: string; title: string; message: string; entityType: string | null; entityId: string | null; readAt: string | null; createdAt: string; applicationId?: string | null }
 export const fetchNotifications = async (pageSize = 10) => {
   const r = await getApi<{ data: NotificationRecord[]; total: number } | NotificationRecord[]>(`/notifications?page=1&pageSize=${pageSize}`);
   return stripPay(Array.isArray(r) ? { data: r, total: r.length } : { data: r?.data ?? [], total: r?.total ?? 0 });
@@ -87,7 +91,9 @@ export const fetchNotifications = async (pageSize = 10) => {
 export const markRead = (id: string) => patchApi(`/notifications/${enc(id)}/read`, {});
 export const markAllRead = () => postApi<{ count: number }>('/notifications/read-all', {});
 /** v2 Employee routing: only E13 files, jobs and My Work. Offers/requisitions/interviews/candidates have no Employee-safe page → no link. */
+/** The file comes first (b280ac5: offer/interview/file notifications carry applicationId); else the entity. */
 export function notificationHref(n: NotificationRecord): string | null {
+  if (n.applicationId) return `/applications/${enc(n.applicationId)}`;
   if (!n.entityId) return null;
   const t = (n.entityType ?? '').toLowerCase();
   if (t === 'application') return `/applications/${enc(n.entityId)}`;
