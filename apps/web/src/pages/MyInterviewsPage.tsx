@@ -13,7 +13,7 @@ import {
   type ListResult, type MyInterview, type MyScorecard, type SubmitScorecardBody,
 } from '../api/myInterviews';
 
-type Load = { kind: 'loading' } | { kind: 'ready'; result: ListResult } | { kind: 'error'; message: string; forbidden: boolean };
+type Load = { kind: 'loading' } | { kind: 'ready'; result: ListResult; pending: MyInterview[] } | { kind: 'error'; message: string; forbidden: boolean };
 
 const when = (iso: string, tz?: string | null) => {
   const d = new Date(iso);
@@ -24,6 +24,9 @@ const when = (iso: string, tz?: string | null) => {
     return d.toLocaleString();
   }
 };
+
+/** B2V-1: an ended, not-cancelled interview still needs my scorecard while it is missing or a draft. */
+export const needsMyScorecard = (i: MyInterview) => i.status !== 'Cancelled' && i.scorecardStatus !== 'submitted';
 
 const RSVP_LABEL: Record<string, { label: string; variant: 'success' | 'danger' | 'warning' | 'neutral' }> = {
   Confirmed: { label: 'Accepted', variant: 'success' },
@@ -45,7 +48,7 @@ export function MyInterviewsPage({ load = listMyInterviews }: { load?: typeof li
   const [deepLinked, setDeepLinked] = useState(false);
   useEffect(() => {
     if (deepLinked || !focusId || state.kind !== 'ready' || !state.result.available) return;
-    const hit = state.result.items.find((i) => i.id === focusId);
+    const hit = [...state.pending, ...state.result.items].find((i) => i.id === focusId);
     if (!hit) return;
     setDeepLinked(true);
     if (openScorecard && hit.status !== 'Cancelled') setScorecardFor(hit);
@@ -55,15 +58,17 @@ export function MyInterviewsPage({ load = listMyInterviews }: { load?: typeof li
   useEffect(() => {
     let alive = true;
     setState({ kind: 'loading' });
-    load('upcoming')
-      .then((result) => alive && setState({ kind: 'ready', result }))
+    // B2V-1: ended interviews whose scorecard is still missing or a draft come from scope=past (the API's only filter);
+    // the client keeps those. If the past list fails, upcoming still shows.
+    Promise.all([load('upcoming'), load('past').catch(() => ({ available: false }) as ListResult)])
+      .then(([result, past]) => alive && setState({ kind: 'ready', result, pending: past.available ? past.items.filter((i) => needsMyScorecard(i) && !(result.available && result.items.some((u) => u.id === i.id))) : [] }))
       .catch((e: unknown) => alive && setState({ kind: 'error', message: e instanceof Error ? e.message : 'Could not load your interviews.', forbidden: e instanceof ApiError && e.statusCode === 403 }));
     return () => { alive = false; };
   }, [load, attempt]);
 
   const patch = useCallback((id: string, change: Partial<MyInterview>) => {
     setState((s) => (s.kind === 'ready' && s.result.available
-      ? { kind: 'ready', result: { available: true, items: s.result.items.map((i) => (i.id === id ? { ...i, ...change } : i)) } }
+      ? { kind: 'ready', result: { available: true, items: s.result.items.map((i) => (i.id === id ? { ...i, ...change } : i)) }, pending: s.pending.map((i) => (i.id === id ? { ...i, ...change } : i)) }
       : s));
   }, []);
 
@@ -78,7 +83,17 @@ export function MyInterviewsPage({ load = listMyInterviews }: { load?: typeof li
       {state.kind === 'ready' && !state.result.available ? (
         <PageState kind="unavailable" title="Not available yet" description="The list of your interviews is coming soon. Links in your interview invitations still work." />
       ) : null}
-      {state.kind === 'ready' && state.result.available && state.result.items.length === 0 ? (
+      {state.kind === 'ready' && state.result.available && state.pending.length > 0 ? (
+        <section aria-labelledby="mi-due-h" className="space-y-2">
+          <h2 id="mi-due-h" className="text-sm font-semibold">Scorecard due — ended interviews</h2>
+          <ul className="space-y-3" aria-label="Ended interviews needing my scorecard">
+            {state.pending.map((item) => (
+              <InterviewCard key={item.id} item={item} focused={item.id === focusId} onPatch={patch} onScorecard={() => setScorecardFor(item)} />
+            ))}
+          </ul>
+        </section>
+      ) : null}
+      {state.kind === 'ready' && state.result.available && state.result.items.length === 0 && state.pending.length === 0 ? (
         <PageState kind="empty" title="No upcoming interviews" description="Interviews you are invited to will appear here." />
       ) : null}
       {state.kind === 'ready' && state.result.available && state.result.items.length > 0 ? (
