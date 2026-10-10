@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { CircleCheck, CircleX, FileText, Link2, TriangleAlert, Upload } from 'lucide-react';
 import { ButtonV2, DrawerV2, StatusChip } from '../../components/v2';
-import { FIELD_LABEL, cvFileProblem, duplicateCheck, existingPerson, importRow, parseCv, splitName, type DuplicateCheckResult, type ExtractedCv, type ExistingPerson, type ImportDecision, type LinkResult } from '../api/cvImport';
+import { FIELD_LABEL, candidateExistsDetails, cvFileProblem, duplicateCheck, existingPerson, importRow, parseCv, splitName, type DuplicateCheckResult, type ExtractedCv, type ExistingPerson, type ImportDecision, type LinkResult } from '../api/cvImport';
 import { errorMessage, jobTitle, type JobDetail } from '../api/jobs';
 
 type RowStatus = 'parsing' | 'ready' | 'unreadable' | 'invalid' | 'importing' | 'done' | 'failed';
@@ -58,7 +58,10 @@ export function ImportCvsDrawer({ job, onClose, onDone }: { job: JobDetail; onCl
         // #23 CANDIDATE_EXISTS: someone with this email/phone is already in the bank. Offer to link that person (never copy).
         const found = await existingPerson(e, { email: r.cv?.email, phone: r.cv?.phone });
         if (found !== undefined) {
-          const dup = await duplicateCheck({ ...(r.cv?.email ? { email: r.cv.email } : {}), ...(r.cv?.phone ? { phone: r.cv.phone } : {}) }).catch(() => null);
+          // #23 603d44d: the 409 carries details.candidateId/candidateCode; link with those, no email/phone lookup.
+          const dup: DuplicateCheckResult | null = found && candidateExistsDetails(e)
+            ? { normalized: { email: null, phone: null }, isDuplicate: true, matches: [{ candidateId: found.candidateId, candidateCode: found.candidateCode ?? '', name: found.name ?? found.candidateCode ?? 'the existing person', status: 'Active', matchedBy: [] }] }
+            : await duplicateCheck({ ...(r.cv?.email ? { email: r.cv.email } : {}), ...(r.cv?.phone ? { phone: r.cv.phone } : {}) }).catch(() => null);
           failed += 1;
           patch(r.key, found
             ? { status: 'ready', dup: dup ?? r.dup, decision: { kind: 'link', candidateId: found.candidateId }, existing: found, problem: undefined }
