@@ -8,8 +8,10 @@ import {
   Patch,
   Post,
   Query,
+  StreamableFile,
   UseGuards,
 } from '@nestjs/common';
+import { createReadStream } from 'node:fs';
 // DTO classes must remain runtime imports for Nest metadata reflection.
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { InterviewsService } from './interviews.service';
@@ -18,6 +20,7 @@ import {
   CreateInterviewDto,
   UpdateInterviewDto,
   SubmitScorecardDto,
+  ReviseScorecardDto,
   InterviewQueryDto,
   CheckAvailabilityDto,
   GenerateSelfScheduleDto,
@@ -26,7 +29,7 @@ import {
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { TenantScopedGuard } from '../common/guards/tenant-scoped.guard';
-import { TenantResource } from '../common/decorators/tenant-resource.decorator';
+import { AllowInterviewAttendee, TenantResource } from '../common/decorators/tenant-resource.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { RequirePermissions } from '../common/decorators/require-permissions.decorator';
 import { AuditAction } from '../common/decorators/audit-action.decorator';
@@ -86,6 +89,7 @@ export class InterviewsController {
   @RequirePermissions('VACANCY_VIEW')
   @UseGuards(TenantScopedGuard)
   @TenantResource({ resource: 'interview', param: 'id' })
+  @AllowInterviewAttendee()
   @Header('Content-Type', 'text/calendar; charset=utf-8')
   @Header('Content-Disposition', 'attachment; filename="interview.ics"')
   getInterviewIcs(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
@@ -120,6 +124,7 @@ export class InterviewsController {
   @AuditAction('INTERVIEW_RESPONSE')
   @UseGuards(TenantScopedGuard)
   @TenantResource({ resource: 'interview', param: 'id' })
+  @AllowInterviewAttendee()
   respondToInterview(
     @CurrentUser() user: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,
@@ -128,11 +133,60 @@ export class InterviewsController {
     return this.interviewsService.respondToInterview(user.organizationId, id, user.userId, body, user);
   }
 
+  @Get(':id/scorecard')
+  @RequirePermissions('VACANCY_VIEW')
+  @UseGuards(TenantScopedGuard)
+  @TenantResource({ resource: 'interview', param: 'id' })
+  @AllowInterviewAttendee()
+  getScorecards(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.interviewsService.getScorecards(user.organizationId, id, user);
+  }
+
+  @Get(':id/cv')
+  @RequirePermissions('VACANCY_VIEW')
+  @AuditAction('INTERVIEW_CV_DOWNLOAD')
+  @UseGuards(TenantScopedGuard)
+  @TenantResource({ resource: 'interview', param: 'id' })
+  @AllowInterviewAttendee()
+  async getCandidateCv(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
+    const file = await this.interviewsService.getCandidateCvFile(user.organizationId, id);
+    return new StreamableFile(createReadStream(file.path), {
+      type: file.mimeType,
+      disposition: `attachment; filename="${file.fileName.replace(/"/g, '')}"`,
+    });
+  }
+
+  /** E3: owner-only nudge to interviewers with a missing scorecard; at most one per interview per day (409). */
+  @Post(':id/scorecard-reminder')
+  @RequirePermissions('VACANCY_VIEW')
+  @AuditAction('SCORECARD_REMINDER_SEND')
+  @UseGuards(TenantScopedGuard)
+  @TenantResource({ resource: 'interview', param: 'id' })
+  sendScorecardReminder(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.interviewsService.sendScorecardReminder(user.organizationId, id, user);
+  }
+
+  /** B5: revise a submitted scorecard (new revision with a reason). */
+  @Post(':id/scorecard/revisions')
+  @RequirePermissions('VACANCY_VIEW')
+  @AuditAction('SCORECARD_REVISE')
+  @UseGuards(TenantScopedGuard)
+  @TenantResource({ resource: 'interview', param: 'id' })
+  @AllowInterviewAttendee()
+  reviseScorecard(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: ReviseScorecardDto,
+  ) {
+    return this.interviewsService.reviseScorecard(user.organizationId, id, user.userId, body, user);
+  }
+
   @Post(':id/scorecard')
   @RequirePermissions('VACANCY_VIEW')
   @AuditAction('SCORECARD_SUBMIT')
   @UseGuards(TenantScopedGuard)
   @TenantResource({ resource: 'interview', param: 'id' })
+  @AllowInterviewAttendee()
   submitScorecard(
     @CurrentUser() user: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,

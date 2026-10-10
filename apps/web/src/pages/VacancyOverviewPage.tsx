@@ -114,12 +114,15 @@ export function VacancyOverviewPage() {
 
   const handleStatusChange = async (newStatus: VacancyStatus) => {
     if (!id) return;
+    // B3: hold / reopen / close need a reason (written to the job's status history).
+    const reason = window.prompt(`Reason for setting this job to ${newStatus}`)?.trim();
+    if (!reason) return;
     try {
-      const updated = await patchApi<VacancyDetailView>(`/vacancies/${id}/status`, { status: newStatus });
+      const updated = await patchApi<VacancyDetailView>(`/vacancies/${id}/status`, { status: newStatus, reason });
       if (updated) {
         setVacancy(updated);
       }
-      showToast(`✓ Requisition status updated to ${newStatus}`);
+      showToast(`✓ Job status updated to ${newStatus}`);
       setIsActionsDropdownOpen(false);
       void loadAllData();
     } catch (err: unknown) {
@@ -134,7 +137,7 @@ export function VacancyOverviewPage() {
       await deleteApi(`/vacancies/${vacancy.id}`);
       navigate('/vacancies', { replace: true });
     } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : 'Failed to delete vacancy');
+      showToast(err instanceof Error ? err.message : 'Failed to deactivate job');
       setIsDeleteDialogOpen(false);
     } finally {
       setIsDeleting(false);
@@ -312,7 +315,7 @@ export function VacancyOverviewPage() {
         roleCode: 'RECRUITER',
         assignmentKind: 'PRIMARY',
       });
-      const isActivation = vacancy.status === 'Pending Activation';
+      const isActivation = (vacancy.status as string) === 'Pending Activation'; // legacy, removed in B3
       const willBeOpen =
         isActivation &&
         (updated?.status === 'Open' || Boolean(vacancy.jobSummary?.trim()));
@@ -466,7 +469,7 @@ export function VacancyOverviewPage() {
               Assign a primary recruiter before working on this open vacancy.
             </p>
           )}
-          {vacancy?.status === 'Pending Activation' && (() => {
+          {vacancy && (vacancy.status as string) === 'Pending Activation' && (() => {
             const blockingReasons = getVacancyBlockingReasons(vacancy);
             return (
               <div className="mt-3 rounded-2xl border border-amber-300 bg-amber-50/80 p-3.5 text-xs dark:border-amber-800 dark:bg-amber-950/30">
@@ -591,7 +594,7 @@ export function VacancyOverviewPage() {
                       className="flex w-full cursor-pointer items-center gap-2 px-3.5 py-2.5 text-left font-semibold text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/30"
                     >
                       <Icon name="trash" size={13} />
-                      <span>Delete requisition</span>
+                      <span>Deactivate job</span>
                     </button>
                   </>
                 )}
@@ -599,7 +602,7 @@ export function VacancyOverviewPage() {
                 <div className="px-3.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
                   Status
                 </div>
-                {(['Open', 'On Hold', 'Cancelled'] as VacancyStatus[]).map((st) => (
+                {(['Open', 'On Hold', 'Closed'] as VacancyStatus[]).map((st) => (
                   <button
                     key={st}
                     type="button"
@@ -1747,9 +1750,9 @@ export function VacancyOverviewPage() {
           if (!isDeleting) setIsDeleteDialogOpen(false);
         }}
         onConfirm={handleDeleteVacancy}
-        title="Delete requisition permanently?"
-        description="This removes the requisition and its setup records permanently. Requisitions with applications cannot be deleted and must be cancelled instead."
-        confirmLabel="Delete permanently"
+        title="Deactivate this job?"
+        description="The job is set to Cancelled and its open requisition is cancelled. Nothing is deleted; history stays. Jobs with open applications must have them closed first."
+        confirmLabel="Deactivate job"
         tone="danger"
         icon="trash"
         isLoading={isDeleting}

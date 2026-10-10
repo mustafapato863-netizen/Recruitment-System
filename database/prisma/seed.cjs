@@ -30,10 +30,52 @@ async function resyncCodeSequences() {
     }, 0);
 
     if (maxSeq > 0) {
-      await prisma.codeSequence.upsert({
-        where: { key },
-        create: { key, lastIssued: maxSeq },
-        update: { lastIssued: maxSeq },
+      // Never rewind: a code may have been issued (sequence bumped) but its row not written yet.
+      await prisma.codeSequence.upsert({ where: { key }, create: { key, lastIssued: maxSeq }, update: {} });
+      await prisma.codeSequence.updateMany({ where: { key, lastIssued: { lt: maxSeq } }, data: { lastIssued: maxSeq } });
+    }
+  }
+}
+
+/**
+ * C3: one master-data base for every reason list (apps/api/src/master-data/reason-lists.ts).
+ * Deactivate-only; "Other" (where present) needs a note. Idempotent: upsert on (org, category, name), never overwrites.
+ */
+const REASON_LISTS = {
+  'hold-reasons': [['BUDGET_REVIEW', 'Budget review'], ['HIRING_FREEZE', 'Hiring freeze'], ['ROLE_UNDER_REVIEW', 'Role under review'], ['AWAITING_INTERNAL_CANDIDATE', 'Awaiting internal candidate'], ['OTHER', 'Other']],
+  'close-reasons': [['POSITION_NO_LONGER_NEEDED', 'Position no longer needed'], ['BUDGET_WITHDRAWN', 'Budget withdrawn'], ['FILLED_INTERNALLY', 'Filled internally'], ['OTHER', 'Other']],
+  'rejection-reasons': [['REQ_CANCELLED', 'Requisition cancelled'], ['DECLINED_OFFER', 'Declined offer'], ['WITHDRAWN_BY_CANDIDATE', 'Withdrawn by candidate'], ['NOT_QUALIFIED', 'Not qualified'], ['FAILED_SCREENING', 'Did not pass screening'], ['FAILED_INTERVIEW', 'Did not pass interview'], ['NO_RESPONSE', 'No response from candidate'], ['POSITION_FILLED', 'Position filled']],
+  'reassign-reasons': [['WORKLOAD_BALANCING', 'Workload balancing'], ['OWNER_ON_LEAVE', 'Owner on leave'], ['OWNER_LEAVING', 'Owner leaving'], ['SPECIALIST_NEEDED', 'Specialist needed'], ['OTHER', 'Other']],
+};
+/** B5 seeding path (inside the org transaction); same single list as seedReasonLists. */
+async function seedRejectionReasons(tx, organizationId) {
+  await tx.masterDataValue.createMany({
+    data: REASON_LISTS['rejection-reasons'].map(([code, name]) => ({ organizationId, category: 'rejection-reasons', code, name, status: 'Active' })),
+    skipDuplicates: true,
+  });
+}
+
+// B7: minimal grades (master data) and AED monthly-base bands for the demo branch.
+async function seedGradeBands(tx, organizationId, branchId) {
+  const grades = [['G5', 'Grade 5', 8000, 12000], ['G6', 'Grade 6', 12000, 18000], ['G7', 'Grade 7', 18000, 26000]];
+  for (const [code, name, min, max] of grades) {
+    const grade = await tx.masterDataValue.upsert({
+      where: { organizationId_category_name: { organizationId, category: 'grades', name } },
+      update: {},
+      create: { organizationId, category: 'grades', code, name, status: 'Active' },
+    });
+    const exists = await tx.gradeBand.findFirst({ where: { organizationId, gradeId: grade.id, branchId, currency: 'AED', status: 'Active' } });
+    if (!exists) await tx.gradeBand.create({ data: { organizationId, gradeId: grade.id, branchId, currency: 'AED', minMonthlyBase: min, maxMonthlyBase: max } });
+  }
+}
+
+async function seedReasonLists(organizationId) {
+  for (const [category, values] of Object.entries(REASON_LISTS)) {
+    for (const [code, name] of values) {
+      await prisma.masterDataValue.upsert({
+        where: { organizationId_category_name: { organizationId, category, name } },
+        create: { organizationId, category, name, code },
+        update: {},
       });
     }
   }
@@ -50,6 +92,41 @@ async function seedDefaultPipeline(tx, organizationId) {
       stages: { create: stages.map((name, i) => ({ name, stageType: name, sortOrder: i, required: true, isHiredStage: name === 'Joined' })) },
     },
   });
+}
+
+/**
+ * B7 demo: manager links (users.managerId), a grade on every demo job's requisition and
+ * matching AED bands for each demo job's site, so a demo can show decide and reassign.
+ * Recruiters report to the Talent Manager (Mona); Mona reports to the Hiring Manager (Hassan),
+ * which also demonstrates escalation when Mona owns a file herself.
+ */
+async function seedDecisionDemo(tx, organizationId, users) {
+  const mona = users['mona.manager@recruitflow.local'];
+  const hassan = users['hassan.ali@recruitflow.local'];
+  if (!mona || !hassan) return;
+  await tx.user.update({ where: { id: mona.id }, data: { managerId: hassan.id } });
+  const recruiters = await tx.user.findMany({
+    where: { organizationId, managerId: null, id: { notIn: [mona.id, hassan.id] }, userRoles: { some: { role: { code: 'RECRUITER' } } } },
+    select: { id: true },
+  });
+  for (const r of recruiters) await tx.user.update({ where: { id: r.id }, data: { managerId: mona.id } });
+  const jobs = await tx.vacancy.findMany({ where: { organizationId }, select: { branchId: true, vacancyRequestId: true } });
+  const branchIds = [...new Set(jobs.map((j) => j.branchId))];
+  for (const branchId of branchIds) await seedGradeBands(tx, organizationId, branchId);
+  const g6 = await tx.masterDataValue.findFirst({ where: { organizationId, category: 'grades', name: 'Grade 6' } });
+  if (g6) await tx.vacancyRequest.updateMany({ where: { id: { in: jobs.map((j) => j.vacancyRequestId) }, gradeId: null }, data: { gradeId: g6.id } });
+}
+
+/** M1: demo departments (master data 'departments'). Upsert by name: safe to run any number of times. */
+const DEMO_DEPARTMENTS = ['IT', 'Nursing', 'Pharmacy', 'Finance', 'HR'];
+async function seedDemoDepartments(organizationId) {
+  for (const name of DEMO_DEPARTMENTS) {
+    await prisma.masterDataValue.upsert({
+      where: { organizationId_category_name: { organizationId, category: 'departments', name } },
+      create: { organizationId, category: 'departments', name, code: `DEPT_${name.toUpperCase()}` },
+      update: {},
+    });
+  }
 }
 
 // B6: minimal skill library (master data, category "skills"; metadata.category is optional).
@@ -81,6 +158,7 @@ async function main() {
       },
     });
 
+    await seedRejectionReasons(tx, organization.id);
     await seedSkillLibrary(tx, organization.id);
     await seedDefaultPipeline(tx, organization.id);
 
@@ -102,6 +180,7 @@ async function main() {
         city: 'Cairo',
       },
     });
+    await seedGradeBands(tx, organization.id, branch.id);
 
     // ── Position ──────────────────────────────────────────────
     const position = await tx.position.upsert({
@@ -292,7 +371,8 @@ async function main() {
       { code: 'CANDIDATE_VIEW', description: 'View candidate profile and list.' },
       { code: 'CANDIDATE_CREATE', description: 'Create candidate records.' },
       { code: 'CANDIDATE_EDIT', description: 'Edit candidate profile details.' },
-      { code: 'CANDIDATE_DELETE', name: 'Delete candidate data', description: 'Permanently delete a candidate and linked test data.' },
+      // B2: hard delete retired; legal erasure is anonymize (Administrator only).
+      { code: 'CANDIDATE_ANONYMIZE', name: 'Anonymize candidate (legal erasure)', description: "Irreversibly replace a candidate's personal data with placeholders. Administrator only." },
       { code: 'APPLICATION_VIEW', description: 'View recruitment applications.' },
       { code: 'APPLICATION_CREATE', description: 'Apply candidate to a vacancy.' },
       { code: 'APPLICATION_MOVE_STAGE', description: 'Advance or move application stage.' },
@@ -300,6 +380,8 @@ async function main() {
       { code: 'VIEW_CANDIDATE_PII', description: 'View candidate personally identifiable information.' },
       { code: 'VIEW_CURRENT_SALARY', description: 'View candidate current salary details.' },
       { code: 'APPROVE_OFFERS', description: 'Approve offer packages and salary bands.' },
+      // B7: offer pay (base, package, component amounts); distinct from VIEW_CURRENT_SALARY.
+      { code: 'OFFER_PAY_VIEW', name: 'View offer pay', description: 'See offer base pay, package and component amounts. Current/expected salary still needs VIEW_CURRENT_SALARY.' },
       { code: 'DOWNLOAD_DOCUMENTS', description: 'Download private candidate and hiring documents.' },
       { code: 'FINAL_HIRING_APPROVAL', description: 'Perform final hiring approval gate.' },
       { code: 'OVERRIDE_WORKFLOW', description: 'Override workflow rules and bypass validations.' },
@@ -307,6 +389,9 @@ async function main() {
       { code: 'NOTIFICATION_VIEW', description: 'View own notifications and manage read status.' },
       { code: 'TASK_VIEW', description: 'View tasks assigned to the current user.' },
       { code: 'TASK_UPDATE_STATUS', description: 'Update the status of an assigned task.' },
+      // C2: named now, wired in B0b (no endpoint checks them yet)
+      { code: 'INTERVIEW_PARTICIPATE', name: 'Participate in interviews', description: 'Be scheduled on interviews and submit scorecards for interviews you attend.' },
+      { code: 'LICENSE_CHECK', name: 'Check professional licenses', description: "Record and verify a candidate's professional license check (e.g. nursing, pharmacy)." },
     ];
 
     for (const p of permSeed) {
@@ -317,9 +402,13 @@ async function main() {
       });
     }
 
+    // B2: CANDIDATE_DELETE is retired (kept for history, never effective).
+    await tx.permission.updateMany({ where: { code: 'CANDIDATE_DELETE' }, data: { status: 'Retired' } });
+
     // ── Role → Permission assignments ─────────────────────────
     const rolePermMap = {
-      ADMINISTRATOR: Object.keys(permissions), // Administrator gets everything
+      // Administrator gets everything except offer pay (B7, v2 §7: pay visible to Manager only).
+      ADMINISTRATOR: Object.keys(permissions).filter((code) => code !== 'OFFER_PAY_VIEW'),
       PERFORMANCE_ADMIN: [
         'VACANCY_REQUEST_VIEW',
         'VACANCY_VIEW',
@@ -336,7 +425,7 @@ async function main() {
         'MASTER_DATA_VIEW',
         'CANDIDATE_VIEW', 'CANDIDATE_CREATE', 'CANDIDATE_EDIT',
         'APPLICATION_VIEW', 'APPLICATION_CREATE', 'APPLICATION_MOVE_STAGE',
-        'VIEW_CANDIDATE_PII', 'VIEW_CURRENT_SALARY', 'APPROVE_OFFERS', 'FINAL_HIRING_APPROVAL',
+        'VIEW_CANDIDATE_PII', 'VIEW_CURRENT_SALARY', 'APPROVE_OFFERS', 'FINAL_HIRING_APPROVAL', 'OFFER_PAY_VIEW',
         'DOWNLOAD_DOCUMENTS',
         'NOTIFICATION_VIEW', 'TASK_VIEW', 'TASK_UPDATE_STATUS',
       ],
@@ -358,14 +447,14 @@ async function main() {
         'AUDIT_VIEW',
         'CANDIDATE_VIEW', 'CANDIDATE_CREATE', 'CANDIDATE_EDIT',
         'APPLICATION_VIEW', 'APPLICATION_CREATE', 'APPLICATION_MOVE_STAGE',
-        'VIEW_CANDIDATE_PII', 'VIEW_CURRENT_SALARY', 'APPROVE_OFFERS',
+        'VIEW_CANDIDATE_PII', 'VIEW_CURRENT_SALARY', 'APPROVE_OFFERS', 'OFFER_PAY_VIEW',
         'NOTIFICATION_VIEW', 'TASK_VIEW', 'TASK_UPDATE_STATUS',
       ],
       HIRING_MANAGER: [
         'VACANCY_REQUEST_VIEW', 'VACANCY_REQUEST_CREATE', 'VACANCY_REQUEST_APPROVE',
         'VACANCY_VIEW',
         'MASTER_DATA_VIEW',
-        'CANDIDATE_VIEW', 'APPLICATION_VIEW', 'APPLICATION_MOVE_STAGE',
+        'CANDIDATE_VIEW', 'APPLICATION_VIEW', 'APPLICATION_MOVE_STAGE', 'OFFER_PAY_VIEW',
         'NOTIFICATION_VIEW', 'TASK_VIEW', 'TASK_UPDATE_STATUS',
       ],
       INTERVIEWER: [
@@ -496,6 +585,7 @@ async function main() {
     }
 
     const demo = await seedDemoFixtures(tx, { organization, branch, position, users });
+    await seedDecisionDemo(tx, organization.id, users);
 
     // ── Organization B (for Cross-Tenant Isolation Testing) ─────
     const orgB = await tx.organization.upsert({
@@ -507,6 +597,7 @@ async function main() {
         name: 'Acme Global Healthcare',
       },
     });
+    await seedRejectionReasons(tx, orgB.id);
 
     const branchB = await tx.branch.upsert({
       where: { organizationId_code: { organizationId: orgB.id, code: 'ACME-ALEX' } },
@@ -577,6 +668,7 @@ async function main() {
     return { organization, branch, position, users, roles, demo, orgB, userB, candidateB, branchB };
   }, { timeout: 30000 });
 
+  for (const org of await prisma.organization.findMany({ select: { id: true } })) { await seedReasonLists(org.id); await seedDemoDepartments(org.id); }
   await resyncCodeSequences();
 
   console.log(

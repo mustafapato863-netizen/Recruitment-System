@@ -48,6 +48,7 @@ const RECOVERY_TTL_HOURS = 1;
 const INVITATION_TTL_HOURS = 72;
 const GENERIC_RECOVERY_RESPONSE = Object.freeze({ accepted: true as const });
 
+import { ROLLOUT_CONFIG_NAME, resolveV2Seats, seatOf } from './seat-rollout';
 @Injectable()
 export class AuthService {
   constructor(
@@ -190,6 +191,7 @@ export class AuthService {
             role: {
               include: {
                 permissions: {
+                  where: { permission: { status: 'Active' } },
                   include: {
                     permission: true,
                   },
@@ -231,7 +233,19 @@ export class AuthService {
       roles,
       permissions,
       lastLoginAt: user.lastLoginAt ? user.lastLoginAt.toISOString() : null,
+      ...(await this.rollout(user.organizationId, user.id, roles.map((r) => r.code))),
     };
+  }
+
+  /** B10: per-seat rollout switch (see seat-rollout.ts for precedence). */
+  private async rollout(organizationId: string, userId: string, roleCodes: string[]) {
+    const [config, reports] = await Promise.all([
+      this.prisma.integration.findFirst({ where: { organizationId, name: ROLLOUT_CONFIG_NAME }, select: { configJson: true } }),
+      this.prisma.user.count({ where: { organizationId, managerId: userId, status: 'Active' } }),
+    ]);
+    const { v2Seats } = resolveV2Seats(config?.configJson, process.env.RF_V2_SEATS);
+    const seat = seatOf(roleCodes, reports > 0);
+    return { seat, v2Seats, v2Enabled: v2Seats.includes(seat), flags: { v2Seats } };
   }
 
   async getOwnProfile(userId: string, organizationId: string): Promise<UserProfile> {

@@ -53,7 +53,7 @@ describe('B6 ordering is documented, not scored', () => {
 });
 
 describe('B6 skill library is deactivate-only', () => {
-  it('DELETE on a skill sets it Inactive and never deletes', async () => {
+  it('DELETE on a skill sets it Archived and never deletes', async () => {
     const calls: string[] = [];
     const prisma = {
       masterDataValue: {
@@ -63,8 +63,8 @@ describe('B6 skill library is deactivate-only', () => {
       },
     };
     const svc = new MasterDataService(prisma as never);
-    await expect(svc.deleteCatalogValue('org', 'skills', 's1')).resolves.toEqual({ id: 's1', deactivated: true, status: 'Inactive' });
-    expect(calls).toEqual(['update:Inactive']);
+    await expect(svc.deleteCatalogValue('org', 'skills', 's1')).resolves.toEqual({ id: 's1', deactivated: true, status: 'Archived' });
+    expect(calls).toEqual(['update:Archived']);
   });
 });
 

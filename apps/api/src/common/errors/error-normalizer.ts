@@ -193,6 +193,10 @@ export interface NormalizedError {
   details?: Record<string, unknown>;
   retryable: boolean;
   retryAfterSeconds?: number | null;
+  gate?: string;
+  missing?: string[];
+  band?: Record<string, string | number | null>;
+  offeredMonthlyBase?: number;
   /** Server-side diagnostic context (sanitized). Never returned to clients. */
   logContext?: string;
 }
@@ -483,6 +487,25 @@ export function normalizeError(
           ? resObj.details
           : undefined;
 
+      // B5: gate 409s keep { gate, missing[] } (short strings only).
+      const gateInfo =
+        stableCode.startsWith('GATE_') &&
+        typeof resObj.gate === 'string' && resObj.gate.length <= 60 &&
+        Array.isArray(resObj.missing) &&
+        resObj.missing.every((m: unknown) => typeof m === 'string' && m.length <= 80)
+          ? { gate: resObj.gate, missing: resObj.missing as string[] }
+          : undefined;
+
+      // B7: band errors keep the band (flat scalars only; pay figures are already
+      // omitted by the service for callers without OFFER_PAY_VIEW).
+      const flat = (v: unknown): v is Record<string, string | number | null> =>
+        typeof v === 'object' && v !== null && !Array.isArray(v) &&
+        Object.values(v).every((x) => x === null || typeof x === 'number' || (typeof x === 'string' && x.length <= 120));
+      const bandInfo =
+        (stableCode === 'GRADE_BAND_MISSING' || stableCode === 'OFFER_PAY_OUTSIDE_BAND') && flat(resObj.band)
+          ? { band: resObj.band, ...(typeof resObj.offeredMonthlyBase === 'number' ? { offeredMonthlyBase: resObj.offeredMonthlyBase } : {}) }
+          : undefined;
+
       const rawMessage = Array.isArray(resObj.message)
         ? resObj.message
         : typeof resObj.message === 'string'
@@ -530,6 +553,8 @@ export function normalizeError(
         message,
         ...(hasFieldErrors && fields ? { fields } : {}),
         ...(details ? { details } : {}),
+        ...(gateInfo ?? {}),
+        ...(bandInfo ?? {}),
         retryable,
         retryAfterSeconds:
           retryAfter ?? (status === HttpStatus.TOO_MANY_REQUESTS ? null : null),
@@ -603,7 +628,7 @@ function resolveStableCode(
   return stableCodeByStatus(status);
 }
 
-/** Allowlist = the shared registry in @recruitflow/contracts (incl. B6 domain codes). */
+/** Allowlist = the shared registry in @recruitflow/contracts (incl. B3/B4/B5/B6 domain codes). */
 function isStableCode(value: string): boolean {
   return (errorCodes as readonly string[]).includes(value);
 }
@@ -634,6 +659,10 @@ export function buildErrorEnvelope(normalized: NormalizedError, requestId: strin
     envelope.fields = normalized.fields;
   }
   if (normalized.details) envelope.details = normalized.details;
+  if (normalized.gate !== undefined) envelope.gate = normalized.gate;
+  if (normalized.missing !== undefined) envelope.missing = normalized.missing;
+  if (normalized.band !== undefined) envelope.band = normalized.band;
+  if (normalized.offeredMonthlyBase !== undefined) envelope.offeredMonthlyBase = normalized.offeredMonthlyBase;
   return envelope;
 }
 

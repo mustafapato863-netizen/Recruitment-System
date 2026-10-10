@@ -17,6 +17,9 @@ import {
   CreateVacancyRequestDto,
   UpdateVacancyRequestDto,
   VacancyRequestActionDto,
+  CancelVacancyRequestDto,
+  ActivateVacancyRequestDto,
+  UpdateRequisitionTargetDto,
 } from './vacancy-core.dto';
 import { VacancyCoreService } from './vacancy-core.service';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
@@ -41,7 +44,7 @@ export class VacancyRequestsController {
   @Get()
   @RequirePermissions('VACANCY_REQUEST_VIEW')
   listRequests(@CurrentUser() user: AuthUser) {
-    return this.vacancyCoreService.listRequests(user.organizationId);
+    return this.vacancyCoreService.listRequests(user.organizationId, user);
   }
 
   @Get('inbox')
@@ -146,8 +149,37 @@ export class VacancyRequestsController {
   cancelRequest(
     @CurrentUser() user: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: CancelVacancyRequestDto = {},
   ) {
-    return this.vacancyCoreService.cancelRequest(id, user.organizationId, user.userId);
+    return this.vacancyCoreService.cancelRequest(id, user.organizationId, user.userId, body?.reason);
+  }
+
+  /** M1: Manager changes seats / due date of an activated requisition (reason required; history + audit). */
+  @Patch(':id/target')
+  @RequirePermissions('VACANCY_REQUEST_CREATE')
+  @AuditAction('VACANCY_REQUEST_TARGET_UPDATE')
+  @UseGuards(TenantScopedGuard)
+  @TenantResource({ resource: 'vacancyRequest', param: 'id' })
+  updateTarget(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: UpdateRequisitionTargetDto,
+  ) {
+    return this.vacancyCoreService.updateRequisitionTarget(id, user.organizationId, user.userId, body);
+  }
+
+  @Post(':id/activate')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('VACANCY_MANAGE')
+  @AuditAction('VACANCY_REQUEST_ACTIVATE')
+  @UseGuards(TenantScopedGuard)
+  @TenantResource({ resource: 'vacancyRequest', param: 'id' })
+  activate(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: ActivateVacancyRequestDto = {},
+  ) {
+    return this.vacancyCoreService.activateRequest(id, user.organizationId, user.userId, { assignedEmployeeId: body?.assignedEmployeeId ?? null });
   }
 
   @Post(':id/convert')
@@ -160,6 +192,7 @@ export class VacancyRequestsController {
     @CurrentUser() user: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    return this.vacancyCoreService.convertToVacancy(id, user.organizationId);
+    // Deprecated alias of /activate (B3).
+    return this.vacancyCoreService.convertToVacancy(id, user.organizationId, user.userId);
   }
 }

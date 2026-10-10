@@ -1,53 +1,49 @@
 import { describe, expect, it, vi } from 'vitest';
 import { MasterDataService } from '../master-data.service';
 
-function createPrisma(overrides: Record<string, unknown> = {}) {
+// B2 (v2 §3): DELETE never removes master data; it archives.
+function createPrisma() {
   return {
     masterDataValue: {
       findFirst: vi.fn().mockResolvedValue({ id: 'skill-1', name: 'ICU', code: 'ICU-1' }),
-      delete: vi.fn().mockResolvedValue({}),
+      update: vi.fn().mockResolvedValue({}),
+      delete: vi.fn(),
     },
-    vacancy: {
-      findMany: vi.fn().mockResolvedValue([]),
-      count: vi.fn().mockResolvedValue(0),
+    branch: {
+      findFirst: vi.fn().mockResolvedValue({ id: 'branch-1', status: 'Active' }),
+      update: vi.fn().mockResolvedValue({}),
+      delete: vi.fn(),
     },
-    candidate: {
-      findMany: vi.fn().mockResolvedValue([]),
-      count: vi.fn().mockResolvedValue(0),
+    position: {
+      findFirst: vi.fn().mockResolvedValue({ id: 'pos-1', status: 'Archived' }),
+      update: vi.fn().mockResolvedValue({}),
+      delete: vi.fn(),
     },
-    application: { count: vi.fn().mockResolvedValue(0) },
-    interview: { count: vi.fn().mockResolvedValue(0) },
-    position: { findMany: vi.fn().mockResolvedValue([]) },
-    ...overrides,
   };
 }
 
-describe('MasterDataService catalog deletion', () => {
-  it('deletes an unused catalog value for the current organization', async () => {
+describe('MasterDataService DELETE archives (B2)', () => {
+  it('archives a catalog value instead of deleting it', async () => {
     const prisma = createPrisma();
     const service = new MasterDataService(prisma as never);
-
-    await expect(service.deleteCatalogValue('org-1', 'interview-types', 'skill-1')).resolves.toEqual({ deleted: true });
-    expect(prisma.masterDataValue.findFirst).toHaveBeenCalledWith({
-      where: { id: 'skill-1', organizationId: 'org-1', category: 'interview-types' },
-      select: { id: true, name: true, code: true },
-    });
-    expect(prisma.masterDataValue.delete).toHaveBeenCalledWith({ where: { id: 'skill-1' } });
+    await expect(service.deleteCatalogValue('org-1', 'skills', 'skill-1')).resolves.toEqual({ id: 'skill-1', deactivated: true, status: 'Archived' });
+    expect(prisma.masterDataValue.update).toHaveBeenCalledWith({ where: { id: 'skill-1' }, data: { status: 'Archived' } });
+    expect(prisma.masterDataValue.delete).not.toHaveBeenCalled();
   });
 
-  it('B6: never deletes a skill, used or not; it is deactivated instead', async () => {
-    const prisma = createPrisma({
-      masterDataValue: {
-        findFirst: vi.fn().mockResolvedValue({ id: 'skill-1' }),
-        update: vi.fn().mockResolvedValue({}),
-        delete: vi.fn(),
-      },
-      vacancy: { findMany: vi.fn().mockResolvedValue([{ requiredSkills: ['ICU'] }]), count: vi.fn() },
-    });
+  it('archives a branch (even one in use) and never deletes it', async () => {
+    const prisma = createPrisma();
     const service = new MasterDataService(prisma as never);
+    await expect(service.deleteBranch('org-1', 'branch-1')).resolves.toMatchObject({ deactivated: true, status: 'Archived' });
+    expect(prisma.branch.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 'branch-1' }, data: expect.objectContaining({ status: 'Archived' }) }));
+    expect(prisma.branch.delete).not.toHaveBeenCalled();
+  });
 
-    await expect(service.deleteCatalogValue('org-1', 'skills', 'skill-1')).resolves.toEqual({ id: 'skill-1', deactivated: true, status: 'Inactive' });
-    expect(prisma.masterDataValue.update).toHaveBeenCalledWith({ where: { id: 'skill-1' }, data: { status: 'Inactive', version: { increment: 1 } } });
-    expect(prisma.masterDataValue.delete).not.toHaveBeenCalled();
+  it('is idempotent for an already archived position', async () => {
+    const prisma = createPrisma();
+    const service = new MasterDataService(prisma as never);
+    await expect(service.deletePosition('org-1', 'pos-1')).resolves.toMatchObject({ deactivated: true });
+    expect(prisma.position.update).not.toHaveBeenCalled();
+    expect(prisma.position.delete).not.toHaveBeenCalled();
   });
 });

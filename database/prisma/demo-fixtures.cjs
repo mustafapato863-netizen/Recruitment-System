@@ -508,6 +508,8 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
       requiredSkills: ['DHA/MOH License', 'Clinical Experience'],
     });
     vacMap[v.code] = createdVac;
+    // B3: a requisition with a live job has been activated.
+    await tx.vacancyRequest.update({ where: { id: vr.id }, data: { status: 'Converted to Vacancy' } });
   }
 
   // ── 7. Real Applications ───────────────────────────────────
@@ -531,8 +533,8 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
     { id: fixtureId(507), code: 'APP-100190', email: 'lina.mostafa@sample.com', vacId: nurseVacId, stage: 'Screening', src: 'Career Site' },
     { id: fixtureId(508), code: 'APP-100191', email: 'kareem.fathy@sample.com', vacId: medCoderVacId, stage: 'Screening', src: 'Employee Ref' },
     // New
-    { id: fixtureId(509), code: 'APP-100192', email: 'hassan.talaat@sample.com', vacId: pharmVacId, stage: 'New', src: 'LinkedIn' },
-    { id: fixtureId(510), code: 'APP-100193', email: 'mariam.essam@sample.com', vacId: medCoderVacId, stage: 'New', src: 'LinkedIn' },
+    { id: fixtureId(509), code: 'APP-100192', email: 'hassan.talaat@sample.com', vacId: pharmVacId, stage: 'Applied', src: 'LinkedIn' },
+    { id: fixtureId(510), code: 'APP-100193', email: 'mariam.essam@sample.com', vacId: medCoderVacId, stage: 'Applied', src: 'LinkedIn' },
     // Offer
     { id: fixtureId(511), code: 'APP-100194', email: 'nabil.ahmed@sample.com', vacId: nurseVacId, stage: 'Offer', src: 'Referral' },
     { id: fixtureId(512), code: 'APP-100195', email: 'ahmed.farag@sample.com', vacId: radVacId, stage: 'Offer', src: 'Career Site' },
@@ -542,8 +544,8 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
     { id: fixtureId(515), code: 'APP-100198', email: 'christina.beatric@sample.com', vacId: counsVacId, stage: 'Offer', src: 'Referral' },
     { id: fixtureId(516), code: 'APP-100199', email: 'dr.abhimanyu@sample.com', vacId: urolVacId, stage: 'Offer', src: 'LinkedIn' },
     // Hired
-    { id: fixtureId(517), code: 'APP-100200', email: 'dr.mozna@sample.com', vacId: pharmVacId, stage: 'Hired', src: 'Walk-in' },
-    { id: fixtureId(518), code: 'APP-100201', email: 'tasabeeh.m@sample.com', vacId: nurseVacId, stage: 'Hired', src: 'Agency' },
+    { id: fixtureId(517), code: 'APP-100200', email: 'dr.mozna@sample.com', vacId: pharmVacId, stage: 'Pre-Hire', src: 'Walk-in' },
+    { id: fixtureId(518), code: 'APP-100201', email: 'tasabeeh.m@sample.com', vacId: nurseVacId, stage: 'Pre-Hire', src: 'Agency' },
   ];
 
   const appMap = {};
@@ -584,12 +586,12 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
   });
 
   await tx.interviewScorecard.upsert({
-    where: { interviewId_interviewerId: { interviewId: interviewNour.id, interviewerId: hiringManagerOmarH.id } },
+    where: { interviewId_interviewerId_revision: { interviewId: interviewNour.id, interviewerId: hiringManagerOmarH.id, revision: 1 } },
     update: { overallRating: 5, recommendation: 'Strong Hire' },
     create: {
       id: fixtureId(701),
       interviewId: interviewNour.id, interviewerId: hiringManagerOmarH.id,
-      overallRating: 5, recommendation: 'Strong Hire',
+      overallRating: 5, recommendation: 'Strong Hire', status: 'Submitted',
       strengths: 'Excellent clinical judgment in emergency scenarios, compassionate patient communication, familiarity with Epic and Cerner EMR systems.',
       concerns: 'Needs orientation on automated medication dispensing units used in SGH Dubai ICU wing.',
       notes: 'Demonstrates strong clinical knowledge and confidence in patient assessment. Communication: 4/5, Clinical Knowledge: 5/5, Problem Solving: 4/5, Teamwork: 5/5, Professionalism: 5/5, Cultural Fit: 4/5. Average: 4.5/5.0',
@@ -599,7 +601,7 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
   // ── 9. Real Offer + Approval Chain ─────────────────────────
   const offerNour = await upsertOffer(tx, fixtureId(801), {
     organizationId: orgId, applicationId: nourAppId,
-    offerCode: 'OFF-2024-0142', status: 'Sent to Candidate',
+    offerCode: 'OFF-2024-0142', status: 'Sent',
   });
 
   const offerV1 = await upsertOfferVersion(tx, fixtureId(821), {
@@ -609,7 +611,7 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
     offerExpiry: dateFromNow(7), proposedJoiningDate: dateFromNow(20),
     workLocation: 'SGH Dubai Hospital - ICU Wing',
     workingSchedule: '48 hrs/week (Rotational Shifts)',
-    approvalStatus: 'Approved', isLocked: true,
+    approvalStatus: 'Approved', status: 'Approved',
   });
 
   // Offer Components

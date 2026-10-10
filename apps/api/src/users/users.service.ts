@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { PrismaService } from '../database/prisma.service';
 import { RolesService } from '../roles/roles.service';
@@ -102,7 +102,10 @@ export class UsersService {
     const updateData: { displayName?: string; jobTitle?: string | null; status?: string; managerId?: string | null } = {};
     if (data.displayName !== undefined) updateData.displayName = data.displayName;
     if (data.jobTitle !== undefined) updateData.jobTitle = data.jobTitle?.trim() || null;
-    if (data.status !== undefined) updateData.status = data.status;
+    if (data.status !== undefined) {
+      if (data.status !== 'Active') await this.assertNoOpenOwnership(organizationId, id);
+      updateData.status = data.status;
+    }
     if (data.managerId !== undefined) {
       updateData.managerId = await this.resolveManagerId(organizationId, id, data.managerId);
     }
@@ -117,6 +120,24 @@ export class UsersService {
     }
 
     return this.getById(organizationId, id);
+  }
+
+  /**
+   * B2: a user who still owns open work cannot be deactivated; reassign first
+   * (reassignment itself is B7). 409 with counts.
+   * Open jobs count when the user is the job owner (Vacancy.primaryRecruiterId,
+   * B1) or still holds an active PRIMARY assignment.
+   */
+  async assertNoOpenOwnership(organizationId: string, userId: string): Promise<void> {
+    const counts = await countOpenOwnership(this.prisma, organizationId, userId);
+    const total = Object.values(counts).reduce((sum, value) => sum + value, 0);
+    if (total > 0) {
+      throw new ConflictException({
+        code: 'USER_OWNS_OPEN_WORK',
+        message: 'This user still owns open work. Reassign it before deactivating the user.',
+        counts,
+      });
+    }
   }
 
   async assignRole(organizationId: string, userId: string, roleId: string): Promise<UserRecord> {
@@ -212,4 +233,34 @@ export class UsersService {
       updatedAt: user.updatedAt.toISOString(),
     };
   }
+}
+
+/** Open-work statuses used by the B2 owner block (strings, as stored). */
+export const OPEN_JOB_STATUSES = ['Pending Activation', 'Open', 'On Hold', 'Partially Filled'];
+export const OPEN_REQUISITION_STATUSES = ['Draft', 'Pending Approval', 'Changes Requested', 'Approved'];
+export const CLOSED_APPLICATION_STAGES = ['Joined', 'Rejected', 'Withdrawn'];
+
+export async function countOpenOwnership(
+  prisma: Pick<PrismaService, 'application' | 'vacancy' | 'vacancyRequest'>,
+  organizationId: string,
+  userId: string,
+): Promise<{ openApplicationsPrimary: number; openApplicationsTaskOwner: number; openJobsPrimary: number; openRequisitions: number }> {
+  const openApplication = { organizationId, stage: { notIn: CLOSED_APPLICATION_STAGES } };
+  const [openApplicationsPrimary, openApplicationsTaskOwner, openJobsPrimary, openRequisitions] = await Promise.all([
+    prisma.application.count({ where: { ...openApplication, primaryRecruiterId: userId } }),
+    prisma.application.count({ where: { ...openApplication, taskOwnerId: userId } }),
+    // Distinct open jobs the user owns (B1 column) or is still PRIMARY on.
+    prisma.vacancy.count({
+      where: {
+        organizationId,
+        status: { in: OPEN_JOB_STATUSES },
+        OR: [
+          { primaryRecruiterId: userId },
+          { assignments: { some: { userId, isActive: true, assignmentKind: 'PRIMARY' } } },
+        ],
+      },
+    }),
+    prisma.vacancyRequest.count({ where: { organizationId, requesterId: userId, status: { in: OPEN_REQUISITION_STATUSES } } }),
+  ]);
+  return { openApplicationsPrimary, openApplicationsTaskOwner, openJobsPrimary, openRequisitions };
 }

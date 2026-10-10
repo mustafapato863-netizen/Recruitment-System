@@ -189,6 +189,34 @@ describe('Error Normalizer', () => {
     expect(result.details?.targetStage).toBe('Interview');
     expect(result.details?.requirements).toHaveLength(1);
   });
+
+  // QA BUG-1: B1 machine codes must reach clients in the HTTP envelope.
+  it.each([
+    [403, 'FILE_NOT_OWNED', 'Access denied: this file belongs to another owner.'],
+    [403, 'JOB_NOT_OWNED', 'Access denied: this job belongs to another owner.'],
+    [403, 'ADMIN_CANNOT_REASSIGN', 'Administrators cannot reassign a job owner.'],
+    [400, 'OWNER_NOT_ELIGIBLE', 'An inactive user cannot own a job or file.'],
+    [403, 'ADMIN_ONLY', 'Access denied: only administrators can manage templates.'],
+    [403, 'DOCUMENT_DOWNLOAD_DENIED', 'Access denied: downloading this document requires DOWNLOAD_DOCUMENTS.'],
+  ])('keeps the B1 code %s/%s and its message', (status, code, message) => {
+    const result = normalizeError(new HttpException({ code, message }, status));
+    expect(result.statusCode).toBe(status);
+    expect(result.code).toBe(code);
+    expect(result.message).toBe(message);
+  });
+});
+
+describe('B3 domain codes are registered (kept, not collapsed)', () => {
+  it('keeps every B3 code in the envelope', async () => {
+    const { ConflictException, ForbiddenException, BadRequestException } = await import('@nestjs/common');
+    expect(normalizeError(new ConflictException({ code: 'ILLEGAL_JOB_TRANSITION', message: 'Job is already Closed.' })).code).toBe('ILLEGAL_JOB_TRANSITION');
+    expect(normalizeError(new ForbiddenException({ code: 'NOT_JOB_OWNER', message: 'x' })).code).toBe('NOT_JOB_OWNER');
+    expect(normalizeError(new BadRequestException({ code: 'HOLD_UNTIL_NOT_FUTURE', message: 'x' })).code).toBe('HOLD_UNTIL_NOT_FUTURE');
+    for (const c of ['ADMIN_CANNOT_CHANGE_JOB_STATUS', 'ASSIGNEE_NOT_ELIGIBLE', 'ASSIGNEE_REQUIRED', 'DUE_DATE_REQUIRED', 'GRADE_NOT_FOUND', 'JOB_NOT_ACCEPTING_APPLICATIONS', 'REASON_REQUIRED', 'REQUISITION_CANCELLED', 'REASON_NOT_IN_LIST']) {
+      expect(normalizeError(new ConflictException({ code: c, message: 'x' })).code).toBe(c);
+    }
+    expect(normalizeError(new ConflictException({ code: 'SOMETHING_UNKNOWN' })).code).toBe('CONFLICT');
+  });
 });
 
 describe('B6 domain codes are registered', () => {

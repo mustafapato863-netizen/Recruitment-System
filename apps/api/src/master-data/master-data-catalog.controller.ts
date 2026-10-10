@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, UseGuards } from '@nestjs/common';
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { MasterDataBatchDto } from './master-data.dto';
 import { MasterDataService } from './master-data.service';
@@ -31,9 +31,22 @@ export class MasterDataCatalogController {
     return this.masterDataService.saveCatalogBatch(user.organizationId, category, body.rows);
   }
 
+  /** C3: deactivate (or re-activate) one value: body {status:'Inactive'|'Active'}. */
+  @Patch(':category/:id')
+  @RequirePermissions('MASTER_DATA_MANAGE')
+  @AuditAction('MASTER_DATA_VALUE_STATUS')
+  setStatus(
+    @CurrentUser() user: AuthUser,
+    @Param('category') category: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { status?: string },
+  ) {
+    return this.masterDataService.setCatalogValueStatus(user.organizationId, category, id, body?.status ?? '');
+  }
+
   @Delete(':category/:id')
   @RequirePermissions('MASTER_DATA_MANAGE')
-  @AuditAction('MASTER_DATA_VALUE_DELETE')
+  @AuditAction('MASTER_DATA_VALUE_DEACTIVATE')
   remove(
     @CurrentUser() user: AuthUser,
     @Param('category') category: string,
