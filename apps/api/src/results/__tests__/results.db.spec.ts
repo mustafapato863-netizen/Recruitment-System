@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PrismaService } from '../../database/prisma.service';
 import { AccessControlService } from '../../access-control/access-control.service';
 import { ResultsService } from '../results.service';
+import { HAS_VACANCY_OWNER } from '../../common/schema-features';
 
 const url = process.env.B8_TEST_DATABASE_URL;
 const ORG = '10000000-0000-4000-8000-000000000001';
@@ -28,9 +29,10 @@ describe.skipIf(!url)('B8 /results (scratch Postgres)', () => {
     const jobs = await prisma.vacancy.findMany({ where: { organizationId: ORG, status: { not: 'Closed' } }, take: 2, orderBy: { vacancyCode: 'asc' } });
     job = jobs[0]!.id; otherJob = jobs[1]!.id;
     await prisma.vacancy.update({ where: { id: job }, data: { approvedHeadcount: 3 } });
+    // Same shape the API writes: one active PRIMARY (+ Vacancy.primaryRecruiterId once B1 is under this branch).
     await prisma.vacancyAssignment.updateMany({ where: { vacancyId: job, assignmentKind: 'PRIMARY', isActive: true }, data: { isActive: false } });
     await prisma.vacancyAssignment.create({ data: { vacancyId: job, userId: u.r1, roleCode: 'RECRUITER', assignmentKind: 'PRIMARY', isActive: true } });
-    await prisma.vacancy.update({ where: { id: job }, data: { primaryRecruiterId: u.r1 } as never });
+    if (HAS_VACANCY_OWNER) await prisma.vacancy.update({ where: { id: job }, data: { primaryRecruiterId: u.r1 } as never });
     const mkCand = async (i: number | string) => (await prisma.candidate.create({ data: { organizationId: ORG, candidateCode: `R8-${tag}-${i}`, firstName: 'R8', lastName: `C${i}` } })).id;
     const apps: string[] = [];
     for (let i = 0; i < 6; i += 1) {

@@ -156,12 +156,23 @@ export class InterviewsController {
     });
   }
 
+  /** E3: owner-only nudge to interviewers with a missing scorecard; at most one per interview per day (409). */
+  @Post(':id/scorecard-reminder')
+  @RequirePermissions('VACANCY_VIEW')
+  @AuditAction('SCORECARD_REMINDER_SEND')
+  @UseGuards(TenantScopedGuard)
+  @TenantResource({ resource: 'interview', param: 'id' })
+  sendScorecardReminder(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.interviewsService.sendScorecardReminder(user.organizationId, id, user);
+  }
+
   /** B5: revise a submitted scorecard (new revision with a reason). */
   @Post(':id/scorecard/revisions')
   @RequirePermissions('VACANCY_VIEW')
   @AuditAction('SCORECARD_REVISE')
   @UseGuards(TenantScopedGuard)
   @TenantResource({ resource: 'interview', param: 'id' })
+  @AllowInterviewAttendee()
   reviseScorecard(
     @CurrentUser() user: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,

@@ -22,6 +22,7 @@ import type {
   VacancyDetailView,
 } from '@recruitflow/contracts';
 import type { Prisma } from '@recruitflow/database';
+import { HAS_VACANCY_OWNER } from '../common/schema-features';
 import type {
   CreateVacancyRequestDto,
   VacancyRequestActionDto,
@@ -706,8 +707,8 @@ export class VacancyCoreService {
           });
         }
       }
-      // B1 x B3 (integration): the activated job's single owner is the assigned employee.
-      await tx.vacancy.update({ where: { id: jobId }, data: { primaryRecruiterId: assigneeId } });
+      // B1 x B3: the activated job's single owner is the assigned employee. Guarded: the column exists once B1 (#4) is merged.
+      if (HAS_VACANCY_OWNER) await tx.vacancy.update({ where: { id: jobId }, data: { primaryRecruiterId: assigneeId } as never });
       await tx.vacancyAssignment.updateMany({ where: { vacancyId: jobId, assignmentKind: 'PRIMARY', isActive: true, NOT: { userId: assigneeId } }, data: { isActive: false } });
       const already = await tx.vacancyAssignment.findFirst({ where: { vacancyId: jobId, assignmentKind: 'PRIMARY', isActive: true, userId: assigneeId } });
       if (!already) {

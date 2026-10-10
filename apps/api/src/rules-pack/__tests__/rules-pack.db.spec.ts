@@ -19,7 +19,8 @@ import { assertEligibleOwner } from '../../common/access/file-access';
 import { redactVacancy } from '../../vacancy-core/vacancy-core.service';
 import { JOB_STATUSES, JOB_TRANSITIONS, assertJobAcceptsApplications } from '../../vacancy-core/vacancy-lifecycle';
 import { GATE_CODES, assertStageGate, resolveRejectionReason } from '../../applications/application-gates';
-import { scorecardState } from '../../interviews/interview-rules';
+import { scorecardState } from '../../interviews/interview-rules';import { HAS_VACANCY_OWNER } from '../../common/schema-features';
+
 
 const url = process.env.RULES_TEST_DATABASE_URL;
 const ORG = '10000000-0000-4000-8000-000000000001';
@@ -188,5 +189,11 @@ describe.skipIf(!url)('B11 rules pack — Postgres', () => {
       }
       await expect(resolveRejectionReason(prisma as never, ORG, 'Declined offer')).resolves.toBe('Declined offer');
     });
+  });
+});
+
+describe('stack-merge guards are live on the integrated stack', () => {
+  it('HAS_VACANCY_OWNER is on (B1 under B3/B8): activation and B8 counting use Vacancy.primaryRecruiterId', () => {
+    expect(HAS_VACANCY_OWNER).toBe(true);
   });
 });

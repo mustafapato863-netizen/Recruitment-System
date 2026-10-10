@@ -72,6 +72,7 @@ export function scorecardState(sc: {
     previousRevisionId: sc.previousRevisionId,
     revisedById: sc.revisedById,
     revisionReason: sc.revisionReason,
+    // TODO(E3): remove isLocked once Frontend reads `status` (kept as a derived, read-only mirror of Submitted).
     isLocked: sc.status === 'Submitted',
     submittedAt: (sc.submittedAt ?? sc.createdAt).toISOString(),
   };

@@ -31,11 +31,11 @@ describe.skipIf(!url)('B5 follow-ups: offer Draft/submit/send, approver note + g
   const outbox = { enqueueWithTx: async (_tx: unknown, input: Record<string, unknown>) => { queued.push(input); } };
   const visibleOnly: { ids: string[] | null } = { ids: null };
   const visibility = async (u: { organizationId: string }) => ({ organizationId: u.organizationId, ...(visibleOnly.ids ? { id: { in: visibleOnly.ids } } : {}) });
-  // B11 integration: B1's AccessControlService adds read-visibility and assertApplicationAccess; the stub mirrors them.
+  // Mirrors B1's AccessControlService too (read visibility + assertApplicationAccess) so this spec passes once #4 is merged under it.
   const access = {
     getApplicationVisibilityWhere: visibility,
     getApplicationReadVisibilityWhere: visibility,
-    assertApplicationAccess: async (u: { organizationId: string }, id: string) => {
+    assertApplicationAccess: async (_u: { organizationId: string }, id: string) => {
       if (visibleOnly.ids && !visibleOnly.ids.includes(id)) throw Object.assign(new Error('Forbidden'), { status: 403 });
     },
   };
