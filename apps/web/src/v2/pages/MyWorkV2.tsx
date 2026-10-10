@@ -9,7 +9,7 @@ import { EmptyStateV2, ForbiddenStateV2, SkeletonV2 } from '../../components/v2/
 import { TaskRow, TaskSection } from '../../components/v2/Task';
 import '../../components/v2/v2-primitives.css';
 import './my-work.css';
-import { fileActionHref, getMyWork, type MyWorkAction, type MyWorkDay, type MyWorkResult, type MyWorkTarget, type WorkItem, type WorkItemType } from '../api/myWork';
+import { fileActionHref, getMyWork, waitingOnName, type MyWorkAction, type MyWorkDay, type MyWorkResult, type MyWorkTarget, type WorkItem, type WorkItemType } from '../api/myWork';
 
 type LoadState =
   | { kind: 'loading' }
@@ -120,6 +120,29 @@ function ItemMeta({ item }: { item: WorkItem }) {
   );
 }
 
+const HINT_NOUN: Record<WorkItemType, string> = { job: 'job', requisition: 'requisition', task: 'task', interview: 'interview', scorecard: 'scorecard', offer: 'offer' };
+/** E02 tile detail: the first item, "Ahmed Embaby — scorecard" / "Lina Hassan — with Karim Hassan". */
+function countHint(items: WorkItem[], bucket: Bucket): string | null {
+  const first = items[0];
+  if (!first) return null;
+  const who = first.candidate?.name ?? first.title;
+  if (bucket === 'waitingOnOthers') {
+    const on = waitingOnName(first);
+    return on ? `${who} — with ${on}` : `${who} — ${HINT_NOUN[first.type] ?? first.type}`;
+  }
+  return `${who} — ${HINT_NOUN[first.type] ?? first.type}`;
+}
+
+/** E02: a waiting offer reads "Lina Hassan — offer waiting on Karim Hassan" (never a role code). */
+function rowTitle(item: WorkItem, bucket: Bucket): string {
+  if (bucket !== 'waitingOnOthers' || item.type !== 'offer' || !item.candidate) return item.title;
+  const on = waitingOnName(item);
+  return `${item.candidate.name} — offer waiting ${on ? `on ${on}` : 'for approval'}`;
+}
+
+/** E02: a waiting row is read-only unless it has an enabled action beyond just opening the record (e.g. Record answer). */
+const readOnly = (item: WorkItem) => !item.actions.some((a) => !a.disabled && !a.key.startsWith('open-'));
+
 function greeting(): string {
   const h = new Date().getHours();
   return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
@@ -173,9 +196,12 @@ export function MyWorkV2({ load = getMyWork }: { load?: typeof getMyWork } = {})
           {subtitle ? <p className="rf2-mywork__subtitle">{subtitle}</p> : null}
         </div>
         <div className="rf2-mywork__day">
+          <div className="rf2-mywork__head-actions">
+            {data && !noWork ? <Link className="rf2-btn rf2-btn--secondary rf2-btn--sm" to="/vacancies"><span>View open jobs</span></Link> : null}
           <div className="rf2-segmented" role="group" aria-label="Day">
             <ButtonV2 kind="secondary" size="sm" selected={day === 'today'} onClick={() => setDay('today')}>Today</ButtonV2>
             <ButtonV2 kind="secondary" size="sm" selected={day === 'tomorrow'} onClick={() => setDay('tomorrow')}>Tomorrow</ButtonV2>
+          </div>
           </div>
           {data?.date ? <p className="rf2-mywork__today">{day === 'tomorrow' ? 'Tomorrow' : 'Today'} · {f.full(data.date)}</p> : null}
         </div>
@@ -218,6 +244,15 @@ export function MyWorkV2({ load = getMyWork }: { load?: typeof getMyWork } = {})
             />
           ) : (
             <>
+              <dl className="rf2-mywork__counts" aria-label="Counts">
+                {([['Total open', total, 'Tasks assigned to you'], ['Overdue', data.counts.overdue, countHint(data.overdue, 'overdue')], [day === 'tomorrow' ? 'Due tomorrow' : 'Due today', data.counts.today, countHint(data.dueToday, 'dueToday')], ['Waiting on others', data.counts.waitingOnOthers, countHint(data.waitingOnOthers, 'waitingOnOthers')]] as const).map(([label, value, hint]) => (
+                  <div key={label} className="rf2-mywork__count" data-key={label}>
+                    <dt>{label}</dt>
+                    <dd data-count-value="">{value}</dd>
+                    {hint ? <dd className="rf2-mywork__count-hint">{hint}</dd> : null}
+                  </div>
+                ))}
+              </dl>
               {BUCKETS.map(({ key, title: t0, empty: e0 }) => {
                 const title = key === 'dueToday' && day === 'tomorrow' ? 'Tomorrow' : t0;
                 const empty = key === 'dueToday' && day === 'tomorrow' ? 'Nothing booked for tomorrow.' : e0;
@@ -230,27 +265,20 @@ export function MyWorkV2({ load = getMyWork }: { load?: typeof getMyWork } = {})
                       <TaskRow key={`${item.type}-${item.id}`}
                         icon={key === 'overdue' ? <TriangleAlert /> : TYPE_ICON[item.type] ?? <Clock />}
                         iconTone={key === 'overdue' ? 'warning' : key === 'waitingOnOthers' ? 'neutral' : 'info'}
-                        title={item.title}
+                        title={rowTitle(item, key)}
                         meta={<ItemMeta item={item} />}
-                        chip={<span className="rf2-mywork__chips">{item.waitingOn ? <StatusChip tone="neutral" label={WAITING_LABEL[item.waitingOn] ?? 'Waiting'} /> : <StatusChip tone={key === 'overdue' ? 'warning' : 'info'} label={TYPE_LABEL[item.type] ?? item.type} />}{sla ? <span data-testid="sla">{sla}</span> : null}</span>}
-                        due={due ? <span data-testid="due">{due}</span> : undefined}
+                        chip={<span className="rf2-mywork__chips">{item.waitingOn ? <StatusChip tone="neutral" label={item.waitingOn === 'approver' ? 'Waiting on approval' : WAITING_LABEL[item.waitingOn] ?? 'Waiting'} /> : <StatusChip tone={key === 'overdue' ? 'warning' : 'info'} label={TYPE_LABEL[item.type] ?? item.type} />}{sla ? <span data-testid="sla">{sla}</span> : null}</span>}
+                        due={key === 'waitingOnOthers' && readOnly(item) ? <span data-testid="due">No action for you</span> : due ? <span data-testid="due">{due}</span> : undefined}
                         dueTone={key === 'overdue' ? 'danger' : 'default'}
-                        action={<ItemActions item={item} bucket={key} primary={key === 'dueToday' && index === 0} />}
+                        action={key === 'waitingOnOthers' && readOnly(item)
+                          ? <span className="rf2-mywork__readonly">Read-only</span>
+                          : <ItemActions item={item} bucket={key} primary={key === 'dueToday' && index === 0} />}
                       />
                     );
                   })}
                 </TaskSection>
                 );
               })}
-              <dl className="rf2-mywork__counts" aria-label="Counts">
-                {([['Total open', total, 'Tasks assigned to you'], ['Overdue', data.counts.overdue, null], [day === 'tomorrow' ? 'Due tomorrow' : 'Due today', data.counts.today, null], ['Waiting on others', data.counts.waitingOnOthers, null]] as const).map(([label, value, hint]) => (
-                  <div key={label} className="rf2-mywork__count" data-key={label}>
-                    <dt>{label}</dt>
-                    <dd data-count-value="">{value}</dd>
-                    {hint ? <dd className="rf2-mywork__count-hint">{hint}</dd> : null}
-                  </div>
-                ))}
-              </dl>
             </>
           )}
         </>
@@ -269,7 +297,8 @@ function TargetStrip({ target, format }: { target: MyWorkTarget; format: ReturnT
         <p className="rf2-jobstrip__meta">{[target.vacancyCode, target.department, target.site, target.owner ? `Owner: ${target.owner.name}` : null].filter(Boolean).join(' · ')}</p>
       </div>
       <div className="rf2-jobstrip__seats">
-        <span className="rf2-jobstrip__seats-label">{target.label} filled</span>
+        <span className="rf2-jobstrip__seats-kicker">Hire target</span>
+        <span className="rf2-jobstrip__seats-label">{target.filled} of {target.target} joined</span>
         <span className="rf2-jobstrip__bar" role="progressbar" aria-label={`Seats filled for ${target.title}`} aria-valuemin={0} aria-valuemax={target.target} aria-valuenow={target.filled}>
           <span style={{ width: `${pct}%` }} />
         </span>
@@ -277,6 +306,9 @@ function TargetStrip({ target, format }: { target: MyWorkTarget; format: ReturnT
       <div className="rf2-jobstrip__due">
         <span className="rf2-jobstrip__due-label">Due</span>
         <span className="rf2-jobstrip__due-value">{target.dueDate ? format.full(target.dueDate) : 'No due date'}</span>
+      </div>
+      <div className="rf2-jobstrip__links">
+        <Link className="rf2-btn rf2-btn--secondary rf2-btn--sm" to={`/vacancies/${encodeURIComponent(target.vacancyId)}`} aria-label={`Open pipeline: ${target.title}`}><span>Open pipeline</span></Link>
       </div>
     </section>
   );
