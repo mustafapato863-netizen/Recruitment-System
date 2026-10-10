@@ -173,16 +173,18 @@ describe('E09 Job pipeline', () => {
 });
 
 describe('E12 Hold / Reopen / Close (B3)', () => {
-  it('hold requires a reason, posts it, closes the drawer and reloads; shows job history', async () => {
+  it('hold is the one primary; reason required; posts; reloads; shows history; client presets when master data is absent', async () => {
     const u = userEvent.setup();
     api.postApi.mockResolvedValue(fx.jobDetail('On Hold'));
     renderAt('/vacancies/v1');
     await u.click(await screen.findByRole('button', { name: 'Hold job' }));
     const d = await screen.findByRole('dialog', { name: 'Hold or close this job' });
     expect(screen.getByTestId('loc')).toHaveTextContent('/vacancies/v1?drawer=status');
-    expect(within(d).getByRole('radio', { name: 'Put on hold' })).toHaveAttribute('aria-checked', 'true');
-    expect(within(d).queryByRole('radio', { name: 'Reopen job' })).not.toBeInTheDocument();
+    expect(d.querySelectorAll('.rf2-btn--primary')).toHaveLength(1);
+    expect(within(d).getByRole('button', { name: 'Close job' })).toHaveAttribute('data-kind', 'danger-outline');
     expect(await within(d).findByText(/Open → Partially Filled/)).toBeInTheDocument();
+    await waitFor(() => expect(within(d).getByRole('option', { name: 'Budget review' })).toBeInTheDocument());
+    expect(api.getApi).toHaveBeenCalledWith('/master-data/catalog/job-hold-reasons');
     await u.click(within(d).getByRole('button', { name: 'Put on hold' }));
     expect(within(d).getByText('A reason is required (at least 3 characters).')).toBeInTheDocument();
     expect(api.postApi).not.toHaveBeenCalled();
@@ -193,23 +195,34 @@ describe('E12 Hold / Reopen / Close (B3)', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(await axeViolations(document.body)).toEqual([]);
   });
-  it('reopen from On Hold; close needs the final confirmation; server message shown inline', async () => {
+  it('uses master-data reasons when Backend adds the category', async () => {
+    serve({ '/master-data/catalog/job-hold-reasons': [{ name: 'Hiring freeze', status: 'Active' }, { name: 'Old', status: 'Inactive' }] });
+    renderAt('/vacancies/v1?drawer=status');
+    const d = await screen.findByRole('dialog');
+    expect(await within(d).findByRole('option', { name: 'Hiring freeze' })).toBeInTheDocument();
+    expect(within(d).queryByRole('option', { name: 'Old' })).not.toBeInTheDocument();
+    expect(within(d).queryByRole('option', { name: 'Budget review' })).not.toBeInTheDocument();
+    expect(within(d).getByRole('option', { name: 'Position no longer needed' })).toBeInTheDocument();
+  });
+  it('reopen from On Hold (server message inline); Close needs click + confirm (danger-outline → danger)', async () => {
     const u = userEvent.setup();
     serve({ '/vacancies/v1': fx.jobDetail('On Hold') });
     api.postApi.mockRejectedValueOnce(new ApiError(403, 'Only the job owner or their manager can hold, reopen or close this job.', undefined, { code: 'FORBIDDEN' }));
     renderAt('/vacancies/v1?drawer=status');
     const d = await screen.findByRole('dialog', { name: 'Reopen this job' });
+    await waitFor(() => expect(within(d).getByRole('option', { name: 'Hiring manager back' })).toBeInTheDocument());
     await u.selectOptions(within(d).getByLabelText(/^Reason/), 'Hiring manager back');
     await u.click(within(d).getByRole('button', { name: 'Reopen job' }));
     expect(await within(d).findByRole('alert')).toHaveTextContent('Only the job owner or their manager can hold, reopen or close this job.');
     expect(api.postApi).toHaveBeenCalledWith('/vacancies/v1/reopen', { reason: 'Hiring manager back' });
-    await u.click(within(d).getByRole('radio', { name: 'Close job' }));
-    await u.selectOptions(within(d).getByLabelText(/^Reason/), 'Position no longer needed');
-    await u.click(within(d).getByRole('button', { name: 'Close job' }));
-    expect(within(d).getByRole('alert')).toHaveTextContent('Confirm that closing is final.');
     api.postApi.mockResolvedValue(fx.jobDetail('Closed'));
-    await u.click(within(d).getByLabelText('I understand closing is final.'));
-    await u.click(within(d).getByRole('button', { name: 'Close job' }));
+    await u.selectOptions(within(d).getByLabelText(/^Reason/), 'Position no longer needed');
+    const close = within(d).getByRole('button', { name: 'Close job' });
+    await u.click(close);
+    expect(api.postApi).toHaveBeenCalledTimes(1);
+    expect(close).toHaveTextContent('Confirm close — final');
+    expect(close).toHaveAttribute('data-kind', 'danger');
+    await u.click(close);
     await waitFor(() => expect(api.postApi).toHaveBeenLastCalledWith('/vacancies/v1/close', { reason: 'Position no longer needed' }));
   });
   it('closed job: no actions offered', async () => {
@@ -217,7 +230,8 @@ describe('E12 Hold / Reopen / Close (B3)', () => {
     renderAt('/vacancies/v1?drawer=status');
     const d = await screen.findByRole('dialog');
     expect(within(d).getByText(/closed job is final and cannot be reopened/)).toBeInTheDocument();
-    expect(within(d).queryByRole('radio')).not.toBeInTheDocument();
+    expect(within(d).queryByRole('button', { name: 'Close job' })).not.toBeInTheDocument();
+    expect(d.querySelectorAll('.rf2-btn--primary')).toHaveLength(0);
   });
 });
 
@@ -247,7 +261,7 @@ describe('E11 Import CVs (resume parse + B6 duplicate check)', () => {
     expect(within(dupBox).getByRole('radio', { name: /Link to Nourhan Sami \(CAN-2026-0007\)/ })).toBeChecked();
     expect(dupBox).toHaveTextContent('Evidence: same email (nourhan.sami@gmail.com)');
     expect(d.textContent).not.toMatch(/\d\s?%/);
-    expect(rows[2]).toHaveTextContent(/Not accepted.*ZIP archives are not supported/);
+    expect(rows[2]).toHaveTextContent(/Not accepted.*ZIP is not supported/);
     expect(api.postApi).toHaveBeenCalledWith('/candidates/duplicate-check', { email: 'Rania.Kamel@Gmail.com', phone: '+20 100 555 0192' });
     expect(await axeViolations(baseElement)).toEqual([]);
     await u.click(within(d).getByRole('button', { name: 'Import 2 to Applied' }));

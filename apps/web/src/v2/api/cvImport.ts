@@ -31,7 +31,7 @@ export const ACCEPTED_CV = ['.pdf', '.doc', '.docx'];
 export const MAX_CV_BYTES = 10 * 1024 * 1024;
 export function cvFileProblem(file: File): string | null {
   const n = file.name.toLowerCase();
-  if (!ACCEPTED_CV.some((x) => n.endsWith(x))) return 'Not a PDF or Word file. ZIP archives are not supported yet; add the PDFs one by one.';
+  if (!ACCEPTED_CV.some((x) => n.endsWith(x))) return 'Not a PDF or Word file. ZIP is not supported; select the CVs themselves (several at once is fine).';
   if (file.size > MAX_CV_BYTES) return 'Larger than 10 MB.';
   return null;
 }

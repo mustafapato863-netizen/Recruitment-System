@@ -257,3 +257,26 @@ export const errorMessage = (error: unknown, fallback: string) => {
   const m = (error as { message?: unknown })?.message;
   return typeof m === 'string' && m ? m : fallback;
 };
+
+// ── Reason presets (client today; master data when Backend adds the categories) ──
+export const CLIENT_REASON_PRESETS: Record<JobAction, string[]> = {
+  hold: ['Hiring manager unavailable — interviews paused', 'Budget review', 'Role being redefined'],
+  reopen: ['Hiring manager back', 'Budget confirmed', 'Role confirmed'],
+  close: ['Position no longer needed', 'Filled internally', 'Budget withdrawn'],
+};
+/** Proposed master-data categories (not yet in Backend). */
+export const REASON_CATEGORY: Record<JobAction, string> = { hold: 'job-hold-reasons', reopen: 'job-reopen-reasons', close: 'job-close-reasons' };
+
+/**
+ * Uses GET /master-data/catalog/:category when it exists and has active values;
+ * falls back to the client presets on 404/empty/error. Returns the source for transparency.
+ */
+export async function jobReasonPresets(action: JobAction): Promise<{ source: 'master-data' | 'client'; reasons: string[] }> {
+  try {
+    const rows = await getApi<Array<{ name?: string; status?: string }> | { data: Array<{ name?: string; status?: string }> }>(`/master-data/catalog/${REASON_CATEGORY[action]}`);
+    const arr = Array.isArray(rows) ? rows : rows?.data ?? [];
+    const reasons = arr.filter((r) => r.name?.trim() && r.status !== 'Inactive' && r.status !== 'Archived').map((r) => r.name!.trim());
+    if (reasons.length) return { source: 'master-data', reasons };
+  } catch { /* category not there yet */ }
+  return { source: 'client', reasons: CLIENT_REASON_PRESETS[action] };
+}

@@ -70,9 +70,9 @@ export function ImportCvsDrawer({ job, onClose, onDone }: { job: JobDetail; onCl
       <div className="rf2-drawer-form">
         <div className="rf2-drop" onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); add(e.dataTransfer.files); }}>
           <Upload aria-hidden="true" />
-          <label htmlFor="cv-files" className="rf2-drop__label">Drop CVs or <span className="rf2-link">browse</span></label>
+          <label htmlFor="cv-files" className="rf2-drop__label">Drop CVs or <span className="rf2-link">select files</span></label>
           <input id="cv-files" ref={input} className="rf2-sr-only" type="file" multiple accept=".pdf,.doc,.docx" onChange={(e) => { add(e.target.files); e.target.value = ''; }} />
-          <p className="rf2-jtable__sub">PDF or Word, up to 10 MB each. Each CV is checked against the bank by email and phone.</p>
+          <p className="rf2-jtable__sub">Select one or several PDF or Word files, up to 10 MB each. Each CV is checked against the bank by email and phone.</p>
         </div>
         {rows.length ? (
           <ul className="rf2-imports" aria-label="CVs">
