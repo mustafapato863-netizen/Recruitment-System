@@ -1,7 +1,9 @@
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
+import { fetchVacancyContext, fetchVacancyList } from '../utils/vacancyAccess';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getApi, patchApi, ApiError } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
+import { isAdministratorUser } from '../utils/isAdministrator';
 import type {
   Application,
   ApplicationStage,
@@ -361,6 +363,7 @@ function mapApplicationToKanbanCard(
   a: Application,
   colStageKey: ApplicationStage,
   targetVacancy?: Vacancy | VacancyDetailView | null,
+  isAdmin = false,
 ): KanbanCard {
   const candidateName = a.candidate
     ? `${a.candidate.firstName} ${a.candidate.lastName}`.trim()
@@ -404,6 +407,7 @@ function mapApplicationToKanbanCard(
   const nextPlan = getNextActionPlan(
     a.stage || colStageKey,
     !a.primaryRecruiterId || ownerName === 'Unassigned',
+    isAdmin,
   );
 
   return {
@@ -450,6 +454,9 @@ export function ApplicationsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const vacancyId = searchParams.get('vacancyId');
   const { user } = useAuth();
+  const isAdmin = isAdministratorUser(user);
+  const isAdminRef = useRef(isAdmin);
+  isAdminRef.current = isAdmin;
 
   const [currentVacancy, setCurrentVacancy] = useState<VacancyDetailView | null>(null);
   const currentVacancyRef = useRef<VacancyDetailView | null>(currentVacancy);
@@ -751,7 +758,7 @@ export function ApplicationsPage() {
 
         const cards = matchedApps.map((a) => {
           const targetVacancy = (a.vacancyId ? vacMap.get(a.vacancyId) : null) || curVac;
-          return mapApplicationToKanbanCard(a, col.stageKey, targetVacancy);
+          return mapApplicationToKanbanCard(a, col.stageKey, targetVacancy, isAdminRef.current);
         });
         return {
           id: col.id,
@@ -799,12 +806,11 @@ export function ApplicationsPage() {
           let list = allVacanciesRef.current;
           if (!list.length) {
             try {
-              const res = await getApi<Vacancy[]>('/vacancies');
-              if (Array.isArray(res)) {
-                list = res;
-                setAllVacancies(res);
-                allVacanciesRef.current = res;
-              }
+              // B1: redacted jobs are excluded from the job switcher.
+              const { full } = await fetchVacancyList();
+              list = full;
+              setAllVacancies(full);
+              allVacanciesRef.current = full;
             } catch {
               // ignore
             }
@@ -823,7 +829,7 @@ export function ApplicationsPage() {
         const [res, vacRes] = await Promise.allSettled([
           fetchAllApplicationPages({ vacancyId: resolvedVacancyId }),
           /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(resolvedVacancyId)
-            ? getApi<VacancyDetailView>(`/vacancies/${resolvedVacancyId}`)
+            ? fetchVacancyContext(resolvedVacancyId)
             : Promise.reject(new Error('Invalid vacancy identifier')),
         ]);
 
@@ -873,12 +879,10 @@ export function ApplicationsPage() {
   }, [loadApplications]);
 
   useEffect(() => {
-    void getApi<Vacancy[]>('/vacancies')
-      .then((res) => {
-        if (Array.isArray(res)) {
-          setAllVacancies(res);
-          allVacanciesRef.current = res;
-        }
+    void fetchVacancyList()
+      .then(({ full }) => {
+        setAllVacancies(full);
+        allVacanciesRef.current = full;
       })
       .catch(() => {});
   }, []);
@@ -1061,7 +1065,7 @@ export function ApplicationsPage() {
       const positionTitle = app.positionTitle || 'No position specified';
 
       const unassigned = !app.primaryRecruiterId || ownerName === 'Unassigned';
-      const nextPlan = getNextActionPlan(currentStage, unassigned);
+      const nextPlan = getNextActionPlan(currentStage, unassigned, isAdmin);
 
       const targetVacancy = (app.vacancyId ? vacancyMap.get(app.vacancyId) : null) || currentVacancy;
       const fitBreakdown = calculateCandidateFitScore(
@@ -1114,7 +1118,7 @@ export function ApplicationsPage() {
         rawApplication: app,
       };
     });
-  }, [filteredApplications, vacancyMap, currentVacancy]);
+  }, [filteredApplications, vacancyMap, currentVacancy, isAdmin]);
 
   const pageSize = 10;
   const paginatedList = useMemo(() => {
@@ -2054,7 +2058,7 @@ export function ApplicationsPage() {
                         disabled={row.nextAction === 'Assign to me' && claimingId === row.id}
                         onClick={() => {
                           const unassigned = !row.rawApplication.primaryRecruiterId || row.ownerName === 'Unassigned';
-                          const plan = getNextActionPlan(row.currentStage, unassigned);
+                          const plan = getNextActionPlan(row.currentStage, unassigned, isAdmin);
                           handleNextAction(row.id, plan.kind);
                         }}
                         className="inline-flex min-h-7 items-center rounded-lg bg-blue-600 px-2.5 text-[11px] font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
@@ -2285,6 +2289,7 @@ export function ApplicationsPage() {
                     {column.cards.map((card) => (
                       <ApplicationKanbanCard
                         key={card.id}
+                        canClaim={!isAdmin}
                         card={{
                           id: card.id,
                           applicationCode: card.applicationCode,

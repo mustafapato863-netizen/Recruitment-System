@@ -18,7 +18,7 @@ import { CreateEmailTemplateDto, UpdateEmailTemplateDto } from './email-template
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { AuthUser } from '@recruitflow/contracts';
-import { RequireAnyPermissions, RequirePermissions } from '../common/decorators/require-permissions.decorator';
+import { RequireAdmin, RequireAnyPermissions } from '../common/decorators/require-permissions.decorator';
 import { AuditAction } from '../common/decorators/audit-action.decorator';
 
 @Controller('email-templates')
@@ -42,7 +42,7 @@ export class EmailTemplatesController {
   }
 
   @Post()
-  @RequireAnyPermissions('MASTER_DATA_MANAGE', 'APPLICATION_VIEW', 'VACANCY_VIEW')
+  @RequireAdmin()
   @AuditAction('email_template.create')
   async createTemplate(
     @CurrentUser() user: AuthUser,
@@ -52,7 +52,7 @@ export class EmailTemplatesController {
   }
 
   @Patch(':id')
-  @RequireAnyPermissions('MASTER_DATA_MANAGE', 'APPLICATION_VIEW', 'VACANCY_VIEW')
+  @RequireAdmin()
   @AuditAction('email_template.update')
   async updateTemplate(
     @CurrentUser() user: AuthUser,
@@ -63,7 +63,7 @@ export class EmailTemplatesController {
   }
 
   @Post(':id/duplicate')
-  @RequireAnyPermissions('MASTER_DATA_MANAGE', 'APPLICATION_VIEW', 'VACANCY_VIEW')
+  @RequireAdmin()
   @AuditAction('email_template.duplicate')
   async duplicateTemplate(
     @CurrentUser() user: AuthUser,
@@ -73,7 +73,7 @@ export class EmailTemplatesController {
   }
 
   @Delete(':id')
-  @RequireAnyPermissions('MASTER_DATA_MANAGE', 'APPLICATION_VIEW', 'VACANCY_VIEW')
+  @RequireAdmin()
   @AuditAction('email_template.archive')
   @HttpCode(HttpStatus.NO_CONTENT)
   async archiveTemplate(

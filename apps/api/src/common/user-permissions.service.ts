@@ -18,7 +18,7 @@ export class UserPermissionsService {
       select: {
         userRoles: {
           where: { role: { status: 'Active' } },
-          select: { role: { select: { permissions: { select: { permission: { select: { code: true } } } } } } },
+          select: { role: { select: { permissions: { where: { permission: { status: 'Active' } }, select: { permission: { select: { code: true } } } } } } },
         },
       },
     });

@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { fetchVacancyList } from '../utils/vacancyAccess';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getApi } from '../api/client';
 import type { Candidate, Application, Vacancy, PaginatedResult } from '@recruitflow/contracts';
@@ -84,10 +85,9 @@ export function CandidateComparisonPage() {
   useEffect(() => {
     const fetchVacancies = async () => {
       try {
-        const list = await getApi<Vacancy[]>('/vacancies');
-        if (Array.isArray(list)) {
-          setVacancies(list);
-        }
+        // B1: other owners' jobs are excluded from the position switcher (their files are 403).
+        const { full } = await fetchVacancyList();
+        setVacancies(full);
       } catch {
         // Ignore fallback
       }

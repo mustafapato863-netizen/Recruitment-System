@@ -1,4 +1,7 @@
 import { useState, useEffect, useMemo, type FormEvent } from 'react';
+import { fetchVacancyList } from '../utils/vacancyAccess';
+import type { RedactedVacancy } from '../types/redactedVacancy';
+import { RedactedJobOptions } from '../components/access/RedactedJobOptions';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
   PageFrame,
@@ -50,10 +53,8 @@ export function CandidateDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const canDeleteCandidate = Boolean(
-    user?.roles.some((role) => role.code === 'ADMINISTRATOR') &&
-      user?.permissions.includes('CANDIDATE_DELETE'),
-  );
+  // B2 (v2 §3): no delete for anyone. The action archives the candidate.
+  const canDeleteCandidate = Boolean(user?.permissions.includes('CANDIDATE_EDIT'));
 
   // Core candidate identity state
   const [candidate, setCandidate] = useState<Candidate | null>(null);
@@ -86,6 +87,7 @@ export function CandidateDetailPage() {
 
   // Vacancy options for assignment modal
   const [vacancies, setVacancies] = useState<Vacancy[]>([]);
+  const [redactedVacancies, setRedactedVacancies] = useState<RedactedVacancy[]>([]);
   const [isApplyModalOpen, setIsApplyModalOpen] = useState(false);
   const [selectedVacancyId, setSelectedVacancyId] = useState('');
   const [applySubmitting, setApplySubmitting] = useState(false);
@@ -140,7 +142,7 @@ export function CandidateDetailPage() {
       validCandidateId
         ? getApi<Offer[]>(`/offers?candidateId=${encodeURIComponent(validCandidateId)}`)
         : Promise.resolve([]),
-      getApi<Vacancy[]>('/vacancies'),
+      fetchVacancyList(),
     ]);
 
     if (appsRes.status === 'fulfilled') {
@@ -171,8 +173,9 @@ export function CandidateDetailPage() {
     }
 
     if (vacsRes.status === 'fulfilled') {
-      const vacList = Array.isArray(vacsRes.value) ? vacsRes.value : [];
+      const vacList = vacsRes.value.full;
       setVacancies(vacList);
+      setRedactedVacancies(vacsRes.value.redacted);
       if (vacList.length > 0) {
         setSelectedVacancyId((current) => current || vacList[0].id);
       }
@@ -299,7 +302,7 @@ export function CandidateDetailPage() {
       navigate('/candidates', { replace: true });
       return true;
     } catch (err: unknown) {
-      setDeleteError((err as Error).message || 'Failed to delete candidate data.');
+      setDeleteError((err as Error).message || 'Failed to archive candidate.');
       setIsDeleteDialogOpen(false);
       return false;
     } finally {
@@ -492,14 +495,14 @@ export function CandidateDetailPage() {
               }}
             >
               <Icon name="trash" size={13} />
-              Delete candidate
+              Archive candidate
             </Button>
           )}
         </>
       }
     >
       {deleteError && (
-        <Alert tone="danger" title="Candidate deletion failed" className="mb-4">
+        <Alert tone="danger" title="Candidate archive failed" className="mb-4">
           {deleteError}
         </Alert>
       )}
@@ -692,7 +695,7 @@ export function CandidateDetailPage() {
                           interviewerName={interviewerName}
                           recommendation={agg.recommendation}
                           averageRating={agg.averageRating}
-                          isLocked={agg.isLocked}
+                          submitted={agg.submitted}
                         />
                       </div>
                     );
@@ -707,7 +710,7 @@ export function CandidateDetailPage() {
                         interviewerName={interviewerName}
                         recommendation={null}
                         averageRating={null}
-                        isLocked={false}
+                        submitted={false}
                         pendingLabel="Pending feedback"
                       />
                     </div>
@@ -802,6 +805,7 @@ export function CandidateDetailPage() {
                   </option>
                 ))
               )}
+              <RedactedJobOptions jobs={redactedVacancies} />
             </Select>
           </FormField>
           <div className="flex items-center justify-end gap-2 mt-5">
@@ -862,9 +866,9 @@ export function CandidateDetailPage() {
           const deleted = await handleDeleteCandidate();
           if (deleted) setIsDeleteDialogOpen(false);
         }}
-        title="Permanently delete candidate?"
-        description="This permanently removes the candidate, linked applications, interviews, offers, follow-ups, pool memberships, and uploaded CV files. This cannot be undone."
-        confirmLabel="Delete permanently"
+        title="Archive candidate?"
+        description="The candidate leaves default lists and pickers. Applications, documents and history are kept, and nothing is deleted."
+        confirmLabel="Archive candidate"
         tone="danger"
         icon="trash"
         isLoading={deleteSubmitting}

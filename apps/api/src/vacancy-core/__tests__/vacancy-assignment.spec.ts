@@ -9,6 +9,7 @@ describe('VacancyCoreService recruiter assignment', () => {
     type AssignmentRow = { id: string; vacancyId: string; userId: string; roleCode: string; assignmentKind: string; isActive: boolean; assignedAt: Date };
     const rows: AssignmentRow[] = [];
     const tx = {
+      vacancy: { update: vi.fn().mockResolvedValue(undefined) },
       vacancyAssignment: {
         findFirst: vi.fn(async ({ where }: { where: Record<string, unknown> }) => {
           return rows.find((row) => Object.entries(where).every(([key, value]) => row[key as keyof typeof row] === value)) ?? null;
@@ -41,7 +42,10 @@ describe('VacancyCoreService recruiter assignment', () => {
       getVacancy: vi.fn().mockResolvedValue({ id: 'vacancy', organizationId: 'org' }),
       ensureUserInOrganization: vi.fn().mockResolvedValue(undefined),
     };
-    const prisma = { $transaction: vi.fn(async (callback: (value: typeof tx) => Promise<void>) => callback(tx)) };
+    const prisma = {
+      $transaction: vi.fn(async (callback: (value: typeof tx) => Promise<void>) => callback(tx)),
+      user: { findFirst: vi.fn().mockResolvedValue({ status: 'Active', userRoles: [{ role: { code: 'RECRUITER' } }] }) },
+    };
     const service = new VacancyCoreService(
       repository as unknown as VacancyCoreRepository,
       prisma as unknown as PrismaService,
@@ -70,6 +74,7 @@ describe('VacancyCoreService recruiter assignment', () => {
       assignments: [],
     };
     const tx = {
+      vacancy: { update: vi.fn().mockResolvedValue(undefined) },
       vacancyAssignment: {
         findFirst: vi.fn().mockResolvedValue(null),
         updateMany: vi.fn().mockResolvedValue({ count: 0 }),
@@ -83,6 +88,7 @@ describe('VacancyCoreService recruiter assignment', () => {
     };
     const prisma = {
       $transaction: vi.fn(async (callback: (value: typeof tx) => Promise<void>) => callback(tx)),
+      user: { findFirst: vi.fn().mockResolvedValue({ status: 'Active', userRoles: [{ role: { code: 'RECRUITER' } }] }) },
     };
     const service = new VacancyCoreService(
       repository as unknown as VacancyCoreRepository,

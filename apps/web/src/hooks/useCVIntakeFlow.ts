@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef, useDeferredValue } from 'react';
+import { fetchVacancyList } from '../utils/vacancyAccess';
 import type { ImportJobSummary, PaginatedResult, Vacancy } from '@recruitflow/contracts';
 import { calculateCandidateFitScore, type CriteriaBreakdown } from '@recruitflow/validation';
 import { getApi, postApi, postFormDataApi, patchApi, ApiError } from '../api/client';
@@ -134,8 +135,9 @@ export function useCVIntakeFlow(initialTargetVacancy?: string | null) {
 
   const loadVacancies = useCallback(async () => {
     try {
-      const list = await getApi<Vacancy[]>('/vacancies');
-      if (Array.isArray(list) && list.length > 0) {
+      // B1: CV intake can only target jobs the user owns; redacted jobs are excluded.
+      const { full: list } = await fetchVacancyList();
+      if (list.length > 0) {
         setVacancies(list);
       }
     } catch {
