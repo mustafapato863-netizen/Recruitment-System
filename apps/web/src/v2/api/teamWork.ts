@@ -2,7 +2,7 @@
  * M2 adapters: Manager team work + reassign (Figma M02 / M06).
  *
  * Preferred: GET /team/work (coming, CoS) → TeamWorkApi below. When it is absent (404/405/501) we compose existing endpoints:
- * - GET /users/assignable                         → the caller's direct reports (B1/B3)
+ * - GET /users/assignable                         → the people list, always (#21 B2-16: any signed-in user, the caller's own reports)
  * - GET /applications?primaryRecruiterId=:id      → each report's files (B5 list: stage, followUpDate, gates[], interview, positionTitle, vacancyBranchName)
  * - GET /offers?status=Pending Approval           → offers waiting on the Manager's decision (B7: the owner's manager decides)
  * Reassign is B7 (#15, feat/b7-manager-decision):
@@ -17,6 +17,7 @@
 import { getApi, postApi } from '../../api/client';
 import { stripPay } from './paySafety';
 import { domainError } from './gates';
+import { serverFormErrors } from '../forms/serverErrors';
 import { blockingGate, cairoToday, type CardInterview, type FileGate } from './jobs';
 import { fetchPeople, type Person } from './requisitions';
 import { fetchMyWorkApi, type WorkItem } from './myWork';
@@ -116,8 +117,16 @@ export async function fetchTeamWork(): Promise<TeamWork> {
     if (!NOT_THERE.has((e as { statusCode?: number })?.statusCode ?? 0)) throw e;
   }
   if (api && Array.isArray(api.reports)) {
-    const reports = api.reports.map((r) => buildReport({ id: r.user.id, name: r.user.displayName ?? r.user.name ?? 'Unnamed', detail: r.user.roleName ?? undefined },
-      (r.files ?? []).filter((a) => !(CLOSED_STAGES as readonly string[]).includes(a.stage)).map(toFile), today, r)).sort((a, b) => a.person.name.localeCompare(b.person.name));
+    // #21 (B2-16): the people list is GET /users/assignable (any signed-in user, the caller's own reports), so a
+    // report with no open files still has a row and is a reassign target. /team/work supplies each person's files.
+    const people = await fetchPeople();
+    const byId = new Map(api.reports.map((r) => [r.user.id, r]));
+    const roster: Person[] = people ?? api.reports.map((r) => ({ id: r.user.id, name: r.user.displayName ?? r.user.name ?? 'Unnamed', detail: r.user.roleName ?? undefined }));
+    const reports = roster.map((person) => {
+      const r = byId.get(person.id);
+      return buildReport({ ...person, detail: person.detail ?? r?.user.roleName ?? undefined },
+        (r?.files ?? []).filter((a) => !(CLOSED_STAGES as readonly string[]).includes(a.stage)).map(toFile), today, r);
+    }).sort((a, b) => a.person.name.localeCompare(b.person.name));
     const items = api.waitingOnYou ?? [];
     const waiting = items.filter((w) => w.type === 'offer' && w.offerId && w.versionId).map((w) => ({
       offerId: w.offerId!, versionId: w.versionId!, versionNumber: w.versionNumber ?? 1, applicationId: w.applicationId ?? '', candidate: w.candidateName ?? 'Candidate', job: w.positionTitle ?? 'Job', ownerName: w.ownerName ?? null, submittedAt: w.submittedAt ?? null,
@@ -161,6 +170,11 @@ const REASSIGN_TEXT: Record<string, { field?: 'to' | 'reason' | 'what'; text: st
 };
 /** Codes first (B7 passes them through), else the server message. */
 export function reassignError(e: unknown): { field?: 'to' | 'reason' | 'what'; text: string; code?: string } {
+  // #23: a 400's field/fields name the body path (toUserId, reason, applicationIds…): put it on that input.
+  const f = serverFormErrors(e);
+  const API: Record<string, 'to' | 'reason' | 'what'> = { toUserId: 'to', reason: 'reason', applicationIds: 'what', fromUserId: 'what' };
+  const hit = Object.keys(f.byField).find((k) => API[k.split('.')[0]]);
+  if (hit) return { field: API[hit.split('.')[0]], text: f.byField[hit], ...(f.code ? { code: f.code } : {}) };
   const d = domainError(e);
   if (d && REASSIGN_TEXT[d.code]) return { ...REASSIGN_TEXT[d.code], code: d.code };
   const x = e as { statusCode?: number; message?: string } | null;

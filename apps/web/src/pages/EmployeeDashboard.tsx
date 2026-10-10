@@ -1,3 +1,4 @@
+import { canUseRequisitions } from '../v2/destinations';
 import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { VacancyRequest, TaskRecord } from '@recruitflow/contracts';
@@ -19,8 +20,8 @@ export function EmployeeDashboard() {
   const [error, setError] = useState('');
 
   const greetingName = user?.displayName?.trim().split(/\s+/)[0] ?? 'there';
-  const canViewRequests = Boolean(user?.permissions?.includes('VACANCY_REQUEST_VIEW'));
-  const canCreateRequests = Boolean(user?.permissions?.includes('VACANCY_REQUEST_CREATE'));
+  const canViewRequests = canUseRequisitions(user);
+  const canCreateRequests = canViewRequests && Boolean(user?.permissions?.includes('VACANCY_REQUEST_CREATE'));
   const canViewTasks = Boolean(user?.permissions?.includes('TASK_VIEW'));
 
   useEffect(() => {
