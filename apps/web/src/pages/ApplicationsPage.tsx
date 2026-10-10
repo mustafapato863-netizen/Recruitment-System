@@ -2289,6 +2289,7 @@ export function ApplicationsPage() {
                     {column.cards.map((card) => (
                       <ApplicationKanbanCard
                         key={card.id}
+                        canClaim={!isAdmin}
                         card={{
                           id: card.id,
                           applicationCode: card.applicationCode,
