@@ -44,6 +44,7 @@ export const teamPaths = (): Record<string, unknown> => ({
   '/users/assignable': assignable,
   ...Object.fromEntries(Object.entries(apps).map(([id, rows]) => [`/applications?primaryRecruiterId=${id}&pageSize=100`, { data: rows, total: rows.length }])),
   '/offers?status=Pending+Approval&pageSize=100': pendingOffers,
+  '/me/work?day=today': myWork,
 });
 
 /** B7 grade bands (amounts present: the caller holds OFFER_PAY_VIEW). */
@@ -53,3 +54,21 @@ export const bands = [
   { id: 'gbold', grade: { id: 'g8', name: 'Grade 8' }, site: { id: 'b-cairo', name: 'Offshore Cairo' }, currency: 'EGP', status: 'Inactive', version: 1, minMonthlyBase: 1, maxMonthlyBase: 2 },
 ];
 export const decisionPaths = (): Record<string, unknown> => ({ '/offers/o1': pendingOffers[0], '/master-data/grade-bands': bands });
+/** B4 /me/work with one late scorecard of the Manager's own (as interviewer). */
+export const myWork = {
+  date: day(0), counts: { overdue: 1, today: 0, waitingOnOthers: 0 },
+  overdue: [{ id: 'w1', type: 'scorecard', title: 'Ahmed Embaby', dueAt: at(-2), reason: 'HRIS Developer', nextAction: { code: 'submit-scorecard', label: 'Submit scorecard' }, entity: { type: 'interview', id: 'i1' }, actions: [], candidate: { id: 'c-a1', name: 'Ahmed Embaby' }, applicationId: 'a1' }],
+  dueToday: [], waitingOnOthers: [], targets: [], empty: false, emptyMessage: null, reminderWorkerHealthy: true,
+};
+export const reassignReasons = [{ name: 'Balance load', status: 'Active' }, { name: 'Leave', status: 'Active' }, { name: 'Old reason', status: 'Inactive' }, { name: 'Other', status: 'Active' }];
+/** The coming GET /team/work (typed adapter shape). */
+export const teamWorkApi = {
+  waitingOnYou: [
+    { type: 'offer', offerId: 'o1', versionId: 'ov1', versionNumber: 2, applicationId: 'a3', candidateName: 'Lina Hassan', positionTitle: 'HRIS Developer', ownerName: 'Mariam Farag', submittedAt: at(-1) },
+    { type: 'scorecard', interviewId: 'i9', applicationId: 'y1', candidateName: 'Rana Adel', positionTitle: 'BI Data Analyst', dueAt: day(-1) },
+  ],
+  reports: [
+    { user: { id: 'u-youssef', displayName: 'Youssef Ibrahim', roleName: 'Recruiter-onshore' }, files: apps['u-youssef'], open: 2, overdue: 0 },
+    { user: { id: 'u-mariam', displayName: 'Mariam Farag', roleName: 'Recruiter-offshore' }, files: apps['u-mariam'], open: 3, overdue: 1 },
+  ],
+};

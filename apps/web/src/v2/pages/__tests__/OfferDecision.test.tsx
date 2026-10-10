@@ -38,8 +38,9 @@ describe('M3 offer decision (B7)', () => {
     await u.click(await screen.findByRole('button', { name: 'Review offer: Lina Hassan' }));
     const d = await screen.findByRole('dialog', { name: 'Offer for Lina Hassan' });
     expect(await within(d).findByText('Submitted by Mariam Farag')).toBeInTheDocument();
-    expect(within(d).getByTestId('base-pay')).toHaveTextContent('62,000');
-    expect(d).toHaveTextContent('Allowances (EGP)9,500Not counted in the band');
+    expect(within(d).getByLabelText(/^Monthly basic pay \(EGP\)/)).toHaveValue(62000);
+    expect(within(d).getByLabelText(/^Allowance 1 name/)).toHaveValue('Housing and transport');
+    expect(d).toHaveTextContent('Allowances 9,500 EGP / month · not counted in the band');
     const band = within(d).getByRole('region', { name: 'Pay band' });
     expect(band).toHaveTextContent('Grade 8 band · monthly basic, EGP');
     expect(band).toHaveTextContent('Inside band');
@@ -48,7 +49,7 @@ describe('M3 offer decision (B7)', () => {
     expect(d).toHaveTextContent(/Grade 8.*Sun 1 Nov 2026.*Full-time · 2 years.*3 months/);
     expect(await axeViolations(baseElement)).toEqual([]);
     await u.click(within(d).getByRole('button', { name: 'Approve offer' }));
-    await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/offers/o1/versions/ov1/decision', { decision: 'Approve' }));
+    await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/offers/o1/versions/ov1/decision', { decision: 'Approve', pay: { basePay: 62000, currency: 'EGP', allowances: [{ name: 'Housing and transport', amount: 9500 }] } }));
     expect(await screen.findByRole('status')).toHaveTextContent('Offer for Lina Hassan approved. Mariam can send it now.');
     expect(screen.getByTestId('loc')).toHaveTextContent('/my-work');
   });
@@ -131,5 +132,57 @@ describe('M3 offer decision (B7)', () => {
     expect(decisionError(err(400, 'DECISION_REASON_REQUIRED')).field).toBe('reason');
     expect(decisionError(err(409, 'OFFER_BASE_PAY_MISSING')).text).toMatch(/no base pay/);
     expect(decisionError(new ApiError(500, 'Boom')).text).toBe('Boom');
+  });
+});
+
+describe('M3 CoS follow-ups: pay on Approve, band by branchId', () => {
+  it('Manager edits pay: band redraws live, allowances add/remove, sent on Approve only', async () => {
+    const u = userEvent.setup();
+    api.postApi.mockResolvedValue({});
+    renderAt();
+    const d = await screen.findByRole('dialog', { name: 'Offer for Lina Hassan' });
+    const base = await within(d).findByLabelText(/^Monthly basic pay/);
+    await u.clear(base); await u.type(base, '75000');
+    expect(within(d).getByRole('region', { name: 'Pay band' })).toHaveTextContent('Above band');
+    await u.clear(base); await u.type(base, '58000');
+    expect(within(d).getByRole('region', { name: 'Pay band' })).toHaveTextContent('Inside band');
+    await u.click(within(d).getByRole('button', { name: 'Add allowance' }));
+    await u.click(within(d).getByRole('button', { name: 'Approve offer' }));
+    expect(await within(d).findByText('Each allowance needs a name and an amount (0 or more).')).toBeInTheDocument();
+    await u.type(within(d).getByLabelText(/^Allowance 2 name/), 'Phone');
+    await u.type(within(d).getByLabelText(/^Allowance 2 \(EGP\)/), '500');
+    await u.click(within(d).getByRole('button', { name: 'Remove allowance 1' }));
+    await u.click(within(d).getByRole('button', { name: 'Approve offer' }));
+    await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/offers/o1/versions/ov1/decision', { decision: 'Approve', pay: { basePay: 58000, currency: 'EGP', allowances: [{ name: 'Phone', amount: 500 }] } }));
+  });
+  it('empty base pay blocks Approve; Request changes never sends pay', async () => {
+    const u = userEvent.setup();
+    api.postApi.mockResolvedValue({});
+    renderAt();
+    const d = await screen.findByRole('dialog', { name: 'Offer for Lina Hassan' });
+    await u.clear(await within(d).findByLabelText(/^Monthly basic pay/));
+    await u.click(within(d).getByRole('button', { name: 'Approve offer' }));
+    expect(await within(d).findByText('Enter the monthly basic pay.')).toBeInTheDocument();
+    await u.type(within(d).getByLabelText(/^Comment to Mariam/), 'Fix dates');
+    await u.click(within(d).getByRole('button', { name: 'Request changes' }));
+    await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/offers/o1/versions/ov1/decision', { decision: 'RequestChanges', reason: 'Fix dates' }));
+  });
+  it('band by branchId when the offer has it (location name ignored)', async () => {
+    serve({ '/offers/o1': { ...fx.pendingOffers[0], branchId: 'b-riyadh', location: 'Offshore Cairo' }, '/master-data/grade-bands': fx.bands.map((b) => (b.id === 'gb8r' ? { ...b, currency: 'EGP', minMonthlyBase: 90000, maxMonthlyBase: 99000 } : b)) });
+    renderAt();
+    const d = await screen.findByRole('dialog', { name: 'Offer for Lina Hassan' });
+    await within(d).findByText('Submitted by Mariam Farag');
+    expect(within(d).getByRole('region', { name: 'Pay band' })).toHaveTextContent('Min 90,000');
+  });
+  it('no pay view → no pay fields and no pay in the body', async () => {
+    const u = userEvent.setup();
+    auth.perms = ['APPLICATION_VIEW'];
+    api.postApi.mockResolvedValue({});
+    renderAt();
+    const d = await screen.findByRole('dialog', { name: 'Offer for Lina Hassan' });
+    await within(d).findByText('Submitted by Mariam Farag');
+    expect(within(d).queryByLabelText(/^Monthly basic pay/)).toBeNull();
+    await u.click(within(d).getByRole('button', { name: 'Approve offer' }));
+    await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/offers/o1/versions/ov1/decision', { decision: 'Approve' }));
   });
 });

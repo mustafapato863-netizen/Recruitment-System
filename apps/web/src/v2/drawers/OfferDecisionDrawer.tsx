@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { CircleCheck, Info, PencilLine, ShieldCheck, TriangleAlert } from 'lucide-react';
-import { ButtonV2, DangerConfirmButton, DrawerV2, initials, StatusChip, TextareaV2 } from '../../components/v2';
+import { CircleCheck, Info, PencilLine, Plus, ShieldCheck, Trash2, TriangleAlert } from 'lucide-react';
+import { ButtonV2, DangerConfirmButton, DrawerV2, initials, InputV2, SelectV2, StatusChip, TextareaV2 } from '../../components/v2';
 import {
-  bandFor, bandPosition, currentVersion, decide, decisionError, loadDecision, money, payOf,
-  type Decision, type DecisionError, type DecisionOffer, type GradeBand,
+  bandFor, bandPosition, CURRENCIES, currentVersion, decide, decisionError, loadDecision, money, payOf,
+  type Decision, type DecisionError, type DecisionPay, type DecisionOffer, type GradeBand,
 } from '../api/offerDecision';
 
 const fmtDay = (d?: string | null) => (d ? new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${d.slice(0, 10)}T12:00:00Z`)).replace(/^(\w{3}),/, '$1') : '—');
@@ -30,8 +30,25 @@ export function OfferDecisionDrawer({ offerId, ownerName, showPay, onClose, onDo
   const offer = state.kind === 'ready' ? state.offer : null;
   const v = offer ? currentVersion(offer) : null;
   const pay = showPay ? payOf(v) : null;
-  const band = offer && state.kind === 'ready' ? bandFor(state.bands, offer, pay?.base?.currency ?? null) : null;
-  const pos = bandPosition(band, pay?.base?.amount ?? null);
+  // CoS: the Manager sets pay on Approve. Prefilled from the version; editable only with showPay (Manager seat + OFFER_PAY_VIEW).
+  const [form, setForm] = useState<{ base: string; currency: string; allowances: Array<{ name: string; amount: string }> } | null>(null);
+  useEffect(() => {
+    if (!showPay || !v || form) return;
+    const allow = (v.components ?? []).filter((c) => ['allowance', 'benefit'].includes(c.type.trim().toLowerCase()) && typeof c.amount === 'number');
+    setForm({ base: pay?.base ? String(pay.base.amount) : '', currency: pay?.base?.currency ?? allow[0]?.currency ?? 'EGP', allowances: allow.map((c) => ({ name: c.name, amount: String(c.amount) })) });
+  }, [showPay, v, form, pay?.base]);
+  const baseNum = form && form.base.trim() !== '' && Number.isFinite(Number(form.base)) ? Number(form.base) : null;
+  const band = offer && state.kind === 'ready' ? bandFor(state.bands, offer, form?.currency ?? pay?.base?.currency ?? null) : null;
+  const pos = bandPosition(band, baseNum);
+  const allowTotal = (form?.allowances ?? []).reduce((t, a) => t + (Number(a.amount) || 0), 0);
+  const payBody = (): DecisionPay | null => {
+    if (!form) return null;
+    if (baseNum === null || baseNum <= 0) { setErr({ field: 'pay', text: 'Enter the monthly basic pay.' }); return null; }
+    const bad = form.allowances.find((a) => !a.name.trim() || !(Number(a.amount) >= 0) || a.amount.trim() === '');
+    if (bad) { setErr({ field: 'pay', text: 'Each allowance needs a name and an amount (0 or more).' }); return null; }
+    return { basePay: baseNum, currency: form.currency, allowances: form.allowances.map((a) => ({ name: a.name.trim(), amount: Number(a.amount) })) };
+  };
+  const setAllow = (i: number, k: 'name' | 'amount', val: string) => { setForm((f) => f && { ...f, allowances: f.allowances.map((a, j) => (j === i ? { ...a, [k]: val } : a)) }); setErr(null); };
   const pending = v?.status === 'Pending Approval' || (!v?.status && offer?.status === 'Pending Approval');
   const owner = ownerName ?? 'the owner';
   const first = owner.split(' ')[0];
@@ -39,9 +56,11 @@ export function OfferDecisionDrawer({ offerId, ownerName, showPay, onClose, onDo
   const run = async (d: Decision) => {
     if (!offer || !v) return;
     if (d !== 'Approve' && reason.trim().length < 3) { setErr({ field: 'reason', text: d === 'Reject' ? 'Write a comment to reject (at least 3 characters).' : 'Write a comment to request changes (at least 3 characters).' }); return; }
+    let body: DecisionPay | undefined;
+    if (d === 'Approve' && showPay) { const b = payBody(); if (!b) return; body = b; }
     setBusy(d); setErr(null);
     try {
-      await decide(offer.id, v.id, d, reason.trim() || undefined);
+      await decide(offer.id, v.id, d, reason.trim() || undefined, body);
       const who = offer.candidateName ?? 'the candidate';
       onDone(d === 'Approve' ? `Offer for ${who} approved. ${first} can send it now.` : d === 'RequestChanges' ? `Changes requested on ${who}’s offer. It is back with ${first} as a draft.` : `Offer v${v.versionNumber} for ${who} rejected. The file stays in Offer; ${first} drafts a new version or closes the file.`);
     } catch (e) { setErr(decisionError(e)); } finally { setBusy(null); }
@@ -49,7 +68,7 @@ export function OfferDecisionDrawer({ offerId, ownerName, showPay, onClose, onDo
 
   const errBand = err?.band;
   const shownBand = band ?? (errBand ? { id: String(errBand.id ?? ''), grade: errBand.grade ? { id: '', name: String(errBand.grade) } : null, site: errBand.site ? { id: '', name: String(errBand.site) } : null, currency: String(errBand.currency ?? ''), minMonthlyBase: typeof errBand.minMonthlyBase === 'number' ? errBand.minMonthlyBase : undefined, maxMonthlyBase: typeof errBand.maxMonthlyBase === 'number' ? errBand.maxMonthlyBase : undefined } : null);
-  const amount = pay?.base?.amount ?? err?.offered ?? null;
+  const amount = (showPay ? baseNum : null) ?? err?.offered ?? null;
   const shownPos = pos ?? bandPosition(shownBand, amount);
 
   return (
@@ -75,10 +94,30 @@ export function OfferDecisionDrawer({ offerId, ownerName, showPay, onClose, onDo
           </dl>
           {showPay ? (
             <>
-              <div className="rf2-req__row">
-                <div className="rf2-decide__pay"><p className="rf2-field__label">Monthly basic pay{pay?.base ? ` (${pay.base.currency})` : ''}</p><p className="rf2-decide__amount" data-testid="base-pay">{pay?.base ? money(pay.base.amount) : pay?.mixed ? 'Mixed currencies' : 'Not set'}</p></div>
-                <div className="rf2-decide__pay"><p className="rf2-field__label">Allowances{pay?.allowances ? ` (${pay.allowances.currency})` : ''}</p><p className="rf2-decide__amount">{pay?.allowances ? money(pay.allowances.amount) : '—'}</p><p className="rf2-jtable__sub">Not counted in the band</p></div>
-              </div>
+              {form ? (
+                <fieldset className="rf2-decide__payform" disabled={!pending}>
+                  <legend className="rf2-field__label">Pay (set by you on Approve)</legend>
+                  {err?.field === 'pay' ? <p className="rf2-form-error" role="alert">{err.text}</p> : null}
+                  {pay?.mixed ? <p className="rf2-jtable__sub">The version mixes currencies; pick one.</p> : null}
+                  <div className="rf2-req__row">
+                    <InputV2 label={`Monthly basic pay (${form.currency})`} required type="number" min={0} inputMode="numeric" value={form.base} onChange={(e) => { setForm({ ...form, base: e.target.value }); setErr(null); }} data-testid="base-pay" />
+                    <SelectV2 label="Currency" value={form.currency} onChange={(e) => { setForm({ ...form, currency: e.target.value }); setErr(null); }}>
+                      {[...new Set([form.currency, ...CURRENCIES])].map((c) => <option key={c} value={c}>{c}</option>)}
+                    </SelectV2>
+                  </div>
+                  {form.allowances.map((a, i) => (
+                    <div className="rf2-decide__allow" key={i}>
+                      <InputV2 label={`Allowance ${i + 1} name`} value={a.name} onChange={(e) => setAllow(i, 'name', e.target.value)} />
+                      <InputV2 label={`Allowance ${i + 1} (${form.currency})`} type="number" min={0} value={a.amount} onChange={(e) => setAllow(i, 'amount', e.target.value)} />
+                      <ButtonV2 kind="tertiary" size="sm" icon={<Trash2 />} aria-label={`Remove allowance ${i + 1}`} onClick={() => setForm({ ...form, allowances: form.allowances.filter((_, j) => j !== i) })} />
+                    </div>
+                  ))}
+                  <div className="rf2-row-between">
+                    <ButtonV2 kind="tertiary" size="sm" icon={<Plus />} onClick={() => setForm({ ...form, allowances: [...form.allowances, { name: '', amount: '' }] })}>Add allowance</ButtonV2>
+                    <p className="rf2-jtable__sub">Allowances {money(allowTotal, form.currency)} / month · not counted in the band</p>
+                  </div>
+                </fieldset>
+              ) : null}
               <BandPanel band={shownBand} grade={offer.grade?.name ?? null} amount={amount} pos={shownPos} code={err?.code} bandsListed={state.kind === 'ready' && state.bands !== null} />
             </>
           ) : <p className="rf2-inline-note"><ShieldCheck aria-hidden="true" /> Pay and the band are visible to the Manager only.</p>}

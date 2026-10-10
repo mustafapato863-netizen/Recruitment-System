@@ -8,6 +8,8 @@
  *     403 OFFER_DECISION_NOT_MANAGER (not the owner's manager, a co-owner manager, or Admin); 409 OFFER_NOT_PENDING_APPROVAL;
  *     409 GRADE_BAND_MISSING / OFFER_PAY_OUTSIDE_BAND with `band{id?, grade, site, currency, minMonthlyBase?, maxMonthlyBase?}` + `offeredMonthlyBase?`;
  *     409 OFFER_BASE_PAY_MISSING / OFFER_BASE_CURRENCY_MIXED; 400 DECISION_REASON_REQUIRED.
+ * CoS (Oct 10): Approve accepts pay {basePay, allowances[], currency} on the decision (Manager seat only; typed below).
+ *   Offers gain `branchId`: the band is matched on branchId when present, else on the location name.
  * Base pay = "Salary" components only, annual amounts / 12 (allowances never count) — mirrored by monthlyBase().
  * Pay is shown only to the Manager seat holding OFFER_PAY_VIEW; everyone else gets stripPay().
  */
@@ -25,7 +27,7 @@ export interface DecisionVersion {
 }
 export interface DecisionOffer {
   id: string; applicationId: string; offerCode: string; candidateName?: string; positionTitle?: string; status: string;
-  grade?: { id: string; name: string } | null; location?: string | null; currentVersionId?: string | null; versions?: DecisionVersion[]; currentVersion?: DecisionVersion | null;
+  grade?: { id: string; name: string } | null; location?: string | null; branchId?: string | null; currentVersionId?: string | null; versions?: DecisionVersion[]; currentVersion?: DecisionVersion | null;
 }
 export interface GradeBand { id: string; grade: { id: string; name: string } | null; site: { id: string; name: string } | null; currency: string; status?: string; minMonthlyBase?: number; maxMonthlyBase?: number }
 export interface Pay { base: { amount: number; currency: string } | null; allowances: { amount: number; currency: string } | null; mixed: boolean }
@@ -67,7 +69,8 @@ export async function loadDecision(offerId: string, showPay: boolean): Promise<{
 /** The band B7 would use: same grade, site (job location) and base-pay currency. */
 export function bandFor(bands: GradeBand[] | null, offer: DecisionOffer, currency: string | null): GradeBand | null {
   if (!bands || !offer.grade) return null;
-  return bands.find((b) => b.grade?.id === offer.grade!.id && (!offer.location || b.site?.name === offer.location) && (!currency || b.currency.toUpperCase() === currency.toUpperCase())) ?? null;
+  const site = (b: GradeBand) => (offer.branchId ? b.site?.id === offer.branchId : !offer.location || b.site?.name === offer.location);
+  return bands.find((b) => b.grade?.id === offer.grade!.id && site(b) && (!currency || b.currency.toUpperCase() === currency.toUpperCase())) ?? null;
 }
 export type BandPosition = 'inside' | 'below' | 'above';
 export function bandPosition(band: Pick<GradeBand, 'minMonthlyBase' | 'maxMonthlyBase'> | null, amount: number | null): BandPosition | null {
@@ -75,11 +78,16 @@ export function bandPosition(band: Pick<GradeBand, 'minMonthlyBase' | 'maxMonthl
   return amount < band.minMonthlyBase ? 'below' : amount > band.maxMonthlyBase ? 'above' : 'inside';
 }
 
-export const decide = (offerId: string, versionId: string, decision: Decision, reason?: string) =>
-  postApi<{ id: string; decision: Decision; toStatus: string }>(`/offers/${enc(offerId)}/versions/${enc(versionId)}/decision`, reason ? { decision, reason } : { decision });
+/** Pay the Manager sets on Approve (CoS). Monthly amounts; allowances never count toward the band. */
+export interface DecisionPay { basePay: number; allowances: Array<{ name: string; amount: number }>; currency: string }
+export const decide = (offerId: string, versionId: string, decision: Decision, reason?: string, pay?: DecisionPay) =>
+  postApi<{ id: string; decision: Decision; toStatus: string }>(`/offers/${enc(offerId)}/versions/${enc(versionId)}/decision`, {
+    decision, ...(reason ? { reason } : {}), ...(decision === 'Approve' && pay ? { pay } : {}),
+  });
+export const CURRENCIES = ['EGP', 'AED', 'SAR'] as const;
 
-export interface DecisionError { code?: string; field?: 'reason'; text: string; band?: Record<string, string | number | null>; offered?: number }
-const TEXT: Record<string, { field?: 'reason'; text: string }> = {
+export interface DecisionError { code?: string; field?: 'reason' | 'pay'; text: string; band?: Record<string, string | number | null>; offered?: number }
+const TEXT: Record<string, { field?: 'reason' | 'pay'; text: string }> = {
   OFFER_DECISION_NOT_MANAGER: { text: 'Only the manager of this file’s owner can decide. If you co-own the file, your own manager decides it.' },
   OFFER_NOT_PENDING_APPROVAL: { text: 'This version is no longer waiting for a decision (someone already decided, or it was revised). Reload to see it.' },
   GRADE_BAND_MISSING: { text: 'No active pay band for this grade, site and currency, so it cannot be approved. Ask an admin to add the band, or request changes.' },
@@ -88,6 +96,9 @@ const TEXT: Record<string, { field?: 'reason'; text: string }> = {
   OFFER_BASE_CURRENCY_MIXED: { text: 'Base pay uses more than one currency. Request changes.' },
   DECISION_REASON_REQUIRED: { field: 'reason', text: 'Write a comment to request changes or reject.' },
   DECISION_INVALID: { text: 'That decision is not allowed.' },
+  // Expected with pay-on-approve (names not final; unknown codes fall back to the server message).
+  OFFER_PAY_INVALID: { field: 'pay', text: 'Check the pay: base pay above 0, allowances 0 or more, one currency.' },
+  CURRENCY_INVALID: { field: 'pay', text: 'Pick a supported currency.' },
 };
 export function decisionError(e: unknown): DecisionError {
   const d = domainError(e);

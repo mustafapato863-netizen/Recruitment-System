@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { ArrowLeftRight, CalendarClock, CircleAlert, CircleCheck, Clock, Eye, Info, RotateCw, TriangleAlert, Users } from 'lucide-react';
+import { ArrowLeftRight, Star, CalendarClock, CircleAlert, CircleCheck, Clock, Eye, Info, RotateCw, TriangleAlert, Users } from 'lucide-react';
 import { ButtonV2, EmptyStateV2, ForbiddenStateV2, initials, SkeletonV2, StatusChip } from '../../components/v2';
 import { useAuth } from '../../auth/AuthContext';
 import { fetchTeamWork, fileHref, type ReportWork, type TaskTone, type TeamTask, type TeamWork, type WaitingOffer } from '../api/teamWork';
@@ -54,6 +54,7 @@ export function TeamWorkV2() {
   const waiting = data?.waiting ?? [];
   const deciding: WaitingOffer | null = waiting.find((w) => w.offerId === params.get('offer')) ?? null;
   const showPay = canSeePay('manager', user?.permissions);
+  const cards = data?.scorecards ?? [];
 
   return (
     <div className="rf2-jobs rf2-team">
@@ -68,8 +69,8 @@ export function TeamWorkV2() {
       {data ? (
         <>
           <section className="rf2-panel rf2-team__waiting" aria-labelledby="tw-wait-h">
-            <div className="rf2-row-between"><h2 id="tw-wait-h" className="rf2-team__h">Waiting on you</h2><span className="rf2-task-section__count" aria-label={`${waiting.length} waiting`}>{waiting.length}</span></div>
-            {waiting.length === 0 ? <p className="rf2-jtable__sub">Nothing is waiting on your decision.</p> : (
+            <div className="rf2-row-between"><h2 id="tw-wait-h" className="rf2-team__h">Waiting on you</h2><span className="rf2-task-section__count" aria-label={`${waiting.length + cards.length} waiting`}>{waiting.length + cards.length}</span></div>
+            {waiting.length + cards.length === 0 ? <p className="rf2-jtable__sub">Nothing is waiting on your decision.</p> : (
               <ul className="rf2-team__list">
                 {waiting.map((w) => (
                   <li key={w.offerId} className="rf2-team__wrow">
@@ -80,6 +81,17 @@ export function TeamWorkV2() {
                     </div>
                     {ago(w.submittedAt) ? <StatusChip tone="neutral" label={ago(w.submittedAt)!} /> : null}
                     <ButtonV2 size="sm" icon={<Eye />} onClick={() => go({ offer: w.offerId })} aria-label={`Review offer: ${w.candidate}`}>Review offer</ButtonV2>
+                  </li>
+                ))}
+                {cards.map((c) => (
+                  <li key={c.interviewId} className="rf2-team__wrow">
+                    <Star aria-hidden="true" className="rf2-team__wicon" data-tone="warning" />
+                    <div className="rf2-team__wtext">
+                      <p className="rf2-jtable__name">Your scorecard — {c.candidate}{c.job ? `, ${c.job}` : ''}</p>
+                      <p className="rf2-jtable__sub">You interviewed them as interviewer · the gate blocks Offer until it is submitted</p>
+                    </div>
+                    {c.overdue ? <StatusChip tone="danger" label="Late" /> : c.dueAt ? <StatusChip tone="info" label="Due today" /> : null}
+                    <Link className="rf2-btn rf2-btn--secondary rf2-btn--sm" to={`/interviews/${encodeURIComponent(c.interviewId)}`} aria-label={`Submit scorecard: ${c.candidate}`}>Submit scorecard</Link>
                   </li>
                 ))}
               </ul>
@@ -94,8 +106,8 @@ export function TeamWorkV2() {
               {reports.map((r) => <ReportCard key={r.person.id} r={r} onReassign={() => go({ reassign: r.person.id, file: null })} canReassign={reports.length > 1} />)}
             </div>
           )}
-          <p className="rf2-inline-note"><Users aria-hidden="true" /> Only your direct reports appear here. Reassign changes the primary recruiter on one file, a whole job’s files or all of a person’s open files.</p>
           {deciding ? <OfferDecisionDrawer offerId={deciding.offerId} ownerName={deciding.ownerName} showPay={showPay} onClose={() => go({ offer: null })} onDone={done} /> : null}
+          <p className="rf2-inline-note"><Users aria-hidden="true" /> Only your direct reports appear here. Reassign moves files to a new primary recruiter — one file, a person’s files on one job, or all their open files. Jobs keep their owner.</p>
           {from && reports ? <ReassignDrawer from={from} reports={reports} fileId={params.get('file')} managerName={user?.displayName ?? 'you'} onClose={() => go({ reassign: null, file: null })} onDone={done} /> : null}
         </>
       ) : null}
