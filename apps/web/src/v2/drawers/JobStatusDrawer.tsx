@@ -5,6 +5,7 @@ import {
   OTHER_REASON, cairoToday, changeJobStatus, errorMessage, jobActions, jobErrorFromError, jobReasons, jobStatusHistory, jobTitle,
   type JobAction, type JobDetail, type JobStatusHistoryItem,
 } from '../api/jobs';
+import { bannerError, fieldError, serverFormErrors } from '../forms/serverErrors';
 import { STATUS_LABEL, STATUS_TONE, formatDay } from '../pages/OpenJobsV2';
 
 const EFFECT: Record<JobAction, string> = {
@@ -66,7 +67,14 @@ export function JobStatusDrawer({ job, onClose, onDone }: { job: JobDetail; onCl
       if (d?.code === 'REASON_NOT_IN_LIST') { setErr({ reason: d.message }); setReason(''); setReload((n) => n + 1); }
       else if (d?.code === 'REASON_REQUIRED') setErr(action === 'reopen' || isOther ? { note: d.message } : { reason: d.message });
       else if (d?.code === 'HOLD_UNTIL_NOT_FUTURE') setErr({ holdUntil: 'Pick a day after today (Cairo).' });
-      else setErr({ form: errorMessage(e, 'Could not change the job status.') });
+      else {
+        // #23: a 400's field/fields go on the matching inputs (reason, note, holdUntil); the rest stays in the banner.
+        const f = serverFormErrors(e);
+        const inline = { reason: fieldError(f, 'reason'), note: fieldError(f, 'note'), holdUntil: fieldError(f, 'holdUntil') };
+        const banner = Object.keys(f.byField).length ? bannerError(f, ['reason', 'note', 'holdUntil']) : errorMessage(e, 'Could not change the job status.');
+        // Reopen sends its free text as `reason`, typed in the note box.
+        setErr({ ...inline, ...(action === 'reopen' && inline.reason ? { reason: undefined, note: inline.reason } : {}), ...(banner ? { form: banner } : {}) });
+      }
     } finally { setBusy(false); }
   };
   const primary = action === 'hold' || action === 'reopen' ? action : null;
