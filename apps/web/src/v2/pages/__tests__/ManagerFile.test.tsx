@@ -70,6 +70,25 @@ describe('B2-23: the Manager decides on the same file', () => {
   });
 });
 
+describe('#23 (f64406b) 400 field/fields inline in the decision drawer', () => {
+  it('basePay and allowances.0.amount messages sit on their inputs; no banner when every message landed', async () => {
+    const u = userEvent.setup();
+    const fields = { basePay: ['basePay must be a positive number'], 'allowances.0.amount': ['amount must not be less than 0'] };
+    api.postApi.mockRejectedValue(new ApiError(400, 'x', { statusCode: 400, code: 'VALIDATION_ERROR', message: 'Please correct the highlighted fields.', field: 'basePay', fields }, { code: 'VALIDATION_ERROR', fields }));
+    renderFile('/applications/a1?decide=o1');
+    const d = await screen.findByRole('dialog', { name: 'Offer for Ahmed Embaby' });
+    await u.type(await within(d).findByLabelText(/^Monthly basic pay/), '15000');
+    await u.click(within(d).getByRole('button', { name: 'Add allowance' }));
+    await u.type(within(d).getByLabelText(/^Allowance 1 name/), 'Housing');
+    await u.type(within(d).getByLabelText(/^Allowance 1 \(/), '2000');
+    await u.click(within(d).getByRole('button', { name: 'Approve offer' }));
+    expect(await within(d).findByText('basePay must be a positive number')).toBeInTheDocument();
+    expect(within(d).getByText('amount must not be less than 0')).toBeInTheDocument();
+    expect(within(d).getByLabelText(/^Monthly basic pay/)).toHaveAttribute('aria-invalid', 'true');
+    expect(within(d).queryByTestId('decision-error')).toBeNull();
+  });
+});
+
 describe('B2-15 helpers', () => {
   it('decisionBody is the B7 DTO: top-level pay, never nested', () => {
     expect(decisionBody('Approve', undefined, { basePay: 15000, currency: 'AED', allowances: [{ name: 'Housing', amount: 2000 }] }))
