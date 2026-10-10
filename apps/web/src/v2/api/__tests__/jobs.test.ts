@@ -13,8 +13,8 @@ describe('E08 adapter (B3 work queue ?mine=true + dueDate/department/holdUntil +
   it('mine = ?mine=true (no /vacancies join, no owner filter); others = the scoped queue minus mine, title/site/seats only; no pay', async () => {
     api.getApi.mockImplementation(async (p: string) => structuredClone(p.includes('mine=true') ? workQueueMine : workQueue));
     const r = await fetchOpenJobs();
-    expect(api.getApi).toHaveBeenCalledWith('/vacancies/work-queue?mine=true&pageSize=100');
-    expect(api.getApi).toHaveBeenCalledWith('/vacancies/work-queue?pageSize=100');
+    expect(api.getApi).toHaveBeenCalledWith('/vacancies/work-queue?mine=true&page=1&pageSize=100');
+    expect(api.getApi).toHaveBeenCalledWith('/vacancies/work-queue?page=1&pageSize=100');
     expect(api.getApi).not.toHaveBeenCalledWith('/vacancies');
     expect(r.mine.find((j) => j.id === 'v5')).toMatchObject({ status: 'On Hold', holdUntil: '2026-11-01', dueDate: '2026-12-01', department: 'HIM' });
     expect(r.mine.map((j) => j.title)).toEqual(['HRIS Developer', 'Laravel Backend Engineer', 'Patient Relations Officer', 'Staff Nurse — ICU', 'Medical Coder']);
