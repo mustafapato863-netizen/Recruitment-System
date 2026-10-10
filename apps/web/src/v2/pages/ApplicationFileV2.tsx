@@ -40,6 +40,7 @@ export function primaryFor(file: ApplicationFile): { key: DrawerKey; label: stri
       if (st === 'Approved') return { key: 'send', label: 'Send offer', icon: <Send /> };
       if (st === 'Sent') return { key: 'answer', label: 'Record answer', icon: <Check /> };
       if (st === 'Accepted') return { key: 'prehire', label: 'Move to Pre-hire', icon: <ArrowRight /> };
+      if (st === 'Expired') return { key: 'offer', label: 'New offer version', icon: <Send /> };
       return { key: 'offer', label: 'Draft offer', icon: <Send /> };
     }
     case 'Pre-Hire':

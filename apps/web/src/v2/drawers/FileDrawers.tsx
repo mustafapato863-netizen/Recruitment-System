@@ -287,6 +287,8 @@ export function OfferDraftDrawer({ file, onClose, onDone }: DrawerProps) {
   const s = useSubmit(onDone);
   const gate = gateState(file);
   const needsMove = app.stage === 'Interview';
+  const expired = file.offer?.status === 'Expired' ? file.offer : null;
+  const nextVersion = expired ? ((expired.currentVersion ?? expired.versions?.[0])?.versionNumber ?? 1) + 1 : 1;
   const submit = () => {
     const next: Record<string, string> = {};
     if (!terms.proposedJoiningDate) next.start = 'Pick the start date.';
@@ -294,12 +296,13 @@ export function OfferDraftDrawer({ file, onClose, onDone }: DrawerProps) {
     if (Object.keys(next).length) return;
     void s.run(async () => {
       if (needsMove) await advanceTo(app, 'Offer');
-      await createOfferDraft(app.id, terms);
+      if (expired) await createOfferRevision(expired.id, terms);
+      else await createOfferDraft(app.id, terms);
       if (note.trim()) await addNote(app.id, `Note to approver: ${note.trim()}`);
     });
   };
   return (
-    <DrawerV2 open onClose={onClose} kicker="Offer · Draft v1" title={`Draft offer — ${candidateName(app)}`}
+    <DrawerV2 open onClose={onClose} kicker={`Offer · Draft v${nextVersion}`} title={`${expired ? 'New offer version' : 'Draft offer'} — ${candidateName(app)}`}
       primaryAction={<ButtonV2 onClick={submit} loading={s.busy} disabled={needsMove && !gate.scorecard}>Submit for approval</ButtonV2>}
       secondaryAction={<ButtonV2 kind="secondary" onClick={onClose}>Cancel</ButtonV2>}>
       <div className="rf2-drawer-form">
@@ -365,7 +368,7 @@ export function AnswerDrawer({ file, onClose, onDone }: DrawerProps) {
   const app = file.workspace.application;
   const offer = file.offer;
   const v = offer?.currentVersion ?? offer?.versions?.[0];
-  const [answer, setAnswer] = useState<'Accepted' | 'Declined' | 'Withdrawn' | ''>('');
+  const [answer, setAnswer] = useState<'Accepted' | 'Declined' | 'Expired' | 'Withdrawn' | ''>('');
   const [why, setWhy] = useState('');
   const [errs, setErrs] = useState<Record<string, string>>({});
   const s = useSubmit(onDone);
@@ -376,10 +379,10 @@ export function AnswerDrawer({ file, onClose, onDone }: DrawerProps) {
     setErrs(next);
     if (Object.keys(next).length || !offer) return;
     void s.run(async () => {
-      if (answer === 'Accepted') { await setOfferStatus(offer.id, 'Accepted'); return; }
+      if (answer === 'Accepted' || answer === 'Expired') { await setOfferStatus(offer.id, answer); return; }
       if (answer === 'Declined') {
-        // v2: Declined = a new offer version; the file stays in Offer. (Not PATCH status=Declined: #11 rejects the file.)
-        await createOfferRevision(offer.id, { contractType: v?.contractType ?? undefined, probationPeriod: v?.probationPeriod ?? undefined, proposedJoiningDate: v?.proposedJoiningDate?.slice(0, 10) ?? undefined, workLocation: v?.workLocation ?? undefined, workingSchedule: v?.workingSchedule ?? undefined });
+        // #11 + Figma E20: the version is Declined and the API closes the file as Rejected — "Declined offer".
+        await setOfferStatus(offer.id, 'Declined');
         await addNote(app.id, `Candidate declined offer v${v?.versionNumber ?? 1}: ${why.trim()}`);
         return;
       }
@@ -391,7 +394,8 @@ export function AnswerDrawer({ file, onClose, onDone }: DrawerProps) {
   };
   const choices = [
     { v: 'Accepted', label: 'Accepted', help: 'The file can move to Pre-hire.' },
-    { v: 'Declined', label: 'Declined — wants changes', help: 'Makes a new offer version for the manager. The file stays in Offer.' },
+    { v: 'Declined', label: 'Declined', help: 'The file closes as Rejected — "Declined offer".' },
+    { v: 'Expired', label: 'No answer — expired', help: 'The file stays in Offer. You can draft a new version for the manager.' },
     { v: 'Withdrawn', label: 'Withdrawn', help: 'The candidate is out. The file closes as Rejected — "Withdrawn by candidate".' },
   ] as const;
   return (
@@ -409,7 +413,7 @@ export function AnswerDrawer({ file, onClose, onDone }: DrawerProps) {
           {errs.answer ? <p id="ans-err" className="rf2-field__msg rf2-field__msg--error" role="alert">{errs.answer}</p> : null}
         </fieldset>
         {answer === 'Declined' || answer === 'Withdrawn' ? (
-          <TextareaV2 label={answer === 'Declined' ? 'What they asked for' : 'Why they withdrew'} required rows={3} value={why} onChange={(e) => setWhy(e.target.value)} error={errs.why} />
+          <TextareaV2 label={answer === 'Declined' ? 'Why they declined' : 'Why they withdrew'} required rows={3} value={why} onChange={(e) => setWhy(e.target.value)} error={errs.why} />
         ) : null}
         <PayNote />
         <FormError text={s.error} />

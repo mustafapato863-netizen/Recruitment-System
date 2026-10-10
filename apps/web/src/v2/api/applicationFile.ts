@@ -131,10 +131,10 @@ export const reviseScorecard = (interviewId: string, body: Omit<ScorecardBody, '
 export interface OfferTerms { contractType?: string; probationPeriod?: string; offerExpiry?: string; proposedJoiningDate?: string; workLocation?: string; workingSchedule?: string }
 /** = CreateOfferDto with components: [] — the Manager adds pay at the offer decision (M3). */
 export const createOfferDraft = (applicationId: string, terms: OfferTerms) => postApi<string>('/offers', { applicationId, ...terms, components: [] });
-/** = CreateOfferRevisionDto with components: [] (new version; Manager re-enters pay). */
+/** = CreateOfferRevisionDto with components: [] — new version after Expired (#11 allows it); Manager re-enters pay at M3. */
 export const createOfferRevision = (offerId: string, terms: OfferTerms) => postApi<string>(`/offers/${enc(offerId)}/revisions`, { ...terms, components: [] });
-/** = UpdateOfferStatusDto. Never 'Declined' from v2: #11 auto-rejects the file on Declined. */
-export const setOfferStatus = (offerId: string, status: 'Sent' | 'Accepted' | 'Withdrawn') => patchApi(`/offers/${enc(offerId)}/status`, { status });
+/** = UpdateOfferStatusDto. #11: Declined also rejects the file with reason "Declined offer"; Expired keeps it in Offer. */
+export const setOfferStatus = (offerId: string, status: 'Sent' | 'Accepted' | 'Declined' | 'Withdrawn' | 'Expired') => patchApi(`/offers/${enc(offerId)}/status`, { status });
 /** = CreateHiringCaseDto. */
 export const createHiringCase = (offerId: string) => postApi<HiringItem>('/hiring', { offerId });
 /** = UpdateComplianceDto. */

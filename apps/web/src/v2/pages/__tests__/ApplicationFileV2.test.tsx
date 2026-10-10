@@ -289,20 +289,44 @@ describe('E17–E20 offer', () => {
     await u.click(within(d).getByRole('button', { name: 'Record answer' }));
     await waitFor(() => expect(api.patchApi).toHaveBeenCalledWith('/offers/o1/status', { status: 'Accepted' }));
   });
-  it('E20 Declined → a new version (POST revisions, components []) and the file stays in Offer; never PATCH Declined', async () => {
+  it('E20 Declined → PATCH status Declined (#11 closes the file as Rejected "Declined offer"); no revision', async () => {
     const u = userEvent.setup();
     serve('offer-sent');
     renderFile('/applications/a1?drawer=answer');
     const d = await screen.findByRole('dialog');
-    await u.click(within(d).getByRole('radio', { name: /Declined/ }));
+    await u.click(within(d).getByRole('radio', { name: /^Declined/ }));
+    expect(within(d).getByText(/closes as Rejected — "Declined offer"/)).toBeInTheDocument();
     await u.click(within(d).getByRole('button', { name: 'Record answer' }));
     expect(within(d).getByText('Say what the candidate told you.')).toBeInTheDocument();
-    await u.type(within(d).getByLabelText(/What they asked for/), 'Later start date');
+    await u.type(within(d).getByLabelText(/Why they declined/), 'Took another offer');
     await u.click(within(d).getByRole('button', { name: 'Record answer' }));
-    await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/offers/o1/revisions', expect.objectContaining({ components: [], contractType: 'Full-time · 2 years', proposedJoiningDate: '2026-11-01' })));
-    expect(api.postApi).toHaveBeenCalledWith('/applications/a1/notes', { content: 'Candidate declined offer v1: Later start date' });
-    expect(api.patchApi).not.toHaveBeenCalledWith('/offers/o1/status', { status: 'Declined' });
+    await waitFor(() => expect(api.patchApi).toHaveBeenCalledWith('/offers/o1/status', { status: 'Declined' }));
+    expect(api.postApi).toHaveBeenCalledWith('/applications/a1/notes', { content: 'Candidate declined offer v1: Took another offer' });
+    expect(api.postApi).not.toHaveBeenCalledWith('/offers/o1/revisions', expect.anything());
     expect(api.patchApi).not.toHaveBeenCalledWith('/applications/a1/stage', expect.anything());
+  });
+  it('E20 Expired → PATCH status Expired; the file stays in Offer', async () => {
+    const u = userEvent.setup();
+    serve('offer-sent');
+    renderFile('/applications/a1?drawer=answer');
+    const d = await screen.findByRole('dialog');
+    await u.click(within(d).getByRole('radio', { name: /expired/ }));
+    await u.click(within(d).getByRole('button', { name: 'Record answer' }));
+    await waitFor(() => expect(api.patchApi).toHaveBeenCalledWith('/offers/o1/status', { status: 'Expired' }));
+    expect(api.patchApi).not.toHaveBeenCalledWith('/applications/a1/stage', expect.anything());
+  });
+  it('Expired offer: primary "New offer version" → POST revisions (components [], no pay)', async () => {
+    const u = userEvent.setup();
+    const r = fileResponses('offer-sent');
+    const offer = { ...(r['/offers/o1'] as Record<string, unknown>), status: 'Expired' };
+    serve('offer-sent', { '/offers': [offer], '/offers/o1': offer });
+    renderFile();
+    await u.click(await screen.findByRole('button', { name: 'New offer version' }));
+    const d = await screen.findByRole('dialog', { name: /New offer version/ });
+    await u.type(within(d).getByLabelText(/Start date/), '2026-11-15');
+    await u.click(within(d).getByRole('button', { name: 'Submit for approval' }));
+    await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/offers/o1/revisions', expect.objectContaining({ components: [], proposedJoiningDate: '2026-11-15' })));
+    expect(api.postApi).not.toHaveBeenCalledWith('/offers', expect.anything());
   });
   it('E20 Withdrawn → offer Withdrawn + file Rejected with "Withdrawn by candidate"', async () => {
     const u = userEvent.setup();
