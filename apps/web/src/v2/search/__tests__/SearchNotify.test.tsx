@@ -19,9 +19,9 @@ import { notificationHref, scopedSearch } from '../../api/searchNotify';
 
 let responses: Record<string, unknown> = {};
 const serve = (extra: Record<string, unknown> = {}) => {
-  responses = { '/search': sfx.search, '/applications': sfx.myApps, '/vacancies/work-queue': jfx.workQueue, '/vacancies': jfx.vacancyList, '/notifications': sfx.notifications(), ...extra };
+  responses = { '/search': sfx.search, '/applications': sfx.myApps, '/vacancies/work-queue': jfx.workQueue, mine: jfx.workQueueMine, '/vacancies': jfx.vacancyList, '/notifications': sfx.notifications(), ...extra };
   api.getApi.mockImplementation(async (path: string) => {
-    const p = path.split('?')[0];
+    const p = path.startsWith('/vacancies/work-queue?mine=true') ? 'mine' : path.split('?')[0];
     if (p in responses) { const v = responses[p]; if (v instanceof Error) throw v; return structuredClone(v); }
     throw new ApiError(404, 'nf');
   });
@@ -37,7 +37,7 @@ beforeEach(() => { Object.values(api).forEach((f) => f.mockReset()); serve(); sh
 
 describe('scopedSearch (client mitigation of an unscoped /search)', () => {
   it('keeps my files/jobs, redacts team jobs, drops out-of-scope jobs/files/offers, strips candidate email', async () => {
-    const r = await scopedSearch('Ahmed', jfx.ME);
+    const r = await scopedSearch('Ahmed');
     expect(api.getApi).toHaveBeenCalledWith('/search?q=Ahmed&limit=10');
     expect(api.getApi).toHaveBeenCalledWith('/applications?search=Ahmed&pageSize=50');
     const flat = r.groups.flatMap((g) => g.items);

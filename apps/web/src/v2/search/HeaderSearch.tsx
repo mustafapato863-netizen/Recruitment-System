@@ -21,7 +21,7 @@ export function HeaderSearch({ placeholder, meId }: { placeholder: string; meId:
     const sig = { aborted: false };
     setRes({ kind: 'loading' });
     const t = window.setTimeout(() => {
-      scopedSearch(q, meId, sig).then((data) => { if (!sig.aborted) { setRes({ kind: 'ready', data }); setActive(-1); } })
+      scopedSearch(q, sig).then((data) => { if (!sig.aborted) { setRes({ kind: 'ready', data }); setActive(-1); } })
         .catch((e: { statusCode?: number; message?: string }) => { if (!sig.aborted) setRes({ kind: 'error', message: e?.statusCode === 403 ? 'Your role does not include search.' : 'Search failed. Try again.' }); });
     }, 250);
     return () => { sig.aborted = true; window.clearTimeout(t); };

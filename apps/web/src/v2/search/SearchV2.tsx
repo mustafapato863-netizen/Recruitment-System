@@ -18,7 +18,7 @@ export function SearchV2() {
     if (!shell || q.length < 2 || !meId) return undefined;
     const sig = { aborted: false };
     setState({ kind: 'loading' });
-    scopedSearch(q, meId, sig).then((data) => !sig.aborted && setState({ kind: 'ready', data }))
+    scopedSearch(q, sig).then((data) => !sig.aborted && setState({ kind: 'ready', data }))
       .catch((e: { statusCode?: number; message?: string }) => !sig.aborted && setState(e?.statusCode === 403 ? { kind: 'forbidden' } : { kind: 'error', message: e?.message || 'Search failed.' }));
     return () => { sig.aborted = true; };
   }, [shell, q, meId]);

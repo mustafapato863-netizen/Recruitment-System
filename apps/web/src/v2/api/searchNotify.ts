@@ -30,12 +30,12 @@ type MyApp = { id: string; candidateId: string; stage: string; positionTitle?: s
 const list = <T,>(r: T[] | { data: T[] } | null | undefined): T[] => (Array.isArray(r) ? r : r?.data ?? []);
 const day = (iso: string) => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? iso : new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', timeZone: 'Africa/Cairo' }).format(d); };
 
-export async function scopedSearch(q: string, meId: string, signal?: { aborted: boolean }): Promise<ScopedSearch> {
+export async function scopedSearch(q: string, signal?: { aborted: boolean }): Promise<ScopedSearch> {
   const query = q.trim();
   const [raw, apps, jobs] = await Promise.all([
     getApi<GlobalSearchResponse>(`/search?q=${enc(query)}&limit=10`),
     getApi<MyApp[] | { data: MyApp[] }>(`/applications?search=${enc(query)}&pageSize=50`).then(list).catch(() => [] as MyApp[]),
-    fetchOpenJobs(meId).catch(() => null),
+    fetchOpenJobs().catch(() => null),
   ]);
   if (signal?.aborted) return { query, groups: [], shown: 0, hidden: 0 };
   const res = stripPay(raw);
