@@ -39,10 +39,10 @@ const audit = [
 let paths: Record<string, unknown> = {};
 const serve = (extra: Record<string, unknown> = {}) => {
   paths = {
-    '/vacancies/work-queue?pageSize=200': { data: jobs }, '/users?pageSize=500': ufx.users,
-    '/offers?status=Pending+Approval&pageSize=100': { data: [{ id: 'o1', status: 'Pending Approval', candidateName: 'Lina Hassan', positionTitle: 'HRIS Developer', versions: [{ id: 'ov1', versionNumber: 1, createdAt: new Date(Date.now() - 86400000).toISOString(), baseSalary: 62000 }] }] },
+    '/vacancies/work-queue?page=1&pageSize=100': { data: jobs }, '/users?page=1&pageSize=100': ufx.users,
+    '/offers?status=Pending+Approval&page=1&pageSize=100': { data: [{ id: 'o1', status: 'Pending Approval', candidateName: 'Lina Hassan', positionTitle: 'HRIS Developer', approvers: [{ id: null, name: 'OFFER_APPROVER' }, { id: 'u-karim', name: 'Karim Hassan' }], versions: [{ id: 'ov1', versionNumber: 1, createdAt: new Date(Date.now() - 86400000).toISOString(), baseSalary: 62000 }] }] },
     [`/results/org?month=${M}&managerId=u-hala`]: res(2, true), [`/results/org?month=${M}&managerId=u-karim`]: res(3, false),
-    '/audit-logs?page=1&pageSize=200': { data: audit, total: 3 },
+    '/audit-logs?page=1&pageSize=100': { data: audit, total: 3 },
     '/integrations': [{ id: 'i1', name: 'Careers site publishing', provider: 'careers_site', category: 'Publishing', status: 'Connected', lastSyncAt: '2026-10-09T05:45:00.000Z' }, { id: 'i2', name: 'Email Provider', provider: 'smtp', category: 'Communication', status: 'Available', lastSyncAt: null }, { id: 'i3', name: 'Calendar', provider: 'google_calendar', category: 'x', status: 'Connected' }],
     ...extra,
   };
@@ -69,7 +69,8 @@ describe('A08 Reports (Admin)', () => {
     expect(within(rows[2]).queryByRole('button', { name: /Override/ })).toBeNull();
     expect(screen.getByRole('list', { name: 'Files by stage' })).toHaveTextContent(/Applied10.*Screening6.*Pre-hire1/);
     expect(screen.getByText(/Time in stage \(median days\) needs a backend field/)).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'Offers waiting' })).toHaveTextContent(/Lina Hassan · HRIS Developer.*Offer v1.*Waiting on the Manager · 1 day/);
+    expect(screen.getByRole('region', { name: 'Offers waiting' })).toHaveTextContent(/Lina Hassan · HRIS Developer.*Offer v1.*Waiting on Karim Hassan · 1 day/); // approver named, role code skipped
+    expect(api.getApi.mock.calls.map((c) => String(c[0])).filter((p) => /pageSize=\d/.test(p)).every((p) => Number(/pageSize=(\d+)/.exec(p)![1]) <= 100)).toBe(true); // B2-22
     const tr = screen.getByRole('table', { name: 'Hiring report by team' });
     expect(within(tr).getAllByRole('row')).toHaveLength(3);
     expect(within(tr).getByRole('row', { name: /Talent/ })).toHaveTextContent(/Hala Mostafa’s 2 direct reports.*Too few to judge.*4 of 8.*3.*5 of 10.*3 of 5/);
@@ -93,6 +94,26 @@ describe('A08 Reports (Admin)', () => {
 });
 
 describe('A5 Admin override', () => {
+  it('CoS: with the B3 lists, hold sends the list reason and holdUntil; Other needs a note', async () => {
+    const u = userEvent.setup();
+    serve({ '/master-data/catalog/hold-reasons': [{ name: 'Budget freeze', status: 'Active' }, { name: 'Other', status: 'Active' }, { name: 'Old', status: 'Inactive' }] });
+    api.postApi.mockResolvedValue({ action: 'job.hold', entityId: 'v1', from: 'Open', to: 'On Hold' });
+    renderAt('/reports?override=v1');
+    const d = await screen.findByRole('dialog');
+    await u.click(within(d).getByRole('radio', { name: 'Put on hold' }));
+    const pick = await within(d).findByLabelText(/^Hold reason/);
+    expect(within(pick).queryByRole('option', { name: 'Old' })).toBeNull();
+    await u.type(within(d).getByLabelText(/^Why you are overriding/), 'Owner on sick leave');
+    await u.click(within(d).getByRole('button', { name: 'Apply override' }));
+    expect(within(d).getByText('Pick a reason from the list.')).toBeInTheDocument();
+    await u.selectOptions(pick, 'Other');
+    await u.click(within(d).getByRole('button', { name: 'Apply override' }));
+    expect(within(d).getByText('Say what the other reason is.')).toBeInTheDocument();
+    await u.type(within(d).getByLabelText(/^Other reason/), 'Site audit');
+    await u.type(within(d).getByLabelText(/^Hold until/), '2099-01-15');
+    await u.click(within(d).getByRole('button', { name: 'Apply override' }));
+    await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/admin/overrides', { action: 'job.hold', entityId: 'v1', reason: 'Owner on sick leave', statusReason: 'Other', statusNote: 'Site audit', holdUntil: '2099-01-15' }));
+  });
   it('hold an Open job: actions by status, reason ≥ 10, POST /admin/overrides; audited note', async () => {
     const u = userEvent.setup();
     api.postApi.mockResolvedValue({ action: 'job.hold', entityId: 'v1', from: 'Open', to: 'On Hold', reason: 'Owner on sick leave' });
@@ -103,11 +124,11 @@ describe('A5 Admin override', () => {
     await u.click(within(d).getByRole('button', { name: 'Apply override' }));
     expect(within(d).getByText('Pick what to do.')).toBeInTheDocument();
     await u.click(within(d).getByRole('radio', { name: 'Put on hold' }));
-    await u.type(within(d).getByLabelText(/^Reason/), 'too short');
+    await u.type(within(d).getByLabelText(/^Why you are overriding/), 'too short');
     await u.click(within(d).getByRole('button', { name: 'Apply override' }));
     expect(within(d).getByText('An override needs a reason (at least 10 characters).')).toBeInTheDocument();
     expect(api.postApi).not.toHaveBeenCalled();
-    await u.clear(within(d).getByLabelText(/^Reason/)); await u.type(within(d).getByLabelText(/^Reason/), 'Owner on sick leave');
+    await u.clear(within(d).getByLabelText(/^Why you are overriding/)); await u.type(within(d).getByLabelText(/^Why you are overriding/), 'Owner on sick leave');
     await u.click(within(d).getByRole('button', { name: 'Apply override' }));
     await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/admin/overrides', { action: 'job.hold', entityId: 'v1', reason: 'Owner on sick leave' }));
     expect(await screen.findByRole('status')).toHaveTextContent('HRIS Developer: Open → On Hold. Logged in Audit as an admin override.');
@@ -120,7 +141,7 @@ describe('A5 Admin override', () => {
     const d = await screen.findByRole('dialog', { name: 'Medical Coder' });
     expect(within(d).getAllByRole('radio').map((r) => (r as HTMLInputElement).value)).toEqual(['job.reopen', 'job.close']);
     await u.click(within(d).getByRole('radio', { name: 'Reopen' }));
-    await u.type(within(d).getByLabelText(/^Reason/), 'Manager is back from leave');
+    await u.type(within(d).getByLabelText(/^Why you are overriding/), 'Manager is back from leave');
     await u.click(within(d).getByRole('button', { name: 'Apply override' }));
     expect(await within(d).findByText('job.reopen is not allowed from Closed.')).toBeInTheDocument();
     await u.click(within(d).getByRole('button', { name: 'Apply override' }));
@@ -132,22 +153,48 @@ describe('A09 Audit', () => {
   it('read-only log, newest first, last 7 days by default; who/area filters; areas; axe', async () => {
     const u = userEvent.setup();
     const { container } = renderAt('/audit-log');
-    const t = await screen.findByRole('table', { name: 'Audit log' });
+    const table = () => screen.findByRole('table', { name: 'Audit log' });
+    let t = await table();
     let rows = within(t).getAllByRole('row').slice(1);
     expect(rows).toHaveLength(2);
     expect(rows[0]).toHaveTextContent(/Karim Hassan.*Offer.*Offer decision — Approved v2.*Offer · o1-aaaaa/);
     expect(rows[1]).toHaveTextContent(/Omar Khalil.*Override.*Admin override — Hiring manager on leave/);
     expect(screen.getByText('2 entries')).toBeInTheDocument();
     await u.selectOptions(screen.getByLabelText('Period'), 'all');
+    t = await table();
     expect(within(t).getAllByRole('row')).toHaveLength(4);
     await u.selectOptions(screen.getByLabelText('Area'), 'File');
     rows = within(t).getAllByRole('row').slice(1);
     expect(rows).toHaveLength(1);
     await u.selectOptions(screen.getByLabelText('Area'), 'all');
     await u.selectOptions(screen.getByLabelText('Who'), 'u-omar');
+    t = await table();
     expect(within(t).getAllByRole('row')).toHaveLength(2);
     expect(screen.queryByRole('button', { name: /delete|edit/i })).toBeNull();
     expect(await axeViolations(container)).toEqual([]);
+  });
+  it('CoS: server-side filters and paging via GET /audit when present (pageSize 100)', async () => {
+    const u = userEvent.setup();
+    const calls: string[] = [];
+    api.getApi.mockImplementation(async (p: string) => {
+      calls.push(p);
+      if (p.startsWith('/audit?')) {
+        const q = new URLSearchParams(p.split('?')[1]);
+        const page = Number(q.get('page'));
+        const rows = q.get('actor') === 'u-omar' ? [audit[1]] : page === 1 ? audit.slice(0, 2) : [audit[2]];
+        return { data: rows, total: q.get('actor') ? 1 : 150 };
+      }
+      throw new ApiError(404, 'no');
+    });
+    render(<MemoryRouter><AuditV2 /></MemoryRouter>);
+    expect(await screen.findByText(/page 1 of 2 \(150 in total\)/)).toBeInTheDocument();
+    expect(calls[0]).toMatch(/^\/audit\?page=1&pageSize=100&from=\d{4}-\d{2}-\d{2}$/);
+    await u.click(screen.getByRole('button', { name: 'Older' }));
+    expect(await screen.findByText(/page 2 of 2/)).toBeInTheDocument();
+    expect(calls.at(-1)).toMatch(/page=2&pageSize=100/);
+    await u.selectOptions(screen.getByLabelText('Who'), 'u-omar');
+    await waitFor(() => expect(calls.at(-1)).toMatch(/page=1&pageSize=100&from=.*&actor=u-omar/));
+    expect(calls.every((c) => !/pageSize=(\d{3,})/.test(c) || Number(/pageSize=(\d+)/.exec(c)![1]) <= 100)).toBe(true);
   });
   it('helpers: area mapping and CSV escaping (formula-safe)', () => {
     expect(auditArea({ entityType: 'User', action: 'USER_UPDATE' })).toBe('Users');
@@ -161,7 +208,7 @@ describe('A09 Audit', () => {
   });
   it('error → Try again', async () => {
     const u = userEvent.setup();
-    serve({ '/audit-logs?page=1&pageSize=200': new ApiError(500, 'Audit down') });
+    serve({ '/audit-logs?page=1&pageSize=100': new ApiError(500, 'Audit down') });
     render(<MemoryRouter><AuditV2 /></MemoryRouter>);
     expect(await screen.findByRole('alert')).toHaveTextContent('Audit down');
     serve();

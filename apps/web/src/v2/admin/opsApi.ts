@@ -4,12 +4,16 @@
  * - Offers waiting: GET /offers?status=Pending Approval (never pay; stripPay).
  * - Stage counts: B8 GET /reports/overview?from&to → funnel[] (counts only; no time-in-stage median on the API).
  * - Hiring report by team: B8 GET /results/org?month&managerId= per manager (ADMINISTRATOR only), tooFewToJudge from the server.
- * - Audit: GET /audit-logs?page&pageSize → AuditLogEntry. Read-only.
+ * - Audit (CoS): server-side GET /audit?actor&entity&from&to&page&pageSize (C5, admin-only, pageSize ≤ 100) when present;
+ *   else GET /audit-logs?page&pageSize=100 with the client-side filters. Read-only.
+ * - Every list call stays at pageSize ≤ 100 (B2-22) and pages through fetchAllPages.
  * - Integrations: B9 — only careers_site and smtp (others hidden / 404). GET /integrations, POST /integrations/:id/test.
  * - Override: B9 POST /admin/overrides {action, entityId, reason}; actions job.hold | job.reopen | job.close; reason ≥ 10;
+ *   CoS: also sends the B3 list reason (statusReason, + statusNote for "Other") and holdUntil when the B3 lists exist.
  *   400 OVERRIDE_REASON_REQUIRED / OVERRIDE_NOT_ALLOWED, 409 wrong state (OVERRIDE_NOT_ALLOWED), 403 non-admin.
  */
 import { getApi, postApi } from '../../api/client';
+import { fetchAllPages } from '../api/paged';
 import { stripPay } from '../api/paySafety';
 import { domainError } from '../api/gates';
 import { isRedactedJob, type JobStatus, type JobWorkQueueItem, type RedactedJob } from '../api/jobs';
@@ -22,7 +26,7 @@ const ACTIVE = ['Applied', 'Screening', 'Interview', 'Offer', 'Pre-Hire'];
 
 export interface OrgJob { id: string; title: string; site: string | null; owner: string | null; status: JobStatus | null; seats: { filled: number; target: number }; dueDate: string | null; active: number | null; redacted: boolean }
 export async function fetchOrgJobs(): Promise<OrgJob[]> {
-  const r = stripPay(list(await getApi<Array<JobWorkQueueItem | RedactedJob> | { data: Array<JobWorkQueueItem | RedactedJob> }>('/vacancies/work-queue?pageSize=200')));
+  const r = stripPay(await fetchAllPages<JobWorkQueueItem | RedactedJob>('/vacancies/work-queue'));
   return r.map((j) => (isRedactedJob(j)
     ? { id: j.id, title: j.title, site: j.site?.name ?? null, owner: null, status: null, seats: j.seats, dueDate: null, active: null, redacted: true }
     : { id: j.id, title: j.title, site: j.branch?.name ?? null, owner: j.owner?.displayName ?? null, status: j.status, seats: { filled: j.headcount.joined, target: j.headcount.approved }, dueDate: j.dueDate ?? null,
@@ -30,14 +34,22 @@ export async function fetchOrgJobs(): Promise<OrgJob[]> {
     .filter((j) => j.status !== 'Closed' && j.status !== 'Filled');
 }
 
-export interface WaitingOfferRow { id: string; candidate: string; job: string; version: number; submittedAt: string | null }
+export interface WaitingOfferRow { id: string; candidate: string; job: string; version: number; submittedAt: string | null; approver: string | null }
+type Person = { id?: string | null; name?: string | null; displayName?: string | null } | null | undefined;
+const isRoleCode = (n: string) => /^[A-Z][A-Z0-9_]+$/.test(n.trim());
+/** CoS: name the approver when the API sends one (approver / approvers[] / approvals[].approver); never a role code. */
+export function approverName(o: { approver?: Person; approvers?: Person[]; approvals?: Array<{ status?: string; approver?: Person; approverName?: string | null }> }): string | null {
+  const people: Person[] = [o.approver, ...(o.approvers ?? []), ...(o.approvals ?? []).filter((a) => !a.status || a.status === 'Pending').map((a) => a.approver ?? (a.approverName ? { name: a.approverName } : null))];
+  const names = [...new Set(people.map((p) => (p?.name ?? p?.displayName ?? '').trim()).filter((n) => n && !isRoleCode(n)))];
+  return names.length ? names.join(', ') : null;
+}
 export async function fetchOffersWaiting(): Promise<WaitingOfferRow[]> {
   type V = { id: string; versionNumber: number; createdAt?: string | null };
-  type Raw = { id: string; status?: string; candidateName?: string; positionTitle?: string; currentVersionId?: string | null; currentVersion?: V | null; versions?: V[] };
-  const rows = stripPay(list(await getApi<Raw[] | { data: Raw[] }>(`/offers?${new URLSearchParams({ status: 'Pending Approval', pageSize: '100' })}`)));
+  type Raw = { id: string; status?: string; candidateName?: string; positionTitle?: string; currentVersionId?: string | null; currentVersion?: V | null; versions?: V[] } & Parameters<typeof approverName>[0];
+  const rows = stripPay(await fetchAllPages<Raw>(`/offers?${new URLSearchParams({ status: 'Pending Approval' })}`));
   return rows.filter((o) => !o.status || o.status === 'Pending Approval').map((o) => {
     const v = o.currentVersion ?? o.versions?.find((x) => x.id === o.currentVersionId) ?? [...(o.versions ?? [])].sort((x, y) => y.versionNumber - x.versionNumber)[0];
-    return { id: o.id, candidate: o.candidateName ?? 'Candidate', job: o.positionTitle ?? 'Job', version: v?.versionNumber ?? 1, submittedAt: v?.createdAt ?? null };
+    return { id: o.id, candidate: o.candidateName ?? 'Candidate', job: o.positionTitle ?? 'Job', version: v?.versionNumber ?? 1, submittedAt: v?.createdAt ?? null, approver: approverName(o) };
   });
 }
 
@@ -69,10 +81,25 @@ export async function fetchTeamReport(month: string, managers: Array<{ id: strin
 }
 
 export interface AuditEntry { id: string; actorUserId: string | null; actorDisplayName?: string; action: string; entityType: string; entityId: string; result: string; reason: string | null; createdAt: string }
-export async function fetchAudit(pageSize = 200): Promise<{ rows: AuditEntry[]; total: number }> {
-  const r = await getApi<{ data: AuditEntry[]; total?: number; meta?: { total?: number } } | AuditEntry[]>(`/audit-logs?page=1&pageSize=${pageSize}`);
-  const rows = list(r);
-  return { rows, total: Array.isArray(r) ? rows.length : r.total ?? r.meta?.total ?? rows.length };
+export interface AuditQuery { from?: string; to?: string; actor?: string; entity?: string; page?: number }
+export interface AuditPage { rows: AuditEntry[]; total: number; page: number; pageSize: number; server: boolean }
+export const AUDIT_PAGE_SIZE = 100;
+/**
+ * CoS: server-side filters + pagination via C5 GET /audit when it exists; on 404/405 (not deployed) fall back to /audit-logs
+ * (page of 100, filters applied client-side by the page). `server` tells the page which mode it got.
+ */
+export async function fetchAudit(q: AuditQuery = {}): Promise<AuditPage> {
+  const page = q.page ?? 1;
+  type R = { data: AuditEntry[]; total?: number; meta?: { total?: number } } | AuditEntry[];
+  const shape = (r: R, server: boolean): AuditPage => {
+    const rows = list(r);
+    return { rows, total: Array.isArray(r) ? rows.length : r.total ?? r.meta?.total ?? rows.length, page, pageSize: AUDIT_PAGE_SIZE, server };
+  };
+  const p = new URLSearchParams({ page: String(page), pageSize: String(AUDIT_PAGE_SIZE) });
+  for (const k of ['from', 'to', 'actor', 'entity'] as const) if (q[k]) p.set(k, q[k]!);
+  try { return shape(await getApi<R>(`/audit?${p}`), true); }
+  catch (e) { const s = (e as { statusCode?: number })?.statusCode; if (s !== 404 && s !== 405 && s !== 501) throw e; }
+  return shape(await getApi<R>(`/audit-logs?page=${page}&pageSize=${AUDIT_PAGE_SIZE}`), false);
 }
 /** Area chip from the entity type / action (Figma A09 areas). */
 export function auditArea(e: Pick<AuditEntry, 'entityType' | 'action'>): string {
@@ -116,11 +143,21 @@ export const OVERRIDE_FROM: Record<OverrideAction, readonly string[]> = {
 export const OVERRIDE_LABEL: Record<OverrideAction, string> = { 'job.hold': 'Put on hold', 'job.reopen': 'Reopen', 'job.close': 'Close job' };
 export const overridesFor = (status: string | null) => (Object.keys(OVERRIDE_FROM) as OverrideAction[]).filter((a) => !!status && OVERRIDE_FROM[a].includes(status));
 export const OVERRIDE_MIN_REASON = 10;
-export const postOverride = (action: OverrideAction, entityId: string, reason: string) => postApi<{ action: string; entityId: string; from: string; to: string; reason: string }>('/admin/overrides', { action, entityId, reason });
-export function overrideError(e: unknown): { field?: 'reason'; text: string } {
+/** B3 extras on hold/close, sent only when the lists exist (B9 TODO(B3) routes them through the job lifecycle). */
+export interface OverrideExtras { statusReason?: string; statusNote?: string; holdUntil?: string }
+export const postOverride = (action: OverrideAction, entityId: string, reason: string, extras: OverrideExtras = {}) => {
+  const body: Record<string, string> = { action, entityId, reason };
+  if (action !== 'job.reopen' && extras.statusReason) body.statusReason = extras.statusReason;
+  if (action !== 'job.reopen' && extras.statusNote?.trim()) body.statusNote = extras.statusNote.trim();
+  if (action === 'job.hold' && extras.holdUntil) body.holdUntil = extras.holdUntil;
+  return postApi<{ action: string; entityId: string; from: string; to: string; reason: string }>('/admin/overrides', body);
+};
+export function overrideError(e: unknown): { field?: 'reason' | 'statusReason' | 'holdUntil'; text: string } {
   const d = domainError(e); const s = (e as { statusCode?: number })?.statusCode;
   if (d?.code === 'OVERRIDE_REASON_REQUIRED') return { field: 'reason', text: `An override needs a reason (at least ${OVERRIDE_MIN_REASON} characters).` };
   if (d?.code === 'OVERRIDE_NOT_ALLOWED') return { text: d.message || 'That override is not allowed for this job now.' };
+  if (d?.code === 'REASON_NOT_IN_LIST') return { field: 'statusReason', text: 'Pick a reason from the list.' };
+  if (d?.code === 'HOLD_UNTIL_NOT_FUTURE') return { field: 'holdUntil', text: 'Pick a day after today (Cairo).' };
   if (s === 403) return { text: 'Only an administrator can use an override.' };
   return { text: (e as { message?: string })?.message || 'Could not apply the override.' };
 }

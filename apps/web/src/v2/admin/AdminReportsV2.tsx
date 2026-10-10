@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Clock, Download, Info, RotateCw, ShieldAlert } from 'lucide-react';
-import { ButtonV2, DrawerV2, EmptyStateV2, SelectV2, SkeletonV2, StatusChip, TextareaV2, initials } from '../../components/v2';
+import { ButtonV2, DrawerV2, EmptyStateV2, InputV2, SelectV2, SkeletonV2, StatusChip, TextareaV2, initials } from '../../components/v2';
+import { OTHER_REASON, cairoToday, jobReasons } from '../api/jobs';
 import { cairoMonth, monthLabel, tooFew, type ResultTile, type TileKey } from '../api/myResult';
 import { rowTooFew } from '../api/teamResult';
 import { fetchUsers, seatOf } from './usersApi';
@@ -106,7 +107,7 @@ export function AdminReportsV2() {
                 <ul className="rf2-admin__offers">{data.offers.map((o) => (
                   <li key={o.id}><span className="rf2-avatar rf2-team__avatar" aria-hidden="true">{initials(o.candidate)}</span>
                     <span><span className="rf2-jtable__name">{o.candidate} · {o.job}</span><span className="rf2-jtable__sub">Offer v{o.version}{o.submittedAt ? ` · submitted ${day(o.submittedAt)}` : ''}</span></span>
-                    {ago(o.submittedAt) ? <StatusChip tone="neutral" icon={<Clock />} label={`Waiting on the Manager · ${ago(o.submittedAt)}`} /> : null}</li>
+                    {ago(o.submittedAt) ? <StatusChip tone="neutral" icon={<Clock />} label={`Waiting on ${o.approver ?? 'the Manager'} · ${ago(o.submittedAt)}`} /> : null}</li>
                 ))}</ul>
               )}
             </section>
@@ -139,13 +140,33 @@ export function OverrideDrawer({ job, onClose, onDone }: { job: OrgJob; onClose:
   const actions = overridesFor(job.status);
   const [action, setAction] = useState<OverrideAction | ''>(actions.length === 1 ? actions[0] : '');
   const [reason, setReason] = useState('');
-  const [err, setErr] = useState<{ field?: 'reason' | 'action'; text: string } | null>(null);
+  // CoS: B3 reason lists + holdUntil, used when the lists exist on the server.
+  const kind = action === 'job.hold' ? 'hold' : action === 'job.close' ? 'close' : null;
+  const [lists, setLists] = useState<Partial<Record<'hold' | 'close', string[] | null>>>({});
+  const [statusReason, setStatusReason] = useState('');
+  const [statusNote, setStatusNote] = useState('');
+  const [holdUntil, setHoldUntil] = useState('');
+  useEffect(() => {
+    if (!kind || kind in lists) return;
+    let live = true;
+    jobReasons(kind).then((r) => live && setLists((l) => ({ ...l, [kind]: r.length ? r : null }))).catch(() => live && setLists((l) => ({ ...l, [kind]: null })));
+    return () => { live = false; };
+  }, [kind, lists]);
+  const list = kind ? lists[kind] ?? null : null;
+  useEffect(() => { setStatusReason(''); setStatusNote(''); }, [kind]);
+  const [err, setErr] = useState<{ field?: 'reason' | 'action' | 'statusReason' | 'holdUntil' | 'statusNote'; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const submit = async () => {
     if (!action) return setErr({ field: 'action', text: 'Pick what to do.' });
+    if (list && !statusReason) return setErr({ field: 'statusReason', text: 'Pick a reason from the list.' });
+    if (list && statusReason === OTHER_REASON && !statusNote.trim()) return setErr({ field: 'statusNote', text: 'Say what the other reason is.' });
+    if (action === 'job.hold' && holdUntil && holdUntil <= cairoToday()) return setErr({ field: 'holdUntil', text: 'Pick a day after today (Cairo).' });
     if (reason.trim().length < OVERRIDE_MIN_REASON) return setErr({ field: 'reason', text: `An override needs a reason (at least ${OVERRIDE_MIN_REASON} characters).` });
     setBusy(true); setErr(null);
-    try { const r = await postOverride(action, job.id, reason.trim()); onDone(`${job.title}: ${r?.from ?? job.status} → ${r?.to ?? OVERRIDE_LABEL[action]}. Logged in Audit as an admin override.`); }
+    try {
+      const r = await postOverride(action, job.id, reason.trim(), list ? { statusReason, statusNote, holdUntil: holdUntil || undefined } : {});
+      onDone(`${job.title}: ${r?.from ?? job.status} → ${r?.to ?? OVERRIDE_LABEL[action]}. Logged in Audit as an admin override.`);
+    }
     catch (e) { setErr(overrideError(e)); } finally { setBusy(false); }
   };
   return (
@@ -160,9 +181,19 @@ export function OverrideDrawer({ job, onClose, onDone }: { job: OrgJob; onClose:
         ))}
         {err?.field === 'action' ? <p className="rf2-form-error" role="alert">{err.text}</p> : null}
       </fieldset>
-      <TextareaV2 label="Reason" required rows={3} value={reason} onChange={(e) => { setReason(e.target.value); setErr(null); }} error={err?.field === 'reason' ? err.text : undefined} hint={`At least ${OVERRIDE_MIN_REASON} characters. Kept on the audit log with who did it and the before/after status.`} />
+      {list ? (
+        <>
+          <SelectV2 label={kind === 'hold' ? 'Hold reason' : 'Close reason'} required value={statusReason} onChange={(e) => { setStatusReason(e.target.value); setErr(null); }} error={err?.field === 'statusReason' ? err.text : undefined}>
+            <option value="">Choose a reason</option>
+            {list.map((r) => <option key={r} value={r}>{r}</option>)}
+          </SelectV2>
+          {statusReason === OTHER_REASON ? <TextareaV2 label="Other reason" required rows={2} value={statusNote} onChange={(e) => { setStatusNote(e.target.value); setErr(null); }} error={err?.field === 'statusNote' ? err.text : undefined} /> : null}
+          {kind === 'hold' ? <InputV2 label="Hold until (optional)" type="date" value={holdUntil} onChange={(e) => { setHoldUntil(e.target.value); setErr(null); }} error={err?.field === 'holdUntil' ? err.text : undefined} hint="A day after today (Cairo)." /> : null}
+        </>
+      ) : null}
+      <TextareaV2 label="Why you are overriding" required rows={3} value={reason} onChange={(e) => { setReason(e.target.value); setErr(null); }} error={err?.field === 'reason' ? err.text : undefined} hint={`At least ${OVERRIDE_MIN_REASON} characters. Kept on the audit log with who did it and the before/after status.`} />
       {err && !err.field ? <p className="rf2-form-error" role="alert">{err.text}</p> : null}
-      <p className="rf2-inline-note" data-tone="warning"><Info aria-hidden="true" /> Use this only when the owner can’t act. Files are reassigned by their Manager from Team work, not here.</p>
+      <p className="rf2-inline-note" data-tone="warning"><Info aria-hidden="true" /> Use this only when the owner can’t act. A leaver’s files move from Users → Deactivate (file.reassign override).</p>
     </DrawerV2>
   );
 }
