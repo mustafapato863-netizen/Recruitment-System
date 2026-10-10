@@ -16,7 +16,7 @@ const QUERIES: Record<string, string> = {
   role_permissions: 'SELECT count(*) AS n FROM "role_permissions"',
   branches: 'SELECT count(*) AS n FROM "branches"',
   positions: 'SELECT count(*) AS n FROM "positions"',
-  seededMasterData: `SELECT count(*) AS n FROM "master_data_values" WHERE code LIKE 'DEPT\\_%' OR category IN ('hold-reasons', 'close-reasons')`,
+  seededMasterData: `SELECT count(*) AS n FROM "master_data_values" WHERE code LIKE 'DEPT\\_%' OR category IN ('hold-reasons', 'close-reasons', 'rejection-reasons', 'reassign-reasons')`,
 };
 
 describe.skipIf(!url)('seed (scratch Postgres)', () => {
