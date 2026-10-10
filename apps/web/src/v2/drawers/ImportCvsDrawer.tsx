@@ -10,7 +10,7 @@ interface Row { key: string; file: File; status: RowStatus; cv?: ExtractedCv; du
 const MATCH_LABEL = { email: 'same email', phone: 'same phone' } as const;
 
 /** E11 Import CVs: upload → parse → duplicate check (B6) → link existing person or create → add to this job (Applied). */
-export function ImportCvsDrawer({ job, onClose, onDone }: { job: JobDetail; onClose: () => void; onDone: () => void }) {
+export function ImportCvsDrawer({ job, onClose, onDone, onImported }: { job: JobDetail; onClose: () => void; onDone: () => void; onImported?: () => void }) {
   const [rows, setRows] = useState<Row[]>([]);
   const [busy, setBusy] = useState(false);
   const [summary, setSummary] = useState<string | null>(null);
@@ -76,6 +76,8 @@ export function ImportCvsDrawer({ job, onClose, onDone }: { job: JobDetail; onCl
     setSummary(`${ok} added to Applied${linked ? ` (${linked} linked to an existing person)` : ''}${already ? ` · ${already} already on this job` : ''}${failed ? ` · ${failed} failed` : ''}.`);
     // Keep the drawer open when there are conflicts to read; otherwise close and refresh the board.
     if (ok && !failed && !conflicted && !already) onDone();
+    // B2F-13: the board behind the drawer shows the new Applied cards even while the drawer stays open.
+    else if (ok) onImported?.();
   };
 
   return (
