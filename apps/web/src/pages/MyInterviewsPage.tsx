@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { PageFrame } from '../components/ui/PageFrame';
 import { PageState } from '../components/ui/PageState';
 import { Button } from '../components/ui/Button';
@@ -37,6 +38,19 @@ export function MyInterviewsPage({ load = listMyInterviews }: { load?: typeof li
   const [state, setState] = useState<Load>({ kind: 'loading' });
   const [attempt, setAttempt] = useState(0);
   const [scorecardFor, setScorecardFor] = useState<MyInterview | null>(null);
+  // B2F-3: My Work's "Open interview" / "Submit scorecard" deep-link here (?interview=<id>[&scorecard=1]).
+  const [params] = useSearchParams();
+  const focusId = params.get('interview');
+  const openScorecard = params.get('scorecard') === '1';
+  const [deepLinked, setDeepLinked] = useState(false);
+  useEffect(() => {
+    if (deepLinked || !focusId || state.kind !== 'ready' || !state.result.available) return;
+    const hit = state.result.items.find((i) => i.id === focusId);
+    if (!hit) return;
+    setDeepLinked(true);
+    if (openScorecard && hit.status !== 'Cancelled') setScorecardFor(hit);
+    else document.getElementById(`my-interview-${hit.id}`)?.scrollIntoView?.({ block: 'center' });
+  }, [deepLinked, focusId, openScorecard, state]);
 
   useEffect(() => {
     let alive = true;
@@ -70,7 +84,7 @@ export function MyInterviewsPage({ load = listMyInterviews }: { load?: typeof li
       {state.kind === 'ready' && state.result.available && state.result.items.length > 0 ? (
         <ul className="space-y-3" aria-label="My interviews">
           {state.result.items.map((item) => (
-            <InterviewCard key={item.id} item={item} onPatch={patch} onScorecard={() => setScorecardFor(item)} />
+            <InterviewCard key={item.id} item={item} focused={item.id === focusId} onPatch={patch} onScorecard={() => setScorecardFor(item)} />
           ))}
         </ul>
       ) : null}
@@ -82,7 +96,7 @@ export function MyInterviewsPage({ load = listMyInterviews }: { load?: typeof li
   );
 }
 
-function InterviewCard({ item, onPatch, onScorecard }: { item: MyInterview; onPatch: (id: string, c: Partial<MyInterview>) => void; onScorecard: () => void }) {
+function InterviewCard({ item, focused = false, onPatch, onScorecard }: { item: MyInterview; focused?: boolean; onPatch: (id: string, c: Partial<MyInterview>) => void; onScorecard: () => void }) {
   const [busy, setBusy] = useState<null | 'cv' | 'ics' | 'Confirmed' | 'Declined'>(null);
   const [notice, setNotice] = useState<{ tone: 'error' | 'ok'; text: string } | null>(null);
   const rsvp = RSVP_LABEL[item.myResponse] ?? RSVP_LABEL.Pending;
@@ -102,7 +116,7 @@ function InterviewCard({ item, onPatch, onScorecard }: { item: MyInterview; onPa
   };
 
   return (
-    <li className="rounded-2xl border border-rf-border bg-rf-surface p-4" aria-labelledby={`iv-${item.id}`} data-testid="my-interview">
+    <li id={`my-interview-${item.id}`} className={`rounded-2xl border bg-rf-surface p-4 ${focused ? "border-rf-action ring-2 ring-rf-action/30" : "border-rf-border"}`} aria-current={focused ? "true" : undefined} aria-labelledby={`iv-${item.id}`} data-testid="my-interview">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 id={`iv-${item.id}`} className="text-sm font-bold text-rf-ink">{item.candidateName}{item.positionTitle ? <span className="font-semibold text-rf-ink-muted"> · {item.positionTitle}</span> : null}</h2>

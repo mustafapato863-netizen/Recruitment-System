@@ -198,7 +198,16 @@ export function actionHref(item: WorkItem, action: MyWorkAction): string | null 
  * E2: in the v2 Employee seat, application-linked actions open the v2 file (E13)
  * or its drawer instead of v1 pages. Others fall back to actionHref().
  */
-export function fileActionHref(item: WorkItem, action: MyWorkAction): string | null {
+export interface HrefContext { meId?: string; canOpenFile?: boolean; interviewer?: boolean }
+export function fileActionHref(item: WorkItem, action: MyWorkAction, ctx: HrefContext = {}): string | null {
+  // B2F-3: an interviewer's interview opens their v2 interview view (CV + own scorecard), never the file
+  // (which needs APPLICATION_VIEW / ownership and showed v1 "Access Restricted").
+  if (item.entity.type === 'interview' && ctx.interviewer && (action.key === 'open-interview' || action.key === 'submit-scorecard')) {
+    const attendee = !!ctx.meId && [item.interviewer, ...(item.interviewers ?? [])].some((p) => p?.id === ctx.meId);
+    if (attendee || ctx.canOpenFile === false) {
+      return `/my-interviews?interview=${encodeURIComponent(item.entity.id)}${action.key === 'submit-scorecard' ? '&scorecard=1' : ''}`;
+    }
+  }
   const appId = item.applicationId ?? (item.entity.type === 'application' ? item.entity.id : undefined);
   if (!appId) return actionHref(item, action);
   const base = `/applications/${encodeURIComponent(appId)}`;

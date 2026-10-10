@@ -6,7 +6,7 @@
  * - GET  /vacancy-requests/context        → { branches[{id,name}], positions[{id,title}], … }   (VACANCY_REQUEST_CREATE)
  * - POST /vacancy-requests                → CreateVacancyRequestDto {branchId, positionId, requestedHeadcount, dueDate?, gradeId?, assignedEmployeeId?, justification?}
  * - PATCH /vacancy-requests/:id           → same fields; only from Draft / Changes Requested (409 otherwise)
- * - POST /vacancy-requests/:id/submit     → Draft|Changes Requested → Pending Approval; 400 DUE_DATE_REQUIRED
+ * - (no submit: B2F-5 / Figma M03 — Draft → Activate job; the approval path needs budget fields the v2 form does not have)
  * - POST /vacancy-requests/:id/activate {assignedEmployeeId?} (VACANCY_MANAGE) → {request, vacancy}; only from Approved;
  *        409 REQUISITION_CANCELLED, 400 DUE_DATE_REQUIRED / ASSIGNEE_REQUIRED; idempotent once activated.
  * - POST /vacancy-requests/:id/cancel {reason}  (reason required once approved) → closes the live job and rejects its open files.
@@ -86,7 +86,6 @@ export async function fetchPeople(): Promise<Person[] | null> {
 export interface ReqFields { departmentId?: string | null; positionId: string; branchId: string; requestedHeadcount: number; dueDate: string | null; gradeId: string | null; assignedEmployeeId: string | null; justification: string | null }
 export const createRequisition = (f: ReqFields) => postApi<Requisition>('/vacancy-requests', f);
 export const updateRequisition = (id: string, f: Partial<ReqFields>) => patchApi<Requisition>(`/vacancy-requests/${enc(id)}`, f);
-export const submitRequisition = (id: string) => postApi<Requisition>(`/vacancy-requests/${enc(id)}/submit`, {});
 export const activateRequisition = (id: string, assignedEmployeeId: string | null) =>
   postApi<{ request: Requisition; vacancy?: { id: string; vacancyCode?: string } }>(`/vacancy-requests/${enc(id)}/activate`, assignedEmployeeId ? { assignedEmployeeId } : {});
 export const cancelRequisition = (id: string, reason: string) => postApi<{ request: Requisition; rejectedApplications?: number; closedJob?: boolean }>(`/vacancy-requests/${enc(id)}/cancel`, { reason });
@@ -108,9 +107,9 @@ export function deptOf(r: Requisition, ctx: ReqContext | null): string | null {
   return r.departmentId ? ctx?.departments?.find((d) => d.id === r.departmentId)?.name ?? null : null;
 }
 
-/** CoS: a Manager may activate their own Draft once it has a due date. */
-export const canActivateDraft = (r: Pick<Requisition, 'status' | 'requesterId'> | null, meId: string | undefined, due: string | null) =>
-  (!r || (r.status === 'Draft' && r.requesterId === meId)) && !!due;
+/** B2F-5 (Figma M03): a Draft (or Changes requested) activates once it has a due date; no approval step. */
+export const canActivateDraft = (r: Pick<Requisition, 'status' | 'requesterId'> | null, _meId: string | undefined, due: string | null) =>
+  (!r || isEditable(r.status)) && !!due;
 /** The current backend refusing a Draft activation (not yet live): 409 without a known code, or 403. */
 export function draftActivateRefused(e: unknown): boolean {
   const x = e as { statusCode?: number } | null;

@@ -89,14 +89,15 @@ describe('M1 requisitions list', () => {
 });
 
 describe('M03 requisition drawer', () => {
-  it('new: due date required (Save disabled), saves a draft without budget, then submit sends for approval', async () => {
+  it('B2F-5 new: due date required (Save/Activate disabled), no Submit for approval; Activate creates then activates', async () => {
     const u = userEvent.setup();
-    api.postApi.mockImplementation(async (p: string) => (p === '/vacancy-requests' ? { ...fx.requisitions[3], id: 'r-new' } : { id: 'r-new', status: 'Pending Approval' }));
+    api.postApi.mockImplementation(async (p: string) => (p === '/vacancy-requests' ? { ...fx.requisitions[3], id: 'r-new' } : { request: { id: 'r-new', status: 'Converted to Vacancy' } }));
     const { baseElement } = renderAt();
     await u.click(await screen.findByRole('button', { name: 'New requisition' }));
     const d = await screen.findByRole('dialog', { name: 'New requisition' });
     expect(within(d).getByRole('button', { name: 'Save draft' })).toBeDisabled();
-    expect(within(d).getByRole('button', { name: 'Submit for approval' })).toBeDisabled();
+    expect(within(d).getByRole('button', { name: 'Activate job' })).toBeDisabled();
+    expect(within(d).queryByRole('button', { name: /Submit for approval/ })).toBeNull();
     await u.selectOptions(within(d).getByLabelText(/^Title/), 'p-payroll');
     await u.selectOptions(within(d).getByLabelText(/^Site/), 'b-riyadh');
     await u.selectOptions(within(d).getByLabelText(/^Grade/), 'g7');
@@ -105,10 +106,11 @@ describe('M03 requisition drawer', () => {
     await u.selectOptions(within(d).getByLabelText(/^Primary recruiter/), 'u-youssef');
     expect(within(d).queryByRole('option', { name: /Old Recruiter/ })).toBeNull();
     expect(await axeViolations(baseElement)).toEqual([]);
-    await u.click(within(d).getByRole('button', { name: 'Submit for approval' }));
-    await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/vacancy-requests/r-new/submit', {}));
+    await u.click(within(d).getByRole('button', { name: 'Activate job' }));
+    await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/vacancy-requests/r-new/activate', { assignedEmployeeId: 'u-youssef' }));
     expect(api.postApi).toHaveBeenCalledWith('/vacancy-requests', { positionId: 'p-payroll', branchId: 'b-riyadh', requestedHeadcount: 1, dueDate: '2099-11-20', gradeId: 'g7', assignedEmployeeId: 'u-youssef', justification: null });
-    expect(await screen.findByRole('status')).toHaveTextContent('Payroll Systems Analyst sent for approval. Activate it once it is approved.');
+    expect(api.postApi).not.toHaveBeenCalledWith(expect.stringMatching(/\/submit$/), expect.anything());
+    expect(await screen.findByRole('status')).toHaveTextContent('Job active — Payroll Systems Analyst is now in Youssef Ibrahim’s Open jobs.');
   });
   it('draft edit → PATCH; DUE_DATE_REQUIRED by code lands on the field', async () => {
     const u = userEvent.setup();
@@ -118,7 +120,7 @@ describe('M03 requisition drawer', () => {
     const d = await screen.findByRole('dialog', { name: 'Payroll Systems Analyst' });
     expect(within(d).getByLabelText(/^Notes/)).toHaveValue('Backfill for Payroll HRIS support. Arabic and English. Oracle HCM payroll a must.');
     await u.type(within(d).getByLabelText(/^Due date/), '2099-11-20');
-    await u.click(within(d).getByRole('button', { name: 'Submit for approval' }));
+    await u.click(within(d).getByRole('button', { name: 'Activate job' }));
     await waitFor(() => expect(api.patchApi).toHaveBeenCalledWith('/vacancy-requests/r421', expect.objectContaining({ dueDate: '2099-11-20', gradeId: 'g7', assignedEmployeeId: 'u-youssef' })));
     expect(await within(d).findByText(/needs a due date/)).toBeInTheDocument();
   });
@@ -209,29 +211,30 @@ describe('/vacancy-requests route', () => {
 });
 
 describe('M1 CoS follow-ups', () => {
-  it('own draft with a due date: Activate job saves then activates; today’s refusal is explained and Submit stays', async () => {
+  it('draft with a due date: Activate job saves then activates; a refusal is explained, never “submit”', async () => {
     const u = userEvent.setup();
     api.patchApi.mockResolvedValue({ id: 'r421' });
     api.postApi.mockRejectedValueOnce(new ApiError(409, 'Request REQ-IT-0421 must be approved before activation.'));
     renderAt('/vacancy-requests?req=r421');
     const d = await screen.findByRole('dialog', { name: 'Payroll Systems Analyst' });
-    expect(within(d).queryByRole('button', { name: 'Activate job' })).toBeNull();
+    expect(within(d).getByRole('button', { name: 'Activate job' })).toBeDisabled();
     await u.type(within(d).getByLabelText(/^Due date/), '2099-11-20');
     await u.click(within(d).getByRole('button', { name: 'Activate job' }));
     await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/vacancy-requests/r421/activate', { assignedEmployeeId: 'u-youssef' }));
     expect(api.patchApi).toHaveBeenCalledWith('/vacancy-requests/r421', expect.objectContaining({ dueDate: '2099-11-20' }));
-    expect(await within(d).findByRole('alert')).toHaveTextContent('Activating a draft directly is not live yet — your changes are saved. Submit it for approval');
-    expect(within(d).getByRole('button', { name: 'Submit for approval' })).toBeEnabled();
+    expect(await within(d).findByRole('alert')).toHaveTextContent('could not be activated — your changes are saved as a draft. Request REQ-IT-0421 must be approved before activation.');
+    expect(within(d).queryByRole('button', { name: /Submit for approval/ })).toBeNull();
     api.postApi.mockResolvedValueOnce({ request: { id: 'r421' } });
     await u.click(within(d).getByRole('button', { name: 'Activate job' }));
     expect(await screen.findByRole('status')).toHaveTextContent('Job active — Payroll Systems Analyst is now in Youssef Ibrahim’s Open jobs.');
   });
-  it('someone else’s draft never offers Activate', async () => {
+  it('B2F-5: a team member’s draft with a due date activates too (HM and TM); no Submit anywhere', async () => {
     serve({ '/vacancy-requests': fx.requisitions.map((r) => (r.id === 'r421' ? { ...r, requesterId: 'u-other', dueDate: '2099-11-20', targetFillDate: '2099-11-20' } : r)) });
     renderAt('/vacancy-requests?req=r421');
     const d = await screen.findByRole('dialog');
-    expect(within(d).queryByRole('button', { name: 'Activate job' })).toBeNull();
-    expect(within(d).getByRole('button', { name: 'Submit for approval' })).toBeInTheDocument();
+    expect(within(d).getByRole('button', { name: 'Activate job' })).toBeEnabled();
+    expect(within(d).queryByRole('button', { name: /Submit for approval/ })).toBeNull();
+    expect(screen.getByText(/There is no pending state/)).toBeInTheDocument();
   });
   it('refusal helper: 409/403 without a known code', () => {
     expect(draftActivateRefused(new ApiError(409, 'must be approved'))).toBe(true);
@@ -286,12 +289,30 @@ describe('M1 CoS follow-ups', () => {
     await waitFor(() => expect(api.patchApi).toHaveBeenCalledWith('/vacancy-requests/r412/target', { requestedHeadcount: 4, dueDate: '2026-10-19', reason: 'Second shift approved' }));
     expect(onDone).toHaveBeenCalledWith(expect.stringContaining('1 of 4'));
   });
-  it('Changes requested drafts never offer Activate, even with a due date', async () => {
+  it('legacy Changes requested rows are editable drafts: Activate (with a due date), no Submit', async () => {
     serve({ '/vacancy-requests': fx.requisitions.map((r) => (r.id === 'r421' ? { ...r, status: 'Changes Requested', dueDate: '2099-11-20', targetFillDate: '2099-11-20' } : r)) });
     renderAt('/vacancy-requests?req=r421');
     const d = await screen.findByRole('dialog');
-    expect(within(d).queryByRole('button', { name: 'Activate job' })).toBeNull();
-    expect(within(d).getByRole('button', { name: 'Submit for approval' })).toBeEnabled();
+    expect(within(d).getByRole('button', { name: 'Activate job' })).toBeEnabled();
+    expect(within(d).queryByRole('button', { name: /Submit for approval/ })).toBeNull();
+  });
+  it('B2F-6: cancel uses the close-reasons list; "Other" needs a note and goes as "Other: <note>"', async () => {
+    const u = userEvent.setup();
+    serve({ '/master-data/catalog/close-reasons': [{ id: 'c1', name: 'Budget cut', status: 'Active' }, { id: 'c2', name: 'Other', status: 'Active' }, { id: 'c3', name: 'Old', status: 'Archived' }] });
+    api.postApi.mockResolvedValue({ request: { id: 'r412', status: 'Cancelled' }, closedJob: true, rejectedApplications: 0 });
+    renderAt('/vacancy-requests?req=r412');
+    const d = await screen.findByRole('dialog', { name: 'HRIS Developer' });
+    const pick = await within(d).findByRole('combobox', { name: /^Reason to cancel/ });
+    expect(within(pick).queryByRole('option', { name: 'Old' })).toBeNull();
+    await u.selectOptions(pick, 'Other');
+    await u.click(within(d).getByRole('button', { name: 'Cancel requisition' }));
+    await u.click(within(d).getByRole('button', { name: /Confirm cancel/ }));
+    expect(await within(d).findByText(/"Other" needs a short note/)).toBeInTheDocument();
+    expect(api.postApi).not.toHaveBeenCalled();
+    await u.type(within(d).getByLabelText(/^Say why/), 'Merged into REQ-9');
+    await u.click(within(d).getByRole('button', { name: 'Cancel requisition' }));
+    await u.click(within(d).getByRole('button', { name: /Confirm cancel/ }));
+    await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/vacancy-requests/r412/cancel', { reason: 'Other: Merged into REQ-9' }));
   });
 });
 
