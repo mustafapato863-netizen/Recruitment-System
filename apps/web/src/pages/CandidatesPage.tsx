@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { fetchVacancyList } from '../utils/vacancyAccess';
+import type { RedactedVacancy } from '../types/redactedVacancy';
+import { RedactedJobPickerRows } from '../components/access/RedactedJobOptions';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import type { Candidate, CandidateMetrics, PaginatedResult, Vacancy } from '@recruitflow/contracts';
 import { downloadApi, fetchApi, postApi, patchApi, deleteApi, getApi } from '../api/client';
@@ -95,6 +98,7 @@ export function CandidatesPage() {
   const [assignCandidate, setAssignCandidate] = useState<Candidate | null>(null);
   const [assignCandidateIds, setAssignCandidateIds] = useState<string[]>([]);
   const [vacancies, setVacancies] = useState<Vacancy[]>([]);
+  const [redactedVacancies, setRedactedVacancies] = useState<RedactedVacancy[]>([]);
   const [vacanciesLoading, setVacanciesLoading] = useState(false);
   const [selectedVacancyId, setSelectedVacancyId] = useState('');
   const [assignSubmitting, setAssignSubmitting] = useState(false);
@@ -279,9 +283,10 @@ export function CandidatesPage() {
     if (vacancies.length === 0) {
       setVacanciesLoading(true);
       try {
-        const res = await getApi<Vacancy[] | { data: Vacancy[] }>('/vacancies?pageSize=100');
-        const list = Array.isArray(res) ? res : res.data ?? [];
+        // B1: other owners' jobs are listed disabled; they can't receive candidates from here.
+        const { full: list, redacted } = await fetchVacancyList('/vacancies?pageSize=100');
         setVacancies(list);
+        setRedactedVacancies(redacted);
         if (list.length > 0) {
           setSelectedVacancyId((prev) => prev || list[0].id);
         }
@@ -502,9 +507,9 @@ export function CandidatesPage() {
       setSelectedCandidateIds((prev) => prev.filter((id) => id !== deleteCandidate.id));
       setTotalCount((prev) => Math.max(0, prev - 1));
       setIsDeleteDialogOpen(false);
-      showToast(`Candidate ${deleteCandidate.firstName} ${deleteCandidate.lastName} deleted successfully`);
+      showToast(`Candidate ${deleteCandidate.firstName} ${deleteCandidate.lastName} archived`);
     } catch (err: unknown) {
-      toastError(err, 'Delete failed');
+      toastError(err, 'Archive failed');
       setIsDeleteDialogOpen(false);
     } finally {
       setDeleteSubmitting(false);
@@ -522,9 +527,9 @@ export function CandidatesPage() {
       setTotalCount((prev) => Math.max(0, prev - count));
       setSelectedCandidateIds([]);
       setIsBulkDeleteDialogOpen(false);
-      showToast(`Deleted ${count} candidate records successfully`);
+      showToast(`Archived ${count} candidate records`);
     } catch (err: unknown) {
-      toastError(err, 'Bulk delete failed');
+      toastError(err, 'Bulk archive failed');
       setIsBulkDeleteDialogOpen(false);
     } finally {
       setBulkDeleteSubmitting(false);
@@ -784,10 +789,10 @@ export function CandidatesPage() {
               type="button"
               onClick={() => setIsBulkDeleteDialogOpen(true)}
               className="inline-flex items-center gap-1.5 px-3 py-1 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-bold transition shadow-xs cursor-pointer"
-              title="Delete selected candidates"
+              title="Archive selected candidates"
             >
               <Icon name="trash-2" size={12} />
-              <span>Delete Selected</span>
+              <span>Archive Selected</span>
             </button>
             <button
               type="button"
@@ -1105,7 +1110,7 @@ export function CandidatesPage() {
                                     className="w-full px-3.5 py-2 text-left flex items-center gap-2.5 text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/40 font-semibold transition cursor-pointer"
                                   >
                                     <Icon name="trash-2" size={14} className="text-rose-500 shrink-0" />
-                                    <span>Delete Candidate</span>
+                                    <span>Archive Candidate</span>
                                   </button>
                                 </div>
                               </div>
@@ -1398,6 +1403,7 @@ export function CandidatesPage() {
                         </div>
                       );
                     })}
+                  <RedactedJobPickerRows jobs={redactedVacancies} />
                 </div>
               )}
             </div>
@@ -1680,9 +1686,9 @@ export function CandidatesPage() {
           isOpen={isDeleteDialogOpen}
           onClose={() => setIsDeleteDialogOpen(false)}
           onConfirm={handleConfirmDelete}
-          title="Delete Candidate Record"
-          description={`Are you sure you want to delete ${deleteCandidate.firstName} ${deleteCandidate.lastName} (${deleteCandidate.candidateCode || 'Record'})? All associated applications, interview records, and CV documents will be permanently removed.`}
-          confirmLabel="Delete Candidate"
+          title="Archive Candidate Record"
+          description={`Are you sure you want to delete ${deleteCandidate.firstName} ${deleteCandidate.lastName} (${deleteCandidate.candidateCode || 'Record'})? They leave default lists; applications, documents and history are kept.`}
+          confirmLabel="Archive Candidate"
           cancelLabel="Cancel"
           tone="danger"
           isLoading={deleteSubmitting}
@@ -1695,9 +1701,9 @@ export function CandidatesPage() {
           isOpen={isBulkDeleteDialogOpen}
           onClose={() => setIsBulkDeleteDialogOpen(false)}
           onConfirm={handleConfirmBulkDelete}
-          title="Delete Selected Candidates"
-          description={`Are you sure you want to permanently delete ${selectedCandidateIds.length} candidate record(s)? This action cannot be undone.`}
-          confirmLabel={`Delete ${selectedCandidateIds.length} Candidates`}
+          title="Archive Selected Candidates"
+          description={`Archive ${selectedCandidateIds.length} candidate record(s)? They leave default lists; nothing is deleted.`}
+          confirmLabel={`Archive ${selectedCandidateIds.length} Candidates`}
           cancelLabel="Cancel"
           tone="danger"
           isLoading={bulkDeleteSubmitting}

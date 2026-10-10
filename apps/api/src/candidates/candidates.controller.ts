@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -23,6 +24,7 @@ import {
   CreateCandidateDto,
   UpdateCandidateDto,
   CandidateQueryDto,
+  AnonymizeCandidateDto,
 } from './candidates.dto';
 import { UserPermissionsService } from '../common/user-permissions.service';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
@@ -176,16 +178,35 @@ export class CandidatesController {
     return this.candidatesService.updateCandidate(tenantId, id, body, user);
   }
 
+  /**
+   * B2 (v2 §3): no delete for anyone. DELETE archives (deactivates) the
+   * candidate; the record and its history stay. CANDIDATE_DELETE is retired.
+   */
   @Delete(':id')
-  @RequirePermissions('CANDIDATE_DELETE')
-  @AuditAction('CANDIDATE_DELETE')
+  @RequirePermissions('CANDIDATE_EDIT')
+  @AuditAction('CANDIDATE_ARCHIVE')
   @UseGuards(TenantScopedGuard)
   @TenantResource({ resource: 'candidate', param: 'id' })
-  async deleteCandidate(
-    @CurrentUser() user: AuthUser,
+  archiveCandidate(
     @CurrentTenant() tenantId: string,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    return this.candidatesService.deleteCandidate(tenantId, id, user);
+    return this.candidatesService.archiveCandidate(tenantId, id);
+  }
+
+  /** B2 legal erasure: Administrator only, irreversible, idempotent. */
+  @Post(':id/anonymize')
+  @RequirePermissions('CANDIDATE_ANONYMIZE')
+  @UseGuards(TenantScopedGuard)
+  @TenantResource({ resource: 'candidate', param: 'id' })
+  @HttpCode(200)
+  async anonymizeCandidate(
+    @CurrentUser() user: AuthUser,
+    @CurrentTenant() tenantId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: AnonymizeCandidateDto,
+  ) {
+    await this.candidatesService.assertAdministrator(tenantId, user.userId);
+    return this.candidatesService.anonymizeCandidate(tenantId, id, body.reason.trim(), user);
   }
 }

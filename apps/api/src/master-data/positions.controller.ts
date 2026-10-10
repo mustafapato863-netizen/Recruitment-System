@@ -59,7 +59,7 @@ export class PositionsController {
   @RequirePermissions('MASTER_DATA_MANAGE')
   @UseGuards(TenantScopedGuard)
   @TenantResource({ resource: 'position', param: 'id' })
-  @AuditAction('POSITION_DELETE')
+  @AuditAction('POSITION_DEACTIVATE')
   remove(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.masterDataService.deletePosition(user.organizationId, id);
   }

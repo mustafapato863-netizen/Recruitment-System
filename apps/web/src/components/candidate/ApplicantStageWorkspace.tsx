@@ -1,4 +1,5 @@
 import { getPermissionLabel } from '@recruitflow/contracts';
+import { roundScorecardState } from '../../utils/scorecardStatus';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import type {
   Application,
@@ -626,7 +627,7 @@ export function ApplicantStageWorkspace({
               <div className="space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-xs text-slate-600 dark:text-slate-300">Schedule interviews, track confirmation, and capture panel evaluations here.</p><Button type="button" size="sm" variant="primary" onClick={onScheduleInterview} disabled={!canMoveStage}><Icon name="calendar" size={13} />Schedule interview</Button></div>
                 {interviews.length === 0 ? <PageState kind="empty" title="No interviews recorded" description="Schedule the first interview for this applicant." actionLabel={canMoveStage ? 'Schedule interview' : undefined} onAction={canMoveStage ? onScheduleInterview : undefined} /> : interviews.map((item) => {
-                  const pendingScorecard = !item.scorecards?.some((scorecard) => scorecard.isLocked);
+                  const pendingScorecard = roundScorecardState(item.scorecards) !== 'submitted';
                   return (
                     <div key={item.id} className="rounded-xl border border-slate-200 bg-white/80 p-4 text-xs dark:border-slate-800 dark:bg-slate-900/80">
                       <div className="flex flex-wrap items-start justify-between gap-3">
