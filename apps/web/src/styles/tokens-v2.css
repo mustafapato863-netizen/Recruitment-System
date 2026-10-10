@@ -1,0 +1,207 @@
+/* RecruitFlow v2 design tokens (F1).
+ * Source: Figma W0wgsg7tz9ldpbnsxxMgBV "RF v2 / Color" + "RF v2 / Radius",
+ * docs/design-system/enterprise-visual-identity.md.
+ *
+ * EVERYTHING here is scoped to [data-ui='v2']. With the attribute absent the
+ * legacy UI is untouched. v2 is light only for now.
+ * Switch: see src/theme/uiVersion.ts (?ui=v2 | localStorage | VITE_UI_V2).
+ */
+[data-ui='v2'],
+:root[data-ui='v2'][data-theme='dark'] {
+  /* ---- v2 primitives (new names, --rf2-*) ---- */
+  --rf2-ink: #0f172a;
+  --rf2-ink-2: #334155;
+  --rf2-muted: #64748b;
+  --rf2-action: #1d4ed8;
+  --rf2-action-hover: #2563eb;
+  --rf2-canvas: #f8fafc;
+  --rf2-card: #ffffff;
+  --rf2-border: #cbd5e1;
+  --rf2-divider: #e2e8f0;
+  --rf2-nav: #0b1b33;
+  --rf2-nav-text: #cbd5e1;
+  --rf2-success: #15803d;
+  --rf2-warning: #b45309;
+  --rf2-danger: #b91c1c;
+  --rf2-info: #0369a1;
+  --rf2-success-tint: #f0fdf4;
+  --rf2-warning-tint: #fffbeb;
+  --rf2-danger-tint: #fef2f2;
+  --rf2-info-tint: #f0f9ff;
+  --rf2-neutral-tint: #f1f5f9;
+  --rf2-on-action: #ffffff;
+  /* F2: pressed / hover shades for primitives */
+  --rf2-action-pressed: #1e40af;
+  --rf2-danger-hover: #991b1b;
+  --rf2-danger-pressed: #7f1d1d;
+  --rf2-danger-tint-strong: #fee2e2;
+
+  --rf2-font: 'Plus Jakarta Sans', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --rf2-numeric: tabular-nums;
+
+  /* type scale: size / line-height / weight */
+  --rf2-text-caption: 12px;  --rf2-leading-caption: 16px;  --rf2-weight-caption: 500;
+  --rf2-text-label: 13px;    --rf2-leading-label: 18px;    --rf2-weight-label: 600;
+  --rf2-text-body: 14px;     --rf2-leading-body: 21px;     --rf2-weight-body: 400;
+  --rf2-text-card: 16px;     --rf2-leading-card: 24px;     --rf2-weight-card: 600;
+  --rf2-text-section: 18px;  --rf2-leading-section: 26px;  --rf2-weight-section: 700;
+  --rf2-text-page: 24px;     --rf2-leading-page: 32px;     --rf2-weight-page: 700;
+
+  /* 8px grid (4px micro for icon/text only) */
+  --rf2-space-0-5: 4px;
+  --rf2-space-1: 8px;
+  --rf2-space-1-5: 12px;
+  --rf2-space-2: 16px;
+  --rf2-space-3: 24px;
+  --rf2-space-4: 32px;
+  --rf2-space-5: 40px;
+  --rf2-space-6: 48px;
+  --rf2-space-8: 64px;
+
+  --rf2-radius-control: 6px;
+  --rf2-radius-card: 8px;
+  --rf2-radius-drawer: 12px;
+  --rf2-radius-pill: 9999px;
+
+  /* shadows: overlays only (menus, dialogs, drawers). Cards are flat + 1px border. */
+  --rf2-shadow-none: none;
+  --rf2-shadow-menu: 0 8px 24px -8px rgba(15, 23, 42, 0.18), 0 2px 6px rgba(15, 23, 42, 0.06);
+  --rf2-shadow-overlay: 0 24px 48px -16px rgba(15, 23, 42, 0.28), 0 8px 16px -8px rgba(15, 23, 42, 0.12);
+  --rf2-scrim: rgba(15, 23, 42, 0.40);
+
+  --rf2-focus-width: 2px;
+  --rf2-focus-offset: 2px;
+  --rf2-focus-color: #1d4ed8;
+  --rf2-focus-ring: 0 0 0 var(--rf2-focus-offset) #ffffff, 0 0 0 calc(var(--rf2-focus-offset) + var(--rf2-focus-width)) var(--rf2-focus-color);
+
+  --rf2-motion-fast: 150ms;
+  --rf2-motion-standard: 200ms;
+  --rf2-ease: cubic-bezier(0.2, 0, 0, 1);
+
+  /* ---- legacy semantic tokens re-pointed to v2 (scoped) ---- */
+  color-scheme: light;
+  --font-sans: var(--rf2-font);
+  --font-heading: var(--rf2-font);
+  --font-rf-heading: var(--rf2-font);
+
+  --color-canvas: var(--rf2-canvas);
+  --color-surface: var(--rf2-card);
+  --color-surface-elevated: var(--rf2-card);
+  --color-surface-subtle: var(--rf2-canvas);
+  --color-surface-muted: var(--rf2-neutral-tint);
+  --color-surface-hover: var(--rf2-neutral-tint);
+  --color-surface-selected: #eff6ff;
+  --color-field: var(--rf2-card);
+  --color-field-disabled: var(--rf2-neutral-tint);
+  --color-border: var(--rf2-border);
+  --color-border-subtle: var(--rf2-divider);
+  --color-border-strong: #94a3b8;
+
+  --color-ink-950: var(--rf2-ink);
+  --color-ink-800: #1e293b;
+  --color-ink-700: var(--rf2-ink-2);
+  --color-ink-500: #475569;
+  --color-ink-400: var(--rf2-muted);
+  --color-link: var(--rf2-action);
+
+  --color-action: var(--rf2-action);
+  --color-action-strong: var(--rf2-action-hover);
+  --color-action-hover: var(--rf2-action-hover);
+  --color-action-secondary: var(--rf2-action);
+  --color-action-focus: var(--rf2-focus-color);
+  --color-action-soft: #eff6ff;
+  --color-action-glow: transparent;
+  --color-on-action: var(--rf2-on-action);
+  --color-overlay: var(--rf2-scrim);
+
+  --color-success: var(--rf2-success);
+  --color-success-strong: #166534;
+  --color-success-soft: var(--rf2-success-tint);
+  --color-success-border: #bbf7d0;
+  --color-warning: var(--rf2-warning);
+  --color-warning-strong: #92400e;
+  --color-warning-soft: var(--rf2-warning-tint);
+  --color-warning-border: #fde68a;
+  --color-danger: var(--rf2-danger);
+  --color-danger-strong: #991b1b;
+  --color-danger-soft: var(--rf2-danger-tint);
+  --color-danger-border: #fecaca;
+  --color-info: var(--rf2-info);
+  --color-info-strong: #075985;
+  --color-info-soft: var(--rf2-info-tint);
+  --color-info-border: #bae6fd;
+
+  /* no purple, no second accent family, no neon: neutralise */
+  --color-purple: var(--rf2-info);
+  --color-purple-soft: var(--rf2-info-tint);
+  --color-purple-border: #bae6fd;
+  --color-cyan: var(--rf2-info);
+  --color-cyan-soft: var(--rf2-info-tint);
+  --color-cyan-border: #bae6fd;
+  --color-neon-cyan: var(--rf2-action);
+  --color-neon-violet: var(--rf2-action);
+  --neon-cyan: var(--rf2-action);
+  --neon-violet: var(--rf2-action);
+  --color-atmosphere-indigo: transparent;
+  --color-atmosphere-cyan: transparent;
+  --rf-app-art: none;
+  --sgh-cyan: var(--rf2-action);
+  --sgh-cyan-dark: var(--rf2-action);
+  --sgh-cyan-deep: var(--rf2-action);
+  --sgh-cyan-light: var(--rf2-action-hover);
+  --sgh-emerald: var(--rf2-success);
+  --sgh-emerald-dark: var(--rf2-success);
+  --sgh-emerald-lime: var(--rf2-success);
+  --sgh-emerald-forest: var(--rf2-success);
+
+  /* gradients become solid fills (still valid as background-image) */
+  --gradient-canvas: linear-gradient(var(--rf2-canvas), var(--rf2-canvas));
+  --gradient-action: linear-gradient(var(--rf2-action), var(--rf2-action));
+  --gradient-selection: linear-gradient(#eff6ff, #eff6ff);
+  --gradient-neon: linear-gradient(var(--rf2-action), var(--rf2-action));
+  --gradient-brand: linear-gradient(var(--rf2-action), var(--rf2-action));
+  --sgh-glow-brand: none;
+  --sgh-glow-cyan: none;
+  --sgh-glow-button: none;
+
+  --radius-sm: var(--rf2-radius-control);
+  --radius-md: var(--rf2-radius-control);
+  --radius-lg: var(--rf2-radius-card);
+  --radius-xl: var(--rf2-radius-drawer);
+  --radius-control: var(--rf2-radius-control);
+  --radius-card: var(--rf2-radius-card);
+
+  --shadow-2xs: none;
+  --shadow-xs: none;
+  --shadow-sm: none;
+  --shadow-card: none;
+  --shadow-hover: none;
+  --shadow-md: var(--rf2-shadow-menu);
+  --shadow-float: var(--rf2-shadow-overlay);
+
+  --focus-ring-color: var(--rf2-focus-color);
+  --motion-fast: var(--rf2-motion-fast);
+  --motion-standard: var(--rf2-motion-standard);
+  --motion-slow: var(--rf2-motion-standard);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-ui='v2'] {
+    --rf2-motion-fast: 0ms;
+    --rf2-motion-standard: 0ms;
+  }
+}
+
+[data-ui='v2'] .rf2-num,
+[data-ui='v2'] [data-numeric] {
+  font-variant-numeric: tabular-nums;
+}
+
+[data-ui='v2'] :focus-visible {
+  outline: var(--rf2-focus-width) solid var(--rf2-focus-color);
+  outline-offset: var(--rf2-focus-offset);
+}
+
+/* Legacy hard-coded brand overrides in index.css: neutralise under v2 only. */
+[data-ui='v2'] .bg-blue-600 { background-color: var(--rf2-action); }
+[data-ui='v2'] .hover\:bg-blue-700:hover { background-color: var(--rf2-action-hover); }

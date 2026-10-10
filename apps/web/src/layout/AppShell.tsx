@@ -7,6 +7,7 @@ import { canUseMyInterviews } from '../auth/interviewer';
 import { useAuth } from '../auth/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
 import { isEmployeeWorkspaceUser } from '../auth/workspacePersona';
+import { isRecruiterOnly } from '../v2/destinations';
 import { Icon, type IconName } from '../components/Icon';
 import { IconButton } from '../components/ui/IconButton';
 import { CommandPalette } from '../components/ui/CommandPalette';
@@ -404,7 +405,7 @@ export function AppShellInner() {
               ) : (
                 <NavigationItem end icon="dashboard" label="Command Center" to="/" navigationKey="dashboard" requiredAnyPermissions={['VACANCY_REQUEST_APPROVE', 'USERS_MANAGE', 'VACANCY_MANAGE', 'MASTER_DATA_VIEW', 'VACANCY_VIEW', 'APPLICATION_VIEW']} isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
               )}
-              <NavigationItem icon="file-text" label="Requisitions" to="/vacancy-requests" navigationKey="vacancy-requests" requiredPermission="VACANCY_REQUEST_VIEW" isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
+              {!isRecruiterOnly(user?.roles) && <NavigationItem icon="file-text" label="Requisitions" to="/vacancy-requests" navigationKey="vacancy-requests" requiredPermission="VACANCY_REQUEST_VIEW" isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />}
               {canUseMyInterviews(user) && (
                 <NavigationItem icon="calendar" label="My interviews" to="/my-interviews" requiredPermission="VACANCY_VIEW" unavailableMode="hide" isCollapsed={isSidebarCollapsed} onNavigate={closeMobileDrawer} />
               )}

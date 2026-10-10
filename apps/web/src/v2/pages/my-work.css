@@ -1,0 +1,71 @@
+/* E1 My Work page. Scoped, tokens only. */
+[data-ui='v2'] .rf2-mywork { display: flex; flex-direction: column; gap: var(--rf2-space-2); max-width: 1136px; padding: var(--rf2-space-4); font-family: var(--rf2-font); color: var(--rf2-ink); }
+[data-ui='v2'] .rf2-mywork__top { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--rf2-space-2); }
+[data-ui='v2'] .rf2-mywork__title { margin: 0; font-size: var(--rf2-text-page); line-height: var(--rf2-leading-page); font-weight: var(--rf2-weight-page); }
+[data-ui='v2'] .rf2-mywork__subtitle { margin: var(--rf2-space-0-5) 0 0; font-size: var(--rf2-text-body); line-height: var(--rf2-leading-body); color: var(--rf2-ink-2); }
+[data-ui='v2'] .rf2-mywork__note { display: flex; align-items: center; gap: var(--rf2-space-1); margin: 0; padding: var(--rf2-space-1) var(--rf2-space-1-5); border-radius: var(--rf2-radius-control); background: var(--rf2-info-tint); color: var(--rf2-info); font-size: var(--rf2-text-label); line-height: var(--rf2-leading-label); }
+[data-ui='v2'] .rf2-mywork__note svg { width: 16px; height: 16px; flex: none; }
+[data-ui='v2'] .rf2-mywork__no-action { color: var(--rf2-muted); font-size: var(--rf2-text-label); }
+
+[data-ui='v2'] .rf2-daytoggle { display: inline-flex; padding: 2px; border: 1px solid var(--rf2-divider); border-radius: var(--rf2-radius-card); background: var(--rf2-neutral-tint); }
+[data-ui='v2'] .rf2-daytoggle__btn { min-height: 32px; padding: 0 var(--rf2-space-1-5); border: 1px solid transparent; border-radius: var(--rf2-radius-control); background: transparent; color: var(--rf2-ink-2); font: inherit; font-size: var(--rf2-text-label); font-weight: 500; cursor: pointer; }
+[data-ui='v2'] .rf2-daytoggle__btn[aria-pressed='true'] { border-color: var(--rf2-border); background: var(--rf2-card); color: var(--rf2-action); font-weight: 600; }
+[data-ui='v2'] .rf2-daytoggle__btn:focus-visible { outline: var(--rf2-focus-width) solid var(--rf2-focus-color); outline-offset: var(--rf2-focus-offset); }
+
+[data-ui='v2'] .rf2-jobstrip { display: grid; grid-template-columns: 40px minmax(0, 1fr) 160px 120px auto; align-items: center; gap: var(--rf2-space-2); padding: var(--rf2-space-2); border: 1px solid var(--rf2-divider); border-radius: var(--rf2-radius-card); background: var(--rf2-card); }
+[data-ui='v2'] .rf2-jobstrip__icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: var(--rf2-radius-card); background: var(--rf2-info-tint); color: var(--rf2-action); }
+[data-ui='v2'] .rf2-jobstrip__icon svg { width: 18px; height: 18px; }
+[data-ui='v2'] .rf2-jobstrip__title { margin: 0; font-size: var(--rf2-text-card); line-height: var(--rf2-leading-card); font-weight: 600; }
+[data-ui='v2'] .rf2-jobstrip__meta { margin: 0; font-size: var(--rf2-text-label); line-height: var(--rf2-leading-label); color: var(--rf2-muted); }
+[data-ui='v2'] .rf2-jobstrip__seats { display: flex; flex-direction: column; gap: var(--rf2-space-0-5); }
+[data-ui='v2'] .rf2-jobstrip__seats-label { color: var(--rf2-success); font-size: var(--rf2-text-label); font-weight: 600; font-variant-numeric: tabular-nums; }
+[data-ui='v2'] .rf2-jobstrip__bar { display: block; height: 6px; border-radius: var(--rf2-radius-pill); background: var(--rf2-divider); overflow: hidden; }
+[data-ui='v2'] .rf2-jobstrip__bar > span { display: block; height: 100%; background: var(--rf2-success); }
+[data-ui='v2'] .rf2-jobstrip__due { display: flex; flex-direction: column; }
+[data-ui='v2'] .rf2-jobstrip__due-label { font-size: var(--rf2-text-caption); color: var(--rf2-muted); }
+[data-ui='v2'] .rf2-jobstrip__due-value { font-size: var(--rf2-text-body); font-weight: 600; color: var(--rf2-warning); font-variant-numeric: tabular-nums; }
+
+[data-ui='v2'] .rf2-mywork__counts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--rf2-space-2); margin: 0; }
+[data-ui='v2'] .rf2-mywork__count { padding: var(--rf2-space-2); border: 1px solid var(--rf2-divider); border-radius: var(--rf2-radius-card); background: var(--rf2-card); }
+[data-ui='v2'] .rf2-mywork__count dt { font-size: var(--rf2-text-label); color: var(--rf2-ink-2); }
+[data-ui='v2'] .rf2-mywork__count dd[data-count-value] { margin: var(--rf2-space-0-5) 0 0; font-size: var(--rf2-text-page); line-height: var(--rf2-leading-page); font-weight: 600; font-variant-numeric: tabular-nums; }
+[data-ui='v2'] .rf2-mywork__count[data-key='Overdue'] dd[data-count-value] { color: var(--rf2-danger); }
+[data-ui='v2'] .rf2-mywork__count[data-key='Waiting on others'] dd[data-count-value] { color: var(--rf2-info); }
+[data-ui='v2'] .rf2-mywork__count-hint { margin: 0; font-size: var(--rf2-text-caption); color: var(--rf2-muted); }
+
+[data-ui='v2'] .rf2-mywork__scheduled { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--rf2-space-2); }
+[data-ui='v2'] .rf2-scheduled { display: grid; grid-template-columns: 96px minmax(0, 1fr) auto; gap: var(--rf2-space-3); padding: var(--rf2-space-2); border: 1px solid var(--rf2-divider); border-radius: var(--rf2-radius-card); background: var(--rf2-card); }
+[data-ui='v2'] .rf2-scheduled__when { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: var(--rf2-space-1-5); border-radius: var(--rf2-radius-card); background: var(--rf2-info-tint); }
+[data-ui='v2'] .rf2-scheduled__day { color: var(--rf2-action); font-size: var(--rf2-text-caption); font-weight: 600; text-transform: uppercase; }
+[data-ui='v2'] .rf2-scheduled__time { font-size: var(--rf2-text-page); line-height: var(--rf2-leading-page); font-weight: 700; font-variant-numeric: tabular-nums; }
+[data-ui='v2'] .rf2-scheduled__to { font-size: var(--rf2-text-caption); color: var(--rf2-muted); }
+[data-ui='v2'] .rf2-scheduled__title { display: flex; align-items: center; gap: var(--rf2-space-1); margin: 0; font-size: var(--rf2-text-section); line-height: var(--rf2-leading-section); font-weight: 600; }
+[data-ui='v2'] .rf2-scheduled__meta { margin: 0 0 var(--rf2-space-1); font-size: var(--rf2-text-label); color: var(--rf2-muted); }
+[data-ui='v2'] .rf2-scheduled__facts { margin: 0; }
+[data-ui='v2'] .rf2-scheduled__facts > div { display: grid; grid-template-columns: 150px 1fr; gap: var(--rf2-space-2); padding: var(--rf2-space-1) 0; border-top: 1px solid var(--rf2-divider); font-size: var(--rf2-text-body); }
+[data-ui='v2'] .rf2-scheduled__facts dt { display: flex; align-items: center; gap: var(--rf2-space-1); color: var(--rf2-ink-2); }
+[data-ui='v2'] .rf2-scheduled__facts dt svg { width: 16px; height: 16px; }
+[data-ui='v2'] .rf2-scheduled__facts dd { margin: 0; }
+[data-ui='v2'] .rf2-scheduled__facts a { color: var(--rf2-action); }
+[data-ui='v2'] .rf2-scheduled__action { align-self: end; }
+[data-ui='v2'] .rf2-mywork__today { margin: 0; color: var(--rf2-ink-2); font-size: var(--rf2-text-label); line-height: var(--rf2-leading-label); font-variant-numeric: tabular-nums; }
+[data-ui='v2'] .rf2-mywork__targets { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--rf2-space-1); }
+[data-ui='v2'] .rf2-jobstrip__title a { color: inherit; text-decoration: none; }
+[data-ui='v2'] .rf2-jobstrip__title a:hover { text-decoration: underline; }
+[data-ui='v2'] .rf2-jobstrip__title a:focus-visible { outline: var(--rf2-focus-width) solid var(--rf2-focus-color); outline-offset: var(--rf2-focus-offset); }
+
+/* #9 @829983a: day switch, actions[], SLA chips */
+[data-ui='v2'] .rf2-mywork__day { display: flex; flex-direction: column; align-items: flex-end; gap: var(--rf2-space-1, 4px); }
+[data-ui='v2'] .rf2-segmented { display: inline-flex; gap: var(--rf2-space-1, 4px); }
+[data-ui='v2'] .rf2-mywork__actions { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--rf2-space-1, 4px); }
+[data-ui='v2'] .rf2-mywork__chips { display: inline-flex; gap: var(--rf2-space-1, 4px); }
+[data-ui='v2'] .rf2-mywork__meta-bit a { color: var(--rf2-action); text-decoration: underline; }
+[data-ui='v2'] .rf2-visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+[data-ui='v2'] .rf2-mywork__meta-line { display: block; overflow: hidden; text-overflow: ellipsis; }
+[data-ui='v2'] .rf2-jobstrip__result { align-self: center; color: var(--rf2-action); font-size: var(--rf2-text-body); font-weight: 600; text-decoration: none; }
+[data-ui='v2'] .rf2-jobstrip__result { white-space: nowrap; }
+[data-ui='v2'] .rf2-jobstrip__seats-kicker { font-size: var(--rf2-text-label); line-height: var(--rf2-leading-label); color: var(--rf2-muted); }
+[data-ui='v2'] .rf2-jobstrip__links { display: flex; gap: var(--rf2-space-1); align-items: center; justify-content: flex-end; }
+[data-ui='v2'] .rf2-mywork__head-actions { display: flex; gap: var(--rf2-space-1); align-items: center; justify-content: flex-end; }
+[data-ui='v2'] .rf2-mywork__readonly { color: var(--rf2-muted); font-size: var(--rf2-text-label); }
+[data-ui='v2'] .rf2-mywork__counts { margin-block: 0; }

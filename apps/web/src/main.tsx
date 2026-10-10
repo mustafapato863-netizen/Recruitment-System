@@ -6,6 +6,7 @@ import './pages/CommandCenterPolish.css'
 import './pages/ApplicantProfilePolish.css'
 import './i18n'
 import App from './App.tsx'
+import { initUiVersion } from './theme/uiVersion'
 import { CollapseInitialMatchSkills } from './components/candidate/CollapseInitialMatchSkills'
 import { ApplicantProfilePolish } from './components/candidate/ApplicantProfilePolish'
 
@@ -19,6 +20,8 @@ window.addEventListener('vite:preloadError', (event) => {
     window.location.reload();
   }
 });
+
+initUiVersion();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

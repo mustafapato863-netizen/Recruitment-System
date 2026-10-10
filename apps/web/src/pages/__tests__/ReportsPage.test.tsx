@@ -186,4 +186,17 @@ describe('ReportsPage - Recruitment KPIs Scorecard & Extraction', () => {
       expect(createObjectURLMock).toHaveBeenCalled();
     });
   });
+
+  it('B8 /reports shape: no comparison, comparisonRange, kpis.*.change or recruiterWorkload[].activity → renders, says "Selected period"', async () => {
+    const base = await vi.mocked(getApi).getMockImplementation()?.('') ?? (await (getApi as unknown as () => Promise<Record<string, unknown>>)());
+    const b8 = structuredClone(base) as Record<string, unknown> & { kpis: Record<string, Record<string, unknown>> };
+    delete b8.comparison; delete b8.comparisonRange;
+    for (const k of Object.values(b8.kpis)) { delete k.changePct; delete k.change; }
+    b8.recruiterWorkload = [{ id: 'u1', name: 'Mariam Farag', openApplications: 3 }];
+    vi.mocked(getApi).mockResolvedValue(b8);
+    render(<MemoryRouter><ReportsPage /></MemoryRouter>);
+    expect(await screen.findByText('Reports')).toBeInTheDocument();
+    expect(screen.getAllByText('Selected period (no prior-period comparison)').length).toBeGreaterThan(0);
+    expect(screen.queryByText(/vs previous period/)).toBeNull();
+  });
 });

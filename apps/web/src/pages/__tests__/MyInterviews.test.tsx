@@ -193,19 +193,27 @@ describe('r3: #4 cards carry isLocked, no status (R3-1 / R3-2)', () => {
   });
 
   it('R3-2: after submitting a draft the dialog switches to Submitted and hides Submit, without a reload', async () => {
+    // Deterministic (TEST-1): every async step is awaited on the state it produces; no timers, no sleeps.
     const u = userEvent.setup();
-    api.getApi.mockImplementation(async (p: string) => (p.endsWith('/scorecard') ? [card({ isLocked: false })] : { data: [row({ scorecardStatus: 'draft' })] }));
+    api.getApi.mockImplementation(async (p: string) => {
+      if (p.endsWith('/scorecard')) return [card({ isLocked: false })];
+      if (p === '/me/interviews?scope=upcoming') return { data: [row({ scorecardStatus: 'draft' })] };
+      return { data: [] };
+    });
     // #4 echoes the saved card without `status` (and here without isLocked either).
     api.postApi.mockResolvedValue(card({ notes: 'Half done, finished', submittedAt: '2026-10-13T10:00:00Z' }));
     renderPage();
     await u.click(await screen.findByRole('button', { name: 'Continue scorecard' }));
-    await u.type(await screen.findByLabelText(/Written evidence/), ', finished');
-    await u.click(screen.getByRole('button', { name: 'Submit scorecard' }));
+    // The draft has loaded once its text is in the form; only then is the form final.
+    const evidence = await screen.findByDisplayValue('Half done');
+    const submit = await screen.findByRole('button', { name: 'Submit scorecard' });
+    await u.type(evidence, ', finished');
+    await u.click(submit);
     expect(await screen.findByTestId('my-scorecard')).toHaveTextContent('Half done, finished');
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Submit scorecard' })).not.toBeInTheDocument());
     expect(screen.queryByTestId('draft-note')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Submit scorecard' })).not.toBeInTheDocument();
     expect(screen.getByText('Scorecard submitted')).toBeInTheDocument();
-    expect(api.getApi.mock.calls.filter(([p]) => p.startsWith('/me/interviews'))).toHaveLength(1);
+    expect(api.getApi.mock.calls.filter(([p]) => p === '/me/interviews?scope=upcoming')).toHaveLength(1);
   });
 });
 
@@ -216,5 +224,48 @@ describe('who sees My interviews', () => {
     expect(canUseMyInterviews({ roles: [{ id: 'r', code: 'RECRUITER', name: 'Recruiter' }], permissions: ['VACANCY_VIEW'] })).toBe(false);
     expect(canUseMyInterviews({ roles: [{ id: 'r', code: 'INTERVIEWER', name: 'Interviewer' }], permissions: [] })).toBe(false);
     expect(canUseMyInterviews(null)).toBe(false);
+  });
+});
+
+describe('B2V-1 ended interviews that still need my scorecard', () => {
+  it('lists past interviews with a missing/draft scorecard (not submitted or cancelled); the deep link opens one', async () => {
+    api.getApi.mockImplementation(async (p: string) => {
+      if (p === '/me/interviews?scope=upcoming') return { data: [row({ id: 'up1', candidateName: 'Future Person' })] };
+      if (p === '/me/interviews?scope=past') return { data: [
+        row({ id: 'p1', candidateName: 'Nourhan Sami', scorecardStatus: 'missing' }),
+        row({ id: 'p2', candidateName: 'Draft Person', scorecardStatus: 'draft' }),
+        row({ id: 'p3', candidateName: 'Done Person', scorecardStatus: 'submitted' }),
+        row({ id: 'p4', candidateName: 'Cancelled Person', status: 'Cancelled' }),
+      ] };
+      return [];
+    });
+    render(<MemoryRouter initialEntries={['/my-interviews?interview=p1&scorecard=1']}><MyInterviewsPage /></MemoryRouter>);
+    const due = await screen.findByRole('list', { name: 'Ended interviews needing my scorecard' });
+    expect(within(due).getAllByTestId('my-interview').map((c) => c.textContent)).toEqual([expect.stringContaining('Nourhan Sami'), expect.stringContaining('Draft Person')]);
+    expect(screen.queryByText(/Done Person|Cancelled Person/)).toBeNull();
+    expect(screen.getByText(/Future Person/)).toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: /Scorecard — Nourhan Sami/ })).toBeInTheDocument();
+  });
+  it('a failing past list still shows upcoming', async () => {
+    api.getApi.mockImplementation(async (p: string) => {
+      if (p === '/me/interviews?scope=upcoming') return { data: [row()] };
+      throw new ApiError(500, 'down');
+    });
+    renderPage();
+    expect(await screen.findByTestId('my-interview')).toHaveTextContent('Ahmed Embaby');
+  });
+});
+
+describe('B2F-3 deep link from My Work', () => {
+  it('?interview=<id>&scorecard=1 opens that interview’s scorecard; ?interview alone marks the card', async () => {
+    api.getApi.mockImplementation(async (p: string) => (p.startsWith('/me/interviews') ? { data: [row(), row({ id: 'iv2', candidateName: 'Nourhan Sami' })] } : []));
+    const { unmount } = render(<MemoryRouter initialEntries={['/my-interviews?interview=iv2&scorecard=1']}><MyInterviewsPage /></MemoryRouter>);
+    expect(await screen.findByRole('dialog', { name: /Scorecard — Nourhan Sami/ })).toBeInTheDocument();
+    unmount();
+    render(<MemoryRouter initialEntries={['/my-interviews?interview=iv2']}><MyInterviewsPage /></MemoryRouter>);
+    const cards = await screen.findAllByTestId('my-interview');
+    expect(cards[1]).toHaveAttribute('aria-current', 'true');
+    expect(cards[0]).not.toHaveAttribute('aria-current');
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 });

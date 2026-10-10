@@ -74,8 +74,8 @@ const offerApprovalColumns: ResponsiveDataColumn<OfferApprovalRow>[] = [
     priority: 'secondary',
     render: (row) => (
       <div className="grid gap-0.5">
-        <span className="font-bold text-rf-ink">{row.monthlyPackage === null ? 'Restricted' : formatOfferAmount(row.monthlyPackage, row.packageCurrency)}</span>
-        <span className="font-medium text-rf-ink-muted">{row.monthlyPackage === null ? 'Salary hidden by policy' : 'Monthly gross'}</span>
+        <span className="font-bold text-rf-ink">{row.monthlyPackage == null ? 'Restricted' : formatOfferAmount(row.monthlyPackage, row.packageCurrency)}</span>
+        <span className="font-medium text-rf-ink-muted">{row.monthlyPackage == null ? 'Salary hidden by policy' : 'Monthly gross'}</span>
       </div>
     ),
   },

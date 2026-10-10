@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
@@ -148,7 +148,7 @@ describe('Vacancy Assignment and Activation Flow', () => {
       expect(changeBtn).toBeInTheDocument();
     });
 
-    it('shows job deactivation (B2, no delete) only to administrators', async () => {
+    it('closing the job (admin) sends a close-list reason (#23 603d44d DELETE body)', async () => {
       const user = userEvent.setup();
       mockIsAdministrator = true;
       mockPermissions = ['VACANCY_VIEW', 'VACANCY_MANAGE'];
@@ -159,6 +159,7 @@ describe('Vacancy Assignment and Activation Flow', () => {
           if (url.includes('/interviews')) return Promise.resolve([]);
           if (url.includes('/offers')) return Promise.resolve([]);
           if (url.includes('/users/interviewers')) return Promise.resolve(mockInterviewers);
+          if (url.includes('/master-data/catalog/close-reasons')) return Promise.resolve([{ name: 'Filled elsewhere', status: 'Active' }]);
           return Promise.resolve([]);
         }) as unknown as typeof getApi,
       );
@@ -173,11 +174,11 @@ describe('Vacancy Assignment and Activation Flow', () => {
       );
 
       await user.click(await screen.findByRole('button', { name: /^More$/ }));
-      await user.click(screen.getByRole('button', { name: /deactivate job/i }));
-      expect(screen.getByRole('button', { name: /^deactivate job$/i })).toBeInTheDocument();
-
-      await user.click(screen.getByRole('button', { name: /^deactivate job$/i }));
-      await waitFor(() => expect(mockDeleteApi).toHaveBeenCalledWith('/vacancies/vac-2'));
+      await user.click(screen.getByRole('button', { name: /close job/i }));
+      const dialog = await screen.findByRole('dialog', { name: 'Close this job?' });
+      await user.selectOptions(await within(dialog).findByRole('combobox'), 'Filled elsewhere');
+      await user.click(within(dialog).getByRole('button', { name: 'Close job' }));
+      await waitFor(() => expect(mockDeleteApi).toHaveBeenCalledWith('/vacancies/vac-2', { reason: 'Filled elsewhere' }));
     });
 
     it('does not expose permanent deletion to non-administrators', async () => {
@@ -202,7 +203,7 @@ describe('Vacancy Assignment and Activation Flow', () => {
       );
 
       await user.click(await screen.findByRole('button', { name: /^More$/ }));
-      expect(screen.queryByRole('button', { name: /deactivate job/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^close job$/i })).not.toBeInTheDocument();
     });
 
     it('displays blocking reasons banner when vacancy is Pending Activation', async () => {
