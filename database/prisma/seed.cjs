@@ -37,31 +37,29 @@ async function resyncCodeSequences() {
   }
 }
 
-// B5: minimal rejection reasons (master data, category rejection-reasons).
+/**
+ * C3: one master-data base for every reason list (apps/api/src/master-data/reason-lists.ts).
+ * Deactivate-only; "Other" (where present) needs a note. Idempotent: upsert on (org, category, name), never overwrites.
+ */
+const REASON_LISTS = {
+  'hold-reasons': [['BUDGET_REVIEW', 'Budget review'], ['HIRING_FREEZE', 'Hiring freeze'], ['ROLE_UNDER_REVIEW', 'Role under review'], ['AWAITING_INTERNAL_CANDIDATE', 'Awaiting internal candidate'], ['OTHER', 'Other']],
+  'close-reasons': [['POSITION_NO_LONGER_NEEDED', 'Position no longer needed'], ['BUDGET_WITHDRAWN', 'Budget withdrawn'], ['FILLED_INTERNALLY', 'Filled internally'], ['OTHER', 'Other']],
+  'rejection-reasons': [['REQ_CANCELLED', 'Requisition cancelled'], ['DECLINED_OFFER', 'Declined offer'], ['WITHDRAWN_BY_CANDIDATE', 'Withdrawn by candidate'], ['NOT_QUALIFIED', 'Not qualified'], ['FAILED_SCREENING', 'Did not pass screening'], ['FAILED_INTERVIEW', 'Did not pass interview'], ['NO_RESPONSE', 'No response from candidate'], ['POSITION_FILLED', 'Position filled']],
+  'reassign-reasons': [['WORKLOAD_BALANCING', 'Workload balancing'], ['OWNER_ON_LEAVE', 'Owner on leave'], ['OWNER_LEAVING', 'Owner leaving'], ['SPECIALIST_NEEDED', 'Specialist needed'], ['OTHER', 'Other']],
+};
+/** B5 seeding path (inside the org transaction); same single list as seedReasonLists. */
 async function seedRejectionReasons(tx, organizationId) {
   await tx.masterDataValue.createMany({
-    data: [
-      ['REQ_CANCELLED', 'Requisition cancelled'],
-      ['DECLINED_OFFER', 'Declined offer'],
-      ['WITHDRAWN_BY_CANDIDATE', 'Withdrawn by candidate'],
-      ['NOT_QUALIFIED', 'Not qualified'],
-      ['FAILED_SCREENING', 'Did not pass screening'],
-      ['FAILED_INTERVIEW', 'Did not pass interview'],
-      ['NO_RESPONSE', 'No response from candidate'],
-      ['POSITION_FILLED', 'Position filled'],
-    ].map(([code, name]) => ({ organizationId, category: 'rejection-reasons', code, name, status: 'Active' })),
+    data: REASON_LISTS['rejection-reasons'].map(([code, name]) => ({ organizationId, category: 'rejection-reasons', code, name, status: 'Active' })),
     skipDuplicates: true,
   });
 }
-
-/** B3: hold and close reason lists (deactivate-only master data). "Other" needs a note. */
-async function seedJobStatusReasons(organizationId) {
-  const lists = { 'hold-reasons': ['Budget review', 'Hiring freeze', 'Role under review', 'Awaiting internal candidate', 'Other'], 'close-reasons': ['Position no longer needed', 'Budget withdrawn', 'Filled internally', 'Other'] };
-  for (const [category, names] of Object.entries(lists)) {
-    for (const name of names) {
+async function seedReasonLists(organizationId) {
+  for (const [category, values] of Object.entries(REASON_LISTS)) {
+    for (const [code, name] of values) {
       await prisma.masterDataValue.upsert({
         where: { organizationId_category_name: { organizationId, category, name } },
-        create: { organizationId, category, name, code: name.toUpperCase().replace(/ /g, '_') },
+        create: { organizationId, category, name, code },
         update: {},
       });
     }
@@ -318,6 +316,9 @@ async function main() {
       { code: 'NOTIFICATION_VIEW', description: 'View own notifications and manage read status.' },
       { code: 'TASK_VIEW', description: 'View tasks assigned to the current user.' },
       { code: 'TASK_UPDATE_STATUS', description: 'Update the status of an assigned task.' },
+      // C2: named now, wired in B0b (no endpoint checks them yet)
+      { code: 'INTERVIEW_PARTICIPATE', name: 'Participate in interviews', description: 'Be scheduled on interviews and submit scorecards for interviews you attend.' },
+      { code: 'LICENSE_CHECK', name: 'Check professional licenses', description: "Record and verify a candidate's professional license check (e.g. nursing, pharmacy)." },
     ];
 
     for (const p of permSeed) {
@@ -589,7 +590,7 @@ async function main() {
     return { organization, branch, position, users, roles, demo, orgB, userB, candidateB, branchB };
   }, { timeout: 30000 });
 
-  for (const org of await prisma.organization.findMany({ select: { id: true } })) { await seedJobStatusReasons(org.id); await seedDemoDepartments(org.id); }
+  for (const org of await prisma.organization.findMany({ select: { id: true } })) { await seedReasonLists(org.id); await seedDemoDepartments(org.id); }
   await resyncCodeSequences();
 
   console.log(

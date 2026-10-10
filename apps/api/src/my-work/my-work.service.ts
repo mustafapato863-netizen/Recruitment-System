@@ -126,7 +126,11 @@ export class MyWorkService {
       }),
       this.prisma.offer.findMany({
         where: { organizationId: org, status: { in: ['Pending Approval', 'Sent'] }, application: myFileWhere },
-        select: { id: true, offerCode: true, status: true, applicationId: true, updatedAt: true, application: { select: appSelect } },
+        select: {
+          id: true, offerCode: true, status: true, applicationId: true, updatedAt: true, application: { select: appSelect },
+          // C6: who the offer is waiting on (pending approvals of the latest version).
+          versions: { orderBy: { versionNumber: 'desc' }, take: 1, select: { approvals: { where: { status: 'Pending' }, orderBy: { createdAt: 'asc' }, select: { approverUserId: true, roleCode: true, approver: { select: { displayName: true } } } } } },
+        },
         take: 200,
       }),
       this.prisma.serviceHeartbeat.findUnique({ where: { service: DUE_REMINDER_HEARTBEAT_SERVICE }, select: { observedAt: true, metadata: true } }),
@@ -186,7 +190,10 @@ export class MyWorkService {
         interviewId: i.id, title: i.title, end: i.scheduledEnd,
         missing: i.attendees.filter((a) => a.userId !== me && !submitted(i, a.userId)).length, app: appInfo(i.application),
       })),
-      offers: offers.map((o) => ({ id: o.id, code: o.offerCode, status: o.status, applicationId: o.applicationId, updatedAt: o.updatedAt, app: appInfo(o.application) })),
+      offers: offers.map((o) => ({
+        id: o.id, code: o.offerCode, status: o.status, applicationId: o.applicationId, updatedAt: o.updatedAt, app: appInfo(o.application),
+        approvers: (o.versions[0]?.approvals ?? []).map((a) => ({ id: a.approverUserId, name: a.approver?.displayName ?? a.roleCode })),
+      })),
       reminderWorkerHealthy: reminderWorkerHealthy(beat, now),
     }, now, day);
   }
