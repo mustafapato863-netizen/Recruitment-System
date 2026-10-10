@@ -44,7 +44,17 @@ export class OfferDecisionService {
     @Inject(NotificationsService) private readonly notifications: NotificationsService,
   ) {}
 
-  async decide(user: AuthUser, offerId: string, versionId: string, input: { decision: ManagerDecision; reason?: string | null }) {
+  async decide(user: AuthUser, offerId: string, versionId: string, input: { decision: ManagerDecision; reason?: string | null; basePay?: number; allowances?: Array<{ name: string; amount: number; frequency?: string }>; currency?: string }) {
+    const sendsPay = input.basePay !== undefined || (input.allowances?.length ?? 0) > 0 || input.currency !== undefined;
+    if (sendsPay) {
+      if (input.decision !== 'Approve') throw new BadRequestException({ code: 'VALIDATION_FAILED', message: 'Pay can only be sent with Approve.' });
+      if (!(await this.permissions.hasPermission(user.userId, user.organizationId, 'OFFER_PAY_VIEW'))) {
+        throw new ForbiddenException({ code: 'OFFER_PAY_VIEW_REQUIRED', message: 'Sending offer pay needs the OFFER_PAY_VIEW permission.' });
+      }
+      if (input.basePay === undefined || !input.currency || !/^[A-Za-z]{3}$/.test(input.currency)) {
+        throw new BadRequestException({ code: 'VALIDATION_FAILED', message: 'basePay and a 3-letter currency are required when sending pay.' });
+      }
+    }
     if (!(input.decision in DECISION_OUTCOME)) throw new BadRequestException({ code: 'DECISION_INVALID', message: 'decision must be Approve, Reject or RequestChanges.' });
     const reason = input.reason?.trim() || null;
     if (input.decision !== 'Approve' && !reason) {
@@ -69,14 +79,29 @@ export class OfferDecisionService {
       throw new ConflictException({ code: 'OFFER_NOT_PENDING_APPROVAL', message: `Only the current version in Pending Approval can be decided (this one is ${version.status}).` });
     }
 
+    // M3: the manager's pay replaces the version's components (Salary = basePay monthly; allowances stay separate
+    // and are NOT part of the band check). Stored in the same transaction as the decision.
+    const currency = input.currency?.toUpperCase();
+    const newComponents = sendsPay ? [
+      { type: 'Salary', name: 'Base pay', amount: input.basePay!, currency: currency!, frequency: 'Monthly' },
+      ...(input.allowances ?? []).map((a) => ({ type: 'Allowance', name: a.name.trim(), amount: a.amount, currency: currency!, frequency: a.frequency ?? 'Monthly' })),
+    ] : null;
+    const toDecimalish = (c: { type: string; amount: number; currency: string; frequency: string }) => ({ ...c, amount: c.amount as unknown as Prisma.Decimal | null, currency: c.currency as string | null, frequency: c.frequency as string | null });
     let bandId: string | null = null;
-    if (input.decision === 'Approve') bandId = await assertOfferInsideBand(this.prisma, user.organizationId, () => this.permissions.hasPermission(user.userId, user.organizationId, 'OFFER_PAY_VIEW'), version.components, app.vacancy);
+    if (input.decision === 'Approve') bandId = await assertOfferInsideBand(this.prisma, user.organizationId, () => this.permissions.hasPermission(user.userId, user.organizationId, 'OFFER_PAY_VIEW'), newComponents ? newComponents.map(toDecimalish) : version.components, app.vacancy);
 
     const outcome = DECISION_OUTCOME[input.decision];
     const now = new Date();
     const decision = await this.prisma.$transaction(async (tx) => {
       const locked = await tx.offerVersion.updateMany({ where: { id: version.id, status: 'Pending Approval' }, data: { status: outcome.version, approvalStatus: outcome.approvalStatus } });
       if (locked.count !== 1) throw new ConflictException({ code: 'OFFER_NOT_PENDING_APPROVAL', message: 'This version was decided by someone else.' });
+      if (newComponents) {
+        await tx.offerComponent.deleteMany({ where: { offerVersionId: version.id } }); // version-local pay rows, replaced by the approver's figures
+        await tx.offerComponent.createMany({ data: newComponents.map((c) => ({ offerVersionId: version.id, ...c })) });
+        const monthlyAllow = (input.allowances ?? []).reduce((t, a) => t + ((a.frequency ?? 'Monthly') === 'Monthly' ? a.amount : (a.frequency === 'Annual' ? a.amount / 12 : 0)), 0);
+        const monthly = Math.round((input.basePay! + monthlyAllow) * 100) / 100;
+        await tx.offerVersion.update({ where: { id: version.id }, data: { monthlyPackage: monthly, annualFixed: Math.round(monthly * 12 * 100) / 100 } });
+      }
       await tx.offer.update({ where: { id: offerId }, data: { status: outcome.offer } });
       await tx.offerApproval.updateMany({
         where: { offerVersionId: version.id, status: 'Pending' },

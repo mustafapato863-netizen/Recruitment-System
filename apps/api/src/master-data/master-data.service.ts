@@ -17,9 +17,9 @@ import { Prisma } from '@recruitflow/database';
 import type { MasterDataCategory, MasterDataValueRecord } from '@recruitflow/contracts';
 import { catalogKey, normalizeBranchCity, normalizeCatalogText, uniqueCatalogNames } from './catalog-normalization';
 
-const CATALOG_CATEGORIES = new Set<MasterDataCategory>(['departments', 'skills', 'candidate-sources', 'interview-types', ...(['grades', 'rejection-reasons', 'hold-reasons', 'close-reasons'] as unknown as MasterDataCategory[])]);
+const CATALOG_CATEGORIES = new Set<MasterDataCategory>(['departments', 'skills', 'candidate-sources', 'interview-types', ...(['grades', 'rejection-reasons', 'hold-reasons', 'close-reasons', 'reassign-reasons'] as unknown as MasterDataCategory[])]);
 /** B3: reason lists are deactivate-only (history rows quote them). */
-const DEACTIVATE_ONLY = new Set<string>(['hold-reasons', 'close-reasons']);
+const DEACTIVATE_ONLY = new Set<string>(['hold-reasons', 'close-reasons', 'reassign-reasons']);
 const SUPPORTED_CATALOGS = new Set(['branches', 'job-titles', ...CATALOG_CATEGORIES]);
 
 type MasterDataBatchRow = {

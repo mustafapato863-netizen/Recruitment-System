@@ -70,7 +70,7 @@ async function seedGradeBands(tx, organizationId, branchId) {
 
 /** B3: hold and close reason lists (deactivate-only master data). "Other" needs a note. */
 async function seedJobStatusReasons(organizationId) {
-  const lists = { 'hold-reasons': ['Budget review', 'Hiring freeze', 'Role under review', 'Awaiting internal candidate', 'Other'], 'close-reasons': ['Position no longer needed', 'Budget withdrawn', 'Filled internally', 'Other'] };
+  const lists = { 'hold-reasons': ['Budget review', 'Hiring freeze', 'Role under review', 'Awaiting internal candidate', 'Other'], 'close-reasons': ['Position no longer needed', 'Budget withdrawn', 'Filled internally', 'Other'], 'reassign-reasons': ['Workload balancing', 'Owner on leave', 'Owner leaving', 'Specialist needed', 'Other'] };
   for (const [category, names] of Object.entries(lists)) {
     for (const name of names) {
       await prisma.masterDataValue.upsert({

@@ -67,7 +67,7 @@ function domainErrorCodes() {
     'REOPEN_NOT_OWNER', 'REOPEN_REASON_REQUIRED', 'WITHDRAWN_NOT_AN_EXIT',
     'FOLLOW_UP_NOT_OWNER', 'JOINING_CHECK_TYPE_INVALID',
     // B7 grade bands, manager decision, reassign
-    'GRADE_BAND_MISSING', 'OFFER_PAY_OUTSIDE_BAND', 'GRADE_BAND_AMOUNT_INVALID', 'GRADE_BAND_FIELDS_REQUIRED',
+    'GRADE_BAND_MISSING', 'OFFER_PAY_VIEW_REQUIRED', 'OFFER_PAY_OUTSIDE_BAND', 'GRADE_BAND_AMOUNT_INVALID', 'GRADE_BAND_FIELDS_REQUIRED',
     'GRADE_BAND_IDENTITY_IMMUTABLE', 'GRADE_BAND_MIN_GT_MAX', 'GRADE_BAND_OVERLAP', 'GRADE_INVALID', 'SITE_INVALID', 'CURRENCY_INVALID',
     'OFFER_BASE_CURRENCY_MIXED', 'OFFER_BASE_PAY_MISSING', 'OFFER_DECISION_NOT_MANAGER', 'OFFER_NOT_PENDING_APPROVAL',
     'DECISION_INVALID', 'DECISION_REASON_REQUIRED',
@@ -1297,6 +1297,9 @@ export interface OfferApprovalInboxItem {
   versionNumber: number;
   /** B5 follow-up: the job's grade (from its requisition). */
   grade?: { id: string; name: string } | null;
+  /** M3: the job's site for band matching (siteId = branchId). */
+  branchId?: string | null;
+  siteId?: string | null;
   /** B7: omitted (absent) without OFFER_PAY_VIEW. */
   monthlyPackage?: number | null;
   packageCurrency?: OfferCurrency | null;
@@ -1339,6 +1342,9 @@ export interface Offer {
   candidateName?: string;
   positionTitle?: string;
   grade?: { id: string; name: string } | null;
+  /** M3: the job's site for band matching (siteId = branchId). */
+  branchId?: string | null;
+  siteId?: string | null;
   location?: string | null;
   offerCode: string;
   currentVersionId?: string | null;

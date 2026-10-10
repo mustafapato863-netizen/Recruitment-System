@@ -1,5 +1,6 @@
 import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
-import { IsArray, IsIn, IsNumber, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import { IsArray, IsIn, IsNumber, IsOptional, IsString, IsUUID, MaxLength, Min, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 import type { AuthUser } from '@recruitflow/contracts';
 // Runtime service imports must remain value imports for Nest DI metadata reflection.
 /* eslint-disable @typescript-eslint/consistent-type-imports */
@@ -20,15 +21,26 @@ export class GradeBandDto {
   @IsOptional() @IsNumber() maxMonthlyBase?: number;
   @IsOptional() @IsIn(['Active', 'Inactive']) status?: 'Active' | 'Inactive';
 }
+export class DecisionAllowanceDto {
+  @IsString() @MaxLength(150) name!: string;
+  @IsNumber() @Min(0) amount!: number;
+  @IsOptional() @IsIn(['Monthly', 'Annual', 'Once']) frequency?: 'Monthly' | 'Annual' | 'Once';
+}
 export class ManagerDecisionDto {
   @IsIn(['Approve', 'Reject', 'RequestChanges']) decision!: 'Approve' | 'Reject' | 'RequestChanges';
   @IsOptional() @IsString() @MaxLength(1000) reason?: string;
+  /** M3: Approve may carry the pay (monthly base + allowances); needs OFFER_PAY_VIEW (403 otherwise). */
+  @IsOptional() @IsNumber() @Min(0) basePay?: number;
+  @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => DecisionAllowanceDto) allowances?: DecisionAllowanceDto[];
+  @IsOptional() @IsString() @MaxLength(3) currency?: string;
 }
 export class ReassignFilesDto {
   @IsOptional() @IsArray() @IsUUID('4', { each: true }) applicationIds?: string[];
   @IsOptional() @IsUUID() fromUserId?: string;
   @IsUUID() toUserId!: string;
+  /** M2-M4: a value from master data 'reassign-reasons' (or "Other" + note). */
   @IsString() @MaxLength(1000) reason!: string;
+  @IsOptional() @IsString() @MaxLength(1000) note?: string;
 }
 
 @UseGuards(JwtAuthGuard)

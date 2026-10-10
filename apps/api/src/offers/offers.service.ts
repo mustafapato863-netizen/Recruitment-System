@@ -92,6 +92,7 @@ type OfferRecord = {
     candidate?: { firstName: string; lastName: string } | null;
     vacancy?: {
       id: string;
+      branchId?: string;
       location?: string | null;
       vacancyRequest?: { grade?: { id: string; name: string } | null } | null;
       branch?: { name: string } | null;
@@ -760,6 +761,9 @@ export class OffersService {
         : undefined,
       positionTitle: offer.application?.vacancy?.position?.title,
       grade: offer.application?.vacancy?.vacancyRequest?.grade ?? null,
+      /** M3: the job's site (branch) for band matching; siteId is an alias of branchId. */
+      branchId: offer.application?.vacancy?.branchId ?? null,
+      siteId: offer.application?.vacancy?.branchId ?? null,
       location: offer.application?.vacancy?.location ?? offer.application?.vacancy?.branch?.name ?? null,
       currentVersionId: offer.currentVersionId,
       currentVersion: version ? this.mapVersion(version, disclosure) : null,
@@ -782,6 +786,9 @@ export class OffersService {
         : undefined,
       positionTitle: offer.application?.vacancy?.position?.title,
       grade: offer.application?.vacancy?.vacancyRequest?.grade ?? null,
+      /** M3: the job's site (branch) for band matching; siteId is an alias of branchId. */
+      branchId: offer.application?.vacancy?.branchId ?? null,
+      siteId: offer.application?.vacancy?.branchId ?? null,
       location: offer.application?.vacancy?.location ?? offer.application?.vacancy?.branch?.name ?? null,
       currentVersionId: offer.currentVersionId,
       currentVersion: currentVersion ? this.mapVersion(currentVersion, disclosure) : null,

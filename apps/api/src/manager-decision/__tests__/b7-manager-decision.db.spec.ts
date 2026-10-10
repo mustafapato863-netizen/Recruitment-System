@@ -197,7 +197,7 @@ describe.skipIf(!url)('B7 grade bands, offer pay, manager decision, reassign (sc
   it('reassign: admin 403, reason required, target eligible, manager only, closed files do not move', async () => {
     const open = await file('owner', jobId, 'Screening');
     const closed = await file('owner', jobId, 'Rejected');
-    const body = { applicationIds: [open.id], toUserId: u.target!, reason: 'Leave' };
+    const body = { applicationIds: [open.id], toUserId: u.target!, reason: 'Owner on leave' };
     expect((await err(reassign.reassign(user('admin'), body))).status).toBe(403);
     expect((await err(reassign.reassign(user('mgr'), { ...body, reason: '  ' }))).body.code).toBe('REASSIGN_REASON_REQUIRED');
     expect((await err(reassign.reassign(user('mgr'), { ...body, toUserId: u.inactive! }))).body.code).toBe('REASSIGN_TARGET_INELIGIBLE');
@@ -252,7 +252,7 @@ describe.skipIf(!url)('B7 grade bands, offer pay, manager decision, reassign (sc
     const o = await pendingOffer(app.id, 12000);
     expect((await err(decisions.decide(user('midMgr'), o.offerId, o.versionId, { decision: 'Approve' }))).body.code).toBe('OFFER_DECISION_NOT_MANAGER');
     expect((await decisions.decide(user('top'), o.offerId, o.versionId, { decision: 'Approve' })).toStatus).toBe('Approved');
-    const body = { applicationIds: [app.id], toUserId: u.target!, reason: 'Rebalance' };
+    const body = { applicationIds: [app.id], toUserId: u.target!, reason: 'Workload balancing' };
     expect((await err(reassign.reassign(user('midMgr'), body))).body.code).toBe('REASSIGN_NOT_MANAGER');
     expect((await reassign.reassign(user('top'), body)).moved).toHaveLength(1);
     // Without co-ownership the direct manager decides, and the grand-manager does not.
@@ -260,6 +260,58 @@ describe.skipIf(!url)('B7 grade bands, offer pay, manager decision, reassign (sc
     const o2 = await pendingOffer(plain.id, 12000);
     expect((await err(decisions.decide(user('top'), o2.offerId, o2.versionId, { decision: 'Approve' }))).body.code).toBe('OFFER_DECISION_NOT_MANAGER');
     expect((await decisions.decide(user('midMgr'), o2.offerId, o2.versionId, { decision: 'Approve' })).toStatus).toBe('Approved');
+  });
+
+  it('M3: Approve with {basePay, allowances[], currency} stores the pay on the version and checks the band on basePay only', async () => {
+    const app = await file('owner', jobId);
+    const o = await pendingOffer(app.id, 99999); // stored figures are replaced by the manager's
+    const noPerm = await err(decisions.decide(user('mgrNoPay'), o.offerId, o.versionId, { decision: 'Approve', basePay: 12000, allowances: [], currency: 'AED' }));
+    expect(noPerm).toMatchObject({ status: 403, body: { code: 'OFFER_PAY_VIEW_REQUIRED' } });
+    const outside = await err(decisions.decide(user('mgr'), o.offerId, o.versionId, { decision: 'Approve', basePay: 15001, allowances: [], currency: 'AED' }));
+    expect(outside.body).toMatchObject({ code: 'OFFER_PAY_OUTSIDE_BAND', offeredMonthlyBase: 15001 });
+    expect(await prisma.offerComponent.count({ where: { offerVersionId: o.versionId, amount: 15001 } })).toBe(0); // rolled back with the decision
+    // allowances are excluded from the band check: 12000 base + 9000 allowances is still inside 10000-15000
+    const ok = await decisions.decide(user('mgr'), o.offerId, o.versionId, { decision: 'Approve', basePay: 12000, allowances: [{ name: 'Housing', amount: 6000 }, { name: 'Transport', amount: 36000, frequency: 'Annual' }], currency: 'aed' });
+    expect(ok.toStatus).toBe('Approved');
+    const v = await prisma.offerVersion.findUniqueOrThrow({ where: { id: o.versionId }, include: { components: true } });
+    expect(v.components.map((c) => [c.type, c.name, Number(c.amount), c.currency, c.frequency]).sort()).toEqual([
+      ['Allowance', 'Housing', 6000, 'AED', 'Monthly'], ['Allowance', 'Transport', 36000, 'AED', 'Annual'], ['Salary', 'Base pay', 12000, 'AED', 'Monthly'],
+    ].sort());
+    expect(Number(v.monthlyPackage)).toBe(21000);
+    // pay with a non-Approve decision is refused
+    const o2 = await pendingOffer((await file('owner', jobId)).id, 12000);
+    expect((await err(decisions.decide(user('mgr'), o2.offerId, o2.versionId, { decision: 'Reject', reason: 'No', basePay: 1, currency: 'AED' }))).status).toBe(400);
+  });
+
+  it('M3: GET /offers/:id carries branchId/siteId for band matching', async () => {
+    const app = await file('owner', jobId);
+    const { offerId } = await pendingOffer(app.id, 12000);
+    const access = { getApplicationVisibilityWhere: async () => ({ organizationId: ORG }) };
+    const ctl = new OffersController(new OffersService(prisma, notifications as never, access as never), perms);
+    const job = await prisma.vacancy.findUniqueOrThrow({ where: { id: jobId } });
+    expect(await ctl.getOfferById(user('mgr'), offerId)).toMatchObject({ branchId: job.branchId, siteId: job.branchId });
+  });
+
+  it('reassign reasons come from master data (reassign-reasons; Other needs a note); deactivate-only', async () => {
+    const app = await file('owner', jobId, 'Screening');
+    const body = { applicationIds: [app.id], toUserId: u.target! };
+    expect((await err(reassign.reassign(user('mgr'), { ...body, reason: 'Because I said so' }))).body.code).toBe('REASON_NOT_IN_LIST');
+    expect((await err(reassign.reassign(user('mgr'), { ...body, reason: 'Other' }))).body.code).toBe('REASON_REQUIRED');
+    const res = await reassign.reassign(user('mgr'), { ...body, reason: 'Other', note: 'Candidate asked for a Arabic speaker' });
+    expect(await prisma.fileReassignment.findFirstOrThrow({ where: { batchId: res.batchId } })).toMatchObject({ reason: 'Other: Candidate asked for a Arabic speaker' });
+    const names = (await prisma.masterDataValue.findMany({ where: { organizationId: ORG, category: 'reassign-reasons' } })).map((v) => v.name);
+    expect(names).toEqual(expect.arrayContaining(['Workload balancing', 'Owner on leave', 'Owner leaving', 'Specialist needed', 'Other']));
+  });
+
+  it('whole-job reassign stays files-only (v2 §7): the job owner never moves', async () => {
+    const before = await prisma.vacancyAssignment.findMany({ where: { vacancyId: jobId, assignmentKind: 'PRIMARY', isActive: true }, select: { userId: true } });
+    const jobBefore = await prisma.vacancy.findUniqueOrThrow({ where: { id: jobId } }) as unknown as Record<string, unknown>;
+    await file('owner', jobId, 'Screening'); await file('owner', jobId, 'Interview');
+    await reassign.reassign(user('mgr'), { fromUserId: u.owner!, toUserId: u.target!, reason: 'Owner leaving' });
+    expect(await prisma.vacancyAssignment.findMany({ where: { vacancyId: jobId, assignmentKind: 'PRIMARY', isActive: true }, select: { userId: true } })).toEqual(before);
+    const jobAfter = await prisma.vacancy.findUniqueOrThrow({ where: { id: jobId } }) as unknown as Record<string, unknown>;
+    expect(jobAfter.primaryRecruiterId).toEqual(jobBefore.primaryRecruiterId); // undefined on this base, the B1 owner once #4 is under it
+    expect(await prisma.application.count({ where: { vacancyId: jobId, primaryRecruiterId: u.owner!, stage: { notIn: ['Joined', 'Rejected', 'Withdrawn'] } } })).toBe(0);
   });
 
   it('seed demo: manager links, graded demo jobs and matching bands', async () => {

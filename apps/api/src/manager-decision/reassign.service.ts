@@ -4,13 +4,15 @@ import type { AuthUser } from '@recruitflow/contracts';
 import { PrismaService } from '../database/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { escalatedManagers, fileOwnerIds, isAdmin } from './file-ownership';
+import { resolveJobStatusReason } from '../vacancy-core/vacancy-lifecycle';
 
 /** A file is open until it reaches an exit stage; closed files never move (v2 §7 Reassign). */
 export const CLOSED_FILE_STAGES = ['Joined', 'Rejected', 'Withdrawn'];
 
-export interface ReassignInput { applicationIds?: string[]; fromUserId?: string; toUserId: string; reason: string }
+export interface ReassignInput { applicationIds?: string[]; fromUserId?: string; toUserId: string; reason: string; note?: string }
 
 /**
+ * Files only (v2 §7): the job and its owner (Vacancy primary assignee / primaryRecruiterId) never move.
  * B7 reassign: the manager moves OPEN files owned by a direct report to another active,
  * non-admin user, with a reason. Admin never can (403). Atomic: all files move or none.
  * Owner field on this base: Application.primaryRecruiterId.
@@ -26,8 +28,9 @@ export class ReassignService {
 
   async reassign(user: AuthUser, input: ReassignInput) {
     if (isAdmin(user.roleCodes)) throw new ForbiddenException({ code: 'REASSIGN_ADMIN_FORBIDDEN', message: 'Administrators cannot reassign files; the owner\'s manager does.' });
-    const reason = input.reason?.trim();
-    if (!reason) throw new BadRequestException({ code: 'REASSIGN_REASON_REQUIRED', message: 'A reason is required to reassign files.' });
+    if (!input.reason?.trim()) throw new BadRequestException({ code: 'REASSIGN_REASON_REQUIRED', message: 'A reason is required to reassign files.' });
+    // M2-M4: the reason comes from master data 'reassign-reasons' ("Other" needs a note), like hold/close reasons.
+    const reason = await resolveJobStatusReason(this.prisma, user.organizationId, 'reassign-reasons', input.reason, input.note);
     const byIds = Array.isArray(input.applicationIds) && input.applicationIds.length > 0;
     if (byIds === Boolean(input.fromUserId)) throw new BadRequestException({ code: 'REASSIGN_SCOPE', message: 'Give either applicationIds or fromUserId (all open files of that user).' });
 

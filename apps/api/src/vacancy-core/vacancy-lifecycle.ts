@@ -172,7 +172,7 @@ export async function assertDepartment(tx: Tx, organizationId: string, departmen
 }
 
 /** B3: categories of job status reasons (master data, deactivate-only). */
-export const JOB_REASON_CATEGORIES = ['hold-reasons', 'close-reasons'] as const;
+export const JOB_REASON_CATEGORIES = ['hold-reasons', 'close-reasons', 'reassign-reasons'] as const;
 export const OTHER_REASON = 'Other';
 
 /**
@@ -192,7 +192,7 @@ export async function resolveJobStatusReason(
     select: { name: true },
   });
   if (!value) {
-    throw new BadRequestException({ code: 'REASON_NOT_IN_LIST', message: `"${text}" is not an active ${category === 'hold-reasons' ? 'hold' : 'close'} reason. Pick one from the list, or "Other" with a note.` });
+    throw new BadRequestException({ code: 'REASON_NOT_IN_LIST', message: `"${text}" is not an active ${category === 'hold-reasons' ? 'hold' : category === 'close-reasons' ? 'close' : 'reassign'} reason. Pick one from the list, or "Other" with a note.` });
   }
   if (value.name.toLowerCase() === OTHER_REASON.toLowerCase()) {
     const free = note?.trim() ?? '';
