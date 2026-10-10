@@ -21,9 +21,9 @@ import {
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { TenantScopedGuard } from '../common/guards/tenant-scoped.guard';
-import { TenantResource } from '../common/decorators/tenant-resource.decorator';
+import { AllowFileApprover, TenantResource } from '../common/decorators/tenant-resource.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { RequirePermissions } from '../common/decorators/require-permissions.decorator';
+import { RequireAnyPermissions, RequirePermissions } from '../common/decorators/require-permissions.decorator';
 import { AuditAction } from '../common/decorators/audit-action.decorator';
 import type { AuthUser } from '@recruitflow/contracts';
 
@@ -50,9 +50,10 @@ export class ApplicationsController {
   }
 
   @Get(':id')
-  @RequirePermissions('APPLICATION_VIEW')
+  @RequireAnyPermissions('APPLICATION_VIEW', 'APPROVE_OFFERS', 'FINAL_HIRING_APPROVAL')
   @UseGuards(TenantScopedGuard)
   @TenantResource({ resource: 'application', param: 'id' })
+  @AllowFileApprover()
   getApplication(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.applicationsService.getApplication(user.organizationId, id, user);
   }

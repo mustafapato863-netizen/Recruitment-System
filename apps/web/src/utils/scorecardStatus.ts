@@ -1,13 +1,15 @@
 /**
- * B5: a scorecard's state comes only from its status (Draft | Submitted). The old `isLocked`
- * flag is going away and is never read. No card at all = 'missing'.
+ * A scorecard's state: B5 `status` (Draft | Submitted) when the API sends it; until B5 ships,
+ * fall back to the legacy `isLocked` flag (locked = submitted). No card at all = 'missing'.
  */
 export type ScorecardState = 'missing' | 'draft' | 'submitted';
 type Card = object | null | undefined;
 
 export function scorecardState(card: Card): ScorecardState {
   if (!card) return 'missing';
-  return String((card as { status?: unknown }).status ?? '').toLowerCase() === 'submitted' ? 'submitted' : 'draft';
+  const { status, isLocked } = card as { status?: unknown; isLocked?: unknown };
+  if (typeof status === 'string' && status.trim()) return status.trim().toLowerCase() === 'submitted' ? 'submitted' : 'draft';
+  return isLocked === true ? 'submitted' : 'draft';
 }
 export const isScorecardSubmitted = (card: Card) => scorecardState(card) === 'submitted';
 /** One interview round: submitted if any card is submitted, draft if any card exists, else missing. */

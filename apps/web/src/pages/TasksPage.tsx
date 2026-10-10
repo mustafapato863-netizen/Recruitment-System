@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
+import { fetchVacancyList } from '../utils/vacancyAccess';
 import { useNavigate } from 'react-router-dom';
 import type { TaskRecord, UserRecord, Vacancy } from '@recruitflow/contracts';
 import { Icon } from '../components/Icon';
@@ -217,7 +218,8 @@ export function TasksPage() {
     try {
       const [tasksRes, vacRes, recRes] = await Promise.allSettled([
         getApi<{ data?: TaskRecord[] } | TaskRecord[]>('/tasks?pageSize=100'),
-        getApi<Vacancy[]>('/vacancies'),
+        // B1: assignment targets exclude other owners' jobs.
+        fetchVacancyList().then(({ full }) => full),
         // Team-scoped: admins see everyone, others see themselves + direct reports.
         getApi<UserRecord[] | { data?: UserRecord[] }>('/users/assignable'),
       ]);
