@@ -223,7 +223,7 @@ export class OffersService {
           },
         },
         versions: {
-          include: { components: true, approvals: { include: { approver: true } } },
+          include: { components: { where: { supersededAt: null } }, approvals: { include: { approver: true } } },
           orderBy: { versionNumber: 'desc' },
           take: 1,
         },
@@ -247,7 +247,7 @@ export class OffersService {
         },
         versions: {
           include: {
-            components: true,
+            components: { where: { supersededAt: null } },
             approvals: { include: { approver: true } },
           },
           orderBy: { versionNumber: 'desc' },
@@ -508,7 +508,7 @@ export class OffersService {
       include: {
         offerVersion: {
           include: {
-            components: { where: { type: 'Salary' }, take: 1 },
+            components: { where: { type: 'Salary', supersededAt: null }, take: 1 },
             offer: {
               include: {
                 application: {
@@ -587,7 +587,7 @@ export class OffersService {
     if (dto.decision === 'Approve') {
       const v = await this.prisma.offerVersion.findUniqueOrThrow({
         where: { id: approval.offerVersionId },
-        include: { components: true, offer: { include: { application: { include: { vacancy: { select: { branchId: true, branch: { select: { name: true } }, vacancyRequest: { select: { gradeId: true, grade: { select: { name: true } } } } } } } } } } },
+        include: { components: { where: { supersededAt: null } }, offer: { include: { application: { include: { vacancy: { select: { branchId: true, branch: { select: { name: true } }, vacancyRequest: { select: { gradeId: true, grade: { select: { name: true } } } } } } } } } } },
       });
       await assertOfferInsideBand(
         this.prisma, user.organizationId,
