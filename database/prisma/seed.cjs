@@ -39,6 +39,19 @@ async function resyncCodeSequences() {
   }
 }
 
+// B9: exactly one pipeline template (the default). Idempotent: does nothing if an active template exists.
+async function seedDefaultPipeline(tx, organizationId) {
+  const existing = await tx.pipelineTemplate.count({ where: { organizationId, status: { not: 'Archived' } } });
+  if (existing) return;
+  const stages = ['Applied', 'Screening', 'Interview', 'Offer', 'Pre-Hire', 'Joined'];
+  await tx.pipelineTemplate.create({
+    data: {
+      organizationId, name: 'Default pipeline', isDefault: true, status: 'Active',
+      stages: { create: stages.map((name, i) => ({ name, stageType: name, sortOrder: i, required: true, isHiredStage: name === 'Joined' })) },
+    },
+  });
+}
+
 // B6: minimal skill library (master data, category "skills"; metadata.category is optional).
 async function seedSkillLibrary(tx, organizationId) {
   const skills = [
@@ -69,6 +82,7 @@ async function main() {
     });
 
     await seedSkillLibrary(tx, organization.id);
+    await seedDefaultPipeline(tx, organization.id);
 
     // ── Branch ────────────────────────────────────────────────
     const branch = await tx.branch.upsert({

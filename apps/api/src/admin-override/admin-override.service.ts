@@ -5,14 +5,20 @@ import { VacancyCoreService } from '../vacancy-core/vacancy-core.service';
 
 /**
  * B9 / A5: admin override. The only way an Administrator changes owned work.
- * Covered actions (on this base): job.hold, job.reopen. Each needs a reason (>= 10 chars) and writes
+ * Covered actions: job.hold, job.reopen, job.close; file.reassign is recognised but deferred (see below). Each needs a reason (>= 10 chars) and writes
  * an ADMIN_OVERRIDE audit row (who, when, action, reason, before/after) in the same request.
- * TODO(B3): once the B3 hold/reopen endpoints are on this stack, route these through them (status history + holdUntil).
+ * Deferred to stacking (B3 is not on #21's base, #13 → main):
+ *   TODO(B3): route hold/reopen/close through B3's job lifecycle service so they also write vacancy_status_histories,
+ *   take holdUntil, validate the reason against hold-reasons / close-reasons, and run the transition table.
+ *   Until then they use VacancyCoreService.updateVacancyStatus + the ADMIN_OVERRIDE audit row.
+ *   TODO(B7): file.reassign → B7 ReassignService (manager reassign rules, history, notifications). Returns 400 here.
  */
 export const OVERRIDE_ACTIONS = {
   'job.hold': { from: ['Open', 'Partially Filled'], to: 'On Hold' },
   'job.reopen': { from: ['On Hold'], to: 'Open' },
+  'job.close': { from: ['Open', 'On Hold', 'Partially Filled', 'Filled'], to: 'Closed' },
 } as const;
+export const DEFERRED_OVERRIDE_ACTIONS = ['file.reassign'] as const;
 export type OverrideAction = keyof typeof OVERRIDE_ACTIONS;
 
 @Injectable()
@@ -26,6 +32,9 @@ export class AdminOverrideService {
     if (!user.roleCodes.includes('ADMINISTRATOR')) throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Only an administrator can use an override.' });
     const reason = body.reason?.trim() ?? '';
     if (reason.length < 10) throw new BadRequestException({ code: 'OVERRIDE_REASON_REQUIRED', message: 'An override needs a reason (at least 10 characters).' });
+    if ((DEFERRED_OVERRIDE_ACTIONS as readonly string[]).includes(body.action ?? '')) {
+      throw new BadRequestException({ code: 'OVERRIDE_NOT_ALLOWED', message: 'file.reassign override is not available on this build yet (needs B7 reassign). Use the manager reassign once B7 is merged.' });
+    }
     const rule = OVERRIDE_ACTIONS[body.action as OverrideAction];
     if (!rule) throw new BadRequestException({ code: 'OVERRIDE_NOT_ALLOWED', message: `Allowed override actions: ${Object.keys(OVERRIDE_ACTIONS).join(', ')}.` });
     const job = await this.prisma.vacancy.findFirst({ where: { id: body.entityId ?? '', organizationId: user.organizationId }, select: { id: true, status: true, vacancyCode: true } });

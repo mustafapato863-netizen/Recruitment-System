@@ -39,11 +39,19 @@ describe.skipIf(!url)('B9 admin (scratch Postgres)', () => {
     expect(audit.map((a) => [a.actorUserId, (a.afterData as { status: string }).status])).toEqual([[admin.userId, 'On Hold'], [admin.userId, 'Open']]);
   });
 
+  it('override: close is covered and audited; reassign is a clear 400 until B7 is stacked', async () => {
+    await expect(overrides.override(admin, { action: 'file.reassign', entityId: jobId, reason: `Owner left ${tag}` })).rejects.toMatchObject({ status: 400, response: { code: 'OVERRIDE_NOT_ALLOWED', message: expect.stringContaining('B7') } });
+    const res = await overrides.override(admin, { action: 'job.close', entityId: jobId, reason: `Role cancelled ${tag}` });
+    expect(res).toMatchObject({ from: 'Open', to: 'Closed' });
+    await expect(overrides.override(admin, { action: 'job.close', entityId: jobId, reason: `Again closing ${tag}` })).rejects.toMatchObject({ status: 409 });
+    expect(await prisma.auditLog.count({ where: { action: 'ADMIN_OVERRIDE', entityId: jobId, reason: `Role cancelled ${tag}` } })).toBe(1);
+  });
+
   it('one pipeline template: list shows one; create/duplicate 409; default cannot be un-defaulted', async () => {
     const svc = new PipelineSettingsService(prisma);
-    if (!(await svc.listTemplates(ORG)).length) await svc.createTemplate(ORG, { name: 'Default pipeline', isDefault: true } as never);
     const list = await svc.listTemplates(ORG);
-    expect(list).toHaveLength(1);
+    expect(list).toHaveLength(1); // seeded
+    expect(list[0]).toMatchObject({ name: 'Default pipeline', isDefault: true, stageCount: 6 });
     // a legacy extra template stays hidden
     await prisma.pipelineTemplate.create({ data: { organizationId: ORG, name: `Legacy ${tag}`, isDefault: false, status: 'Active' } });
     expect((await svc.listTemplates(ORG)).map((t) => t.id)).toEqual([list[0]!.id]);
