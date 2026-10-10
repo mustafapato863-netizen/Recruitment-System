@@ -1,4 +1,5 @@
 import { MyWorkModule } from './my-work/my-work.module';
+import { ResultsModule } from './results/results.module';
 import { Module } from '@nestjs/common';
 import type { NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
@@ -44,6 +45,7 @@ import { CorrelationIdMiddleware, TenantContextMiddleware } from './common/middl
     DatabaseModule,
     VacancyCoreModule,
     MyWorkModule,
+    ResultsModule,
     CommonModule,
     AuthModule,
     UsersModule,

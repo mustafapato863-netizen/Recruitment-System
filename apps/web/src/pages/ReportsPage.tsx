@@ -10,11 +10,14 @@ import {
   Pie,
   Cell,
 } from 'recharts';
-import type { ReportOverview, RecruitmentKpiItem } from '@recruitflow/contracts';
+import type { ReportOverview, RecruitmentKpiItem, RecruiterWorkload } from '@recruitflow/contracts';
 import { Icon } from '../components/Icon';
 import { Modal } from '../components/Modal';
 import { getApi, downloadApi } from '../api/client';
 import './PageEnhancementsV2.css';
+
+// B8: the API no longer returns activity counters; kept as optional so this page still renders until it is redesigned.
+type LegacyRecruiterWorkload = RecruiterWorkload & { activity?: { total: number; applications: number; screening: number; interviews: number; offers: number; hiring: number } };
 
 type SourceDatum = { name: string; value: number; pct: string; color: string };
 type OfferDatum = { name: string; value: number; pct: string; color: string };
@@ -29,12 +32,6 @@ function formatChip(label: string, value: string | number, detail?: string) {
       {detail ? <span className="text-slate-500">{detail}</span> : null}
     </span>
   );
-}
-
-function formatPeriodChange(current: number, previous: number): string {
-  if (previous === 0) return current === 0 ? 'No activity in either period' : 'New activity vs previous period';
-  const change = Math.round(((current - previous) / previous) * 100);
-  return `${change > 0 ? '+' : ''}${change}% vs previous period`;
 }
 
 // ── Department Breakdown Data ──
@@ -133,11 +130,11 @@ export function ReportsPage() {
 
       return {
         applications: appCount,
-        appTrend: formatPeriodChange(appCount, reportOverview.comparison.applications),
+        appTrend: 'Selected period (no prior-period comparison)',
         interviews: intCount,
-        intTrend: formatPeriodChange(intCount, reportOverview.comparison.interviews),
+        intTrend: 'Selected period (no prior-period comparison)',
         offers: offCount,
-        offTrend: formatPeriodChange(offCount, reportOverview.comparison.offers),
+        offTrend: 'Selected period (no prior-period comparison)',
         hires: hireCount,
         hireTrend: hireCount > 0 ? `${hireCount} joined in period` : 'No hires in period',
         timeToFill: ttf,
@@ -260,7 +257,7 @@ export function ReportsPage() {
   }, [reportOverview]);
 
   const recruiterActivityRows = useMemo(
-    () => [...(reportOverview?.recruiterWorkload ?? [])].sort((left, right) => (right.activity?.total ?? 0) - (left.activity?.total ?? 0)),
+    () => [...((reportOverview?.recruiterWorkload ?? []) as LegacyRecruiterWorkload[])].sort((left, right) => (right.activity?.total ?? 0) - (left.activity?.total ?? 0)),
     [reportOverview],
   );
   const recruiterActivityTotals = useMemo(

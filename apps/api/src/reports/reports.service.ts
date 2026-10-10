@@ -576,7 +576,7 @@ export class ReportsService {
     const topSourceEntry = [...sourceCounts.entries()].sort((a, b) => b[1].total - a[1].total)[0];
 
     return {
-      timeToFill: { value: averageTimeToFill, change: 0 },
+      timeToFill: { value: averageTimeToFill },
       timeToOffer: { value: averageTimeToOffer, target: 25 },
       offerAcceptanceRate: {
         value: totalOffers === 0 ? 0 : Math.round((acceptedOffers / totalOffers) * 100),

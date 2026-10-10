@@ -1877,3 +1877,21 @@ export interface MyWorkResponse {
   /** Reminder worker swept within 2x its interval. */
   reminderWorkerHealthy: boolean;
 }
+
+/** B8: GET /results/me|team|org?month=YYYY-MM&vacancyId=&managerId= (Cairo months). No activity counters, no prior-period comparison. */
+export interface ResultTile {
+  value: number;
+  of: number;
+  sampleSize: number;
+  detail: string;
+  /** true when sampleSize < 5; seats are exempt (always false). */
+  tooFewToJudge: boolean;
+}
+export interface ResultsResponse {
+  scope: 'me' | 'team' | 'org';
+  month: string;
+  range: { from: string; to: string };
+  filters: { vacancyId: string | null; managerId: string | null };
+  people: Array<{ id: string; name: string }>;
+  tiles: { seats: ResultTile; overdueFollowUps: ResultTile; screensReachedInterview: ResultTile; offersAccepted: ResultTile };
+}
