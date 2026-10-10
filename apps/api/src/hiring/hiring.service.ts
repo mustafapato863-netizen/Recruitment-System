@@ -1,3 +1,4 @@
+import { assertJoiningChecks } from '../applications/application-gates';
 import { recordJoin } from '../vacancy-core/vacancy-lifecycle';
 import {
   BadRequestException,
@@ -379,6 +380,9 @@ export class HiringService {
     if (dto.status === 'Joined' && hiringCase.application.vacancy.joinedHeadcount >= hiringCase.application.vacancy.approvedHeadcount) {
       throw new BadRequestException('Vacancy headcount is already full');
     }
+
+    // B5 gate 4: Joined needs ID, contract and SCFHS licence checked.
+    if (dto.status === 'Joined') await assertJoiningChecks(this.prisma, hiringCase.applicationId);
 
     const updateData: Prisma.HiringCaseUpdateInput = { status: dto.status };
     if (dto.actualJoiningDate) {

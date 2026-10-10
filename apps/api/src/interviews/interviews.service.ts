@@ -24,10 +24,12 @@ import type {
   CreateInterviewDto,
   InterviewQueryDto,
   SubmitScorecardDto,
+  ReviseScorecardDto,
   UpdateInterviewDto,
   UpdateInterviewResponseDto,
 } from './interviews.dto';
 import { generateIcsCalendar } from './ics-generator';
+import { scorecardState, validateInterviewRoom } from './interview-rules';
 // Runtime service import must remain a value import for Nest DI metadata reflection.
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { AccessControlService } from '../access-control/access-control.service';
@@ -76,7 +78,7 @@ export class InterviewsService {
           },
         },
         attendees: { include: { user: true } },
-        scorecards: { include: { interviewer: true } },
+        scorecards: { where: { nextRevision: { is: null } }, include: { interviewer: true } },
       },
       orderBy: { scheduledStart: 'asc' },
     });
@@ -98,7 +100,7 @@ export class InterviewsService {
           },
         },
         attendees: { include: { user: true } },
-        scorecards: { include: { interviewer: true } },
+        scorecards: { where: { nextRevision: { is: null } }, include: { interviewer: true } },
       },
     });
 
@@ -213,20 +215,22 @@ export class InterviewsService {
     }
 
     const attendeeUserIds = [...new Set(dto.attendeeUserIds ?? [])];
-    const interviewerName = dto.interviewerName?.trim() || null;
     const interviewerJobTitle = dto.interviewerJobTitle?.trim() || null;
-    if (attendeeUserIds.length === 0 && !interviewerName) {
-      throw new BadRequestException('Enter an interviewer name before saving the interview.');
+    // B5 (v2 §7): the interviewer is a user. Free-text names are not accepted.
+    if ((dto as { interviewerName?: unknown }).interviewerName) {
+      throw new BadRequestException({ code: 'INTERVIEWER_NOT_A_USER', message: 'Interviewers must be users. Pick attendees instead of typing a name.' });
     }
-    if (attendeeUserIds.length > 0) {
-      const attendees = await this.prisma.user.findMany({
-        where: { id: { in: attendeeUserIds }, organizationId, status: 'Active' },
-        select: { id: true, jobTitle: true },
-      });
-      if (attendees.length !== attendeeUserIds.length) {
-        throw new NotFoundException('One or more interview attendees were not found in this organization.');
-      }
+    if (attendeeUserIds.length === 0) {
+      throw new BadRequestException({ code: 'INTERVIEWER_REQUIRED', message: 'Add at least one interviewer (an internal user).' });
     }
+    const attendees = await this.prisma.user.findMany({
+      where: { id: { in: attendeeUserIds }, organizationId, status: 'Active' },
+      select: { id: true, jobTitle: true },
+    });
+    if (attendees.length !== attendeeUserIds.length) {
+      throw new BadRequestException({ code: 'INTERVIEWER_NOT_A_USER', message: 'Every interviewer must be an active user in this organization.' });
+    }
+    const room = validateInterviewRoom({ locationUrl: dto.locationUrl, roomName: dto.roomName });
 
     // Conflict detection check
     if (!dto.allowConflict && attendeeUserIds.length > 0) {
@@ -259,8 +263,8 @@ export class InterviewsService {
           scheduledStart: start,
           scheduledEnd: end,
           timezone: dto.timezone?.trim() ?? 'UTC',
-          locationUrl: dto.locationUrl?.trim() ?? null,
-          interviewerName,
+          locationUrl: room.locationUrl,
+          roomName: room.roomName,
           interviewerJobTitle,
           status: 'Scheduled',
         },
@@ -302,7 +306,7 @@ export class InterviewsService {
             },
           },
           attendees: { include: { user: true } },
-          scorecards: { include: { interviewer: true } },
+          scorecards: { where: { nextRevision: { is: null } }, include: { interviewer: true } },
         },
       });
     });
@@ -376,12 +380,20 @@ export class InterviewsService {
       if (!dto.status) dataToUpdate.status = 'Rescheduled';
     }
 
-    if (dto.locationUrl !== undefined) dataToUpdate.locationUrl = dto.locationUrl?.trim() ?? null;
+    if (dto.locationUrl !== undefined || dto.roomName !== undefined) {
+      const current = await this.prisma.interview.findFirst({ where: { id, organizationId }, select: { locationUrl: true, roomName: true } });
+      const room = validateInterviewRoom({
+        locationUrl: dto.locationUrl !== undefined ? dto.locationUrl : current?.locationUrl,
+        roomName: dto.roomName !== undefined ? dto.roomName : current?.roomName,
+      });
+      dataToUpdate.locationUrl = room.locationUrl;
+      dataToUpdate.roomName = room.roomName;
+    }
 
     if (dto.status === 'Completed') {
       const [attendeeCount, submittedCount] = await Promise.all([
         this.prisma.interviewAttendee.count({ where: { interviewId: id } }),
-        this.prisma.interviewScorecard.count({ where: { interviewId: id, isLocked: true } }),
+        this.submittedInterviewerCount(id),
       ]);
       if (attendeeCount === 0 || submittedCount < attendeeCount) {
         throw new BadRequestException('All assigned interviewers must submit ratings and written notes before completing this interview.');
@@ -401,7 +413,7 @@ export class InterviewsService {
           },
         },
         attendees: { include: { user: true } },
-        scorecards: { include: { interviewer: true } },
+        scorecards: { where: { nextRevision: { is: null } }, include: { interviewer: true } },
       },
     });
 
@@ -622,52 +634,34 @@ export class InterviewsService {
       throw new ForbiddenException('Only an assigned interviewer can submit a scorecard.');
     }
 
-    const existing = await this.prisma.interviewScorecard.findUnique({
-      where: {
-        interviewId_interviewerId: {
-          interviewId,
-          interviewerId,
-        },
-      },
+    // B5: Draft -> Submitted. A Submitted scorecard is never edited; use a revision.
+    const latest = await this.prisma.interviewScorecard.findFirst({
+      where: { interviewId, interviewerId },
+      orderBy: { revision: 'desc' },
     });
-
-    if (existing && existing.isLocked) {
-      throw new BadRequestException(
-        'Scorecard has been locked and cannot be modified after submission.',
-      );
+    if (latest && latest.status === 'Submitted') {
+      throw new ConflictException({
+        code: 'SCORECARD_ALREADY_SUBMITTED',
+        message: 'This scorecard was submitted and cannot be edited. Create a revision with a reason.',
+      });
     }
-
-    const scorecard = await this.prisma.interviewScorecard.upsert({
-      where: {
-        interviewId_interviewerId: {
-          interviewId,
-          interviewerId,
-        },
-      },
-      create: {
-        interviewId,
-        interviewerId,
-        overallRating: dto.overallRating,
-        recommendation: dto.recommendation,
-        strengths: dto.strengths?.trim() ?? null,
-        concerns: dto.concerns?.trim() ?? null,
-        notes: dto.notes?.trim() ?? null,
-        isLocked: true, // Lock scorecard upon submission
-      },
-      update: {
-        overallRating: dto.overallRating,
-        recommendation: dto.recommendation,
-        strengths: dto.strengths?.trim() ?? null,
-        concerns: dto.concerns?.trim() ?? null,
-        notes: dto.notes?.trim() ?? null,
-        isLocked: true,
-      },
-      include: { interviewer: true },
-    });
+    const submit = (dto.status ?? 'Submitted') === 'Submitted';
+    const fields = {
+      overallRating: dto.overallRating,
+      recommendation: dto.recommendation,
+      strengths: dto.strengths?.trim() ?? null,
+      concerns: dto.concerns?.trim() ?? null,
+      notes: dto.notes?.trim() ?? null,
+      status: submit ? 'Submitted' : 'Draft',
+      submittedAt: submit ? new Date() : null,
+    };
+    const scorecard = latest
+      ? await this.prisma.interviewScorecard.update({ where: { id: latest.id }, data: fields, include: { interviewer: true } })
+      : await this.prisma.interviewScorecard.create({ data: { interviewId, interviewerId, revision: 1, ...fields }, include: { interviewer: true } });
 
     const [attendeeCount, submittedCount] = await Promise.all([
       this.prisma.interviewAttendee.count({ where: { interviewId } }),
-      this.prisma.interviewScorecard.count({ where: { interviewId, isLocked: true } }),
+      this.submittedInterviewerCount(interviewId),
     ]);
     if (attendeeCount > 0 && submittedCount >= attendeeCount) {
       await this.prisma.interview.updateMany({
@@ -686,9 +680,67 @@ export class InterviewsService {
       strengths: scorecard.strengths,
       concerns: scorecard.concerns,
       notes: scorecard.notes,
-      isLocked: scorecard.isLocked,
-      submittedAt: scorecard.submittedAt.toISOString(),
+      ...scorecardState(scorecard),
     };
+  }
+
+  /**
+   * B5: revise a Submitted scorecard. Creates revision n+1 (Submitted), linked
+   * to the previous one, with who, when and why. The latest Submitted counts.
+   */
+  async reviseScorecard(
+    organizationId: string,
+    interviewId: string,
+    interviewerId: string,
+    dto: ReviseScorecardDto,
+    user?: AuthUser,
+  ): Promise<InterviewScorecardItem> {
+    await this.getInterview(organizationId, interviewId, user);
+    const latest = await this.prisma.interviewScorecard.findFirst({ where: { interviewId, interviewerId }, orderBy: { revision: 'desc' } });
+    if (!latest || latest.status !== 'Submitted') {
+      throw new ConflictException({ code: 'SCORECARD_NOT_SUBMITTED', message: 'Only a submitted scorecard can be revised; edit the draft instead.' });
+    }
+    const reason = dto.reason?.trim();
+    if (!reason) throw new BadRequestException({ code: 'REVISION_REASON_REQUIRED', message: 'A reason is required to revise a scorecard.' });
+    const scorecard = await this.prisma.interviewScorecard.create({
+      data: {
+        interviewId,
+        interviewerId,
+        revision: latest.revision + 1,
+        previousRevisionId: latest.id,
+        revisedById: user?.userId ?? interviewerId,
+        revisionReason: reason,
+        overallRating: dto.overallRating,
+        recommendation: dto.recommendation,
+        strengths: dto.strengths?.trim() ?? null,
+        concerns: dto.concerns?.trim() ?? null,
+        notes: dto.notes.trim(),
+        status: 'Submitted',
+        submittedAt: new Date(),
+      },
+      include: { interviewer: true },
+    });
+    return {
+      id: scorecard.id,
+      interviewId: scorecard.interviewId,
+      interviewerId: scorecard.interviewerId,
+      interviewerName: scorecard.interviewer?.displayName,
+      overallRating: scorecard.overallRating,
+      recommendation: scorecard.recommendation as InterviewScorecardItem['recommendation'],
+      strengths: scorecard.strengths,
+      concerns: scorecard.concerns,
+      notes: scorecard.notes,
+      ...scorecardState(scorecard),
+    };
+  }
+
+  /** Interviewers whose latest scorecard revision is Submitted. */
+  private async submittedInterviewerCount(interviewId: string): Promise<number> {
+    const rows = await this.prisma.interviewScorecard.findMany({
+      where: { interviewId, status: 'Submitted', nextRevision: { is: null } },
+      select: { interviewerId: true },
+    });
+    return new Set(rows.map((r) => r.interviewerId)).size;
   }
 
   private async notifyCalendarIntegration(organizationId: string): Promise<void> {
@@ -748,7 +800,9 @@ export class InterviewsService {
       scheduledEnd: record.scheduledEnd.toISOString(),
       timezone: record.timezone,
       locationUrl: record.locationUrl,
-      interviewerName: record.interviewerName,
+      interviewerName: record.attendees[0]?.user?.displayName ?? null,
+      legacyInterviewerName: record.legacyInterviewerName,
+      roomName: record.roomName,
       interviewerJobTitle: record.interviewerJobTitle,
       status: record.status as InterviewStatus,
       attendees: record.attendees.map((att) => ({
@@ -770,8 +824,7 @@ export class InterviewsService {
         strengths: sc.strengths,
         concerns: sc.concerns,
         notes: sc.notes,
-        isLocked: sc.isLocked,
-        submittedAt: sc.submittedAt.toISOString(),
+        ...scorecardState(sc),
       })),
       createdAt: record.createdAt.toISOString(),
       updatedAt: record.updatedAt.toISOString(),

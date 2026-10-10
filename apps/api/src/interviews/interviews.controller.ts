@@ -18,6 +18,7 @@ import {
   CreateInterviewDto,
   UpdateInterviewDto,
   SubmitScorecardDto,
+  ReviseScorecardDto,
   InterviewQueryDto,
   CheckAvailabilityDto,
   GenerateSelfScheduleDto,
@@ -126,6 +127,20 @@ export class InterviewsController {
     @Body() body: UpdateInterviewResponseDto,
   ) {
     return this.interviewsService.respondToInterview(user.organizationId, id, user.userId, body, user);
+  }
+
+  /** B5: revise a submitted scorecard (new revision with a reason). */
+  @Post(':id/scorecard/revisions')
+  @RequirePermissions('VACANCY_VIEW')
+  @AuditAction('SCORECARD_REVISE')
+  @UseGuards(TenantScopedGuard)
+  @TenantResource({ resource: 'interview', param: 'id' })
+  reviseScorecard(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: ReviseScorecardDto,
+  ) {
+    return this.interviewsService.reviseScorecard(user.organizationId, id, user.userId, body, user);
   }
 
   @Post(':id/scorecard')

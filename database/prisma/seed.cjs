@@ -39,6 +39,23 @@ async function resyncCodeSequences() {
   }
 }
 
+// B5: minimal rejection reasons (master data, category rejection-reasons).
+async function seedRejectionReasons(tx, organizationId) {
+  await tx.masterDataValue.createMany({
+    data: [
+      ['REQ_CANCELLED', 'Requisition cancelled'],
+      ['DECLINED_OFFER', 'Declined offer'],
+      ['WITHDRAWN_BY_CANDIDATE', 'Withdrawn by candidate'],
+      ['NOT_QUALIFIED', 'Not qualified'],
+      ['FAILED_SCREENING', 'Did not pass screening'],
+      ['FAILED_INTERVIEW', 'Did not pass interview'],
+      ['NO_RESPONSE', 'No response from candidate'],
+      ['POSITION_FILLED', 'Position filled'],
+    ].map(([code, name]) => ({ organizationId, category: 'rejection-reasons', code, name, status: 'Active' })),
+    skipDuplicates: true,
+  });
+}
+
 async function main() {
   const result = await prisma.$transaction(async (tx) => {
     // ── Organization ──────────────────────────────────────────
@@ -51,6 +68,8 @@ async function main() {
         name: 'RecruitFlow Demo Organization',
       },
     });
+
+    await seedRejectionReasons(tx, organization.id);
 
     // ── Branch ────────────────────────────────────────────────
     const branch = await tx.branch.upsert({
@@ -475,6 +494,7 @@ async function main() {
         name: 'Acme Global Healthcare',
       },
     });
+    await seedRejectionReasons(tx, orgB.id);
 
     const branchB = await tx.branch.upsert({
       where: { organizationId_code: { organizationId: orgB.id, code: 'ACME-ALEX' } },

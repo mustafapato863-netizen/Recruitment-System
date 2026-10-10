@@ -1,3 +1,4 @@
+import { DECLINED_OFFER_REASON } from '../applications/application-gates';
 import {
   Injectable,
   NotFoundException,
@@ -48,7 +49,7 @@ type OfferVersionRecord = {
   workLocation: string | null;
   workingSchedule: string | null;
   approvalStatus: string;
-  isLocked: boolean;
+  status: string;
   createdAt: Date;
   components?: Array<{
     id: string;
@@ -277,6 +278,7 @@ export class OffersService {
           workLocation,
           workingSchedule: dto.workingSchedule ?? null,
           approvalStatus: 'Pending',
+          status: 'Pending Approval',
           components: {
             create: dto.components.map((c) => ({
               type: c.type,
@@ -352,6 +354,7 @@ export class OffersService {
           workLocation,
           workingSchedule: dto.workingSchedule ?? null,
           approvalStatus: 'Pending',
+          status: 'Pending Approval',
           components: {
             create: dto.components.map((c) => ({
               type: c.type,
@@ -516,7 +519,7 @@ export class OffersService {
       if (dto.decision === 'Reject') {
         await tx.offerVersion.update({
           where: { id: approval.offerVersionId },
-          data: { approvalStatus: 'Rejected' },
+          data: { approvalStatus: 'Rejected', status: 'Changes Requested' },
         });
         await tx.offer.update({
           where: { id: approval.offerVersion.offerId },
@@ -526,7 +529,7 @@ export class OffersService {
       } else if (pendingRemaining === 0) {
         await tx.offerVersion.update({
           where: { id: approval.offerVersionId },
-          data: { approvalStatus: 'Approved', isLocked: true },
+          data: { approvalStatus: 'Approved', status: 'Approved' },
         });
         await tx.offer.update({
           where: { id: approval.offerVersion.offerId },
@@ -563,7 +566,7 @@ export class OffersService {
     const allowedTransitions: Record<string, string[]> = {
       Draft: ['Withdrawn'],
       'Pending Approval': ['Withdrawn'],
-      Approved: ['Sent', 'Withdrawn'],
+      Approved: ['Sent', 'Expired', 'Withdrawn'],
       Sent: ['Accepted', 'Declined', 'Expired', 'Withdrawn'],
       Accepted: [],
       Declined: [],
@@ -583,11 +586,24 @@ export class OffersService {
     }
 
     const result = await this.prisma.$transaction(async (tx) => {
-      if (dto.status === 'Sent') {
-        await tx.offerVersion.update({
-          where: { id: currentVersion.id },
-          data: { isLocked: true },
-        });
+      // B5: the version carries the state (replaces isLocked).
+      await tx.offerVersion.update({
+        where: { id: currentVersion.id },
+        data: { status: dto.status },
+      });
+
+      // B5 exit rule: a declined offer rejects the file with reason "Declined offer".
+      if (dto.status === 'Declined') {
+        const app = await tx.application.findUnique({ where: { id: offer.applicationId }, select: { stage: true } });
+        if (app && !['Joined', 'Rejected', 'Withdrawn'].includes(app.stage)) {
+          await tx.application.update({
+            where: { id: offer.applicationId },
+            data: { stage: 'Rejected', rejectionReason: DECLINED_OFFER_REASON, version: { increment: 1 } },
+          });
+          await tx.applicationStatusHistory.create({
+            data: { applicationId: offer.applicationId, fromStage: app.stage, toStage: 'Rejected', changedById: user.userId, reason: DECLINED_OFFER_REASON },
+          });
+        }
       }
 
       await tx.offer.update({
@@ -694,7 +710,9 @@ export class OffersService {
       workLocation: v.workLocation,
       workingSchedule: v.workingSchedule,
       approvalStatus: v.approvalStatus,
-      isLocked: v.isLocked,
+      status: v.status,
+      /** derived: a version is frozen once it left Draft/Pending/Changes Requested. */
+      isLocked: !['Draft', 'Pending Approval', 'Changes Requested'].includes(v.status),
       components:
         v.components?.map((c) => ({
           id: c.id,

@@ -120,6 +120,7 @@ Table users {
   applicationNotes application_notes [not null]
   interviewAttendeeLinks interview_attendees [not null]
   submittedScorecards interview_scorecards [not null]
+  revisedScorecards interview_scorecards [not null]
   offerApprovals offer_approvals [not null]
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [not null]
@@ -423,6 +424,7 @@ Table applications {
   primaryRecruiter users
   taskOwnerId String
   taskOwner users
+  rejectionReason String
   appliedAt DateTime [default: `now()`, not null]
   statusHistory application_status_histories [not null]
   screeningLogs screening_logs [not null]
@@ -555,7 +557,8 @@ Table interviews {
   scheduledEnd DateTime [not null]
   timezone String [not null, default: 'UTC']
   locationUrl String
-  interviewerName String
+  legacyInterviewerName String
+  roomName String
   interviewerJobTitle String
   status String [not null, default: 'Scheduled']
   attendees interview_attendees [not null]
@@ -590,11 +593,19 @@ Table interview_scorecards {
   strengths String
   concerns String
   notes String
-  isLocked Boolean [not null, default: false]
-  submittedAt DateTime [default: `now()`, not null]
+  status String [not null, default: 'Draft']
+  revision Int [not null, default: 1]
+  previousRevisionId String [unique]
+  previousRevision interview_scorecards
+  nextRevision interview_scorecards
+  revisedById String
+  revisedBy users
+  revisionReason String
+  submittedAt DateTime [default: `now()`]
+  createdAt DateTime [default: `now()`, not null]
 
   indexes {
-    (interviewId, interviewerId) [unique]
+    (interviewId, interviewerId, revision) [unique]
   }
 }
 
@@ -627,7 +638,7 @@ Table offer_versions {
   workLocation String
   workingSchedule String
   approvalStatus String [not null, default: 'Draft']
-  isLocked Boolean [not null, default: false]
+  status String [not null, default: 'Draft']
   components offer_components [not null]
   approvals offer_approvals [not null]
   createdAt DateTime [default: `now()`, not null]
@@ -1067,6 +1078,10 @@ Ref: interview_attendees.userId > users.id [delete: Restrict]
 Ref: interview_scorecards.interviewId > interviews.id [delete: Restrict]
 
 Ref: interview_scorecards.interviewerId > users.id [delete: Restrict]
+
+Ref: interview_scorecards.previousRevisionId - interview_scorecards.id [delete: Restrict]
+
+Ref: interview_scorecards.revisedById > users.id [delete: Restrict]
 
 Ref: offers.organizationId > organizations.id [delete: Restrict]
 

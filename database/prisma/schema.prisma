@@ -134,6 +134,7 @@ model User {
   applicationNotes         ApplicationNote[]
   interviewAttendeeLinks   InterviewAttendee[]
   submittedScorecards      InterviewScorecard[]
+  revisedScorecards        InterviewScorecard[]       @relation("ScorecardRevisers")
   offerApprovals           OfferApproval[]
   createdAt                DateTime                   @default(now()) @db.Timestamptz(6)
   updatedAt                DateTime                   @updatedAt @db.Timestamptz(6)
@@ -475,6 +476,8 @@ model Application {
   primaryRecruiter   User?                      @relation("ApplicationPrimaryRecruiter", fields: [primaryRecruiterId], references: [id], onDelete: Restrict)
   taskOwnerId        String?                    @db.Uuid
   taskOwner          User?                      @relation("ApplicationTaskOwner", fields: [taskOwnerId], references: [id], onDelete: Restrict)
+  // B5: the single exit is Rejected with a reason from master data (rejection-reasons).
+  rejectionReason    String?                    @db.VarChar(200)
   appliedAt          DateTime                   @default(now()) @db.Timestamptz(6)
   statusHistory      ApplicationStatusHistory[]
   screeningLogs      ScreeningLog[]
@@ -622,25 +625,29 @@ model ScreeningLog {
 }
 
 model Interview {
-  id                  String               @id @default(uuid()) @db.Uuid
-  organizationId      String               @db.Uuid
-  organization        Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  interviewCode       String               @unique @db.VarChar(50)
-  applicationId       String               @db.Uuid
-  application         Application          @relation(fields: [applicationId], references: [id], onDelete: Restrict)
-  title               String               @db.VarChar(200)
-  interviewType       String               @db.VarChar(60)
-  scheduledStart      DateTime             @db.Timestamptz(6)
-  scheduledEnd        DateTime             @db.Timestamptz(6)
-  timezone            String               @default("UTC") @db.VarChar(50)
-  locationUrl         String?              @db.VarChar(500)
-  interviewerName     String?              @db.VarChar(200)
-  interviewerJobTitle String?              @db.VarChar(120)
-  status              String               @default("Scheduled") @db.VarChar(40)
-  attendees           InterviewAttendee[]
-  scorecards          InterviewScorecard[]
-  createdAt           DateTime             @default(now()) @db.Timestamptz(6)
-  updatedAt           DateTime             @updatedAt @db.Timestamptz(6)
+  id                    String               @id @default(uuid()) @db.Uuid
+  organizationId        String               @db.Uuid
+  organization          Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  interviewCode         String               @unique @db.VarChar(50)
+  applicationId         String               @db.Uuid
+  application           Application          @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  title                 String               @db.VarChar(200)
+  interviewType         String               @db.VarChar(60)
+  scheduledStart        DateTime             @db.Timestamptz(6)
+  scheduledEnd          DateTime             @db.Timestamptz(6)
+  timezone              String               @default("UTC") @db.VarChar(50)
+  locationUrl           String?              @db.VarChar(500)
+  // B5: interviewers are users (attendees). Free-text names that matched no
+  // user during the migration are kept here, read-only, for history.
+  legacyInterviewerName String?              @db.VarChar(200)
+  // B5: physical room when the interview is not online (locationUrl is the online room).
+  roomName              String?              @db.VarChar(200)
+  interviewerJobTitle   String?              @db.VarChar(120)
+  status                String               @default("Scheduled") @db.VarChar(40)
+  attendees             InterviewAttendee[]
+  scorecards            InterviewScorecard[]
+  createdAt             DateTime             @default(now()) @db.Timestamptz(6)
+  updatedAt             DateTime             @updatedAt @db.Timestamptz(6)
 
   @@index([organizationId, status])
   @@index([applicationId, scheduledStart])
@@ -662,20 +669,31 @@ model InterviewAttendee {
 }
 
 model InterviewScorecard {
-  id             String    @id @default(uuid()) @db.Uuid
-  interviewId    String    @db.Uuid
-  interview      Interview @relation(fields: [interviewId], references: [id], onDelete: Restrict)
-  interviewerId  String    @db.Uuid
-  interviewer    User      @relation(fields: [interviewerId], references: [id], onDelete: Restrict)
-  overallRating  Int
-  recommendation String    @db.VarChar(40)
-  strengths      String?   @db.Text
-  concerns       String?   @db.Text
-  notes          String?   @db.Text
-  isLocked       Boolean   @default(false)
-  submittedAt    DateTime  @default(now()) @db.Timestamptz(6)
+  id                 String              @id @default(uuid()) @db.Uuid
+  interviewId        String              @db.Uuid
+  interview          Interview           @relation(fields: [interviewId], references: [id], onDelete: Restrict)
+  interviewerId      String              @db.Uuid
+  interviewer        User                @relation(fields: [interviewerId], references: [id], onDelete: Restrict)
+  overallRating      Int
+  recommendation     String              @db.VarChar(40)
+  strengths          String?             @db.Text
+  concerns           String?             @db.Text
+  notes              String?             @db.Text
+  // B5: Draft -> Submitted. A Submitted row is never edited; a change is a new
+  // revision linked to the previous one. The latest Submitted revision counts.
+  status             String              @default("Draft") @db.VarChar(20)
+  revision           Int                 @default(1)
+  previousRevisionId String?             @unique @db.Uuid
+  previousRevision   InterviewScorecard? @relation("ScorecardRevisions", fields: [previousRevisionId], references: [id], onDelete: Restrict)
+  nextRevision       InterviewScorecard? @relation("ScorecardRevisions")
+  revisedById        String?             @db.Uuid
+  revisedBy          User?               @relation("ScorecardRevisers", fields: [revisedById], references: [id], onDelete: Restrict)
+  revisionReason     String?
+  submittedAt        DateTime?           @default(now()) @db.Timestamptz(6)
+  createdAt          DateTime            @default(now()) @db.Timestamptz(6)
 
-  @@unique([interviewId, interviewerId])
+  @@unique([interviewId, interviewerId, revision])
+  @@index([interviewId, interviewerId])
   @@map("interview_scorecards")
 }
 
@@ -716,7 +734,9 @@ model OfferVersion {
   workLocation        String?          @db.VarChar(200)
   workingSchedule     String?          @db.VarChar(100)
   approvalStatus      String           @default("Draft") @db.VarChar(50)
-  isLocked            Boolean          @default(false)
+  // B5: version state (replaces isLocked). Draft, Pending Approval, Approved,
+  // Changes Requested, Sent, Accepted, Declined, Expired, Withdrawn.
+  status              String           @default("Draft") @db.VarChar(30)
   components          OfferComponent[]
   approvals           OfferApproval[]
   createdAt           DateTime         @default(now()) @db.Timestamptz(6)

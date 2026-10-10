@@ -540,7 +540,7 @@ export class VacancyCoreService {
           select: { id: true, stage: true },
         });
         for (const application of live) {
-          await tx.application.update({ where: { id: application.id }, data: { stage: 'Rejected', version: { increment: 1 } } });
+          await tx.application.update({ where: { id: application.id }, data: { stage: 'Rejected', rejectionReason: REQUISITION_CANCELLED_REASON, version: { increment: 1 } } });
           await tx.applicationStatusHistory.create({
             data: { applicationId: application.id, fromStage: application.stage, toStage: 'Rejected', changedById: actorUserId, reason: REQUISITION_CANCELLED_REASON },
           });

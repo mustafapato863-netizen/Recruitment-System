@@ -6,6 +6,7 @@ import { assertOutboxEncryptionKey } from './outbox-crypto';
 import { createTransportFromEnv } from './transport';
 import { sweepStaleApplicants, sweepConsentExpiry } from './sweepers';
 import { dueReminderConfigFromEnv, sweepDueDateReminders } from './due-reminders';
+import { expireOverdueOffers } from './offer-expiry';
 
 const BATCH_SIZE = positiveInt(process.env.WORKER_BATCH_SIZE, 20, 100);
 const POLL_INTERVAL_MS = positiveInt(process.env.WORKER_POLL_INTERVAL_MS, 2_000, 60_000);
@@ -90,13 +91,14 @@ async function runSweeperLoop(): Promise<void> {
   await sleep(30_000);
   while (!stopping) {
     try {
-      const [nudges, expiries, reminders] = await Promise.all([
+      const [nudges, expiries, reminders, offersExpired] = await Promise.all([
         sweepStaleApplicants(prisma),
         sweepConsentExpiry(prisma),
         sweepDueDateReminders(prisma, new Date(), DUE_REMINDER_CONFIG),
+        expireOverdueOffers(prisma, new Date()),
       ]);
-      if (nudges > 0 || expiries > 0 || reminders > 0) {
-        console.log(`[sweeper] stale-nudges=${nudges} consent-expiries=${expiries} due-reminders=${reminders}`);
+      if (nudges > 0 || expiries > 0 || reminders > 0 || offersExpired > 0) {
+        console.log(`[sweeper] stale-nudges=${nudges} consent-expiries=${expiries} due-reminders=${reminders} offers-expired=${offersExpired}`);
       }
     } catch (err) {
       console.error(`[sweeper] error: ${err instanceof Error ? err.message : err}`);

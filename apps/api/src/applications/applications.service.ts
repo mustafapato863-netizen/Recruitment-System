@@ -1,3 +1,4 @@
+import { WITHDRAWN_BY_CANDIDATE_REASON, assertStageGate, resolveRejectionReason } from './application-gates';
 import { assertJobAcceptsApplications, recordJoin } from '../vacancy-core/vacancy-lifecycle';
 import {
   BadRequestException,
@@ -35,14 +36,15 @@ import type {
 } from './applications.dto';
 
 const ALLOWED_STAGE_TRANSITIONS: Record<ApplicationStage, ApplicationStage[]> = {
-  Applied: ['Screening', 'Rejected', 'Withdrawn'],
-  Screening: ['Interview', 'Rejected', 'Withdrawn'],
-  Interview: ['Offer', 'Rejected', 'Withdrawn'],
-  Offer: ['Pre-Hire', 'Rejected', 'Withdrawn'],
-  'Pre-Hire': ['Joined', 'Rejected', 'Withdrawn'],
+  // B5: the only exit is Rejected (with a reason). Withdrawn is legacy history.
+  Applied: ['Screening', 'Rejected'],
+  Screening: ['Interview', 'Rejected'],
+  Interview: ['Offer', 'Rejected'],
+  Offer: ['Pre-Hire', 'Rejected'],
+  'Pre-Hire': ['Joined', 'Rejected'],
   Joined: [],
   Rejected: ['Applied', 'Screening', 'Interview'],
-  Withdrawn: ['Applied'],
+  Withdrawn: [],
 };
 
 type GateContext = {
@@ -50,7 +52,7 @@ type GateContext = {
   screeningOutcome: string | null;
   interviews: Array<{
     status: string;
-    scorecards: Array<{ isLocked: boolean; notes: string | null }>;
+    scorecards: Array<{ status: string; notes: string | null }>;
   }>;
   offerStatus: string | null;
   hiringStatus: string | null;
@@ -330,7 +332,7 @@ export class ApplicationsService {
         where: { organizationId, applicationId: id },
         select: {
           status: true,
-          scorecards: { select: { isLocked: true, notes: true } },
+          scorecards: { where: { status: 'Submitted' }, select: { status: true, notes: true } },
         },
       }),
       this.prisma.offer.findFirst({
@@ -587,13 +589,19 @@ export class ApplicationsService {
     // ordering is authoritative; only the immediate next stage (plus the
     // terminal rejection paths) can be selected. The canonical map remains
     // the fallback for legacy records without a matching pipeline stage.
+    if (dto.stage === 'Withdrawn') {
+      throw new ConflictException({
+        code: 'WITHDRAWN_NOT_AN_EXIT',
+        message: `Withdrawn is not a manual exit. Reject with the reason "${WITHDRAWN_BY_CANDIDATE_REASON}".`,
+      });
+    }
     const allowed = ALLOWED_STAGE_TRANSITIONS[application.stage] ?? [];
     const workspace = await this.getWorkspace(organizationId, id, user);
     const configuredNextAllowed = workspace.stages.some(
       (stage) => stage.isNext && stage.name === dto.stage,
     );
     const hasPersistedCurrentStage = workspace.stages.some((stage) => stage.isCurrent);
-    const isTerminalEscape = dto.stage === 'Rejected' || dto.stage === 'Withdrawn';
+    const isTerminalEscape = dto.stage === 'Rejected';
     const transitionAllowed = hasPersistedCurrentStage
       ? configuredNextAllowed || isTerminalEscape
       : allowed.includes(dto.stage);
@@ -602,6 +610,12 @@ export class ApplicationsService {
         `Cannot transition application from ${application.stage} to ${dto.stage}. Allowed transitions: ${allowed.join(', ')}.`,
       );
     }
+
+    // B5: the five v2 gates are API checks, independent of the pipeline config.
+    const rejectionReason = dto.stage === 'Rejected'
+      ? await resolveRejectionReason(this.prisma, organizationId, dto.reason)
+      : null;
+    await assertStageGate(this.prisma, application, dto.stage);
 
     const gateRequirements = workspace.nextStage === dto.stage
       ? workspace.nextStageRequirements
@@ -637,6 +651,7 @@ export class ApplicationsService {
         data: {
           stage: dto.stage,
           version: { increment: 1 },
+          ...(rejectionReason ? { rejectionReason } : {}),
         },
       });
 
@@ -658,7 +673,7 @@ export class ApplicationsService {
           fromStage: dto.expectedStage,
           toStage: dto.stage,
           changedById: actorUserId,
-          reason: dto.reason?.trim() ?? null,
+          reason: rejectionReason ?? dto.reason?.trim() ?? null,
         },
       });
 
@@ -896,12 +911,12 @@ export class ApplicationsService {
         return context.interviews.some(
           (interview) =>
             interview.status === 'Completed' ||
-            interview.scorecards.some((scorecard) => scorecard.isLocked),
+            interview.scorecards.some((scorecard) => scorecard.status === 'Submitted'),
         );
       case 'feedback':
       case 'scorecard':
         return context.interviews.some((interview) =>
-          interview.scorecards.some((scorecard) => scorecard.isLocked && Boolean(scorecard.notes?.trim())),
+          interview.scorecards.some((scorecard) => scorecard.status === 'Submitted' && Boolean(scorecard.notes?.trim())),
         );
       case 'offer':
         return Boolean(context.offerStatus && context.offerStatus !== 'Rejected');

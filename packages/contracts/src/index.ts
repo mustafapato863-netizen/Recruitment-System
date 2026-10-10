@@ -1049,6 +1049,13 @@ export interface InterviewScorecardItem {
   strengths?: string | null | undefined;
   concerns?: string | null | undefined;
   notes?: string | null | undefined;
+  /** B5: Draft | Submitted. */
+  status?: 'Draft' | 'Submitted';
+  revision?: number;
+  previousRevisionId?: string | null;
+  revisedById?: string | null;
+  revisionReason?: string | null;
+  /** B5: derived (status === 'Submitted'); no longer stored. */
   isLocked: boolean;
   submittedAt: string;
 }
@@ -1067,7 +1074,12 @@ export interface Interview {
   scheduledEnd: string;
   timezone: string;
   locationUrl?: string | null | undefined;
+  /** B5: physical room when not online. */
+  roomName?: string | null | undefined;
+  /** B5: display name of the first interviewer (a user). Free text is no longer stored. */
   interviewerName?: string | null | undefined;
+  /** B5: free-text name from before B5, read-only history. */
+  legacyInterviewerName?: string | null | undefined;
   interviewerJobTitle?: string | null | undefined;
   status: InterviewStatus;
   attendees?: InterviewAttendeeItem[] | undefined;

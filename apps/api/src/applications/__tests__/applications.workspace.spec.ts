@@ -144,6 +144,24 @@ describe('ApplicationsService unified workspace', () => {
     ).rejects.toThrow(/Cannot transition application from Applied to Joined/);
   });
 
+  it('B5: Withdrawn is not a manual exit (409 WITHDRAWN_NOT_AN_EXIT)', async () => {
+    const { service } = createService();
+    await expect(
+      service.updateStage('org-1', 'app-1', 'user-1', { stage: 'Withdrawn', expectedStage: 'Applied', expectedVersion: 4 }, user),
+    ).rejects.toMatchObject({ response: expect.objectContaining({ code: 'WITHDRAWN_NOT_AN_EXIT' }) });
+  });
+
+  it('B5: Rejected without a reason is blocked (409 GATE_REJECT_REASON_REQUIRED)', async () => {
+    const { service } = createService();
+    vi.spyOn(service, 'getWorkspace').mockResolvedValue({
+      application, templateId: 'pipeline-1', templateName: 'Default hiring track', stages: [],
+      nextStage: 'Screening', nextStageRequirements: [], canAdvance: true,
+    });
+    await expect(
+      service.updateStage('org-1', 'app-1', 'user-1', { stage: 'Rejected', expectedStage: 'Applied', expectedVersion: 4, reason: '  ' }, user),
+    ).rejects.toMatchObject({ status: 409, response: expect.objectContaining({ code: 'GATE_REJECT_REASON_REQUIRED' }) });
+  });
+
   it('returns a conflict when the expected stage or version is stale', async () => {
     const { service } = createService();
 
