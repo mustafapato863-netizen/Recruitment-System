@@ -15,6 +15,7 @@
  */
 import { getApi, postApi } from '../../api/client';
 import { stripPay } from './paySafety';
+import { fetchAllPages } from './paged';
 import { domainError, type DomainError, type GateCode } from './gates';
 import { isClosedStage, type FileStage } from './applicationFile';
 
@@ -140,9 +141,10 @@ const ACTIVE_STAGES = ['Applied', 'Screening', 'Interview', 'Offer', 'Pre-Hire']
  * Others = the scoped queue minus mine, shown as title/site/seats only (redacted by #4 or not).
  */
 export async function fetchOpenJobs(): Promise<OpenJobs> {
+  // B2-22 / B2R: the work queue caps pageSize at 100 (400 field=pageSize), so page through it.
   const [mineRes, allRes] = await Promise.all([
-    getApi<{ data: Array<JobWorkQueueItem | RedactedJob> }>('/vacancies/work-queue?mine=true&pageSize=100'),
-    getApi<{ data: Array<JobWorkQueueItem | RedactedJob> }>('/vacancies/work-queue?pageSize=100').catch(() => ({ data: [] as Array<JobWorkQueueItem | RedactedJob> })),
+    fetchAllPages<JobWorkQueueItem | RedactedJob>('/vacancies/work-queue?mine=true').then((data) => ({ data })),
+    fetchAllPages<JobWorkQueueItem | RedactedJob>('/vacancies/work-queue').then((data) => ({ data })).catch(() => ({ data: [] as Array<JobWorkQueueItem | RedactedJob> })),
   ]);
   const mine: MyJobRow[] = [];
   for (const raw of stripPay(mineRes?.data ?? [])) {
@@ -250,6 +252,8 @@ export function canChangeJobStatus(job: JobDetail, me: { id: string; isAdmin?: b
   return (reports ?? []).some((p) => p.id === owner.id && p.managerId === me.id);
 }
 export const JOB_NOT_OWNED_TEXT = 'Only the job owner or their manager can hold, reopen, close or delete this job.';
+/** #23 NEW-3: an Admin's hold/reopen/close answers 403 ADMIN_CANNOT_CHANGE_JOB_STATUS; Admins use the logged override (B9). */
+export const ADMIN_STATUS_TEXT = 'An administrator can’t hold, reopen or close a job here. Use Admin override (Reports → Open jobs) instead; it is logged.';
 
 // ── Job status (E12, B3) ─────────────────────────────────────────────────────
 export type JobAction = 'hold' | 'reopen' | 'close';
@@ -289,7 +293,13 @@ export const errorMessage = (error: unknown, fallback: string) => {
   const d = jobErrorFromError(error);
   // The client replaces every 403 message with a generic one; the code says what happened.
   if (d?.code === 'JOB_NOT_OWNED') return JOB_NOT_OWNED_TEXT;
+  if (d?.code === 'ADMIN_CANNOT_CHANGE_JOB_STATUS') return ADMIN_STATUS_TEXT;
   if (d?.code === 'FILE_CLOSED') return d.message || 'This file is closed and does not move.';
+  if (d?.code === 'JOB_HAS_OPEN_APPLICATIONS') {
+    const x = error as { counts?: { openApplications?: number }; details?: { counts?: { openApplications?: number } } };
+    const n = x?.counts?.openApplications ?? x?.details?.counts?.openApplications;
+    return typeof n === 'number' ? `This job still has ${n} open file${n === 1 ? '' : 's'}. Close or move them first.` : d.message || 'This job still has open files. Close or move them first.';
+  }
   if (d?.message) return d.message;
   const m = (error as { message?: unknown })?.message;
   return typeof m === 'string' && m ? m : fallback;
