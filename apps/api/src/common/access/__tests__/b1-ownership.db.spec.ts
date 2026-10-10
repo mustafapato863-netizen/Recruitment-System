@@ -126,6 +126,12 @@ describe.skipIf(!url)('B1 ownership and scope (scratch Postgres)', () => {
     expect((await prisma.vacancy.findUniqueOrThrow({ where: { id: vacancyId } })).primaryRecruiterId).toBe(ids.owner);
   });
 
+  it('inactive job owner gets OWNER_NOT_ELIGIBLE, not "not in this organization" (QA BUG-2)', async () => {
+    const err = await vacancies.assignTeamMember(vacancyId, ORG, { userId: ids.inactive, roleCode: 'RECRUITER', assignmentKind: 'PRIMARY' }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(BadRequestException);
+    expect((err as BadRequestException).getResponse()).toMatchObject({ code: 'OWNER_NOT_ELIGIBLE', message: 'An inactive user cannot own a job or file.' });
+  });
+
   it('does not let an administrator reassign a job or file owner', async () => {
     await expect(vacancies.assignTeamMember(vacancyId, ORG, { userId: ids.other, roleCode: 'RECRUITER', assignmentKind: 'PRIMARY' }, auth(ids.admin, ['ADMINISTRATOR']))).rejects.toBeInstanceOf(ForbiddenException);
     await expect(applications.updateApplication(ORG, ids.application, ids.admin, { primaryRecruiterId: ids.other }, auth(ids.admin, ['ADMINISTRATOR']))).rejects.toBeInstanceOf(ForbiddenException);

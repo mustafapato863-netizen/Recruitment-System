@@ -36,6 +36,24 @@ import { DocumentsService } from '../documents/documents.service';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import type { AuthUser } from '@recruitflow/contracts';
 
+/**
+ * B1 follow-up (QA BUG-4): an attendee's own interview, with no candidate file
+ * data. The stored title usually contains the candidate's name, so a neutral
+ * placeholder built from the interview type is returned instead.
+ */
+export interface MyInterviewItem {
+  id: string;
+  title: string;
+  interviewType: string;
+  status: string;
+  scheduledStart: string;
+  scheduledEnd: string;
+  timezone: string;
+  room: { name: string | null; url: string | null };
+  myResponse: string;
+  scorecard: { submitted: boolean; submittedAt: string | null; isLocked: boolean };
+}
+
 /** RSVP result for an attendee who does not own the file (no interview detail). */
 export interface InterviewRsvpReceipt {
   id: string;
@@ -92,6 +110,35 @@ export class InterviewsService {
     });
 
     return items.map((item) => this.toInterview(item));
+  }
+
+  /** GET /interviews/mine: interviews the caller attends, without candidate file data. */
+  async listMyInterviews(organizationId: string, userId: string): Promise<MyInterviewItem[]> {
+    const rows = await this.prisma.interview.findMany({
+      where: { organizationId, attendees: { some: { userId } } },
+      select: {
+        id: true, interviewType: true, status: true, scheduledStart: true, scheduledEnd: true, timezone: true, locationUrl: true,
+        attendees: { where: { userId }, select: { response: true } },
+        scorecards: { where: { interviewerId: userId }, select: { submittedAt: true, isLocked: true } },
+      },
+      orderBy: { scheduledStart: 'asc' },
+    });
+    return rows.map((row) => {
+      const card = row.scorecards[0];
+      return {
+        id: row.id,
+        title: `${row.interviewType} Interview`,
+        interviewType: row.interviewType,
+        status: row.status,
+        scheduledStart: row.scheduledStart.toISOString(),
+        scheduledEnd: row.scheduledEnd.toISOString(),
+        timezone: row.timezone,
+        // There is no room-name column; a URL means an online meeting room.
+        room: { name: row.locationUrl ? 'Online meeting' : null, url: row.locationUrl ?? null },
+        myResponse: row.attendees[0]?.response ?? 'Accepted',
+        scorecard: { submitted: Boolean(card), submittedAt: card ? card.submittedAt.toISOString() : null, isLocked: card?.isLocked ?? false },
+      };
+    });
   }
 
   async getInterview(organizationId: string, id: string, user?: AuthUser): Promise<Interview> {

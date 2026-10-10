@@ -76,6 +76,17 @@ export class InterviewsController {
     return this.selfScheduleService.createInvitationLink(user.organizationId, body);
   }
 
+  /**
+   * B1 follow-up (QA BUG-4): the interviewer's entry point. Lists only the
+   * caller's own interviews (attendee rows) with time, room, a neutral title,
+   * their RSVP and their scorecard status. No candidate file data, so no extra
+   * permission beyond being signed in.
+   */
+  @Get('mine')
+  listMyInterviews(@CurrentUser() user: AuthUser) {
+    return this.interviewsService.listMyInterviews(user.organizationId, user.userId);
+  }
+
   @Get(':id')
   @RequirePermissions('VACANCY_VIEW')
   @UseGuards(TenantScopedGuard)

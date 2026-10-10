@@ -785,13 +785,15 @@ export class VacancyCoreService {
       throw new NotFoundException(`Vacancy ${id} was not found.`);
     }
 
-    await this.repository.ensureUserInOrganization(organizationId, dto.userId);
-
     const assignmentKind = dto.assignmentKind ?? 'PRIMARY';
-    // B1: the job owner is never an administrator or an inactive user.
+    // B1: the job owner is never an administrator or an inactive user. Checked
+    // before ensureUserInOrganization (which filters on Active) so an inactive
+    // owner gets OWNER_NOT_ELIGIBLE instead of a misleading "not in this
+    // organization" error (QA BUG-2).
     if (assignmentKind === 'PRIMARY') {
       await assertEligibleOwner(this.prisma, organizationId, dto.userId);
     }
+    await this.repository.ensureUserInOrganization(organizationId, dto.userId);
     await this.assertAssignmentPermission(id, organizationId, dto, assignmentKind, user);
     await this.prisma.$transaction(async (transaction) => {
       const activeAssignment = await transaction.vacancyAssignment.findFirst({

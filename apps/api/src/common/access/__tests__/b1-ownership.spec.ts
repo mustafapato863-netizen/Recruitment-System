@@ -96,6 +96,9 @@ describe('B1 backfill classification', () => {
     [v(null, [a(u('adm', 'Active', ['ADMINISTRATOR']))]), 'PRIMARY_IS_ADMIN'],
     [v(null, [a(u('x', 'Inactive'))]), 'PRIMARY_INACTIVE'],
     [v(null, [a(u('r')), a(u('s'))]), 'MULTIPLE_PRIMARY_ASSIGNMENTS'],
+    // QA BUG-3: an admin from another org is reported as other-organization first.
+    [v(null, [a({ ...u('adm2', 'Inactive', ['ADMINISTRATOR']), organizationId: 'other-org' })]), 'PRIMARY_OTHER_ORGANIZATION'],
+    [v(null, [a({ ...u('o'), organizationId: 'other-org' })]), 'PRIMARY_OTHER_ORGANIZATION'],
   ])('classifies %#', (vacancy, expected) => {
     const result = classify(vacancy);
     expect(result.outcome === 'BACKFILLED' ? 'BACKFILLED' : result.reason).toBe(expected);

@@ -156,6 +156,20 @@ describe.skipIf(!url)('B1 follow-ups (scratch Postgres)', () => {
       await expect(interviews.getInterview(ORG, ids.interview, iv)).rejects.toThrow();
     });
 
+    it('GET /interviews/mine lists only my interviews, with no candidate file data (QA BUG-4)', async () => {
+      const mine = await interviews.listMyInterviews(ORG, ids.interviewer);
+      expect(mine.map((i) => i.id)).toEqual([ids.interview]);
+      const item = mine[0]!;
+      expect(Object.keys(item).sort()).toEqual(['id', 'interviewType', 'myResponse', 'room', 'scheduledEnd', 'scheduledStart', 'scorecard', 'status', 'timezone', 'title']);
+      expect(item).toMatchObject({ title: 'Technical Interview', room: { name: null, url: null }, scorecard: { submitted: false, submittedAt: null } });
+      expect(JSON.stringify(item)).not.toMatch(/B1F|cand-|applicationId|candidate/i);
+      expect(await interviews.listMyInterviews(ORG, ids.other)).toEqual([]);
+      // The route needs no permission beyond sign-in and has no file guard.
+      const handler = InterviewsController.prototype.listMyInterviews;
+      expect(Reflect.getMetadata('permissions', handler)).toBeUndefined();
+      expect(Reflect.getMetadata('TENANT_RESOURCE', handler)).toBeUndefined();
+    });
+
     it('non-attendees get 403 on RSVP and .ics; the owner keeps the full detail', async () => {
       const other = auth(ids.other, ['RECRUITER']);
       await expect(call(other, InterviewsController, 'getInterviewIcs', { id: ids.interview })).rejects.toBeInstanceOf(ForbiddenException);

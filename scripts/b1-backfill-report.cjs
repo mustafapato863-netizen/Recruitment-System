@@ -26,9 +26,10 @@ function classify(vacancy) {
   if (distinct.length === 0) return { outcome: 'NULL', reason: 'NO_PRIMARY_ASSIGNMENT' };
   if (distinct.length > 1) return { outcome: 'NULL', reason: 'MULTIPLE_PRIMARY_ASSIGNMENTS', candidates: distinct };
   const user = distinct[0];
+  // Other organization first: it is the most fundamental reason (QA BUG-3).
+  if (user.organizationId !== vacancy.organizationId) return { outcome: 'NULL', reason: 'PRIMARY_OTHER_ORGANIZATION', candidates: distinct };
   if (user.userRoles.some((ur) => ur.role.code === 'ADMINISTRATOR')) return { outcome: 'NULL', reason: 'PRIMARY_IS_ADMIN', candidates: distinct };
   if (user.status !== 'Active') return { outcome: 'NULL', reason: 'PRIMARY_INACTIVE', candidates: distinct };
-  if (user.organizationId !== vacancy.organizationId) return { outcome: 'NULL', reason: 'PRIMARY_OTHER_ORGANIZATION', candidates: distinct };
   return { outcome: 'NULL', reason: 'NOT_BACKFILLED_UNKNOWN', candidates: distinct };
 }
 
