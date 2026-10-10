@@ -16,7 +16,8 @@ export function isSeat(value: unknown): value is Seat {
  * PROVISIONAL role-code → seat map. Roadmap §3/§11: the full table waits for
  * the admin role export (backend step 0a); only ROLE_001 Recruiter-offshore →
  * Employee is confirmed. Everything else here is a best guess from the seed
- * role codes and must be replaced by `me.seat` (backend B0b).
+ * role codes. B10 #22 sends `me.seat`, which always wins; this table is only the dev fallback
+ * for an API without B10.
  */
 export const PROVISIONAL_ROLE_SEATS: Readonly<Record<string, Seat>> = {
   // Admin
@@ -53,8 +54,7 @@ type MeLike = Pick<UserProfile, 'roles' | 'permissions'> & { seat?: unknown };
 
 /**
  * The ONE place the frontend decides a seat.
- * TODO(B0b): when /auth/me returns `seat`, it is used as-is and the role map
- * above is deleted.
+ * `me.seat` from /auth/me (B10) is used as-is; the provisional table is the fallback.
  */
 export function resolveSeat(me: MeLike | null | undefined): Seat {
   if (!me) return 'employee';

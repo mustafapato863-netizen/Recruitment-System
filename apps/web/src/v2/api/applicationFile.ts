@@ -5,6 +5,7 @@
  * send components: []; screening never sends salary fields).
  */
 import { getApi, patchApi, postApi, putApi } from '../../api/client';
+import { isScorecardSubmitted } from '../../utils/scorecardStatus';
 import { stripPay } from './paySafety';
 import { JOINING_CHECK_TYPES, type JoiningCheckType } from './gates';
 
@@ -55,14 +56,14 @@ export interface InterviewItem {
 export interface ScorecardItem {
   id: string; interviewId: string; interviewerId: string; interviewerName?: string; overallRating: number;
   recommendation: Recommendation; strengths?: string | null; concerns?: string | null; notes?: string | null;
-  status?: 'Draft' | 'Submitted'; revision?: number; revisionReason?: string | null; isLocked: boolean; submittedAt: string;
+  status?: 'Draft' | 'Submitted'; revision?: number; revisionReason?: string | null; submittedAt: string;
 }
 export type Recommendation = 'Strong Hire' | 'Hire' | 'Neutral' | 'No Hire' | 'Strong No Hire';
 export const RECOMMENDATIONS: Recommendation[] = ['Strong Hire', 'Hire', 'Neutral', 'No Hire', 'Strong No Hire'];
 export type OfferStatus = 'Draft' | 'Pending Approval' | 'Approved' | 'Sent' | 'Accepted' | 'Declined' | 'Withdrawn' | 'Expired';
 /** OfferVersionItem minus pay (monthlyPackage, annualFixed, components). #11 adds status. */
 export interface OfferVersion {
-  id: string; versionNumber: number; status?: OfferStatus | 'Changes Requested'; approvalStatus: string; isLocked: boolean;
+  id: string; versionNumber: number; status?: OfferStatus | 'Changes Requested'; approvalStatus: string;
   contractType?: string | null; probationPeriod?: string | null; offerExpiry?: string | null; proposedJoiningDate?: string | null;
   workLocation?: string | null; workingSchedule?: string | null; createdAt: string;
   approvals?: Array<{ id: string; status: string; approverName?: string | null; roleCode?: string; decidedAt?: string | null; comment?: string | null }>;
@@ -173,7 +174,7 @@ export interface GateState { screenNote: boolean; scorecard: boolean; offerAccep
 export function gateState(f: ApplicationFile): GateState {
   const screenNote = f.screening.some((s) => Boolean(s.notes?.trim()));
   const live = new Set(f.interviews.filter((i) => i.status !== 'Cancelled').map((i) => i.id));
-  const scorecard = Object.entries(f.scorecards).some(([iid, list]) => live.has(iid) && list.some((s) => (s.status ?? (s.isLocked ? 'Submitted' : 'Draft')) === 'Submitted'));
+  const scorecard = Object.entries(f.scorecards).some(([iid, list]) => live.has(iid) && list.some(isScorecardSubmitted));
   const offerAccepted = f.offer?.status === 'Accepted' || Boolean(f.offer?.versions?.some((v) => v.status === 'Accepted'));
   const joining = JOINING_CHECK_TYPES.map((c) => ({ type: c.type, label: c.label, done: Boolean(f.joiningChecks.find((j) => j.type === c.type)?.verified) }));
   return { screenNote, scorecard, offerAccepted, joining };
