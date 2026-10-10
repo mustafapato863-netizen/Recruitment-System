@@ -154,3 +154,20 @@ export async function sweepDueDateReminders(
   }
   return sent;
 }
+
+/** E1: heartbeat for GET /me/work reminderWorkerHealthy (reuses service_heartbeats; no migration). */
+export const DUE_REMINDER_HEARTBEAT_SERVICE = 'due-reminders';
+
+export async function touchDueReminderHeartbeat(
+  prisma: Pick<PrismaClient, 'serviceHeartbeat'>,
+  now: Date,
+  intervalMs: number,
+  sent: number,
+): Promise<void> {
+  const data = { status: 'healthy', observedAt: now, metadata: { intervalMs, lastSent: sent } };
+  await prisma.serviceHeartbeat.upsert({
+    where: { service: DUE_REMINDER_HEARTBEAT_SERVICE },
+    create: { service: DUE_REMINDER_HEARTBEAT_SERVICE, ...data },
+    update: data,
+  });
+}

@@ -5,7 +5,7 @@ import { createOutboxProcessor } from './processor';
 import { assertOutboxEncryptionKey } from './outbox-crypto';
 import { createTransportFromEnv } from './transport';
 import { sweepStaleApplicants, sweepConsentExpiry } from './sweepers';
-import { dueReminderConfigFromEnv, sweepDueDateReminders } from './due-reminders';
+import { dueReminderConfigFromEnv, sweepDueDateReminders, touchDueReminderHeartbeat } from './due-reminders';
 
 const BATCH_SIZE = positiveInt(process.env.WORKER_BATCH_SIZE, 20, 100);
 const POLL_INTERVAL_MS = positiveInt(process.env.WORKER_POLL_INTERVAL_MS, 2_000, 60_000);
@@ -95,6 +95,8 @@ async function runSweeperLoop(): Promise<void> {
         sweepConsentExpiry(prisma),
         sweepDueDateReminders(prisma, new Date(), DUE_REMINDER_CONFIG),
       ]);
+      // E1: the reminder sweep completed; record it for reminderWorkerHealthy.
+      await touchDueReminderHeartbeat(prisma, new Date(), SWEEPER_INTERVAL_MS, reminders);
       if (nudges > 0 || expiries > 0 || reminders > 0) {
         console.log(`[sweeper] stale-nudges=${nudges} consent-expiries=${expiries} due-reminders=${reminders}`);
       }

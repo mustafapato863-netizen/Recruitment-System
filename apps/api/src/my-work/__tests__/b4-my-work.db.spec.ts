@@ -8,7 +8,7 @@ import { PrismaService } from '../../database/prisma.service';
 import { VacancyCoreService } from '../../vacancy-core/vacancy-core.service';
 import { PrismaVacancyCoreRepository } from '../../vacancy-core/prisma-vacancy-core.repository';
 import { MyWorkService } from '../my-work.service';
-import { sweepDueDateReminders } from '../../../../worker/src/due-reminders';
+import { sweepDueDateReminders, touchDueReminderHeartbeat } from '../../../../worker/src/due-reminders';
 
 const url = process.env.B4_TEST_DATABASE_URL;
 const ORG = '10000000-0000-4000-8000-000000000001';
@@ -113,6 +113,38 @@ describe.skipIf(!url)('B4 My Work, target chip and reminders (scratch Postgres)'
     const bossWork = await myWork.getMyWork(user(boss), NOW);
     expect(JSON.stringify(bossWork)).not.toContain(draft); // drafts stay the requester's
     expect(JSON.stringify(await myWork.getMyWork(user(ids.a!), NOW))).not.toContain(dueToday);
+  });
+
+  it('E1 (DB): candidate/stage on file items, department/site/owner on targets, ?day=tomorrow, worker heartbeat', async () => {
+    const { job } = await activated(ids.a!, '2031-04-30');
+    const cand = randomUUID();
+    await prisma.candidate.create({ data: { id: cand, organizationId: ORG, candidateCode: `E1-${tag}`, firstName: 'Ahmed', lastName: 'Embaby' } });
+    const app = await prisma.application.create({ data: { organizationId: ORG, applicationCode: `E1-${tag}`, vacancyId: job.id, candidateId: cand, stage: 'Interview', primaryRecruiterId: ids.a } });
+    await prisma.interview.create({ data: {
+      organizationId: ORG, interviewCode: `E1-${tag}`, applicationId: app.id, title: 'E1 interview', interviewType: 'Technical',
+      scheduledStart: new Date('2031-03-11T08:00:00Z'), scheduledEnd: new Date('2031-03-11T09:00:00Z'), locationUrl: 'https://meet.google.com/e1',
+      attendees: { create: [{ userId: ids.b! }, { userId: ids.a! }] },
+    } });
+    const tomorrow = await myWork.getMyWork(user(ids.a!), NOW, 'tomorrow');
+    expect(tomorrow.date).toBe('2031-03-11');
+    const item = tomorrow.dueToday.find((i) => i.type === 'interview')!;
+    expect(item).toMatchObject({
+      entity: { type: 'interview' }, applicationId: app.id, stage: 'Interview', candidate: { id: cand, name: 'Ahmed Embaby' },
+      room: { url: 'https://meet.google.com/e1', name: null }, startAt: '2031-03-11T08:00:00.000Z',
+    });
+    expect(item.interviewers!.map((p) => p.id).sort()).toEqual([ids.a, ids.b].sort());
+    expect(item.interviewer).toEqual(item.interviewers![0]);
+    const today = await myWork.getMyWork(user(ids.a!), NOW);
+    const target = today.targets.find((t) => t.vacancyId === job.id)!;
+    expect(target.owner).toEqual({ id: ids.a, name: 'B4 a' });
+    expect(target.site).toBeTruthy();
+    expect(target).toHaveProperty('department');
+
+    await prisma.serviceHeartbeat.deleteMany({ where: { service: 'due-reminders' } });
+    expect((await myWork.getMyWork(user(ids.a!), NOW)).reminderWorkerHealthy).toBe(false);
+    await touchDueReminderHeartbeat(prisma, new Date(NOW.getTime() - 60_000), 300_000, 0);
+    expect((await myWork.getMyWork(user(ids.a!), NOW)).reminderWorkerHealthy).toBe(true);
+    expect((await myWork.getMyWork(user(ids.a!), new Date(NOW.getTime() + 3_600_000))).reminderWorkerHealthy).toBe(false);
   });
 
   it('reminder worker: once per item/day, owner only, nothing for held/closed/cancelled', async () => {

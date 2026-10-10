@@ -1,4 +1,4 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Query, UseGuards } from '@nestjs/common';
 import type { AuthUser } from '@recruitflow/contracts';
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { MyWorkService } from './my-work.service';
@@ -13,7 +13,11 @@ export class MyWorkController {
   constructor(private readonly myWork: MyWorkService) {}
 
   @Get('work')
-  getMyWork(@CurrentUser() user: AuthUser) {
-    return this.myWork.getMyWork(user);
+  getMyWork(@CurrentUser() user: AuthUser, @Query('day') day?: string) {
+    // E1: day=today|tomorrow (Cairo days), default today.
+    if (day !== undefined && day !== 'today' && day !== 'tomorrow') {
+      throw new BadRequestException('day must be today or tomorrow');
+    }
+    return this.myWork.getMyWork(user, new Date(), day ?? 'today');
   }
 }

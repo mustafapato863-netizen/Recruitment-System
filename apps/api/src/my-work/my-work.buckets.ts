@@ -1,4 +1,13 @@
-import { buildTargetChip, type TargetChip } from '@recruitflow/contracts';
+import {
+  buildTargetChip,
+  type MyWorkAction,
+  type MyWorkDay,
+  type MyWorkEntityType,
+  type MyWorkItem,
+  type MyWorkItemType,
+  type MyWorkResponse,
+  type MyWorkWaitingOn,
+} from '@recruitflow/contracts';
 
 /**
  * B4 (v2 §7 My Work): pure bucketing so it can be tested with a frozen clock.
@@ -20,41 +29,43 @@ import { buildTargetChip, type TargetChip } from '@recruitflow/contracts';
  */
 export const MY_WORK_TIMEZONE = 'Africa/Cairo';
 
-export type WorkItemType = 'job' | 'requisition' | 'task' | 'interview' | 'scorecard' | 'offer';
-export type WaitingOn = 'approver' | 'interviewer' | 'candidate';
+export type WorkItemType = MyWorkItemType;
+export type WaitingOn = MyWorkWaitingOn;
+export type WorkItem = MyWorkItem;
+export type { MyWorkResponse };
 
-export interface WorkItem {
-  id: string;
-  type: WorkItemType;
-  title: string;
-  dueAt: string | null;
-  reason: string;
-  nextAction: { code: string; label: string };
-  entity: { type: string; id: string };
-  waitingOn?: WaitingOn;
-}
-
-export interface MyWorkResponse {
-  timezone: string;
-  today: string;
-  generatedAt: string;
-  counts: { overdue: number; today: number; waitingOnOthers: number };
-  overdue: WorkItem[];
-  dueToday: WorkItem[];
-  waitingOnOthers: WorkItem[];
-  targets: Array<TargetChip & { vacancyId: string; vacancyCode: string }>;
-  empty: boolean;
-  emptyMessage: string | null;
-}
+type Person = { id: string; name: string };
+type AppInfo = { applicationId: string; candidate: Person; stage: string };
 
 export interface MyWorkInput {
-  jobs: Array<{ id: string; code: string; title: string; status: string; joined: number; target: number; dueDate: string | null }>;
+  me?: string;
+  jobs: Array<{ id: string; code: string; title: string; status: string; joined: number; target: number; dueDate: string | null; department?: string | null; site?: string | null; owner?: Person | null }>;
   requisitions: Array<{ id: string; code: string; title: string; status: string; dueDate: string | null }>;
   tasks: Array<{ id: string; title: string; dueAt: Date | null; entityType: string | null; entityId: string | null }>;
-  interviews: Array<{ id: string; title: string; start: Date; end: Date; applicationId: string }>;
-  myMissingScorecards: Array<{ interviewId: string; title: string; end: Date }>;
-  othersMissingScorecards: Array<{ interviewId: string; title: string; end: Date; missing: number }>;
-  offers: Array<{ id: string; code: string; status: string; applicationId: string; updatedAt: Date }>;
+  interviews: Array<{ id: string; title: string; start: Date; end: Date; applicationId: string; roomUrl?: string | null; roomName?: string | null; interviewers?: Array<{ id: string | null; name: string }>; app?: AppInfo; iAmInterviewer?: boolean }>;
+  myMissingScorecards: Array<{ interviewId: string; title: string; end: Date; app?: AppInfo }>;
+  othersMissingScorecards: Array<{ interviewId: string; title: string; end: Date; missing: number; app?: AppInfo }>;
+  offers: Array<{ id: string; code: string; status: string; applicationId: string; updatedAt: Date; app?: AppInfo }>;
+  reminderWorkerHealthy?: boolean;
+}
+
+const ENTITY_MAP: Record<string, MyWorkEntityType> = {
+  application: 'application', interview: 'interview', offer: 'offer', requisition: 'requisition', vacancyrequest: 'requisition',
+  job: 'job', vacancy: 'job', task: 'task',
+};
+/** E1: free-form entity types (tasks) collapse to the fixed enum; unknown -> task. */
+export function toEntityType(raw: string | null | undefined): MyWorkEntityType {
+  return ENTITY_MAP[(raw ?? '').replace(/[^a-z]/gi, '').toLowerCase()] ?? 'task';
+}
+
+const act = (key: string, label: string, reason?: string): MyWorkAction => (reason ? { key, label, disabled: true, reason } : { key, label, disabled: false });
+const appFields = (app?: AppInfo) => (app ? { applicationId: app.applicationId, candidate: app.candidate, stage: app.stage } : {});
+
+/** Cairo date + n days, for a YYYY-MM-DD string. */
+export function addDays(date: string, n: number): string {
+  const d = new Date(`${date}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
 }
 
 export function cairoDate(now: Date): string {
@@ -68,16 +79,17 @@ function dayOf(value: Date | string): string {
 
 const iso = (value: Date | string | null): string | null => (value == null ? null : typeof value === 'string' ? value : value.toISOString());
 
-export function buildMyWork(input: MyWorkInput, now: Date): MyWorkResponse {
+export function buildMyWork(input: MyWorkInput, now: Date, day: MyWorkDay = 'today'): MyWorkResponse {
   const today = cairoDate(now);
+  const focus = day === 'tomorrow' ? addDays(today, 1) : today;
   const overdue: WorkItem[] = [];
   const dueToday: WorkItem[] = [];
   const waiting: WorkItem[] = [];
   const place = (item: WorkItem, due: Date | string | null) => {
     if (due == null) return;
-    const day = dayOf(due);
-    if (day < today) overdue.push(item);
-    else if (day === today) dueToday.push(item);
+    const d = dayOf(due);
+    if (d < today) overdue.push(item);
+    else if (d === focus) dueToday.push(item);
   };
 
   for (const job of input.jobs) {
@@ -85,40 +97,59 @@ export function buildMyWork(input: MyWorkInput, now: Date): MyWorkResponse {
     place({
       id: job.id, type: 'job', title: `${job.title} (${job.code})`, dueAt: job.dueDate,
       reason: `${job.joined} of ${job.target} seats filled`, nextAction: { code: 'review-applicants', label: 'Review applicants' },
-      entity: { type: 'Vacancy', id: job.id },
+      entity: { type: 'job', id: job.id },
+      actions: [act('review-applicants', 'Review applicants'), act('hold-job', 'Put on hold')],
     }, job.dueDate);
   }
 
   for (const req of input.requisitions) {
-    const base = { id: req.id, type: 'requisition' as const, title: `${req.title} (${req.code})`, dueAt: req.dueDate, entity: { type: 'VacancyRequest', id: req.id } };
+    const base = { id: req.id, type: 'requisition' as const, title: `${req.title} (${req.code})`, dueAt: req.dueDate, entity: { type: 'requisition' as const, id: req.id } };
     if (req.status === 'Pending Approval') {
-      waiting.push({ ...base, reason: 'Waiting for approval', nextAction: { code: 'view-requisition', label: 'View requisition' }, waitingOn: 'approver' });
+      waiting.push({ ...base, reason: 'Waiting for approval', nextAction: { code: 'view-requisition', label: 'View requisition' }, waitingOn: 'approver',
+        actions: [act('view-requisition', 'View requisition'), act('activate-requisition', 'Activate', 'Waiting for approval')] });
       continue;
     }
+    if (!['Draft', 'Changes Requested', 'Approved'].includes(req.status)) continue;
     const action = req.status === 'Approved'
       ? { code: 'activate-requisition', label: 'Activate' }
       : { code: 'submit-requisition', label: 'Submit for approval' };
-    if (!['Draft', 'Changes Requested', 'Approved'].includes(req.status)) continue;
     if (!req.dueDate) {
-      if (req.status === 'Draft') dueToday.push({ ...base, reason: 'Set a due date', nextAction: { code: 'set-due-date', label: 'Set due date' } });
+      if (req.status === 'Draft' && day === 'today') {
+        dueToday.push({ ...base, reason: 'Set a due date', nextAction: { code: 'set-due-date', label: 'Set due date' },
+          actions: [act('set-due-date', 'Set due date'), act('submit-requisition', 'Submit for approval', 'Set a due date first'), act('cancel-requisition', 'Cancel')] });
+      }
       continue;
     }
-    place({ ...base, reason: `Requisition ${req.status}`, nextAction: action }, req.dueDate);
+    place({ ...base, reason: `Requisition ${req.status}`, nextAction: action,
+      actions: [act(action.code, action.label), act('cancel-requisition', 'Cancel')] }, req.dueDate);
   }
 
   for (const task of input.tasks) {
+    const type = toEntityType(task.entityType);
     place({
       id: task.id, type: 'task', title: task.title, dueAt: iso(task.dueAt), reason: 'Task',
       nextAction: { code: 'complete-task', label: 'Complete task' },
-      entity: { type: task.entityType ?? 'Task', id: task.entityId ?? task.id },
+      entity: task.entityId && type !== 'task' ? { type, id: task.entityId } : { type: 'task', id: task.id },
+      actions: [act('complete-task', 'Complete task')],
     }, task.dueAt);
   }
 
   for (const interview of input.interviews) {
-    if (dayOf(interview.start) !== today) continue;
+    if (dayOf(interview.start) !== focus) continue;
+    const people = (interview.interviewers ?? []).map((p) => ({ id: p.id, name: p.name }));
+    const ended = interview.end <= now;
     dueToday.push({
-      id: interview.id, type: 'interview', title: interview.title, dueAt: iso(interview.start), reason: 'Interview today',
-      nextAction: { code: 'open-interview', label: 'Open interview' }, entity: { type: 'Application', id: interview.applicationId },
+      id: interview.id, type: 'interview', title: interview.title, dueAt: iso(interview.start),
+      reason: day === 'tomorrow' ? 'Interview tomorrow' : 'Interview today',
+      nextAction: { code: 'open-interview', label: 'Open interview' }, entity: { type: 'interview', id: interview.id },
+      startAt: interview.start.toISOString(), endAt: interview.end.toISOString(),
+      room: { name: interview.roomName ?? null, url: interview.roomUrl ?? null },
+      interviewer: people[0] ?? null, interviewers: people,
+      applicationId: interview.applicationId, ...appFields(interview.app),
+      actions: [
+        act('open-interview', 'Open interview'),
+        act('submit-scorecard', 'Submit scorecard', interview.iAmInterviewer === false ? 'You are not an interviewer on this interview' : ended ? undefined : 'Interview has not ended'),
+      ],
     });
   }
 
@@ -126,7 +157,8 @@ export function buildMyWork(input: MyWorkInput, now: Date): MyWorkResponse {
     if (sc.end > now) continue;
     place({
       id: sc.interviewId, type: 'scorecard', title: sc.title, dueAt: iso(sc.end), reason: 'Your scorecard is missing',
-      nextAction: { code: 'submit-scorecard', label: 'Submit scorecard' }, entity: { type: 'Interview', id: sc.interviewId },
+      nextAction: { code: 'submit-scorecard', label: 'Submit scorecard' }, entity: { type: 'interview', id: sc.interviewId },
+      ...appFields(sc.app), actions: [act('submit-scorecard', 'Submit scorecard')],
     }, sc.end);
   }
 
@@ -134,7 +166,9 @@ export function buildMyWork(input: MyWorkInput, now: Date): MyWorkResponse {
     if (sc.end > now || sc.missing <= 0) continue;
     waiting.push({
       id: sc.interviewId, type: 'scorecard', title: sc.title, dueAt: iso(sc.end), reason: `${sc.missing} scorecard(s) missing`,
-      nextAction: { code: 'open-interview', label: 'Open interview' }, entity: { type: 'Interview', id: sc.interviewId }, waitingOn: 'interviewer',
+      nextAction: { code: 'open-interview', label: 'Open interview' }, entity: { type: 'interview', id: sc.interviewId }, waitingOn: 'interviewer',
+      ...appFields(sc.app),
+      actions: [act('open-interview', 'Open interview'), act('move-to-offer', 'Move to Offer', 'Gate not met: scorecard not submitted')],
     });
   }
 
@@ -144,7 +178,12 @@ export function buildMyWork(input: MyWorkInput, now: Date): MyWorkResponse {
     waiting.push({
       id: offer.id, type: 'offer', title: `Offer ${offer.code}`, dueAt: null,
       reason: waitingOn === 'approver' ? 'Offer waiting for approval' : 'Offer waiting for the candidate',
-      nextAction: { code: 'open-offer', label: 'Open offer' }, entity: { type: 'Application', id: offer.applicationId }, waitingOn,
+      nextAction: { code: 'open-offer', label: 'Open offer' }, entity: { type: 'offer', id: offer.id }, waitingOn,
+      applicationId: offer.applicationId, ...appFields(offer.app),
+      actions: [
+        act('open-offer', 'Open offer'),
+        waitingOn === 'approver' ? act('send-offer', 'Send offer', 'Waiting for approval') : act('record-response', 'Record response'),
+      ],
     });
   }
 
@@ -153,12 +192,19 @@ export function buildMyWork(input: MyWorkInput, now: Date): MyWorkResponse {
 
   const targets = input.jobs
     .filter((job) => ['Open', 'Partially Filled'].includes(job.status))
-    .map((job) => ({ ...buildTargetChip({ title: job.title, filled: job.joined, target: job.target, dueDate: job.dueDate }), vacancyId: job.id, vacancyCode: job.code }));
+    .map((job) => ({
+      ...buildTargetChip({ title: job.title, filled: job.joined, target: job.target, dueDate: job.dueDate }),
+      vacancyId: job.id, vacancyCode: job.code,
+      department: job.department ?? null, site: job.site ?? null, owner: job.owner ?? null,
+    }));
 
-  const empty = overdue.length + dueToday.length + waiting.length + targets.length === 0;
+  // E1: targets are context, not work. No items -> empty, even with targets.
+  const empty = overdue.length + dueToday.length + waiting.length === 0;
   return {
     timezone: MY_WORK_TIMEZONE,
     today,
+    day,
+    date: focus,
     generatedAt: now.toISOString(),
     counts: { overdue: overdue.length, today: dueToday.length, waitingOnOthers: waiting.length },
     overdue,
@@ -167,5 +213,6 @@ export function buildMyWork(input: MyWorkInput, now: Date): MyWorkResponse {
     targets,
     empty,
     emptyMessage: empty ? 'No open work assigned to you.' : null,
+    reminderWorkerHealthy: input.reminderWorkerHealthy ?? false,
   };
 }
