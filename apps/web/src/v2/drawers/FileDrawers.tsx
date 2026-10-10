@@ -1,4 +1,5 @@
 import type React from 'react';
+import { isScorecardSubmitted } from '../../utils/scorecardStatus';
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { CircleCheck, Clock, Copy, ExternalLink, Info, ShieldCheck } from 'lucide-react';
@@ -189,7 +190,7 @@ export function ScorecardDrawer({ file, onClose, onDone, params }: DrawerProps) 
   const iv: InterviewItem | undefined = interviews.find((i) => i.id === interviewId);
   const cards = file.scorecards[interviewId] ?? [];
   const mine = cards.filter((c) => c.interviewerId === user?.id).sort((a, b) => (b.revision ?? 1) - (a.revision ?? 1))[0];
-  const submitted = mine && (mine.status ?? (mine.isLocked ? 'Submitted' : 'Draft')) === 'Submitted';
+  const submitted = isScorecardSubmitted(mine);
   const [form, setForm] = useState({ overallRating: mine?.overallRating ?? 0, recommendation: (mine?.recommendation ?? 'Hire') as Recommendation, strengths: mine?.strengths ?? '', concerns: mine?.concerns ?? '', notes: mine?.notes ?? '', reason: '' });
   const [revising, setRevising] = useState(false);
   const [errs, setErrs] = useState<Record<string, string>>({});
@@ -249,7 +250,7 @@ export function ScorecardDrawer({ file, onClose, onDone, params }: DrawerProps) 
   );
 }
 function ScorecardSummary({ card, own }: { card: ScorecardItem; own?: boolean }) {
-  const st = card.status ?? (card.isLocked ? 'Submitted' : 'Draft');
+  const st = isScorecardSubmitted(card) ? 'Submitted' : 'Draft';
   return (
     <section className="rf2-scard" aria-label={`Scorecard by ${own ? 'you' : card.interviewerName ?? 'interviewer'}`}>
       <header><strong>{own ? 'Your scorecard' : card.interviewerName ?? 'Interviewer'}</strong> <StatusChip tone={st === 'Submitted' ? 'success' : 'neutral'} label={st === 'Submitted' ? `Submitted${card.revision && card.revision > 1 ? ` · rev ${card.revision}` : ''}` : 'Draft'} /></header>

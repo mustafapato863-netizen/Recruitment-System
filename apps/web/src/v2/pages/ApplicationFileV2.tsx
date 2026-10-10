@@ -1,4 +1,5 @@
 import type React from 'react';
+import { isScorecardSubmitted } from '../../utils/scorecardStatus';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, CalendarDays, Check, CircleCheck, Clock, FileText, Minus, RotateCw, Send, Star, XCircle } from 'lucide-react';
@@ -217,7 +218,7 @@ function Timeline({ file, onScorecard }: { file: ApplicationFile; onScorecard: (
   for (const s of file.screening) rows.push({ at: s.screenedAt, title: `Screening logged${s.screenerName ? ` by ${s.screenerName}` : ''} — ${s.outcome}`, sub: s.notes ?? undefined });
   for (const i of file.interviews) {
     const cards = file.scorecards[i.id] ?? [];
-    const submitted = cards.filter((c) => (c.status ?? (c.isLocked ? 'Submitted' : 'Draft')) === 'Submitted').length;
+    const submitted = cards.filter(isScorecardSubmitted).length;
     rows.push({
       at: i.scheduledStart,
       title: `${i.title} — ${fmt(i.scheduledStart, true)}${i.status !== 'Scheduled' ? ` (${i.status})` : ''}`,
