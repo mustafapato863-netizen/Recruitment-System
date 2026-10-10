@@ -48,7 +48,7 @@ describe('interview workflow DTOs', () => {
     expect(invalid.some((error) => error.property === 'response')).toBe(true);
   });
 
-  it('validates meeting links as HTTP or HTTPS URLs', async () => {
+  it('leaves meeting-link rules to the service (B5 room URL allowlist), DTO only bounds the string', async () => {
     const valid = await validate(plainToInstance(CreateInterviewDto, {
       applicationId: '00000000-0000-4000-8000-000000000001',
       interviewType: 'Technical',
@@ -62,7 +62,8 @@ describe('interview workflow DTOs', () => {
     const invalid = await validate(plainToInstance(UpdateInterviewDto, {
       locationUrl: 'meet.example.com/interview',
     }));
-    expect(invalid.some((error) => error.property === 'locationUrl')).toBe(true);
+    // B5: https + allowlisted host is enforced by validateInterviewRoom (interview-rules.spec.ts).
+    expect(invalid.some((error) => error.property === 'locationUrl')).toBe(false);
 
     const selfScheduleWithoutInterviewer = await validate(plainToInstance(GenerateSelfScheduleDto, {
       applicationId: '00000000-0000-4000-8000-000000000001',

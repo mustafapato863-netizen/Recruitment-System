@@ -36,6 +36,7 @@ Table organizations {
   recruiterTargets recruiter_targets [not null]
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [not null]
+  gradeBands grade_bands [not null]
 }
 
 Table branches {
@@ -52,6 +53,7 @@ Table branches {
   vacancies vacancies [not null]
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [not null]
+  gradeBands grade_bands [not null]
 
   indexes {
     (organizationId, code) [unique]
@@ -107,6 +109,8 @@ Table users {
   taskReminders Boolean [not null, default: true]
   userRoles user_roles [not null]
   vacancyRequests vacancy_requests [not null]
+  assignedVacancyRequests vacancy_requests [not null]
+  vacancyStatusChanges vacancy_status_histories [not null]
   approvals vacancy_request_approvals [not null]
   assignments vacancy_assignments [not null]
   ownedVacancies vacancies [not null]
@@ -119,6 +123,7 @@ Table users {
   applicationNotes application_notes [not null]
   interviewAttendeeLinks interview_attendees [not null]
   submittedScorecards interview_scorecards [not null]
+  revisedScorecards interview_scorecards [not null]
   offerApprovals offer_approvals [not null]
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [not null]
@@ -134,6 +139,12 @@ Table users {
   createdCandidates candidates [not null]
   recruiterTargetsReceived recruiter_targets [not null]
   recruiterTargetsSet recruiter_targets [not null]
+  offerDecisions offer_version_decisions [not null]
+  filesReassignedFrom file_reassignments [not null]
+  filesReassignedTo file_reassignments [not null]
+  filesReassignedBy file_reassignments [not null]
+  joiningChecksVerified joining_checks [not null]
+  skillEvidenceAdded candidate_skill_evidence [not null]
 
   indexes {
     (organizationId, emailNormalized) [unique]
@@ -252,6 +263,15 @@ Table vacancy_requests {
   benefits String
   submittedAt DateTime
   approvalRevision Int [not null, default: 1]
+  gradeId String
+  grade master_data_values
+  departmentId String [note: 'M1: department from master data (category \'departments\').']
+  department master_data_values
+  assignedEmployeeId String
+  assignedEmployee users
+  activatedAt DateTime
+  cancelledAt DateTime
+  cancelReason String
   approvals vacancy_request_approvals [not null]
   vacancy vacancies
   createdAt DateTime [default: `now()`, not null]
@@ -288,7 +308,7 @@ Table vacancies {
   vacancyRequestId String [unique, not null]
   vacancyRequest vacancy_requests [not null]
   vacancyCode String [unique, not null]
-  status String [not null, default: 'Pending Activation']
+  status String [not null, default: 'Open']
   primaryRecruiterId String
   primaryRecruiter users
   approvedHeadcount Int [not null]
@@ -306,8 +326,10 @@ Table vacancies {
   benefits String
   assignments vacancy_assignments [not null]
   applications applications [not null]
+  statusHistory vacancy_status_histories [not null]
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [not null]
+  holdUntil DateTime [note: 'B3: optional hold-until date (data only; no auto-reopen)']
 }
 
 Table vacancy_assignments {
@@ -382,6 +404,9 @@ Table candidates {
   consentCapturedAt DateTime
   consentSource String
   skills String[] [not null]
+  emailNormalized String [note: 'B6: lower(trim(email)); written by the API (contact-keys.ts) and repaired at boot.']
+  phoneNormalized String [note: 'B6: E.164-ish phone (+digits), cc from env DEFAULT_PHONE_COUNTRY_CODE; written by the API, repaired at boot.']
+  skillLinks candidate_skills [not null]
   experienceYears Int
   location String
   certifications String[] [not null]
@@ -418,6 +443,7 @@ Table applications {
   primaryRecruiter users
   taskOwnerId String
   taskOwner users
+  rejectionReason String
   appliedAt DateTime [default: `now()`, not null]
   statusHistory application_status_histories [not null]
   screeningLogs screening_logs [not null]
@@ -427,10 +453,42 @@ Table applications {
   hiringCase hiring_cases
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [not null]
+  reassignments file_reassignments [not null]
+  followUpDate DateTime [note: 'B5 follow-up: owner-editable follow-up date (plain date, no timer).']
+  joiningChecks joining_checks [not null]
 
   indexes {
     (vacancyId, candidateId) [unique]
   }
+}
+
+Table due_date_reminders {
+  id String [pk]
+  organizationId String [not null]
+  entityType String [not null]
+  entityId String [not null]
+  kind String [not null]
+  reminderDate DateTime [not null]
+  recipientUserId String [not null]
+  notificationId String
+  createdAt DateTime [default: `now()`, not null]
+
+  indexes {
+    (entityType, entityId, kind, reminderDate, recipientUserId) [unique]
+  }
+}
+
+Table vacancy_status_histories {
+  id String [pk]
+  vacancyId String [not null]
+  vacancy vacancies [not null]
+  fromStatus String
+  toStatus String [not null]
+  reason String
+  holdUntil DateTime [note: 'B3: optional "hold until" given with a hold (data only, no auto-reopen)']
+  changedById String
+  changedBy users
+  createdAt DateTime [default: `now()`, not null]
 }
 
 Table application_status_histories {
@@ -490,6 +548,7 @@ Table candidate_documents {
   complianceRequirements compliance_requirements [not null]
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [not null]
+  joiningChecks joining_checks [not null]
 }
 
 Table screening_logs {
@@ -523,7 +582,8 @@ Table interviews {
   scheduledEnd DateTime [not null]
   timezone String [not null, default: 'UTC']
   locationUrl String
-  interviewerName String
+  legacyInterviewerName String
+  roomName String
   interviewerJobTitle String
   status String [not null, default: 'Scheduled']
   attendees interview_attendees [not null]
@@ -558,11 +618,19 @@ Table interview_scorecards {
   strengths String
   concerns String
   notes String
-  isLocked Boolean [not null, default: false]
-  submittedAt DateTime [default: `now()`, not null]
+  status String [not null, default: 'Draft']
+  revision Int [not null, default: 1]
+  previousRevisionId String [unique]
+  previousRevision interview_scorecards
+  nextRevision interview_scorecards
+  revisedById String
+  revisedBy users
+  revisionReason String
+  submittedAt DateTime [default: `now()`]
+  createdAt DateTime [default: `now()`, not null]
 
   indexes {
-    (interviewId, interviewerId) [unique]
+    (interviewId, interviewerId, revision) [unique]
   }
 }
 
@@ -595,11 +663,16 @@ Table offer_versions {
   workLocation String
   workingSchedule String
   approvalStatus String [not null, default: 'Draft']
-  isLocked Boolean [not null, default: false]
+  status String [not null, default: 'Draft']
   components offer_components [not null]
   approvals offer_approvals [not null]
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [not null]
+  decisions offer_version_decisions [not null]
+  sentChannel String [note: 'B5 follow-up: how the version was sent (channel email|whatsapp, template, who, when).']
+  sentTemplateId String
+  sentAt DateTime
+  sentById String
 
   indexes {
     (offerId, versionNumber) [unique]
@@ -616,6 +689,7 @@ Table offer_components {
   currency String
   frequency String
   isTaxable Boolean [not null, default: true]
+  supersededAt DateTime [note: 'B2-21: set when a manager decision replaces the version\'s pay; superseded rows are kept (no hard delete), never read as live pay.']
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [not null]
 }
@@ -893,8 +967,12 @@ Table master_data_values {
   metadata Json
   status String [not null, default: 'Active']
   version Int [not null, default: 1]
+  candidateSkills candidate_skills [not null]
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [default: `now()`, not null]
+  gradeRequests vacancy_requests [not null]
+  gradeBands grade_bands [not null]
+  departmentRequests vacancy_requests [not null]
 
   indexes {
     (organizationId, category, code) [unique]
@@ -926,6 +1004,118 @@ Table recruiter_targets {
   indexes {
     (organizationId, recruiterId, period, month) [unique]
   }
+}
+
+Table grade_bands {
+  id String [pk]
+  organizationId String [not null]
+  organization organizations [not null]
+  gradeId String [not null]
+  grade master_data_values [not null]
+  branchId String [not null]
+  branch branches [not null]
+  currency String [not null]
+  minMonthlyBase Decimal [not null]
+  maxMonthlyBase Decimal [not null]
+  status String [not null, default: 'Active']
+  version Int [not null, default: 1]
+  createdById String
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+
+  Note: 'B7: pay band per grade (master data "grades") + site (branch) + currency. Monthly BASE pay only;
+allowances are never part of the band check. Deactivate-only.'
+}
+
+Table offer_version_decisions {
+  id String [pk]
+  organizationId String [not null]
+  offerVersionId String [not null]
+  offerVersion offer_versions [not null]
+  decision String [not null]
+  fromStatus String [not null]
+  toStatus String [not null]
+  reason String
+  decidedById String [not null]
+  decidedBy users [not null]
+  gradeBandId String
+  createdAt DateTime [default: `now()`, not null]
+
+  Note: 'B7: a manager\'s decision on an offer version, taken from within the file.'
+}
+
+Table file_reassignments {
+  id String [pk]
+  organizationId String [not null]
+  applicationId String [not null]
+  application applications [not null]
+  fromUserId String
+  fromUser users
+  toUserId String [not null]
+  toUser users [not null]
+  reason String [not null]
+  reassignedById String [not null]
+  reassignedBy users [not null]
+  batchId String [not null]
+  createdAt DateTime [default: `now()`, not null]
+
+  Note: 'B7: owner change on an open file (application), with reason. One row per file moved.'
+}
+
+Table joining_checks {
+  id String [pk]
+  applicationId String [not null]
+  application applications [not null]
+  type String [not null]
+  verified Boolean [not null, default: false]
+  verifiedById String
+  verifiedBy users
+  verifiedAt DateTime
+  documentId String
+  document candidate_documents
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+
+  indexes {
+    (applicationId, type) [unique]
+  }
+
+  Note: 'B5 follow-up: typed joining checks read by gate 4 (Pre-Hire -> Joined). type: ID | CONTRACT | SCFHS_LICENCE.'
+}
+
+Table candidate_skills {
+  id String [pk]
+  organizationId String [not null]
+  candidateId String [not null]
+  candidate candidates [not null]
+  skillId String [not null]
+  skill master_data_values [not null]
+  evidence candidate_skill_evidence [not null]
+  createdAt DateTime [default: `now()`, not null]
+
+  indexes {
+    (candidateId, skillId) [unique]
+  }
+
+  Note: 'B6: a candidate\'s skill, linked to the skill library (master data, category "skills").'
+}
+
+Table candidate_skill_evidence {
+  id String [pk]
+  candidateSkillId String [not null]
+  candidateSkill candidate_skills [not null]
+  sourceType String [not null]
+  sourceRef String
+  snippet String
+  addedById String
+  addedBy users
+  createdAt DateTime [default: `now()`, not null]
+
+  indexes {
+    (candidateSkillId, sourceType, sourceRef) [unique]
+  }
+
+  Note: 'B6: evidence for a candidate skill. sourceType: CV_TEXT | SCREENING_NOTE | SCORECARD | IMPORT | MANUAL.'
 }
 
 Ref: branches.organizationId > organizations.id [delete: Restrict]
@@ -962,6 +1152,12 @@ Ref: vacancy_requests.positionId > positions.id [delete: Restrict]
 
 Ref: vacancy_requests.requesterId > users.id [delete: Restrict]
 
+Ref: vacancy_requests.gradeId > master_data_values.id [delete: Restrict]
+
+Ref: vacancy_requests.departmentId > master_data_values.id [delete: Restrict]
+
+Ref: vacancy_requests.assignedEmployeeId > users.id [delete: Restrict]
+
 Ref: vacancy_request_approvals.vacancyRequestId > vacancy_requests.id [delete: Restrict]
 
 Ref: vacancy_request_approvals.assigneeUserId > users.id [delete: Restrict]
@@ -993,6 +1189,10 @@ Ref: applications.candidateId > candidates.id [delete: Restrict]
 Ref: applications.primaryRecruiterId > users.id [delete: Restrict]
 
 Ref: applications.taskOwnerId > users.id [delete: Restrict]
+
+Ref: vacancy_status_histories.vacancyId > vacancies.id [delete: Restrict]
+
+Ref: vacancy_status_histories.changedById > users.id [delete: Restrict]
 
 Ref: application_status_histories.applicationId > applications.id [delete: Restrict]
 
@@ -1029,6 +1229,10 @@ Ref: interview_attendees.userId > users.id [delete: Restrict]
 Ref: interview_scorecards.interviewId > interviews.id [delete: Restrict]
 
 Ref: interview_scorecards.interviewerId > users.id [delete: Restrict]
+
+Ref: interview_scorecards.previousRevisionId - interview_scorecards.id [delete: Restrict]
+
+Ref: interview_scorecards.revisedById > users.id [delete: Restrict]
 
 Ref: offers.organizationId > organizations.id [delete: Restrict]
 
@@ -1103,3 +1307,35 @@ Ref: recruiter_targets.organizationId > organizations.id [delete: Restrict]
 Ref: recruiter_targets.recruiterId > users.id [delete: Restrict]
 
 Ref: recruiter_targets.setById > users.id [delete: Restrict]
+
+Ref: grade_bands.organizationId > organizations.id [delete: Restrict]
+
+Ref: grade_bands.gradeId > master_data_values.id [delete: Restrict]
+
+Ref: grade_bands.branchId > branches.id [delete: Restrict]
+
+Ref: offer_version_decisions.offerVersionId > offer_versions.id [delete: Cascade]
+
+Ref: offer_version_decisions.decidedById > users.id [delete: Restrict]
+
+Ref: file_reassignments.applicationId > applications.id [delete: Cascade]
+
+Ref: file_reassignments.fromUserId > users.id [delete: Restrict]
+
+Ref: file_reassignments.toUserId > users.id [delete: Restrict]
+
+Ref: file_reassignments.reassignedById > users.id [delete: Restrict]
+
+Ref: joining_checks.applicationId > applications.id [delete: Cascade]
+
+Ref: joining_checks.verifiedById > users.id [delete: Set Null]
+
+Ref: joining_checks.documentId > candidate_documents.id [delete: Set Null]
+
+Ref: candidate_skills.candidateId > candidates.id [delete: Cascade]
+
+Ref: candidate_skills.skillId > master_data_values.id [delete: Restrict]
+
+Ref: candidate_skill_evidence.candidateSkillId > candidate_skills.id [delete: Cascade]
+
+Ref: candidate_skill_evidence.addedById > users.id [delete: Restrict]

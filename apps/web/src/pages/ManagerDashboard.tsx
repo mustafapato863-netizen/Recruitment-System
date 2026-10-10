@@ -279,7 +279,7 @@ export function ManagerDashboard() {
       }
 
       const mappedVacancies: OpenVacancyOption[] = loadedVacancies
-        .filter((v) => v.status === 'Open' || v.status === 'Pending Activation')
+        .filter((v) => v.status === 'Open')
         .map((v) => {
         const title = v.title || v.position?.title || 'No position';
         const department = (v as unknown as { department?: string }).department || v.branch?.name || 'Operations';
@@ -294,7 +294,7 @@ export function ManagerDashboard() {
           title,
           department,
           location,
-          status: v.status === 'Pending Activation' ? 'Pending Activation' : 'Open',
+          status: 'Open',
           currentRecruiter: recruiter,
           currentRecruiterId: recruiterId,
           targetHires,
