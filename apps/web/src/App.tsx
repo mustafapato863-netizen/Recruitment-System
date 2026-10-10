@@ -35,7 +35,7 @@ const CreateVacancyRequestPage = lazy(() => import('./pages/CreateVacancyRequest
 const VacancyRequestDetailPage = lazy(() => import('./pages/VacancyRequestDetailPage').then((m) => ({ default: m.VacancyRequestDetailPage })));
 const ApprovalInboxPage = lazy(() => import('./pages/ApprovalInboxPage').then((m) => ({ default: m.ApprovalInboxPage })));
 const JobAnalyticsPage = lazy(() => import('./pages/JobAnalyticsPage').then((m) => ({ default: m.JobAnalyticsPage })));
-const CandidatesPage = lazy(() => import('./pages/CandidatesPage').then((m) => ({ default: m.CandidatesPage })));
+const CandidatesListRoute = lazy(() => import('./v2/pages/CandidatesRoute').then((m) => ({ default: m.CandidatesListRoute })));
 const CVBankPage = lazy(() => import('./pages/CVBankPage').then((m) => ({ default: m.CVBankPage })));
 const CandidateDetailPage = lazy(() => import('./pages/CandidateDetailPage').then((m) => ({ default: m.CandidateDetailPage })));
 const CandidateDocumentsPage = lazy(() => import('./pages/CandidateDocumentsPage').then((m) => ({ default: m.CandidateDocumentsPage })));
@@ -67,7 +67,7 @@ const NotificationsPage = lazy(() => import('./pages/NotificationsPage').then((m
 const ProfilePage = lazy(() => import('./pages/ProfilePage').then((m) => ({ default: m.ProfilePage })));
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then((m) => ({ default: m.SettingsPage })));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage').then((m) => ({ default: m.NotFoundPage })));
-const CandidateComparisonPage = lazy(() => import('./pages/CandidateComparisonPage').then((m) => ({ default: m.CandidateComparisonPage })));
+const CandidatesCompareRoute = lazy(() => import('./v2/pages/CandidatesRoute').then((m) => ({ default: m.CandidatesCompareRoute })));
 const ApplicantPortalPage = lazy(() => import('./pages/ApplicantPortalPage').then((m) => ({ default: m.ApplicantPortalPage })));
 const SeatShellSwitch = lazy(() => import('./layout/SeatShellSwitch').then((m) => ({ default: m.SeatShellSwitch })));
 
@@ -147,8 +147,8 @@ function App() {
                   <Route path="/vacancies/:id/analytics" element={<PermissionGate requiredPermission="VACANCY_VIEW"><JobAnalyticsPage /></PermissionGate>} />
 
                   {/* Talent */}
-                  <Route path="/candidates" element={<PermissionGate requiredPermission="CANDIDATE_VIEW"><CandidatesPage /></PermissionGate>} />
-                  <Route path="/candidates/compare" element={<PermissionGate requiredPermission="CANDIDATE_VIEW"><CandidateComparisonPage /></PermissionGate>} />
+                  <Route path="/candidates" element={<PermissionGate requiredPermission="CANDIDATE_VIEW"><CandidatesListRoute /></PermissionGate>} />
+                  <Route path="/candidates/compare" element={<PermissionGate requiredPermission="CANDIDATE_VIEW"><CandidatesCompareRoute /></PermissionGate>} />
                   <Route path="/candidates/:id" element={<PermissionGate requiredPermission="CANDIDATE_VIEW"><CandidateDetailPage /></PermissionGate>} />
                   <Route path="/candidates/:id/documents" element={<PermissionGate requiredPermission="CANDIDATE_VIEW"><CandidateDocumentsPage /></PermissionGate>} />
                   <Route path="/cv-bank" element={<PermissionGate requiredPermission="CANDIDATE_VIEW"><CVBankPage /></PermissionGate>} />

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { DragDropProvider, useDraggable, useDroppable, type DragEndEvent } from '@dnd-kit/react';
-import { ArrowRight, CircleX, Clock, MoveRight, Pause, Play, RotateCw, Upload } from 'lucide-react';
+import { ArrowRight, CircleX, Clock, MoveRight, Pause, Play, RotateCw, Sparkles, Upload } from 'lucide-react';
 import { ButtonV2, EmptyStateV2, ForbiddenStateV2, SkeletonV2, StatusChip } from '../../components/v2';
 import { patchApi } from '../../api/client';
 import {
@@ -11,6 +11,7 @@ import {
 import { GATE_COPY, type GateCode } from '../api/gates';
 import { JobStatusDrawer } from '../drawers/JobStatusDrawer';
 import { ImportCvsDrawer } from '../drawers/ImportCvsDrawer';
+import { SuggestDrawer } from '../drawers/SuggestDrawer';
 import { STATUS_LABEL, STATUS_TONE, formatDay } from './OpenJobsV2';
 import './jobs.css';
 
@@ -110,6 +111,7 @@ export function JobPipelineV2() {
           <div className="rf2-jobhead__actions">
             {actions.includes('reopen') ? <ButtonV2 kind="tertiary" icon={<Play />} onClick={() => setDrawer('status')}>Reopen job</ButtonV2>
               : actions.length ? <ButtonV2 kind="tertiary" icon={<Pause />} onClick={() => setDrawer('status')}>Hold job</ButtonV2> : null}
+            <ButtonV2 kind="secondary" icon={<Sparkles />} onClick={() => setDrawer('suggest')}>Suggest from bank</ButtonV2>
             <ButtonV2 icon={<Upload />} onClick={() => setDrawer('import')} disabled={!accepting} aria-describedby={accepting ? undefined : 'import-why'}>Import CVs</ButtonV2>
             {!accepting ? <span id="import-why" className="rf2-sr-only">{job.status === 'On Hold' ? 'A held job takes no new applications.' : `A ${STATUS_LABEL[job.status].toLowerCase()} job takes no new applications.`}</span> : null}
           </div>
@@ -151,6 +153,7 @@ export function JobPipelineV2() {
       {closedOpen ? <ClosedFiles id="closed-files" vacancyId={job.id} /> : null}
 
       {drawer === 'status' ? <JobStatusDrawer job={job} onClose={() => setDrawer(null)} onDone={() => { setDrawer(null); reload(); }} /> : null}
+      {drawer === 'suggest' ? <SuggestDrawer job={job} accepting={accepting} onClose={() => setDrawer(null)} onAdded={reload} /> : null}
       {drawer === 'import' ? <ImportCvsDrawer job={job} onClose={() => setDrawer(null)} onDone={() => { setDrawer(null); reload(); }} /> : null}
     </div>
   );
