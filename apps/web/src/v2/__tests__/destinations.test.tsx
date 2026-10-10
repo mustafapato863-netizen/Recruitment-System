@@ -77,3 +77,11 @@ describe('v2 default: every v1 URL redirects to its v2 equivalent', () => {
     expect(v2Redirect('employee', '/offers/o1', o)).toBe('/my-interviews');
   });
 });
+
+describe('PR33-5: no applicant portal in the staff app', () => {
+  it.each(['/portal', '/portal/applications/a1', '/my-applications'])('%s goes to the seat home', (path) => {
+    expect(v2Redirect('employee', path)).toBe('/my-work');
+    expect(v2Redirect('manager', path)).toBe('/my-work');
+    expect(v2Redirect('admin', path)).toBe('/users');
+  });
+});

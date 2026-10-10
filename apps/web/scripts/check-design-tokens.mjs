@@ -27,9 +27,7 @@ const legacyPaletteBaseline = 10420;
 // 2026-09-17 (76 total). New strict-boundary files must be clean, and these
 // files must not gain new violations. Migrate them to rf-* tokens per the
 // burn-down plan, then remove them from this list.
-const grandfatheredStrictFiles = {
-  'src/components/ui/Drawer.tsx': 3,
-};
+const grandfatheredStrictFiles = {};
 
 
 function collectFiles(path) {
