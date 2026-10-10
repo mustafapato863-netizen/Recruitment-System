@@ -125,6 +125,7 @@ model User {
   vacancyStatusChanges     VacancyStatusHistory[]     @relation("VacancyStatusChanges")
   approvals                VacancyRequestApproval[]   @relation("ApprovalAssignee")
   assignments              VacancyAssignment[]
+  ownedVacancies           Vacancy[]                  @relation("VacancyPrimaryRecruiter")
   primaryApplications      Application[]              @relation("ApplicationPrimaryRecruiter")
   taskApplications         Application[]              @relation("ApplicationTaskOwner")
   applicationStageChanges  ApplicationStatusHistory[]
@@ -224,6 +225,8 @@ model Permission {
   description    String?
   organizationId String?          @db.Uuid
   organization   Organization?    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  /// B2: Active | Inactive | Retired. Only Active permissions are effective.
+  status         String           @default("Active") @db.VarChar(30)
   roleLinks      RolePermission[]
   createdAt      DateTime         @default(now()) @db.Timestamptz(6)
   updatedAt      DateTime         @updatedAt @db.Timestamptz(6)
@@ -337,6 +340,10 @@ model Vacancy {
   vacancyCode        String                 @unique @db.VarChar(50)
   // B3: Open | On Hold | Partially Filled | Filled | Closed (see vacancy-lifecycle.ts)
   status             String                 @default("Open") @db.VarChar(40)
+  // B1: the single job owner. Never an ADMINISTRATOR or inactive user
+  // (enforced in the API). Nullable: unowned jobs stay null until assigned.
+  primaryRecruiterId String?                @db.Uuid
+  primaryRecruiter   User?                  @relation("VacancyPrimaryRecruiter", fields: [primaryRecruiterId], references: [id], onDelete: Restrict)
   approvedHeadcount  Int
   joinedHeadcount    Int                    @default(0)
   openedAt           DateTime?              @db.Timestamptz(6)
@@ -358,6 +365,7 @@ model Vacancy {
 
   @@index([organizationId, status])
   @@index([branchId, positionId, openedAt])
+  @@index([primaryRecruiterId])
   @@map("vacancies")
   holdUntil          DateTime?              @db.Date /// B3: optional hold-until date (data only; no auto-reopen)
 }
@@ -446,6 +454,8 @@ model Candidate {
   languages             String[]              @default([]) @db.VarChar(50)
   availability          String?               @db.VarChar(60)
   metadata              Json?
+  /// B2: set once by the admin-only legal-erasure anonymize action (irreversible).
+  anonymizedAt          DateTime?             @db.Timestamptz(6)
   applications          Application[]
   createdById           String?               @db.Uuid
   createdBy             User?                 @relation("CandidateCreator", fields: [createdById], references: [id], onDelete: SetNull)
@@ -595,6 +605,8 @@ model CandidateDocument {
   deletedById            String?                 @db.Uuid
   deletedBy              User?                   @relation("DocumentDeleter", fields: [deletedById], references: [id], onDelete: Restrict)
   deletionReason         String?                 @db.Text
+  /// B2: file bytes removed and metadata scrubbed by candidate anonymize.
+  anonymizedAt           DateTime?               @db.Timestamptz(6)
   uploadedById           String?                 @db.Uuid
   uploadedBy             User?                   @relation(fields: [uploadedById], references: [id], onDelete: Restrict)
   complianceRequirements ComplianceRequirement[]
@@ -889,6 +901,8 @@ model TalentPoolCandidate {
   consentExpiry   DateTime?  @db.Timestamptz(6)
   source          String?    @db.VarChar(100)
   addedAt         DateTime   @default(now()) @db.Timestamptz(6)
+  /// B2: soft unlink. Removing a candidate from a pool sets this; re-adding clears it.
+  removedAt       DateTime?  @db.Timestamptz(6)
 
   @@unique([talentPoolId, candidateId])
   @@index([candidateId])

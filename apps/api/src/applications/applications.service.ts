@@ -3,6 +3,7 @@ import { assertJobAcceptsApplications, recordJoin } from '../vacancy-core/vacanc
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
   Logger,
@@ -28,6 +29,7 @@ import { EmailOutboxService } from '../email/email-outbox.service';
 import { AccessControlService } from '../access-control/access-control.service';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import { EmailTemplatesService } from '../email-templates/email-templates.service';
+import { assertEligibleOwner } from '../common/access/file-access';
 import type {
   ApplicationQueryDto,
   CreateApplicationDto,
@@ -294,8 +296,9 @@ export class ApplicationsService {
     const policy = user
       ? await this.accessControl.getUserEffectiveScope(organizationId, user.userId, user.roleCodes)
       : null;
+    // Read-only file view: also open to the current offer/final-hire approver (B1 follow-up).
     const visibility = user
-      ? await this.accessControl.getApplicationVisibilityWhere(user)
+      ? await this.accessControl.getApplicationReadVisibilityWhere(user)
       : { organizationId };
     const application = await this.prisma.application.findFirst({
       where: { AND: [visibility, { id }] },
@@ -520,6 +523,11 @@ export class ApplicationsService {
       throw new NotFoundException(`Candidate ${dto.candidateId} was not found.`);
     }
 
+    // B1: an administrator or inactive user can never own a file.
+    for (const ownerId of new Set([dto.primaryRecruiterId, dto.taskOwnerId].filter((id): id is string => Boolean(id)))) {
+      await assertEligibleOwner(this.prisma, organizationId, ownerId);
+    }
+
     const relatedUserIds = [dto.primaryRecruiterId, dto.taskOwnerId].filter(
       (id): id is string => Boolean(id),
     );
@@ -563,7 +571,8 @@ export class ApplicationsService {
           candidateId: dto.candidateId,
           stage: 'Applied',
           source: dto.source?.trim() ?? candidate.source ?? null,
-          primaryRecruiterId: dto.primaryRecruiterId ?? null,
+          // Default the file owner to the job owner (B1); never an admin.
+          primaryRecruiterId: dto.primaryRecruiterId ?? vacancy.primaryRecruiterId ?? null,
           taskOwnerId: dto.taskOwnerId ?? null,
         },
         include: {
@@ -733,6 +742,17 @@ export class ApplicationsService {
     user?: AuthUser,
   ): Promise<Application> {
     await this.getApplication(organizationId, id, user);
+
+    // B1: Admin never owns or reassigns files (reassignment proper is B7).
+    if ((dto.primaryRecruiterId !== undefined || dto.taskOwnerId !== undefined) && user && this.accessControl) {
+      const profile = await this.accessControl.getAccessProfile(user);
+      if (profile.isAdmin) {
+        throw new ForbiddenException({ code: 'ADMIN_CANNOT_REASSIGN', message: 'Administrators cannot assign or reassign file owners.' });
+      }
+    }
+    for (const ownerId of [dto.primaryRecruiterId, dto.taskOwnerId]) {
+      if (ownerId) await assertEligibleOwner(this.prisma, organizationId, ownerId);
+    }
 
     const updateData: Prisma.ApplicationUpdateInput = {};
 

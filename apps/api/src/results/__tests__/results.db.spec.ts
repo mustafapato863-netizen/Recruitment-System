@@ -28,7 +28,9 @@ describe.skipIf(!url)('B8 /results (scratch Postgres)', () => {
     const jobs = await prisma.vacancy.findMany({ where: { organizationId: ORG, status: { not: 'Closed' } }, take: 2, orderBy: { vacancyCode: 'asc' } });
     job = jobs[0]!.id; otherJob = jobs[1]!.id;
     await prisma.vacancy.update({ where: { id: job }, data: { approvedHeadcount: 3 } });
+    await prisma.vacancyAssignment.updateMany({ where: { vacancyId: job, assignmentKind: 'PRIMARY', isActive: true }, data: { isActive: false } });
     await prisma.vacancyAssignment.create({ data: { vacancyId: job, userId: u.r1, roleCode: 'RECRUITER', assignmentKind: 'PRIMARY', isActive: true } });
+    await prisma.vacancy.update({ where: { id: job }, data: { primaryRecruiterId: u.r1 } as never });
     const mkCand = async (i: number | string) => (await prisma.candidate.create({ data: { organizationId: ORG, candidateCode: `R8-${tag}-${i}`, firstName: 'R8', lastName: `C${i}` } })).id;
     const apps: string[] = [];
     for (let i = 0; i < 6; i += 1) {

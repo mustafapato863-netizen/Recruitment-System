@@ -30,7 +30,15 @@ describe.skipIf(!url)('B5 follow-ups: offer Draft/submit/send, approver note + g
   const queued: Array<Record<string, unknown>> = [];
   const outbox = { enqueueWithTx: async (_tx: unknown, input: Record<string, unknown>) => { queued.push(input); } };
   const visibleOnly: { ids: string[] | null } = { ids: null };
-  const access = { getApplicationVisibilityWhere: async (u: { organizationId: string }) => ({ organizationId: u.organizationId, ...(visibleOnly.ids ? { id: { in: visibleOnly.ids } } : {}) }) };
+  const visibility = async (u: { organizationId: string }) => ({ organizationId: u.organizationId, ...(visibleOnly.ids ? { id: { in: visibleOnly.ids } } : {}) });
+  // B11 integration: B1's AccessControlService adds read-visibility and assertApplicationAccess; the stub mirrors them.
+  const access = {
+    getApplicationVisibilityWhere: visibility,
+    getApplicationReadVisibilityWhere: visibility,
+    assertApplicationAccess: async (u: { organizationId: string }, id: string) => {
+      if (visibleOnly.ids && !visibleOnly.ids.includes(id)) throw Object.assign(new Error('Forbidden'), { status: 403 });
+    },
+  };
   const notifications = { create: async () => undefined };
   const user = (userId: string, roleCodes = ['RECRUITER']) => ({ userId, organizationId: ORG, tokenVersion: 0, roleCodes });
   let gradeId = '';

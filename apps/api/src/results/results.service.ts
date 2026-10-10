@@ -49,7 +49,8 @@ export class ResultsService {
 
     // 2) Access scope of the caller, ANDed with every filter (never replaced).
     const appScope = await this.access.getApplicationVisibilityWhere(user);
-    const jobScope = await this.access.getVacancyVisibilityWhere(user);
+    // B1: jobs in the caller's scope (others' jobs are in scope, just redacted); files carry their own visibility.
+    const jobScope = await this.access.getVacancyScopeWhere(user);
     const jobFilter: Prisma.VacancyWhereInput[] = [jobScope, { organizationId: org }];
     if (query.vacancyId) jobFilter.push({ id: query.vacancyId });
     const fileWhere = (extra: Prisma.ApplicationWhereInput): Prisma.ApplicationWhereInput => ({
@@ -60,9 +61,9 @@ export class ResultsService {
     const today = cairoToday(now);
     const monthName = new Date(`${range.month}-15T12:00:00Z`).toLocaleString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 
-    // Seats: joins this month on jobs the people own, against those jobs' targets. TODO(B1): Vacancy.primaryRecruiterId.
+    // Seats: joins this month on jobs the people own, against those jobs' targets. Owner = Vacancy.primaryRecruiterId (B1).
     const jobs = await this.prisma.vacancy.findMany({
-      where: { AND: [...jobFilter, { assignments: { some: { userId: { in: subjects }, isActive: true, assignmentKind: 'PRIMARY' } } }, { OR: [{ openedAt: null }, { openedAt: { lt: to } }] }, { OR: [{ status: { not: 'Closed' } }, { updatedAt: { gte: from } }] }] },
+      where: { AND: [...jobFilter, { primaryRecruiterId: { in: subjects } }, { OR: [{ openedAt: null }, { openedAt: { lt: to } }] }, { OR: [{ status: { not: 'Closed' } }, { updatedAt: { gte: from } }] }] },
       select: { id: true, approvedHeadcount: true },
     });
     const joined = jobs.length ? await this.prisma.applicationStatusHistory.count({
