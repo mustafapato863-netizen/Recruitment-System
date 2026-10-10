@@ -296,7 +296,7 @@ describe('M1 CoS follow-ups', () => {
     expect(within(d).getByRole('button', { name: 'Activate job' })).toBeEnabled();
     expect(within(d).queryByRole('button', { name: /Submit for approval/ })).toBeNull();
   });
-  it('B2F-6: cancel uses the close-reasons list; "Other" needs a note and goes as "Other: <note>"', async () => {
+  it('B2F-6 / #23 2d76bdd: cancel sends {reason: close-list value, note} — "Other" needs a note; no "Other: text" string', async () => {
     const u = userEvent.setup();
     serve({ '/master-data/catalog/close-reasons': [{ id: 'c1', name: 'Budget cut', status: 'Active' }, { id: 'c2', name: 'Other', status: 'Active' }, { id: 'c3', name: 'Old', status: 'Archived' }] });
     api.postApi.mockResolvedValue({ request: { id: 'r412', status: 'Cancelled' }, closedJob: true, rejectedApplications: 0 });
@@ -312,7 +312,7 @@ describe('M1 CoS follow-ups', () => {
     await u.type(within(d).getByLabelText(/^Say why/), 'Merged into REQ-9');
     await u.click(within(d).getByRole('button', { name: 'Cancel requisition' }));
     await u.click(within(d).getByRole('button', { name: /Confirm cancel/ }));
-    await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/vacancy-requests/r412/cancel', { reason: 'Other: Merged into REQ-9' }));
+    await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/vacancy-requests/r412/cancel', { reason: 'Other', note: 'Merged into REQ-9' }));
   });
 });
 
