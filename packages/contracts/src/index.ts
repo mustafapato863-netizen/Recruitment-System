@@ -1877,6 +1877,9 @@ export interface MyWorkItem {
   room?: { name: string | null; url: string | null };
   interviewer?: MyWorkPerson | null;
   interviewers?: MyWorkPerson[];
+  /** C6: offers waiting on approval: who it waits on (first pending approver, and all of them). */
+  approver?: MyWorkPerson | null;
+  approvers?: MyWorkPerson[];
   /** Application-linked items (interviews, scorecards, offers). */
   applicationId?: string;
   candidate?: { id: string; name: string };

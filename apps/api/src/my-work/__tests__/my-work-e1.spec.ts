@@ -145,4 +145,19 @@ describe('E1 GET /me/work?day=', () => {
     expect(calls).toEqual(['today', 'tomorrow']);
     expect(() => c.getMyWork(u, 'yesterday')).toThrow(/today or tomorrow/);
   });
+
+  it('C6: offers waiting on approval name the approver', () => {
+    const work = buildMyWork({
+      ...base,
+      offers: [
+        { id: 'o1', code: 'O1', status: 'Pending Approval', applicationId: 'a1', updatedAt: NOW, approvers: [{ id: 'u9', name: 'Mona Saleh' }] },
+        { id: 'o2', code: 'O2', status: 'Pending Approval', applicationId: 'a1', updatedAt: NOW, approvers: [] },
+        { id: 'o3', code: 'O3', status: 'Sent', applicationId: 'a1', updatedAt: NOW, approvers: [{ id: 'u9', name: 'Mona Saleh' }] },
+      ],
+    }, NOW);
+    const by = (id: string) => work.waitingOnOthers.find((i) => i.id === id)!;
+    expect(by('o1')).toMatchObject({ waitingOn: 'approver', approver: { id: 'u9', name: 'Mona Saleh' }, reason: 'Offer waiting for approval from Mona Saleh' });
+    expect(by('o2')).toMatchObject({ approver: null, reason: 'Offer waiting for approval' });
+    expect('approver' in by('o3')).toBe(false);
+  });
 });

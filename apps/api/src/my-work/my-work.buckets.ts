@@ -46,7 +46,7 @@ export interface MyWorkInput {
   interviews: Array<{ id: string; title: string; start: Date; end: Date; applicationId: string; roomUrl?: string | null; roomName?: string | null; interviewers?: Array<{ id: string | null; name: string }>; app?: AppInfo; iAmInterviewer?: boolean }>;
   myMissingScorecards: Array<{ interviewId: string; title: string; end: Date; app?: AppInfo }>;
   othersMissingScorecards: Array<{ interviewId: string; title: string; end: Date; missing: number; app?: AppInfo }>;
-  offers: Array<{ id: string; code: string; status: string; applicationId: string; updatedAt: Date; app?: AppInfo }>;
+  offers: Array<{ id: string; code: string; status: string; applicationId: string; updatedAt: Date; app?: AppInfo; approvers?: Array<{ id: string | null; name: string }> }>;
   reminderWorkerHealthy?: boolean;
 }
 
@@ -183,9 +183,11 @@ export function buildMyWork(input: MyWorkInput, now: Date, day: MyWorkDay = 'tod
   for (const offer of input.offers) {
     const waitingOn: WaitingOn | null = offer.status === 'Pending Approval' ? 'approver' : offer.status === 'Sent' ? 'candidate' : null;
     if (!waitingOn) continue;
+    const approvers = waitingOn === 'approver' ? offer.approvers ?? [] : [];
     waiting.push({
       id: offer.id, type: 'offer', title: `Offer ${offer.code}`, dueAt: null,
-      reason: waitingOn === 'approver' ? 'Offer waiting for approval' : 'Offer waiting for the candidate',
+      reason: waitingOn === 'approver' ? (approvers.length ? `Offer waiting for approval from ${approvers.map((a) => a.name).join(', ')}` : 'Offer waiting for approval') : 'Offer waiting for the candidate',
+      ...(waitingOn === 'approver' ? { approver: approvers[0] ?? null, approvers } : {}),
       nextAction: { code: 'open-offer', label: 'Open offer' }, entity: { type: 'offer', id: offer.id }, waitingOn,
       applicationId: offer.applicationId, ...appFields(offer.app),
       actions: [
