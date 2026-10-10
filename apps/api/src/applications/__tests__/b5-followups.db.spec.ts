@@ -63,6 +63,8 @@ describe.skipIf(!url)('B5 follow-ups: offer Draft/submit/send, approver note + g
     gradeId = (await prisma.masterDataValue.create({ data: { organizationId: ORG, category: 'grades', name: `B5F Grade ${tag}`, status: 'Active' } })).id;
     const vacancy = await prisma.vacancy.findFirstOrThrow({ where: { organizationId: ORG, status: 'Open' }, orderBy: { createdAt: 'asc' } });
     await prisma.vacancyRequest.update({ where: { id: vacancy.vacancyRequestId }, data: { gradeId } });
+    // B7: approving runs the band check, so give this grade a band at the job's site.
+    await prisma.gradeBand.create({ data: { organizationId: ORG, gradeId, branchId: vacancy.branchId, currency: 'AED', minMonthlyBase: 1000, maxMonthlyBase: 50000 } });
     ids.email = (await prisma.emailTemplate.create({ data: { organizationId: ORG, name: `B5F offer ${tag}`, subject: 'Your offer {{offerCode}}', bodyTemplate: 'Dear {{candidateName}}, your offer for {{positionTitle}} is ready.' } })).id;
     ids.emailOff = (await prisma.emailTemplate.create({ data: { organizationId: ORG, name: `B5F off ${tag}`, subject: 's', bodyTemplate: 'b', status: 'Inactive' } })).id;
     ids.wa = (await prisma.whatsAppTemplate.create({ data: { organizationId: ORG, name: `B5F wa ${tag}`, bodyTemplate: 'Hi {{candidateName}}, offer {{offerCode}}' } })).id;
@@ -87,10 +89,10 @@ describe.skipIf(!url)('B5 follow-ups: offer Draft/submit/send, approver note + g
 
   it('item 3: approver note (who, when, text) and the job grade reach the approver and the offer', async () => {
     const approval = await prisma.offerApproval.findFirstOrThrow({ where: { offerVersion: { offerId: ids.offer! } } });
-    const inbox = await offers.getApprovalInbox(user(ids.approver!, ['OFFER_APPROVER']), { viewSalary: true });
+    const inbox = await offers.getApprovalInbox(user(ids.approver!, ['OFFER_APPROVER']), { viewOfferPay: true });
     expect(inbox.find((i) => i.id === approval.id)?.grade).toEqual({ id: gradeId, name: `B5F Grade ${tag}` });
     await offers.submitDecision(user(ids.approver!, ['OFFER_APPROVER']), approval.id, { decision: 'Approve', note: 'Within band, approved for July start.' } as never);
-    const detail = await offers.getOfferById(user(ids.owner!), ids.offer!, { viewSalary: true }) as unknown as { grade: unknown; currentVersion: { status: string; approverNote: { byUserId: string; byName: string; at: string; text: string } } };
+    const detail = await offers.getOfferById(user(ids.owner!), ids.offer!, { viewOfferPay: true }) as unknown as { grade: unknown; currentVersion: { status: string; approverNote: { byUserId: string; byName: string; at: string; text: string } } };
     expect(detail.grade).toEqual({ id: gradeId, name: `B5F Grade ${tag}` });
     expect(detail.currentVersion.status).toBe('Approved');
     expect(detail.currentVersion.approverNote).toMatchObject({ byUserId: ids.approver, byName: 'B5F approver', text: 'Within band, approved for July start.' });
@@ -128,9 +130,9 @@ describe.skipIf(!url)('B5 follow-ups: offer Draft/submit/send, approver note + g
   });
 
   it('item 6: GET /offers and GET /hiring filter by applicationId', async () => {
-    const list = await offers.getOffers(user(ids.owner!), { applicationId: ids.app! }, { viewSalary: true });
+    const list = await offers.getOffers(user(ids.owner!), { applicationId: ids.app! }, { viewOfferPay: true });
     expect(list.map((o) => o.applicationId)).toEqual([ids.app]);
-    expect(await offers.getOffers(user(ids.owner!), { applicationId: 'nope' }, { viewSalary: true })).toEqual([]);
+    expect(await offers.getOffers(user(ids.owner!), { applicationId: 'nope' }, { viewOfferPay: true })).toEqual([]);
     const hc = await prisma.hiringCase.create({ data: { organizationId: ORG, applicationId: ids.app!, offerId: ids.offer! } });
     const hiring = new HiringService(prisma as never, notifications as never, access as never);
     const cases = await hiring.listHiringCases(ORG, undefined, user(ids.owner!) as never, ids.app!) as Array<{ id: string }>;

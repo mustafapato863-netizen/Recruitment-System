@@ -195,6 +195,8 @@ export interface NormalizedError {
   retryAfterSeconds?: number | null;
   gate?: string;
   missing?: string[];
+  band?: Record<string, string | number | null>;
+  offeredMonthlyBase?: number;
   /** Server-side diagnostic context (sanitized). Never returned to clients. */
   logContext?: string;
 }
@@ -494,6 +496,16 @@ export function normalizeError(
           ? { gate: resObj.gate, missing: resObj.missing as string[] }
           : undefined;
 
+      // B7: band errors keep the band (flat scalars only; pay figures are already
+      // omitted by the service for callers without OFFER_PAY_VIEW).
+      const flat = (v: unknown): v is Record<string, string | number | null> =>
+        typeof v === 'object' && v !== null && !Array.isArray(v) &&
+        Object.values(v).every((x) => x === null || typeof x === 'number' || (typeof x === 'string' && x.length <= 120));
+      const bandInfo =
+        (stableCode === 'GRADE_BAND_MISSING' || stableCode === 'OFFER_PAY_OUTSIDE_BAND') && flat(resObj.band)
+          ? { band: resObj.band, ...(typeof resObj.offeredMonthlyBase === 'number' ? { offeredMonthlyBase: resObj.offeredMonthlyBase } : {}) }
+          : undefined;
+
       const rawMessage = Array.isArray(resObj.message)
         ? resObj.message
         : typeof resObj.message === 'string'
@@ -542,6 +554,7 @@ export function normalizeError(
         ...(hasFieldErrors && fields ? { fields } : {}),
         ...(details ? { details } : {}),
         ...(gateInfo ?? {}),
+        ...(bandInfo ?? {}),
         retryable,
         retryAfterSeconds:
           retryAfter ?? (status === HttpStatus.TOO_MANY_REQUESTS ? null : null),
@@ -648,6 +661,8 @@ export function buildErrorEnvelope(normalized: NormalizedError, requestId: strin
   if (normalized.details) envelope.details = normalized.details;
   if (normalized.gate !== undefined) envelope.gate = normalized.gate;
   if (normalized.missing !== undefined) envelope.missing = normalized.missing;
+  if (normalized.band !== undefined) envelope.band = normalized.band;
+  if (normalized.offeredMonthlyBase !== undefined) envelope.offeredMonthlyBase = normalized.offeredMonthlyBase;
   return envelope;
 }
 

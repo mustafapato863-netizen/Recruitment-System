@@ -59,6 +59,16 @@ describe('B5 domain error codes', () => {
     expect(await res.json()).toMatchObject({ code: 'REOPEN_NOT_OWNER' });
   });
 
+  it('B7: band errors keep code and band; pay only when the service included it', async () => {
+    const { ConflictException } = await import('@nestjs/common');
+    const noPay = normalizeError(new ConflictException({ code: 'OFFER_PAY_OUTSIDE_BAND', message: 'Base pay is outside the band.', band: { id: 'b', grade: 'G6', site: 'HQ', currency: 'AED' } }));
+    expect(noPay).toMatchObject({ statusCode: 409, code: 'OFFER_PAY_OUTSIDE_BAND', band: { grade: 'G6', site: 'HQ', currency: 'AED' } });
+    expect(noPay).not.toHaveProperty('offeredMonthlyBase');
+    expect(normalizeError(new ConflictException({ code: 'GRADE_BAND_MISSING', band: { grade: null, site: 'HQ', currency: 'AED' } }))).toMatchObject({ code: 'GRADE_BAND_MISSING', band: { site: 'HQ' } });
+    expect(normalizeError(new ConflictException({ code: 'GRADE_BAND_MISSING', band: { nested: { x: 1 } } }))).not.toHaveProperty('band');
+    for (const c of ['REASSIGN_NOT_MANAGER', 'OFFER_DECISION_NOT_MANAGER', 'GRADE_BAND_OVERLAP']) expect(errorCodes as readonly string[]).toContain(c);
+  });
+
   it('gate/missing are only passed through for GATE_* codes and safe shapes', async () => {
     const { ConflictException } = await import('@nestjs/common');
     expect(normalizeError(new ConflictException({ code: 'OFFER_CLOSED', gate: 'x', missing: ['y'] }))).not.toHaveProperty('gate');

@@ -43,4 +43,14 @@ describe.skipIf(!url)('notification safety (scratch Postgres)', () => {
     expect('applicationId' in byType.TaskAssigned!).toBe(false);
     expect(JSON.stringify(list.data)).not.toMatch(/16,000|18,500/);
   });
+
+  it('B7: a manager with OFFER_PAY_VIEW keeps the pay text; the owner (Employee) never sees it', async () => {
+    const mgr = randomUUID();
+    const role = await prisma.role.findFirstOrThrow({ where: { code: 'HIRING_MANAGER' } });
+    await prisma.user.create({ data: { id: mgr, organizationId: ORG, email: `nsm-${tag}@t.test`, emailNormalized: `nsm-${tag}@t.test`, displayName: 'NSM', passwordHash: 'x', emailNotifications: false, userRoles: { create: { roleId: role.id } } } });
+    const msg = `OFF-NS-${tag} v2: Reject (base AED 16,000 above band)`;
+    for (const r of [mgr, employee]) await svc.create({ organizationId: ORG, recipientUserId: r, type: 'OfferManagerDecision', title: 'Offer rejected', message: msg, entityType: 'Offer', entityId: `${offerId}` });
+    expect((await svc.list(ORG, mgr, false, 1, 10)).data[0]!.message).toBe(msg);
+    expect(JSON.stringify((await svc.list(ORG, employee, false, 1, 50)).data)).not.toContain('16,000');
+  });
 });

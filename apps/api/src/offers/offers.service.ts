@@ -2,6 +2,8 @@ import { DECLINED_OFFER_REASON } from '../applications/application-gates';
 import { Injectable, NotFoundException, BadRequestException, ConflictException, ForbiddenException, Optional } from '@nestjs/common';
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { EmailOutboxService } from '../email/email-outbox.service';
+import { UserPermissionsService } from '../common/user-permissions.service';
+import { assertOfferInsideBand } from '../manager-decision/offer-decision.service';
 import { PrismaService } from '../database/prisma.service';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import type {
@@ -30,7 +32,12 @@ function cleanUuidParam(value?: string | null): string | null | undefined {
   return UUID_REGEX.test(trimmed) ? trimmed : null;
 }
 
-type CompensationDisclosure = { viewSalary: boolean };
+/**
+ * B7: offer pay (base, package, component amounts) needs OFFER_PAY_VIEW. Fields are
+ * OMITTED (absent), never null, without it. Current/expected salary is a different
+ * permission (VIEW_CURRENT_SALARY) and is not part of offer payloads.
+ */
+type CompensationDisclosure = { viewOfferPay: boolean };
 
 type OfferVersionRecord = {
   id: string;
@@ -85,6 +92,7 @@ type OfferRecord = {
     candidate?: { firstName: string; lastName: string } | null;
     vacancy?: {
       id: string;
+      branchId?: string;
       location?: string | null;
       vacancyRequest?: { grade?: { id: string; name: string } | null } | null;
       branch?: { name: string } | null;
@@ -104,6 +112,7 @@ export class OffersService {
     private readonly notifications: NotificationsService,
     private readonly accessControl: AccessControlService,
     @Optional() private readonly outbox?: EmailOutboxService,
+    @Optional() private readonly userPermissions?: UserPermissionsService,
   ) {}
 
   private applicationVisibility(user: AuthUser) {
@@ -534,12 +543,10 @@ export class OffersService {
       branchName: app.offerVersion.offer.application.vacancy.branch?.name,
       versionNumber: app.offerVersion.versionNumber,
       grade: app.offerVersion.offer.application.vacancy.vacancyRequest?.grade ?? null,
-      monthlyPackage: disclosure.viewSalary && app.offerVersion.monthlyPackage !== null
-        ? Number(app.offerVersion.monthlyPackage)
-        : null,
-      packageCurrency: disclosure.viewSalary
-        ? (app.offerVersion.components[0]?.currency?.toUpperCase() === 'EGP' ? 'EGP' : 'AED')
-        : null,
+      ...(disclosure.viewOfferPay ? {
+        monthlyPackage: app.offerVersion.monthlyPackage !== null ? Number(app.offerVersion.monthlyPackage) : null,
+        packageCurrency: app.offerVersion.components[0]?.currency?.toUpperCase() === 'EGP' ? 'EGP' as const : 'AED' as const,
+      } : {}),
       roleCode: app.roleCode,
       status: app.status,
       step: 1,
@@ -580,6 +587,20 @@ export class OffersService {
     };
     const note = (dto.note ?? dto.comment)?.trim();
     if (note) updateData.comment = note;
+
+    // B7 (Mustafa): the approver inbox runs the same band check as the manager decision
+    // (same codes; pay figures in the error only for OFFER_PAY_VIEW holders).
+    if (dto.decision === 'Approve') {
+      const v = await this.prisma.offerVersion.findUniqueOrThrow({
+        where: { id: approval.offerVersionId },
+        include: { components: true, offer: { include: { application: { include: { vacancy: { select: { branchId: true, branch: { select: { name: true } }, vacancyRequest: { select: { gradeId: true, grade: { select: { name: true } } } } } } } } } } },
+      });
+      await assertOfferInsideBand(
+        this.prisma, user.organizationId,
+        async () => Boolean(await this.userPermissions?.hasPermission(user.userId, user.organizationId, 'OFFER_PAY_VIEW')),
+        v.components, v.offer.application.vacancy,
+      );
+    }
 
     const application = await this.prisma.application.findUnique({
       where: { id: approval.offerVersion.offer.applicationId },
@@ -746,6 +767,9 @@ export class OffersService {
         : undefined,
       positionTitle: offer.application?.vacancy?.position?.title,
       grade: offer.application?.vacancy?.vacancyRequest?.grade ?? null,
+      /** M3: the job's site (branch) for band matching; siteId is an alias of branchId. */
+      branchId: offer.application?.vacancy?.branchId ?? null,
+      siteId: offer.application?.vacancy?.branchId ?? null,
       location: offer.application?.vacancy?.location ?? offer.application?.vacancy?.branch?.name ?? null,
       currentVersionId: offer.currentVersionId,
       currentVersion: version ? this.mapVersion(version, disclosure) : null,
@@ -768,6 +792,9 @@ export class OffersService {
         : undefined,
       positionTitle: offer.application?.vacancy?.position?.title,
       grade: offer.application?.vacancy?.vacancyRequest?.grade ?? null,
+      /** M3: the job's site (branch) for band matching; siteId is an alias of branchId. */
+      branchId: offer.application?.vacancy?.branchId ?? null,
+      siteId: offer.application?.vacancy?.branchId ?? null,
       location: offer.application?.vacancy?.location ?? offer.application?.vacancy?.branch?.name ?? null,
       currentVersionId: offer.currentVersionId,
       currentVersion: currentVersion ? this.mapVersion(currentVersion, disclosure) : null,
@@ -778,13 +805,15 @@ export class OffersService {
   }
 
   private mapVersion(v: OfferVersionRecord, disclosure: CompensationDisclosure) {
-    const showCompensation = disclosure.viewSalary;
+    const showCompensation = disclosure.viewOfferPay;
     return {
       id: v.id,
       offerId: v.offerId,
       versionNumber: v.versionNumber,
-      monthlyPackage: showCompensation && v.monthlyPackage ? Number(v.monthlyPackage) : null,
-      annualFixed: showCompensation && v.annualFixed ? Number(v.annualFixed) : null,
+      ...(showCompensation ? {
+        monthlyPackage: v.monthlyPackage ? Number(v.monthlyPackage) : null,
+        annualFixed: v.annualFixed ? Number(v.annualFixed) : null,
+      } : {}),
       contractType: v.contractType,
       probationPeriod: v.probationPeriod,
       offerExpiry: v.offerExpiry ? v.offerExpiry.toISOString() : null,
@@ -808,7 +837,7 @@ export class OffersService {
           id: c.id,
           type: c.type,
           name: c.name,
-          amount: showCompensation && c.amount ? Number(c.amount) : null,
+          ...(showCompensation ? { amount: c.amount ? Number(c.amount) : null } : {}),
           currency: c.currency?.toUpperCase() === 'EGP' ? 'EGP' : 'AED',
           frequency: c.frequency,
           isTaxable: c.isTaxable,

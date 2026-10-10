@@ -45,7 +45,8 @@ export class OffersController {
 
   private async compensationDisclosure(user: AuthUser) {
     return {
-      viewSalary: await this.userPermissions.hasPermission(user.userId, user.organizationId, 'VIEW_CURRENT_SALARY'),
+      // B7: offer pay has its own permission; VIEW_CURRENT_SALARY no longer reveals it.
+      viewOfferPay: await this.userPermissions.hasPermission(user.userId, user.organizationId, 'OFFER_PAY_VIEW'),
     };
   }
 
