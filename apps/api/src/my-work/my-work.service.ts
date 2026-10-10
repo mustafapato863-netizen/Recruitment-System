@@ -4,7 +4,20 @@ import type { AuthUser } from '@recruitflow/contracts';
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { PrismaService } from '../database/prisma.service';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
+import type { MyWorkDay } from '@recruitflow/contracts';
 import { buildMyWork, type MyWorkResponse } from './my-work.buckets';
+
+/** E1: the reminder worker's heartbeat (service_heartbeats, written after each sweep). */
+export const DUE_REMINDER_HEARTBEAT_SERVICE = 'due-reminders';
+const DEFAULT_SWEEP_INTERVAL_MS = 5 * 60_000;
+
+export function reminderWorkerHealthy(beat: { observedAt: Date; metadata: unknown } | null, now: Date): boolean {
+  if (!beat) return false;
+  const meta = (beat.metadata ?? {}) as { intervalMs?: unknown };
+  const interval = typeof meta.intervalMs === 'number' && meta.intervalMs > 0 ? meta.intervalMs : DEFAULT_SWEEP_INTERVAL_MS;
+  const age = now.getTime() - beat.observedAt.getTime();
+  return age >= 0 && age <= 2 * interval;
+}
 
 const CLOSED_STAGES = ['Joined', 'Rejected', 'Withdrawn'];
 const WORKING_JOB = ['Open', 'Partially Filled'];
@@ -15,14 +28,14 @@ const WORKING_JOB = ['Open', 'Partially Filled'];
  * Ownership (B1 is not on this base): a job is owned via an active PRIMARY
  * VacancyAssignment; a file via Application.primaryRecruiterId / taskOwnerId,
  * or by owning its job. A requisition via requesterId.
- * TODO(B1): switch to Vacancy.primaryRecruiterId and file-access.ts
+ * TODO(B1): NOT switched here on purpose (B1/#4 is not on this base). Switch to Vacancy.primaryRecruiterId and file-access.ts
  * applicationOwnershipWhere once #4 merges; add manager "team work" there.
  */
 @Injectable()
 export class MyWorkService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
-  async getMyWork(user: AuthUser, now: Date = new Date()): Promise<MyWorkResponse> {
+  async getMyWork(user: AuthUser, now: Date = new Date(), day: MyWorkDay = 'today'): Promise<MyWorkResponse> {
     const org = user.organizationId;
     const me = user.userId;
     const ownedJobWhere = { organizationId: org, assignments: { some: { userId: me, isActive: true, assignmentKind: 'PRIMARY' } } };
@@ -33,13 +46,17 @@ export class MyWorkService {
       OR: [{ primaryRecruiterId: me }, { taskOwnerId: me }, { vacancy: ownedJobWhere }],
     };
 
-    const [jobs, requisitions, tasks, interviews, offers] = await Promise.all([
+    const appSelect = { id: true, stage: true, candidate: { select: { id: true, firstName: true, lastName: true } } } as const;
+    const [jobs, requisitions, tasks, interviews, offers, beat] = await Promise.all([
       this.prisma.vacancy.findMany({
         where: { ...ownedJobWhere, status: { in: WORKING_JOB } },
         select: {
           id: true, vacancyCode: true, status: true, joinedHeadcount: true, approvedHeadcount: true,
           position: { select: { title: true } },
+          department: true,
           vacancyRequest: { select: { requestedHeadcount: true, targetFillDate: true } },
+          branch: { select: { name: true } },
+          assignments: { where: { isActive: true, assignmentKind: 'PRIMARY' }, select: { user: { select: { id: true, displayName: true } } }, take: 1 },
         },
       }),
       this.prisma.vacancyRequest.findMany({
@@ -63,23 +80,33 @@ export class MyWorkService {
         where: {
           organizationId: org,
           status: { notIn: ['Cancelled'] },
-          scheduledStart: { gte: new Date(now.getTime() - 14 * 86_400_000), lte: new Date(now.getTime() + 2 * 86_400_000) },
+          scheduledStart: { gte: new Date(now.getTime() - 14 * 86_400_000), lte: new Date(now.getTime() + 3 * 86_400_000) },
           OR: [{ application: myFileWhere }, { attendees: { some: { userId: me } } }],
         },
         select: {
-          id: true, title: true, scheduledStart: true, scheduledEnd: true, applicationId: true,
-          application: { select: { primaryRecruiterId: true, taskOwnerId: true, vacancy: { select: { status: true, assignments: { where: { userId: me, isActive: true, assignmentKind: 'PRIMARY' }, select: { id: true } } } } } },
-          attendees: { select: { userId: true, role: true } },
+          id: true, title: true, scheduledStart: true, scheduledEnd: true, applicationId: true, locationUrl: true, roomName: true, legacyInterviewerName: true,
+          application: { select: { ...appSelect, primaryRecruiterId: true, taskOwnerId: true, vacancy: { select: { status: true, assignments: { where: { userId: me, isActive: true, assignmentKind: 'PRIMARY' }, select: { id: true } } } } } },
+          attendees: { select: { userId: true, role: true, user: { select: { displayName: true } } } },
           scorecards: { select: { interviewerId: true } },
         },
         take: 200,
       }),
       this.prisma.offer.findMany({
         where: { organizationId: org, status: { in: ['Pending Approval', 'Sent'] }, application: myFileWhere },
-        select: { id: true, offerCode: true, status: true, applicationId: true, updatedAt: true },
+        select: { id: true, offerCode: true, status: true, applicationId: true, updatedAt: true, application: { select: appSelect } },
         take: 200,
       }),
+      this.prisma.serviceHeartbeat.findUnique({ where: { service: DUE_REMINDER_HEARTBEAT_SERVICE }, select: { observedAt: true, metadata: true } }),
     ]);
+    const appInfo = (a: { id: string; stage: string; candidate: { id: string; firstName: string; lastName: string } | null }) => ({
+      applicationId: a.id, stage: a.stage,
+      candidate: { id: a.candidate?.id ?? '', name: a.candidate ? `${a.candidate.firstName} ${a.candidate.lastName}`.trim() : '' },
+    });
+    // Attendees are users; pre-B5 rows that matched no user keep a legacy free-text name.
+    const interviewersOf = (i: (typeof interviews)[number]) => {
+      const users = i.attendees.map((a) => ({ id: a.userId as string | null, name: a.user?.displayName ?? '' }));
+      return users.length ? users : i.legacyInterviewerName?.trim() ? [{ id: null, name: i.legacyInterviewerName.trim() }] : [];
+    };
 
     const ownsFile = (i: (typeof interviews)[number]) =>
       WORKING_JOB.includes(i.application.vacancy.status) &&
@@ -91,21 +118,31 @@ export class MyWorkService {
         id: j.id, code: j.vacancyCode, title: j.position?.title ?? j.vacancyCode, status: j.status, joined: j.joinedHeadcount,
         target: j.vacancyRequest?.requestedHeadcount ?? j.approvedHeadcount,
         dueDate: j.vacancyRequest?.targetFillDate ? j.vacancyRequest.targetFillDate.toISOString().slice(0, 10) : null,
+        department: j.department ?? null,
+        site: j.branch?.name ?? null,
+        owner: j.assignments[0]?.user ? { id: j.assignments[0].user.id, name: j.assignments[0].user.displayName } : null,
       })),
       requisitions: requisitions.map((r) => ({
         id: r.id, code: r.requestCode, title: r.position?.title ?? r.requestCode, status: r.status,
         dueDate: r.targetFillDate ? r.targetFillDate.toISOString().slice(0, 10) : null,
       })),
       tasks,
-      interviews: interviews.filter(ownsFile).map((i) => ({ id: i.id, title: i.title, start: i.scheduledStart, end: i.scheduledEnd, applicationId: i.applicationId })),
+      interviews: interviews
+        .filter((i) => ownsFile(i) || i.attendees.some((a) => a.userId === me))
+        .map((i) => ({
+          id: i.id, title: i.title, start: i.scheduledStart, end: i.scheduledEnd, applicationId: i.applicationId,
+          roomUrl: i.locationUrl, roomName: i.roomName,
+          interviewers: interviewersOf(i), app: appInfo(i.application), iAmInterviewer: i.attendees.some((a) => a.userId === me),
+        })),
       myMissingScorecards: interviews
         .filter((i) => i.attendees.some((a) => a.userId === me) && !submitted(i, me))
-        .map((i) => ({ interviewId: i.id, title: i.title, end: i.scheduledEnd })),
+        .map((i) => ({ interviewId: i.id, title: i.title, end: i.scheduledEnd, app: appInfo(i.application) })),
       othersMissingScorecards: interviews.filter(ownsFile).map((i) => ({
         interviewId: i.id, title: i.title, end: i.scheduledEnd,
-        missing: i.attendees.filter((a) => a.userId !== me && !submitted(i, a.userId)).length,
+        missing: i.attendees.filter((a) => a.userId !== me && !submitted(i, a.userId)).length, app: appInfo(i.application),
       })),
-      offers: offers.map((o) => ({ id: o.id, code: o.offerCode, status: o.status, applicationId: o.applicationId, updatedAt: o.updatedAt })),
-    }, now);
+      offers: offers.map((o) => ({ id: o.id, code: o.offerCode, status: o.status, applicationId: o.applicationId, updatedAt: o.updatedAt, app: appInfo(o.application) })),
+      reminderWorkerHealthy: reminderWorkerHealthy(beat, now),
+    }, now, day);
   }
 }

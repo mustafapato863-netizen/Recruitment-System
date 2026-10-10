@@ -1773,3 +1773,75 @@ export interface ExtractedCandidate {
 
 export * from './resume/index.ts';
 
+
+// ─── B4 / E1: GET /me/work ──────────────────────────────────────
+/** E1: fixed entity types for My Work items. */
+export const myWorkEntityTypes = ['application', 'interview', 'offer', 'requisition', 'job', 'task'] as const;
+export type MyWorkEntityType = (typeof myWorkEntityTypes)[number];
+export type MyWorkDay = 'today' | 'tomorrow';
+export type MyWorkItemType = 'job' | 'requisition' | 'task' | 'interview' | 'scorecard' | 'offer';
+export type MyWorkWaitingOn = 'approver' | 'interviewer' | 'candidate';
+
+export interface MyWorkAction {
+  key: string;
+  label: string;
+  disabled: boolean;
+  /** Why it is disabled (gate not met, on hold, not the owner, ...). */
+  reason?: string;
+}
+
+export interface MyWorkPerson {
+  id: string | null;
+  name: string;
+}
+
+export interface MyWorkItem {
+  id: string;
+  type: MyWorkItemType;
+  title: string;
+  /** Plain due fact (ISO date or instant). No timers or countdowns. */
+  dueAt: string | null;
+  reason: string;
+  nextAction: { code: string; label: string };
+  entity: { type: MyWorkEntityType; id: string };
+  actions: MyWorkAction[];
+  waitingOn?: MyWorkWaitingOn;
+  /** Interview items. */
+  startAt?: string;
+  endAt?: string;
+  room?: { name: string | null; url: string | null };
+  interviewer?: MyWorkPerson | null;
+  interviewers?: MyWorkPerson[];
+  /** Application-linked items (interviews, scorecards, offers). */
+  applicationId?: string;
+  candidate?: { id: string; name: string };
+  stage?: string;
+}
+
+export interface MyWorkTarget extends TargetChip {
+  vacancyId: string;
+  vacancyCode: string;
+  department: string | null;
+  site: string | null;
+  owner: { id: string; name: string } | null;
+}
+
+export interface MyWorkResponse {
+  timezone: string;
+  today: string;
+  /** E1: which day dueToday lists (Cairo). */
+  day: MyWorkDay;
+  date: string;
+  generatedAt: string;
+  counts: { overdue: number; today: number; waitingOnOthers: number };
+  overdue: MyWorkItem[];
+  /** Items due on `date` (today by default, tomorrow with ?day=tomorrow). */
+  dueToday: MyWorkItem[];
+  waitingOnOthers: MyWorkItem[];
+  targets: MyWorkTarget[];
+  /** True when there are no work items; targets alone do not count. */
+  empty: boolean;
+  emptyMessage: string | null;
+  /** Reminder worker swept within 2x its interval. */
+  reminderWorkerHealthy: boolean;
+}
