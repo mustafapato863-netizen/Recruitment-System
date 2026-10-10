@@ -22,9 +22,9 @@ type Errs = { reason?: string; note?: string; holdUntil?: string; form?: string 
  * Hold and close reasons come only from master data ('hold-reasons' / 'close-reasons', active values); "Other" needs a note.
  * Hold takes an optional "Hold until" (a future Cairo day). Reopen takes a free-text reason.
  */
-export function JobStatusDrawer({ job, onClose, onDone }: { job: JobDetail; onClose: () => void; onDone: () => void }) {
+export function JobStatusDrawer({ job, initial, onClose, onDone }: { job: JobDetail; initial?: JobAction; onClose: () => void; onDone: () => void }) {
   const allowed = jobActions(job.status);
-  const [action, setAction] = useState<JobAction | null>(allowed[0] ?? null);
+  const [action, setAction] = useState<JobAction | null>(initial && allowed.includes(initial) ? initial : allowed[0] ?? null);
   const [lists, setLists] = useState<Partial<Record<'hold' | 'close', string[] | 'error'>>>({});
   const [reason, setReason] = useState('');
   const [note, setNote] = useState('');

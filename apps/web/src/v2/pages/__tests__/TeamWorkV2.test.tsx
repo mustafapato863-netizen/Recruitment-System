@@ -195,3 +195,47 @@ describe('M2 CoS follow-ups', () => {
     expect(await within(d).findByText('"Other" needs a short note (at least 3 characters).')).toBeInTheDocument();
   });
 });
+
+describe('B2F-6 job Hold/Close for the owner’s manager', () => {
+  const q = (o: Record<string, unknown>) => ({ code: 'VAC-1', branch: { id: 'b1', name: 'Cairo HQ' }, headcount: { approved: 2, joined: 0, remaining: 2 }, pipelineCounts: {}, needsActionCount: 0, health: null, lastActivity: null, nextAction: null, ...o });
+  it('a report’s open jobs show Hold/Close; hold uses the hold list + holdUntil, close uses the close list + "Other" note', async () => {
+    const u = userEvent.setup();
+    serve({
+      '/vacancies/work-queue?page=1&pageSize=100': { data: [
+        q({ id: 'v1', title: 'HRIS Developer', status: 'Open', owner: { id: 'u-mariam', displayName: 'Mariam Farag' } }),
+        q({ id: 'v2', title: 'Payroll Lead', status: 'On Hold', owner: { id: 'u-noura', displayName: 'Noura Al-Dosari' } }),
+        q({ id: 'v3', title: 'Not my team', status: 'Open', owner: { id: 'u-x', displayName: 'X' } }),
+        { id: 'v4', redacted: true, title: 'Redacted', branch: null, seats: { filled: 0, target: 1 } },
+      ], total: 4 },
+      '/master-data/catalog/hold-reasons': [{ id: 'h1', name: 'Budget review', status: 'Active' }, { id: 'h2', name: 'Other', status: 'Active' }],
+      '/master-data/catalog/close-reasons': [{ id: 'c1', name: 'Filled internally', status: 'Active' }, { id: 'c2', name: 'Other', status: 'Active' }],
+      '/vacancies/v1/status-history': [],
+    });
+    api.postApi.mockResolvedValue({ id: 'v1' });
+    renderAt();
+    const m = await waitFor(() => { const c = card('Mariam Farag'); within(c).getByRole('button', { name: 'Hold HRIS Developer' }); return c; });
+    expect(within(m).getByRole('button', { name: 'Close HRIS Developer' })).toBeInTheDocument();
+    expect(within(card('Noura Al-Dosari')).queryByRole('button', { name: 'Hold Payroll Lead' })).toBeNull();
+    expect(within(card('Noura Al-Dosari')).getByRole('button', { name: 'Close Payroll Lead' })).toBeInTheDocument();
+    expect(document.body).not.toHaveTextContent('Not my team');
+    expect(document.body).not.toHaveTextContent('Redacted');
+
+    await u.click(within(m).getByRole('button', { name: 'Hold HRIS Developer' }));
+    let d = await screen.findByRole('dialog');
+    await u.selectOptions(await within(d).findByRole('combobox', { name: /reason/i }), 'Budget review');
+    await u.type(within(d).getByLabelText(/until/i), '2099-01-15');
+    await u.click(within(d).getByRole('button', { name: /^Put on hold$|^Hold job$|^Hold$/ }));
+    await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/vacancies/v1/hold', expect.objectContaining({ reason: 'Budget review', holdUntil: '2099-01-15' })));
+
+    await u.click(await within(card('Mariam Farag')).findByRole('button', { name: 'Close HRIS Developer' }));
+    d = await screen.findByRole('dialog');
+    await u.selectOptions(await within(d).findByRole('combobox', { name: /reason/i }), 'Other');
+    await u.click(within(d).getByRole('button', { name: 'Close job' }));
+    await u.click(within(d).getByRole('button', { name: /Confirm close/ }));
+    expect(api.postApi).not.toHaveBeenCalledWith('/vacancies/v1/close', expect.anything());
+    await u.type(within(d).getByLabelText(/note|why/i), 'Merged with another role');
+    await u.click(within(d).getByRole('button', { name: 'Close job' }));
+    await u.click(within(d).getByRole('button', { name: /Confirm close/ }));
+    await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/vacancies/v1/close', expect.objectContaining({ reason: 'Other', note: 'Merged with another role' })));
+  });
+});
