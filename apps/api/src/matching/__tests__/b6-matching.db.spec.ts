@@ -141,7 +141,7 @@ describe.skipIf(!url)('B6 suggest, compare, evidence, duplicates (scratch Postgr
 
   it('evidence: manual needs a snippet; deactivated skills are rejected; derive finds CV text', async () => {
     expect(await statusOf(matching.addEvidence(ORG, ids.A!, { skillId: skill.Triage! }, ids.owner!))).toBe('400 EVIDENCE_SNIPPET_REQUIRED');
-    const old = await prisma.masterDataValue.create({ data: { organizationId: ORG, category: 'skills', name: `Old ${tag}`, status: 'Inactive' } });
+    const old = await prisma.masterDataValue.create({ data: { organizationId: ORG, category: 'skills', name: `Old ${tag}`, status: 'Archived' } });
     expect(await statusOf(matching.addEvidence(ORG, ids.A!, { skillId: old.id, snippet: 'x' }, ids.owner!))).toBe('400 SKILL_INACTIVE');
     const doc = await prisma.candidateDocument.findFirst({ where: { organizationId: ORG } });
     if (doc) {
@@ -194,7 +194,7 @@ describe.skipIf(!url)('B6 suggest, compare, evidence, duplicates (scratch Postgr
     await md.deleteCatalogValue(ORG, 'skills', dead.id);
     const names = await prisma.$transaction((tx) => md.syncSkillsInTransaction(tx, ORG, [`retired  ${tag}`]));
     expect(names).toEqual([`Retired ${tag}`]);
-    expect((await prisma.masterDataValue.findUniqueOrThrow({ where: { id: dead.id } })).status).toBe('Inactive');
+    expect((await prisma.masterDataValue.findUniqueOrThrow({ where: { id: dead.id } })).status).toBe('Archived');
     const v = await prisma.vacancy.findUniqueOrThrow({ where: { id: ids.vac! } });
     await prisma.vacancy.update({ where: { id: ids.vac! }, data: { requiredSkills: [...v.requiredSkills, `Retired ${tag}`] } });
     const res = await matching.suggestions(user(ids.owner!), ids.vac!);
@@ -222,7 +222,8 @@ describe.skipIf(!url)('B6 suggest, compare, evidence, duplicates (scratch Postgr
     const app = await prisma.application.create({ data: { organizationId: ORG, applicationCode: `B6S-${tag}`, vacancyId: (await prisma.vacancy.findFirstOrThrow({ where: { organizationId: ORG, id: { not: ids.vac! } } })).id, candidateId: cid, stage: 'Interview' } });
     const iv = await prisma.interview.create({ data: { organizationId: ORG, interviewCode: `B6I-${tag}`, title: 'B6 interview', applicationId: app.id, interviewType: 'Technical', scheduledStart: new Date('2031-01-01T08:00:00Z'), scheduledEnd: new Date('2031-01-01T09:00:00Z'), status: 'Scheduled', attendees: { create: { userId: ids.owner! } } } as never });
     const access = { getApplicationVisibilityWhere: async () => ({ organizationId: ORG }), getInterviewVisibilityWhere: async () => ({ organizationId: ORG }) };
-    const interviews = new InterviewsService(prisma, { create: async () => undefined } as never, access as never, matching);
+    const interviews = new InterviewsService(prisma, { create: async () => undefined } as never, access as never);
+    (interviews as unknown as { matching: typeof matching }).matching = matching; // by name: later chunks add constructor params before it
     pending.length = 0;
     await interviews.submitScorecard(ORG, iv.id, ids.owner!, { overallRating: 4, recommendation: 'Hire', notes: `Strong ICU ${tag} background.` } as never);
     await Promise.all(pending);
@@ -240,9 +241,11 @@ describe.skipIf(!url)('B6 suggest, compare, evidence, duplicates (scratch Postgr
     const rows = await prisma.candidateImportRow.findMany({ where: { jobId }, orderBy: { rowNumber: 'asc' } });
     expect(rows[0]!.result).toBe('Duplicate');
     await imports.saveDecision(ORG, jobId, rows[0]!.id, { decision: 'Update' } as never);
-    const before = await prisma.candidate.count({ where: { organizationId: ORG } });
+    // Count only this test's people: other suites create candidates in the same org concurrently.
+    const mine = { organizationId: ORG, email: { in: [`imp-${tag}@b6.test`, `new-${tag}@b6.test`], mode: "insensitive" as const } };
+    expect(await prisma.candidate.count({ where: mine })).toBe(1);
     const res = await imports.confirmJob(ORG, jobId, ids.owner!);
-    expect(await prisma.candidate.count({ where: { organizationId: ORG } })).toBe(before + 1);
+    expect(await prisma.candidate.count({ where: mine })).toBe(2); // one new person; the existing one is linked
     const linked = res.duplicateReport.find((r) => r.rowId === rows[0]!.id)!;
     expect(linked).toMatchObject({ action: 'linked', candidateId: id, matchedBy: ['email'] });
     expect(linked.filled.sort()).toEqual(['location', 'phone', 'skills']);

@@ -46,8 +46,8 @@ describe('MasterDataService catalog deletion', () => {
     });
     const service = new MasterDataService(prisma as never);
 
-    await expect(service.deleteCatalogValue('org-1', 'skills', 'skill-1')).resolves.toEqual({ id: 'skill-1', deactivated: true, status: 'Inactive' });
-    expect(prisma.masterDataValue.update).toHaveBeenCalledWith({ where: { id: 'skill-1' }, data: { status: 'Inactive', version: { increment: 1 } } });
+    await expect(service.deleteCatalogValue('org-1', 'skills', 'skill-1')).resolves.toEqual({ id: 'skill-1', deactivated: true, status: 'Archived' });
+    expect(prisma.masterDataValue.update).toHaveBeenCalledWith({ where: { id: 'skill-1' }, data: { status: 'Archived', version: { increment: 1 } } });
     expect(prisma.masterDataValue.delete).not.toHaveBeenCalled();
   });
 });
