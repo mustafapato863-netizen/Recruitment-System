@@ -12,7 +12,7 @@
 [data-ui='v2'] .rf2-daytoggle__btn[aria-pressed='true'] { border-color: var(--rf2-border); background: var(--rf2-card); color: var(--rf2-action); font-weight: 600; }
 [data-ui='v2'] .rf2-daytoggle__btn:focus-visible { outline: var(--rf2-focus-width) solid var(--rf2-focus-color); outline-offset: var(--rf2-focus-offset); }
 
-[data-ui='v2'] .rf2-jobstrip { display: grid; grid-template-columns: 40px minmax(0, 1fr) 160px 120px; align-items: center; gap: var(--rf2-space-2); padding: var(--rf2-space-2); border: 1px solid var(--rf2-divider); border-radius: var(--rf2-radius-card); background: var(--rf2-card); }
+[data-ui='v2'] .rf2-jobstrip { display: grid; grid-template-columns: 40px minmax(0, 1fr) 160px 120px auto; align-items: center; gap: var(--rf2-space-2); padding: var(--rf2-space-2); border: 1px solid var(--rf2-divider); border-radius: var(--rf2-radius-card); background: var(--rf2-card); }
 [data-ui='v2'] .rf2-jobstrip__icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: var(--rf2-radius-card); background: var(--rf2-info-tint); color: var(--rf2-action); }
 [data-ui='v2'] .rf2-jobstrip__icon svg { width: 18px; height: 18px; }
 [data-ui='v2'] .rf2-jobstrip__title { margin: 0; font-size: var(--rf2-text-card); line-height: var(--rf2-leading-card); font-weight: 600; }
@@ -62,3 +62,8 @@
 [data-ui='v2'] .rf2-mywork__meta-bit a { color: var(--rf2-action); text-decoration: underline; }
 [data-ui='v2'] .rf2-visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 [data-ui='v2'] .rf2-mywork__meta-line { display: block; overflow: hidden; text-overflow: ellipsis; }
+[data-ui='v2'] .rf2-jobstrip__seats-kicker { font-size: var(--rf2-text-label); line-height: var(--rf2-leading-label); color: var(--rf2-muted); }
+[data-ui='v2'] .rf2-jobstrip__links { display: flex; gap: var(--rf2-space-1); align-items: center; justify-content: flex-end; }
+[data-ui='v2'] .rf2-mywork__head-actions { display: flex; gap: var(--rf2-space-1); align-items: center; justify-content: flex-end; }
+[data-ui='v2'] .rf2-mywork__readonly { color: var(--rf2-muted); font-size: var(--rf2-text-label); }
+[data-ui='v2'] .rf2-mywork__counts { margin-block: 0; }
