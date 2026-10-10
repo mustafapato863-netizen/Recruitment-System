@@ -167,7 +167,6 @@ export function ApplicationDetailPage() {
         'Pre-Hire',
         'Joined',
         'Rejected',
-        'Withdrawn',
       ].filter((s) => s !== application.stage) as ApplicationStage[];
       if (remaining.length > 0 && !remaining.includes(selectedNextStage)) {
         setSelectedNextStage(remaining[0]);

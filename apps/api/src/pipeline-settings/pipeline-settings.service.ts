@@ -10,8 +10,16 @@ export class PipelineSettingsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async listTemplates(organizationId: string): Promise<PipelineTemplateItem[]> {
-    const templates = await this.prisma.pipelineTemplate.findMany({
+    // B9 (v2 §11): one pipeline template. Only the default (else the oldest active) is listed;
+    // extra legacy templates stay in the table but are hidden and can only be archived.
+    const all = await this.prisma.pipelineTemplate.findMany({
       where: { organizationId, status: { not: 'Archived' } },
+      orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
+      select: { id: true },
+      take: 1,
+    });
+    const templates = await this.prisma.pipelineTemplate.findMany({
+      where: { organizationId, id: { in: all.map((t) => t.id) } },
       include: {
         _count: {
           select: { stages: { where: { status: { not: 'Archived' } } } }
@@ -49,7 +57,14 @@ export class PipelineSettingsService {
     return template;
   }
 
+  private async assertNoTemplate(organizationId: string) {
+    if (await this.prisma.pipelineTemplate.count({ where: { organizationId, status: { not: 'Archived' } } })) {
+      throw new ConflictException({ code: 'SINGLE_PIPELINE_TEMPLATE', message: 'There is one pipeline template. Edit its stages instead of adding another template.' });
+    }
+  }
+
   async createTemplate(organizationId: string, dto: CreatePipelineTemplateDto) {
+    await this.assertNoTemplate(organizationId);
     return this.prisma.$transaction(async (tx) => {
       if (dto.isDefault) {
         await tx.pipelineTemplate.updateMany({ where: { organizationId, isDefault: true }, data: { isDefault: false } });
@@ -63,6 +78,9 @@ export class PipelineSettingsService {
   async updateTemplate(organizationId: string, id: string, dto: UpdatePipelineTemplateDto) {
     const template = await this.prisma.pipelineTemplate.findFirst({ where: { id, organizationId, status: { not: 'Archived' } } });
     if (!template) throw new NotFoundException('Template not found');
+    if (template.isDefault && dto.isDefault === false) {
+      throw new ConflictException({ code: 'SINGLE_PIPELINE_TEMPLATE', message: 'The only pipeline template stays the default.' });
+    }
     return this.prisma.$transaction(async (tx) => {
       if (dto.isDefault) {
         await tx.pipelineTemplate.updateMany({ where: { organizationId, id: { not: id }, isDefault: true }, data: { isDefault: false } });
@@ -85,6 +103,7 @@ export class PipelineSettingsService {
   }
 
   async duplicateTemplate(organizationId: string, id: string) {
+    await this.assertNoTemplate(organizationId);
     const template = await this.prisma.pipelineTemplate.findFirst({
       where: { id, organizationId, status: { not: 'Archived' } },
       include: { stages: { where: { status: { not: 'Archived' } } } }

@@ -1,0 +1,55 @@
+name: v2 rules pack (B11)
+
+# Seven v2 rules + five gates against a real Postgres (service container). No new deps.
+on:
+  push:
+    branches: [ main, 'feat/b11-*' ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  rules-pack:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: recruitflow_rules
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d recruitflow_rules"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/recruitflow_rules?schema=public
+      RULES_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/recruitflow_rules?schema=public
+      NODE_ENV: test
+      JWT_ACCESS_SECRET: ci-access-secret-must-be-at-least-32-characters
+      JWT_REFRESH_SECRET: ci-refresh-secret-must-be-at-least-32-characters
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 11
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:generate
+      - name: Migrate (fresh) and seed
+        run: pnpm db:migrate:deploy && pnpm db:seed
+      - name: Rules pack (7 rules + 5 gates)
+        run: pnpm --dir apps/web exec vitest run --root ../.. --environment node --globals apps/api/src/rules-pack
+      - name: Full API suite incl. per-chunk DB specs (same DB)
+        env:
+          B1_TEST_DATABASE_URL: ${{ env.DATABASE_URL }}
+          B2_TEST_DATABASE_URL: ${{ env.DATABASE_URL }}
+          B3_TEST_DATABASE_URL: ${{ env.DATABASE_URL }}
+          B4_TEST_DATABASE_URL: ${{ env.DATABASE_URL }}
+          B5_TEST_DATABASE_URL: ${{ env.DATABASE_URL }}
+          B8_TEST_DATABASE_URL: ${{ env.DATABASE_URL }}
+        run: pnpm test:api

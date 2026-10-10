@@ -6,11 +6,13 @@ import { CommonModule } from '../common/common.module';
 import { AccessControlModule } from '../access-control/access-control.module';
 import { CandidateActivityService } from './candidate-activity.service';
 import { DocumentsModule } from '../documents/documents.module';
+import { ResumeModule } from '../resume/resume.module';
+import { CandidateFillService } from './candidate-fill.service';
 
 @Module({
-  imports: [DatabaseModule, CommonModule, AccessControlModule, DocumentsModule],
+  imports: [DatabaseModule, CommonModule, AccessControlModule, DocumentsModule, ResumeModule],
   controllers: [CandidatesController],
-  providers: [CandidatesService, CandidateActivityService],
+  providers: [CandidatesService, CandidateActivityService, CandidateFillService],
   exports: [CandidatesService],
 })
 export class CandidatesModule {}

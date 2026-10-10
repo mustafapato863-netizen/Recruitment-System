@@ -41,6 +41,7 @@ export const errorCodes = [
   'ASYNC_JOB_FAILED',
   'INTEGRATION_UNAVAILABLE',
   'INTERNAL_ERROR',
+  ...domainErrorCodes(),
   // B1 ownership/scope codes (PR #4); clients branch on these.
   'FILE_NOT_OWNED',
   'JOB_NOT_OWNED',
@@ -48,7 +49,44 @@ export const errorCodes = [
   'OWNER_NOT_ELIGIBLE',
   'ADMIN_ONLY',
   'DOCUMENT_DOWNLOAD_DENIED',
+  // B6 suggest / compare / skill evidence / duplicates (kept as-is by the API error normalizer)
+  'APPLICATION_EXISTS', 'COMPARE_CANDIDATE_NOT_FOUND', 'COMPARE_COUNT', 'CONTACT_REQUIRED', 'EVIDENCE_SNIPPET_REQUIRED',
+  'EVIDENCE_SOURCE_INVALID', 'NOT_JOB_OWNER', 'USER_OWNS_OPEN_WORK', 'JOB_HAS_OPEN_APPLICATIONS', 'CANDIDATE_EXISTS', 'SKILL_INACTIVE', 'SKILL_NOT_IN_LIBRARY',
+  // B9 admin
+  'SINGLE_PIPELINE_TEMPLATE', 'OVERRIDE_REASON_REQUIRED', 'OVERRIDE_NOT_ALLOWED', 'USER_DELETE_NOT_ALLOWED',
 ] as const;
+
+/**
+ * B3/B4/B5 domain codes. Services throw `{ code, message, ... }`; the API error
+ * normalizer keeps these codes as-is (instead of collapsing to CONFLICT etc.).
+ * Gate codes (GATE_*) also carry `gate` and `missing[]` in the envelope.
+ */
+function domainErrorCodes() {
+  return [
+    // B3 requisition / job lifecycle
+    'ADMIN_CANNOT_CHANGE_JOB_STATUS', 'ASSIGNEE_NOT_ELIGIBLE', 'ASSIGNEE_REQUIRED', 'DUE_DATE_REQUIRED', 'SEATS_BELOW_JOINED', 'REQUISITION_NOT_APPROVED', 'REQUISITION_NOT_ACTIVE', 'DEPARTMENT_NOT_FOUND', 'FILE_CLOSED', 'ASSIGNEE_NOT_IN_TEAM',
+    'GRADE_NOT_FOUND', 'ILLEGAL_JOB_TRANSITION', 'JOB_NOT_ACCEPTING_APPLICATIONS', 'NOT_JOB_OWNER',
+    'REASON_REQUIRED', 'REQUISITION_CANCELLED', 'REASON_NOT_IN_LIST', 'HOLD_UNTIL_NOT_FUTURE',
+    // B5 gates
+    'GATE_SCREEN_NOTE_MISSING', 'GATE_SCORECARD_NOT_SUBMITTED', 'GATE_OFFER_NOT_ACCEPTED',
+    'GATE_JOINING_CHECKS_INCOMPLETE', 'GATE_REJECT_REASON_REQUIRED',
+    // B5 interviews / scorecards
+    'INTERVIEWER_NOT_A_USER', 'INTERVIEWER_REQUIRED', 'ROOM_REQUIRED', 'ROOM_URL_INVALID', 'ROOM_URL_NOT_HTTPS',
+    'ROOM_URL_HOST_NOT_ALLOWED', 'SCORECARD_ALREADY_SUBMITTED', 'SCORECARD_NOT_SUBMITTED', 'REVISION_REASON_REQUIRED', 'SCORECARD_REMINDER_ALREADY_SENT',
+    // B5 file / offers
+    'OFFER_CLOSED', 'OFFER_NOT_DRAFT', 'OFFER_NOT_APPROVED', 'OFFER_SEND_REQUIRES_TEMPLATE', 'OFFER_CHANNEL_INVALID',
+    'OFFER_TEMPLATE_INVALID', 'OFFER_TEMPLATE_CHANNEL_MISMATCH', 'OFFER_CANDIDATE_NO_CONTACT',
+    'REOPEN_NOT_OWNER', 'REOPEN_REASON_REQUIRED', 'WITHDRAWN_NOT_AN_EXIT',
+    'FOLLOW_UP_NOT_OWNER', 'JOINING_CHECK_TYPE_INVALID',
+    // B7 grade bands, manager decision, reassign
+    'GRADE_BAND_MISSING', 'OFFER_PAY_VIEW_REQUIRED', 'OFFER_PAY_OUTSIDE_BAND', 'GRADE_BAND_AMOUNT_INVALID', 'GRADE_BAND_FIELDS_REQUIRED',
+    'GRADE_BAND_IDENTITY_IMMUTABLE', 'GRADE_BAND_MIN_GT_MAX', 'GRADE_BAND_OVERLAP', 'GRADE_INVALID', 'SITE_INVALID', 'CURRENCY_INVALID',
+    'OFFER_BASE_CURRENCY_MIXED', 'OFFER_BASE_PAY_MISSING', 'OFFER_DECISION_NOT_MANAGER', 'OFFER_NOT_PENDING_APPROVAL',
+    'DECISION_INVALID', 'DECISION_REASON_REQUIRED',
+    'REASSIGN_ADMIN_FORBIDDEN', 'REASSIGN_CONFLICT', 'REASSIGN_FILE_CLOSED', 'REASSIGN_FILE_NOT_FOUND', 'REASSIGN_NOT_MANAGER',
+    'REASSIGN_REASON_REQUIRED', 'REASSIGN_SCOPE', 'REASSIGN_TARGET_INELIGIBLE', 'REASSIGN_TARGET_NOT_IN_TEAM',
+  ] as const;
+}
 
 export type ErrorCode = (typeof errorCodes)[number];
 
@@ -64,6 +102,16 @@ export interface ErrorEnvelope {
   fields?: ErrorFieldErrors;
   /** Safe, resource-specific context for recoverable client workflows such as optimistic-concurrency conflicts. */
   details?: Record<string, unknown>;
+  /** B5: present on GATE_* 409s: which gate blocked and what is missing. */
+  gate?: string;
+  missing?: string[];
+  /** B7: on GRADE_BAND_MISSING / OFFER_PAY_OUTSIDE_BAND. Pay figures only for OFFER_PAY_VIEW holders. */
+  band?: Record<string, string | number | null>;
+  offeredMonthlyBase?: number;
+  /** B2-15: on 400s, the first offending input (dotted path, e.g. "basePay", "allowances.0.amount", "pay"). */
+  field?: string;
+  /** B2-9: on USER_OWNS_OPEN_WORK / JOB_HAS_OPEN_APPLICATIONS 409s, e.g. { openApplicationsPrimary: 2, openJobs: 1 }. */
+  counts?: Record<string, number>;
   requestId: string;
   retryable: boolean;
   retryAfterSeconds: number | null;
@@ -81,6 +129,39 @@ export const vacancyRequestStatuses = [
 
 export type VacancyRequestStatus = (typeof vacancyRequestStatuses)[number];
 
+/**
+ * B3: display labels for requisition statuses. The stored/API value
+ * 'Converted to Vacancy' is unchanged (no data mapping); it is shown as "Active".
+ */
+export const vacancyRequestStatusLabels: Record<VacancyRequestStatus, string> = {
+  Draft: 'Draft',
+  'Pending Approval': 'Pending Approval',
+  'Changes Requested': 'Changes Requested',
+  Approved: 'Approved',
+  Rejected: 'Rejected',
+  Cancelled: 'Cancelled',
+  'Converted to Vacancy': 'Active',
+};
+
+/** B4 (v2 §7): "HRIS Developer, 1 of 3, due 19 Oct". Seats filled vs the requisition's target. */
+export interface TargetChip {
+  title: string;
+  filled: number;
+  target: number;
+  label: string;
+  dueDate: string | null;
+}
+
+export function buildTargetChip(input: { title: string; filled: number; target: number; dueDate: string | null }): TargetChip {
+  const target = Math.max(0, Math.trunc(input.target || 0));
+  const filled = Math.max(0, Math.trunc(input.filled || 0));
+  return { title: input.title, filled, target, label: `${filled} of ${target}`, dueDate: input.dueDate };
+}
+
+export function vacancyRequestStatusLabel(status: string): string {
+  return (vacancyRequestStatusLabels as Record<string, string>)[status] ?? status;
+}
+
 export const vacancyRequestApprovalStatuses = [
   'Pending',
   'Approved',
@@ -91,15 +172,13 @@ export const vacancyRequestApprovalStatuses = [
 export type VacancyRequestApprovalStatus =
   (typeof vacancyRequestApprovalStatuses)[number];
 
+// B3 (v2 §3/§4): Cancelled lives only on the requisition; Pending Activation is gone.
 export const vacancyStatuses = [
-  'Pending Activation',
   'Open',
   'On Hold',
   'Partially Filled',
   'Filled',
-  // B2: a deactivated job is Closed. Cancelled is legacy here (requisition-only per v2 §3; removed in B3).
   'Closed',
-  'Cancelled',
 ] as const;
 
 export type VacancyStatus = (typeof vacancyStatuses)[number];
@@ -125,6 +204,10 @@ export interface VacancyRequest {
   requesterId: string;
   requestCode: string;
   status: VacancyRequestStatus;
+  /** B3: display label for status ('Converted to Vacancy' -> 'Active'). */
+  statusLabel?: string;
+  /** B4: seats filled (job joined headcount) of the requisition target. */
+  targetChip?: TargetChip;
   requestedHeadcount: number;
   employmentType: string | null;
   reason: string | null;
@@ -145,6 +228,28 @@ export interface VacancyRequest {
   benefits: string | null;
   submittedAt: string | null;
   approvalRevision: number;
+  /** B3: v2 due date (same value as targetFillDate). */
+  dueDate?: string | null;
+  /** B3: master-data grade (category 'grades'). */
+  gradeId?: string | null;
+  /** M1: master-data department. */
+  departmentId?: string | null;
+  /** M1 (GET /vacancy-requests): display fields. */
+  title?: string;
+  site?: { id: string; name: string };
+  grade?: { id: string; name: string } | null;
+  department?: { id: string; name: string } | null;
+  requester?: { id: string; name: string };
+  requesterName?: string;
+  owner?: { id: string; name: string } | null;
+  ownerName?: string | null;
+  /** B2-16: the job's owner once activated, else the assigned employee. */
+  primaryRecruiter?: { id: string; name: string } | null;
+  /** B3: active, non-admin user who owns the job once activated. */
+  assignedEmployeeId?: string | null;
+  activatedAt?: string | null;
+  cancelledAt?: string | null;
+  cancelReason?: string | null;
   approvals: VacancyRequestApproval[];
   createdAt: string;
   updatedAt: string;
@@ -172,6 +277,8 @@ export interface Vacancy {
   status: VacancyStatus;
   approvedHeadcount: number;
   joinedHeadcount: number;
+  /** B4: seats filled of the requisition target, with its due date. */
+  targetChip?: TargetChip;
   openedAt: string | null;
   targetStartDate: string | null;
   /** B1: the single job owner (never an administrator). */
@@ -239,6 +346,11 @@ export interface JobWorkQueueItem {
   health: WorkHealth | null;
   lastActivity: { at: string; label: string } | null;
   nextAction: NextActionDescriptor | null;
+  /** B3/E3: requisition due date (YYYY-MM-DD, plain fact) and department. */
+  dueDate?: string | null;
+  department?: string | null;
+  /** B3: optional hold-until date (data only). */
+  holdUntil?: string | null;
 }
 
 export interface CreateVacancyRequestInput {
@@ -264,6 +376,11 @@ export interface CreateVacancyRequestInput {
   responsibilities?: string | null;
   qualifications?: string | null;
   benefits?: string | null;
+  dueDate?: string | null;
+  gradeId?: string | null;
+  /** M1: master-data department. */
+  departmentId?: string | null;
+  assignedEmployeeId?: string | null;
 }
 
 export interface VacancyRequestActionInput {
@@ -300,6 +417,11 @@ export interface UpdateVacancyRequestInput {
   responsibilities?: string | null;
   qualifications?: string | null;
   benefits?: string | null;
+  dueDate?: string | null;
+  gradeId?: string | null;
+  /** M1: master-data department. */
+  departmentId?: string | null;
+  assignedEmployeeId?: string | null;
 }
 
 export interface VacancyRequestFilterInput {
@@ -378,6 +500,12 @@ export interface UserProfile {
   roles: RoleSummary[];
   permissions: string[];
   lastLoginAt: string | null;
+  /** B10 rollout switch: the caller's seat, the seats on v2 (org config > env RF_V2_SEATS > ['employee']), and whether this user gets v2. */
+  seat?: 'employee' | 'manager' | 'admin';
+  v2Seats?: Array<'employee' | 'manager' | 'admin'>;
+  v2Enabled?: boolean;
+  /** Same list, under flags (as promised in FRONTEND_GAP F4). */
+  flags?: { v2Seats: Array<'employee' | 'manager' | 'admin'> };
 }
 
 export type UserThemePreference = 'light' | 'dark';
@@ -793,6 +921,12 @@ export interface Application {
   lastActivityLabel?: string | null | undefined;
   /** Earliest persisted follow-up due date, when one is visible to the caller. */
   nextFollowUpAt?: string | null | undefined;
+  /** B5: owner-editable follow-up date (YYYY-MM-DD). */
+  followUpDate?: string | null | undefined;
+  /** E3 (list only): the five gates for this file. */
+  gates?: Array<{ gate: 'screen-note' | 'scorecard' | 'offer-accepted' | 'joining-checks' | 'reject-reason'; code: string; met: boolean; missing: string[] }> | undefined;
+  /** E3 (list/board card only): next upcoming interview, else the last one. */
+  interview?: { when: 'next' | 'last'; startAt: string; endAt: string; room: { name: string | null; url: string | null } } | null | undefined;
   appliedAt: string;
   createdAt: string;
   updatedAt: string;
@@ -1044,6 +1178,14 @@ export interface InterviewScorecardItem {
   strengths?: string | null | undefined;
   concerns?: string | null | undefined;
   notes?: string | null | undefined;
+  /** B5: Draft | Submitted. */
+  status?: 'Draft' | 'Submitted';
+  revision?: number;
+  previousRevisionId?: string | null;
+  revisedById?: string | null;
+  revisionReason?: string | null;
+  /** B5: derived (status === 'Submitted'); no longer stored. */
+  /** TODO(E3): deprecated mirror of status === Submitted; removed once Frontend reads status. */
   isLocked: boolean;
   submittedAt: string;
 }
@@ -1062,7 +1204,12 @@ export interface Interview {
   scheduledEnd: string;
   timezone: string;
   locationUrl?: string | null | undefined;
+  /** B5: physical room when not online. */
+  roomName?: string | null | undefined;
+  /** B5: display name of the first interviewer (a user). Free text is no longer stored. */
   interviewerName?: string | null | undefined;
+  /** B5: free-text name from before B5, read-only history. */
+  legacyInterviewerName?: string | null | undefined;
   interviewerJobTitle?: string | null | undefined;
   status: InterviewStatus;
   attendees?: InterviewAttendeeItem[] | undefined;
@@ -1212,7 +1359,13 @@ export interface OfferApprovalInboxItem {
   positionTitle: string;
   branchName?: string | null;
   versionNumber: number;
-  monthlyPackage: number | null;
+  /** B5 follow-up: the job's grade (from its requisition). */
+  grade?: { id: string; name: string } | null;
+  /** M3: the job's site for band matching (siteId = branchId). */
+  branchId?: string | null;
+  siteId?: string | null;
+  /** B7: omitted (absent) without OFFER_PAY_VIEW. */
+  monthlyPackage?: number | null;
   packageCurrency?: OfferCurrency | null;
   roleCode: string;
   status: string;
@@ -1232,6 +1385,12 @@ export interface OfferVersionItem {
   workLocation?: string | null;
   workingSchedule?: string | null;
   approvalStatus: OfferVersionApprovalStatus;
+  status?: string;
+  sentChannel?: 'email' | 'whatsapp' | string | null;
+  sentAt?: string | null;
+  /** B5 follow-up: the approver's note (who, when, text). */
+  approverNote?: { byUserId: string | null; byName: string | null; at: string; text: string } | null;
+  /** TODO(E3): deprecated, derived from status; removed once Frontend reads status. */
   isLocked: boolean;
   components: OfferComponentItem[];
   approvals: OfferApprovalItem[];
@@ -1246,6 +1405,10 @@ export interface Offer {
   applicationCode?: string;
   candidateName?: string;
   positionTitle?: string;
+  grade?: { id: string; name: string } | null;
+  /** M3: the job's site for band matching (siteId = branchId). */
+  branchId?: string | null;
+  siteId?: string | null;
   location?: string | null;
   offerCode: string;
   currentVersionId?: string | null;
@@ -1478,7 +1641,7 @@ export interface BulkImportRowItem {
 // --- Phase 8: Reports, Pipeline & Integrations ---
 
 export interface ReportKpis {
-  timeToFill: { value: number; change: number; sampleCount?: number };
+  timeToFill: { value: number; sampleCount?: number };
   timeToOffer: { value: number; target: number };
   offerAcceptanceRate: { value: number; accepted: number; total: number };
   interviewNoShowRate: { value: number; noShows: number; total: number };
@@ -1505,15 +1668,6 @@ export interface RecruiterWorkload {
   vacancies: number;
   applications: number;
   overdueTasks: number;
-  /** Successful, audit-recorded recruiter actions in the selected report period. */
-  activity?: {
-    total: number;
-    applications: number;
-    screening: number;
-    interviews: number;
-    offers: number;
-    hiring: number;
-  };
 }
 
 export interface ReportRange {
@@ -1566,14 +1720,7 @@ export interface RecruitmentKpiItem {
 
 export interface ReportOverview {
   range: ReportRange;
-  comparisonRange: ReportRange;
   kpis: ReportKpis;
-  comparison: {
-    applications: number;
-    offers: number;
-    interviews: number;
-    joined: number;
-  };
   trend: ReportTrendPoint[];
   sourceBreakdown: ReportSourceBreakdown[];
   funnel: FunnelStage[];
@@ -1758,3 +1905,115 @@ export interface ExtractedCandidate {
 
 export * from './resume/index.ts';
 
+
+// ─── B4 / E1: GET /me/work ──────────────────────────────────────
+/** E1: fixed entity types for My Work items. */
+export const myWorkEntityTypes = ['application', 'interview', 'offer', 'requisition', 'job', 'task'] as const;
+export type MyWorkEntityType = (typeof myWorkEntityTypes)[number];
+export type MyWorkDay = 'today' | 'tomorrow';
+export type MyWorkItemType = 'job' | 'requisition' | 'task' | 'interview' | 'scorecard' | 'offer';
+export type MyWorkWaitingOn = 'approver' | 'interviewer' | 'candidate';
+
+export interface MyWorkAction {
+  key: string;
+  label: string;
+  disabled: boolean;
+  /** Why it is disabled (gate not met, on hold, not the owner, ...). */
+  reason?: string;
+}
+
+export interface MyWorkPerson {
+  id: string | null;
+  name: string;
+}
+
+export interface MyWorkItem {
+  id: string;
+  type: MyWorkItemType;
+  title: string;
+  /** Plain due fact (ISO date or instant). No timers or countdowns. */
+  dueAt: string | null;
+  reason: string;
+  nextAction: { code: string; label: string };
+  entity: { type: MyWorkEntityType; id: string };
+  actions: MyWorkAction[];
+  waitingOn?: MyWorkWaitingOn;
+  /** Interview items. */
+  startAt?: string;
+  endAt?: string;
+  room?: { name: string | null; url: string | null };
+  interviewer?: MyWorkPerson | null;
+  interviewers?: MyWorkPerson[];
+  /** C6: offers waiting on approval: who it waits on (first pending approver, and all of them). */
+  approver?: MyWorkPerson | null;
+  approvers?: MyWorkPerson[];
+  /** Application-linked items (interviews, scorecards, offers). */
+  applicationId?: string;
+  candidate?: { id: string; name: string };
+  stage?: string;
+}
+
+export interface MyWorkTarget extends TargetChip {
+  vacancyId: string;
+  vacancyCode: string;
+  department: string | null;
+  site: string | null;
+  owner: { id: string; name: string } | null;
+}
+
+/** M2-M4: GET /team/work — direct reports' My Work, each item tagged with its owner. */
+export type TeamWorkItem = MyWorkItem & { owner: { id: string; name: string } };
+export interface TeamWorkResponse {
+  timezone: string;
+  day: MyWorkDay;
+  date: string;
+  generatedAt: string;
+  people: Array<{ id: string; name: string }>;
+  counts: { overdue: number; today: number; waitingOnOthers: number };
+  overdue: TeamWorkItem[];
+  dueToday: TeamWorkItem[];
+  waitingOnOthers: TeamWorkItem[];
+  targets: Array<MyWorkTarget & { owner: { id: string; name: string } }>;
+  empty: boolean;
+  emptyMessage: string | null;
+}
+
+export interface MyWorkResponse {
+  timezone: string;
+  today: string;
+  /** E1: which day dueToday lists (Cairo). */
+  day: MyWorkDay;
+  date: string;
+  generatedAt: string;
+  counts: { overdue: number; today: number; waitingOnOthers: number };
+  overdue: MyWorkItem[];
+  /** Items due on `date` (today by default, tomorrow with ?day=tomorrow). */
+  dueToday: MyWorkItem[];
+  waitingOnOthers: MyWorkItem[];
+  targets: MyWorkTarget[];
+  /** True when there are no work items; targets alone do not count. */
+  empty: boolean;
+  emptyMessage: string | null;
+  /** Reminder worker swept within 2x its interval. */
+  reminderWorkerHealthy: boolean;
+}
+
+/** B8: GET /results/me|team|org?month=YYYY-MM&vacancyId=&managerId= (Cairo months). No activity counters, no prior-period comparison. */
+export interface ResultTile {
+  value: number;
+  of: number;
+  sampleSize: number;
+  detail: string;
+  /** true when sampleSize < 5; seats are exempt (always false). */
+  tooFewToJudge: boolean;
+}
+export interface ResultsResponse {
+  scope: 'me' | 'team' | 'org';
+  month: string;
+  range: { from: string; to: string };
+  filters: { vacancyId: string | null; managerId: string | null };
+  people: Array<{ id: string; name: string }>;
+  tiles: { seats: ResultTile; overdueFollowUps: ResultTile; screensReachedInterview: ResultTile; offersAccepted: ResultTile };
+  /** M2-M4: /results/team only — one row per direct report (after the manager filter). */
+  rows?: Array<{ person: { id: string; name: string }; tiles: ResultsResponse['tiles'] }>;
+}

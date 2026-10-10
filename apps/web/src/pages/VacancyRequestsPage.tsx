@@ -1,3 +1,4 @@
+import { vacancyRequestStatusLabel } from '@recruitflow/contracts';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { VacancyCoreContext, VacancyRequest, VacancyRequestStatus } from '@recruitflow/contracts';
@@ -85,7 +86,7 @@ export function VacancyRequestsPage() {
     { label: 'Pending Approval', value: 'Pending Approval', count: count('Pending Approval') },
     { label: 'Changes Requested', value: 'Changes Requested', count: count('Changes Requested') },
     { label: 'Approved', value: 'Approved', count: count('Approved') },
-    { label: 'Converted', value: 'Converted to Vacancy', count: count('Converted to Vacancy') },
+    { label: vacancyRequestStatusLabel('Converted to Vacancy'), value: 'Converted to Vacancy', count: count('Converted to Vacancy') },
   ];
 
   return (
@@ -172,7 +173,7 @@ export function VacancyRequestsPage() {
             <option value="">All Statuses</option>
             {['Draft', 'Pending Approval', 'Changes Requested', 'Approved', 'Rejected', 'Cancelled', 'Converted to Vacancy'].map((item) => (
               <option key={item} value={item}>
-                {item}
+                {vacancyRequestStatusLabel(item)}
               </option>
             ))}
           </Select>
@@ -277,7 +278,7 @@ export function VacancyRequestsPage() {
                   key: 'status',
                   header: 'Approval Status',
                   priority: 'secondary',
-                  render: (request) => <StatusBadge status={request.status} />,
+                  render: (request) => <StatusBadge status={request.status} label={vacancyRequestStatusLabel(request.status)} />,
                 },
                 {
                   key: 'createdAt',
