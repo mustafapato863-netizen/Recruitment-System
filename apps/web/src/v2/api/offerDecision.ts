@@ -55,7 +55,7 @@ export const canSeePay = (seat: string | undefined, permissions: readonly string
 export async function loadDecision(offerId: string, showPay: boolean): Promise<{ offer: DecisionOffer; bands: GradeBand[] | null }> {
   const raw = await getApi<DecisionOffer>(`/offers/${enc(offerId)}`);
   const offer = showPay ? raw : stripPay(raw);
-  let bands: GradeBand[] | null = null;
+  let bands: GradeBand[] | null;
   try {
     const r = await getApi<GradeBand[] | { data: GradeBand[] }>('/master-data/grade-bands');
     const rows = Array.isArray(r) ? r : r?.data ?? [];
