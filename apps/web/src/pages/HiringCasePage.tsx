@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { isForbiddenError } from '../utils/vacancyAccess';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { getApi, patchApi, postApi } from '../api/client';
 import type { HiringCase, ComplianceStatus } from '@recruitflow/contracts';
@@ -52,6 +53,7 @@ export function HiringCasePage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [forbidden403, setIsForbiddenError] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmState>(initialConfirmState);
 
@@ -78,6 +80,7 @@ export function HiringCasePage() {
       setHiringCase(await getApi<HiringCase>(`/hiring/${id}`));
     } catch (reason: unknown) {
       setError(getErrorMessage(reason));
+      setIsForbiddenError(isForbiddenError(reason));
     } finally {
       setLoading(false);
       setIsRefreshing(false);
@@ -198,7 +201,7 @@ export function HiringCasePage() {
   }
 
   if (!hiringCase) {
-    const isForbidden = error?.toLowerCase().includes('denied') || error?.toLowerCase().includes('permission') || error?.includes('403');
+    const isForbidden = forbidden403 || error?.toLowerCase().includes('denied') || error?.toLowerCase().includes('permission') || error?.includes('403');
     return (
       <PageFrame title="Hire" description="Pre-hire checks and joining.">
         {isForbidden ? (
