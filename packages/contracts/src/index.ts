@@ -1848,6 +1848,23 @@ export interface MyWorkTarget extends TargetChip {
   owner: { id: string; name: string } | null;
 }
 
+/** M2-M4: GET /team/work — direct reports' My Work, each item tagged with its owner. */
+export type TeamWorkItem = MyWorkItem & { owner: { id: string; name: string } };
+export interface TeamWorkResponse {
+  timezone: string;
+  day: MyWorkDay;
+  date: string;
+  generatedAt: string;
+  people: Array<{ id: string; name: string }>;
+  counts: { overdue: number; today: number; waitingOnOthers: number };
+  overdue: TeamWorkItem[];
+  dueToday: TeamWorkItem[];
+  waitingOnOthers: TeamWorkItem[];
+  targets: Array<MyWorkTarget & { owner: { id: string; name: string } }>;
+  empty: boolean;
+  emptyMessage: string | null;
+}
+
 export interface MyWorkResponse {
   timezone: string;
   today: string;

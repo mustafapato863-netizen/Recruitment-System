@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { AuthUser } from '@recruitflow/contracts';
+import type { TeamWorkResponse, AuthUser } from '@recruitflow/contracts';
 // Runtime service imports must remain value imports for Nest DI metadata reflection.
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { PrismaService } from '../database/prisma.service';
@@ -34,6 +34,33 @@ const WORKING_JOB = ['Open', 'Partially Filled'];
 @Injectable()
 export class MyWorkService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+
+  /**
+   * M2-M4: GET /team/work — the My Work buckets of each ACTIVE direct report of the caller (users.managerId),
+   * merged, every item tagged with owner{id,name}. Scoped server-side to direct reports only (no admin bypass).
+   * Items keep the report's own actions/reasons (they are the report's work).
+   */
+  async getTeamWork(user: AuthUser, now: Date = new Date(), day: MyWorkDay = 'today'): Promise<TeamWorkResponse> {
+    const reports = await this.prisma.user.findMany({
+      where: { organizationId: user.organizationId, managerId: user.userId, status: 'Active' },
+      select: { id: true, displayName: true },
+      orderBy: { displayName: 'asc' },
+    });
+    const per = await Promise.all(reports.map(async (r) => ({ r, w: await this.getMyWork({ ...user, userId: r.id, roleCodes: [] }, now, day) })));
+    const tag = <T>(items: T[], r: { id: string; displayName: string }) => items.map((i) => ({ ...i, owner: { id: r.id, name: r.displayName } }));
+    const pick = (k: 'overdue' | 'dueToday' | 'waitingOnOthers') => per.flatMap(({ r, w }) => tag(w[k], r));
+    const overdue = pick('overdue'); const dueToday = pick('dueToday'); const waitingOnOthers = pick('waitingOnOthers');
+    const first = per[0]?.w;
+    const empty = overdue.length + dueToday.length + waitingOnOthers.length === 0;
+    return {
+      timezone: first?.timezone ?? 'Africa/Cairo', day, date: first?.date ?? '', generatedAt: now.toISOString(),
+      people: reports.map((r) => ({ id: r.id, name: r.displayName })),
+      counts: { overdue: overdue.length, today: dueToday.length, waitingOnOthers: waitingOnOthers.length },
+      overdue, dueToday, waitingOnOthers,
+      targets: per.flatMap(({ r, w }) => tag(w.targets, r)),
+      empty, emptyMessage: empty ? (reports.length ? 'Your team has nothing due.' : 'You have no direct reports.') : null,
+    };
+  }
 
   async getMyWork(user: AuthUser, now: Date = new Date(), day: MyWorkDay = 'today'): Promise<MyWorkResponse> {
     const org = user.organizationId;

@@ -140,6 +140,24 @@ describe.skipIf(!url)('B4 My Work, target chip and reminders (scratch Postgres)'
     await prisma.vacancyRequest.updateMany({ where: { id: { in: [badAssignee, changes] } }, data: { status: 'Cancelled' } });
   });
 
+  it('GET /team/work: direct reports only, items tagged with owner, server-side scope', async () => {
+    const boss = randomUUID();
+    const role = await prisma.role.findFirstOrThrow({ where: { code: 'RECRUITER' } });
+    await prisma.user.create({ data: { id: boss, organizationId: ORG, email: `tb-${tag}@b4.test`, emailNormalized: `tb-${tag}@b4.test`, displayName: 'B4 teamboss', passwordHash: 'x', userRoles: { create: { roleId: role.id } } } });
+    await prisma.user.update({ where: { id: ids.a! }, data: { managerId: boss } });
+    const { job } = await activated(ids.a!, TODAY);
+    const { job: other } = await activated(ids.b!, TODAY);
+    const team = await myWork.getTeamWork(user(boss), NOW);
+    expect(team.people).toEqual([{ id: ids.a, name: 'B4 a' }]);
+    const items = [...team.overdue, ...team.dueToday, ...team.waitingOnOthers];
+    expect(items.find((i) => i.id === job.id)?.owner).toEqual({ id: ids.a, name: 'B4 a' });
+    expect(items.every((i) => i.owner.id === ids.a)).toBe(true);
+    expect(JSON.stringify(team)).not.toContain(other.id); // b is not a report
+    expect((await myWork.getTeamWork(user(ids.b!), NOW))).toMatchObject({ people: [], empty: true, emptyMessage: 'You have no direct reports.' });
+    for (const j of [job.id, other.id]) await prisma.vacancy.update({ where: { id: j }, data: { status: 'Closed' } });
+    await prisma.user.update({ where: { id: ids.a! }, data: { managerId: null } });
+  });
+
   it('E1 (DB): candidate/stage on file items, department/site/owner on targets, ?day=tomorrow, worker heartbeat', async () => {
     const { job } = await activated(ids.a!, '2031-04-30');
     const cand = randomUUID();
