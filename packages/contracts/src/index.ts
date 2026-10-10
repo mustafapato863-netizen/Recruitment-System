@@ -60,7 +60,7 @@ function domainErrorCodes() {
     'GATE_JOINING_CHECKS_INCOMPLETE', 'GATE_REJECT_REASON_REQUIRED',
     // B5 interviews / scorecards
     'INTERVIEWER_NOT_A_USER', 'INTERVIEWER_REQUIRED', 'ROOM_REQUIRED', 'ROOM_URL_INVALID', 'ROOM_URL_NOT_HTTPS',
-    'ROOM_URL_HOST_NOT_ALLOWED', 'SCORECARD_ALREADY_SUBMITTED', 'SCORECARD_NOT_SUBMITTED', 'REVISION_REASON_REQUIRED',
+    'ROOM_URL_HOST_NOT_ALLOWED', 'SCORECARD_ALREADY_SUBMITTED', 'SCORECARD_NOT_SUBMITTED', 'REVISION_REASON_REQUIRED', 'SCORECARD_REMINDER_ALREADY_SENT',
     // B5 file / offers
     'OFFER_CLOSED', 'OFFER_NOT_DRAFT', 'OFFER_NOT_APPROVED', 'OFFER_SEND_REQUIRES_TEMPLATE', 'OFFER_CHANNEL_INVALID',
     'OFFER_TEMPLATE_INVALID', 'OFFER_TEMPLATE_CHANNEL_MISMATCH', 'OFFER_CANDIDATE_NO_CONTACT',
@@ -1106,6 +1106,7 @@ export interface InterviewScorecardItem {
   revisedById?: string | null;
   revisionReason?: string | null;
   /** B5: derived (status === 'Submitted'); no longer stored. */
+  /** TODO(E3): deprecated mirror of status === Submitted; removed once Frontend reads status. */
   isLocked: boolean;
   submittedAt: string;
 }
@@ -1307,6 +1308,7 @@ export interface OfferVersionItem {
   sentAt?: string | null;
   /** B5 follow-up: the approver's note (who, when, text). */
   approverNote?: { byUserId: string | null; byName: string | null; at: string; text: string } | null;
+  /** TODO(E3): deprecated, derived from status; removed once Frontend reads status. */
   isLocked: boolean;
   components: OfferComponentItem[];
   approvals: OfferApprovalItem[];
