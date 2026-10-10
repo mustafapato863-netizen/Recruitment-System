@@ -63,8 +63,9 @@ describe('E4 adapters (B6 #13)', () => {
     [404, 'One or more candidates were not found or are not active.', 'COMPARE_CANDIDATE_NOT_FOUND'],
     [403, 'Only the job owner, their manager or a full-access user can suggest or compare for this job.', 'NOT_JOB_OWNER'],
     [409, 'Candidate Heba Mansour has already applied to vacancy VAC-1.', 'APPLICATION_EXISTS'],
-  ])('error pass-through: %s "%s" → %s (code dropped by the filter, message mapped)', (status, msg, code) => {
-    expect(matchErrorFromError(new ApiError(status, msg, undefined, { code: 'VALIDATION_ERROR' }))?.code).toBe(code);
+  ])('error codes: %s "%s" → %s (read from the code, not the message)', (status, msg, code) => {
+    expect(matchErrorFromError(new ApiError(status, msg, { code, message: msg }, { code }))).toEqual({ code, message: msg });
+    expect(matchErrorFromError(new ApiError(status, msg, undefined, { code: 'VALIDATION_ERROR' }))).toBeNull();
   });
 });
 
