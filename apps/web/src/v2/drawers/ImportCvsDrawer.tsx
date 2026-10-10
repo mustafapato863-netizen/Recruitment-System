@@ -1,11 +1,11 @@
 import { useRef, useState } from 'react';
 import { CircleCheck, CircleX, FileText, Link2, TriangleAlert, Upload } from 'lucide-react';
 import { ButtonV2, DrawerV2, StatusChip } from '../../components/v2';
-import { cvFileProblem, duplicateCheck, importRow, parseCv, splitName, type DuplicateCheckResult, type ExtractedCv, type ImportDecision } from '../api/cvImport';
+import { FIELD_LABEL, cvFileProblem, duplicateCheck, importRow, parseCv, splitName, type DuplicateCheckResult, type ExtractedCv, type ImportDecision, type LinkResult } from '../api/cvImport';
 import { errorMessage, jobTitle, type JobDetail } from '../api/jobs';
 
 type RowStatus = 'parsing' | 'ready' | 'unreadable' | 'invalid' | 'importing' | 'done' | 'failed';
-interface Row { key: string; file: File; status: RowStatus; cv?: ExtractedCv; dup?: DuplicateCheckResult | null; decision?: ImportDecision; problem?: string }
+interface Row { key: string; file: File; status: RowStatus; cv?: ExtractedCv; dup?: DuplicateCheckResult | null; decision?: ImportDecision; problem?: string; link?: LinkResult }
 
 const MATCH_LABEL = { email: 'same email', phone: 'same phone' } as const;
 
@@ -45,13 +45,14 @@ export function ImportCvsDrawer({ job, onClose, onDone }: { job: JobDetail; onCl
   const parsing = rows.some((r) => r.status === 'parsing');
   const run = async () => {
     setBusy(true);
-    let ok = 0; let linked = 0; let failed = 0;
+    let ok = 0; let linked = 0; let failed = 0; let conflicted = 0;
     for (const r of ready) {
       patch(r.key, { status: 'importing' });
       try {
-        await importRow(job.id, r.file, r.cv ?? {}, r.decision ?? { kind: 'create' });
+        const res = await importRow(job.id, r.file, r.cv ?? {}, r.decision ?? { kind: 'create' });
         ok += 1; if (r.decision?.kind === 'link') linked += 1;
-        patch(r.key, { status: 'done' });
+        if (res.link?.conflicts.length) conflicted += 1;
+        patch(r.key, { status: 'done', link: res.link });
       } catch (e) {
         failed += 1;
         patch(r.key, { status: 'failed', problem: errorMessage(e, 'Import failed.') });
@@ -59,7 +60,8 @@ export function ImportCvsDrawer({ job, onClose, onDone }: { job: JobDetail; onCl
     }
     setBusy(false);
     setSummary(`${ok} added to Applied${linked ? ` (${linked} linked to an existing person)` : ''}${failed ? ` · ${failed} failed` : ''}.`);
-    if (ok && !failed) onDone();
+    // Keep the drawer open when there are conflicts to read; otherwise close and refresh the board.
+    if (ok && !failed && !conflicted) onDone();
   };
 
   return (
@@ -126,7 +128,14 @@ function ImportRow({ row, onDecide }: { row: Row; onDecide: (d: ImportDecision) 
           ))}
         </fieldset>
       ) : null}
-      {row.status === 'done' ? <p className="rf2-jtable__sub"><CircleCheck aria-hidden="true" /> Added to Applied.</p> : null}
+      {row.status === 'done' ? <p className="rf2-jtable__sub"><CircleCheck aria-hidden="true" /> Added to Applied.{row.link?.filled.length ? ` Filled from the CV: ${row.link.filled.map((f) => FIELD_LABEL[f] ?? f).join(', ')}.` : ''}</p> : null}
+      {row.status === 'done' && row.link?.conflicts.length ? (
+        <div className="rf2-conflicts" role="group" aria-label={`Not overwritten for ${row.file.name}`}>
+          <p className="rf2-conflicts__title"><TriangleAlert aria-hidden="true" /> Not overwritten — the bank keeps its value. Check these on the person:</p>
+          <ul>{row.link.conflicts.map((c) => <li key={c.field}><strong>{FIELD_LABEL[c.field] ?? c.field}</strong>: bank “{c.existing}” · CV “{c.incoming}”</li>)}</ul>
+        </div>
+      ) : null}
+      {row.status === 'done' && row.link && !row.link.compared ? <p className="rf2-jtable__sub">Linked. The existing record could not be compared with this CV.</p> : null}
     </li>
   );
 }
