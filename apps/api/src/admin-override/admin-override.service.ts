@@ -11,7 +11,7 @@ import { VacancyCoreService } from '../vacancy-core/vacancy-core.service';
  *   TODO(B3): route hold/reopen/close through B3's job lifecycle service so they also write vacancy_status_histories,
  *   take holdUntil, validate the reason against hold-reasons / close-reasons, and run the transition table.
  *   Until then they use VacancyCoreService.updateVacancyStatus + the ADMIN_OVERRIDE audit row.
- *   TODO(B7): file.reassign → B7 ReassignService (manager reassign rules, history, notifications). Returns 400 here.
+ *   file.reassign lives on #15 (POST /admin/overrides/file-reassign via B7 ReassignService.adminOverride). Returns 400 here; this branch has no B7.
  */
 export const OVERRIDE_ACTIONS = {
   'job.hold': { from: ['Open', 'Partially Filled'], to: 'On Hold' },
@@ -33,7 +33,7 @@ export class AdminOverrideService {
     const reason = body.reason?.trim() ?? '';
     if (reason.length < 10) throw new BadRequestException({ code: 'OVERRIDE_REASON_REQUIRED', message: 'An override needs a reason (at least 10 characters).' });
     if ((DEFERRED_OVERRIDE_ACTIONS as readonly string[]).includes(body.action ?? '')) {
-      throw new BadRequestException({ code: 'OVERRIDE_NOT_ALLOWED', message: 'file.reassign override is not available on this build yet (needs B7 reassign). Use the manager reassign once B7 is merged.' });
+      throw new BadRequestException({ code: 'OVERRIDE_NOT_ALLOWED', message: 'file.reassign override is not available on this build (needs B7 reassign). It ships on #15 as POST /admin/overrides/file-reassign.' });
     }
     const rule = OVERRIDE_ACTIONS[body.action as OverrideAction];
     if (!rule) throw new BadRequestException({ code: 'OVERRIDE_NOT_ALLOWED', message: `Allowed override actions: ${Object.keys(OVERRIDE_ACTIONS).join(', ')}.` });
