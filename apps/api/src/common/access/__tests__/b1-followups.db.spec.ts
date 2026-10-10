@@ -13,6 +13,7 @@ import type { ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import type { AuthUser } from '@recruitflow/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { privateVacancy } from '../../testing/private-vacancy';
 import { PrismaService } from '../../../database/prisma.service';
 import { Prisma } from '@recruitflow/database';
 // Stack-merge guard: B5 replaces InterviewScorecard.isLocked with status. Fixtures work on both shapes.
@@ -98,8 +99,8 @@ describe.skipIf(!url)('B1 follow-ups (scratch Postgres)', () => {
     await mkUser(ids.hireApprover, 'hire-approver', 'FINAL_HIRING_APPROVER');
     await mkUser(ids.admin, 'admin', 'ADMINISTRATOR');
 
-    const [v, w] = await prisma.vacancy.findMany({ where: { organizationId: ORG, primaryRecruiterId: null, assignments: { none: {} } }, orderBy: { vacancyCode: 'desc' }, take: 2 });
-    vacancyId = v!.id; otherVacancyId = w!.id;
+    // Private unowned jobs: seeded unowned jobs are few and other suites pick them concurrently.
+    vacancyId = await privateVacancy(prisma, ORG, 'B1a'); otherVacancyId = await privateVacancy(prisma, ORG, 'B1b');
     for (const vid of [vacancyId, otherVacancyId]) {
       // Same shape as a PRIMARY assignment so the B1 backfill invariant holds.
       await prisma.$transaction([ // atomic for concurrent invariant checks
