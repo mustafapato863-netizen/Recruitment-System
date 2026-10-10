@@ -26,7 +26,6 @@ const JobsListRoute = lazy(() => import('./v2/pages/JobsRoute').then((m) => ({ d
 const JobDetailRoute = lazy(() => import('./v2/pages/JobsRoute').then((m) => ({ default: m.JobDetailRoute })));
 const ApplicationRoute = lazy(() => import('./v2/pages/ApplicationRoute').then((m) => ({ default: m.ApplicationRoute })));
 const MyWorkRoute = lazy(() => import('./v2/pages/MyWorkRoute').then((m) => ({ default: m.MyWorkRoute })));
-const UsersRolesPage = lazy(() => import('./pages/UsersRolesPage').then((m) => ({ default: m.UsersRolesPage })));
 const ReportingTreePage = lazy(() => import('./pages/ReportingTreePage').then((m) => ({ default: m.ReportingTreePage })));
 const MasterDataPage = lazy(() => import('./pages/MasterDataPage').then((m) => ({ default: m.MasterDataPage })));
 const AuditLogPage = lazy(() => import('./pages/AuditLogPage').then((m) => ({ default: m.AuditLogPage })));
@@ -60,6 +59,8 @@ const ImportPreviewPage = lazy(() => import('./pages/ImportPreviewPage').then((m
 const BulkImportPage = lazy(() => import('./pages/BulkImportPage').then((m) => ({ default: m.BulkImportPage })));
 const CVIntakePage = lazy(() => import('./pages/CVIntakePage').then((m) => ({ default: m.CVIntakePage })));
 const ReportsRoute = lazy(() => import('./v2/pages/ReportsRoute').then((m) => ({ default: m.ReportsRoute })));
+const UsersRoute = lazy(() => import('./v2/admin/AdminRoutes').then((m) => ({ default: m.UsersRoute })));
+const RolesRoute = lazy(() => import('./v2/admin/AdminRoutes').then((m) => ({ default: m.RolesRoute })));
 const PipelineSettingsPage = lazy(() => import('./pages/PipelineSettingsPage').then((m) => ({ default: m.PipelineSettingsPage })));
 const EmailTemplatesPage = lazy(() => import('./pages/EmailTemplatesPage').then((m) => ({ default: m.EmailTemplatesPage })));
 const WhatsAppTemplatesPage = lazy(() => import('./pages/WhatsAppTemplatesPage').then((m) => ({ default: m.WhatsAppTemplatesPage })));
@@ -111,7 +112,15 @@ function App() {
                     path="/users"
                     element={
                       <PermissionGate requiredPermission="USERS_VIEW">
-                        <UsersRolesPage />
+                        <UsersRoute />
+                      </PermissionGate>
+                    }
+                  />
+                  <Route
+                    path="/roles"
+                    element={
+                      <PermissionGate requiredPermission="USERS_VIEW">
+                        <RolesRoute />
                       </PermissionGate>
                     }
                   />

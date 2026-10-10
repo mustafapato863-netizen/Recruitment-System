@@ -1,0 +1,34 @@
+/* v2 Admin (A1–A5). Scoped under [data-ui='v2']. */
+[data-ui='v2'] .rf2-admin { display: flex; flex-direction: column; gap: var(--rf2-space-2); }
+[data-ui='v2'] .rf2-admin__filterset { display: flex; gap: var(--rf2-space-1); align-items: center; flex-wrap: wrap; }
+[data-ui='v2'] .rf2-admin__card { padding: 0; overflow: hidden; }
+[data-ui='v2'] .rf2-admin__head { padding: var(--rf2-space-1-5) var(--rf2-space-2); border-bottom: 1px solid var(--rf2-border); }
+[data-ui='v2'] .rf2-admin__head h2 { margin: 0; }
+[data-ui='v2'] .rf2-admin__person { display: flex; align-items: center; gap: var(--rf2-space-1); background: none; border: 0; padding: 0; font: inherit; color: inherit; text-align: start; cursor: pointer; }
+[data-ui='v2'] .rf2-admin__person > span:last-child { display: flex; flex-direction: column; }
+[data-ui='v2'] .rf2-admin__person:focus-visible { outline: 2px solid var(--rf2-focus, var(--rf2-action)); outline-offset: 2px; border-radius: 4px; }
+[data-ui='v2'] .rf2-admin th[scope='row'], [data-ui='v2'] .rf2-admin th[scope='rowgroup'] { text-transform: none; letter-spacing: 0; font-size: var(--rf2-text-body); color: var(--rf2-ink-1, inherit); text-align: start; font-weight: 500; }
+[data-ui='v2'] .rf2-admin__seat { font-weight: 600; }
+[data-ui='v2'] .rf2-admin tr[data-inactive] { opacity: 0.6; }
+[data-ui='v2'] .rf2-admin__group th { background: var(--rf2-neutral-tint); font-size: var(--rf2-text-caption) !important; text-transform: uppercase !important; letter-spacing: 0.04em !important; color: var(--rf2-ink-2) !important; font-weight: 600 !important; }
+[data-ui='v2'] .rf2-admin__matrix td svg { width: 14px; height: 14px; vertical-align: -2px; }
+[data-ui='v2'] .rf2-admin__matrix td[data-tone='yes'] svg { color: var(--rf2-success); }
+[data-ui='v2'] .rf2-admin__matrix td[data-tone='info'] svg { color: var(--rf2-info); }
+[data-ui='v2'] .rf2-admin__matrix td[data-tone='no'] { color: var(--rf2-ink-2); }
+[data-ui='v2'] .rf2-admin__cap { color: var(--rf2-action) !important; }
+[data-ui='v2'] .rf2-admin__capblock { display: flex; flex-direction: column; gap: var(--rf2-space-0-5); padding: var(--rf2-space-1-5) var(--rf2-space-2); border-bottom: 1px solid var(--rf2-border); }
+[data-ui='v2'] .rf2-admin__capblock p { margin: 0; }
+[data-ui='v2'] .rf2-admin__grants { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: var(--rf2-space-0-5) var(--rf2-space-2); }
+[data-ui='v2'] .rf2-admin__grants li { display: flex; justify-content: space-between; gap: var(--rf2-space-1); align-items: center; }
+[data-ui='v2'] .rf2-check { display: inline-flex; gap: var(--rf2-space-0-5); align-items: center; cursor: pointer; }
+[data-ui='v2'] .rf2-admin__code { font-size: var(--rf2-text-caption); padding: 1px 6px; border-radius: 4px; background: var(--rf2-neutral-tint); }
+[data-ui='v2'] .rf2-admin__tree { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+[data-ui='v2'] .rf2-admin__node { display: flex; align-items: center; gap: var(--rf2-space-1); width: 100%; padding: var(--rf2-space-0-5) var(--rf2-space-1); border: 1px solid transparent; border-radius: var(--rf2-radius-card); background: none; font: inherit; color: inherit; text-align: start; cursor: pointer; }
+[data-ui='v2'] .rf2-admin__node > span:last-child { display: flex; flex-direction: column; }
+[data-ui='v2'] .rf2-admin__node[aria-pressed='true'] { border-color: var(--rf2-action); background: var(--rf2-info-tint); }
+[data-ui='v2'] .rf2-admin__arrow { width: 14px; height: 14px; color: var(--rf2-ink-2); }
+[data-ui='v2'] .rf2-admin__edit { display: flex; flex-direction: column; gap: var(--rf2-space-1); padding: var(--rf2-space-1-5); border: 1px solid var(--rf2-border); border-radius: var(--rf2-radius-card); }
+[data-ui='v2'] .rf2-admin__edit p { margin: 0; }
+[data-ui='v2'] .rf2-admin__owned { display: flex; flex-direction: column; gap: var(--rf2-space-1); padding: var(--rf2-space-1-5); border: 1px solid var(--rf2-danger); border-radius: var(--rf2-radius-card); background: var(--rf2-danger-tint); }
+[data-ui='v2'] .rf2-admin__owned p, [data-ui='v2'] .rf2-admin__owned ul { margin: 0; }
+[data-ui='v2'] .rf2-admin__owned .rf2-jtable__name svg { width: 16px; height: 16px; vertical-align: -3px; color: var(--rf2-danger); }

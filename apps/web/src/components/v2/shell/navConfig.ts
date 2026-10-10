@@ -47,7 +47,7 @@ export const SEAT_NAV: Record<Seat, { heading: string; searchPlaceholder: string
     searchPlaceholder: 'Search users and settings',
     items: [
       { key: 'users', label: 'Users', to: '/users', icon: 'users', requires: ['USERS_VIEW'] },
-      { key: 'roles', label: 'Roles', to: '/users#roles', icon: 'roles', requires: ['USERS_VIEW'] },
+      { key: 'roles', label: 'Roles', to: '/roles', icon: 'roles', requires: ['USERS_VIEW'] },
       { key: 'pipeline', label: 'Pipeline template', to: '/pipeline-settings', icon: 'pipeline', requires: ['OVERRIDE_WORKFLOW'] },
       { key: 'master-data', label: 'Master data', to: '/master-data', icon: 'master-data', requires: ['MASTER_DATA_VIEW'] },
       { key: 'templates', label: 'Templates', to: '/email-templates', icon: 'templates', requiresAny: ['MASTER_DATA_MANAGE', 'MASTER_DATA_VIEW', 'APPLICATION_VIEW', 'VACANCY_VIEW'] },
