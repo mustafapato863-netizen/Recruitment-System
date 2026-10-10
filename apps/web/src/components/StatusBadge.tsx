@@ -76,7 +76,7 @@ export function getStatusTone(status: string): StatusTone {
   return 'neutral';
 }
 
-export function StatusBadge({ status }: { status: string }) {
+export function StatusBadge({ status, label }: { status: string; label?: string }) {
   const tone = getStatusTone(status);
 
   const dotClasses = {
@@ -92,7 +92,7 @@ export function StatusBadge({ status }: { status: string }) {
   return (
     <Badge variant={tone}>
       <span className={['h-1.5 w-1.5 rounded-full', dotClasses[tone]].join(' ')} aria-hidden="true" />
-      {status}
+      {label ?? status}
     </Badge>
   );
 }

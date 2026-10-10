@@ -17,6 +17,8 @@ export class AuditInterceptor implements NestInterceptor {
     const action = this.reflector.get<string>(AUDIT_ACTION_KEY, context.getHandler());
     const req = context.switchToHttp().getRequest();
     const user = req.user;
+    const entity = auditEntityFor(this.reflector.get<{ resource: string; param: string } | undefined>('TENANT_RESOURCE', context.getHandler()), req);
+    const bodyReason = auditBodyReason(req?.body);
 
     return next.handle().pipe(
       tap({
@@ -27,9 +29,9 @@ export class AuditInterceptor implements NestInterceptor {
                 action,
                 actorUserId: user.userId,
                 organizationId: user.organizationId,
-                entityType: 'system',
-                entityId: 'none',
+                ...entity,
                 result: 'SUCCESS',
+                ...(bodyReason ? { reason: bodyReason } : {}),
               },
             }).catch(console.error);
           }
@@ -44,8 +46,7 @@ export class AuditInterceptor implements NestInterceptor {
                 action,
                 actorUserId: user.userId,
                 organizationId: user.organizationId,
-                entityType: 'system',
-                entityId: 'none',
+                ...entity,
                 result: 'FAILURE',
                 reason: auditReasonFrom(err),
               },
@@ -55,4 +56,24 @@ export class AuditInterceptor implements NestInterceptor {
       }),
     );
   }
+}
+
+/**
+ * B2F-7: tie the audit row to the resource the route acts on (from @TenantResource), e.g. Vacancy/<id>,
+ * instead of system/none. Routes without that marker keep system/none.
+ */
+export function auditEntityFor(meta: { resource: string; param: string } | undefined, req: { params?: Record<string, string> } | undefined): { entityType: string; entityId: string } {
+  const id = meta ? req?.params?.[meta.param] : undefined;
+  if (!meta || !id) return { entityType: 'system', entityId: 'none' };
+  return { entityType: meta.resource.charAt(0).toUpperCase() + meta.resource.slice(1), entityId: id };
+}
+
+/** B2F-7: the reason the caller gave ({reason, note?}); "Other" is stored as "Other: <note>" like status history. */
+export function auditBodyReason(body: unknown): string | null {
+  if (!body || typeof body !== 'object') return null;
+  const { reason, note } = body as { reason?: unknown; note?: unknown };
+  if (typeof reason !== 'string' || !reason.trim()) return null;
+  const r = reason.trim();
+  const text = r.toLowerCase() === 'other' && typeof note === 'string' && note.trim() ? `Other: ${note.trim()}` : r;
+  return text.slice(0, 1000);
 }

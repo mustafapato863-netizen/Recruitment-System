@@ -1,3 +1,4 @@
+import { normalizePhoneKey } from '../candidates/contact-keys';
 import {
   Injectable,
   NotFoundException,
@@ -149,8 +150,9 @@ function normalizedName(value: unknown): string {
   return normalizeCatalogText(text(value));
 }
 
+/** B6: E.164-ish key (candidates/contact-keys.ts); '' when not a usable phone. */
 function normalizePhone(value: unknown): string {
-  return text(value).replace(/\D/g, '');
+  return normalizePhoneKey(text(value)) ?? '';
 }
 
 function list(value: unknown): string[] {
@@ -323,16 +325,16 @@ export class BulkImportService {
 
   private async validateCandidateRows(organizationId: string, rows: RawRow[]): Promise<{ rows: RawRow[]; counts: { valid: number; invalid: number; duplicate: number } }> {
     const emails = rows.map((row) => text(row.email).toLowerCase()).filter(Boolean);
-    const phones = rows.map((row) => normalizePhone(row.phone)).filter((phone) => phone.length >= 7);
+    const phones = rows.map((row) => normalizePhone(row.phone)).filter(Boolean);
     const existing = emails.length === 0 && phones.length === 0 ? [] : await this.prisma.candidate.findMany({
       where: { organizationId, OR: [
-        ...(emails.length > 0 ? [{ email: { in: emails, mode: 'insensitive' as const } }] : []),
-        ...(phones.length > 0 ? [{ phone: { in: phones } }] : []),
+        ...(emails.length > 0 ? [{ emailNormalized: { in: emails } }] : []),
+        ...(phones.length > 0 ? [{ phoneNormalized: { in: phones } }] : []),
       ] },
-      select: { email: true, phone: true },
+      select: { emailNormalized: true, phoneNormalized: true },
     });
-    const existingEmails = new Set(existing.map((candidate) => candidate.email?.toLowerCase()).filter((email): email is string => Boolean(email)));
-    const existingPhones = new Set(existing.map((candidate) => normalizePhone(candidate.phone)).filter((phone) => phone.length >= 7));
+    const existingEmails = new Set(existing.map((candidate) => candidate.emailNormalized).filter((email): email is string => Boolean(email)));
+    const existingPhones = new Set(existing.map((candidate) => candidate.phoneNormalized).filter((phone): phone is string => Boolean(phone)));
     const seen = new Set<string>();
     const seenPhones = new Set<string>();
     const counts = { valid: 0, invalid: 0, duplicate: 0 };
@@ -348,7 +350,7 @@ export class BulkImportService {
       } else if (email && !/^\S+@\S+\.\S+$/.test(email)) {
         result = 'Invalid';
         details = 'Email format is invalid.';
-      } else if (!email && phone.length < 7) {
+      } else if (!email && !phone) {
         result = 'Invalid';
         details = 'A valid Email or Phone is required.';
       } else if (existingEmails.has(email) || seen.has(email) || existingPhones.has(phone) || seenPhones.has(phone)) {
