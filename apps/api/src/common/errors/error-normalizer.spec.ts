@@ -205,3 +205,52 @@ describe('Error Normalizer', () => {
     expect(result.message).toBe(message);
   });
 });
+
+describe('B3 domain codes are registered (kept, not collapsed)', () => {
+  it('keeps every B3 code in the envelope', async () => {
+    const { ConflictException, ForbiddenException, BadRequestException } = await import('@nestjs/common');
+    expect(normalizeError(new ConflictException({ code: 'ILLEGAL_JOB_TRANSITION', message: 'Job is already Closed.' })).code).toBe('ILLEGAL_JOB_TRANSITION');
+    expect(normalizeError(new ForbiddenException({ code: 'NOT_JOB_OWNER', message: 'x' })).code).toBe('NOT_JOB_OWNER');
+    expect(normalizeError(new BadRequestException({ code: 'HOLD_UNTIL_NOT_FUTURE', message: 'x' })).code).toBe('HOLD_UNTIL_NOT_FUTURE');
+    for (const c of ['ADMIN_CANNOT_CHANGE_JOB_STATUS', 'ASSIGNEE_NOT_ELIGIBLE', 'ASSIGNEE_REQUIRED', 'DUE_DATE_REQUIRED', 'GRADE_NOT_FOUND', 'JOB_NOT_ACCEPTING_APPLICATIONS', 'REASON_REQUIRED', 'REQUISITION_CANCELLED', 'REASON_NOT_IN_LIST']) {
+      expect(normalizeError(new ConflictException({ code: c, message: 'x' })).code).toBe(c);
+    }
+    expect(normalizeError(new ConflictException({ code: 'SOMETHING_UNKNOWN' })).code).toBe('CONFLICT');
+  });
+});
+
+describe('B6 domain codes are registered', () => {
+  it('keeps B6 codes instead of collapsing them', async () => {
+    const { ConflictException, BadRequestException } = await import('@nestjs/common');
+    for (const c of ['COMPARE_CANDIDATE_NOT_FOUND', 'COMPARE_COUNT', 'CONTACT_REQUIRED', 'EVIDENCE_SNIPPET_REQUIRED', 'EVIDENCE_SOURCE_INVALID', 'NOT_JOB_OWNER', 'SKILL_INACTIVE', 'SKILL_NOT_IN_LIBRARY']) {
+      expect(normalizeError(new BadRequestException({ code: c, message: 'x' })).code).toBe(c);
+    }
+    expect(normalizeError(new ConflictException({ code: 'NOPE_UNKNOWN' })).code).toBe('CONFLICT');
+  });
+});
+
+describe('B2-9 / NEW-3 codes and counts reach the client', () => {
+  it('keeps USER_OWNS_OPEN_WORK + counts, JOB_HAS_OPEN_APPLICATIONS + counts, JOB_NOT_OWNED, FILE_CLOSED', async () => {
+    const { ConflictException, ForbiddenException } = await import('@nestjs/common');
+    const { buildErrorEnvelope } = await import('./error-normalizer');
+    const u = buildErrorEnvelope(normalizeError(new ConflictException({ code: 'USER_OWNS_OPEN_WORK', message: 'x', counts: { openApplicationsPrimary: 2, openJobs: 1 } })), 'r');
+    expect(u).toMatchObject({ statusCode: 409, code: 'USER_OWNS_OPEN_WORK', counts: { openApplicationsPrimary: 2, openJobs: 1 } });
+    expect(buildErrorEnvelope(normalizeError(new ConflictException({ code: 'JOB_HAS_OPEN_APPLICATIONS', message: 'x', counts: { openApplications: 3 } })), 'r'))
+      .toMatchObject({ code: 'JOB_HAS_OPEN_APPLICATIONS', counts: { openApplications: 3 } });
+    expect(normalizeError(new ForbiddenException({ code: 'JOB_NOT_OWNED', message: 'x' })).code).toBe('JOB_NOT_OWNED');
+    expect(normalizeError(new ConflictException({ code: 'FILE_CLOSED', message: 'x' })).code).toBe('FILE_CLOSED');
+    // non-numeric counts never leak
+    expect(buildErrorEnvelope(normalizeError(new ConflictException({ code: 'USER_OWNS_OPEN_WORK', message: 'x', counts: { email: 'a@b.c' } })), 'r').counts).toBeUndefined();
+  });
+});
+
+describe('B2R-4 CANDIDATE_EXISTS keeps the existing person id/code', () => {
+  it('passes details {candidateId, candidateCode} and nothing else', async () => {
+    const { ConflictException } = await import('@nestjs/common');
+    const { buildErrorEnvelope } = await import('./error-normalizer');
+    const id = '11111111-2222-4333-8444-555555555555';
+    expect(buildErrorEnvelope(normalizeError(new ConflictException({ code: 'CANDIDATE_EXISTS', message: 'x', details: { candidateId: id, candidateCode: 'CND-2026-004' } })), 'r'))
+      .toMatchObject({ code: 'CANDIDATE_EXISTS', details: { candidateId: id, candidateCode: 'CND-2026-004' } });
+    expect(buildErrorEnvelope(normalizeError(new ConflictException({ code: 'CANDIDATE_EXISTS', message: 'x', details: { candidateId: id, candidateCode: 'C', email: 'a@b.c' } })), 'r').details).toBeUndefined();
+  });
+});

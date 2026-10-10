@@ -20,38 +20,10 @@ import type { ReportOverviewQueryDto } from './reports.dto';
 
 const DAY_MS = 86_400_000;
 const REPORTING_ROLE_CODES = ['ADMINISTRATOR', 'TALENT_MANAGER', 'HR_MANAGER', 'PERFORMANCE_ADMIN'];
-const RECRUITER_ACTIVITY_ACTION_CATEGORIES = {
-  APPLICATION_CREATE: 'applications',
-  APPLICATION_UPDATE: 'applications',
-  APPLICATION_NOTE_CREATE: 'applications',
-  CANDIDATE_CREATE: 'applications',
-  APPLICATION_MOVE_STAGE: 'screening',
-  SCREENING_SUBMIT: 'screening',
-  INTERVIEW_SCHEDULE: 'interviews',
-  INTERVIEW_UPDATE: 'interviews',
-  INTERVIEW_RESPONSE: 'interviews',
-  SCORECARD_SUBMIT: 'interviews',
-  OFFER_CREATE: 'offers',
-  OFFER_REVISION_CREATE: 'offers',
-  OFFER_STATUS_UPDATE: 'offers',
-  HIRING_CASE_CREATE: 'hiring',
-  HIRING_COMPLIANCE_UPDATE: 'hiring',
-  HIRING_FINAL_APPROVAL_SUBMIT: 'hiring',
-  HIRING_FINAL_APPROVAL_DECIDE: 'hiring',
-  HIRING_JOINING_UPDATE: 'hiring',
-} as const;
-type RecruiterActivityCategory = (typeof RECRUITER_ACTIVITY_ACTION_CATEGORIES)[keyof typeof RECRUITER_ACTIVITY_ACTION_CATEGORIES];
-type RecruiterActivityCounts = Record<RecruiterActivityCategory, number>;
-
-function emptyRecruiterActivity(): RecruiterActivityCounts {
-  return { applications: 0, screening: 0, interviews: 0, offers: 0, hiring: 0 };
-}
 
 interface ResolvedReportRange {
   from: Date;
   to: Date;
-  comparisonFrom: Date;
-  comparisonTo: Date;
 }
 
 @Injectable()
@@ -71,25 +43,14 @@ export class ReportsService {
       ? await this.accessControl.getApplicationVisibilityWhere(user)
       : { organizationId };
     const applicationWhere = this.applicationWhere(organizationId, range.from, range.to, query, visibility);
-    const comparisonApplicationWhere = this.applicationWhere(
-      organizationId,
-      range.comparisonFrom,
-      range.comparisonTo,
-      query,
-      visibility,
-    );
     const canViewRecruiterTeam = !user || user.roleCodes.some((roleCode) => REPORTING_ROLE_CODES.includes(roleCode));
     const recruiterUserScope = user && !canViewRecruiterTeam ? { id: user.userId } : {};
 
     const [
       applications,
-      comparisonApplications,
       offers,
-      comparisonOffers,
       interviews,
-      comparisonInterviews,
       joinedCases,
-      comparisonJoinedCases,
       vacancies,
       users,
       filterBranches,
@@ -99,10 +60,6 @@ export class ReportsService {
       this.prisma.application.findMany({
         where: applicationWhere,
         select: { id: true, source: true, stage: true, appliedAt: true, createdAt: true },
-      }),
-      this.prisma.application.findMany({
-        where: comparisonApplicationWhere,
-        select: { id: true },
       }),
       this.prisma.offer.findMany({
         where: {
@@ -116,13 +73,6 @@ export class ReportsService {
           application: { select: { appliedAt: true } },
         },
       }),
-      this.prisma.offer.count({
-        where: {
-          organizationId,
-          createdAt: { gte: range.comparisonFrom, lte: range.comparisonTo },
-          application: this.applicationRelationFilter(query, visibility),
-        },
-      }),
       this.prisma.interview.findMany({
         where: {
           organizationId,
@@ -130,13 +80,6 @@ export class ReportsService {
           application: this.applicationRelationFilter(query, visibility),
         },
         select: { status: true, scheduledStart: true },
-      }),
-      this.prisma.interview.count({
-        where: {
-          organizationId,
-          scheduledStart: { gte: range.comparisonFrom, lte: range.comparisonTo },
-          application: this.applicationRelationFilter(query, visibility),
-        },
       }),
       this.prisma.hiringCase.findMany({
         where: {
@@ -152,14 +95,6 @@ export class ReportsService {
               vacancy: { select: { branchId: true, openedAt: true, positionId: true } },
             },
           },
-        },
-      }),
-      this.prisma.hiringCase.count({
-        where: {
-          organizationId,
-          status: 'Joined',
-          actualJoiningDate: { gte: range.comparisonFrom, lte: range.comparisonTo },
-          application: this.applicationRelationFilter(query, visibility),
         },
       }),
       this.prisma.vacancy.findMany({
@@ -242,29 +177,7 @@ export class ReportsService {
       }),
     ]);
 
-    const activityByRecruiter = new Map<string, RecruiterActivityCounts>();
-    const recruiterIds = users.map((recruiter) => recruiter.id);
-    if (recruiterIds.length > 0) {
-      const groupedActivity = await this.prisma.auditLog.groupBy({
-        by: ['actorUserId', 'action'],
-        where: {
-          organizationId,
-          actorUserId: { in: recruiterIds },
-          createdAt: { gte: range.from, lte: range.to },
-          result: 'SUCCESS',
-          action: { in: Object.keys(RECRUITER_ACTIVITY_ACTION_CATEGORIES) },
-        },
-        _count: { _all: true },
-      });
-      for (const row of groupedActivity) {
-        if (!row.actorUserId) continue;
-        const category = RECRUITER_ACTIVITY_ACTION_CATEGORIES[row.action as keyof typeof RECRUITER_ACTIVITY_ACTION_CATEGORIES];
-        if (!category) continue;
-        const counts = activityByRecruiter.get(row.actorUserId) ?? emptyRecruiterActivity();
-        counts[category] += row._count._all;
-        activityByRecruiter.set(row.actorUserId, counts);
-      }
-    }
+    // B8: activity counters (audit-log action counts per recruiter) were removed: v2 §9 does not score activity.
 
     const acceptedOffers = offers.filter((offer) => offer.status === 'Accepted').length;
     const completedInterviews = interviews.filter((interview) => ['Completed', 'No-show'].includes(interview.status));
@@ -311,7 +224,7 @@ export class ReportsService {
     }
 
     const kpis: ReportKpis = {
-      timeToFill: { value: timeToFill, change: 0, sampleCount: timeToFillSamples.length },
+      timeToFill: { value: timeToFill, sampleCount: timeToFillSamples.length },
       timeToOffer: { value: timeToOffer, target: 25 },
       offerAcceptanceRate: {
         value: offers.length === 0 ? 0 : Math.round((acceptedOffers / offers.length) * 100),
@@ -337,17 +250,8 @@ export class ReportsService {
 
     return {
       range: { from: range.from.toISOString(), to: range.to.toISOString() },
-      comparisonRange: {
-        from: range.comparisonFrom.toISOString(),
-        to: range.comparisonTo.toISOString(),
-      },
+      // B8: no prior-period comparison (v2: "no fabricated prior period").
       kpis,
-      comparison: {
-        applications: comparisonApplications.length,
-        offers: comparisonOffers,
-        interviews: comparisonInterviews,
-        joined: comparisonJoinedCases,
-      },
       trend: this.buildTrend(range.from, range.to, applications, interviews, offers, joinedCases),
       sourceBreakdown: [...sourceCounts.entries()]
         .map(([name, values]) => ({
@@ -378,10 +282,6 @@ export class ReportsService {
         vacancies: user._count.assignments,
         applications: user._count.primaryApplications,
         overdueTasks: user._count.assignedTasks,
-        activity: (() => {
-          const activity = activityByRecruiter.get(user.id) ?? emptyRecruiterActivity();
-          return { ...activity, total: Object.values(activity).reduce((total, count) => total + count, 0) };
-        })(),
       })),
       filterOptions: {
         branches: filterBranches.map((branch) => ({ id: branch.id, label: branch.name })),
@@ -493,28 +393,21 @@ export class ReportsService {
         }),
         { applications: 0, interviews: 0, offers: 0, joined: 0 },
       );
-      const recruiterActionTotal = overview.recruiterWorkload.reduce(
-        (total, recruiter) => total + (recruiter.activity?.total ?? 0),
-        0,
-      );
       XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet([
         ['RecruitFlow Recruitment Performance Report'],
         ['From', overview.range.from],
         ['To', overview.range.to],
-        ['Comparison from', overview.comparisonRange.from],
-        ['Comparison to', overview.comparisonRange.to],
         [],
-        ['Metric', 'Current', 'Comparison'],
-        ['Applications', currentTotals.applications, overview.comparison.applications],
-        ['Interviews', currentTotals.interviews, overview.comparison.interviews],
-        ['Offers', currentTotals.offers, overview.comparison.offers],
-        ['Joined', currentTotals.joined, overview.comparison.joined],
+        ['Metric', 'Current', ''],
+        ['Applications', currentTotals.applications, ''],
+        ['Interviews', currentTotals.interviews, ''],
+        ['Offers', currentTotals.offers, ''],
+        ['Joined', currentTotals.joined, ''],
         ['Time to fill (days)', overview.kpis.timeToFill.value, ''],
         ['Time to offer (days)', overview.kpis.timeToOffer.value, ''],
         ['Offer acceptance rate (%)', overview.kpis.offerAcceptanceRate.value, ''],
         ['Interview no-show rate (%)', overview.kpis.interviewNoShowRate.value, ''],
         ['Top source', overview.kpis.topSource.name, ''],
-        ['Successful recruiter actions', recruiterActionTotal, ''],
       ]), 'Summary');
 
       if (overview.recruitmentKpis && overview.recruitmentKpis.length > 0) {
@@ -549,12 +442,6 @@ export class ReportsService {
         openPositions: recruiter.vacancies,
         applicationsOwned: recruiter.applications,
         overdueTasks: recruiter.overdueTasks,
-        successfulActions: recruiter.activity?.total ?? 0,
-        applicationActions: recruiter.activity?.applications ?? 0,
-        screeningActions: recruiter.activity?.screening ?? 0,
-        interviewActions: recruiter.activity?.interviews ?? 0,
-        offerActions: recruiter.activity?.offers ?? 0,
-        hiringActions: recruiter.activity?.hiring ?? 0,
       }))), 'Recruiter Workload');
       return XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }) as Buffer;
     } catch (error) {
@@ -568,33 +455,19 @@ export class ReportsService {
     const from = query.from ? new Date(query.from) : new Date(to.getTime() - (29 * DAY_MS));
     if (from > to) throw new BadRequestException('Report start date must be before the end date.');
 
-    const duration = Math.max(DAY_MS, to.getTime() - from.getTime());
-    const comparisonTo = query.comparisonTo ? new Date(query.comparisonTo) : new Date(from.getTime() - 1);
-    const comparisonFrom = query.comparisonFrom
-      ? new Date(query.comparisonFrom)
-      : new Date(comparisonTo.getTime() - duration);
-    if (comparisonFrom > comparisonTo) {
-      throw new BadRequestException('Comparison start date must be before the comparison end date.');
-    }
-
-    return { from, to, comparisonFrom, comparisonTo };
+    return { from, to };
   }
 
+  /** Report filters are ANDed with the access scope; a filter never replaces the scope. */
   private applicationRelationFilter(
     query: ReportOverviewQueryDto,
     visibility?: Prisma.ApplicationWhereInput,
   ): Prisma.ApplicationWhereInput {
-    const result: Prisma.ApplicationWhereInput = { ...(visibility ?? {}) };
-    if (query.recruiterId) result.primaryRecruiterId = query.recruiterId;
-    if (query.branchId || query.positionId) {
-      const existingVacancy = (visibility?.vacancy ?? {}) as Prisma.VacancyWhereInput;
-      result.vacancy = {
-        ...existingVacancy,
-        ...(query.branchId ? { branchId: query.branchId } : {}),
-        ...(query.positionId ? { positionId: query.positionId } : {}),
-      };
-    }
-    return result;
+    const filters: Prisma.ApplicationWhereInput[] = [visibility ?? {}];
+    if (query.recruiterId) filters.push({ primaryRecruiterId: query.recruiterId });
+    if (query.branchId) filters.push({ vacancy: { branchId: query.branchId } });
+    if (query.positionId) filters.push({ vacancy: { positionId: query.positionId } });
+    return { AND: filters };
   }
 
   private applicationWhere(
@@ -604,12 +477,7 @@ export class ReportsService {
     query: ReportOverviewQueryDto,
     visibility?: Prisma.ApplicationWhereInput,
   ): Prisma.ApplicationWhereInput {
-    return {
-      ...(visibility ?? {}),
-      organizationId,
-      createdAt: { gte: from, lte: to },
-      ...this.applicationRelationFilter(query, visibility),
-    };
+    return { AND: [{ organizationId, createdAt: { gte: from, lte: to } }, this.applicationRelationFilter(query, visibility)] };
   }
 
   private buildTrend(
@@ -708,7 +576,7 @@ export class ReportsService {
     const topSourceEntry = [...sourceCounts.entries()].sort((a, b) => b[1].total - a[1].total)[0];
 
     return {
-      timeToFill: { value: averageTimeToFill, change: 0 },
+      timeToFill: { value: averageTimeToFill },
       timeToOffer: { value: averageTimeToOffer, target: 25 },
       offerAcceptanceRate: {
         value: totalOffers === 0 ? 0 : Math.round((acceptedOffers / totalOffers) * 100),
