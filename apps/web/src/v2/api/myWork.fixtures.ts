@@ -26,7 +26,7 @@ export function myWorkFixture(opts: { variant?: FixtureVariant; day?: MyWorkDay 
   }];
   const waitingOnOthers: MyWorkResponse['waitingOnOthers'] = [
     { id: 'o1', type: 'offer', title: 'Offer OFF-1', dueAt: null, reason: 'Offer waiting for approval', nextAction: { code: 'open-offer', label: 'Open offer' },
-      entity: { type: 'offer', id: 'o1' }, waitingOn: 'approver', applicationId: 'a3', candidate: { id: 'c3', name: 'Salma Farouk' }, stage: 'Offer',
+      entity: { type: 'offer', id: 'o1' }, waitingOn: 'approver', approver: { id: 'u-karim', name: 'Karim Hassan' }, applicationId: 'a3', candidate: { id: 'c3', name: 'Salma Farouk' }, stage: 'Offer',
       actions: [{ key: 'open-offer', label: 'Open offer', disabled: false }, { key: 'send-offer', label: 'Send offer', disabled: true, reason: 'Waiting for approval' }] },
     { id: 'iv-done', type: 'scorecard', title: 'Interview: Omar Said', dueAt: '2026-10-18T12:00:00.000Z', reason: '2 scorecard(s) missing',
       nextAction: { code: 'open-interview', label: 'Open interview' }, entity: { type: 'interview', id: 'iv-done' }, waitingOn: 'interviewer',
