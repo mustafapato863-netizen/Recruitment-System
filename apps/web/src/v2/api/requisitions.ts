@@ -113,7 +113,7 @@ export function draftActivateRefused(e: unknown): boolean {
 /** Target update on a live job (seats + due date + reason). Endpoint announced by Backend, not live: hidden until TARGET_UPDATE_LIVE. */
 export const TARGET_UPDATE_LIVE = false;
 export interface TargetUpdate { requestedHeadcount: number; dueDate: string; reason: string }
-export const updateTarget = (id: string, body: TargetUpdate) => postApi<Requisition>(`/vacancy-requests/${enc(id)}/target`, body);
+export const updateTarget = (id: string, body: TargetUpdate) => patchApi<Requisition>(`/vacancy-requests/${enc(id)}/target`, body);
 
 /** Manager scope: requisitions I raised or that are assigned to one of my reports. Defence-in-depth over an org-wide list. */
 export function mineOrTeam(rows: Requisition[], meId: string | undefined, people: Person[] | null): Requisition[] {
