@@ -1,130 +1,67 @@
-// Test fixtures for development/testing with simplified data
-// Following user constraints: IDs <= 4 chars, simple fname/lname placeholders, 3 role types
+// Test fixtures for development/testing with simplified data.
+// Three role types (Employee/Requester, Manager/Hiring Manager,
+// Administrator/Recruitment Ops), placeholder people and one job/application.
+//
+// Ids are fixed UUIDs (every id column is @db.Uuid, so the old 4-character ids
+// can no longer be stored); the short fixture number is the last 4 digits.
+// Idempotent: every row is upserted on its unique key, so re-running is safe.
 
-const TEST_PASSWORD_HASH = '$2b$10$TEST.HASH.FOR.DEV.ONLY.123'; // bcrypt hash of "test123"
+const TEST_PASSWORD_HASH = '$2b$10$TEST.HASH.FOR.DEV.ONLY.123'; // not a usable bcrypt hash; dev only
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 function fixtureId(number) {
-  // Generate short ID: max 4 characters
-  return String(number).padStart(4, '0');
+  return `7e570000-0000-4000-8000-${String(number).padStart(12, '0')}`;
 }
 
 function dateFromNow(days) {
   return new Date(Date.now() + days * DAY_MS);
 }
 
-async function upsertUser(tx, orgId, id, email, firstName, lastName, roleCode) {
-  const existingById = await tx.user.findUnique({ where: { id } });
-  if (existingById) {
-    return tx.user.update({
-      where: { id },
-      data: {
-        email,
-        emailNormalized: email.toLowerCase(),
-        firstName,
-        lastName,
-        displayName: `${firstName} ${lastName}`,
-        passwordHash: TEST_PASSWORD_HASH,
-        status: 'Active'
-      }
-    });
-  }
+async function upsertRole(tx, code, name) {
+  return tx.role.upsert({ where: { code }, update: {}, create: { code, name } });
+}
 
-  const existingByEmail = await tx.user.findUnique({
-    where: { organizationId_emailNormalized: { organizationId: orgId, emailNormalized: email.toLowerCase() } }
+async function upsertUser(tx, orgId, id, email, displayName) {
+  const emailNormalized = email.toLowerCase();
+  const existing = await tx.user.findUnique({
+    where: { organizationId_emailNormalized: { organizationId: orgId, emailNormalized } },
   });
-  if (existingByEmail) {
-    return tx.user.update({
-      where: { id: existingByEmail.id },
-      data: {
-        firstName,
-        lastName,
-        displayName: `${firstName} ${lastName}`,
-        passwordHash: TEST_PASSWORD_HASH,
-        status: 'Active'
-      }
-    });
-  }
-
-  return tx.user.create({
-    data: {
-      id,
-      organizationId: orgId,
-      email,
-      emailNormalized: email.toLowerCase(),
-      firstName,
-      lastName,
-      displayName: `${firstName} ${lastName}`,
-      passwordHash: TEST_PASSWORD_HASH,
-      status: 'Active'
-    }
-  });
+  const data = { email, emailNormalized, displayName, passwordHash: TEST_PASSWORD_HASH, status: 'Active' };
+  if (existing) return tx.user.update({ where: { id: existing.id }, data });
+  return tx.user.create({ data: { id, organizationId: orgId, ...data } });
 }
 
 async function upsertUserRole(tx, userId, roleId) {
-  const existing = await tx.userRole.findUnique({ where: { userId_roleId: { userId, roleId } } });
-  if (existing) return;
-
-  return tx.userRole.create({
-    data: { userId, roleId }
-  });
+  await tx.userRole.upsert({ where: { userId_roleId: { userId, roleId } }, update: {}, create: { userId, roleId } });
 }
 
 async function seedTestFixtures(tx, { organization }) {
   const orgId = organization.id;
+  const branch = await tx.branch.findFirst({ where: { organizationId: orgId }, orderBy: { createdAt: 'asc' } });
+  const position = await tx.position.findFirst({ where: { organizationId: orgId }, orderBy: { createdAt: 'asc' } });
+  if (!branch || !position) {
+    throw new Error('No branch/position in this organization. Run the base seed first (pnpm --dir database prisma:seed).');
+  }
 
-  // Get or create test roles
-  const employeeRole = await tx.role.upsert({
-    where: { code: 'EMPLOYEE' },
-    update: {},
-    create: {
-      id: fixtureId(1),
-      name: 'Employee/Requester',
-      code: 'EMPLOYEE',
-      description: 'Can request vacancies and view own applications'
-    }
-  });
+  const employeeRole = await upsertRole(tx, 'EMPLOYEE', 'Employee/Requester');
+  const managerRole = await upsertRole(tx, 'MANAGER', 'Manager/Hiring Manager');
+  const adminRole = await upsertRole(tx, 'ADMIN', 'Administrator/Recruitment Ops');
 
-  const managerRole = await tx.role.upsert({
-    where: { code: 'MANAGER' },
-    update: {},
-    create: {
-      id: fixtureId(2),
-      name: 'Manager/Hiring Manager',
-      code: 'MANAGER',
-      description: 'Can approve requests and manage hiring process'
-    }
-  });
-
-  const adminRole = await tx.role.upsert({
-    where: { code: 'ADMIN' },
-    update: {},
-    create: {
-      id: fixtureId(3),
-      name: 'Administrator/Recruitment Ops',
-      code: 'ADMIN',
-      description: 'Full system access including user management'
-    }
-  });
-
-  // Create test users with simple placeholder names (single letters)
-  // Employee/Requester role
-  const empUser = await upsertUser(tx, orgId, fixtureId(10), 'e@test.com', 'E', 'mployee', employeeRole.code);
+  const empUser = await upsertUser(tx, orgId, fixtureId(10), 'e@test.com', 'E Mployee');
   await upsertUserRole(tx, empUser.id, employeeRole.id);
-
-  // Manager/Hiring Manager role
-  const mgrUser = await upsertUser(tx, orgId, fixtureId(20), 'm@test.com', 'M', 'anager', managerRole.code);
+  const mgrUser = await upsertUser(tx, orgId, fixtureId(20), 'm@test.com', 'M Anager');
   await upsertUserRole(tx, mgrUser.id, managerRole.id);
-
-  // Administrator/Recruitment Operations role
-  const adminUser = await upsertUser(tx, orgId, fixtureId(30), 'a@test.com', 'A', 'dmin', adminRole.code);
+  const adminUser = await upsertUser(tx, orgId, fixtureId(30), 'a@test.com', 'A Dmin');
   await upsertUserRole(tx, adminUser.id, adminRole.id);
 
-  // Create a simple test vacancy request
-  await tx.vacancyRequest.create({
-    data: {
+  const request = await tx.vacancyRequest.upsert({
+    where: { requestCode: 'VR-TEST' },
+    update: {},
+    create: {
       id: fixtureId(40),
       organizationId: orgId,
+      branchId: branch.id,
+      positionId: position.id,
       requestCode: 'VR-TEST',
       requesterId: empUser.id,
       status: 'Approved',
@@ -135,15 +72,19 @@ async function seedTestFixtures(tx, { organization }) {
       criticality: 'Normal',
       targetStartDate: dateFromNow(30),
       justification: 'Test fixture for development',
-      submittedAt: new Date()
-    }
+      submittedAt: new Date(),
+    },
   });
 
-  // Create a simple test vacancy
-  await tx.vacancy.create({
-    data: {
+  const vacancy = await tx.vacancy.upsert({
+    where: { vacancyCode: 'VAC-TEST' },
+    update: {},
+    create: {
       id: fixtureId(50),
       organizationId: orgId,
+      branchId: branch.id,
+      positionId: position.id,
+      vacancyRequestId: request.id,
       vacancyCode: 'VAC-TEST',
       status: 'Open',
       approvedHeadcount: 1,
@@ -151,32 +92,34 @@ async function seedTestFixtures(tx, { organization }) {
       location: 'Test Location',
       openedAt: new Date(),
       targetStartDate: dateFromNow(30),
-      requiredSkills: ['Test Skill']
-    }
+      requiredSkills: ['Test Skill'],
+    },
   });
 
-  // Create a simple test application
-  await tx.application.create({
-    data: {
+  const candidate = await tx.candidate.upsert({
+    where: { candidateCode: 'CND-TEST' },
+    update: {},
+    create: { id: fixtureId(55), organizationId: orgId, candidateCode: 'CND-TEST', firstName: 'C', lastName: 'Andidate', email: 'c@test.com' },
+  });
+
+  await tx.application.upsert({
+    where: { applicationCode: 'APP-TEST' },
+    update: {},
+    create: {
       id: fixtureId(60),
       organizationId: orgId,
       applicationCode: 'APP-TEST',
-      vacancyId: fixtureId(50),
-      candidateId: fixtureId(50), // Reusing vacancy ID for simplicity in test
-      stage: 'New',
+      vacancyId: vacancy.id,
+      candidateId: candidate.id,
+      stage: 'Applied',
       source: 'Test',
       appliedAt: new Date(),
       primaryRecruiterId: empUser.id,
-      taskOwnerId: empUser.id
-    }
+      taskOwnerId: empUser.id,
+    },
   });
 
-  return {
-    users: 3,
-    vacancyRequests: 1,
-    vacancies: 1,
-    applications: 1
-  };
+  return { users: 3, vacancyRequests: 1, vacancies: 1, candidates: 1, applications: 1 };
 }
 
-module.exports = { seedTestFixtures };
+module.exports = { seedTestFixtures, fixtureId };

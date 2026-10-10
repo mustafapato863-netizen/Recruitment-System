@@ -75,6 +75,11 @@ function normalizeFieldErrors(value: unknown): ErrorFieldErrors | undefined {
   return Object.keys(result).length > 0 ? result : undefined;
 }
 
+/** B1 ownership codes whose server message is shown as-is (they reach the wire as codes on #4 @84f66f4). */
+const OWNERSHIP_403_CODES = new Set(['JOB_NOT_OWNED', 'FILE_NOT_OWNED', 'ADMIN_CANNOT_REASSIGN', 'OWNER_NOT_ELIGIBLE', 'DOCUMENT_DOWNLOAD_DENIED', 'ADMIN_ONLY']);
+
+// #4 passes every B1 code through its error normalizer, so the client reads `code` and never matches message text.
+
 let refreshPromise: Promise<boolean> | null = null;
 
 function shouldRefreshSession(path: string): boolean {
@@ -133,6 +138,9 @@ async function handleResponseError(response: Response, path: string): Promise<ne
       message += minutes !== null
         ? ` Try again in ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}.`
         : ' Please try again later.';
+    } else if (code && OWNERSHIP_403_CODES.has(code) && typeof problem?.message === 'string' && problem.message.trim()) {
+      // B1: ownership denials carry a specific, user-safe message.
+      message = problem.message.trim();
     } else {
       message = 'Access denied: you do not have permission to perform this action.';
     }
@@ -209,6 +217,26 @@ export function postFormDataApi<T>(path: string, formData: FormData): Promise<T>
     method: 'POST',
     body: formData,
   });
+}
+
+/** Blob download that also returns the filename from Content-Disposition. */
+export async function downloadFileApi(path: string, fallbackName = 'download', allowRefresh = true): Promise<{ blob: Blob; filename: string }> {
+  const response = await fetch(`${API_BASE_URL}${path}`, { method: 'GET', credentials: 'include' });
+  if (response.status === 401 && allowRefresh && shouldRefreshSession(path)) {
+    if (await refreshAccessToken()) return downloadFileApi(path, fallbackName, false);
+  }
+  if (!response.ok) return handleResponseError(response, path);
+  return { blob: await response.blob(), filename: filenameFromDisposition(response.headers.get('Content-Disposition')) ?? fallbackName };
+}
+
+export function filenameFromDisposition(header: string | null): string | null {
+  if (!header) return null;
+  const star = /filename\*\s*=\s*(?:UTF-8'')?([^;]+)/i.exec(header);
+  if (star) {
+    try { return decodeURIComponent(star[1].trim().replace(/^"|"$/g, '')); } catch { /* fall through */ }
+  }
+  const plain = /filename\s*=\s*"?([^";]+)"?/i.exec(header);
+  return plain ? plain[1].trim() : null;
 }
 
 export async function downloadApi(path: string, allowRefresh = true): Promise<Blob> {

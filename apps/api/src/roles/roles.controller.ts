@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, ParseUUIDPipe, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, ParseUUIDPipe, Query, UseGuards } from '@nestjs/common';
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { RolesService } from './roles.service';
 import {
@@ -23,14 +23,16 @@ export class RolesController {
 
   @Get()
   @RequirePermissions('ROLES_VIEW')
-  list(@CurrentUser() user: AuthUser) {
-    return this.rolesService.list(user.organizationId);
+  list(@CurrentUser() user: AuthUser, @Query('includeInactive') includeInactive?: string) {
+    // B2: inactive roles (and inactive permissions inside them) are hidden unless includeInactive=true.
+    return this.rolesService.list(user.organizationId, { includeInactive: includeInactive === 'true' });
   }
 
   @Get('permissions')
   @RequirePermissions('ROLES_VIEW')
-  listPermissions(@CurrentUser() user: AuthUser) {
-    return this.rolesService.listPermissions(user.organizationId);
+  listPermissions(@CurrentUser() user: AuthUser, @Query('includeInactive') includeInactive?: string) {
+    // B2: inactive/retired permissions are hidden unless includeInactive=true.
+    return this.rolesService.listPermissions(user.organizationId, { includeInactive: includeInactive === 'true' });
   }
 
   @Post('permissions')
@@ -53,13 +55,13 @@ export class RolesController {
 
   @Delete('permissions/:permissionId')
   @RequirePermissions('ROLES_MANAGE')
-  @AuditAction('PERMISSION_DELETE')
+  @AuditAction('PERMISSION_DEACTIVATE')
   async deletePermission(
     @CurrentUser() user: AuthUser,
     @Param('permissionId', ParseUUIDPipe) permissionId: string,
   ) {
     await this.rolesService.deletePermission(user.organizationId, permissionId);
-    return { deleted: true };
+    return { id: permissionId, deactivated: true, status: 'Inactive' };
   }
 
   @Get(':id')
@@ -118,11 +120,11 @@ export class RolesController {
 
   @Delete(':id')
   @RequirePermissions('ROLES_MANAGE')
-  @AuditAction('ROLE_DELETE')
+  @AuditAction('ROLE_DEACTIVATE')
   @UseGuards(TenantScopedGuard)
   @TenantResource({ resource: 'role', param: 'id' })
   async delete(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
-    await this.rolesService.delete(user.organizationId, id);
-    return { deleted: true };
+    await this.rolesService.deactivate(user.organizationId, id);
+    return { id, deactivated: true, status: 'Inactive' };
   }
 }
