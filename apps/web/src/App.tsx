@@ -30,7 +30,7 @@ const UsersRolesPage = lazy(() => import('./pages/UsersRolesPage').then((m) => (
 const ReportingTreePage = lazy(() => import('./pages/ReportingTreePage').then((m) => ({ default: m.ReportingTreePage })));
 const MasterDataPage = lazy(() => import('./pages/MasterDataPage').then((m) => ({ default: m.MasterDataPage })));
 const AuditLogPage = lazy(() => import('./pages/AuditLogPage').then((m) => ({ default: m.AuditLogPage })));
-const VacancyRequestsPage = lazy(() => import('./pages/VacancyRequestsPage').then((m) => ({ default: m.VacancyRequestsPage })));
+const RequisitionsRoute = lazy(() => import('./v2/pages/RequisitionsRoute').then((m) => ({ default: m.RequisitionsRoute })));
 const CreateVacancyRequestPage = lazy(() => import('./pages/CreateVacancyRequestPage').then((m) => ({ default: m.CreateVacancyRequestPage })));
 const VacancyRequestDetailPage = lazy(() => import('./pages/VacancyRequestDetailPage').then((m) => ({ default: m.VacancyRequestDetailPage })));
 const ApprovalInboxPage = lazy(() => import('./pages/ApprovalInboxPage').then((m) => ({ default: m.ApprovalInboxPage })));
@@ -141,7 +141,7 @@ function App() {
                   />
 
                   {/* Vacancy Management */}
-                  <Route path="/vacancy-requests" element={<PermissionGate requiredPermission="VACANCY_REQUEST_VIEW"><VacancyRequestsPage /></PermissionGate>} />
+                  <Route path="/vacancy-requests" element={<PermissionGate requiredPermission="VACANCY_REQUEST_VIEW"><RequisitionsRoute /></PermissionGate>} />
                   <Route path="/vacancy-requests/create" element={<PermissionGate requiredPermission="VACANCY_REQUEST_CREATE"><CreateVacancyRequestPage /></PermissionGate>} />
                   <Route path="/vacancy-requests/:id" element={<PermissionGate requiredPermission="VACANCY_REQUEST_VIEW"><VacancyRequestDetailPage /></PermissionGate>} />
                   <Route path="/approval-inbox" element={<PermissionGate requiredAnyPermission={['VACANCY_REQUEST_APPROVE', 'APPROVE_OFFERS', 'FINAL_HIRING_APPROVAL']}><ApprovalInboxPage /></PermissionGate>} />
