@@ -12,6 +12,8 @@ import {
 import { PageState } from '../components/ui/PageState';
 import { QuickGuideTrigger } from '../quickguide';
 import { MyTargetsWidget } from '../components/MyTargetsWidget';
+import { partitionVacancies, unwrapList, REDACTED_OWNER_LABEL } from '../utils/vacancyAccess';
+import type { MaybeRedacted } from '../types/redactedVacancy';
 
 interface CommandCenterPosition {
   id: string;
@@ -102,6 +104,8 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
   const { user } = useAuth();
 
   const [positions, setPositions] = useState<CommandCenterPosition[]>([]);
+  // B1: other owners' jobs are not part of this work queue.
+  const [hiddenRedactedCount, setHiddenRedactedCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'Open' | 'On Hold' | 'Closed'>('Open');
@@ -126,7 +130,7 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
     setIsLoading(true);
 
     Promise.allSettled([
-      getApi<RawVacancyResponse[] | { data: RawVacancyResponse[] }>('/vacancies'),
+      getApi<Array<MaybeRedacted<RawVacancyResponse>> | { data?: Array<MaybeRedacted<RawVacancyResponse>> }>('/vacancies'),
       canApprove ? getApi<InboxItem[]>('/vacancy-requests/inbox') : Promise.resolve([]),
       canApprove ? getApi<InboxItem[]>('/offers/approvals/inbox') : Promise.resolve([]),
       canApprove ? getApi<InboxItem[]>('/hiring/final-approvals') : Promise.resolve([]),
@@ -134,7 +138,8 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
       if (!isMounted) return;
 
       if (vacRes.status === 'fulfilled') {
-        const rawList = Array.isArray(vacRes.value) ? vacRes.value : vacRes.value?.data || [];
+        const { full: rawList, redacted } = partitionVacancies(unwrapList(vacRes.value));
+        setHiddenRedactedCount(redacted.length);
         const statusMap: Record<string, CommandCenterPosition['status']> = {
           Open: 'Open',
           'On Hold': 'On Hold',
@@ -419,6 +424,12 @@ export function RecruitmentCommandCenter({ onToggleAnalytics }: { onToggleAnalyt
           </div>
         </div>
       </div>
+
+      {!isLoading && hiddenRedactedCount > 0 && (
+        <p className="text-xs text-rf-ink-muted" data-testid="redacted-queue-note">
+          {hiddenRedactedCount} {hiddenRedactedCount === 1 ? 'job is' : 'jobs are'} not in your queue ({REDACTED_OWNER_LABEL.toLowerCase()}). See Job Positions for a read-only view.
+        </p>
+      )}
 
       {/* ── Main Content: Cards Grid or Table ── */}
       {isLoading ? (
