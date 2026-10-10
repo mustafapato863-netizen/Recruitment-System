@@ -228,3 +228,18 @@ describe('B6 domain codes are registered', () => {
     expect(normalizeError(new ConflictException({ code: 'NOPE_UNKNOWN' })).code).toBe('CONFLICT');
   });
 });
+
+describe('B2-9 / NEW-3 codes and counts reach the client', () => {
+  it('keeps USER_OWNS_OPEN_WORK + counts, JOB_HAS_OPEN_APPLICATIONS + counts, JOB_NOT_OWNED, FILE_CLOSED', async () => {
+    const { ConflictException, ForbiddenException } = await import('@nestjs/common');
+    const { buildErrorEnvelope } = await import('./error-normalizer');
+    const u = buildErrorEnvelope(normalizeError(new ConflictException({ code: 'USER_OWNS_OPEN_WORK', message: 'x', counts: { openApplicationsPrimary: 2, openJobs: 1 } })), 'r');
+    expect(u).toMatchObject({ statusCode: 409, code: 'USER_OWNS_OPEN_WORK', counts: { openApplicationsPrimary: 2, openJobs: 1 } });
+    expect(buildErrorEnvelope(normalizeError(new ConflictException({ code: 'JOB_HAS_OPEN_APPLICATIONS', message: 'x', counts: { openApplications: 3 } })), 'r'))
+      .toMatchObject({ code: 'JOB_HAS_OPEN_APPLICATIONS', counts: { openApplications: 3 } });
+    expect(normalizeError(new ForbiddenException({ code: 'JOB_NOT_OWNED', message: 'x' })).code).toBe('JOB_NOT_OWNED');
+    expect(normalizeError(new ConflictException({ code: 'FILE_CLOSED', message: 'x' })).code).toBe('FILE_CLOSED');
+    // non-numeric counts never leak
+    expect(buildErrorEnvelope(normalizeError(new ConflictException({ code: 'USER_OWNS_OPEN_WORK', message: 'x', counts: { email: 'a@b.c' } })), 'r').counts).toBeUndefined();
+  });
+});

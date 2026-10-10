@@ -22,7 +22,7 @@ function createService(status = 'Open') {
   const service = new VacancyCoreService({} as VacancyCoreRepository, prisma as unknown as PrismaService, {} as NotificationsService);
   return { service, prisma, transaction };
 }
-const adminUser = { userId: 'admin-1', organizationId: 'org-1' } as AuthUser;
+const adminUser = { userId: 'admin-1', organizationId: 'org-1', roleCodes: ['ADMINISTRATOR'] } as AuthUser;
 
 describe('VacancyCoreService DELETE deactivates (B2)', () => {
   it('closes the job (never Cancelled), cancels its open requisition, and deletes nothing', async () => {
@@ -49,5 +49,16 @@ describe('VacancyCoreService DELETE deactivates (B2)', () => {
     expect(error).toBeInstanceOf(ConflictException);
     expect((error as ConflictException).getResponse()).toMatchObject({ counts: { openApplications: 2 } });
     expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('NEW-3: a non-admin who is not the owner or the owner\'s manager gets 403 JOB_NOT_OWNED (VACANCY_MANAGE is not enough)', async () => {
+    const { service, prisma } = createService();
+    prisma.vacancy.findFirst.mockResolvedValue({ id: 'vacancy-1', status: 'Open', vacancyRequestId: 'request-1', vacancyRequest: { requesterId: 'requester', assignedEmployeeId: null }, assignments: [{ userId: 'owner', user: { managerId: 'boss' } }] } as never);
+    Object.assign(prisma, { userRole: { count: vi.fn().mockResolvedValue(0) } });
+    const tm = { userId: 'talent-manager', organizationId: 'org-1', roleCodes: ['TALENT_MANAGER'] } as AuthUser;
+    await expect(service.deleteVacancy('vacancy-1', 'org-1', tm)).rejects.toMatchObject({ status: 403, response: { code: 'JOB_NOT_OWNED' } });
+    await expect(service.deleteVacancy('vacancy-1', 'org-1', { ...tm, userId: 'requester' })).rejects.toMatchObject({ status: 403 });
+    await expect(service.deleteVacancy('vacancy-1', 'org-1', { ...tm, userId: 'boss' })).resolves.toMatchObject({ deactivated: true });
+    await expect(service.deleteVacancy('vacancy-1', 'org-1', { ...tm, userId: 'owner' })).resolves.toMatchObject({ deactivated: true });
   });
 });

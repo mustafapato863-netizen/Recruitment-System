@@ -199,6 +199,8 @@ export interface NormalizedError {
   offeredMonthlyBase?: number;
   /** B2-15: the first offending input on a 400 (dotted path). */
   field?: string;
+  /** B2-9: per-kind counts on blocking 409s (USER_OWNS_OPEN_WORK, JOB_HAS_OPEN_APPLICATIONS). */
+  counts?: Record<string, number>;
   /** Server-side diagnostic context (sanitized). Never returned to clients. */
   logContext?: string;
 }
@@ -508,6 +510,14 @@ export function normalizeError(
           ? { band: resObj.band, ...(typeof resObj.offeredMonthlyBase === 'number' ? { offeredMonthlyBase: resObj.offeredMonthlyBase } : {}) }
           : undefined;
 
+      // B2-9: 409s that block a deactivation keep their counts (flat non-negative integers only).
+      const counts =
+        status === HttpStatus.CONFLICT && typeof resObj.counts === 'object' && resObj.counts !== null && !Array.isArray(resObj.counts) &&
+        Object.keys(resObj.counts).length <= 20 &&
+        Object.entries(resObj.counts as Record<string, unknown>).every(([k, v]) => /^[A-Za-z]{1,60}$/.test(k) && Number.isInteger(v) && (v as number) >= 0)
+          ? (resObj.counts as Record<string, number>)
+          : undefined;
+
       const rawMessage = Array.isArray(resObj.message)
         ? resObj.message
         : typeof resObj.message === 'string'
@@ -557,6 +567,7 @@ export function normalizeError(
         ...(details ? { details } : {}),
         ...(gateInfo ?? {}),
         ...(bandInfo ?? {}),
+        ...(counts ? { counts } : {}),
         ...(status === HttpStatus.BAD_REQUEST && typeof resObj.field === 'string' && /^[A-Za-z0-9_.]{1,120}$/.test(resObj.field) ? { field: resObj.field } : {}),
         retryable,
         retryAfterSeconds:
@@ -667,6 +678,7 @@ export function buildErrorEnvelope(normalized: NormalizedError, requestId: strin
   if (normalized.band !== undefined) envelope.band = normalized.band;
   if (normalized.offeredMonthlyBase !== undefined) envelope.offeredMonthlyBase = normalized.offeredMonthlyBase;
   if (normalized.field !== undefined) envelope.field = normalized.field;
+  if (normalized.counts !== undefined) envelope.counts = normalized.counts;
   return envelope;
 }
 

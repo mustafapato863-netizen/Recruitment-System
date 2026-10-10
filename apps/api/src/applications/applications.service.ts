@@ -483,18 +483,10 @@ export class ApplicationsService {
     const vacancyVisibility = user
       ? await this.accessControl.getVacancyVisibilityWhere(user)
       : { organizationId };
-    const applicationVisibility = user
-      ? await this.accessControl.getApplicationVisibilityWhere(user)
-      : { organizationId };
-    const candidateVisibility: Prisma.CandidateWhereInput = user
-      ? {
-          organizationId,
-          OR: [
-            { createdById: user.userId },
-            { applications: { some: applicationVisibility } },
-          ],
-        }
-      : { organizationId };
+    // B2-12 (v2 §7 "Import links a person already in the bank"): linking a bank person to a job the caller
+    // fully sees (vacancyVisibility below) is allowed for any candidate in the organization. Nothing about the
+    // person is returned beyond the new file, which the caller owns.
+    const candidateVisibility: Prisma.CandidateWhereInput = { organizationId };
 
     const [vacancy, candidate] = await Promise.all([
       this.prisma.vacancy.findFirst({

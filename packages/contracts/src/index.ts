@@ -51,7 +51,7 @@ export const errorCodes = [
   'DOCUMENT_DOWNLOAD_DENIED',
   // B6 suggest / compare / skill evidence / duplicates (kept as-is by the API error normalizer)
   'APPLICATION_EXISTS', 'COMPARE_CANDIDATE_NOT_FOUND', 'COMPARE_COUNT', 'CONTACT_REQUIRED', 'EVIDENCE_SNIPPET_REQUIRED',
-  'EVIDENCE_SOURCE_INVALID', 'NOT_JOB_OWNER', 'SKILL_INACTIVE', 'SKILL_NOT_IN_LIBRARY',
+  'EVIDENCE_SOURCE_INVALID', 'NOT_JOB_OWNER', 'USER_OWNS_OPEN_WORK', 'JOB_HAS_OPEN_APPLICATIONS', 'CANDIDATE_EXISTS', 'SKILL_INACTIVE', 'SKILL_NOT_IN_LIBRARY',
 ] as const;
 
 /**
@@ -63,7 +63,7 @@ function domainErrorCodes() {
   return [
     // B3 requisition / job lifecycle
     'ADMIN_CANNOT_CHANGE_JOB_STATUS', 'ASSIGNEE_NOT_ELIGIBLE', 'ASSIGNEE_REQUIRED', 'DUE_DATE_REQUIRED', 'SEATS_BELOW_JOINED', 'REQUISITION_NOT_APPROVED', 'REQUISITION_NOT_ACTIVE', 'DEPARTMENT_NOT_FOUND', 'FILE_CLOSED',
-    'GRADE_NOT_FOUND', 'ILLEGAL_JOB_TRANSITION', 'JOB_NOT_ACCEPTING_APPLICATIONS', 'NOT_JOB_OWNER', 'JOB_NOT_OWNED',
+    'GRADE_NOT_FOUND', 'ILLEGAL_JOB_TRANSITION', 'JOB_NOT_ACCEPTING_APPLICATIONS', 'NOT_JOB_OWNER',
     'REASON_REQUIRED', 'REQUISITION_CANCELLED', 'REASON_NOT_IN_LIST', 'HOLD_UNTIL_NOT_FUTURE',
     // B5 gates
     'GATE_SCREEN_NOTE_MISSING', 'GATE_SCORECARD_NOT_SUBMITTED', 'GATE_OFFER_NOT_ACCEPTED',
@@ -108,6 +108,8 @@ export interface ErrorEnvelope {
   offeredMonthlyBase?: number;
   /** B2-15: on 400s, the first offending input (dotted path, e.g. "basePay", "allowances.0.amount", "pay"). */
   field?: string;
+  /** B2-9: on USER_OWNS_OPEN_WORK / JOB_HAS_OPEN_APPLICATIONS 409s, e.g. { openApplicationsPrimary: 2, openJobs: 1 }. */
+  counts?: Record<string, number>;
   requestId: string;
   retryable: boolean;
   retryAfterSeconds: number | null;

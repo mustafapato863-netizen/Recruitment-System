@@ -1340,6 +1340,9 @@ export class VacancyCoreService {
     // B1 x B2 merge: deactivating is a write, so another owner's job is 403
     // (JOB_NOT_OWNED) and an out-of-scope job is 404, like the other job writes.
     await this.assertVacancyVisible(organizationId, id, user);
+    // NEW-3: like close, only the job owner or the owner's manager deactivates a job (403 JOB_NOT_OWNED);
+    // VACANCY_MANAGE alone is not enough. Administrators keep B2's deactivate.
+    if (user && !user.roleCodes?.includes('ADMINISTRATOR')) await assertJobOwnerOrManager(this.prisma, organizationId, id, user.userId);
     const vacancy = await this.prisma.vacancy.findFirst({
       where: { id, organizationId },
       select: { id: true, status: true, vacancyRequestId: true },
