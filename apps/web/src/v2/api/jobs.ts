@@ -131,7 +131,8 @@ export interface MyJobRow {
   seats: { filled: number; target: number }; dueDate: string | null; holdUntil: string | null;
   pipelineCounts: Record<string, number>; active: number;
 }
-export interface OtherJobRow { id: string; title: string; site: string | null; seats: { filled: number; target: number } }
+/** `full`: the server sent the whole job (#23 603d44d: a manager sees their reports' jobs), so it links to the board. */
+export interface OtherJobRow { id: string; title: string; site: string | null; seats: { filled: number; target: number }; full?: boolean; ownerName?: string | null }
 export interface OpenJobs { mine: MyJobRow[]; others: OtherJobRow[] }
 
 const ACTIVE_STAGES = ['Applied', 'Screening', 'Interview', 'Offer', 'Pre-Hire'];
@@ -160,7 +161,7 @@ export async function fetchOpenJobs(): Promise<OpenJobs> {
   const mineIds = new Set(mine.map((m) => m.id));
   const others: OtherJobRow[] = stripPay(allRes?.data ?? []).filter((raw) => !mineIds.has(raw.id)).map((raw) => (isRedactedJob(raw)
     ? { id: raw.id, title: raw.title, site: raw.site?.name ?? null, seats: raw.seats }
-    : { id: raw.id, title: raw.title, site: raw.branch?.name ?? null, seats: { filled: raw.headcount.joined, target: raw.headcount.approved } }));
+    : { id: raw.id, title: raw.title, site: raw.branch?.name ?? null, seats: { filled: raw.headcount.joined, target: raw.headcount.approved }, full: true, ownerName: raw.owner?.displayName ?? null }));
   mine.sort((a, b) => (a.dueDate ?? '9999').localeCompare(b.dueDate ?? '9999') || a.title.localeCompare(b.title));
   return { mine, others };
 }
