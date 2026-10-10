@@ -94,7 +94,7 @@ describe('A08 Reports (Admin)', () => {
 });
 
 describe('A5 Admin override', () => {
-  it('CoS: with the B3 lists, hold sends the list reason and holdUntil; Other needs a note', async () => {
+  it('#21 2ced190: hold sends {reason: list value, note when Other, holdUntil}; no free-text "why" with a list', async () => {
     const u = userEvent.setup();
     serve({ '/master-data/catalog/hold-reasons': [{ name: 'Budget freeze', status: 'Active' }, { name: 'Other', status: 'Active' }, { name: 'Old', status: 'Inactive' }] });
     api.postApi.mockResolvedValue({ action: 'job.hold', entityId: 'v1', from: 'Open', to: 'On Hold' });
@@ -103,16 +103,16 @@ describe('A5 Admin override', () => {
     await u.click(within(d).getByRole('radio', { name: 'Put on hold' }));
     const pick = await within(d).findByLabelText(/^Hold reason/);
     expect(within(pick).queryByRole('option', { name: 'Old' })).toBeNull();
-    await u.type(within(d).getByLabelText(/^Why you are overriding/), 'Owner on sick leave');
+    expect(within(d).queryByLabelText(/^Why you are overriding/)).toBeNull();
     await u.click(within(d).getByRole('button', { name: 'Apply override' }));
     expect(within(d).getByText('Pick a reason from the list.')).toBeInTheDocument();
     await u.selectOptions(pick, 'Other');
     await u.click(within(d).getByRole('button', { name: 'Apply override' }));
-    expect(within(d).getByText('Say what the other reason is.')).toBeInTheDocument();
+    expect(within(d).getByText('"Other" needs a short note (at least 3 characters).')).toBeInTheDocument();
     await u.type(within(d).getByLabelText(/^Other reason/), 'Site audit');
     await u.type(within(d).getByLabelText(/^Hold until/), '2099-01-15');
     await u.click(within(d).getByRole('button', { name: 'Apply override' }));
-    await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/admin/overrides', { action: 'job.hold', entityId: 'v1', reason: 'Owner on sick leave', statusReason: 'Other', statusNote: 'Site audit', holdUntil: '2099-01-15' }));
+    await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/admin/overrides', { action: 'job.hold', entityId: 'v1', reason: 'Other', note: 'Site audit', holdUntil: '2099-01-15' }));
   });
   it('hold an Open job: actions by status, reason ≥ 10, POST /admin/overrides; audited note', async () => {
     const u = userEvent.setup();
@@ -259,6 +259,17 @@ describe('A10 Integrations', () => {
 });
 
 describe('#21/#23 override errors', () => {
+  it('close with a list reason (not Other) sends no note; reopen keeps free text', async () => {
+    const u = userEvent.setup();
+    serve({ '/master-data/catalog/close-reasons': [{ name: 'Filled internally', status: 'Active' }, { name: 'Other', status: 'Active' }] });
+    api.postApi.mockResolvedValue({ action: 'job.close', entityId: 'v1', from: 'Open', to: 'Closed' });
+    renderAt('/reports?override=v1');
+    const d = await screen.findByRole('dialog');
+    await u.click(within(d).getByRole('radio', { name: 'Close job' }));
+    await u.selectOptions(await within(d).findByLabelText(/^Close reason/), 'Filled internally');
+    await u.click(within(d).getByRole('button', { name: 'Apply override' }));
+    await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/admin/overrides', { action: 'job.close', entityId: 'v1', reason: 'Filled internally' }));
+  });
   it('400 fields map to the override inputs; REASON_REQUIRED goes on the "Other" note', async () => {
     const { overrideError } = await import('../opsApi');
     const { ApiError } = await import('../../../api/client');
@@ -266,6 +277,6 @@ describe('#21/#23 override errors', () => {
     expect(overrideError(new ApiError(400, 'x', { statusCode: 400, code: 'VALIDATION_ERROR', message: 'Please correct the highlighted fields.', field: 'holdUntil', fields }, { code: 'VALIDATION_ERROR', fields })))
       .toEqual({ field: 'holdUntil', text: 'holdUntil must be a valid ISO 8601 date string' });
     expect(overrideError(new ApiError(400, '"Other" needs a short note.', { statusCode: 400, code: 'REASON_REQUIRED', message: '"Other" needs a short note.' }, { code: 'REASON_REQUIRED' })))
-      .toEqual({ field: 'statusNote', text: '"Other" needs a short note.' });
+      .toEqual({ field: 'note', text: '"Other" needs a short note.' });
   });
 });

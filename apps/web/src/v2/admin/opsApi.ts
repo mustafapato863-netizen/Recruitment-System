@@ -9,7 +9,7 @@
  * - Every list call stays at pageSize ≤ 100 (B2-22) and pages through fetchAllPages.
  * - Integrations: B9 — only careers_site and smtp (others hidden / 404). GET /integrations, POST /integrations/:id/test.
  * - Override: B9 POST /admin/overrides {action, entityId, reason}; actions job.hold | job.reopen | job.close; reason ≥ 10;
- *   CoS: also sends the B3 list reason (statusReason, + statusNote for "Other") and holdUntil when the B3 lists exist.
+ *   #21 2ced190: hold/close send the list reason as `reason` (+ `note` for "Other") and holdUntil; reopen sends free text.
  *   400 OVERRIDE_REASON_REQUIRED / OVERRIDE_NOT_ALLOWED, 409 wrong state (OVERRIDE_NOT_ALLOWED), 403 non-admin.
  */
 import { override403Text } from './overrideErrors';
@@ -154,17 +154,20 @@ export const OVERRIDE_FROM: Record<OverrideAction, readonly string[]> = {
 export const OVERRIDE_LABEL: Record<OverrideAction, string> = { 'job.hold': 'Put on hold', 'job.reopen': 'Reopen', 'job.close': 'Close job' };
 export const overridesFor = (status: string | null) => (Object.keys(OVERRIDE_FROM) as OverrideAction[]).filter((a) => !!status && OVERRIDE_FROM[a].includes(status));
 export const OVERRIDE_MIN_REASON = 10;
-/** B3 extras on hold/close, sent only when the lists exist (B9 TODO(B3) routes them through the job lifecycle). */
-export interface OverrideExtras { statusReason?: string; statusNote?: string; holdUntil?: string }
+/**
+ * = #21 2ced190 POST /admin/overrides { action, entityId, reason, note?, holdUntil? }.
+ * hold/close: `reason` is a hold-reasons / close-reasons list value ("Other" + `note`); holdUntil on hold only.
+ * reopen: `reason` is free text (>= 10 characters). Without lists, free text >= 10 is stored server-side as "Other: <text>".
+ */
+export interface OverrideExtras { note?: string; holdUntil?: string }
 export const postOverride = (action: OverrideAction, entityId: string, reason: string, extras: OverrideExtras = {}) => {
   const body: Record<string, string> = { action, entityId, reason };
-  if (action !== 'job.reopen' && extras.statusReason) body.statusReason = extras.statusReason;
-  if (action !== 'job.reopen' && extras.statusNote?.trim()) body.statusNote = extras.statusNote.trim();
+  if (action !== 'job.reopen' && extras.note?.trim()) body.note = extras.note.trim();
   if (action === 'job.hold' && extras.holdUntil) body.holdUntil = extras.holdUntil;
   return postApi<{ action: string; entityId: string; from: string; to: string; reason: string }>('/admin/overrides', body);
 };
-type OverrideField = 'reason' | 'statusReason' | 'holdUntil' | 'statusNote' | 'action';
-const OVERRIDE_FIELD: Record<string, OverrideField> = { reason: 'reason', statusReason: 'statusReason', statusNote: 'statusNote', note: 'statusNote', holdUntil: 'holdUntil', action: 'action' };
+type OverrideField = 'reason' | 'holdUntil' | 'note' | 'action';
+const OVERRIDE_FIELD: Record<string, OverrideField> = { reason: 'reason', note: 'note', holdUntil: 'holdUntil', action: 'action' };
 export function overrideError(e: unknown): { field?: OverrideField; text: string } {
   // #23: a 400's field/fields name the body path; show it on that input.
   const f = serverFormErrors(e);
@@ -172,10 +175,10 @@ export function overrideError(e: unknown): { field?: OverrideField; text: string
   if (hit) return { field: OVERRIDE_FIELD[hit], text: f.byField[hit] };
   const d = domainError(e); const s = (e as { statusCode?: number })?.statusCode;
   // #21: "Other" from a reason list needs a short note (400 REASON_REQUIRED).
-  if (d?.code === 'REASON_REQUIRED') return { field: 'statusNote', text: d.message || '"Other" needs a short note.' };
+  if (d?.code === 'REASON_REQUIRED') return { field: 'note', text: d.message || '"Other" needs a short note.' };
   if (d?.code === 'OVERRIDE_REASON_REQUIRED') return { field: 'reason', text: `An override needs a reason (at least ${OVERRIDE_MIN_REASON} characters).` };
   if (d?.code === 'OVERRIDE_NOT_ALLOWED') return { text: d.message || 'That override is not allowed for this job now.' };
-  if (d?.code === 'REASON_NOT_IN_LIST') return { field: 'statusReason', text: 'Pick a reason from the list.' };
+  if (d?.code === 'REASON_NOT_IN_LIST') return { field: 'reason', text: 'Pick a reason from the list.' };
   if (d?.code === 'HOLD_UNTIL_NOT_FUTURE') return { field: 'holdUntil', text: 'Pick a day after today (Cairo).' };
   // B2F-4: the caller is an admin; say what the server refused (e.g. the job owner check), by code.
   if (s === 403) return { text: override403Text(e) };
