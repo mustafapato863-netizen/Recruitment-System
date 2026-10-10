@@ -98,7 +98,7 @@ export function OfferDecisionDrawer({ offerId, ownerName, showPay, onClose, onDo
               {form ? (
                 <fieldset className="rf2-decide__payform" disabled={!pending}>
                   <legend className="rf2-field__label">Pay (set by you on Approve)</legend>
-                  {err?.field === 'pay' && err.text ? <p className="rf2-form-error" role="alert" ref={(el) => el?.scrollIntoView?.({ block: 'nearest' })} data-testid="decision-error">{err.text}</p> : null}
+                  {err?.field === 'pay' && err.text && !fieldError(err.inline, 'basePay', 'currency') ? <p className="rf2-form-error" role="alert" ref={(el) => el?.scrollIntoView?.({ block: 'nearest' })} data-testid="decision-error">{err.text}</p> : null}
                   {pay?.mixed ? <p className="rf2-jtable__sub">The version mixes currencies; pick one.</p> : null}
                   <div className="rf2-req__row">
                     <InputV2 label={`Monthly basic pay (${form.currency})`} required type="number" min={0} inputMode="numeric" value={form.base} onChange={(e) => { setForm({ ...form, base: e.target.value }); setErr(null); }} data-testid="base-pay" error={fieldError(err?.inline, 'basePay', 'pay')} />
@@ -122,7 +122,7 @@ export function OfferDecisionDrawer({ offerId, ownerName, showPay, onClose, onDo
               <BandPanel band={shownBand} grade={offer.grade?.name ?? null} amount={amount} pos={shownPos} code={err?.code} bandsListed={state.kind === 'ready' && state.bands !== null} />
             </>
           ) : <p className="rf2-inline-note"><ShieldCheck aria-hidden="true" /> Pay and the band are visible to the Manager only.</p>}
-          {err && !err.field && err.text ? <p className="rf2-form-error" role="alert" ref={(el) => el?.scrollIntoView?.({ block: 'nearest' })} data-testid="decision-error">{err.text}</p> : null}
+          {err && err.text && (!err.field || (err.field === 'pay' && !(showPay && form))) ? <p className="rf2-form-error" role="alert" ref={(el) => el?.scrollIntoView?.({ block: 'nearest' })} data-testid="decision-error">{err.text}</p> : null}
           <TextareaV2 label={`Comment to ${first} (required for Request changes or Reject)`} rows={2} value={reason} onChange={(e) => { setReason(e.target.value); setErr(null); }} error={err?.field === 'reason' ? err.text : fieldError(err?.inline, 'reason')} disabled={!pending} />
           {pending ? (
             <div className="rf2-decide__reject">

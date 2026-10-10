@@ -97,6 +97,11 @@ describe('M3 offer decision (B7)', () => {
     expect(within(d).getByRole('region', { name: 'Pay band' })).toHaveTextContent('No active band for Grade 8');
     await u.click(within(d).getByRole('button', { name: 'Approve offer' }));
     expect(await within(d).findByRole('alert')).toHaveTextContent('Base pay is outside the band.');
+    // B2V-3: the message is the pay input's own error (aria-invalid + aria-describedby), shown once.
+    const pay = within(d).getByTestId('base-pay');
+    expect(pay).toHaveAttribute('aria-invalid', 'true');
+    expect(document.getElementById(pay.getAttribute('aria-describedby')!.split(' ')[0])).toHaveTextContent('Base pay is outside the band.');
+    expect(within(d).getAllByText(/Base pay is outside the band\./)).toHaveLength(1);
     const band = within(d).getByRole('region', { name: 'Pay band' });
     expect(band).toHaveTextContent('Above band');
     expect(within(band).getByTestId('band-text')).toHaveTextContent('Offer 62,000 is 2,000 above the maximum. Approve is refused (OFFER_PAY_OUTSIDE_BAND).');
