@@ -41,6 +41,13 @@ export const errorCodes = [
   'ASYNC_JOB_FAILED',
   'INTEGRATION_UNAVAILABLE',
   'INTERNAL_ERROR',
+  // B1 ownership/scope codes (PR #4); clients branch on these.
+  'FILE_NOT_OWNED',
+  'JOB_NOT_OWNED',
+  'ADMIN_CANNOT_REASSIGN',
+  'OWNER_NOT_ELIGIBLE',
+  'ADMIN_ONLY',
+  'DOCUMENT_DOWNLOAD_DENIED',
 ] as const;
 
 export type ErrorCode = (typeof errorCodes)[number];
@@ -167,9 +174,23 @@ export interface Vacancy {
   joinedHeadcount: number;
   openedAt: string | null;
   targetStartDate: string | null;
+  /** B1: the single job owner (never an administrator). */
+  primaryRecruiterId?: string | null;
   assignments: VacancyAssignment[];
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * B1 (Roadmap v2 §5): another owner's job as seen by a non-oversight user.
+ * Only title, site and seats; every other field is withheld server-side.
+ */
+export interface RedactedVacancy {
+  id: string;
+  redacted: true;
+  title: string | null;
+  site: { id: string; name: string } | null;
+  seats: { filled: number; target: number };
 }
 
 export * from './candidate-activity.ts';

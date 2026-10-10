@@ -109,6 +109,7 @@ Table users {
   vacancyRequests vacancy_requests [not null]
   approvals vacancy_request_approvals [not null]
   assignments vacancy_assignments [not null]
+  ownedVacancies vacancies [not null]
   primaryApplications applications [not null]
   taskApplications applications [not null]
   applicationStageChanges application_status_histories [not null]
@@ -288,6 +289,8 @@ Table vacancies {
   vacancyRequest vacancy_requests [not null]
   vacancyCode String [unique, not null]
   status String [not null, default: 'Pending Activation']
+  primaryRecruiterId String
+  primaryRecruiter users
   approvedHeadcount Int [not null]
   joinedHeadcount Int [not null, default: 0]
   openedAt DateTime
@@ -970,6 +973,8 @@ Ref: vacancies.branchId > branches.id [delete: Restrict]
 Ref: vacancies.positionId > positions.id [delete: Restrict]
 
 Ref: vacancies.vacancyRequestId - vacancy_requests.id [delete: Restrict]
+
+Ref: vacancies.primaryRecruiterId > users.id [delete: Restrict]
 
 Ref: vacancy_assignments.vacancyId > vacancies.id [delete: Restrict]
 

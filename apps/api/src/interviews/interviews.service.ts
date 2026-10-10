@@ -5,6 +5,7 @@ import {
   Inject,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import type { Prisma } from '@recruitflow/database';
 import type {
@@ -31,8 +32,34 @@ import { generateIcsCalendar } from './ics-generator';
 // Runtime service import must remain a value import for Nest DI metadata reflection.
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { AccessControlService } from '../access-control/access-control.service';
+import { DocumentsService } from '../documents/documents.service';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import type { AuthUser } from '@recruitflow/contracts';
+
+/**
+ * B1 follow-up (QA BUG-4): an attendee's own interview, with no candidate file
+ * data. The stored title usually contains the candidate's name, so a neutral
+ * placeholder built from the interview type is returned instead.
+ */
+export interface MyInterviewItem {
+  id: string;
+  title: string;
+  interviewType: string;
+  status: string;
+  scheduledStart: string;
+  scheduledEnd: string;
+  timezone: string;
+  room: { name: string | null; url: string | null };
+  myResponse: string;
+  scorecard: { submitted: boolean; submittedAt: string | null; isLocked: boolean };
+}
+
+/** RSVP result for an attendee who does not own the file (no interview detail). */
+export interface InterviewRsvpReceipt {
+  id: string;
+  response: string;
+  redacted: true;
+}
 
 @Injectable()
 export class InterviewsService {
@@ -40,6 +67,7 @@ export class InterviewsService {
     @Inject(PrismaService) private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
     private readonly accessControl: AccessControlService,
+    @Optional() @Inject(DocumentsService) private readonly documents?: DocumentsService,
   ) {}
 
   async listInterviews(
@@ -82,6 +110,35 @@ export class InterviewsService {
     });
 
     return items.map((item) => this.toInterview(item));
+  }
+
+  /** GET /interviews/mine: interviews the caller attends, without candidate file data. */
+  async listMyInterviews(organizationId: string, userId: string): Promise<MyInterviewItem[]> {
+    const rows = await this.prisma.interview.findMany({
+      where: { organizationId, attendees: { some: { userId } } },
+      select: {
+        id: true, interviewType: true, status: true, scheduledStart: true, scheduledEnd: true, timezone: true, locationUrl: true,
+        attendees: { where: { userId }, select: { response: true } },
+        scorecards: { where: { interviewerId: userId }, select: { submittedAt: true, isLocked: true } },
+      },
+      orderBy: { scheduledStart: 'asc' },
+    });
+    return rows.map((row) => {
+      const card = row.scorecards[0];
+      return {
+        id: row.id,
+        title: `${row.interviewType} Interview`,
+        interviewType: row.interviewType,
+        status: row.status,
+        scheduledStart: row.scheduledStart.toISOString(),
+        scheduledEnd: row.scheduledEnd.toISOString(),
+        timezone: row.timezone,
+        // There is no room-name column; a URL means an online meeting room.
+        room: { name: row.locationUrl ? 'Online meeting' : null, url: row.locationUrl ?? null },
+        myResponse: row.attendees[0]?.response ?? 'Accepted',
+        scorecard: { submitted: Boolean(card), submittedAt: card ? card.submittedAt.toISOString() : null, isLocked: card?.isLocked ?? false },
+      };
+    });
   }
 
   async getInterview(organizationId: string, id: string, user?: AuthUser): Promise<Interview> {
@@ -194,6 +251,7 @@ export class InterviewsService {
     dto: CreateInterviewDto,
     user?: AuthUser,
   ): Promise<Interview> {
+    if (user) await this.accessControl.assertApplicationAccess(user, dto.applicationId);
     const visibility = user
       ? await this.accessControl.getApplicationVisibilityWhere(user)
       : { organizationId };
@@ -474,7 +532,13 @@ export class InterviewsService {
       ? await this.accessControl.getApplicationVisibilityWhere(user)
       : { organizationId };
     const interview = await this.prisma.interview.findFirst({
-      where: { id, organizationId, application: visibility },
+      // B1 follow-up: attendees of this interview keep RSVP and the .ics file
+      // even when they do not own the file (the guard already enforced this).
+      where: {
+        id,
+        organizationId,
+        ...(user ? { OR: [{ application: visibility }, { attendees: { some: { userId: user.userId } } }] } : { application: visibility }),
+      },
       include: {
         application: {
           include: {
@@ -528,12 +592,18 @@ export class InterviewsService {
     userId: string,
     dto: UpdateInterviewResponseDto,
     user?: AuthUser,
-  ): Promise<Interview> {
+  ): Promise<Interview | InterviewRsvpReceipt> {
     const visibility = user
       ? await this.accessControl.getApplicationVisibilityWhere(user)
       : { organizationId };
     const interview = await this.prisma.interview.findFirst({
-      where: { id: interviewId, organizationId, application: visibility },
+      // B1 follow-up: attendees of this interview keep RSVP and the .ics file
+      // even when they do not own the file (the guard already enforced this).
+      where: {
+        id: interviewId,
+        organizationId,
+        ...(user ? { OR: [{ application: visibility }, { attendees: { some: { userId: user.userId } } }] } : { application: visibility }),
+      },
       include: {
         attendees: { include: { user: true } },
         application: {
@@ -593,6 +663,15 @@ export class InterviewsService {
       });
     }
 
+    // B1 follow-up: an attendee who does not own the file gets only an RSVP
+    // receipt; the interview detail stays 403/hidden for them.
+    if (user) {
+      const ownsFile = await this.prisma.interview.findFirst({
+        where: { id: interviewId, organizationId, application: visibility },
+        select: { id: true },
+      });
+      if (!ownsFile) return { id: interviewId, response: dto.response, redacted: true };
+    }
     return this.getInterview(organizationId, interviewId, user);
   }
 
@@ -603,7 +682,15 @@ export class InterviewsService {
     dto: SubmitScorecardDto,
     user?: AuthUser,
   ): Promise<InterviewScorecardItem> {
-    const interview = await this.getInterview(organizationId, interviewId, user);
+    // B1: an attendee may submit their own scorecard even when they do not own
+    // the file (TenantScopedGuard + @AllowInterviewAttendee already allowed
+    // the request); the attendee check below is what authorizes the write.
+    void user;
+    const interview = await this.prisma.interview.findFirst({
+      where: { id: interviewId, organizationId },
+      select: { id: true, status: true },
+    });
+    if (!interview) throw new NotFoundException(`Interview ${interviewId} was not found.`);
 
     if (interview.status === 'Cancelled') {
       throw new BadRequestException('Cancelled interviews cannot receive scorecards.');
@@ -689,6 +776,55 @@ export class InterviewsService {
       isLocked: scorecard.isLocked,
       submittedAt: scorecard.submittedAt.toISOString(),
     };
+  }
+
+  /**
+   * B1 interviewer exception: the attendee reads their own scorecard for this
+   * interview; file owners (and oversight) read every scorecard on it.
+   */
+  async getScorecards(organizationId: string, interviewId: string, user: AuthUser): Promise<InterviewScorecardItem[]> {
+    const interview = await this.prisma.interview.findFirst({ where: { id: interviewId, organizationId }, select: { id: true, applicationId: true } });
+    if (!interview) throw new NotFoundException(`Interview ${interviewId} was not found.`);
+    const ownsFile = await this.prisma.application.findFirst({
+      where: { id: interview.applicationId, ...(await this.accessControl.getApplicationVisibilityWhere(user)) },
+      select: { id: true },
+    });
+    const scorecards = await this.prisma.interviewScorecard.findMany({
+      where: { interviewId, ...(ownsFile ? {} : { interviewerId: user.userId }) },
+      include: { interviewer: true },
+      orderBy: { submittedAt: 'asc' },
+    });
+    return scorecards.map((scorecard) => ({
+      id: scorecard.id,
+      interviewId: scorecard.interviewId,
+      interviewerId: scorecard.interviewerId,
+      interviewerName: scorecard.interviewer?.displayName,
+      overallRating: scorecard.overallRating,
+      recommendation: scorecard.recommendation as InterviewScorecardItem['recommendation'],
+      strengths: scorecard.strengths,
+      concerns: scorecard.concerns,
+      notes: scorecard.notes,
+      isLocked: scorecard.isLocked,
+      submittedAt: scorecard.submittedAt.toISOString(),
+    }));
+  }
+
+  /** B1 interviewer exception: the candidate's current CV for this interview. */
+  async getCandidateCvFile(organizationId: string, interviewId: string) {
+    const interview = await this.prisma.interview.findFirst({
+      where: { id: interviewId, organizationId },
+      select: { application: { select: { candidateId: true } } },
+    });
+    if (!interview) throw new NotFoundException(`Interview ${interviewId} was not found.`);
+    const cv = await this.prisma.candidateDocument.findFirst({
+      where: { organizationId, candidateId: interview.application.candidateId, documentType: { in: ['CV', 'Resume'] }, deletedAt: null },
+      orderBy: { createdAt: 'desc' },
+      select: { id: true },
+    });
+    if (!cv || !this.documents) throw new NotFoundException('This candidate has no CV on file.');
+    // The guard already authorized this attendee/owner for this interview;
+    // DocumentsService still enforces scan, consent and retention gates.
+    return this.documents.getFile(organizationId, cv.id);
   }
 
   private async notifyCalendarIntegration(organizationId: string): Promise<void> {
