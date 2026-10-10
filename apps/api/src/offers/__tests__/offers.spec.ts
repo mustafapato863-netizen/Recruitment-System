@@ -37,7 +37,7 @@ describe('OffersController', () => {
     expect(mockOffersService.getOffers).toHaveBeenCalledWith(
       mockUser,
       {},
-      { viewSalary: true },
+      { viewOfferPay: true },
     );
   });
 
@@ -47,7 +47,7 @@ describe('OffersController', () => {
     expect(mockOffersService.getOffers).toHaveBeenCalledWith(
       mockUser,
       {},
-      { viewSalary: true },
+      { viewOfferPay: true },
     );
 
     const resultNull = await controller.getOffers(mockUser, undefined, undefined, 'null');
@@ -71,7 +71,7 @@ describe('OffersController', () => {
         candidateId: validUuid,
         search: 'test candidate',
       },
-      { viewSalary: true },
+      { viewOfferPay: true },
     );
   });
 });

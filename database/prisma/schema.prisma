@@ -47,6 +47,7 @@ model Organization {
   recruiterTargets    RecruiterTarget[]
   createdAt           DateTime             @default(now()) @db.Timestamptz(6)
   updatedAt           DateTime             @updatedAt @db.Timestamptz(6)
+  gradeBands          GradeBand[]
 
   @@index([status])
   @@map("organizations")
@@ -66,6 +67,7 @@ model Branch {
   vacancies       Vacancy[]
   createdAt       DateTime         @default(now()) @db.Timestamptz(6)
   updatedAt       DateTime         @updatedAt @db.Timestamptz(6)
+  gradeBands      GradeBand[]
 
   @@unique([organizationId, code])
   @@index([organizationId, status])
@@ -93,61 +95,70 @@ model Position {
 }
 
 model User {
-  id                      String                     @id @default(uuid()) @db.Uuid
-  organizationId          String                     @db.Uuid
-  organization            Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  email                   String                     @db.VarChar(320)
-  emailNormalized         String                     @db.VarChar(320)
-  passwordHash            String?                    @db.VarChar(128)
-  displayName             String                     @db.VarChar(200)
-  jobTitle                String?                    @db.VarChar(120)
-  status                  String                     @default("Active") @db.VarChar(30)
-  managerId               String?                    @db.Uuid
-  manager                 User?                      @relation("UserReports", fields: [managerId], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  directReports           User[]                     @relation("UserReports")
-  emailVerifiedAt         DateTime?                  @db.Timestamptz(6)
-  invitationAcceptedAt    DateTime?                  @db.Timestamptz(6)
-  tokenVersion            Int                        @default(0)
-  lastLoginAt             DateTime?                  @db.Timestamptz(6)
-  theme                   String                     @default("light") @db.VarChar(10)
-  timezone                String                     @default("UTC") @db.VarChar(80)
-  dateFormat              String                     @default("MMM d, yyyy") @db.VarChar(40)
-  timeFormat              String                     @default("12h") @db.VarChar(10)
-  reducedMotion           Boolean                    @default(false)
-  inAppNotifications      Boolean                    @default(true)
-  emailNotifications      Boolean                    @default(false)
-  interviewReminders      Boolean                    @default(true)
-  approvalReminders       Boolean                    @default(true)
-  taskReminders           Boolean                    @default(true)
-  userRoles               UserRole[]
-  vacancyRequests         VacancyRequest[]           @relation("Requesters")
-  approvals               VacancyRequestApproval[]   @relation("ApprovalAssignee")
-  assignments             VacancyAssignment[]
-  ownedVacancies          Vacancy[]                  @relation("VacancyPrimaryRecruiter")
-  primaryApplications     Application[]              @relation("ApplicationPrimaryRecruiter")
-  taskApplications        Application[]              @relation("ApplicationTaskOwner")
-  applicationStageChanges ApplicationStatusHistory[]
-  uploadedDocuments       CandidateDocument[]
-  deletedDocuments        CandidateDocument[]        @relation("DocumentDeleter")
-  screeningLogs           ScreeningLog[]
-  applicationNotes        ApplicationNote[]
-  interviewAttendeeLinks  InterviewAttendee[]
-  submittedScorecards     InterviewScorecard[]
-  offerApprovals          OfferApproval[]
-  createdAt               DateTime                   @default(now()) @db.Timestamptz(6)
-  updatedAt               DateTime                   @updatedAt @db.Timestamptz(6)
-  hiringCasesOwned        HiringCase[]               @relation("HiringCaseOwner")
-  complianceVerified      ComplianceRequirement[]    @relation("ComplianceVerifier")
-  hiringCaseApprovals     HiringCaseApproval[]       @relation("HiringCaseApprover")
-  importJobs              CandidateImportJob[]       @relation("ImportUploader")
-  notifications           Notification[]
-  authTokens              AuthToken[]
-  assignedTasks           Task[]                     @relation("TaskAssignee")
-  createdTasks            Task[]                     @relation("TaskCreator")
-  completedTasks          Task[]                     @relation("TaskCompleter")
-  createdCandidates       Candidate[]                @relation("CandidateCreator")
+  id                       String                     @id @default(uuid()) @db.Uuid
+  organizationId           String                     @db.Uuid
+  organization             Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  email                    String                     @db.VarChar(320)
+  emailNormalized          String                     @db.VarChar(320)
+  passwordHash             String?                    @db.VarChar(128)
+  displayName              String                     @db.VarChar(200)
+  jobTitle                 String?                    @db.VarChar(120)
+  status                   String                     @default("Active") @db.VarChar(30)
+  managerId                String?                    @db.Uuid
+  manager                  User?                      @relation("UserReports", fields: [managerId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  directReports            User[]                     @relation("UserReports")
+  emailVerifiedAt          DateTime?                  @db.Timestamptz(6)
+  invitationAcceptedAt     DateTime?                  @db.Timestamptz(6)
+  tokenVersion             Int                        @default(0)
+  lastLoginAt              DateTime?                  @db.Timestamptz(6)
+  theme                    String                     @default("light") @db.VarChar(10)
+  timezone                 String                     @default("UTC") @db.VarChar(80)
+  dateFormat               String                     @default("MMM d, yyyy") @db.VarChar(40)
+  timeFormat               String                     @default("12h") @db.VarChar(10)
+  reducedMotion            Boolean                    @default(false)
+  inAppNotifications       Boolean                    @default(true)
+  emailNotifications       Boolean                    @default(false)
+  interviewReminders       Boolean                    @default(true)
+  approvalReminders        Boolean                    @default(true)
+  taskReminders            Boolean                    @default(true)
+  userRoles                UserRole[]
+  vacancyRequests          VacancyRequest[]           @relation("Requesters")
+  assignedVacancyRequests  VacancyRequest[]           @relation("VacancyRequestAssignee")
+  vacancyStatusChanges     VacancyStatusHistory[]     @relation("VacancyStatusChanges")
+  approvals                VacancyRequestApproval[]   @relation("ApprovalAssignee")
+  assignments              VacancyAssignment[]
+  ownedVacancies           Vacancy[]                  @relation("VacancyPrimaryRecruiter")
+  primaryApplications      Application[]              @relation("ApplicationPrimaryRecruiter")
+  taskApplications         Application[]              @relation("ApplicationTaskOwner")
+  applicationStageChanges  ApplicationStatusHistory[]
+  uploadedDocuments        CandidateDocument[]
+  deletedDocuments         CandidateDocument[]        @relation("DocumentDeleter")
+  screeningLogs            ScreeningLog[]
+  applicationNotes         ApplicationNote[]
+  interviewAttendeeLinks   InterviewAttendee[]
+  submittedScorecards      InterviewScorecard[]
+  revisedScorecards        InterviewScorecard[]       @relation("ScorecardRevisers")
+  offerApprovals           OfferApproval[]
+  createdAt                DateTime                   @default(now()) @db.Timestamptz(6)
+  updatedAt                DateTime                   @updatedAt @db.Timestamptz(6)
+  hiringCasesOwned         HiringCase[]               @relation("HiringCaseOwner")
+  complianceVerified       ComplianceRequirement[]    @relation("ComplianceVerifier")
+  hiringCaseApprovals      HiringCaseApproval[]       @relation("HiringCaseApprover")
+  importJobs               CandidateImportJob[]       @relation("ImportUploader")
+  notifications            Notification[]
+  authTokens               AuthToken[]
+  assignedTasks            Task[]                     @relation("TaskAssignee")
+  createdTasks             Task[]                     @relation("TaskCreator")
+  completedTasks           Task[]                     @relation("TaskCompleter")
+  createdCandidates        Candidate[]                @relation("CandidateCreator")
   recruiterTargetsReceived RecruiterTarget[]          @relation("RecruiterTargetAssignee")
   recruiterTargetsSet      RecruiterTarget[]          @relation("RecruiterTargetSetter")
+  offerDecisions           OfferVersionDecision[]     @relation("OfferVersionDecider")
+  filesReassignedFrom      FileReassignment[]         @relation("FileReassignedFrom")
+  filesReassignedTo        FileReassignment[]         @relation("FileReassignedTo")
+  filesReassignedBy        FileReassignment[]         @relation("FileReassignedBy")
+  joiningChecksVerified    JoiningCheck[]             @relation("JoiningCheckVerifier")
+  skillEvidenceAdded       CandidateSkillEvidence[]
 
   @@unique([organizationId, emailNormalized])
   @@index([status])
@@ -284,6 +295,19 @@ model VacancyRequest {
   benefits           String?
   submittedAt        DateTime?                @db.Timestamptz(6)
   approvalRevision   Int                      @default(1)
+  // B3 (v2 §4): grade from master data (category 'grades'), the assigned
+  // employee who owns the job once activated, and cancellation details.
+  // The v2 "due date" is targetFillDate (exposed as dueDate in the API).
+  gradeId            String?                  @db.Uuid
+  grade              MasterDataValue?         @relation("VacancyRequestGrade", fields: [gradeId], references: [id], onDelete: Restrict)
+  /// M1: department from master data (category 'departments').
+  departmentId       String?                  @db.Uuid
+  department         MasterDataValue?         @relation("VacancyRequestDepartment", fields: [departmentId], references: [id], onDelete: Restrict)
+  assignedEmployeeId String?                  @db.Uuid
+  assignedEmployee   User?                    @relation("VacancyRequestAssignee", fields: [assignedEmployeeId], references: [id], onDelete: Restrict)
+  activatedAt        DateTime?                @db.Timestamptz(6)
+  cancelledAt        DateTime?                @db.Timestamptz(6)
+  cancelReason       String?
   approvals          VacancyRequestApproval[]
   vacancy            Vacancy?
   createdAt          DateTime                 @default(now()) @db.Timestamptz(6)
@@ -314,29 +338,30 @@ model VacancyRequestApproval {
 }
 
 model Vacancy {
-  id                 String              @id @default(uuid()) @db.Uuid
-  organizationId     String              @db.Uuid
-  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  branchId           String              @db.Uuid
-  branch             Branch              @relation(fields: [branchId], references: [id], onDelete: Restrict)
-  positionId         String              @db.Uuid
-  position           Position            @relation(fields: [positionId], references: [id], onDelete: Restrict)
-  vacancyRequestId   String              @unique @db.Uuid
-  vacancyRequest     VacancyRequest      @relation(fields: [vacancyRequestId], references: [id], onDelete: Restrict)
-  vacancyCode        String              @unique @db.VarChar(50)
-  status             String              @default("Pending Activation") @db.VarChar(40)
+  id                 String                 @id @default(uuid()) @db.Uuid
+  organizationId     String                 @db.Uuid
+  organization       Organization           @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  branchId           String                 @db.Uuid
+  branch             Branch                 @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  positionId         String                 @db.Uuid
+  position           Position               @relation(fields: [positionId], references: [id], onDelete: Restrict)
+  vacancyRequestId   String                 @unique @db.Uuid
+  vacancyRequest     VacancyRequest         @relation(fields: [vacancyRequestId], references: [id], onDelete: Restrict)
+  vacancyCode        String                 @unique @db.VarChar(50)
+  // B3: Open | On Hold | Partially Filled | Filled | Closed (see vacancy-lifecycle.ts)
+  status             String                 @default("Open") @db.VarChar(40)
   // B1: the single job owner. Never an ADMINISTRATOR or inactive user
   // (enforced in the API). Nullable: unowned jobs stay null until assigned.
-  primaryRecruiterId String?             @db.Uuid
-  primaryRecruiter   User?               @relation("VacancyPrimaryRecruiter", fields: [primaryRecruiterId], references: [id], onDelete: Restrict)
+  primaryRecruiterId String?                @db.Uuid
+  primaryRecruiter   User?                  @relation("VacancyPrimaryRecruiter", fields: [primaryRecruiterId], references: [id], onDelete: Restrict)
   approvedHeadcount  Int
-  joinedHeadcount    Int                 @default(0)
-  openedAt           DateTime?           @db.Timestamptz(6)
-  targetStartDate    DateTime?           @db.Date
-  requiredSkills     String[]            @default([]) @db.VarChar(100)
+  joinedHeadcount    Int                    @default(0)
+  openedAt           DateTime?              @db.Timestamptz(6)
+  targetStartDate    DateTime?              @db.Date
+  requiredSkills     String[]               @default([]) @db.VarChar(100)
   minExperienceYears Int?
-  location           String?             @db.VarChar(120)
-  department         String?             @db.VarChar(120)
+  location           String?                @db.VarChar(120)
+  department         String?                @db.VarChar(120)
   jobSummary         String?
   description        String?
   responsibilities   String?
@@ -344,13 +369,15 @@ model Vacancy {
   benefits           String?
   assignments        VacancyAssignment[]
   applications       Application[]
-  createdAt          DateTime            @default(now()) @db.Timestamptz(6)
-  updatedAt          DateTime            @updatedAt @db.Timestamptz(6)
+  statusHistory      VacancyStatusHistory[]
+  createdAt          DateTime               @default(now()) @db.Timestamptz(6)
+  updatedAt          DateTime               @updatedAt @db.Timestamptz(6)
 
   @@index([organizationId, status])
   @@index([branchId, positionId, openedAt])
   @@index([primaryRecruiterId])
   @@map("vacancies")
+  holdUntil          DateTime?              @db.Date /// B3: optional hold-until date (data only; no auto-reopen)
 }
 
 model VacancyAssignment {
@@ -431,6 +458,11 @@ model Candidate {
   consentCapturedAt     DateTime?             @db.Timestamptz(6)
   consentSource         String?               @db.VarChar(80)
   skills                String[]              @default([]) @db.VarChar(100)
+  /// B6: lower(trim(email)); written by the API (contact-keys.ts) and repaired at boot.
+  emailNormalized       String?               @db.VarChar(255)
+  /// B6: E.164-ish phone (+digits), cc from env DEFAULT_PHONE_COUNTRY_CODE; written by the API, repaired at boot.
+  phoneNormalized       String?               @db.VarChar(20)
+  skillLinks            CandidateSkill[]
   experienceYears       Int?
   location              String?               @db.VarChar(120)
   certifications        String[]              @default([]) @db.VarChar(120)
@@ -452,6 +484,8 @@ model Candidate {
   @@index([organizationId, consentStatus])
   @@index([createdById])
   @@index([organizationId, email])
+  @@index([organizationId, emailNormalized])
+  @@index([organizationId, phoneNormalized])
   @@map("candidates")
 }
 
@@ -471,6 +505,8 @@ model Application {
   primaryRecruiter   User?                      @relation("ApplicationPrimaryRecruiter", fields: [primaryRecruiterId], references: [id], onDelete: Restrict)
   taskOwnerId        String?                    @db.Uuid
   taskOwner          User?                      @relation("ApplicationTaskOwner", fields: [taskOwnerId], references: [id], onDelete: Restrict)
+  // B5: the single exit is Rejected with a reason from master data (rejection-reasons).
+  rejectionReason    String?                    @db.VarChar(200)
   appliedAt          DateTime                   @default(now()) @db.Timestamptz(6)
   statusHistory      ApplicationStatusHistory[]
   screeningLogs      ScreeningLog[]
@@ -480,6 +516,10 @@ model Application {
   hiringCase         HiringCase?
   createdAt          DateTime                   @default(now()) @db.Timestamptz(6)
   updatedAt          DateTime                   @updatedAt @db.Timestamptz(6)
+  reassignments      FileReassignment[]
+  /// B5 follow-up: owner-editable follow-up date (plain date, no timer).
+  followUpDate       DateTime?                  @db.Date
+  joiningChecks      JoiningCheck[]
 
   @@unique([vacancyId, candidateId])
   @@index([organizationId, stage])
@@ -487,6 +527,41 @@ model Application {
   @@index([vacancyId, stage])
   @@index([candidateId])
   @@map("applications")
+}
+
+// B4: sent-log for due-date reminders. One row per item, kind, Cairo day and
+// recipient; the unique key makes the reminder worker idempotent.
+model DueDateReminder {
+  id              String   @id @default(uuid()) @db.Uuid
+  organizationId  String   @db.Uuid
+  entityType      String   @db.VarChar(40)
+  entityId        String   @db.Uuid
+  kind            String   @db.VarChar(20) // before | due | overdue
+  reminderDate    DateTime @db.Date // Africa/Cairo calendar day
+  recipientUserId String   @db.Uuid
+  notificationId  String?  @db.Uuid
+  createdAt       DateTime @default(now()) @db.Timestamptz(6)
+
+  @@unique([entityType, entityId, kind, reminderDate, recipientUserId])
+  @@index([organizationId, reminderDate])
+  @@map("due_date_reminders")
+}
+
+// B3: every job status change (hold, reopen, close, fill, migration).
+model VacancyStatusHistory {
+  id          String   @id @default(uuid()) @db.Uuid
+  vacancyId   String   @db.Uuid
+  vacancy     Vacancy  @relation(fields: [vacancyId], references: [id], onDelete: Restrict)
+  fromStatus  String?  @db.VarChar(40)
+  toStatus    String   @db.VarChar(40)
+  reason      String?
+  holdUntil   DateTime? @db.Date /// B3: optional "hold until" given with a hold (data only, no auto-reopen)
+  changedById String?  @db.Uuid
+  changedBy   User?    @relation("VacancyStatusChanges", fields: [changedById], references: [id], onDelete: Restrict)
+  createdAt   DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([vacancyId, createdAt])
+  @@map("vacancy_status_histories")
 }
 
 model ApplicationStatusHistory {
@@ -555,6 +630,7 @@ model CandidateDocument {
   complianceRequirements ComplianceRequirement[]
   createdAt              DateTime                @default(now()) @db.Timestamptz(6)
   updatedAt              DateTime                @updatedAt @db.Timestamptz(6)
+  joiningChecks          JoiningCheck[]
 
   @@index([organizationId, candidateId])
   @@index([candidateId, documentType])
@@ -586,25 +662,29 @@ model ScreeningLog {
 }
 
 model Interview {
-  id                  String               @id @default(uuid()) @db.Uuid
-  organizationId      String               @db.Uuid
-  organization        Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  interviewCode       String               @unique @db.VarChar(50)
-  applicationId       String               @db.Uuid
-  application         Application          @relation(fields: [applicationId], references: [id], onDelete: Restrict)
-  title               String               @db.VarChar(200)
-  interviewType       String               @db.VarChar(60)
-  scheduledStart      DateTime             @db.Timestamptz(6)
-  scheduledEnd        DateTime             @db.Timestamptz(6)
-  timezone            String               @default("UTC") @db.VarChar(50)
-  locationUrl         String?              @db.VarChar(500)
-  interviewerName     String?              @db.VarChar(200)
-  interviewerJobTitle String?              @db.VarChar(120)
-  status              String               @default("Scheduled") @db.VarChar(40)
-  attendees           InterviewAttendee[]
-  scorecards          InterviewScorecard[]
-  createdAt           DateTime             @default(now()) @db.Timestamptz(6)
-  updatedAt           DateTime             @updatedAt @db.Timestamptz(6)
+  id                    String               @id @default(uuid()) @db.Uuid
+  organizationId        String               @db.Uuid
+  organization          Organization         @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  interviewCode         String               @unique @db.VarChar(50)
+  applicationId         String               @db.Uuid
+  application           Application          @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  title                 String               @db.VarChar(200)
+  interviewType         String               @db.VarChar(60)
+  scheduledStart        DateTime             @db.Timestamptz(6)
+  scheduledEnd          DateTime             @db.Timestamptz(6)
+  timezone              String               @default("UTC") @db.VarChar(50)
+  locationUrl           String?              @db.VarChar(500)
+  // B5: interviewers are users (attendees). Free-text names that matched no
+  // user during the migration are kept here, read-only, for history.
+  legacyInterviewerName String?              @db.VarChar(200)
+  // B5: physical room when the interview is not online (locationUrl is the online room).
+  roomName              String?              @db.VarChar(200)
+  interviewerJobTitle   String?              @db.VarChar(120)
+  status                String               @default("Scheduled") @db.VarChar(40)
+  attendees             InterviewAttendee[]
+  scorecards            InterviewScorecard[]
+  createdAt             DateTime             @default(now()) @db.Timestamptz(6)
+  updatedAt             DateTime             @updatedAt @db.Timestamptz(6)
 
   @@index([organizationId, status])
   @@index([applicationId, scheduledStart])
@@ -626,20 +706,31 @@ model InterviewAttendee {
 }
 
 model InterviewScorecard {
-  id             String    @id @default(uuid()) @db.Uuid
-  interviewId    String    @db.Uuid
-  interview      Interview @relation(fields: [interviewId], references: [id], onDelete: Restrict)
-  interviewerId  String    @db.Uuid
-  interviewer    User      @relation(fields: [interviewerId], references: [id], onDelete: Restrict)
-  overallRating  Int
-  recommendation String    @db.VarChar(40)
-  strengths      String?   @db.Text
-  concerns       String?   @db.Text
-  notes          String?   @db.Text
-  isLocked       Boolean   @default(false)
-  submittedAt    DateTime  @default(now()) @db.Timestamptz(6)
+  id                 String              @id @default(uuid()) @db.Uuid
+  interviewId        String              @db.Uuid
+  interview          Interview           @relation(fields: [interviewId], references: [id], onDelete: Restrict)
+  interviewerId      String              @db.Uuid
+  interviewer        User                @relation(fields: [interviewerId], references: [id], onDelete: Restrict)
+  overallRating      Int
+  recommendation     String              @db.VarChar(40)
+  strengths          String?             @db.Text
+  concerns           String?             @db.Text
+  notes              String?             @db.Text
+  // B5: Draft -> Submitted. A Submitted row is never edited; a change is a new
+  // revision linked to the previous one. The latest Submitted revision counts.
+  status             String              @default("Draft") @db.VarChar(20)
+  revision           Int                 @default(1)
+  previousRevisionId String?             @unique @db.Uuid
+  previousRevision   InterviewScorecard? @relation("ScorecardRevisions", fields: [previousRevisionId], references: [id], onDelete: Restrict)
+  nextRevision       InterviewScorecard? @relation("ScorecardRevisions")
+  revisedById        String?             @db.Uuid
+  revisedBy          User?               @relation("ScorecardRevisers", fields: [revisedById], references: [id], onDelete: Restrict)
+  revisionReason     String?
+  submittedAt        DateTime?           @default(now()) @db.Timestamptz(6)
+  createdAt          DateTime            @default(now()) @db.Timestamptz(6)
 
-  @@unique([interviewId, interviewerId])
+  @@unique([interviewId, interviewerId, revision])
+  @@index([interviewId, interviewerId])
   @@map("interview_scorecards")
 }
 
@@ -667,24 +758,32 @@ model Offer {
 }
 
 model OfferVersion {
-  id                  String           @id @default(uuid()) @db.Uuid
-  offerId             String           @db.Uuid
-  offer               Offer            @relation(fields: [offerId], references: [id], onDelete: Cascade)
+  id                  String                 @id @default(uuid()) @db.Uuid
+  offerId             String                 @db.Uuid
+  offer               Offer                  @relation(fields: [offerId], references: [id], onDelete: Cascade)
   versionNumber       Int
-  monthlyPackage      Decimal?         @db.Decimal(12, 2)
-  annualFixed         Decimal?         @db.Decimal(12, 2)
-  contractType        String?          @db.VarChar(100)
-  probationPeriod     String?          @db.VarChar(100)
-  offerExpiry         DateTime?        @db.Timestamptz(6)
-  proposedJoiningDate DateTime?        @db.Timestamptz(6)
-  workLocation        String?          @db.VarChar(200)
-  workingSchedule     String?          @db.VarChar(100)
-  approvalStatus      String           @default("Draft") @db.VarChar(50)
-  isLocked            Boolean          @default(false)
+  monthlyPackage      Decimal?               @db.Decimal(12, 2)
+  annualFixed         Decimal?               @db.Decimal(12, 2)
+  contractType        String?                @db.VarChar(100)
+  probationPeriod     String?                @db.VarChar(100)
+  offerExpiry         DateTime?              @db.Timestamptz(6)
+  proposedJoiningDate DateTime?              @db.Timestamptz(6)
+  workLocation        String?                @db.VarChar(200)
+  workingSchedule     String?                @db.VarChar(100)
+  approvalStatus      String                 @default("Draft") @db.VarChar(50)
+  // B5: version state (replaces isLocked). Draft, Pending Approval, Approved,
+  // Changes Requested, Sent, Accepted, Declined, Expired, Withdrawn.
+  status              String                 @default("Draft") @db.VarChar(30)
   components          OfferComponent[]
   approvals           OfferApproval[]
-  createdAt           DateTime         @default(now()) @db.Timestamptz(6)
-  updatedAt           DateTime         @updatedAt @db.Timestamptz(6)
+  createdAt           DateTime               @default(now()) @db.Timestamptz(6)
+  updatedAt           DateTime               @updatedAt @db.Timestamptz(6)
+  decisions           OfferVersionDecision[]
+  /// B5 follow-up: how the version was sent (channel email|whatsapp, template, who, when).
+  sentChannel         String?                @db.VarChar(20)
+  sentTemplateId      String?                @db.Uuid
+  sentAt              DateTime?              @db.Timestamptz(6)
+  sentById            String?                @db.Uuid
 
   @@unique([offerId, versionNumber])
   @@map("offer_versions")
@@ -700,6 +799,8 @@ model OfferComponent {
   currency       String?      @db.VarChar(10)
   frequency      String?      @db.VarChar(50) // Monthly, Annual, Once
   isTaxable      Boolean      @default(true)
+  /// B2-21: set when a manager decision replaces the version's pay; superseded rows are kept (no hard delete), never read as live pay.
+  supersededAt   DateTime?    @db.Timestamptz(6)
   createdAt      DateTime     @default(now()) @db.Timestamptz(6)
   updatedAt      DateTime     @updatedAt @db.Timestamptz(6)
 
@@ -900,7 +1001,6 @@ model EmailTemplate {
   @@map("email_templates")
 }
 
-
 model WhatsAppTemplate {
   id             String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   organizationId String       @db.Uuid
@@ -1049,17 +1149,22 @@ model Task {
 // legacy table. Branches and job titles continue to use Branch/Position so
 // their existing legal-entity foreign keys and history remain authoritative.
 model MasterDataValue {
-  id             String       @id @default(uuid()) @db.Uuid
-  organizationId String       @db.Uuid
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  category       String       @db.VarChar(40)
-  code           String?      @db.VarChar(80)
-  name           String       @db.VarChar(200)
-  metadata       Json?
-  status         String       @default("Active") @db.VarChar(30)
-  version        Int          @default(1)
-  createdAt      DateTime     @default(now()) @db.Timestamptz(6)
-  updatedAt      DateTime     @default(now()) @updatedAt @db.Timestamptz(6)
+  id              String           @id @default(uuid()) @db.Uuid
+  organizationId  String           @db.Uuid
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  category        String           @db.VarChar(40)
+  code            String?          @db.VarChar(80)
+  name            String           @db.VarChar(200)
+  metadata        Json?
+  status          String           @default("Active") @db.VarChar(30)
+  version         Int              @default(1)
+  candidateSkills CandidateSkill[]
+  createdAt       DateTime         @default(now()) @db.Timestamptz(6)
+  updatedAt       DateTime         @default(now()) @updatedAt @db.Timestamptz(6)
+
+  gradeRequests VacancyRequest[] @relation("VacancyRequestGrade")
+  gradeBands    GradeBand[]
+  departmentRequests VacancyRequest[] @relation("VacancyRequestDepartment")
 
   @@unique([organizationId, category, code])
   @@unique([organizationId, category, name])
@@ -1076,7 +1181,7 @@ model RecruiterTarget {
   setById        String       @db.Uuid
   setBy          User         @relation("RecruiterTargetSetter", fields: [setById], references: [id], onDelete: Restrict)
   period         String       @db.VarChar(10) // "daily" | "monthly"
-  month          String?      @db.VarChar(7)  // "2026-09" for monthly; null for daily defaults
+  month          String?      @db.VarChar(7) // "2026-09" for monthly; null for daily defaults
   calls          Int          @default(0)
   screenings     Int          @default(0)
   interviews     Int          @default(0)
@@ -1091,4 +1196,119 @@ model RecruiterTarget {
   @@unique([organizationId, recruiterId, period, month])
   @@index([organizationId, recruiterId, isActive])
   @@map("recruiter_targets")
+}
+
+/// B7: pay band per grade (master data "grades") + site (branch) + currency. Monthly BASE pay only;
+/// allowances are never part of the band check. Deactivate-only.
+model GradeBand {
+  id             String          @id @default(uuid()) @db.Uuid
+  organizationId String          @db.Uuid
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  gradeId        String          @db.Uuid
+  grade          MasterDataValue @relation(fields: [gradeId], references: [id], onDelete: Restrict)
+  branchId       String          @db.Uuid
+  branch         Branch          @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  currency       String          @db.VarChar(3)
+  minMonthlyBase Decimal         @db.Decimal(12, 2)
+  maxMonthlyBase Decimal         @db.Decimal(12, 2)
+  status         String          @default("Active") @db.VarChar(20)
+  version        Int             @default(1)
+  createdById    String?         @db.Uuid
+  createdAt      DateTime        @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime        @updatedAt @db.Timestamptz(6)
+
+  @@index([organizationId, gradeId, branchId, currency, status])
+  @@map("grade_bands")
+}
+
+/// B7: a manager's decision on an offer version, taken from within the file.
+model OfferVersionDecision {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @db.Uuid
+  offerVersionId String       @db.Uuid
+  offerVersion   OfferVersion @relation(fields: [offerVersionId], references: [id], onDelete: Cascade)
+  decision       String       @db.VarChar(30) // Approve | Reject | RequestChanges
+  fromStatus     String       @db.VarChar(30)
+  toStatus       String       @db.VarChar(30)
+  reason         String?
+  decidedById    String       @db.Uuid
+  decidedBy      User         @relation("OfferVersionDecider", fields: [decidedById], references: [id], onDelete: Restrict)
+  gradeBandId    String?      @db.Uuid
+  createdAt      DateTime     @default(now()) @db.Timestamptz(6)
+
+  @@index([offerVersionId, createdAt])
+  @@map("offer_version_decisions")
+}
+
+/// B7: owner change on an open file (application), with reason. One row per file moved.
+model FileReassignment {
+  id             String      @id @default(uuid()) @db.Uuid
+  organizationId String      @db.Uuid
+  applicationId  String      @db.Uuid
+  application    Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  fromUserId     String?     @db.Uuid
+  fromUser       User?       @relation("FileReassignedFrom", fields: [fromUserId], references: [id], onDelete: Restrict)
+  toUserId       String      @db.Uuid
+  toUser         User        @relation("FileReassignedTo", fields: [toUserId], references: [id], onDelete: Restrict)
+  reason         String
+  reassignedById String      @db.Uuid
+  reassignedBy   User        @relation("FileReassignedBy", fields: [reassignedById], references: [id], onDelete: Restrict)
+  batchId        String      @db.Uuid
+  createdAt      DateTime    @default(now()) @db.Timestamptz(6)
+
+  @@index([applicationId, createdAt])
+  @@index([organizationId, batchId])
+  @@map("file_reassignments")
+}
+
+/// B5 follow-up: typed joining checks read by gate 4 (Pre-Hire -> Joined). type: ID | CONTRACT | SCFHS_LICENCE.
+model JoiningCheck {
+  id            String             @id @default(uuid()) @db.Uuid
+  applicationId String             @db.Uuid
+  application   Application        @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  type          String             @db.VarChar(30)
+  verified      Boolean            @default(false)
+  verifiedById  String?            @db.Uuid
+  verifiedBy    User?              @relation("JoiningCheckVerifier", fields: [verifiedById], references: [id], onDelete: SetNull)
+  verifiedAt    DateTime?          @db.Timestamptz(6)
+  documentId    String?            @db.Uuid
+  document      CandidateDocument? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  createdAt     DateTime           @default(now()) @db.Timestamptz(6)
+  updatedAt     DateTime           @updatedAt @db.Timestamptz(6)
+
+  @@unique([applicationId, type])
+  @@map("joining_checks")
+}
+
+/// B6: a candidate's skill, linked to the skill library (master data, category "skills").
+model CandidateSkill {
+  id             String                   @id @default(uuid()) @db.Uuid
+  organizationId String                   @db.Uuid
+  candidateId    String                   @db.Uuid
+  candidate      Candidate                @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  skillId        String                   @db.Uuid
+  skill          MasterDataValue          @relation(fields: [skillId], references: [id], onDelete: Restrict)
+  evidence       CandidateSkillEvidence[]
+  createdAt      DateTime                 @default(now()) @db.Timestamptz(6)
+
+  @@unique([candidateId, skillId])
+  @@index([organizationId, skillId])
+  @@map("candidate_skills")
+}
+
+/// B6: evidence for a candidate skill. sourceType: CV_TEXT | SCREENING_NOTE | SCORECARD | IMPORT | MANUAL.
+model CandidateSkillEvidence {
+  id               String         @id @default(uuid()) @db.Uuid
+  candidateSkillId String         @db.Uuid
+  candidateSkill   CandidateSkill @relation(fields: [candidateSkillId], references: [id], onDelete: Cascade)
+  sourceType       String         @db.VarChar(30)
+  sourceRef        String?        @db.VarChar(80)
+  snippet          String?
+  addedById        String?        @db.Uuid
+  addedBy          User?          @relation(fields: [addedById], references: [id], onDelete: Restrict)
+  createdAt        DateTime       @default(now()) @db.Timestamptz(6)
+
+  @@unique([candidateSkillId, sourceType, sourceRef])
+  @@index([candidateSkillId, createdAt])
+  @@map("candidate_skill_evidence")
 }
