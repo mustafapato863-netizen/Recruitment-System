@@ -85,3 +85,19 @@ describe('My Work adapter: source selection', () => {
     expect(isEndpointMissing(apiErr(403))).toBe(false);
   });
 });
+
+describe('E2: My Work actions open the v2 file', () => {
+  it('maps application-linked actions to E13 / drawers', async () => {
+    const { fileActionHref } = await import('../myWork');
+    const fx = myWorkFixture();
+    const sc = fx.overdue[0];
+    expect(fileActionHref(sc, sc.actions[0])).toBe('/applications/a1?drawer=scorecard&interview=i1');
+    const offer = fx.waitingOnOthers[0];
+    expect(fileActionHref(offer, { key: 'send-offer', label: 'Send offer', disabled: false })).toBe('/applications/a3?drawer=send');
+    expect(fileActionHref(offer, { key: 'record-response', label: 'Record response', disabled: false })).toBe('/applications/a3?drawer=answer');
+    expect(fileActionHref(offer, offer.actions[0])).toBe('/applications/a3');
+    expect(fileActionHref(fx.waitingOnOthers[1], { key: 'move-to-offer', label: 'Move to Offer', disabled: false })).toBe('/applications/a4?drawer=offer');
+    const job = fx.dueToday[0];
+    expect(fileActionHref(job, job.actions[0])).toBe('/vacancies/j1');
+  });
+});

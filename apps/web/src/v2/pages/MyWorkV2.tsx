@@ -9,7 +9,7 @@ import { EmptyStateV2, ForbiddenStateV2, SkeletonV2 } from '../../components/v2/
 import { TaskRow, TaskSection } from '../../components/v2/Task';
 import '../../components/v2/v2-primitives.css';
 import './my-work.css';
-import { actionHref, getMyWork, type MyWorkAction, type MyWorkDay, type MyWorkResult, type MyWorkTarget, type WorkItem, type WorkItemType } from '../api/myWork';
+import { fileActionHref, getMyWork, type MyWorkAction, type MyWorkDay, type MyWorkResult, type MyWorkTarget, type WorkItem, type WorkItemType } from '../api/myWork';
 
 type LoadState =
   | { kind: 'loading' }
@@ -84,7 +84,7 @@ function ItemActions({ item, bucket, primary }: { item: WorkItem; bucket: Bucket
     <span className="rf2-mywork__actions">
       {actions.map((action) => {
         if (action.disabled) return <DisabledAction key={action.key} action={action} />;
-        const href = actionHref(item, action);
+        const href = fileActionHref(item, action);
         if (!href) return null; // no page for this entity: no dead link
         // One primary per page (VI): the first enabled action of the first Today item.
         const kind = primary && !usedPrimary ? 'primary' : bucket === 'waitingOnOthers' ? 'tertiary' : 'secondary';

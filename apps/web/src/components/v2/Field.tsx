@@ -93,3 +93,23 @@ export const SelectV2 = React.forwardRef<HTMLSelectElement, SelectV2Props>(funct
     </FieldShell>
   );
 });
+
+export interface TextareaV2Props extends React.TextareaHTMLAttributes<HTMLTextAreaElement>, Common {}
+
+/** v2 Textarea (E2 drawers): same field shell and states as Input. */
+export const TextareaV2 = React.forwardRef<HTMLTextAreaElement, TextareaV2Props>(function TextareaV2(
+  { id, label, hint, error, warning, success, fieldClassName, required, disabled, readOnly, className, rows = 4, ...rest },
+  ref,
+) {
+  const autoId = React.useId();
+  const areaId = id ?? `rf2-ta-${autoId}`;
+  return (
+    <FieldShell id={areaId} label={label} required={required} hint={hint} error={error} warning={warning} success={success} disabled={disabled} readOnly={readOnly} className={fieldClassName}>
+      {(a11y) => (
+        <div className="rf2-field__box rf2-field__box--area">
+          <textarea ref={ref} id={areaId} rows={rows} className={cn('rf2-field__control rf2-field__control--area', className)} required={required} disabled={disabled} readOnly={readOnly} {...a11y} {...rest} />
+        </div>
+      )}
+    </FieldShell>
+  );
+});

@@ -8,7 +8,7 @@ export { StatusChip } from './StatusChip';
 export type { StatusChipProps, StatusTone } from './StatusChip';
 export { NavItem, NavList } from './NavItem';
 export type { NavItemProps } from './NavItem';
-export { InputV2, SelectV2 } from './Field';
+export { InputV2, SelectV2, TextareaV2 } from './Field';
 export type { InputV2Props, SelectV2Props, FieldTone } from './Field';
 export { CardV2 } from './Card';
 export type { CardV2Props } from './Card';

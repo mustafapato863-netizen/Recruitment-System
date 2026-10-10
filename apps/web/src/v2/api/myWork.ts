@@ -190,3 +190,23 @@ export function actionHref(item: WorkItem, action: MyWorkAction): string | null 
   if (action.key === 'review-applicants' && item.entity.type === 'job') return `/vacancies/${encodeURIComponent(item.entity.id)}`;
   return entityHref(item.entity);
 }
+
+/**
+ * E2: in the v2 Employee seat, application-linked actions open the v2 file (E13)
+ * or its drawer instead of v1 pages. Others fall back to actionHref().
+ */
+export function fileActionHref(item: WorkItem, action: MyWorkAction): string | null {
+  const appId = item.applicationId ?? (item.entity.type === 'application' ? item.entity.id : undefined);
+  if (!appId) return actionHref(item, action);
+  const base = `/applications/${encodeURIComponent(appId)}`;
+  const iv = item.entity.type === 'interview' ? `&interview=${encodeURIComponent(item.entity.id)}` : '';
+  switch (action.key) {
+    case 'submit-scorecard': return `${base}?drawer=scorecard${iv}`;
+    case 'move-to-offer': return `${base}?drawer=offer`;
+    case 'send-offer': return `${base}?drawer=send`;
+    case 'record-response': return `${base}?drawer=answer`;
+    case 'open-interview':
+    case 'open-offer':
+    default: return base;
+  }
+}

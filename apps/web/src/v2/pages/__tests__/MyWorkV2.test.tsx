@@ -40,11 +40,11 @@ describe('My Work (E02) from the #9 contract', () => {
     expect(within(overdue).getByTestId('candidate')).toHaveTextContent('Ahmed Embaby · Interview');
     expect(within(overdue).getByTestId('sla')).toHaveTextContent('Overdue');
     expect(within(overdue).getByTestId('due')).toHaveTextContent('Due 18 Oct');
-    expect(within(overdue).getByRole('link', { name: 'Submit scorecard: Interview: Ahmed Embaby' })).toHaveAttribute('href', '/interviews/i1');
+    expect(within(overdue).getByRole('link', { name: 'Submit scorecard: Interview: Ahmed Embaby' })).toHaveAttribute('href', '/applications/a1?drawer=scorecard&interview=i1'); // E2: v2 file drawer
 
     const today = screen.getByRole('region', { name: 'Today' });
     expect(within(today).getByRole('link', { name: 'Review applicants: HRIS Developer (VAC-1)' })).toHaveAttribute('href', '/vacancies/j1');
-    expect(within(today).getByRole('link', { name: 'Open interview: Screening: Nourhan Sami' })).toHaveAttribute('href', '/interviews/iv2');
+    expect(within(today).getByRole('link', { name: 'Open interview: Screening: Nourhan Sami' })).toHaveAttribute('href', '/applications/a2'); // E2: opens the v2 file (E13)
     expect(within(today).getByText('19 Oct, 11:30–12:00')).toBeInTheDocument(); // 08:30Z in Cairo
     expect(within(today).getByRole('link', { name: 'Room 2A' })).toHaveAttribute('href', 'https://rooms.sgh.test/2a');
     const disabled = within(today).getByRole('button', { name: 'Submit scorecard' });

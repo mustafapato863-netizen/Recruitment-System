@@ -251,3 +251,7 @@
 
 /* The field box draws the focus ring (focus-within); suppress the inner control's own ring. */
 [data-ui='v2'] .rf2-field__control:focus, [data-ui='v2'] .rf2-field__control:focus-visible { outline: none; box-shadow: none; }
+
+/* E2: textarea */
+[data-ui='v2'] .rf2-field__box--area { height: auto; align-items: stretch; padding-block: var(--rf2-space-2, 8px); }
+[data-ui='v2'] .rf2-field__control--area { resize: vertical; min-height: 72px; line-height: var(--rf2-leading-body, 20px); }
