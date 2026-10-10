@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PrismaService } from '../../database/prisma.service';
 import { InterviewsService } from '../interviews.service';
+import { MyWorkService } from '../../my-work/my-work.service';
 
 const url = process.env.B5_TEST_DATABASE_URL;
 const ORG = '10000000-0000-4000-8000-000000000001';
@@ -28,6 +29,14 @@ describe.skipIf(!url)('interviewer revisions + owner scorecard reminder (scratch
     interviewId = (await prisma.interview.create({ data: { organizationId: ORG, applicationId: app.id, interviewCode: `SR-${tag}`, title: `SR ${tag}`, interviewType: 'Technical', scheduledStart: new Date('2026-10-01T08:00:00Z'), scheduledEnd: new Date('2026-10-01T09:00:00Z'), attendees: { create: [{ userId: u.iv }, { userId: u.iv2 }] } } as never })).id;
   });
   afterAll(async () => { await prisma?.$disconnect(); });
+
+  it('My Work: the interviewer\'s (e.g. a Manager\'s) own pending scorecard shows until it is Submitted; a Draft still counts as pending', async () => {
+    const myWork = new MyWorkService(prisma);
+    await prisma.interviewScorecard.create({ data: { interviewId, interviewerId: u.iv2, revision: 1, overallRating: 3, recommendation: 'Neutral', status: 'Draft' } });
+    const at = new Date('2026-10-01T10:00:00Z');
+    expect(JSON.stringify(await myWork.getMyWork({ ...auth(u.iv2), roleCodes: ['HIRING_MANAGER'] } as never, at))).toContain(interviewId);
+    await prisma.interviewScorecard.deleteMany({ where: { interviewId, interviewerId: u.iv2 } });
+  });
 
   it('interviewer revises their own submitted card: new revision, reason required, never in place', async () => {
     const first = await svc.submitScorecard(ORG, interviewId, u.iv, card as never);

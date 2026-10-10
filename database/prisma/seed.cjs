@@ -30,11 +30,9 @@ async function resyncCodeSequences() {
     }, 0);
 
     if (maxSeq > 0) {
-      await prisma.codeSequence.upsert({
-        where: { key },
-        create: { key, lastIssued: maxSeq },
-        update: { lastIssued: maxSeq },
-      });
+      // Never rewind: a code may have been issued (sequence bumped) but its row not written yet.
+      await prisma.codeSequence.upsert({ where: { key }, create: { key, lastIssued: maxSeq }, update: {} });
+      await prisma.codeSequence.updateMany({ where: { key, lastIssued: { lt: maxSeq } }, data: { lastIssued: maxSeq } });
     }
   }
 }
@@ -105,6 +103,18 @@ async function seedDecisionDemo(tx, organizationId, users) {
   for (const branchId of branchIds) await seedGradeBands(tx, organizationId, branchId);
   const g6 = await tx.masterDataValue.findFirst({ where: { organizationId, category: 'grades', name: 'Grade 6' } });
   if (g6) await tx.vacancyRequest.updateMany({ where: { id: { in: jobs.map((j) => j.vacancyRequestId) }, gradeId: null }, data: { gradeId: g6.id } });
+}
+
+/** M1: demo departments (master data 'departments'). Upsert by name: safe to run any number of times. */
+const DEMO_DEPARTMENTS = ['IT', 'Nursing', 'Pharmacy', 'Finance', 'HR'];
+async function seedDemoDepartments(organizationId) {
+  for (const name of DEMO_DEPARTMENTS) {
+    await prisma.masterDataValue.upsert({
+      where: { organizationId_category_name: { organizationId, category: 'departments', name } },
+      create: { organizationId, category: 'departments', name, code: `DEPT_${name.toUpperCase()}` },
+      update: {},
+    });
+  }
 }
 
 async function main() {
@@ -621,7 +631,7 @@ async function main() {
     return { organization, branch, position, users, roles, demo, orgB, userB, candidateB, branchB };
   }, { timeout: 30000 });
 
-  for (const org of await prisma.organization.findMany({ select: { id: true } })) await seedJobStatusReasons(org.id);
+  for (const org of await prisma.organization.findMany({ select: { id: true } })) { await seedJobStatusReasons(org.id); await seedDemoDepartments(org.id); }
   await resyncCodeSequences();
 
   console.log(
