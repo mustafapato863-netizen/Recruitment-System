@@ -3,7 +3,6 @@
  * B6_TEST_DATABASE_URL is set. NEVER point this at production.
  */
 import { randomUUID } from 'node:crypto';
-import { Prisma } from '@recruitflow/database';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PrismaService } from '../../database/prisma.service';
 import { UserPermissionsService } from '../../common/user-permissions.service';
@@ -64,18 +63,14 @@ describe.skipIf(!url)('B6 suggest, compare, evidence, duplicates (scratch Postgr
       ids[key] = randomUUID();
       await prisma.user.create({ data: { id: ids[key], organizationId: ORG, email: `${key}-${tag}@b6.test`, emailNormalized: `${key}-${tag}@b6.test`, displayName: `B6 ${key}`, passwordHash: 'x', ...(key === 'owner' ? { managerId: ids.mgr } : {}) } });
     }
-    // Scratch DB: reuse a seeded job and give it this run's required skills.
+    // Scratch DB: a private copy of a seeded job (own requisition + code), so no other suite's job or owner changes.
     const tpl = await prisma.vacancy.findFirstOrThrow({ where: { organizationId: ORG }, orderBy: { createdAt: 'asc' } });
-    const vac = await prisma.vacancy.update({ where: { id: tpl.id }, data: { requiredSkills: [` iCu   ${tag} `, `BLS ${tag}`, `Triage ${tag}`, 'Not In Library'] } });
+    const reqId = randomUUID(); const vacId = randomUUID();
+    await prisma.$executeRawUnsafe(`INSERT INTO "vacancy_requests" SELECT (jsonb_populate_record(NULL::"vacancy_requests", to_jsonb(r) || jsonb_build_object('id', $1::text, 'requestCode', $2::text))).* FROM "vacancy_requests" r WHERE r."id" = $3::uuid`, reqId, `B6R-${tag}`, tpl.vacancyRequestId);
+    await prisma.$executeRawUnsafe(`INSERT INTO "vacancies" SELECT (jsonb_populate_record(NULL::"vacancies", to_jsonb(v) || jsonb_build_object('id', $1::text, 'vacancyCode', $2::text, 'vacancyRequestId', $3::text, 'primaryRecruiterId', $4::text)) /* ignored before B1 */).* FROM "vacancies" v WHERE v."id" = $5::uuid`, vacId, `B6V-${tag}`, reqId, ids.owner!, tpl.id);
+    const vac = await prisma.vacancy.update({ where: { id: vacId }, data: { requiredSkills: [` iCu   ${tag} `, `BLS ${tag}`, `Triage ${tag}`, 'Not In Library'] } });
     ids.vac = vac.id;
-    // Same shape the API writes: exactly one active PRIMARY (mirrored in Vacancy.primaryRecruiterId when B1 is on the base), atomically,
-    // because other suites check that invariant concurrently.
-    const hasOwnerCol = 'primaryRecruiterId' in Prisma.VacancyScalarFieldEnum;
-    await prisma.$transaction([
-      prisma.vacancyAssignment.updateMany({ where: { vacancyId: vac.id, assignmentKind: 'PRIMARY', isActive: true }, data: { isActive: false } }),
-      prisma.vacancyAssignment.create({ data: { vacancyId: vac.id, userId: ids.owner!, roleCode: 'RECRUITER', assignmentKind: 'PRIMARY', isActive: true } }),
-      ...(hasOwnerCol ? [prisma.vacancy.update({ where: { id: vac.id }, data: { primaryRecruiterId: ids.owner! } as never })] : []),
-    ]);
+    await prisma.vacancyAssignment.create({ data: { vacancyId: vac.id, userId: ids.owner!, roleCode: 'RECRUITER', assignmentKind: 'PRIMARY', isActive: true } });
 
     // A: 2 skills with evidence; B: 3 skills, 1 evidenced; C: 2 skills no evidence; D: 1 evidenced (older)
     ids.A = await cand('A'); ids.B = await cand('B'); ids.C = await cand('C'); ids.D = await cand('D');
