@@ -2,19 +2,20 @@
  * E3 adapters: Open jobs (E08), Job pipeline (E09) and job status (E12).
  *
  * Contracts mirrored:
- * - B3 (`feat/b3-req-job-lifecycle`, base of #9): job statuses Open | On Hold | Partially Filled | Filled | Closed,
- *   POST /vacancies/:id/hold|reopen|close {reason} (JobStatusReasonDto, min 3 chars), GET /vacancies/:id/status-history.
- * - B4 (#9): JobWorkQueueItem (GET /vacancies/work-queue) and Vacancy.targetChip (dueDate, "X of Y").
+ * - B3 (`feat/b3-req-job-lifecycle` @2e2fc7d): job statuses Open | On Hold | Partially Filled | Filled | Closed,
+ *   POST /vacancies/:id/hold {reason, note?, holdUntil?} | reopen {reason} | close {reason, note?}; hold/close reasons are
+ *   ACTIVE values of master data 'hold-reasons' / 'close-reasons' ("Other" needs a note); GET /vacancies/:id/status-history.
+ * - B3/B4: JobWorkQueueItem (GET /vacancies/work-queue[?mine=true]) with dueDate, department, holdUntil.
+ * - B5 (#11 @e2f1296): applications list items carry gates[] and the card interview.
  * - B1 (#4): another owner's job comes back redacted: {id, redacted: true, title, site{id,name}, seats{filled,target}}.
  * - Applications: GET /applications?vacancyId= (Application with allowedTransitions), PATCH /applications/:id/stage.
  *
- * The API error filter collapses domain codes to VALIDATION_ERROR/FORBIDDEN/CONFLICT but keeps the message,
- * so jobErrorFromError() maps the exact B3/B1/applications messages back to their codes (flagged for Backend).
+ * Error codes: the registry is the normalizer allowlist now, so B3/B5/B6 codes arrive as `code`. No message matching.
  * Nothing here carries pay; every response goes through stripPay() anyway.
  */
 import { getApi, postApi } from '../../api/client';
 import { stripPay } from './paySafety';
-import { gateFromError, type DomainError } from './gates';
+import { domainError, type DomainError, type GateCode } from './gates';
 import type { FileStage } from './applicationFile';
 
 const enc = encodeURIComponent;
@@ -54,6 +55,11 @@ export interface JobWorkQueueItem {
   health: { state: string; reason?: string; dueAt?: string } | null;
   lastActivity: { at: string; label: string } | null;
   nextAction: { code: string; label: string; enabled: boolean } | null;
+  /** B3/E3: requisition due date (YYYY-MM-DD) and department. */
+  dueDate?: string | null;
+  department?: string | null;
+  /** B3: optional hold-until date (data only; nothing auto-reopens). */
+  holdUntil?: string | null;
 }
 
 /** The subset of Vacancy (contracts + B3/B4 additions) the v2 screens read. */
@@ -71,10 +77,17 @@ export interface JobDetail {
   vacancyRequestId?: string;
   assignments?: Array<{ userId: string; assignmentKind?: 'PRIMARY' | 'SUPPORT'; isActive: boolean; user?: { id: string; displayName: string } }>;
   targetChip?: TargetChip;
+  holdUntil?: string | null;
 }
 
 /** = vacancyStatusHistory select in getVacancyStatusHistory (B3). */
-export interface JobStatusHistoryItem { id: string; fromStatus: string | null; toStatus: string; reason: string | null; changedById: string | null; createdAt: string }
+export interface JobStatusHistoryItem { id: string; fromStatus: string | null; toStatus: string; reason: string | null; holdUntil?: string | null; changedById: string | null; createdAt: string }
+
+/** = GateState (B5 application-gates.ts) on each applications list item. */
+export type GateKey = 'screen-note' | 'scorecard' | 'offer-accepted' | 'joining-checks' | 'reject-reason';
+export interface FileGate { gate: GateKey; code: GateCode; met: boolean; missing: string[] }
+/** = the card interview on the applications list: next upcoming, else the last one. */
+export interface CardInterview { when: 'next' | 'last'; startAt: string; endAt: string; room: { name: string | null; url: string | null } }
 
 /** The subset of Application (contracts) a board card reads. No pay, no contact details. */
 export interface BoardApplication {
@@ -90,48 +103,62 @@ export interface BoardApplication {
   lastActivityAt?: string | null;
   lastActivityLabel?: string | null;
   nextFollowUpAt?: string | null;
+  followUpDate?: string | null;
   candidate?: { id: string; firstName?: string; lastName?: string; currentTitle?: string | null } | null;
+  gates?: FileGate[];
+  interview?: CardInterview | null;
+}
+
+/**
+ * The gate blocking this file's next forward move (B5 gates[]), shown as the card badge and counted as "Gate blocked".
+ * Not counted: Applied (not worked yet) and Interview before the interview took place (nothing to submit yet).
+ * Gate 5 (reject reason) never blocks a forward move.
+ */
+const NEXT_GATE: Partial<Record<FileStage, GateKey>> = { Screening: 'screen-note', Interview: 'scorecard', Offer: 'offer-accepted', 'Pre-Hire': 'joining-checks' };
+export function blockingGate(app: Pick<BoardApplication, 'stage' | 'gates' | 'interview'>): FileGate | null {
+  const key = NEXT_GATE[app.stage];
+  if (!key) return null;
+  if (key === 'scorecard' && app.interview?.when !== 'last') return null;
+  const g = app.gates?.find((x) => x.gate === key);
+  return g && !g.met ? g : null;
 }
 
 // ── Open jobs (E08) ──────────────────────────────────────────────────────────
 export interface MyJobRow {
   id: string; code: string; title: string; status: JobStatus;
   site: string | null; siteId: string | null; department: string | null; ownerName: string | null;
-  seats: { filled: number; target: number }; dueDate: string | null;
+  seats: { filled: number; target: number }; dueDate: string | null; holdUntil: string | null;
   pipelineCounts: Record<string, number>; active: number;
 }
 export interface OtherJobRow { id: string; title: string; site: string | null; seats: { filled: number; target: number } }
 export interface OpenJobs { mine: MyJobRow[]; others: OtherJobRow[] }
 
 const ACTIVE_STAGES = ['Applied', 'Screening', 'Interview', 'Offer', 'Pre-Hire'];
-type ListItem = JobDetail | RedactedJob;
 
 /**
- * Mine = I am the active PRIMARY owner. Everyone else's jobs render as title/site/seats only,
- * whether #4 already redacted them or not (client-side redaction until #4 lands).
+ * Mine = GET /vacancies/work-queue?mine=true (B3: jobs I own as active PRIMARY; ANDed with scope).
+ * Others = the scoped queue minus mine, shown as title/site/seats only (redacted by #4 or not).
  */
-export async function fetchOpenJobs(meId: string): Promise<OpenJobs> {
-  const [queue, list] = await Promise.all([
-    getApi<{ data: Array<JobWorkQueueItem | RedactedJob> }>('/vacancies/work-queue?pageSize=100'),
-    getApi<ListItem[] | { data: ListItem[] }>('/vacancies').catch(() => [] as ListItem[]),
+export async function fetchOpenJobs(): Promise<OpenJobs> {
+  const [mineRes, allRes] = await Promise.all([
+    getApi<{ data: Array<JobWorkQueueItem | RedactedJob> }>('/vacancies/work-queue?mine=true&pageSize=100'),
+    getApi<{ data: Array<JobWorkQueueItem | RedactedJob> }>('/vacancies/work-queue?pageSize=100').catch(() => ({ data: [] as Array<JobWorkQueueItem | RedactedJob> })),
   ]);
-  const listArr = stripPay(Array.isArray(list) ? list : list?.data ?? []);
-  const detailById = new Map(listArr.filter((v): v is JobDetail => !isRedactedJob(v)).map((v) => [v.id, v]));
   const mine: MyJobRow[] = [];
-  const others: OtherJobRow[] = [];
-  for (const raw of stripPay(queue?.data ?? [])) {
-    if (isRedactedJob(raw)) { others.push({ id: raw.id, title: raw.title, site: raw.site?.name ?? null, seats: raw.seats }); continue; }
-    const seats = { filled: raw.headcount.joined, target: raw.headcount.approved };
-    if (raw.owner?.id !== meId) { others.push({ id: raw.id, title: raw.title, site: raw.branch?.name ?? null, seats }); continue; }
-    const d = detailById.get(raw.id);
+  for (const raw of stripPay(mineRes?.data ?? [])) {
+    if (isRedactedJob(raw)) continue;
     const counts = raw.pipelineCounts ?? {};
     mine.push({
       id: raw.id, code: raw.code, title: raw.title, status: raw.status,
-      site: raw.branch?.name ?? null, siteId: raw.branch?.id ?? null, department: d?.department ?? null, ownerName: raw.owner?.displayName ?? null,
-      seats, dueDate: d?.targetChip?.dueDate ?? null, pipelineCounts: counts,
-      active: ACTIVE_STAGES.reduce((n, s) => n + (counts[s] ?? 0), 0),
+      site: raw.branch?.name ?? null, siteId: raw.branch?.id ?? null, department: raw.department ?? null, ownerName: raw.owner?.displayName ?? null,
+      seats: { filled: raw.headcount.joined, target: raw.headcount.approved }, dueDate: raw.dueDate ?? null, holdUntil: raw.holdUntil ?? null,
+      pipelineCounts: counts, active: ACTIVE_STAGES.reduce((n, s) => n + (counts[s] ?? 0), 0),
     });
   }
+  const mineIds = new Set(mine.map((m) => m.id));
+  const others: OtherJobRow[] = stripPay(allRes?.data ?? []).filter((raw) => !mineIds.has(raw.id)).map((raw) => (isRedactedJob(raw)
+    ? { id: raw.id, title: raw.title, site: raw.site?.name ?? null, seats: raw.seats }
+    : { id: raw.id, title: raw.title, site: raw.branch?.name ?? null, seats: { filled: raw.headcount.joined, target: raw.headcount.approved } }));
   mine.sort((a, b) => (a.dueDate ?? '9999').localeCompare(b.dueDate ?? '9999') || a.title.localeCompare(b.title));
   return { mine, others };
 }
@@ -203,8 +230,14 @@ export const MOVE_GATE_HINT: Partial<Record<BoardStage, string>> = {
 
 // ── Job status (E12, B3) ─────────────────────────────────────────────────────
 export type JobAction = 'hold' | 'reopen' | 'close';
-export const changeJobStatus = (id: string, action: JobAction, reason: string) =>
-  postApi<JobDetail>(`/vacancies/${enc(id)}/${action}`, { reason: reason.trim() }).then((v) => stripPay(v));
+/** = JobStatusReasonDto: reason (list value for hold/close, free text for reopen), note (required for "Other"), holdUntil (hold only, YYYY-MM-DD, future Cairo day). */
+export interface JobStatusBody { reason: string; note?: string; holdUntil?: string }
+export const changeJobStatus = (id: string, action: JobAction, body: JobStatusBody) => {
+  const out: JobStatusBody = { reason: body.reason.trim() };
+  if (action !== 'reopen' && body.note?.trim()) out.note = body.note.trim();
+  if (action === 'hold' && body.holdUntil) out.holdUntil = body.holdUntil;
+  return postApi<JobDetail>(`/vacancies/${enc(id)}/${action}`, out).then((v) => stripPay(v));
+};
 export const jobStatusHistory = (id: string) => getApi<JobStatusHistoryItem[]>(`/vacancies/${enc(id)}/status-history`);
 
 /** Which E12 actions B3 allows from a status. Reopen is only from On Hold (reopenVacancy). Closed is terminal. */
@@ -217,38 +250,16 @@ export function jobActions(status: JobStatus): JobAction[] {
   return out;
 }
 
-// ── Error codes (B3 + B1 + applications) ─────────────────────────────────────
-export type JobDomainCode =
-  | 'REASON_REQUIRED' | 'ILLEGAL_JOB_TRANSITION' | 'NOT_JOB_OWNER' | 'ADMIN_CANNOT_CHANGE_JOB_STATUS'
-  | 'JOB_NOT_ACCEPTING_APPLICATIONS' | 'REQUISITION_CANCELLED' | 'APPLICATION_EXISTS' | 'CANDIDATE_DUPLICATE'
-  | 'CONTACT_REQUIRED' | 'STALE_STAGE' | 'JOB_NOT_OWNED';
+/** Today in Cairo as YYYY-MM-DD (holdUntil must be after it). */
+export const cairoToday = (now: Date = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
 
-const JOB_BY_MESSAGE: Array<[RegExp, JobDomainCode]> = [
-  [/^A reason is required/, 'REASON_REQUIRED'],
-  [/^(A job cannot move from|Only a held job can be reopened|Job is already )/, 'ILLEGAL_JOB_TRANSITION'],
-  [/^Only the job owner or their manager can/, 'NOT_JOB_OWNER'],
-  [/^An administrator cannot hold, reopen or close a job/, 'ADMIN_CANNOT_CHANGE_JOB_STATUS'],
-  [/accepts no new applications\.$/, 'JOB_NOT_ACCEPTING_APPLICATIONS'],
-  [/is Cancelled and cannot be activated\.$/, 'REQUISITION_CANCELLED'],
-  [/has already applied to vacancy/, 'APPLICATION_EXISTS'],
-  [/^A candidate with the same email or phone already exists/, 'CANDIDATE_DUPLICATE'],
-  [/^Provide an email or a phone\.$/, 'CONTACT_REQUIRED'],
-  [/^This application changed before the stage update could be saved\./, 'STALE_STAGE'],
-];
-
-export type AnyDomainError = DomainError | { code: JobDomainCode; message: string };
-
-export function jobErrorFromError(error: unknown): AnyDomainError | null {
-  const gate = gateFromError(error);
-  if (gate) return gate;
-  if (!error || typeof error !== 'object') return null;
-  const e = error as { code?: unknown; message?: unknown; details?: unknown };
-  const details = (e.details && typeof e.details === 'object' ? e.details : {}) as { code?: unknown; message?: unknown };
-  const raw = typeof e.code === 'string' ? e.code : typeof details.code === 'string' ? details.code : undefined;
-  const message = (typeof details.message === 'string' ? details.message : typeof e.message === 'string' ? e.message : '').trim();
-  if (raw && JOB_BY_MESSAGE.some(([, c]) => c === raw)) return { code: raw as JobDomainCode, message };
-  const hit = JOB_BY_MESSAGE.find(([re]) => re.test(message));
-  return hit ? { code: hit[1], message } : null;
+// ── Error codes ──────────────────────────────────────────────────────────────
+/** Domain code from the API (B3/B5/B6 codes reach the client). No message matching. */
+export const jobErrorFromError = (error: unknown): DomainError | null => domainError(error);
+/** The applications stage CAS conflict is `code: CONFLICT` + details.currentVersion (not a registry code). */
+export function isStaleStage(error: unknown): boolean {
+  const e = error as { code?: unknown; details?: { details?: { currentVersion?: unknown } } } | null;
+  return e?.code === 'CONFLICT' && typeof e?.details?.details?.currentVersion === 'number';
 }
 
 export const errorMessage = (error: unknown, fallback: string) => {
@@ -258,25 +269,15 @@ export const errorMessage = (error: unknown, fallback: string) => {
   return typeof m === 'string' && m ? m : fallback;
 };
 
-// ── Reason presets (client today; master data when Backend adds the categories) ──
-export const CLIENT_REASON_PRESETS: Record<JobAction, string[]> = {
-  hold: ['Hiring manager unavailable — interviews paused', 'Budget review', 'Role being redefined'],
-  reopen: ['Hiring manager back', 'Budget confirmed', 'Role confirmed'],
-  close: ['Position no longer needed', 'Filled internally', 'Budget withdrawn'],
-};
-/** Proposed master-data categories (not yet in Backend). */
-export const REASON_CATEGORY: Record<JobAction, string> = { hold: 'job-hold-reasons', reopen: 'job-reopen-reasons', close: 'job-close-reasons' };
+// ── Reason lists (B3 master data, deactivate-only) ─────────────────────────────
+/** = B3 JOB_REASON_CATEGORIES. Reopen has no list (free text). */
+export const REASON_CATEGORY: Record<'hold' | 'close', 'hold-reasons' | 'close-reasons'> = { hold: 'hold-reasons', close: 'close-reasons' };
+export const OTHER_REASON = 'Other';
 
-/**
- * Uses GET /master-data/catalog/:category when it exists and has active values;
- * falls back to the client presets on 404/empty/error. Returns the source for transparency.
- */
-export async function jobReasonPresets(action: JobAction): Promise<{ source: 'master-data' | 'client'; reasons: string[] }> {
-  try {
-    const rows = await getApi<Array<{ name?: string; status?: string }> | { data: Array<{ name?: string; status?: string }> }>(`/master-data/catalog/${REASON_CATEGORY[action]}`);
-    const arr = Array.isArray(rows) ? rows : rows?.data ?? [];
-    const reasons = arr.filter((r) => r.name?.trim() && r.status !== 'Inactive' && r.status !== 'Archived').map((r) => r.name!.trim());
-    if (reasons.length) return { source: 'master-data', reasons };
-  } catch { /* category not there yet */ }
-  return { source: 'client', reasons: CLIENT_REASON_PRESETS[action] };
+/** GET /master-data/catalog/hold-reasons | close-reasons → active names only (inactive/archived = deleted). "Other" last. */
+export async function jobReasons(action: 'hold' | 'close'): Promise<string[]> {
+  const rows = await getApi<Array<{ name?: string; status?: string }> | { data: Array<{ name?: string; status?: string }> }>(`/master-data/catalog/${REASON_CATEGORY[action]}`);
+  const arr = Array.isArray(rows) ? rows : rows?.data ?? [];
+  const names = arr.filter((r) => r.name?.trim() && (r.status ?? 'Active') === 'Active').map((r) => r.name!.trim());
+  return [...names.filter((n) => n.toLowerCase() !== 'other'), ...names.filter((n) => n.toLowerCase() === 'other')];
 }

@@ -14,9 +14,10 @@ import { JobPipelineV2 } from '../JobPipelineV2';
 
 let responses: Record<string, unknown> = {};
 function serve(extra: Record<string, unknown> = {}) {
-  responses = { '/vacancies/work-queue': fx.workQueue, '/vacancies': fx.vacancyList, '/vacancies/v1': fx.jobDetail(), '/vacancies/r1': fx.redactedJob, '/applications': fx.applications, '/vacancies/v1/status-history': fx.statusHistory, ...extra };
+  responses = { '/vacancies/work-queue': fx.workQueue, '/vacancies/work-queue?mine=true': fx.workQueueMine, '/vacancies/v1': fx.jobDetail(),
+    '/master-data/catalog/hold-reasons': fx.holdReasons, '/master-data/catalog/close-reasons': fx.closeReasons, '/vacancies/r1': fx.redactedJob, '/applications': fx.applications, '/vacancies/v1/status-history': fx.statusHistory, ...extra };
   api.getApi.mockImplementation(async (path: string) => {
-    const p = path.split('?')[0];
+    const p = path.includes('mine=true') ? `${path.split('?')[0]}?mine=true` : path.split('?')[0];
     if (p in responses) { const v = responses[p]; if (v instanceof Error) throw v; return structuredClone(v); }
     throw new ApiError(404, 'not found');
   });
@@ -68,11 +69,11 @@ describe('E08 Open jobs', () => {
     expect(screen.queryByText('HRIS Developer')).not.toBeInTheDocument();
   });
   it('error → retry; 403 → Forbidden', async () => {
-    serve({ '/vacancies/work-queue': new ApiError(500, 'boom') });
+    serve({ '/vacancies/work-queue?mine=true': new ApiError(500, 'boom') });
     const { unmount } = renderAt('/vacancies');
     expect(await screen.findByRole('alert')).toHaveTextContent('Could not load your jobs');
     unmount();
-    serve({ '/vacancies/work-queue': new ApiError(403, 'no') });
+    serve({ '/vacancies/work-queue?mine=true': new ApiError(403, 'no') });
     renderAt('/vacancies');
     expect(await screen.findByText('You do not have access to this')).toBeInTheDocument();
   });
@@ -89,7 +90,14 @@ describe('E09 Job pipeline', () => {
     expect(screen.getByText('1 of 3 filled')).toBeInTheDocument();
     expect(screen.getByText('19 Oct 2026')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Closed for this job · 3 rejected, 1 joined/ })).toBeInTheDocument();
-    expect(within(cols[1]).getByText(/Follow-up due 7 Oct 2026/)).toBeInTheDocument();
+    expect(within(cols[1]).getByText(/Follow-up 7 Oct 2026/)).toBeInTheDocument();
+    // B5 gates[]: badge on the blocked cards + the header count; card interview (Cairo time + room).
+    expect(screen.getByText('Gate blocked').nextElementSibling).toHaveTextContent('4');
+    expect(screen.getAllByTestId('gate-badge').map((b) => b.textContent?.trim())).toEqual(['Screen note missing', 'Screen note missing', 'Scorecard missing', 'Offer not accepted yet']);
+    const tarek = screen.getByRole('article', { name: 'Tarek Lotfy, Interview' });
+    expect(tarek).toHaveTextContent('Interview 12 Oct, 10:00–11:00 · Room 3B, IT wing');
+    expect(within(tarek).queryByTestId('gate-badge')).toBeNull();
+    expect(screen.getByRole('article', { name: 'Ahmed Embaby, Interview' })).toHaveTextContent('Last interview 6 Oct, 10:00–11:00 · room link');
     expect(container.textContent).not.toMatch(PAY);
     expect(await axeViolations(container)).toEqual([]);
     await u.click(screen.getByRole('link', { name: 'Ahmed Embaby' }));
@@ -121,9 +129,9 @@ describe('E09 Job pipeline', () => {
     expect(within(card).queryByRole('menu')).not.toBeInTheDocument();
     expect(btn).toHaveFocus();
   });
-  it('gate 409 (generic CONFLICT envelope) → toast naming the missing gate; the card stays', async () => {
+  it('gate 409 {code, gate, missing[]} → toast naming the missing gate; the card stays', async () => {
     const u = userEvent.setup();
-    api.patchApi.mockRejectedValue(new ApiError(409, 'Offer needs a submitted interview scorecard.', undefined, { code: 'CONFLICT' }));
+    api.patchApi.mockRejectedValue(new ApiError(409, 'Offer needs a submitted interview scorecard.', { code: 'GATE_SCORECARD_NOT_SUBMITTED', gate: 'scorecard', missing: ['submitted scorecard'] }, { code: 'GATE_SCORECARD_NOT_SUBMITTED' }));
     renderAt('/vacancies/v1');
     const card = await screen.findByRole('article', { name: 'Ahmed Embaby, Interview' });
     await u.click(within(card).getByRole('button', { name: /Move to…/ }));
@@ -136,7 +144,7 @@ describe('E09 Job pipeline', () => {
   });
   it('stale version → refreshes the board', async () => {
     const u = userEvent.setup();
-    api.patchApi.mockRejectedValue(new ApiError(409, 'This application changed before the stage update could be saved.', undefined, { code: 'CONFLICT' }));
+    api.patchApi.mockRejectedValue(new ApiError(409, 'This application changed before the stage update could be saved.', { code: 'CONFLICT', details: { currentStage: 'Offer', currentVersion: 4 } }, { code: 'CONFLICT' }));
     renderAt('/vacancies/v1');
     const card = await screen.findByRole('article', { name: 'Lina Hassan, Offer' });
     const before = api.getApi.mock.calls.length;
@@ -172,8 +180,8 @@ describe('E09 Job pipeline', () => {
   });
 });
 
-describe('E12 Hold / Reopen / Close (B3)', () => {
-  it('hold is the one primary; reason required; posts; reloads; shows history; client presets when master data is absent', async () => {
+describe('E12 Hold / Reopen / Close (B3 reason lists + holdUntil)', () => {
+  it('hold: one primary; reasons from hold-reasons (active only); reason required; holdUntil; posts; reloads; history', async () => {
     const u = userEvent.setup();
     api.postApi.mockResolvedValue(fx.jobDetail('On Hold'));
     renderAt('/vacancies/v1');
@@ -181,43 +189,71 @@ describe('E12 Hold / Reopen / Close (B3)', () => {
     const d = await screen.findByRole('dialog', { name: 'Hold or close this job' });
     expect(screen.getByTestId('loc')).toHaveTextContent('/vacancies/v1?drawer=status');
     expect(d.querySelectorAll('.rf2-btn--primary')).toHaveLength(1);
-    expect(within(d).getByRole('button', { name: 'Close job' })).toHaveAttribute('data-kind', 'danger-outline');
     expect(await within(d).findByText(/Open → Partially Filled/)).toBeInTheDocument();
     await waitFor(() => expect(within(d).getByRole('option', { name: 'Budget review' })).toBeInTheDocument());
-    expect(api.getApi).toHaveBeenCalledWith('/master-data/catalog/job-hold-reasons');
+    expect(api.getApi).toHaveBeenCalledWith('/master-data/catalog/hold-reasons');
+    expect(within(d).queryByRole('option', { name: 'Manager on leave' })).toBeNull();
+    expect(within(d).queryByRole('option', { name: 'Position no longer needed' })).toBeNull();
     await u.click(within(d).getByRole('button', { name: 'Put on hold' }));
-    expect(within(d).getByText('A reason is required (at least 3 characters).')).toBeInTheDocument();
-    expect(api.postApi).not.toHaveBeenCalled();
+    expect(within(d).getByText('Pick a reason from the list.')).toBeInTheDocument();
     await u.selectOptions(within(d).getByLabelText(/^Reason/), 'Budget review');
-    await u.type(within(d).getByLabelText(/Note for the job history/), 'Back after the Q4 review');
+    await u.type(within(d).getByLabelText(/^Hold until/), '2020-01-01');
     await u.click(within(d).getByRole('button', { name: 'Put on hold' }));
-    await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/vacancies/v1/hold', { reason: 'Budget review — Back after the Q4 review' }));
+    expect(within(d).getByText('Pick a day after today (Cairo).')).toBeInTheDocument();
+    expect(api.postApi).not.toHaveBeenCalled();
+    await u.clear(within(d).getByLabelText(/^Hold until/));
+    await u.type(within(d).getByLabelText(/^Hold until/), '2031-02-01');
+    await u.type(within(d).getByLabelText(/^Note/), 'Back after the Q4 review');
+    await u.click(within(d).getByRole('button', { name: 'Put on hold' }));
+    await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/vacancies/v1/hold', { reason: 'Budget review', note: 'Back after the Q4 review', holdUntil: '2031-02-01' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(await axeViolations(document.body)).toEqual([]);
   });
-  it('uses master-data reasons when Backend adds the category', async () => {
-    serve({ '/master-data/catalog/job-hold-reasons': [{ name: 'Hiring freeze', status: 'Active' }, { name: 'Old', status: 'Inactive' }] });
+  it('"Other" requires a note; REASON_NOT_IN_LIST / HOLD_UNTIL_NOT_FUTURE from the server land on the right field by code', async () => {
+    const u = userEvent.setup();
     renderAt('/vacancies/v1?drawer=status');
     const d = await screen.findByRole('dialog');
-    expect(await within(d).findByRole('option', { name: 'Hiring freeze' })).toBeInTheDocument();
-    expect(within(d).queryByRole('option', { name: 'Old' })).not.toBeInTheDocument();
-    expect(within(d).queryByRole('option', { name: 'Budget review' })).not.toBeInTheDocument();
-    expect(within(d).getByRole('option', { name: 'Position no longer needed' })).toBeInTheDocument();
+    await waitFor(() => expect(within(d).getByRole('option', { name: 'Other' })).toBeInTheDocument());
+    await u.selectOptions(within(d).getByLabelText(/^Reason/), 'Other');
+    await u.click(within(d).getByRole('button', { name: 'Put on hold' }));
+    expect(within(d).getByText('"Other" needs a short note.')).toBeInTheDocument();
+    api.postApi.mockRejectedValueOnce(new ApiError(400, '"Other" is not an active hold reason. Pick one from the list, or "Other" with a note.', { code: 'REASON_NOT_IN_LIST' }, { code: 'REASON_NOT_IN_LIST' }));
+    await u.type(within(d).getByLabelText(/^Note/), 'Clinic renovation');
+    await u.click(within(d).getByRole('button', { name: 'Put on hold' }));
+    expect(api.postApi).toHaveBeenCalledWith('/vacancies/v1/hold', { reason: 'Other', note: 'Clinic renovation' });
+    expect(await within(d).findByText(/is not an active hold reason/)).toBeInTheDocument();
+    await waitFor(() => expect(api.getApi.mock.calls.filter(([p]) => p === '/master-data/catalog/hold-reasons').length).toBeGreaterThan(1));
+    api.postApi.mockRejectedValueOnce(new ApiError(400, 'holdUntil must be a future date.', { code: 'HOLD_UNTIL_NOT_FUTURE' }, { code: 'HOLD_UNTIL_NOT_FUTURE' }));
+    await u.selectOptions(within(d).getByLabelText(/^Reason/), 'Hiring freeze');
+    await u.click(within(d).getByRole('button', { name: 'Put on hold' }));
+    expect(await within(d).findByText('Pick a day after today (Cairo).')).toBeInTheDocument();
   });
-  it('reopen from On Hold (server message inline); Close needs click + confirm (danger-outline → danger)', async () => {
-    const u = userEvent.setup();
-    serve({ '/vacancies/v1': fx.jobDetail('On Hold') });
-    api.postApi.mockRejectedValueOnce(new ApiError(403, 'Only the job owner or their manager can hold, reopen or close this job.', undefined, { code: 'FORBIDDEN' }));
+  it('no active reasons → says so (no client presets)', async () => {
+    serve({ '/master-data/catalog/hold-reasons': [{ name: 'Old', status: 'Inactive' }] });
     renderAt('/vacancies/v1?drawer=status');
-    const d = await screen.findByRole('dialog', { name: 'Reopen this job' });
-    await waitFor(() => expect(within(d).getByRole('option', { name: 'Hiring manager back' })).toBeInTheDocument());
-    await u.selectOptions(within(d).getByLabelText(/^Reason/), 'Hiring manager back');
+    const d = await screen.findByRole('dialog');
+    expect(await within(d).findByText(/No hold reasons are set up/)).toBeInTheDocument();
+    expect(within(d).queryByRole('option', { name: 'Budget review' })).toBeNull();
+  });
+  it('reopen from On Hold: free-text reason (server message inline); Close uses close-reasons and needs click + confirm', async () => {
+    const u = userEvent.setup();
+    serve({ '/vacancies/v1': { ...fx.jobDetail('On Hold'), holdUntil: '2026-11-01' } });
+    api.postApi.mockRejectedValueOnce(new ApiError(403, 'Only the job owner or their manager can hold, reopen or close this job.', { code: 'NOT_JOB_OWNER' }, { code: 'NOT_JOB_OWNER' }));
+    renderAt('/vacancies/v1?drawer=status');
+    const d = await screen.findByRole('dialog', { name: 'Reopen or close this job' });
+    expect(d).toHaveTextContent('On hold until 1 Nov 2026.');
+    expect(within(d).queryByLabelText(/^Hold until/)).toBeNull();
+    await u.type(within(d).getByLabelText(/^Reason/), 'Hiring manager back');
     await u.click(within(d).getByRole('button', { name: 'Reopen job' }));
     expect(await within(d).findByRole('alert')).toHaveTextContent('Only the job owner or their manager can hold, reopen or close this job.');
     expect(api.postApi).toHaveBeenCalledWith('/vacancies/v1/reopen', { reason: 'Hiring manager back' });
     api.postApi.mockResolvedValue(fx.jobDetail('Closed'));
+    await u.click(within(d).getByRole('radio', { name: 'Close job' }));
+    expect(d.querySelectorAll('.rf2-btn--primary')).toHaveLength(0);
+    await waitFor(() => expect(within(d).getByRole('option', { name: 'Position no longer needed' })).toBeInTheDocument());
     await u.selectOptions(within(d).getByLabelText(/^Reason/), 'Position no longer needed');
     const close = within(d).getByRole('button', { name: 'Close job' });
+    expect(close).toHaveAttribute('data-kind', 'danger-outline');
     await u.click(close);
     expect(api.postApi).toHaveBeenCalledTimes(1);
     expect(close).toHaveTextContent('Confirm close — final');
@@ -270,6 +306,25 @@ describe('E11 Import CVs (resume parse + B6 duplicate check)', () => {
     expect(api.postApi).toHaveBeenCalledWith('/candidates', expect.objectContaining({ firstName: 'Rania', lastName: 'Kamel', source: 'CV import' }));
     expect(api.postApi).toHaveBeenCalledWith('/applications', { vacancyId: 'v1', candidateId: 'c-new', source: 'CV import' });
     expect(api.postApi).toHaveBeenCalledWith('/applications', { vacancyId: 'v1', candidateId: 'c-a4', source: 'CV import' });
+  });
+  it('after linking: empty fields are filled, conflicts are listed (never overwritten) and the drawer stays open to read them', async () => {
+    const u = userEvent.setup();
+    serve({ '/candidates/c-a4': { id: 'c-a4', firstName: 'Nourhan', currentTitle: 'HR Officer', currentCompany: null, location: 'Giza', skills: ['HRIS'], expectedSalary: 42000 } });
+    api.postFormDataApi.mockImplementation(async (p: string) => (p === '/resume/parse' ? { ...fx.parsedDup, title: 'HR Systems Analyst', currentCompany: 'Andalusia Group', location: 'Cairo', skills: ['HRIS', 'SQL'] } : { id: 'doc1' }));
+    api.postApi.mockImplementation(async (p: string) => (p === '/candidates/duplicate-check' ? fx.dup : { id: 'app-new' }));
+    api.patchApi.mockResolvedValue({});
+    renderAt('/vacancies/v1?drawer=import');
+    const d = await screen.findByRole('dialog');
+    await u.upload(within(d).getByLabelText(/Drop CVs or/), [pdf('nourhan-sami.pdf')]);
+    await waitFor(() => expect(within(d).getByRole('button', { name: 'Import 1 to Applied' })).toBeEnabled());
+    await u.click(within(d).getByRole('button', { name: 'Import 1 to Applied' }));
+    const box = await within(d).findByRole('group', { name: 'Not overwritten for nourhan-sami.pdf' });
+    expect(box).toHaveTextContent('Current title: bank “HR Officer” · CV “HR Systems Analyst”');
+    expect(box).toHaveTextContent('Location: bank “Giza” · CV “Cairo”');
+    expect(within(d).getByText(/Filled from the CV: Current company, Skills\./)).toBeInTheDocument();
+    expect(api.patchApi).toHaveBeenCalledWith('/candidates/c-a4', { currentCompany: 'Andalusia Group', skills: ['HRIS', 'SQL'] });
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(d.textContent).not.toMatch(PAY);
   });
   it('unreadable CV and a failed add (already applied) are reported per row', async () => {
     const u = userEvent.setup();

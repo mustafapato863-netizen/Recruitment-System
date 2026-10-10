@@ -2,18 +2,21 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../../api/client';
 const api = vi.hoisted(() => ({ getApi: vi.fn(), postApi: vi.fn(), patchApi: vi.fn(), postFormDataApi: vi.fn() }));
 vi.mock('../../../api/client', async () => ({ ...(await vi.importActual<object>('../../../api/client')), ...api }));
-import { changeJobStatus, fetchOpenJobs, isRedactedJob, jobActions, jobErrorFromError, loadJobBoard, moveCheck, type BoardApplication, type JobDetail } from '../jobs';
-import { importRow, splitName, cvFileProblem, duplicateCheck } from '../cvImport';
-import { ME, applications, jobDetail, redactedJob, vacancyList, workQueue } from '../__fixtures__/jobs';
+import { blockingGate, cairoToday, changeJobStatus, fetchOpenJobs, isRedactedJob, isStaleStage, jobActions, jobErrorFromError, jobReasons, loadJobBoard, moveCheck, type BoardApplication, type JobDetail } from '../jobs';
+import { diffForLink, importRow, splitName, cvFileProblem, duplicateCheck } from '../cvImport';
+import { applications, closeReasons, holdReasons, jobDetail, redactedJob, workQueue, workQueueMine } from '../__fixtures__/jobs';
 
 afterEach(() => Object.values(api).forEach((f) => f.mockReset()));
 const serve = (map: Record<string, unknown>) => api.getApi.mockImplementation(async (p: string) => { const k = Object.keys(map).find((x) => p === x || p.startsWith(`${x}?`)); if (!k) throw new ApiError(404, 'nf'); return structuredClone(map[k]); });
 
-describe('E08 adapter (B4 JobWorkQueueItem + Vacancy.targetChip + B1 redaction)', () => {
-  it('splits my jobs from others, takes due date from targetChip, redacts others client-side, no pay', async () => {
-    serve({ '/vacancies/work-queue': workQueue, '/vacancies': vacancyList });
-    const r = await fetchOpenJobs(ME);
+describe('E08 adapter (B3 work queue ?mine=true + dueDate/department/holdUntil + B1 redaction)', () => {
+  it('mine = ?mine=true (no /vacancies join, no owner filter); others = the scoped queue minus mine, title/site/seats only; no pay', async () => {
+    api.getApi.mockImplementation(async (p: string) => structuredClone(p.includes('mine=true') ? workQueueMine : workQueue));
+    const r = await fetchOpenJobs();
+    expect(api.getApi).toHaveBeenCalledWith('/vacancies/work-queue?mine=true&pageSize=100');
     expect(api.getApi).toHaveBeenCalledWith('/vacancies/work-queue?pageSize=100');
+    expect(api.getApi).not.toHaveBeenCalledWith('/vacancies');
+    expect(r.mine.find((j) => j.id === 'v5')).toMatchObject({ status: 'On Hold', holdUntil: '2026-11-01', dueDate: '2026-12-01', department: 'HIM' });
     expect(r.mine.map((j) => j.title)).toEqual(['HRIS Developer', 'Laravel Backend Engineer', 'Patient Relations Officer', 'Staff Nurse — ICU', 'Medical Coder']);
     expect(r.mine[0]).toMatchObject({ seats: { filled: 1, target: 3 }, dueDate: '2026-10-19', department: 'IT', active: 10 });
     expect(r.others).toEqual([
@@ -57,14 +60,24 @@ describe('E09 adapter', () => {
 });
 
 describe('E12 adapter (B3)', () => {
-  it('posts the reason to hold / reopen / close', async () => {
+  it('= JobStatusReasonDto: hold {reason, note?, holdUntil?}, close {reason, note?}, reopen {reason}', async () => {
     api.postApi.mockResolvedValue(jobDetail('On Hold'));
-    await changeJobStatus('v1', 'hold', '  Hiring manager away ');
-    expect(api.postApi).toHaveBeenCalledWith('/vacancies/v1/hold', { reason: 'Hiring manager away' });
-    await changeJobStatus('v1', 'reopen', 'Back');
+    await changeJobStatus('v1', 'hold', { reason: ' Budget review ', note: '', holdUntil: '2031-02-01' });
+    expect(api.postApi).toHaveBeenCalledWith('/vacancies/v1/hold', { reason: 'Budget review', holdUntil: '2031-02-01' });
+    await changeJobStatus('v1', 'hold', { reason: 'Other', note: ' Clinic renovation ' });
+    expect(api.postApi).toHaveBeenLastCalledWith('/vacancies/v1/hold', { reason: 'Other', note: 'Clinic renovation' });
+    await changeJobStatus('v1', 'reopen', { reason: 'Back', note: 'x', holdUntil: '2031-01-01' });
     expect(api.postApi).toHaveBeenLastCalledWith('/vacancies/v1/reopen', { reason: 'Back' });
-    await changeJobStatus('v1', 'close', 'Not needed');
-    expect(api.postApi).toHaveBeenLastCalledWith('/vacancies/v1/close', { reason: 'Not needed' });
+    await changeJobStatus('v1', 'close', { reason: 'Budget withdrawn', holdUntil: '2031-01-01' });
+    expect(api.postApi).toHaveBeenLastCalledWith('/vacancies/v1/close', { reason: 'Budget withdrawn' });
+  });
+  it('reason lists: GET /master-data/catalog/hold-reasons | close-reasons, active only, "Other" last', async () => {
+    serve({ '/master-data/catalog/hold-reasons': holdReasons, '/master-data/catalog/close-reasons': closeReasons });
+    expect(await jobReasons('hold')).toEqual(['Budget review', 'Hiring freeze', 'Role under review', 'Awaiting internal candidate', 'Other']);
+    expect(await jobReasons('close')).toEqual(['Position no longer needed', 'Budget withdrawn', 'Filled internally', 'Other']);
+  });
+  it('cairoToday is the Cairo calendar day', () => {
+    expect(cairoToday(new Date('2026-10-09T22:30:00Z'))).toBe('2026-10-10');
   });
   it('jobActions mirrors JOB_TRANSITIONS (reopen only from On Hold, Closed terminal)', () => {
     expect(jobActions('Open')).toEqual(['hold', 'close']);
@@ -75,26 +88,35 @@ describe('E12 adapter (B3)', () => {
   });
 });
 
-describe('error pass-through: the filter drops B3/B6 codes but keeps the message, so we map messages back', () => {
-  const env = (status: number, code: string, message: string) => new ApiError(status, message, undefined, { code });
+describe('error codes reach the client (no message matching)', () => {
+  const env = (status: number, code: string, message = 'server text') => new ApiError(status, message, { code, message }, { code });
   it.each([
-    [400, 'VALIDATION_ERROR', 'A reason is required to hold this job.', 'REASON_REQUIRED'],
-    [409, 'CONFLICT', 'Only a held job can be reopened (job is Open).', 'ILLEGAL_JOB_TRANSITION'],
-    [409, 'CONFLICT', 'A job cannot move from Closed to On Hold.', 'ILLEGAL_JOB_TRANSITION'],
-    [403, 'FORBIDDEN', 'Only the job owner or their manager can hold, reopen or close this job.', 'NOT_JOB_OWNER'],
-    [403, 'FORBIDDEN', 'An administrator cannot hold, reopen or close a job.', 'ADMIN_CANNOT_CHANGE_JOB_STATUS'],
-    [409, 'CONFLICT', 'Job VAC-1 is On Hold and accepts no new applications.', 'JOB_NOT_ACCEPTING_APPLICATIONS'],
-    [409, 'CONFLICT', 'Request REQ-1 is Cancelled and cannot be activated.', 'REQUISITION_CANCELLED'],
-    [409, 'CONFLICT', 'Candidate Nourhan Sami has already applied to vacancy VAC-1.', 'APPLICATION_EXISTS'],
-    [409, 'CONFLICT', 'A candidate with the same email or phone already exists in your organization.', 'CANDIDATE_DUPLICATE'],
-    [400, 'VALIDATION_ERROR', 'Provide an email or a phone.', 'CONTACT_REQUIRED'],
-    [409, 'CONFLICT', 'This application changed before the stage update could be saved.', 'STALE_STAGE'],
-    [409, 'CONFLICT', 'Offer needs a submitted interview scorecard.', 'GATE_SCORECARD_NOT_SUBMITTED'],
-  ])('%s %s "%s" → %s', (status, code, message, expected) => {
-    expect(jobErrorFromError(env(status, code, message))?.code).toBe(expected);
+    'REASON_REQUIRED', 'REASON_NOT_IN_LIST', 'HOLD_UNTIL_NOT_FUTURE', 'ILLEGAL_JOB_TRANSITION', 'NOT_JOB_OWNER', 'ADMIN_CANNOT_CHANGE_JOB_STATUS',
+    'JOB_NOT_ACCEPTING_APPLICATIONS', 'REQUISITION_CANCELLED', 'CONTACT_REQUIRED', 'GATE_SCORECARD_NOT_SUBMITTED',
+  ])('%s by code', (code) => {
+    expect(jobErrorFromError(env(400, code))?.code).toBe(code);
   });
-  it('also accepts the raw code if Backend starts passing it through', () => {
-    expect(jobErrorFromError(env(409, 'ILLEGAL_JOB_TRANSITION', 'x'))?.code).toBe('ILLEGAL_JOB_TRANSITION');
+  it('old messages without a code are no longer matched', () => {
+    expect(jobErrorFromError(env(409, 'CONFLICT', 'Only a held job can be reopened (job is Open).'))).toBeNull();
+    expect(jobErrorFromError(env(400, 'VALIDATION_ERROR', 'A reason is required to hold this job.'))).toBeNull();
+  });
+  it('the stage CAS conflict is detected from details.currentVersion', () => {
+    const e = new ApiError(409, 'This application changed before the stage update could be saved.', { code: 'CONFLICT', details: { currentStage: 'Offer', currentVersion: 5 } }, { code: 'CONFLICT' });
+    expect(isStaleStage(e)).toBe(true);
+    expect(isStaleStage(env(409, 'CONFLICT'))).toBe(false);
+  });
+});
+
+describe('E09 gates[] + card interview (B5)', () => {
+  const byId = (id: string) => applications.data.find((a) => a.id === id) as unknown as BoardApplication;
+  it('blockingGate: next gate unmet; not for Applied, not before the interview took place', () => {
+    expect(blockingGate(byId('a1'))).toBeNull();
+    expect(blockingGate(byId('a4'))).toBeNull();
+    expect(blockingGate(byId('a5'))).toMatchObject({ gate: 'screen-note', code: 'GATE_SCREEN_NOTE_MISSING' });
+    expect(blockingGate(byId('a7'))).toMatchObject({ gate: 'scorecard' });
+    expect(blockingGate(byId('a8'))).toBeNull();
+    expect(blockingGate(byId('a10'))).toMatchObject({ gate: 'offer-accepted' });
+    expect(applications.data.filter((a) => blockingGate(a as unknown as BoardApplication))).toHaveLength(4);
   });
 });
 
@@ -109,17 +131,28 @@ describe('E11 adapter (resume parse + B6 duplicate check)', () => {
     await duplicateCheck({ email: 'a@b.c' });
     expect(api.postApi).toHaveBeenCalledWith('/candidates/duplicate-check', { email: 'a@b.c' });
   });
-  it('link: no candidate created; CV uploaded to the existing person; application added', async () => {
+  it('diffForLink mirrors B6: fill empty, conflicts never overwritten, skills merged', () => {
+    const d = diffForLink({ currentTitle: 'HR Officer', currentCompany: '', location: null, experienceYears: 6, skills: ['HRIS'] },
+      { title: 'HR Systems Analyst', currentCompany: 'Andalusia Group', location: 'Cairo', experienceYears: 6, skills: ['hris', 'SQL'] });
+    expect(d.fill).toEqual({ currentCompany: 'Andalusia Group', location: 'Cairo', skills: ['HRIS', 'SQL'] });
+    expect(d.filled).toEqual(['currentCompany', 'location', 'skills']);
+    expect(d.conflicts).toEqual([{ field: 'currentTitle', existing: 'HR Officer', incoming: 'HR Systems Analyst' }]);
+  });
+  it('link: no candidate created; empty fields filled (PATCH only those), conflicts returned; CV uploaded; application added', async () => {
+    api.getApi.mockResolvedValue({ id: 'c-a4', currentTitle: 'Analyst', currentCompany: null, skills: [], expectedSalary: 42000 });
+    api.patchApi.mockResolvedValue({});
     api.postFormDataApi.mockResolvedValue({ id: 'd1' });
     api.postApi.mockResolvedValue({ id: 'app-new' });
-    const r = await importRow('v1', file, { firstName: 'Nourhan', rawText: 'x' }, { kind: 'link', candidateId: 'c-a4' });
+    const r = await importRow('v1', file, { firstName: 'Nourhan', rawText: 'x', title: 'HR Analyst', currentCompany: 'SGH' }, { kind: 'link', candidateId: 'c-a4' });
     expect(api.postApi).not.toHaveBeenCalledWith('/candidates', expect.anything());
+    expect(api.getApi).toHaveBeenCalledWith('/candidates/c-a4');
+    expect(api.patchApi).toHaveBeenCalledWith('/candidates/c-a4', { currentCompany: 'SGH' });
     const fd = api.postFormDataApi.mock.calls[0][1] as FormData;
     expect(api.postFormDataApi.mock.calls[0][0]).toBe('/documents/upload');
     expect(fd.get('candidateId')).toBe('c-a4');
     expect(fd.get('documentType')).toBe('CV');
     expect(api.postApi).toHaveBeenCalledWith('/applications', { vacancyId: 'v1', candidateId: 'c-a4', source: 'CV import' });
-    expect(r).toEqual({ candidateId: 'c-a4', applicationId: 'app-new' });
+    expect(r).toEqual({ candidateId: 'c-a4', applicationId: 'app-new', link: { filled: ['currentCompany'], conflicts: [{ field: 'currentTitle', existing: 'Analyst', incoming: 'HR Analyst' }], compared: true } });
   });
   it('create: POST /candidates with the parsed fields, then upload + application', async () => {
     api.postFormDataApi.mockResolvedValue({ id: 'd1' });
