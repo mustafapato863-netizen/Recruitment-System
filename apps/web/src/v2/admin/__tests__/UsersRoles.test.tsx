@@ -17,7 +17,7 @@ import { buildTree, flatten, isDescendant, ownedWork } from '../usersApi';
 
 let paths: Record<string, unknown> = {};
 const serve = (extra: Record<string, unknown> = {}) => {
-  paths = { '/users?pageSize=500': fx.users, '/roles': fx.roles, '/roles/permissions': fx.perms, ...extra };
+  paths = { '/users?page=1&pageSize=100': fx.users, '/roles': fx.roles, '/roles/permissions': fx.perms, ...extra };
   api.getApi.mockImplementation(async (p: string) => { const v = paths[p]; if (v instanceof Error) throw v; if (v === undefined) throw new ApiError(404, `no ${p}`); return v; });
 };
 const Loc = () => <div data-testid="loc">{useLocation().search}</div>;
@@ -201,5 +201,17 @@ describe('A04 Roles', () => {
     shell.value = null;
     renderAt('/roles');
     expect(await screen.findByText('v1 users')).toBeInTheDocument();
+  });
+});
+
+describe('B2-22: list calls stay within pageSize 100', () => {
+  it('fetchAllPages walks pages of 100 until the total', async () => {
+    const { fetchAllPages } = await import('../../api/paged');
+    const rows = (n: number, from = 0) => Array.from({ length: n }, (_, i) => ({ id: `u${from + i}` }));
+    api.getApi.mockReset();
+    api.getApi.mockImplementation(async (p: string) => (p.includes('page=1&') ? { data: rows(100), total: 130 } : p.includes('page=2&') ? { data: rows(30, 100), total: 130 } : { data: [] }));
+    const out = await fetchAllPages<{ id: string }>('/users');
+    expect(out).toHaveLength(130);
+    expect(api.getApi.mock.calls.map((c) => c[0])).toEqual(['/users?page=1&pageSize=100', '/users?page=2&pageSize=100']);
   });
 });

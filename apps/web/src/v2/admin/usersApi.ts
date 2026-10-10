@@ -7,8 +7,9 @@
  *   POST /admin/overrides {action:'file.reassign', entityId:<the user leaving>, reason (>= 10 chars), toUserId}. Audited as ADMIN_OVERRIDE.
  *   Codes: 400 OVERRIDE_REASON_REQUIRED, 400/409 OVERRIDE_NOT_ALLOWED (server message shown, e.g. while Backend enables it), 403.
  */
-import { getApi, patchApi, postApi } from '../../api/client';
+import { patchApi, postApi } from '../../api/client';
 import { domainError } from '../api/gates';
+import { fetchAllPages } from '../api/paged';
 import { PROVISIONAL_ROLE_SEATS, SEAT_LABEL, isSeat, type Seat } from '../seat';
 
 export interface AdminUser {
@@ -28,9 +29,8 @@ export const subLine = (u: AdminUser) => [seatLabel(u), u.jobTitle || u.roles.fi
 export const isActive = (u: AdminUser) => u.status === 'Active';
 export const statusTone = (s: string) => (s === 'Active' ? 'success' : s === 'Invited' || s === 'Pending' ? 'info' : 'neutral') as 'success' | 'info' | 'neutral';
 
-const list = <T,>(r: T[] | { data: T[] } | null | undefined): T[] => (Array.isArray(r) ? r : r?.data ?? []);
 export async function fetchUsers(): Promise<AdminUser[]> {
-  return list(await getApi<AdminUser[] | { data: AdminUser[] }>('/users?pageSize=500')).map((u) => ({ ...u, roles: u.roles ?? [], managerId: u.managerId ?? null }));
+  return (await fetchAllPages<AdminUser>('/users')).map((u) => ({ ...u, roles: u.roles ?? [], managerId: u.managerId ?? null }));
 }
 export const setStatus = (id: string, status: 'Active' | 'Inactive') => patchApi<AdminUser>(`/users/${encodeURIComponent(id)}`, { status });
 export const setManager = (id: string, managerId: string | null) => patchApi<AdminUser>(`/users/${encodeURIComponent(id)}`, { managerId });
