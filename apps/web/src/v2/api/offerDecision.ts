@@ -8,7 +8,9 @@
  *     403 OFFER_DECISION_NOT_MANAGER (not the owner's manager, a co-owner manager, or Admin); 409 OFFER_NOT_PENDING_APPROVAL;
  *     409 GRADE_BAND_MISSING / OFFER_PAY_OUTSIDE_BAND with `band{id?, grade, site, currency, minMonthlyBase?, maxMonthlyBase?}` + `offeredMonthlyBase?`;
  *     409 OFFER_BASE_PAY_MISSING / OFFER_BASE_CURRENCY_MIXED; 400 DECISION_REASON_REQUIRED.
- * CoS (Oct 10): Approve accepts pay {basePay, allowances[], currency} on the decision (Manager seat only; typed below).
+ * CoS (Oct 10): Approve accepts pay on the decision (Manager seat only). B2-15: B7 ManagerDecisionDto (#15 @0d6243d) takes it TOP-LEVEL:
+ *   {decision, reason?, basePay?, allowances?: [{name, amount, frequency?: Monthly|Annual|Once}], currency?}. A nested `pay: {…}` is a 400
+ *   VALIDATION_ERROR (whitelist), so decide() sends the flat shape.
  *   Offers gain `branchId`: the band is matched on branchId when present, else on the location name.
  * Base pay = "Salary" components only, annual amounts / 12 (allowances never count) — mirrored by monthlyBase().
  * Pay is shown only to the Manager seat holding OFFER_PAY_VIEW; everyone else gets stripPay().
@@ -79,11 +81,24 @@ export function bandPosition(band: Pick<GradeBand, 'minMonthlyBase' | 'maxMonthl
 }
 
 /** Pay the Manager sets on Approve (CoS). Monthly amounts; allowances never count toward the band. */
-export interface DecisionPay { basePay: number; allowances: Array<{ name: string; amount: number }>; currency: string }
+export interface DecisionPay { basePay: number; allowances: Array<{ name: string; amount: number; frequency?: 'Monthly' | 'Annual' | 'Once' }>; currency: string }
+/** = B7 ManagerDecisionDto: pay fields are top-level siblings of `decision` (B2-15). */
+export interface DecisionBody { decision: Decision; reason?: string; basePay?: number; allowances?: DecisionPay['allowances']; currency?: string }
+export function decisionBody(decision: Decision, reason?: string, pay?: DecisionPay): DecisionBody {
+  return {
+    decision, ...(reason ? { reason } : {}),
+    ...(decision === 'Approve' && pay ? { basePay: pay.basePay, currency: pay.currency, allowances: pay.allowances.map((a) => ({ name: a.name, amount: a.amount, frequency: a.frequency ?? 'Monthly' })) } : {}),
+  };
+}
 export const decide = (offerId: string, versionId: string, decision: Decision, reason?: string, pay?: DecisionPay) =>
-  postApi<{ id: string; decision: Decision; toStatus: string }>(`/offers/${enc(offerId)}/versions/${enc(versionId)}/decision`, {
-    decision, ...(reason ? { reason } : {}), ...(decision === 'Approve' && pay ? { pay } : {}),
-  });
+  postApi<{ id: string; decision: Decision; toStatus: string }>(`/offers/${enc(offerId)}/versions/${enc(versionId)}/decision`, decisionBody(decision, reason, pay));
+
+/** B2-15: default the pay currency to the band that exists for this grade + site (not a hard-coded EGP). */
+export function defaultCurrency(bands: GradeBand[] | null, offer: DecisionOffer): string | null {
+  if (!bands || !offer.grade) return null;
+  const site = (b: GradeBand) => (offer.branchId ? b.site?.id === offer.branchId : !offer.location || b.site?.name === offer.location);
+  return bands.find((b) => b.grade?.id === offer.grade!.id && site(b))?.currency?.toUpperCase() ?? null;
+}
 export const CURRENCIES = ['EGP', 'AED', 'SAR'] as const;
 
 export interface DecisionError { code?: string; field?: 'reason' | 'pay'; text: string; band?: Record<string, string | number | null>; offered?: number }
@@ -104,9 +119,20 @@ export function decisionError(e: unknown): DecisionError {
   const d = domainError(e);
   const env = (e instanceof ApiError ? e.details : null) as { band?: Record<string, string | number | null>; offeredMonthlyBase?: number } | null;
   if (d && TEXT[d.code]) return { code: d.code, ...TEXT[d.code], ...(env?.band ? { band: env.band } : {}), ...(typeof env?.offeredMonthlyBase === 'number' ? { offered: env.offeredMonthlyBase } : {}) };
-  const x = e as { statusCode?: number; message?: string } | null;
-  if (x?.statusCode === 403) return { text: 'You do not have permission to decide on this offer.' };
-  return { text: x?.message || 'Something went wrong. Try again.' };
+  const x = e as { statusCode?: number; message?: string; details?: unknown } | null;
+  if (x?.statusCode === 403) return { code: d?.code, text: x?.message && d?.code ? x.message : 'You do not have permission to decide on this offer.' };
+  // B2-15: always show the API's own message (e.g. 400 VALIDATION_ERROR), plus the fields it names.
+  const fields = fieldsOf(x?.details);
+  const payField = fields.some((f) => /^(basePay|currency|allowances)/.test(f));
+  const text = [x?.message || 'Something went wrong. Try again.', fields.length ? `(${fields.join(', ')})` : ''].filter(Boolean).join(' ');
+  return { code: d?.code, ...(payField ? { field: 'pay' as const } : {}), text };
+}
+
+function fieldsOf(details: unknown): string[] {
+  const f = (details as { fields?: unknown } | null)?.fields;
+  if (Array.isArray(f)) return f.map((x) => (typeof x === 'string' ? x : String((x as { field?: string; property?: string })?.field ?? (x as { property?: string })?.property ?? ''))).filter(Boolean);
+  if (f && typeof f === 'object') return Object.keys(f);
+  return [];
 }
 
 export const money = (n: number, currency?: string) => `${new Intl.NumberFormat('en-GB', { maximumFractionDigits: 0 }).format(n)}${currency ? ` ${currency}` : ''}`;

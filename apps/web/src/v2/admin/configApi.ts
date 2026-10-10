@@ -4,8 +4,8 @@
  *   SINGLE_PIPELINE_TEMPLATE. v2 never offers New / Duplicate / Delete; it edits stage names in place
  *   (PATCH /pipeline-templates/:id/stages/:stageId {name}). Create is offered only when the list is empty.
  * - Templates: /email-templates and /whatsapp-templates (GET, POST, PATCH; no DELETE, B2). Admin seat only (route-gated).
- * - Master data: GET /master-data/catalog/:category, POST /master-data/catalog/:category/batch {rows:[{id?, name, status?}]}.
- *   Deactivate = a batch row with status 'Inactive' (never DELETE). Grade bands: B7 /master-data/grade-bands (POST/PATCH).
+ * - Master data: GET /master-data/catalog/:category, POST /master-data/catalog/:category/batch {rows:[{name}]} to add.
+ *   Deactivate / reactivate = PATCH /master-data/catalog/:category/:id {status:'Inactive'|'Active'} (CoS Oct 10; B3 C3). Never DELETE. Grade bands: B7 /master-data/grade-bands (POST/PATCH).
  */
 import { getApi, patchApi, postApi } from '../../api/client';
 import { domainError } from '../api/gates';
@@ -79,9 +79,12 @@ export async function fetchCatalog(category: string): Promise<CatalogValue[] | n
 }
 export const addValue = (category: string, name: string) => postApi(`/master-data/catalog/${enc(category)}/batch`, { rows: [{ name }] });
 export const setValueStatus = (category: string, v: CatalogValue, status: 'Active' | 'Inactive') =>
-  postApi(`/master-data/catalog/${enc(category)}/batch`, { rows: [{ id: v.id, name: v.name, status, ...(typeof v.version === 'number' ? { expectedVersion: v.version } : {}) }] });
+  patchApi(`/master-data/catalog/${enc(category)}/${enc(v.id)}`, { status });
 
 export interface Band { id: string; grade?: { id: string; name: string } | null; site?: { id: string; name: string } | null; currency: string; status: string; minMonthlyBase?: number | null; maxMonthlyBase?: number | null }
+/** CoS: Admins see band amounts when they hold MASTER_DATA_MANAGE (they maintain the bands); the server decides what it returns. */
+export const canSeeBandAmounts = (permissions: readonly string[] | undefined, isAdministrator = false) =>
+  isAdministrator || (permissions ?? []).includes('MASTER_DATA_MANAGE') || (permissions ?? []).includes('OFFER_PAY_VIEW');
 export async function fetchBands(): Promise<Band[] | null> {
   try { return list(await getApi<Band[] | { data: Band[] }>('/master-data/grade-bands')); }
   catch (e) { if ((e as { statusCode?: number })?.statusCode === 404) return null; throw e; }
