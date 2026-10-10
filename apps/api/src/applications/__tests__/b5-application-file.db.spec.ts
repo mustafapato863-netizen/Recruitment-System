@@ -119,7 +119,11 @@ describe.skipIf(!url)('B5 application file: gates, scorecards, offers, interview
     expect(await codeOf(assertStageGate(prisma, app, 'Pre-Hire'))).toBe(GATE_CODES.offer);
     const { offer, version } = await offerFor(app.id, 'Approved');
     expect(await codeOf(offers.updateOfferStatus(user(ids.rec!), offer.id, { status: 'Accepted' } as never))).toMatch(/Cannot update status/);
-    await offers.updateOfferStatus(user(ids.rec!), offer.id, { status: 'Sent' } as never);
+    // B5 follow-up: Sent only through POST /offers/:id/send { channel, templateId }.
+    expect(await codeOf(offers.updateOfferStatus(user(ids.rec!), offer.id, { status: 'Sent' } as never))).toBe('OFFER_SEND_REQUIRES_TEMPLATE');
+    await prisma.candidate.update({ where: { id: app.candidateId }, data: { email: `c-${app.id.slice(0, 8)}@b5.test` } });
+    const tpl = await prisma.emailTemplate.create({ data: { organizationId: ORG, name: `Offer ${tag} ${app.id.slice(0, 4)}`, subject: 'Offer {{offerCode}}', bodyTemplate: 'Dear {{candidateName}}' } });
+    await offers.sendOffer(user(ids.rec!), offer.id, { channel: 'email', templateId: tpl.id });
     expect((await prisma.offerVersion.findUniqueOrThrow({ where: { id: version.id } })).status).toBe('Sent');
     await offers.updateOfferStatus(user(ids.rec!), offer.id, { status: 'Accepted' } as never);
     expect((await prisma.offerVersion.findUniqueOrThrow({ where: { id: version.id } })).status).toBe('Accepted');
@@ -158,7 +162,7 @@ describe.skipIf(!url)('B5 application file: gates, scorecards, offers, interview
     expect((await prisma.application.findUniqueOrThrow({ where: { id: app.id } })).stage).toBe('Offer');
     const versionId = await offers.createOfferRevision(user(ids.rec!), offer.id, { components: [] } as never);
     const v2 = await prisma.offerVersion.findUniqueOrThrow({ where: { id: versionId } });
-    expect(v2).toMatchObject({ versionNumber: 2, status: 'Pending Approval' });
+    expect(v2).toMatchObject({ versionNumber: 2, status: 'Draft' }); // B5 follow-up: new versions start as Draft
     expect((await prisma.offer.findUniqueOrThrow({ where: { id: offer.id } })).currentVersionId).toBe(versionId);
     const declinedApp = await newApplication('Offer');
     const declined = await offerFor(declinedApp.id, 'Sent');
@@ -182,20 +186,22 @@ describe.skipIf(!url)('B5 application file: gates, scorecards, offers, interview
     expect(await assertReopenAllowed(prisma, app, boss, 'Manager override')).toBe('Manager override');
   });
 
-  it('gate 4: Joined needs ID, contract and SCFHS licence Verified', async () => {
+  it('gate 4: Joined needs the typed checks ID, CONTRACT and SCFHS_LICENCE verified (names no longer matter)', async () => {
     const app = await newApplication('Pre-Hire');
     const { offer } = await offerFor(app.id, 'Accepted');
     const hc = await prisma.hiringCase.create({ data: { organizationId: ORG, applicationId: app.id, offerId: offer.id } });
     const err = await assertStageGate(prisma, app, 'Joined').catch((e: { getResponse: () => { code: string; missing: string[] } }) => e.getResponse());
-    expect(err).toMatchObject({ code: GATE_CODES.joining, missing: ['ID', 'contract', 'SCFHS licence'] });
-    await prisma.complianceRequirement.createMany({ data: [
-      { hiringCaseId: hc.id, type: 'Document', name: 'National ID', status: 'Verified' },
-      { hiringCaseId: hc.id, type: 'Document', name: 'Employment contract', status: 'Verified' },
-      { hiringCaseId: hc.id, type: 'License', name: 'SCFHS licence', status: 'Pending' },
+    expect(err).toMatchObject({ code: GATE_CODES.joining, gate: 'joining-checks', missing: ['ID', 'CONTRACT', 'SCFHS_LICENCE'] });
+    // A Verified compliance item named "National ID" no longer satisfies the gate.
+    await prisma.complianceRequirement.create({ data: { hiringCaseId: hc.id, type: 'Document', name: 'National ID', status: 'Verified' } });
+    await prisma.joiningCheck.createMany({ data: [
+      { applicationId: app.id, type: 'ID', verified: true, verifiedById: ids.rec!, verifiedAt: new Date() },
+      { applicationId: app.id, type: 'CONTRACT', verified: true, verifiedById: ids.rec!, verifiedAt: new Date() },
+      { applicationId: app.id, type: 'SCFHS_LICENCE', verified: false },
     ] });
     const err2 = await assertStageGate(prisma, app, 'Joined').catch((e: { getResponse: () => { missing: string[] } }) => e.getResponse());
-    expect(err2).toMatchObject({ missing: ['SCFHS licence'] });
-    await prisma.complianceRequirement.updateMany({ where: { hiringCaseId: hc.id, type: 'License' }, data: { status: 'Verified' } });
+    expect(err2).toMatchObject({ missing: ['SCFHS_LICENCE'] });
+    await prisma.joiningCheck.updateMany({ where: { applicationId: app.id, type: 'SCFHS_LICENCE' }, data: { verified: true } });
     expect(await codeOf(assertStageGate(prisma, app, 'Joined'))).toBe('ok');
   });
 

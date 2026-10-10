@@ -150,6 +150,7 @@ model User {
   createdCandidates        Candidate[]                @relation("CandidateCreator")
   recruiterTargetsReceived RecruiterTarget[]          @relation("RecruiterTargetAssignee")
   recruiterTargetsSet      RecruiterTarget[]          @relation("RecruiterTargetSetter")
+  joiningChecksVerified    JoiningCheck[]             @relation("JoiningCheckVerifier")
 
   @@unique([organizationId, emailNormalized])
   @@index([status])
@@ -487,6 +488,9 @@ model Application {
   hiringCase         HiringCase?
   createdAt          DateTime                   @default(now()) @db.Timestamptz(6)
   updatedAt          DateTime                   @updatedAt @db.Timestamptz(6)
+  /// B5 follow-up: owner-editable follow-up date (plain date, no timer).
+  followUpDate       DateTime?                  @db.Date
+  joiningChecks      JoiningCheck[]
 
   @@unique([vacancyId, candidateId])
   @@index([organizationId, stage])
@@ -594,6 +598,7 @@ model CandidateDocument {
   complianceRequirements ComplianceRequirement[]
   createdAt              DateTime                @default(now()) @db.Timestamptz(6)
   updatedAt              DateTime                @updatedAt @db.Timestamptz(6)
+  joiningChecks          JoiningCheck[]
 
   @@index([organizationId, candidateId])
   @@index([candidateId, documentType])
@@ -741,6 +746,11 @@ model OfferVersion {
   approvals           OfferApproval[]
   createdAt           DateTime         @default(now()) @db.Timestamptz(6)
   updatedAt           DateTime         @updatedAt @db.Timestamptz(6)
+  /// B5 follow-up: how the version was sent (channel email|whatsapp, template, who, when).
+  sentChannel         String?          @db.VarChar(20)
+  sentTemplateId      String?          @db.Uuid
+  sentAt              DateTime?        @db.Timestamptz(6)
+  sentById            String?          @db.Uuid
 
   @@unique([offerId, versionNumber])
   @@map("offer_versions")
@@ -1146,4 +1156,23 @@ model RecruiterTarget {
   @@unique([organizationId, recruiterId, period, month])
   @@index([organizationId, recruiterId, isActive])
   @@map("recruiter_targets")
+}
+
+/// B5 follow-up: typed joining checks read by gate 4 (Pre-Hire -> Joined). type: ID | CONTRACT | SCFHS_LICENCE.
+model JoiningCheck {
+  id            String             @id @default(uuid()) @db.Uuid
+  applicationId String             @db.Uuid
+  application   Application        @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  type          String             @db.VarChar(30)
+  verified      Boolean            @default(false)
+  verifiedById  String?            @db.Uuid
+  verifiedBy    User?              @relation("JoiningCheckVerifier", fields: [verifiedById], references: [id], onDelete: SetNull)
+  verifiedAt    DateTime?          @db.Timestamptz(6)
+  documentId    String?            @db.Uuid
+  document      CandidateDocument? @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  createdAt     DateTime           @default(now()) @db.Timestamptz(6)
+  updatedAt     DateTime           @updatedAt @db.Timestamptz(6)
+
+  @@unique([applicationId, type])
+  @@map("joining_checks")
 }

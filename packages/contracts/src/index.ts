@@ -41,7 +41,33 @@ export const errorCodes = [
   'ASYNC_JOB_FAILED',
   'INTEGRATION_UNAVAILABLE',
   'INTERNAL_ERROR',
+  ...domainErrorCodes(),
 ] as const;
+
+/**
+ * B3/B4/B5 domain codes. Services throw `{ code, message, ... }`; the API error
+ * normalizer keeps these codes as-is (instead of collapsing to CONFLICT etc.).
+ * Gate codes (GATE_*) also carry `gate` and `missing[]` in the envelope.
+ */
+function domainErrorCodes() {
+  return [
+    // B3 requisition / job lifecycle
+    'ADMIN_CANNOT_CHANGE_JOB_STATUS', 'ASSIGNEE_NOT_ELIGIBLE', 'ASSIGNEE_REQUIRED', 'DUE_DATE_REQUIRED',
+    'GRADE_NOT_FOUND', 'ILLEGAL_JOB_TRANSITION', 'JOB_NOT_ACCEPTING_APPLICATIONS', 'NOT_JOB_OWNER',
+    'REASON_REQUIRED', 'REQUISITION_CANCELLED',
+    // B5 gates
+    'GATE_SCREEN_NOTE_MISSING', 'GATE_SCORECARD_NOT_SUBMITTED', 'GATE_OFFER_NOT_ACCEPTED',
+    'GATE_JOINING_CHECKS_INCOMPLETE', 'GATE_REJECT_REASON_REQUIRED',
+    // B5 interviews / scorecards
+    'INTERVIEWER_NOT_A_USER', 'INTERVIEWER_REQUIRED', 'ROOM_REQUIRED', 'ROOM_URL_INVALID', 'ROOM_URL_NOT_HTTPS',
+    'ROOM_URL_HOST_NOT_ALLOWED', 'SCORECARD_ALREADY_SUBMITTED', 'SCORECARD_NOT_SUBMITTED', 'REVISION_REASON_REQUIRED',
+    // B5 file / offers
+    'OFFER_CLOSED', 'OFFER_NOT_DRAFT', 'OFFER_NOT_APPROVED', 'OFFER_SEND_REQUIRES_TEMPLATE', 'OFFER_CHANNEL_INVALID',
+    'OFFER_TEMPLATE_INVALID', 'OFFER_TEMPLATE_CHANNEL_MISMATCH', 'OFFER_CANDIDATE_NO_CONTACT',
+    'REOPEN_NOT_OWNER', 'REOPEN_REASON_REQUIRED', 'WITHDRAWN_NOT_AN_EXIT',
+    'FOLLOW_UP_NOT_OWNER', 'JOINING_CHECK_TYPE_INVALID',
+  ] as const;
+}
 
 export type ErrorCode = (typeof errorCodes)[number];
 
@@ -57,6 +83,9 @@ export interface ErrorEnvelope {
   fields?: ErrorFieldErrors;
   /** Safe, resource-specific context for recoverable client workflows such as optimistic-concurrency conflicts. */
   details?: Record<string, unknown>;
+  /** B5: present on GATE_* 409s: which gate blocked and what is missing. */
+  gate?: string;
+  missing?: string[];
   requestId: string;
   retryable: boolean;
   retryAfterSeconds: number | null;
@@ -1229,6 +1258,8 @@ export interface OfferApprovalInboxItem {
   positionTitle: string;
   branchName?: string | null;
   versionNumber: number;
+  /** B5 follow-up: the job's grade (from its requisition). */
+  grade?: { id: string; name: string } | null;
   monthlyPackage: number | null;
   packageCurrency?: OfferCurrency | null;
   roleCode: string;
@@ -1249,6 +1280,11 @@ export interface OfferVersionItem {
   workLocation?: string | null;
   workingSchedule?: string | null;
   approvalStatus: OfferVersionApprovalStatus;
+  status?: string;
+  sentChannel?: 'email' | 'whatsapp' | string | null;
+  sentAt?: string | null;
+  /** B5 follow-up: the approver's note (who, when, text). */
+  approverNote?: { byUserId: string | null; byName: string | null; at: string; text: string } | null;
   isLocked: boolean;
   components: OfferComponentItem[];
   approvals: OfferApprovalItem[];
@@ -1263,6 +1299,7 @@ export interface Offer {
   applicationCode?: string;
   candidateName?: string;
   positionTitle?: string;
+  grade?: { id: string; name: string } | null;
   location?: string | null;
   offerCode: string;
   currentVersionId?: string | null;

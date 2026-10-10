@@ -1,4 +1,5 @@
 import { HttpException, HttpStatus } from '@nestjs/common';
+import { errorCodes } from '@recruitflow/contracts';
 import type {
   ErrorCode,
   ErrorEnvelope,
@@ -192,6 +193,8 @@ export interface NormalizedError {
   details?: Record<string, unknown>;
   retryable: boolean;
   retryAfterSeconds?: number | null;
+  gate?: string;
+  missing?: string[];
   /** Server-side diagnostic context (sanitized). Never returned to clients. */
   logContext?: string;
 }
@@ -482,6 +485,15 @@ export function normalizeError(
           ? resObj.details
           : undefined;
 
+      // B5: gate 409s keep { gate, missing[] } (short strings only).
+      const gateInfo =
+        stableCode.startsWith('GATE_') &&
+        typeof resObj.gate === 'string' && resObj.gate.length <= 60 &&
+        Array.isArray(resObj.missing) &&
+        resObj.missing.every((m: unknown) => typeof m === 'string' && m.length <= 80)
+          ? { gate: resObj.gate, missing: resObj.missing as string[] }
+          : undefined;
+
       const rawMessage = Array.isArray(resObj.message)
         ? resObj.message
         : typeof resObj.message === 'string'
@@ -529,6 +541,7 @@ export function normalizeError(
         message,
         ...(hasFieldErrors && fields ? { fields } : {}),
         ...(details ? { details } : {}),
+        ...(gateInfo ?? {}),
         retryable,
         retryAfterSeconds:
           retryAfter ?? (status === HttpStatus.TOO_MANY_REQUESTS ? null : null),
@@ -602,30 +615,9 @@ function resolveStableCode(
   return stableCodeByStatus(status);
 }
 
+/** Allowlist = the shared registry in @recruitflow/contracts (incl. B3/B4/B5 domain codes). */
 function isStableCode(value: string): boolean {
-  const stableCodes: readonly string[] = [
-    'VALIDATION_ERROR',
-    'UNAUTHENTICATED',
-    'SESSION_EXPIRED',
-    'FORBIDDEN',
-    'NOT_FOUND',
-    'CONFLICT',
-    'STAGE_GATE_BLOCKED',
-    'RATE_LIMITED',
-    'INVALID_CREDENTIALS',
-    'TOKEN_INVALID',
-    'TOKEN_EXPIRED',
-    'FILE_INVALID',
-    'FILE_TOO_LARGE',
-    'FILE_UNSAFE',
-    'IMPORT_INVALID',
-    'IMPORT_CONFLICT',
-    'EXPORT_FAILED',
-    'ASYNC_JOB_FAILED',
-    'INTEGRATION_UNAVAILABLE',
-    'INTERNAL_ERROR',
-  ];
-  return stableCodes.includes(value);
+  return (errorCodes as readonly string[]).includes(value);
 }
 
 function isFieldErrors(value: unknown): value is ErrorFieldErrors {
@@ -654,6 +646,8 @@ export function buildErrorEnvelope(normalized: NormalizedError, requestId: strin
     envelope.fields = normalized.fields;
   }
   if (normalized.details) envelope.details = normalized.details;
+  if (normalized.gate !== undefined) envelope.gate = normalized.gate;
+  if (normalized.missing !== undefined) envelope.missing = normalized.missing;
   return envelope;
 }
 

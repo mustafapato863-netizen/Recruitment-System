@@ -15,8 +15,7 @@ import {
   CreateOfferDto,
   CreateOfferRevisionDto,
   OfferDecisionDto,
-  UpdateOfferStatusDto,
-} from './offers.dto';
+  UpdateOfferStatusDto, SendOfferDto } from './offers.dto';
 import { UserPermissionsService } from '../common/user-permissions.service';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -58,6 +57,7 @@ export class OffersController {
     @Query('search') search?: string,
     @Query('candidateId') candidateId?: string,
     @Query('vacancyId') vacancyId?: string,
+    @Query('applicationId') applicationId?: string,
   ) {
     const cleanCandidateId = cleanUuidParam(candidateId);
     const cleanVacancyId = cleanUuidParam(vacancyId);
@@ -68,7 +68,10 @@ export class OffersController {
       return [];
     }
 
-    const query: { status?: string; search?: string; candidateId?: string; vacancyId?: string } = {};
+    const cleanApplicationId = cleanUuidParam(applicationId);
+    if (applicationId && cleanApplicationId === null) return [];
+    const query: { status?: string; search?: string; candidateId?: string; vacancyId?: string; applicationId?: string } = {};
+    if (cleanApplicationId) query.applicationId = cleanApplicationId;
     if (status && status !== 'ALL' && status !== 'undefined' && status !== 'null') {
       query.status = status.trim();
     }
@@ -130,6 +133,24 @@ export class OffersController {
     @Body() dto: UpdateOfferStatusDto,
   ) {
     return this.offersService.updateOfferStatus(user, id, dto);
+  }
+
+  @Post(':id/submit')
+  @RequirePermissions('APPLICATION_MOVE_STAGE')
+  @AuditAction('OFFER_SUBMIT')
+  @UseGuards(TenantScopedGuard)
+  @TenantResource({ resource: 'offer', param: 'id' })
+  submitOffer(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.offersService.submitOffer(user, id);
+  }
+
+  @Post(':id/send')
+  @RequirePermissions('APPLICATION_MOVE_STAGE')
+  @AuditAction('OFFER_SEND')
+  @UseGuards(TenantScopedGuard)
+  @TenantResource({ resource: 'offer', param: 'id' })
+  sendOffer(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: SendOfferDto) {
+    return this.offersService.sendOffer(user, id, dto);
   }
 
   @Post('approvals/:approvalId/decide')

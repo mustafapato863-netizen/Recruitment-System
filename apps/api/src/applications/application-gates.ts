@@ -9,7 +9,7 @@ import type { Prisma } from '@recruitflow/database';
  *  1 | Applied or Screening | Interview | Screen note saved                         | GATE_SCREEN_NOTE_MISSING
  *  2 | Interview            | Offer     | Scorecard submitted                       | GATE_SCORECARD_NOT_SUBMITTED
  *  3 | Offer                | Pre-Hire  | (blank in v2) -> accepted offer version   | GATE_OFFER_NOT_ACCEPTED
- *  4 | Pre-Hire             | Joined    | ID, contract and SCFHS licence checked    | GATE_JOINING_CHECKS_INCOMPLETE
+ *  4 | Pre-Hire             | Joined    | typed joining checks ID, CONTRACT, SCFHS_LICENCE verified    | GATE_JOINING_CHECKS_INCOMPLETE
  *  5 | any open stage       | Rejected  | Reason (from rejection-reasons list)      | GATE_REJECT_REASON_REQUIRED
  */
 export const GATE_CODES = {
@@ -27,44 +27,42 @@ export const WITHDRAWN_BY_CANDIDATE_REASON = 'Withdrawn by candidate';
 /** Always valid even before an org's master data is seeded. */
 export const SYSTEM_REJECTION_REASONS = [REQUISITION_CANCELLED_REASON, DECLINED_OFFER_REASON, WITHDRAWN_BY_CANDIDATE_REASON];
 
-export const JOINING_CHECKS = [
-  { key: 'id', label: 'ID', match: /(^|[^a-z])(id|identity|passport|emirates id|national id|iqama)([^a-z]|$)/i },
-  { key: 'contract', label: 'contract', match: /contract/i },
-  { key: 'licence', label: 'SCFHS licence', match: /scfhs|licen[cs]e/i },
-] as const;
+/** B5 follow-up: typed joining checks (no name matching). Gate 4 needs all three verified. */
+export const JOINING_CHECK_TYPES = ['ID', 'CONTRACT', 'SCFHS_LICENCE'] as const;
+export type JoiningCheckType = (typeof JOINING_CHECK_TYPES)[number];
+export const JOINING_CHECK_LABELS: Record<JoiningCheckType, string> = { ID: 'ID', CONTRACT: 'contract', SCFHS_LICENCE: 'SCFHS licence' };
 
 type Tx = Prisma.TransactionClient;
 
-function blocked(code: string, gate: string, message: string, missing?: string[]): ConflictException {
-  return new ConflictException({ code, gate, message, ...(missing ? { missing } : {}) });
+/** Gate 409 body: always { code, gate, message, missing[] } (kept by the error normalizer). */
+export function blocked(code: string, gate: string, message: string, missing: string[]): ConflictException {
+  return new ConflictException({ code, gate, message, missing });
 }
 
-export async function missingJoiningChecks(tx: Tx, applicationId: string): Promise<string[]> {
-  const reqs = await tx.complianceRequirement.findMany({
-    where: { hiringCase: { applicationId } },
-    select: { name: true, status: true },
-  });
-  return JOINING_CHECKS.filter((check) => !reqs.some((r) => r.status === 'Verified' && check.match.test(r.name))).map((c) => c.label);
+/** Missing typed checks (types, e.g. ['CONTRACT']). */
+export async function missingJoiningChecks(tx: Pick<Tx, 'joiningCheck'>, applicationId: string): Promise<JoiningCheckType[]> {
+  const done = await tx.joiningCheck.findMany({ where: { applicationId, verified: true }, select: { type: true } });
+  return JOINING_CHECK_TYPES.filter((t) => !done.some((d) => d.type === t));
 }
 
-export async function assertJoiningChecks(tx: Tx, applicationId: string): Promise<void> {
+export async function assertJoiningChecks(tx: Pick<Tx, 'joiningCheck'>, applicationId: string): Promise<void> {
   const missing = await missingJoiningChecks(tx, applicationId);
   if (missing.length) {
-    throw blocked(GATE_CODES.joining, 'Joining checks', `Joined needs ID, contract and SCFHS licence checked. Missing: ${missing.join(', ')}.`, missing);
+    throw blocked(GATE_CODES.joining, 'joining-checks', `Joined needs ID, contract and SCFHS licence verified. Missing: ${missing.map((m) => JOINING_CHECK_LABELS[m]).join(', ')}.`, missing);
   }
 }
 
 /** Resolves a rejection reason against the org's active list (plus the system reasons). */
 export async function resolveRejectionReason(tx: Tx, organizationId: string, reason: string | null | undefined): Promise<string> {
   const text = reason?.trim() ?? '';
-  if (!text) throw blocked(GATE_CODES.rejectReason, 'Reject reason', 'Rejected needs a reason from the rejection reasons list.');
+  if (!text) throw blocked(GATE_CODES.rejectReason, 'reject-reason', 'Rejected needs a reason from the rejection reasons list.', ['reason']);
   const system = SYSTEM_REJECTION_REASONS.find((r) => r.toLowerCase() === text.toLowerCase());
   if (system) return system;
   const value = await tx.masterDataValue.findFirst({
     where: { organizationId, category: 'rejection-reasons', status: 'Active', OR: [{ name: { equals: text, mode: 'insensitive' } }, { code: { equals: text, mode: 'insensitive' } }] },
     select: { name: true },
   });
-  if (!value) throw blocked(GATE_CODES.rejectReason, 'Reject reason', `"${text}" is not in the rejection reasons list.`);
+  if (!value) throw blocked(GATE_CODES.rejectReason, 'reject-reason', `"${text}" is not in the rejection reasons list.`, ['reason']);
   return value.name;
 }
 
@@ -73,17 +71,17 @@ export async function assertStageGate(tx: Tx, application: { id: string; stage: 
   const from = application.stage;
   if (to === 'Interview' && (from === 'Applied' || from === 'Screening')) {
     const note = await tx.screeningLog.findFirst({ where: { applicationId: application.id, notes: { not: null } }, select: { notes: true }, orderBy: { createdAt: 'desc' } });
-    if (!note?.notes?.trim()) throw blocked(GATE_CODES.screenNote, 'Screen note', 'Interview needs a saved screen note.');
+    if (!note?.notes?.trim()) throw blocked(GATE_CODES.screenNote, 'screen-note', 'Interview needs a saved screen note.', ['screen note']);
   }
   if (to === 'Offer') {
     const submitted = await tx.interviewScorecard.count({
       where: { status: 'Submitted', interview: { applicationId: application.id, status: { not: 'Cancelled' } } },
     });
-    if (submitted === 0) throw blocked(GATE_CODES.scorecard, 'Scorecard', 'Offer needs a submitted interview scorecard.');
+    if (submitted === 0) throw blocked(GATE_CODES.scorecard, 'scorecard', 'Offer needs a submitted interview scorecard.', ['submitted scorecard']);
   }
   if (to === 'Pre-Hire') {
     const accepted = await tx.offerVersion.count({ where: { status: 'Accepted', offer: { applicationId: application.id } } });
-    if (accepted === 0) throw blocked(GATE_CODES.offer, 'Offer accepted', 'Pre-Hire needs an accepted offer.');
+    if (accepted === 0) throw blocked(GATE_CODES.offer, 'offer-accepted', 'Pre-Hire needs an accepted offer.', ['accepted offer']);
   }
   if (to === 'Joined') await assertJoiningChecks(tx, application.id);
 }

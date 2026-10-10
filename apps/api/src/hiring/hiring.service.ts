@@ -123,10 +123,10 @@ export class HiringService {
     }, {} as Record<string, number>);
   }
 
-  async listHiringCases(organizationId: string, status?: string, user?: AuthUser) {
+  async listHiringCases(organizationId: string, status?: string, user?: AuthUser, applicationId?: string) {
     const visibility = await this.applicationVisibility(user);
     const cases = await this.prisma.hiringCase.findMany({
-      where: { organizationId, ...(status ? { status } : {}), ...(visibility ? { application: visibility } : {}) },
+      where: { organizationId, ...(status ? { status } : {}), ...(applicationId ? { applicationId } : {}), ...(visibility ? { application: visibility } : {}) },
       include: {
         application: {
           include: { candidate: true, vacancy: { include: { position: true, branch: true } } }
