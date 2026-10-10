@@ -8,7 +8,7 @@
  * are what is being tested.
  */
 import { randomUUID } from 'node:crypto';
-import { ForbiddenException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import type { ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import type { AuthUser } from '@recruitflow/contracts';
@@ -19,6 +19,7 @@ import { TenantScopedGuard } from '../../guards/tenant-scoped.guard';
 import { PermissionsGuard } from '../../guards/permissions.guard';
 import { InterviewsService } from '../../../interviews/interviews.service';
 import { InterviewsController } from '../../../interviews/interviews.controller';
+import { MeInterviewsController, parseScope } from '../../../interviews/me-interviews.controller';
 import { ApplicationsService } from '../../../applications/applications.service';
 import { ApplicationsController } from '../../../applications/applications.controller';
 import { OffersService } from '../../../offers/offers.service';
@@ -49,7 +50,7 @@ describe.skipIf(!url)('B1 follow-ups (scratch Postgres)', () => {
     owner: randomUUID(), other: randomUUID(), interviewer: randomUUID(), offerApprover: randomUUID(),
     hireApprover: randomUUID(), admin: randomUUID(),
     candidate: randomUUID(), otherCandidate: randomUUID(), application: randomUUID(), otherApplication: randomUUID(),
-    interview: randomUUID(), cv: randomUUID(), otherCv: randomUUID(), passport: randomUUID(),
+    interview: randomUUID(), upcoming2: randomUUID(), past1: randomUUID(), past2: randomUUID(), pastOther: randomUUID(), cv: randomUUID(), otherCv: randomUUID(), passport: randomUUID(),
     offer: randomUUID(), offerVersion: randomUUID(), offerApproval: randomUUID(), hiringCase: randomUUID(), hiringApproval: randomUUID(),
   };
   const users = () => [ids.owner, ids.other, ids.interviewer, ids.offerApprover, ids.hireApprover, ids.admin];
@@ -121,8 +122,10 @@ describe.skipIf(!url)('B1 follow-ups (scratch Postgres)', () => {
     await prisma.hiringCase.deleteMany({ where: { id: ids.hiringCase } });
     await prisma.offer.deleteMany({ where: { id: ids.offer } });
     await prisma.applicationNote.deleteMany({ where: { applicationId: { in: [ids.application, ids.otherApplication] } } });
-    await prisma.interviewAttendee.deleteMany({ where: { interviewId: ids.interview } });
-    await prisma.interview.deleteMany({ where: { id: ids.interview } });
+    const ivIds = [ids.interview, ids.upcoming2, ids.past1, ids.past2, ids.pastOther];
+    await prisma.interviewScorecard.deleteMany({ where: { interviewId: { in: ivIds } } });
+    await prisma.interviewAttendee.deleteMany({ where: { interviewId: { in: ivIds } } });
+    await prisma.interview.deleteMany({ where: { id: { in: ivIds } } });
     await prisma.candidateDocument.deleteMany({ where: { candidateId: { in: [ids.candidate, ids.otherCandidate] } } });
     await prisma.applicationStatusHistory.deleteMany({ where: { applicationId: { in: [ids.application, ids.otherApplication] } } });
     await prisma.application.deleteMany({ where: { id: { in: [ids.application, ids.otherApplication] } } });
@@ -156,18 +159,50 @@ describe.skipIf(!url)('B1 follow-ups (scratch Postgres)', () => {
       await expect(interviews.getInterview(ORG, ids.interview, iv)).rejects.toThrow();
     });
 
-    it('GET /interviews/mine lists only my interviews, with no candidate file data (QA BUG-4)', async () => {
-      const mine = await interviews.listMyInterviews(ORG, ids.interviewer);
-      expect(mine.map((i) => i.id)).toEqual([ids.interview]);
-      const item = mine[0]!;
-      expect(Object.keys(item).sort()).toEqual(['id', 'interviewType', 'myResponse', 'room', 'scheduledEnd', 'scheduledStart', 'scorecard', 'status', 'timezone', 'title']);
-      expect(item).toMatchObject({ title: 'Technical Interview', room: { name: null, url: null }, scorecard: { submitted: false, submittedAt: null } });
-      expect(JSON.stringify(item)).not.toMatch(/B1F|cand-|applicationId|candidate/i);
-      expect(await interviews.listMyInterviews(ORG, ids.other)).toEqual([]);
-      // The route needs no permission beyond sign-in and has no file guard.
-      const handler = InterviewsController.prototype.listMyInterviews;
+    it('GET /me/interviews: shape, scope filter and order, only my interviews, no extra fields, no locked (QA BUG-4)', async () => {
+      const day = 86_400_000;
+      const mk = async (id: string, offsetDays: number, attendee: string) => {
+        const start = new Date(Date.now() + offsetDays * day);
+        await prisma.interview.create({ data: { id, organizationId: ORG, applicationId: ids.application, interviewCode: `B1F-${id.slice(0, 8)}`, title: `Panel ${id.slice(0, 4)}`, interviewType: 'HR', scheduledStart: start, scheduledEnd: new Date(start.getTime() + 3_600_000), locationUrl: offsetDays === 2 ? 'https://meet.example/x' : null, attendees: { create: { userId: attendee } } } });
+      };
+      await mk(ids.upcoming2, 2, ids.interviewer);
+      await mk(ids.past1, -3, ids.interviewer);
+      await mk(ids.past2, -1, ids.interviewer);
+      await mk(ids.pastOther, -2, ids.other);
+      await prisma.interviewScorecard.create({ data: { interviewId: ids.upcoming2, interviewerId: ids.interviewer, overallRating: 4, recommendation: 'Hire', isLocked: true } });
+      await prisma.interviewScorecard.create({ data: { interviewId: ids.past1, interviewerId: ids.interviewer, overallRating: 3, recommendation: 'Neutral', isLocked: false } });
+
+      const upcoming = await interviews.listMyInterviews(ORG, ids.interviewer, 'upcoming');
+      expect(Object.keys(upcoming)).toEqual(['data']);
+      expect(upcoming.data.map((i) => i.id)).toEqual([ids.interview, ids.upcoming2]);
+      const past = await interviews.listMyInterviews(ORG, ids.interviewer, 'past');
+      expect(past.data.map((i) => i.id)).toEqual([ids.past2, ids.past1]);
+      expect(past.data.map((i) => i.id)).not.toContain(ids.pastOther);
+
+      const fields = ['candidateName', 'id', 'interviewType', 'locationUrl', 'myResponse', 'positionTitle', 'roomName', 'scheduledEnd', 'scheduledStart', 'scorecardStatus', 'status', 'timezone', 'title'];
+      for (const item of [...upcoming.data, ...past.data]) {
+        expect(Object.keys(item).sort()).toEqual(fields);
+        expect(item).toMatchObject({ candidateName: 'B1F A', positionTitle: expect.any(String), roomName: null, interviewType: expect.any(String) });
+      }
+      expect(upcoming.data[1]).toMatchObject({ scorecardStatus: 'submitted', locationUrl: 'https://meet.example/x', title: `Panel ${ids.upcoming2.slice(0, 4)}` });
+      expect(upcoming.data[0]!.scorecardStatus).toBe('missing');
+      expect(past.data.find((i) => i.id === ids.past1)!.scorecardStatus).toBe('draft');
+      expect(past.data.find((i) => i.id === ids.past2)!.scorecardStatus).toBe('missing');
+
+      const blob = JSON.stringify([upcoming, past]);
+      expect(blob).not.toMatch(/locked/i);
+      expect(blob).not.toMatch(/cand-|@b1f\.test|applicationId|candidateId|cv\.pdf|notes|salary|stage/i);
+      expect(await interviews.listMyInterviews(ORG, ids.offerApprover, 'upcoming')).toEqual({ data: [] });
+
+      // scope: default upcoming, anything else 400.
+      expect(parseScope(undefined)).toBe('upcoming');
+      expect(parseScope('past')).toBe('past');
+      for (const bad of ['all', 'UPCOMING', ['past'], '1']) expect(() => parseScope(bad)).toThrow(BadRequestException);
+      // Sign-in only: no permission or file guard metadata on the route.
+      const handler = MeInterviewsController.prototype.listMyInterviews;
       expect(Reflect.getMetadata('permissions', handler)).toBeUndefined();
       expect(Reflect.getMetadata('TENANT_RESOURCE', handler)).toBeUndefined();
+      expect((InterviewsController.prototype as unknown as Record<string, unknown>).listMyInterviews).toBeUndefined();
     });
 
     it('non-attendees get 403 on RSVP and .ics; the owner keeps the full detail', async () => {
