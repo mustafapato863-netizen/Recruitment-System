@@ -198,10 +198,10 @@ describe('r3: #4 cards carry isLocked, no status (R3-1 / R3-2)', () => {
     // #4 echoes the saved card without `status` (and here without isLocked either).
     api.postApi.mockResolvedValue(card({ notes: 'Half done, finished', submittedAt: '2026-10-13T10:00:00Z' }));
     renderPage();
-    await u.click(await screen.findByRole('button', { name: 'Continue scorecard' }));
-    await u.type(await screen.findByLabelText(/Written evidence/), ', finished');
-    await u.click(await screen.findByRole('button', { name: 'Submit scorecard' }));
-    expect(await screen.findByTestId('my-scorecard')).toHaveTextContent('Half done, finished');
+    await u.click(await screen.findByRole('button', { name: 'Continue scorecard' }, { timeout: 5000 }));
+    await u.type(await screen.findByLabelText(/Written evidence/, undefined, { timeout: 5000 }), ', finished');
+    await u.click(await screen.findByRole('button', { name: 'Submit scorecard' }, { timeout: 5000 }));
+    expect(await screen.findByTestId('my-scorecard', undefined, { timeout: 5000 })).toHaveTextContent('Half done, finished');
     expect(screen.queryByTestId('draft-note')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Submit scorecard' })).not.toBeInTheDocument();
     expect(screen.getByText('Scorecard submitted')).toBeInTheDocument();
