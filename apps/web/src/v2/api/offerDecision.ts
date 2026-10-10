@@ -118,10 +118,16 @@ const TEXT: Record<string, { field?: 'reason' | 'pay'; text: string }> = {
 };
 /** Body paths the drawer has an input for. */
 export const DECISION_INPUTS = ['basePay', 'currency', 'allowances', 'reason'] as const;
+const PAY_CODE_FIELD: Record<string, 'basePay' | 'currency'> = { OFFER_PAY_OUTSIDE_BAND: 'basePay', OFFER_BASE_PAY_MISSING: 'basePay', OFFER_BASE_CURRENCY_MIXED: 'currency' };
 export function decisionError(e: unknown): DecisionError {
   const d = domainError(e);
   const env = (e instanceof ApiError ? e.details : null) as { band?: Record<string, string | number | null>; offeredMonthlyBase?: number } | null;
-  if (d && TEXT[d.code]) return { code: d.code, ...TEXT[d.code], ...(env?.band ? { band: env.band } : {}), ...(typeof env?.offeredMonthlyBase === 'number' ? { offered: env.offeredMonthlyBase } : {}) };
+  if (d && TEXT[d.code]) {
+    const base = { code: d.code, ...TEXT[d.code], ...(env?.band ? { band: env.band } : {}), ...(typeof env?.offeredMonthlyBase === 'number' ? { offered: env.offeredMonthlyBase } : {}) };
+    // B2V-3: band/base-pay 409s belong to the pay input (aria-invalid + aria-describedby via the field), not a loose banner.
+    const on = PAY_CODE_FIELD[d.code];
+    return on ? { ...base, field: 'pay' as const, inline: { byField: { [on]: base.text }, message: null, code: d.code } } : base;
+  }
   const x = e as { statusCode?: number; message?: string; details?: unknown } | null;
   if (x?.statusCode === 403) return { code: d?.code, text: x?.message && d?.code ? x.message : 'You do not have permission to decide on this offer.' };
   // B2-15 / #23 (f64406b): a 400 VALIDATION_ERROR names `field` + flattened `fields` ("basePay", "allowances.0.amount", "pay"):
