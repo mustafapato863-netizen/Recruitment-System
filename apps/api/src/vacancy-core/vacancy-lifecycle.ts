@@ -139,8 +139,14 @@ export async function assertJobOwnerOrManager(
     throw new ForbiddenException({ code: 'ADMIN_CANNOT_CHANGE_JOB_STATUS', message: 'An administrator cannot hold, reopen or close a job.' });
   }
   const owners = vacancy.assignments.map((a) => a.userId);
-  const managers = vacancy.assignments.map((a) => a.user.managerId).filter((id): id is string => Boolean(id));
   if (owners.length === 0 && vacancy.vacancyRequest.assignedEmployeeId) owners.push(vacancy.vacancyRequest.assignedEmployeeId);
+  // B2R-1: "the owner's manager" = anyone up the owner's reporting chain (4 levels), like file visibility.
+  const managers: string[] = [];
+  let level = owners;
+  for (let hop = 0; hop < 4 && level.length; hop += 1) {
+    const up = (await tx.user.findMany({ where: { id: { in: level } }, select: { managerId: true } })).map((u) => u.managerId).filter((id): id is string => Boolean(id));
+    managers.push(...up); level = up;
+  }
   // NEW-3: the owner or the owner's manager only. Being the requester, or holding VACANCY_MANAGE, is not enough.
   const allowed = new Set([...owners, ...managers]);
   if (!allowed.has(actorUserId)) {
