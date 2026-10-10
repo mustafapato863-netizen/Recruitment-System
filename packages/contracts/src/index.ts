@@ -1163,7 +1163,8 @@ export interface OfferApprovalInboxItem {
   positionTitle: string;
   branchName?: string | null;
   versionNumber: number;
-  monthlyPackage: number | null;
+  /** #23: omitted (not null) without OFFER_PAY_VIEW. Missing = hidden, never zero. */
+  monthlyPackage?: number | null;
   packageCurrency?: OfferCurrency | null;
   roleCode: string;
   status: string;
