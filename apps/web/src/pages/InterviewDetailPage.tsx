@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { isScorecardSubmitted, scorecardState } from '../utils/scorecardStatus';
 import { ForbiddenState } from '../components/access/ForbiddenState';
 import { isForbiddenError } from '../utils/vacancyAccess';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -306,20 +307,20 @@ export function InterviewDetailPage() {
 
   // Derive current user's scorecard from interview.scorecards
   // Grounded rule: match interviewerId to current user if identifiable via auth context,
-  // else the single unlocked card or latest card
+  // else the single draft card or latest card
   const myScorecard = useMemo<InterviewScorecardItem | null>(() => {
     if (!interview?.scorecards || interview.scorecards.length === 0) return null;
     if (user?.id) {
       const matched = interview.scorecards.find((sc) => sc.interviewerId === user.id);
       if (matched) return matched;
     }
-    const unlocked = interview.scorecards.find((sc) => !sc.isLocked);
-    if (unlocked) return unlocked;
+    const draft = interview.scorecards.find((sc) => scorecardState(sc) === 'draft');
+    if (draft) return draft;
     return interview.scorecards[interview.scorecards.length - 1] ?? null;
   }, [interview?.scorecards, user?.id]);
 
   const activeScorecard = submittedScorecard || myScorecard;
-  const isLocked = Boolean(activeScorecard?.isLocked || submittedScorecard);
+  const isSubmitted = Boolean(submittedScorecard) || isScorecardSubmitted(activeScorecard);
 
   // Check if current user is an assigned interviewer from attendees list
   const isAssignedInterviewer = useMemo(() => {
@@ -687,14 +688,14 @@ export function InterviewDetailPage() {
         const cancelled = interview?.status === 'Cancelled';
         const isPast = Boolean(interview?.scheduledStart && new Date(interview.scheduledStart) < new Date());
         const hasLink = Boolean(interview?.locationUrl && interview.locationUrl.startsWith('http'));
-        const needsScore = !cancelled && !isLocked && (isPast || interview?.status === 'Completed');
+        const needsScore = !cancelled && !isSubmitted && (isPast || interview?.status === 'Completed');
         const label = cancelled
           ? 'Open application'
           : needsScore
             ? 'Submit scorecard'
             : hasLink && !isPast
               ? 'Join interview'
-              : isLocked && rawAppId
+              : isSubmitted && rawAppId
                 ? 'Open application'
                 : hasLink
                   ? 'Join interview'
@@ -705,7 +706,7 @@ export function InterviewDetailPage() {
             ? 'The interview is over. Record your feedback.'
             : hasLink && !isPast
               ? 'Join when it is time, then come back to score.'
-              : isLocked
+              : isSubmitted
                 ? 'Scorecard is in. Continue the application.'
                 : 'Open the application if you need the full profile.';
         const run = () => {
@@ -1110,13 +1111,13 @@ export function InterviewDetailPage() {
               Feedback &amp; Scorecard
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              {isLocked
+              {isSubmitted
                 ? 'Structured feedback has been submitted and locked for this interview.'
                 : 'Evaluate candidate performance across key criteria and submit structured feedback.'}
             </p>
           </div>
           <div>
-            {isLocked ? (
+            {isSubmitted ? (
               <Badge variant="success">Submitted</Badge>
             ) : (
               <Badge variant="warning">Feedback Pending</Badge>
@@ -1172,11 +1173,11 @@ export function InterviewDetailPage() {
             )}
 
             {/* Non-interviewer guard when no card exists */}
-            {!isLocked && (isForbiddenUser || isAssignedInterviewer === false) ? (
+            {!isSubmitted && (isForbiddenUser || isAssignedInterviewer === false) ? (
               <Alert tone="warning" title="Interviewer Access Required">
                 Only the assigned interviewer can submit feedback
               </Alert>
-            ) : isLocked ? (
+            ) : isSubmitted ? (
               /* Non-null (Locked) Scorecard View */
               <div className="space-y-6">
                 <div

@@ -7,42 +7,42 @@ import { isOwnershipDenied } from '../utils/vacancyAccess';
 const envelope = (statusCode: number, code: string, message: string) => ({ statusCode, code, message, retryable: false, retryAfterSeconds: null, requestId: 'req-1' });
 const res = (status: number, body: unknown) => ({ ok: false, status, headers: new Headers(), json: async () => body, text: async () => JSON.stringify(body) }) as Response;
 
-describe('QA BUG-1: B1 error codes through the #4 envelope', () => {
+describe('B1 error codes on the #4 envelope (codes, not messages)', () => {
   const fetchSpy = vi.fn<typeof fetch>();
   let original: typeof fetch;
   beforeEach(() => { original = globalThis.fetch; fetchSpy.mockReset(); globalThis.fetch = fetchSpy; vi.spyOn(window, 'dispatchEvent').mockImplementation(() => true); });
   afterEach(() => { globalThis.fetch = original; vi.restoreAllMocks(); });
 
   it.each([
-    [403, 'Access denied: this file belongs to another owner.', 'FILE_NOT_OWNED'],
-    [403, 'Access denied: you are not approving a file for this candidate.', 'FILE_NOT_OWNED'],
-    [403, 'Access denied: this job belongs to another owner.', 'JOB_NOT_OWNED'],
-    [403, 'Administrators cannot assign or reassign file owners.', 'ADMIN_CANNOT_REASSIGN'],
-    [403, 'Administrators cannot reassign a job owner.', 'ADMIN_CANNOT_REASSIGN'],
-  ])('403 FORBIDDEN envelope "%s" → %s with the server message, no refresh', async (status, message, expected) => {
-    fetchSpy.mockResolvedValueOnce(res(status, envelope(status, 'FORBIDDEN', message)));
+    [403, 'FILE_NOT_OWNED', 'Access denied: this file belongs to another owner.'],
+    [403, 'FILE_NOT_OWNED', 'Access denied: you are not approving a file for this candidate.'],
+    [403, 'JOB_NOT_OWNED', 'Access denied: this job belongs to another owner.'],
+    [403, 'ADMIN_CANNOT_REASSIGN', 'Administrators cannot assign or reassign file owners.'],
+    [403, 'ADMIN_CANNOT_REASSIGN', 'Administrators cannot reassign a job owner.'],
+    [403, 'DOCUMENT_DOWNLOAD_DENIED', 'Access denied: downloading this document requires DOWNLOAD_DOCUMENTS, or a pending approval on this candidate (CV only).'],
+    [403, 'ADMIN_ONLY', 'Access denied: only administrators can manage templates.'],
+    [400, 'OWNER_NOT_ELIGIBLE', 'Owner must be a user in this organization.'],
+    [400, 'OWNER_NOT_ELIGIBLE', 'An inactive user cannot own a job or file.'],
+    [400, 'OWNER_NOT_ELIGIBLE', 'An administrator cannot own a job or file.'],
+  ])('%s %s on the wire → read as the code, server message kept, no refresh', async (status, code, message) => {
+    fetchSpy.mockResolvedValueOnce(res(status, envelope(status, code, message)));
     const err = (await getApi('/applications/a1').catch((e: unknown) => e)) as ApiError;
-    expect(err.statusCode).toBe(403);
-    expect(err.code).toBe(expected);
+    expect(err.statusCode).toBe(status);
+    expect(err.code).toBe(code);
     expect(err.message).toBe(message);
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
 
-  it('FILE_NOT_OWNED/JOB_NOT_OWNED count as ownership denials (Forbidden pages trigger)', async () => {
+  it('no message matching: the same text under a generic code stays generic', async () => {
     fetchSpy.mockResolvedValueOnce(res(403, envelope(403, 'FORBIDDEN', 'Access denied: this file belongs to another owner.')));
-    expect(isOwnershipDenied(await getApi('/applications/a1').catch((e: unknown) => e))).toBe(true);
+    expect(((await getApi('/a').catch((e: unknown) => e)) as ApiError).code).toBe('FORBIDDEN');
+    fetchSpy.mockResolvedValueOnce(res(400, envelope(400, 'VALIDATION_ERROR', 'An inactive user cannot own a job or file.')));
+    expect(((await patchApi('/a', {}).catch((e: unknown) => e)) as ApiError).code).toBe('VALIDATION_ERROR');
   });
 
-  it.each([
-    'Owner must be a user in this organization.',
-    'An inactive user cannot own a job or file.',
-    'An administrator cannot own a job or file.',
-  ])('400 VALIDATION_ERROR "%s" → OWNER_NOT_ELIGIBLE with the server message', async (message) => {
-    fetchSpy.mockResolvedValueOnce(res(400, envelope(400, 'VALIDATION_ERROR', message)));
-    const err = (await patchApi('/applications/a1', { primaryRecruiterId: 'u' }).catch((e: unknown) => e)) as ApiError;
-    expect(err.statusCode).toBe(400);
-    expect(err.code).toBe('OWNER_NOT_ELIGIBLE');
-    expect(err.message).toBe(message);
+  it('FILE_NOT_OWNED/JOB_NOT_OWNED count as ownership denials (Forbidden pages trigger)', async () => {
+    fetchSpy.mockResolvedValueOnce(res(403, envelope(403, 'FILE_NOT_OWNED', 'Access denied: this file belongs to another owner.')));
+    expect(isOwnershipDenied(await getApi('/applications/a1').catch((e: unknown) => e))).toBe(true);
   });
 
   it('the generic #4 FORBIDDEN body keeps the generic copy and code', async () => {

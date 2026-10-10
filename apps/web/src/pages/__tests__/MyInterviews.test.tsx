@@ -112,7 +112,7 @@ describe('My interviews page', () => {
   it('scorecard: validates, then POSTs SubmitScorecardDto', async () => {
     const u = userEvent.setup();
     api.getApi.mockImplementation(async (p: string) => (p.endsWith('/scorecard') ? [] : { data: [row()] }));
-    api.postApi.mockResolvedValue({ id: 's1', interviewId: 'iv1', interviewerId: 'me', overallRating: 4, recommendation: 'Hire', notes: 'Built payroll exports', isLocked: false, submittedAt: '2026-10-13T09:00:00Z' });
+    api.postApi.mockResolvedValue({ id: 's1', interviewId: 'iv1', interviewerId: 'me', overallRating: 4, recommendation: 'Hire', notes: 'Built payroll exports', status: 'Submitted', submittedAt: '2026-10-13T09:00:00Z' });
     renderPage();
     await u.click(await screen.findByRole('button', { name: 'Fill scorecard' }));
     const dialog = await screen.findByRole('dialog');
@@ -131,7 +131,7 @@ describe('My interviews page', () => {
   it('scorecard: shows my submitted scorecard read-only (GET /interviews/:id/scorecard)', async () => {
     const u = userEvent.setup();
     api.getApi.mockImplementation(async (p: string) => (p.endsWith('/scorecard')
-      ? [{ id: 's1', interviewId: 'iv1', interviewerId: 'me', overallRating: 5, recommendation: 'Strong Hire', notes: 'Great', isLocked: true, submittedAt: '2026-10-13T09:00:00Z' }]
+      ? [{ id: 's1', interviewId: 'iv1', interviewerId: 'me', overallRating: 5, recommendation: 'Strong Hire', notes: 'Great', status: 'Submitted', submittedAt: '2026-10-13T09:00:00Z' }]
       : { data: [row({ scorecardStatus: 'submitted' })] }));
     renderPage();
     await u.click(await screen.findByRole('button', { name: 'View my scorecard' }));
@@ -154,9 +154,9 @@ describe('draft scorecard + room name', () => {
   it('draft: badge "Draft saved", the form reopens prefilled and can be submitted', async () => {
     const u = userEvent.setup();
     api.getApi.mockImplementation(async (p: string) => (p.endsWith('/scorecard')
-      ? [{ id: 's1', interviewId: 'iv1', interviewerId: 'me', overallRating: 3, recommendation: 'Neutral', notes: 'Half done', status: 'Draft', isLocked: false, submittedAt: '2026-10-13T09:00:00Z' }]
+      ? [{ id: 's1', interviewId: 'iv1', interviewerId: 'me', overallRating: 3, recommendation: 'Neutral', notes: 'Half done', status: 'Draft', submittedAt: '2026-10-13T09:00:00Z' }]
       : { data: [row({ scorecardStatus: 'draft' })] }));
-    api.postApi.mockResolvedValue({ id: 's1', interviewId: 'iv1', interviewerId: 'me', overallRating: 3, recommendation: 'Neutral', notes: 'Half done, finished', status: 'Submitted', isLocked: true, submittedAt: '2026-10-13T10:00:00Z' });
+    api.postApi.mockResolvedValue({ id: 's1', interviewId: 'iv1', interviewerId: 'me', overallRating: 3, recommendation: 'Neutral', notes: 'Half done, finished', status: 'Submitted', submittedAt: '2026-10-13T10:00:00Z' });
     renderPage();
     expect(await screen.findByText('Draft saved')).toBeInTheDocument();
     await u.click(screen.getByRole('button', { name: 'Continue scorecard' }));

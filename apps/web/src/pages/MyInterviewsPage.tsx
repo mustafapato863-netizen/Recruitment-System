@@ -130,8 +130,9 @@ function InterviewCard({ item, onPatch, onScorecard }: { item: MyInterview; onPa
 
 /** A saved, unsubmitted scorecard stays editable (no 'locked' state). */
 function isDraft(card: MyScorecard, interview: MyInterview): boolean {
+  // B5: status only (Draft | Submitted); without a card status, the interview's scorecardStatus (missing|draft|submitted).
   if (card.status) return card.status === 'Draft';
-  return !card.isLocked && interview.scorecardStatus === 'draft';
+  return interview.scorecardStatus === 'draft';
 }
 
 function ScorecardModal({ interview, onClose, onSubmitted }: { interview: MyInterview; onClose: () => void; onSubmitted: () => void }) {
@@ -166,7 +167,7 @@ function ScorecardModal({ interview, onClose, onSubmitted }: { interview: MyInte
       if (form.strengths?.trim()) body.strengths = form.strengths.trim();
       if (form.concerns?.trim()) body.concerns = form.concerns.trim();
       const saved = await submitScorecard(interview.id, body);
-      setMine(saved && typeof saved === 'object' && 'id' in saved ? saved : { ...body, id: 'new', interviewId: interview.id, interviewerId: '', isLocked: false, submittedAt: new Date().toISOString() });
+      setMine(saved && typeof saved === 'object' && 'id' in saved ? saved : { ...body, id: 'new', interviewId: interview.id, interviewerId: '', status: 'Submitted', submittedAt: new Date().toISOString() });
       onSubmitted();
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : 'Could not submit the scorecard.');
@@ -192,7 +193,7 @@ function ScorecardModal({ interview, onClose, onSubmitted }: { interview: MyInte
           {mine.strengths ? (<><dt className="text-rf-ink-muted">Strengths</dt><dd>{mine.strengths}</dd></>) : null}
           {mine.concerns ? (<><dt className="text-rf-ink-muted">Concerns</dt><dd>{mine.concerns}</dd></>) : null}
           <dt className="text-rf-ink-muted">Evidence</dt><dd className="whitespace-pre-wrap">{mine.notes}</dd>
-          <dt className="text-rf-ink-muted">Submitted</dt><dd>{when(mine.submittedAt)}{mine.isLocked ? ' · locked' : ''}</dd>
+          <dt className="text-rf-ink-muted">Submitted</dt><dd>{when(mine.submittedAt)}</dd>
         </dl>
       ) : null}
       {mine && editing ? <p role="status" className="mb-2 text-xs text-rf-ink-muted" data-testid="draft-note">Draft saved. Continue editing and submit when ready.</p> : null}

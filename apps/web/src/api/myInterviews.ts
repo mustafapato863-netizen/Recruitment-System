@@ -73,8 +73,7 @@ export interface MyScorecard {
   strengths?: string | null;
   concerns?: string | null;
   notes?: string | null;
-  isLocked: boolean;
-  /** B5: Draft | Submitted. */
+  /** B5: Draft | Submitted — the only scorecard state read. */
   status?: 'Draft' | 'Submitted';
   submittedAt: string;
 }

@@ -697,7 +697,7 @@ export function CandidateDetailPage() {
                           interviewerName={interviewerName}
                           recommendation={agg.recommendation}
                           averageRating={agg.averageRating}
-                          isLocked={agg.isLocked}
+                          submitted={agg.submitted}
                         />
                       </div>
                     );
@@ -712,7 +712,7 @@ export function CandidateDetailPage() {
                         interviewerName={interviewerName}
                         recommendation={null}
                         averageRating={null}
-                        isLocked={false}
+                        submitted={false}
                         pendingLabel="Pending feedback"
                       />
                     </div>
