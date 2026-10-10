@@ -98,6 +98,29 @@ describe('#23 CANDIDATE_EXISTS on import', () => {
   });
 });
 
+describe('#23 603d44d CANDIDATE_EXISTS with details', () => {
+  it('links with details.candidateId/candidateCode and never re-matches by email/phone', async () => {
+    const u = userEvent.setup({ applyAccept: false });
+    let checks = 0;
+    api.postFormDataApi.mockImplementation(async (p: string) => (p === '/resume/parse' ? fx.parsed : { id: 'doc1' }));
+    api.postApi.mockImplementation(async (p: string) => {
+      if (p === '/candidates/duplicate-check') { checks += 1; return fx.noDup; }
+      if (p === '/candidates') throw new ApiError(409, 'exists', { statusCode: 409, code: 'CANDIDATE_EXISTS', message: 'exists', details: { candidateId: 'c-x9', candidateCode: 'CAN-2026-0099' } }, { code: 'CANDIDATE_EXISTS' });
+      return { id: 'app-new' };
+    });
+    renderAt('/vacancies/v1?drawer=import');
+    const d = await screen.findByRole('dialog', { name: 'Add candidates to Applied' });
+    await u.upload(within(d).getByLabelText(/Drop CVs or/), [new File(['%PDF'], 'rania.pdf', { type: 'application/pdf' })]);
+    await waitFor(() => expect(within(d).getByRole('button', { name: 'Import 1 to Applied' })).toBeEnabled());
+    const before = checks;
+    await u.click(within(d).getByRole('button', { name: 'Import 1 to Applied' }));
+    const note = await within(d).findByTestId('candidate-exists');
+    expect(note).toHaveTextContent('CAN-2026-0099');
+    expect(within(note).getByRole('link', { name: 'the existing person' })).toHaveAttribute('href', '/candidates/c-x9');
+    expect(checks).toBe(before);
+  });
+});
+
 describe('B2R: APPLICATION_EXISTS, admin status, open-files 409, job list paging', () => {
   it('409 APPLICATION_EXISTS on import links to the existing file instead of failing', async () => {
     const u = userEvent.setup({ applyAccept: false });
