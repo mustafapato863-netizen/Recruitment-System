@@ -3,7 +3,7 @@
  * - B9 #21: GET /pipeline-templates lists only the one template; POST /pipeline-templates and POST /:id/duplicate → 409
  *   SINGLE_PIPELINE_TEMPLATE. v2 never offers New / Duplicate / Delete; it edits stage names in place
  *   (PATCH /pipeline-templates/:id/stages/:stageId {name}). Create is offered only when the list is empty.
- * - Templates: /email-templates and /whatsapp-templates (GET, POST, PATCH; no DELETE, B2). Admin seat only (route-gated).
+ * - Templates: /email-templates and /whatsapp-templates (GET, POST, PATCH; DELETE soft-archives → status Archived, B2-21/B2F-8). Admin seat only.
  * - Master data: GET /master-data/catalog/:category, POST /master-data/catalog/:category/batch {rows:[{name}]} to add.
  *   Deactivate / reactivate = PATCH /master-data/catalog/:category/:id {status:'Inactive'|'Active'} (CoS Oct 10; B3 C3).
  *   Skills (#21 B2-21) deactivate as Archived through DELETE (archive, never a hard delete). Grade bands: B7 /master-data/grade-bands (POST/PATCH).
@@ -61,6 +61,8 @@ export async function fetchTemplates(ch: Channel): Promise<MessageTemplate[]> {
 export type TemplateInput = Pick<MessageTemplate, 'name' | 'category' | 'bodyTemplate'> & { subject?: string };
 export const saveTemplate = (ch: Channel, id: string | null, body: TemplateInput) =>
   (id ? patchApi<MessageTemplate>(`${TPL_PATH[ch]}/${enc(id)}`, body) : postApi<MessageTemplate>(TPL_PATH[ch], body));
+/** B2F-8: DELETE soft-archives (status Archived); nothing is hard-deleted. Archived templates drop out of the list. */
+export const archiveTemplate = (ch: Channel, id: string) => deleteApi<unknown>(`${TPL_PATH[ch]}/${enc(id)}`);
 
 // ── Master data ──
 export interface CatalogValue { id: string; name: string; code?: string | null; status: string; version?: number; metadata?: Record<string, unknown> | null }
