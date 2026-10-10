@@ -91,7 +91,7 @@ describe('header', () => {
   it('shows the unread count from /notifications/unread-count', async () => {
     getApi.mockResolvedValue({ unreadCount: 7 });
     renderShell('employee');
-    expect(await screen.findByRole('link', { name: 'Notifications, 7 unread' })).toHaveAttribute('href', '/notifications');
+    expect(await screen.findByRole('button', { name: 'Notifications, 7 unread' })).toHaveAttribute('aria-haspopup', 'dialog');
     expect(getApi).toHaveBeenCalledWith('/notifications/unread-count');
   });
 
@@ -99,17 +99,17 @@ describe('header', () => {
     getApi.mockRejectedValueOnce(new Error('x'));
     renderShell('employee');
     await waitFor(() => expect(getApi).toHaveBeenCalled());
-    expect(screen.getByRole('link', { name: 'Notifications' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Notifications' })).toBeInTheDocument();
   });
 
   it('hides the bell without NOTIFICATION_VIEW', () => {
     renderShell('employee', user(['VACANCY_VIEW']));
-    expect(screen.queryByRole('link', { name: /Notifications/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Notifications/ })).not.toBeInTheDocument();
   });
 
-  it('search is an entry point only (S2)', () => {
+  it('search is a live combobox (E07)', () => {
     renderShell('admin');
-    expect(screen.getByRole('button', { name: /Search users and settings/ })).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('combobox', { name: 'Search users and settings' })).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('user menu shows name and seat, navigates with keys and signs out', async () => {

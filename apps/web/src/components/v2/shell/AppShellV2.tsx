@@ -1,8 +1,8 @@
 import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react';
-import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
-  BarChart3, Bell, BriefcaseBusiness, Building2, ChevronsUpDown, CircleHelp, ClipboardList, Columns3, Database, FileText, History,
-  ListChecks, LogOut, PanelLeftClose, PanelLeftOpen, Plug, Search, Shield, Target, User, UserRound, Users,
+  BarChart3, BriefcaseBusiness, Building2, ChevronsUpDown, CircleHelp, ClipboardList, Columns3, Database, FileText, History,
+  ListChecks, LogOut, PanelLeftClose, PanelLeftOpen, Plug, Shield, Target, User, UserRound, Users,
 } from 'lucide-react';
 import type { UserProfile } from '@recruitflow/contracts';
 import { getApi } from '../../../api/client';
@@ -14,6 +14,9 @@ import { SEAT_NAV, activeNavKey, permittedNavItems, type NavIconName } from './n
 import { workspaceOptions, type WorkspaceOption } from './workspace';
 import '../v2-primitives.css';
 import './v2-shell.css';
+import { HeaderSearch } from '../../../v2/search/HeaderSearch';
+import { NotificationsBell, NOTIFICATIONS_CHANGED } from '../../../v2/search/NotificationsBell';
+import '../../../v2/search/search.css';
 
 const ICONS: Record<NavIconName, ReactNode> = {
   'my-work': <ListChecks />, jobs: <BriefcaseBusiness />, candidates: <Users />,
@@ -47,7 +50,8 @@ export function useUnreadCount(enabled: boolean): number {
     };
     load();
     window.addEventListener('focus', load);
-    return () => { alive = false; window.removeEventListener('focus', load); };
+    window.addEventListener(NOTIFICATIONS_CHANGED, load);
+    return () => { alive = false; window.removeEventListener('focus', load); window.removeEventListener(NOTIFICATIONS_CHANGED, load); };
   }, [enabled]);
   return count;
 }
@@ -247,20 +251,10 @@ function ShellFrame({ user, seat, onSignOut, children }: AppShellV2Props) {
       <div className="rf2-shell__main">
         <header className="rf2-shell__header">
           <h1 className="rf2-shell__title">{title}</h1>
-          <button type="button" className="rf2-search-entry" aria-label={`${config.searchPlaceholder} (coming soon)`} aria-disabled="true" title="Search arrives in a later release">
-            <Search aria-hidden="true" />
-            <span>{config.searchPlaceholder}</span>
-          </button>
+          <HeaderSearch placeholder={config.searchPlaceholder} meId={user.id} />
           <HelpButton />
           {canSeeNotifications ? (
-            <NavLink
-              to="/notifications"
-              className="rf2-icon-button"
-              aria-label={unread > 0 ? `Notifications, ${unread} unread` : 'Notifications'}
-            >
-              <Bell aria-hidden="true" />
-              {unread > 0 && <span className="rf2-icon-button__badge" aria-hidden="true">{unread > 99 ? '99+' : unread}</span>}
-            </NavLink>
+            <NotificationsBell unread={unread} />
           ) : null}
           <UserMenu user={user} seat={seat} onSignOut={onSignOut} />
         </header>
