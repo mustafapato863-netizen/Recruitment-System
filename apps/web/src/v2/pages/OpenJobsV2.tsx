@@ -104,14 +104,16 @@ export function OpenJobsV2() {
             <section className="rf2-panel" aria-labelledby="other-jobs-h">
               <div className="rf2-panel__head">
                 <h2 id="other-jobs-h" className="rf2-panel__title">Other recruiters’ jobs in your team</h2>
-                <p className="rf2-jtable__sub">Title, site and seats only. Other teams are not shown.</p>
+                <p className="rf2-jtable__sub">{state.data.others.some((o) => o.full) ? 'Jobs owned by your reports open in full; others show title, site and seats only.' : 'Title, site and seats only. Other teams are not shown.'}</p>
               </div>
               <table className="rf2-jtable rf2-jtable--plain">
                 <thead><tr><th scope="col">Job</th><th scope="col">Site</th><th scope="col">Seats</th></tr></thead>
                 <tbody>
                   {state.data.others.map((o) => (
-                    <tr key={o.id} data-redacted="true">
-                      <td><span className="rf2-jtable__ro"><Eye aria-hidden="true" /> {o.title}</span><span className="rf2-sr-only"> (read-only, owned by another recruiter)</span></td>
+                    <tr key={o.id} data-redacted={o.full ? undefined : 'true'}>
+                      <td>{o.full
+                        ? <><Link className="rf2-link" to={`/vacancies/${encodeURIComponent(o.id)}`}>{o.title}</Link>{o.ownerName ? <span className="rf2-jtable__sub"> · {o.ownerName}</span> : null}</>
+                        : <><span className="rf2-jtable__ro"><Eye aria-hidden="true" /> {o.title}</span><span className="rf2-sr-only"> (read-only, owned by another recruiter)</span></>}</td>
                       <td>{o.site ?? '—'}</td>
                       <td className="rf2-num">{o.seats.target}</td>
                     </tr>
