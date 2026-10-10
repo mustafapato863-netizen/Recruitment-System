@@ -188,7 +188,10 @@ describe.skipIf(!url)('B3 requisition and job lifecycle (scratch Postgres)', () 
     const screeningApp = randomUUID();
     await prisma.application.create({ data: { id: screeningApp, organizationId: ORG, applicationCode: `B3S-${tag}`, vacancyId: ids.job!, candidateId: screening, stage: 'Screening' } });
 
-    await expect(service.cancelRequest(ids.jobRequest!, ORG, ids.manager!, '')).rejects.toThrow(BadRequestException);
+    await expect(service.cancelRequest(ids.jobRequest!, ORG, ids.manager!, '')).rejects.toMatchObject({ status: 400, response: { code: 'REASON_REQUIRED', field: 'reason' } });
+    // B2F-9: the reason comes from the close-reason list; "Other" needs a note
+    await expect(service.cancelRequest(ids.jobRequest!, ORG, ids.manager!, 'Changed my mind')).rejects.toMatchObject({ response: { code: 'REASON_NOT_IN_LIST', field: 'reason' } });
+    await expect(service.cancelRequest(ids.jobRequest!, ORG, ids.manager!, 'Other')).rejects.toMatchObject({ response: { code: 'REASON_REQUIRED', field: 'note' } });
     const result = await service.cancelRequest(ids.jobRequest!, ORG, ids.manager!, 'Budget withdrawn');
     expect(result).toMatchObject({ idempotent: false, closedJob: true, rejectedApplications: 2 });
     expect(result.request).toMatchObject({ status: 'Cancelled', cancelReason: 'Budget withdrawn' });
@@ -198,18 +201,20 @@ describe.skipIf(!url)('B3 requisition and job lifecycle (scratch Postgres)', () 
       expect(await prisma.applicationStatusHistory.findFirst({ where: { applicationId: id, toStage: 'Rejected', reason: 'Requisition cancelled' } })).toBeTruthy();
     }
     expect((await prisma.application.findUniqueOrThrow({ where: { id: joinedApp } })).stage).toBe('Joined');
-    expect(await prisma.vacancyStatusHistory.findFirst({ where: { vacancyId: ids.job, toStatus: 'Closed' } })).toMatchObject({ reason: 'Requisition cancelled: Budget withdrawn' });
+    expect(await prisma.vacancyStatusHistory.findFirst({ where: { vacancyId: ids.job, toStatus: 'Closed' } })).toMatchObject({ reason: 'Budget withdrawn' }); // B2F-6: same reason as the cancel
 
-    const again = await service.cancelRequest(ids.jobRequest!, ORG, ids.manager!, 'again');
+    const again = await service.cancelRequest(ids.jobRequest!, ORG, ids.manager!, 'Budget withdrawn');
     expect(again.idempotent).toBe(true);
     expect(await prisma.vacancyStatusHistory.count({ where: { vacancyId: ids.job, toStatus: 'Closed' } })).toBe(1);
     await expect(service.reopenVacancy(ids.job!, ORG, 'try', as(ids.owner!))).rejects.toThrow(ConflictException);
     await expect(service.activateRequest(ids.jobRequest!, ORG, ids.manager, {})).rejects.toThrow(ConflictException);
   });
 
-  it('draft requisitions cancel without a reason', async () => {
+  it('B2F-9: draft requisitions need a close reason too ("Other" + note works)', async () => {
     const id = await makeRequest('Draft');
-    expect((await service.cancelRequest(id, ORG, ids.manager!)).request.status).toBe('Cancelled');
+    await expect(service.cancelRequest(id, ORG, ids.manager!)).rejects.toMatchObject({ response: { code: 'REASON_REQUIRED' } });
+    const res = await service.cancelRequest(id, ORG, ids.manager!, 'Other', 'Duplicate request');
+    expect(res.request).toMatchObject({ status: 'Cancelled', cancelReason: 'Other: Duplicate request' });
   });
 
   it('the B3 data mapping left no Cancelled or Pending Activation jobs', async () => {

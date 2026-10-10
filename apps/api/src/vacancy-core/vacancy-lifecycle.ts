@@ -60,7 +60,7 @@ export function seatStatus(joined: number, approved: number): JobStatus {
 export function requireReason(reason: string | null | undefined, action: string): string {
   const trimmed = reason?.trim() ?? '';
   if (trimmed.length < 3) {
-    throw new BadRequestException({ code: 'REASON_REQUIRED', message: `A reason is required to ${action}.` });
+    throw new BadRequestException({ code: 'REASON_REQUIRED', field: 'reason', message: `A reason is required to ${action}.` });
   }
   return trimmed;
 }
@@ -160,23 +160,23 @@ export async function assertEligibleAssignee(tx: Tx, organizationId: string, use
     where: { id: userId, organizationId },
     select: { status: true, userRoles: { select: { role: { select: { code: true } } } } },
   });
-  if (!user) throw new BadRequestException({ code: 'ASSIGNEE_NOT_ELIGIBLE', message: 'The assigned employee must be a user in this organization.' });
-  if (user.status !== 'Active') throw new BadRequestException({ code: 'ASSIGNEE_NOT_ELIGIBLE', message: 'The assigned employee must be an active user.' });
+  if (!user) throw new BadRequestException({ code: 'ASSIGNEE_NOT_ELIGIBLE', field: 'assignedEmployeeId', message: 'The assigned employee must be a user in this organization.' });
+  if (user.status !== 'Active') throw new BadRequestException({ code: 'ASSIGNEE_NOT_ELIGIBLE', field: 'assignedEmployeeId', message: 'The assigned employee must be an active user.' });
   if (user.userRoles.some((ur) => ur.role.code === 'ADMINISTRATOR')) {
-    throw new BadRequestException({ code: 'ASSIGNEE_NOT_ELIGIBLE', message: 'An administrator cannot be the assigned employee.' });
+    throw new BadRequestException({ code: 'ASSIGNEE_NOT_ELIGIBLE', field: 'assignedEmployeeId', message: 'An administrator cannot be the assigned employee.' });
   }
 }
 
 /** Grade must be an active master-data value in category 'grades'. */
 export async function assertGrade(tx: Tx, organizationId: string, gradeId: string): Promise<void> {
   const grade = await tx.masterDataValue.findFirst({ where: { id: gradeId, organizationId, category: 'grades', status: 'Active' }, select: { id: true } });
-  if (!grade) throw new BadRequestException({ code: 'GRADE_NOT_FOUND', message: 'Grade must be an active value from master data (Grades).' });
+  if (!grade) throw new BadRequestException({ code: 'GRADE_NOT_FOUND', field: 'gradeId', message: 'Grade must be an active value from master data (Grades).' });
 }
 
 /** M1: department must be an active master-data value in category 'departments'. */
 export async function assertDepartment(tx: Tx, organizationId: string, departmentId: string): Promise<void> {
   const d = await tx.masterDataValue.findFirst({ where: { id: departmentId, organizationId, category: 'departments', status: 'Active' }, select: { id: true } });
-  if (!d) throw new BadRequestException({ code: 'DEPARTMENT_NOT_FOUND', message: 'Department must be an active value from master data (Departments).' });
+  if (!d) throw new BadRequestException({ code: 'DEPARTMENT_NOT_FOUND', field: 'departmentId', message: 'Department must be an active value from master data (Departments).' });
 }
 
 /** B3: categories of job status reasons. C3: all reason lists share one base (master-data/reason-lists). */
@@ -198,9 +198,9 @@ export async function resolveJobStatusReason(
 export function parseHoldUntil(raw: string | null | undefined, now: Date = new Date()): Date | null {
   if (raw === undefined || raw === null || raw === '') return null;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(raw) || Number.isNaN(Date.parse(`${raw}T00:00:00Z`))) {
-    throw new BadRequestException({ code: 'VALIDATION_ERROR', message: 'holdUntil must be YYYY-MM-DD.' });
+    throw new BadRequestException({ code: 'VALIDATION_ERROR', field: 'holdUntil', message: 'holdUntil must be YYYY-MM-DD.' });
   }
   const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
-  if (raw <= today) throw new BadRequestException({ code: 'HOLD_UNTIL_NOT_FUTURE', message: 'holdUntil must be a future date.' });
+  if (raw <= today) throw new BadRequestException({ code: 'HOLD_UNTIL_NOT_FUTURE', field: 'holdUntil', message: 'holdUntil must be a future date.' });
   return new Date(`${raw}T00:00:00Z`);
 }
