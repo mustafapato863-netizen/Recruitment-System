@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { fetchVacancyList } from '../utils/vacancyAccess';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getApi, postApi } from '../api/client';
 import { PageFrame } from '../components/ui/PageFrame';
@@ -56,11 +57,12 @@ export function TalentPoolPage() {
 
     try {
       const [vacsRes, candsRes] = await Promise.all([
-        getApi<Vacancy[] | { data: Vacancy[] }>('/vacancies'),
+        // B1: matching needs job requirements, so other owners' jobs are excluded.
+        fetchVacancyList().then(({ full }) => full),
         getApi<{ data?: Candidate[] } | Candidate[]>('/candidates?pageSize=100'),
       ]);
 
-      const vacList = Array.isArray(vacsRes) ? vacsRes : vacsRes?.data || [];
+      const vacList = vacsRes;
       const candList = Array.isArray(candsRes) ? candsRes : candsRes?.data || [];
 
       setVacancies(vacList);
