@@ -194,7 +194,7 @@ describe.skipIf(!url)('B4 My Work, target chip and reminders (scratch Postgres)'
 
   it('reminder worker: once per item/day, owner only, nothing for held/closed/cancelled', async () => {
     const { requestId: cancelledReq } = await activated(ids.a!, TODAY);
-    await vacancies.cancelRequest(cancelledReq, ORG, ids.manager!, 'budget gone');
+    await vacancies.cancelRequest(cancelledReq, ORG, ids.manager!, 'Budget withdrawn');
 
     await sweepDueDateReminders(prisma as never, NOW, CONFIG);
     await sweepDueDateReminders(prisma as never, new Date('2031-03-10T15:00:00Z'), CONFIG);
