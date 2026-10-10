@@ -1,11 +1,11 @@
 import { useRef, useState } from 'react';
 import { CircleCheck, CircleX, FileText, Link2, TriangleAlert, Upload } from 'lucide-react';
 import { ButtonV2, DrawerV2, StatusChip } from '../../components/v2';
-import { FIELD_LABEL, cvFileProblem, duplicateCheck, importRow, parseCv, splitName, type DuplicateCheckResult, type ExtractedCv, type ImportDecision, type LinkResult } from '../api/cvImport';
+import { FIELD_LABEL, cvFileProblem, duplicateCheck, existingPerson, importRow, parseCv, splitName, type DuplicateCheckResult, type ExtractedCv, type ExistingPerson, type ImportDecision, type LinkResult } from '../api/cvImport';
 import { errorMessage, jobTitle, type JobDetail } from '../api/jobs';
 
 type RowStatus = 'parsing' | 'ready' | 'unreadable' | 'invalid' | 'importing' | 'done' | 'failed';
-interface Row { key: string; file: File; status: RowStatus; cv?: ExtractedCv; dup?: DuplicateCheckResult | null; decision?: ImportDecision; problem?: string; link?: LinkResult }
+interface Row { key: string; file: File; status: RowStatus; cv?: ExtractedCv; dup?: DuplicateCheckResult | null; decision?: ImportDecision; problem?: string; link?: LinkResult; existing?: ExistingPerson }
 
 const MATCH_LABEL = { email: 'same email', phone: 'same phone' } as const;
 
@@ -54,6 +54,16 @@ export function ImportCvsDrawer({ job, onClose, onDone }: { job: JobDetail; onCl
         if (res.link?.conflicts.length) conflicted += 1;
         patch(r.key, { status: 'done', link: res.link });
       } catch (e) {
+        // #23 CANDIDATE_EXISTS: someone with this email/phone is already in the bank. Offer to link that person (never copy).
+        const found = await existingPerson(e, { email: r.cv?.email, phone: r.cv?.phone });
+        if (found !== undefined) {
+          const dup = await duplicateCheck({ ...(r.cv?.email ? { email: r.cv.email } : {}), ...(r.cv?.phone ? { phone: r.cv.phone } : {}) }).catch(() => null);
+          failed += 1;
+          patch(r.key, found
+            ? { status: 'ready', dup: dup ?? r.dup, decision: { kind: 'link', candidateId: found.candidateId }, existing: found, problem: undefined }
+            : { status: 'failed', problem: 'This person is already in the bank. Find them under Candidates and add them to this job from there.' });
+          continue;
+        }
         failed += 1;
         patch(r.key, { status: 'failed', problem: errorMessage(e, 'Import failed.') });
       }
@@ -114,6 +124,9 @@ function ImportRow({ row, onDecide }: { row: Row; onDecide: (d: ImportDecision) 
       ) : null}
       {row.status === 'ready' && !row.cv?.email && !row.cv?.phone ? (
         <p className="rf2-inline-note" data-tone="warning"><TriangleAlert aria-hidden="true" /> No email or phone in this CV, so it can’t be checked for duplicates. It will be added as a new person.</p>
+      ) : null}
+      {row.status === 'ready' && row.existing ? (
+        <p className="rf2-inline-note" data-tone="warning" role="alert" data-testid="candidate-exists"><Link2 aria-hidden="true" /> Already in the bank{row.existing.name ? ` as ${row.existing.name}` : ''}{row.existing.candidateCode ? ` (${row.existing.candidateCode})` : ''}. Import again to link this CV to <a className="rf2-link" href={`/candidates/${encodeURIComponent(row.existing.candidateId)}`} target="_blank" rel="noreferrer">the existing person</a>.</p>
       ) : null}
       {row.status === 'ready' && row.dup?.isDuplicate ? (
         <fieldset className="rf2-dup">
