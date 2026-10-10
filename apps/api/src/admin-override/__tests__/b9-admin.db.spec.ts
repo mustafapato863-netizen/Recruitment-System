@@ -73,8 +73,8 @@ describe.skipIf(!url)('B9 admin (scratch Postgres)', () => {
     const md = new MasterDataService(prisma);
     const created = await prisma.masterDataValue.create({ data: { organizationId: ORG, category: 'skills', name: `B9 Skill ${tag}` } as never });
     const res = await md.deleteCatalogValue(ORG, 'skills', created.id);
-    expect(res).toMatchObject({ deactivated: true, status: 'Inactive' });
-    expect((await prisma.masterDataValue.findUnique({ where: { id: created.id } }))?.status).toBe('Inactive');
+    expect(res).toMatchObject({ deactivated: true, status: 'Archived' }); // B2-21: Archived is the single deactivated-skill status
+    expect((await prisma.masterDataValue.findUnique({ where: { id: created.id } }))?.status).toBe('Archived');
   });
 
   it('users are deactivate-only: DELETE /users/:id is 405', () => {
