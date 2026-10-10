@@ -10,7 +10,7 @@ import { EmptyStateV2, ForbiddenStateV2, SkeletonV2 } from '../../components/v2/
 import { InputV2, TextareaV2 } from '../../components/v2/Field';
 import '../../components/v2/v2-primitives.css';
 import './application-file.css';
-import { FILE_STAGES, addNote, candidateName, gateState, loadApplicationFile, setFollowUp, type ApplicationFile } from '../api/applicationFile';
+import { FILE_STAGES, addNote, isClosedStage, candidateName, gateState, loadApplicationFile, setFollowUp, type ApplicationFile } from '../api/applicationFile';
 import { DRAWERS, DRAWER_KEYS, errorText, sentBack, type DrawerKey } from '../drawers/FileDrawers';
 
 type Load = { kind: 'loading' } | { kind: 'ready'; file: ApplicationFile } | { kind: 'forbidden'; message: string } | { kind: 'missing' } | { kind: 'error'; message: string };
@@ -22,6 +22,9 @@ const fmt = (iso: string, withTime = false) => {
   if (Number.isNaN(d.getTime())) return '';
   return new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Cairo', day: 'numeric', month: 'short', year: 'numeric', ...(withTime ? { hour: '2-digit', minute: '2-digit', hour12: false } : {}) }).format(d);
 };
+
+/** Drawers that move or close a file: never open on a closed file (#21 FILE_CLOSED). */
+const MOVING_DRAWERS: DrawerKey[] = ['screen', 'schedule', 'offer', 'send', 'answer', 'prehire', 'reject', 'waiting'];
 
 /** The one primary action per stage (v2 §7/§8) and the drawer it opens. */
 export function primaryFor(file: ApplicationFile): { key: DrawerKey; label: string; icon: React.ReactElement } | null {
@@ -100,9 +103,10 @@ export function ApplicationFileV2({ load = loadApplicationFile }: { load?: typeo
   const app = file.workspace.application;
   const name = candidateName(app);
   const primary = primaryFor(file);
-  const closed = app.stage === 'Rejected' || app.stage === 'Withdrawn' || app.stage === 'Joined';
+  // #21 (B2-4): Joined/Rejected/Withdrawn files are closed (409 FILE_CLOSED): no move, no reject, and no drawer that moves the file.
+  const closed = isClosedStage(app.stage);
   const curIdx = FILE_STAGES.indexOf(app.stage as (typeof FILE_STAGES)[number]);
-  const Drawer = drawer && DRAWER_KEYS.includes(drawer) ? DRAWERS[drawer] : null;
+  const Drawer = drawer && DRAWER_KEYS.includes(drawer) && !(closed && MOVING_DRAWERS.includes(drawer)) ? DRAWERS[drawer] : null;
   const initials = name.split(/\s+/).map((p) => p[0]).slice(0, 2).join('').toUpperCase();
 
   return (
@@ -131,6 +135,7 @@ export function ApplicationFileV2({ load = loadApplicationFile }: { load?: typeo
             );
           })}
         </ol>
+        {app.stage === 'Joined' || app.stage === 'Withdrawn' ? <p className="rf2-file__closed" role="note" data-testid="file-closed">{app.stage}: this file is closed and does not move.</p> : null}
         {app.stage === 'Rejected' ? <p className="rf2-file__closed" role="note">Closed as Rejected{app.rejectionReason ? ` — ${app.rejectionReason}` : ''}.</p> : null}
         <div className="rf2-file__strip">
           <FollowUp id={app.id} value={app.followUpDate ?? null} closed={closed} onSaved={() => setAttempt((n) => n + 1)} />
