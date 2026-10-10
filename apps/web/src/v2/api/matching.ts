@@ -10,6 +10,7 @@
  * allowlist: no email/phone/salary/notice/national id is kept. Error codes are dropped by the API filter
  * (CONFLICT/VALIDATION_ERROR/FORBIDDEN/NOT_FOUND + message), so `matchErrorFromError` maps messages back.
  */
+import { domainError } from './gates';
 import { getApi, postApi } from '../../api/client';
 import { stripPay } from './paySafety';
 
@@ -73,18 +74,9 @@ export async function fetchBank(search: string): Promise<BankRow[]> {
 
 // ── errors ──────────────────────────────────────────────────────────────────
 export type MatchCode = 'COMPARE_COUNT' | 'COMPARE_CANDIDATE_NOT_FOUND' | 'NOT_JOB_OWNER' | 'APPLICATION_EXISTS' | 'JOB_NOT_ACCEPTING_APPLICATIONS';
-const BY_MESSAGE: Array<[RegExp, MatchCode]> = [
-  [/^Compare 2 to 4 candidates\.$/, 'COMPARE_COUNT'],
-  [/^One or more candidates were not found or are not active\.$/, 'COMPARE_CANDIDATE_NOT_FOUND'],
-  [/^Only the job owner, their manager or a full-access user can suggest or compare/, 'NOT_JOB_OWNER'],
-  [/has already applied to vacancy/, 'APPLICATION_EXISTS'],
-  [/accepts no new applications\.$/, 'JOB_NOT_ACCEPTING_APPLICATIONS'],
-];
+const MATCH_CODES: readonly string[] = ['COMPARE_COUNT', 'COMPARE_CANDIDATE_NOT_FOUND', 'NOT_JOB_OWNER', 'APPLICATION_EXISTS', 'JOB_NOT_ACCEPTING_APPLICATIONS'];
+/** Custom codes now reach the client: read the code, never the message text. */
 export function matchErrorFromError(e: unknown): { code: MatchCode; message: string } | null {
-  if (!e || typeof e !== 'object') return null;
-  const x = e as { code?: unknown; message?: unknown };
-  const msg = typeof x.message === 'string' ? x.message.trim() : '';
-  if (typeof x.code === 'string' && BY_MESSAGE.some(([, c]) => c === x.code)) return { code: x.code as MatchCode, message: msg };
-  const hit = BY_MESSAGE.find(([re]) => re.test(msg));
-  return hit ? { code: hit[1], message: msg } : null;
+  const d = domainError(e);
+  return d && MATCH_CODES.includes(d.code) ? { code: d.code as MatchCode, message: d.message } : null;
 }

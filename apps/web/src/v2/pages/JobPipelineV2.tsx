@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { DragDropProvider, useDraggable, useDroppable, type DragEndEvent } from '@dnd-kit/react';
-import { ArrowRight, CircleX, Clock, MoveRight, Pause, Play, RotateCw, Sparkles, Upload } from 'lucide-react';
+import { ArrowRight, CalendarDays, CircleAlert, CircleX, Clock, MoveRight, Pause, Play, RotateCw, Sparkles, Upload } from 'lucide-react';
 import { ButtonV2, EmptyStateV2, ForbiddenStateV2, SkeletonV2, StatusChip } from '../../components/v2';
 import { patchApi } from '../../api/client';
 import {
-  ACCEPTING_JOB_STATUSES, BOARD_LABEL, BOARD_STAGES, MOVE_GATE_HINT, isRedactedJob, jobActions, jobErrorFromError, jobOwner, jobTitle, loadClosedFiles, loadJobBoard, moveCheck,
+  ACCEPTING_JOB_STATUSES, BOARD_LABEL, BOARD_STAGES, MOVE_GATE_HINT, blockingGate, isRedactedJob, isStaleStage, jobActions, jobErrorFromError, jobOwner, jobTitle, loadClosedFiles, loadJobBoard, moveCheck,
   type BoardApplication, type BoardStage, type JobBoard, type JobDetail,
 } from '../api/jobs';
 import { GATE_COPY, type GateCode } from '../api/gates';
@@ -21,6 +21,16 @@ type Toast = { tone: 'danger' | 'success'; title: string; body?: string } | null
 export function cardName(a: BoardApplication): string {
   const n = `${a.candidate?.firstName ?? ''} ${a.candidate?.lastName ?? ''}`.trim();
   return n || a.applicationCode;
+}
+/** Card badge for the gate blocking the next move (B5 gates[]). */
+const GATE_BADGE: Record<string, string> = { 'screen-note': 'Screen note missing', scorecard: 'Scorecard missing', 'offer-accepted': 'Offer not accepted yet', 'joining-checks': 'Joining checks open' };
+/** "13 Oct, 10:00–11:00" in Cairo time. */
+export function formatSlot(startAt: string, endAt: string): string {
+  const s = new Date(startAt); const e = new Date(endAt);
+  if (Number.isNaN(s.getTime())) return '';
+  const day = new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Cairo', day: 'numeric', month: 'short' }).format(s);
+  const t = (d: Date) => new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Cairo', hour: '2-digit', minute: '2-digit', hour12: false }).format(d);
+  return `${day}, ${t(s)}${Number.isNaN(e.getTime()) ? '' : `–${t(e)}`}`;
 }
 const initials = (n: string) => n.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join('');
 
@@ -71,9 +81,9 @@ export function JobPipelineV2() {
       const gate = d && 'gate' in d && d.gate ? GATE_COPY[d.gate as GateCode] : null;
       const body = gate
         ? `Missing gate: ${gate.gate.toLowerCase()}. ${name.split(' ')[0]} stays in ${BOARD_LABEL[app.stage as BoardStage]}. ${gate.fix}`
-        : d?.code === 'STALE_STAGE' ? 'Someone changed this file first. The board was refreshed.' : (d?.message || (e as Error)?.message || 'The move failed.');
+        : isStaleStage(e) ? 'Someone changed this file first. The board was refreshed.' : (d?.message || (e as Error)?.message || 'The move failed.');
       setToast({ tone: 'danger', title: `Can't move ${name} to ${BOARD_LABEL[target]}`, body });
-      if (d?.code === 'STALE_STAGE') reload();
+      if (isStaleStage(e)) reload();
     } finally { setMoving(null); }
   };
 
@@ -98,6 +108,7 @@ export function JobPipelineV2() {
   const seats = { filled: job.targetChip?.filled ?? job.joinedHeadcount, target: job.targetChip?.target ?? job.approvedHeadcount };
   const due = job.targetChip?.dueDate ?? null;
   const overdue = due ? due < new Date().toISOString().slice(0, 10) : false;
+  const blockedCount = apps.filter((a) => blockingGate(a)).length;
 
   return (
     <div className="rf2-jobs">
@@ -120,8 +131,9 @@ export function JobPipelineV2() {
           <div><dt>Seats</dt><dd className="rf2-num" data-tone={seats.filled > 0 ? 'success' : undefined}>{seats.filled} of {seats.target} filled</dd></div>
           <div><dt>Due</dt><dd className="rf2-num" data-tone={overdue ? 'warning' : undefined}>{formatDay(due)}</dd></div>
           <div><dt>Active files</dt><dd className="rf2-num">{apps.length}</dd></div>
+          <div><dt>Gate blocked</dt><dd className="rf2-num" data-tone={blockedCount ? 'warning' : undefined}>{blockedCount}</dd></div>
         </dl>
-        {job.status === 'On Hold' ? <p className="rf2-jobhead__note"><Clock aria-hidden="true" /> On hold: takes no new applications and is off My Work. Files stay in their stages.</p> : null}
+        {job.status === 'On Hold' ? <p className="rf2-jobhead__note"><Clock aria-hidden="true" /> On hold{job.holdUntil ? ` until ${formatDay(`${job.holdUntil.slice(0, 10)}T12:00:00Z`)}` : ''}: takes no new applications and is off My Work. Files stay in their stages.</p> : null}
       </section>
 
       <DragDropProvider onDragEnd={(event: DragEndEvent) => {
@@ -194,6 +206,9 @@ function Card({ app, job, moving, onMove }: { app: BoardApplication; job: JobDet
     document.addEventListener('mousedown', close);
     return () => document.removeEventListener('mousedown', close);
   }, [menu]);
+  const blocked = blockingGate(app);
+  const followUp = app.followUpDate ?? app.nextFollowUpAt?.slice(0, 10) ?? null;
+  const todayIso = new Date().toISOString().slice(0, 10);
   const sub = app.lastActivityLabel ? `${app.lastActivityLabel}${app.lastActivityAt ? ` · ${formatDay(app.lastActivityAt)}` : ''}` : `Applied ${formatDay(app.appliedAt)}${app.source ? ` · ${app.source}` : ''}`;
   return (
     <article ref={ref} className="rf2-kcard" data-dragging={isDragging || undefined} aria-busy={moving || undefined} aria-label={`${name}, ${BOARD_LABEL[app.stage as BoardStage]}`}>
@@ -202,7 +217,9 @@ function Card({ app, job, moving, onMove }: { app: BoardApplication; job: JobDet
         <Link className="rf2-kcard__name" to={`/applications/${encodeURIComponent(app.id)}`}>{name}</Link>
       </div>
       <p className="rf2-kcard__sub">{sub}</p>
-      {app.nextFollowUpAt ? <p className="rf2-kcard__chip" data-tone={app.nextFollowUpAt < new Date().toISOString() ? 'warning' : 'info'}><Clock aria-hidden="true" /> Follow-up due {formatDay(app.nextFollowUpAt)}</p> : null}
+      {app.interview ? <p className="rf2-kcard__iv"><CalendarDays aria-hidden="true" /> {app.interview.when === 'next' ? 'Interview' : 'Last interview'} {formatSlot(app.interview.startAt, app.interview.endAt)}{app.interview.room.name ? ` · ${app.interview.room.name}` : app.interview.room.url ? ' · room link' : ''}</p> : null}
+      {blocked ? <p className="rf2-kcard__chip" data-tone="warning" data-testid="gate-badge"><CircleAlert aria-hidden="true" /> {GATE_BADGE[blocked.gate]}</p> : null}
+      {followUp ? <p className="rf2-kcard__chip" data-tone={followUp < todayIso ? 'warning' : 'info'}><Clock aria-hidden="true" /> Follow-up {formatDay(`${followUp}T12:00:00Z`)}</p> : null}
       <div className="rf2-kcard__menu">
         <button ref={btnRef} type="button" className="rf2-link" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu((v) => !v)} disabled={moving}>
           <MoveRight aria-hidden="true" /> Move to…<span className="rf2-sr-only"> ({name})</span>

@@ -7,10 +7,15 @@
  *   The evidence shown is what matched (email/phone, normalized value), never a percentage.
  * - Create: POST /candidates (CreateCandidateDto subset). Link: reuse matches[i].candidateId (Roadmap §7: never duplicate).
  * - CV file: POST /documents/upload (multipart candidateId, documentType=CV, file, extractionText) — same as v1 intake.
+ * - Link fill (B6 #13 @7c836ec rule, mirrored): empty fields on the existing person are filled from the CV, a
+ *   different non-empty value is a conflict and is NEVER overwritten; skills are merged. B6 applies this rule in
+ *   the bulk import confirm (`duplicateReport[].filled/conflicts`); the per-CV path has no link endpoint, so the
+ *   client reads GET /candidates/:id and PATCHes only the empty fields (flagged as a Backend gap).
  * - Add to job: POST /applications {vacancyId, candidateId, source}.
  * No pay fields exist on these DTOs.
  */
-import { postApi, postFormDataApi } from '../../api/client';
+import { getApi, patchApi, postApi, postFormDataApi } from '../../api/client';
+import { stripPay } from './paySafety';
 
 export interface ExtractedCv {
   firstName?: string; lastName?: string; email?: string; phone?: string; title?: string; currentCompany?: string;
@@ -48,10 +53,47 @@ export function splitName(cv: ExtractedCv, fileName: string): { firstName: strin
 
 export type ImportDecision = { kind: 'link'; candidateId: string } | { kind: 'create' };
 
-/** Runs one row after the recruiter confirmed. Returns the candidate id and application id. */
-export async function importRow(vacancyId: string, file: File, cv: ExtractedCv, decision: ImportDecision): Promise<{ candidateId: string; applicationId: string | null }> {
+/** Field labels for the conflicts list (same field names as the B6 import report). */
+export const FIELD_LABEL: Record<string, string> = { currentTitle: 'Current title', currentCompany: 'Current company', location: 'Location', experienceYears: 'Experience (years)', skills: 'Skills' };
+export interface LinkConflict { field: string; existing: string; incoming: string }
+export interface LinkResult { filled: string[]; conflicts: LinkConflict[]; compared: boolean }
+
+const isEmpty = (v: unknown) => v === null || v === undefined || (typeof v === 'string' && !v.trim());
+/** Same rule as B6 import.service: fill empty, list conflicts, never overwrite; skills are merged. */
+export function diffForLink(existing: Record<string, unknown>, cv: ExtractedCv): { fill: Record<string, unknown>; filled: string[]; conflicts: LinkConflict[] } {
+  const incoming: Record<string, unknown> = {
+    currentTitle: cv.title?.trim().slice(0, 120) || null, currentCompany: cv.currentCompany?.trim().slice(0, 120) || null,
+    location: cv.location?.trim().slice(0, 120) || null, experienceYears: typeof cv.experienceYears === 'number' ? Math.round(cv.experienceYears) : null,
+  };
+  const fill: Record<string, unknown> = {}; const filled: string[] = []; const conflicts: LinkConflict[] = [];
+  for (const [field, value] of Object.entries(incoming)) {
+    if (value === null) continue;
+    const current = existing[field];
+    if (isEmpty(current)) { fill[field] = value; filled.push(field); continue; }
+    if (String(current).trim().toLowerCase() !== String(value).trim().toLowerCase()) conflicts.push({ field, existing: String(current), incoming: String(value) });
+  }
+  const have = Array.isArray(existing.skills) ? (existing.skills as string[]) : [];
+  const merged = [...have];
+  for (const sk of cv.skills ?? []) if (sk?.trim() && !merged.some((x) => x.toLowerCase() === sk.trim().toLowerCase())) merged.push(sk.trim());
+  if (merged.length !== have.length) { fill.skills = merged; filled.push('skills'); }
+  return { fill, filled, conflicts };
+}
+
+async function linkFill(candidateId: string, cv: ExtractedCv): Promise<LinkResult> {
+  let existing: Record<string, unknown>;
+  try { existing = stripPay(await getApi<Record<string, unknown>>(`/candidates/${encodeURIComponent(candidateId)}`)); } catch { return { filled: [], conflicts: [], compared: false }; }
+  const { fill, filled, conflicts } = diffForLink(existing, cv);
+  if (filled.length) {
+    try { await patchApi(`/candidates/${encodeURIComponent(candidateId)}`, fill); } catch { return { filled: [], conflicts, compared: true }; }
+  }
+  return { filled, conflicts, compared: true };
+}
+
+/** Runs one row after the recruiter confirmed. Returns the candidate id, application id and, for a link, what was filled / not overwritten. */
+export async function importRow(vacancyId: string, file: File, cv: ExtractedCv, decision: ImportDecision): Promise<{ candidateId: string; applicationId: string | null; link?: LinkResult }> {
   let candidateId: string;
-  if (decision.kind === 'link') candidateId = decision.candidateId;
+  let link: LinkResult | undefined;
+  if (decision.kind === 'link') { candidateId = decision.candidateId; link = await linkFill(candidateId, cv); }
   else {
     const { firstName, lastName } = splitName(cv, file.name);
     const created = await postApi<{ id: string }>('/candidates', {
@@ -72,5 +114,5 @@ export async function importRow(vacancyId: string, file: File, cv: ExtractedCv, 
   if (cv.rawText?.trim()) doc.append('extractionText', cv.rawText.trim().slice(0, 50000));
   await postFormDataApi('/documents/upload', doc);
   const app = await postApi<{ id?: string }>('/applications', { vacancyId, candidateId, source: 'CV import' });
-  return { candidateId, applicationId: app?.id ?? null };
+  return { candidateId, applicationId: app?.id ?? null, ...(link ? { link } : {}) };
 }
