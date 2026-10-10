@@ -1,12 +1,12 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type { VacancyDetailView, Application, PaginatedResult, Interview, Offer, VacancyStatus } from '@recruitflow/contracts';
-import { deleteApi, fetchApi, getApi, patchApi, postApi } from '../api/client';
+import { fetchApi, getApi, patchApi, postApi } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { isTeamLeaderOrAdmin } from '../auth/workspacePersona';
 import { Icon } from '../components/Icon';
 import { Modal } from '../components/Modal';
-import { ConfirmDialog } from '../components/ConfirmDialog';
+import { CloseJobDialog } from '../components/vacancy/CloseJobDialog';
 import { AddApplicationModal } from '../components/candidate/AddApplicationModal';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
@@ -53,7 +53,6 @@ export function VacancyOverviewPage() {
   const [isAssigningRecruiter, setIsAssigningRecruiter] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
   const [isRoleDetailsExpanded, setIsRoleDetailsExpanded] = useState(false);
 
   const [editFormData, setEditFormData] = useState<{
@@ -127,19 +126,6 @@ export function VacancyOverviewPage() {
     }
   };
 
-  const handleDeleteVacancy = async () => {
-    if (!vacancy || !isAdministrator) return;
-    setIsDeleting(true);
-    try {
-      await deleteApi(`/vacancies/${vacancy.id}`);
-      navigate('/vacancies', { replace: true });
-    } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : 'Failed to delete vacancy');
-      setIsDeleteDialogOpen(false);
-    } finally {
-      setIsDeleting(false);
-    }
-  };
 
   const openEditModal = () => {
     if (vacancy) {
@@ -591,7 +577,7 @@ export function VacancyOverviewPage() {
                       className="flex w-full cursor-pointer items-center gap-2 px-3.5 py-2.5 text-left font-semibold text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/30"
                     >
                       <Icon name="trash" size={13} />
-                      <span>Delete requisition</span>
+                      <span>Close job</span>
                     </button>
                   </>
                 )}
@@ -1741,19 +1727,14 @@ export function VacancyOverviewPage() {
         }}
       />
 
-      <ConfirmDialog
-        isOpen={isDeleteDialogOpen}
-        onClose={() => {
-          if (!isDeleting) setIsDeleteDialogOpen(false);
-        }}
-        onConfirm={handleDeleteVacancy}
-        title="Delete requisition permanently?"
-        description="This removes the requisition and its setup records permanently. Requisitions with applications cannot be deleted and must be cancelled instead."
-        confirmLabel="Delete permanently"
-        tone="danger"
-        icon="trash"
-        isLoading={isDeleting}
-      />
+      {vacancy ? (
+        <CloseJobDialog
+          isOpen={isDeleteDialogOpen}
+          jobId={vacancy.id}
+          onClose={() => setIsDeleteDialogOpen(false)}
+          onClosed={() => navigate('/vacancies', { replace: true })}
+        />
+      ) : null}
 
       {/* Toast Notification */}
       {toastMessage && (
