@@ -191,6 +191,13 @@ describe.skipIf(!url)('B6 suggest, compare, evidence, duplicates (scratch Postgr
     expect(await prisma.candidateSkillEvidence.count({ where: { candidateSkill: { candidateId: id } } })).toBe(0);
   });
 
+  it('B2R-7: the batch save stores a deactivated skill as Archived (Inactive is mapped)', async () => {
+    const md = new MasterDataService(prisma);
+    const sk = await prisma.masterDataValue.create({ data: { organizationId: ORG, category: 'skills', name: `Batch ${tag}`, status: 'Active' } });
+    await md.saveCatalogBatch(ORG, 'skills', [{ id: sk.id, name: sk.name, status: 'Inactive', expectedVersion: sk.version } as never]);
+    expect((await prisma.masterDataValue.findUniqueOrThrow({ where: { id: sk.id } })).status).toBe('Archived');
+  });
+
   it('saving a job never reactivates a deactivated skill; it comes back under unmappedRequiredSkills', async () => {
     const md = new MasterDataService(prisma);
     const dead = await prisma.masterDataValue.create({ data: { organizationId: ORG, category: 'skills', name: `Retired ${tag}`, status: 'Active' } });
