@@ -64,3 +64,20 @@
 [data-ui='v2'] .rf2-admin__add > :first-child { flex: 1; }
 [data-ui='v2'] .rf2-admin__more { margin: 6px var(--rf2-space-2); }
 @media (max-width: 1100px) { [data-ui='v2'] .rf2-admin__grid { grid-template-columns: 1fr 1fr; } [data-ui='v2'] .rf2-admin__split { grid-template-columns: 1fr; } }
+/* A4/A5 */
+[data-ui='v2'] .rf2-admin__two { display: grid; grid-template-columns: 1fr 1fr; gap: var(--rf2-space-2); align-items: start; }
+[data-ui='v2'] .rf2-admin__bars { list-style: none; margin: 0; padding: var(--rf2-space-1-5) var(--rf2-space-2); display: flex; flex-direction: column; gap: var(--rf2-space-1); }
+[data-ui='v2'] .rf2-admin__bars li { display: grid; grid-template-columns: 90px 1fr 48px; gap: var(--rf2-space-1); align-items: center; font-size: var(--rf2-text-body); }
+[data-ui='v2'] .rf2-admin__bar { height: 8px; border-radius: var(--rf2-radius-pill); background: var(--rf2-neutral-tint); overflow: hidden; }
+[data-ui='v2'] .rf2-admin__bar > span { display: block; height: 100%; background: var(--rf2-action); border-radius: inherit; }
+[data-ui='v2'] .rf2-admin__i { width: 14px; height: 14px; vertical-align: -2px; }
+[data-ui='v2'] .rf2-admin__offers { list-style: none; margin: 0; padding: 0; }
+[data-ui='v2'] .rf2-admin__offers li { display: grid; grid-template-columns: auto 1fr auto; gap: var(--rf2-space-1); align-items: center; padding: var(--rf2-space-1) var(--rf2-space-2); border-bottom: 1px solid var(--rf2-border); }
+[data-ui='v2'] .rf2-admin__offers li > span:nth-child(2) { display: flex; flex-direction: column; }
+[data-ui='v2'] .rf2-admin__who { display: inline-flex; align-items: center; gap: var(--rf2-space-1); }
+[data-ui='v2'] .rf2-admin td .rf2-jtable__name, [data-ui='v2'] .rf2-admin th .rf2-jtable__name, [data-ui='v2'] .rf2-admin td .rf2-jtable__sub, [data-ui='v2'] .rf2-admin th .rf2-jtable__sub { display: block; }
+[data-ui='v2'] .rf2-admin__inttitle { display: flex; align-items: center; gap: var(--rf2-space-1); }
+[data-ui='v2'] .rf2-admin__inticon { display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; background: var(--rf2-info-tint); color: var(--rf2-action); }
+[data-ui='v2'] .rf2-admin__inticon svg { width: 16px; height: 16px; }
+[data-ui='v2'] .rf2-admin__intfacts { margin: var(--rf2-space-1-5) var(--rf2-space-2) 0; }
+@media (max-width: 1100px) { [data-ui='v2'] .rf2-admin__two { grid-template-columns: 1fr; } }

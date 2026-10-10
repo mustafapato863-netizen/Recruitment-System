@@ -92,8 +92,8 @@ describe('M4 Team result (B8 /results/team)', () => {
     await u.click(screen.getByRole('button', { name: 'Try again' }));
     expect(await screen.findByRole('table')).toBeInTheDocument();
   });
-  it('route: v1 Reports outside the Manager seat', async () => {
-    shell.value = { seat: 'admin' };
+  it('route: v1 Reports outside the Manager and Admin seats', async () => {
+    shell.value = { seat: 'employee' };
     renderAt();
     expect(await screen.findByText('v1 reports')).toBeInTheDocument();
   });

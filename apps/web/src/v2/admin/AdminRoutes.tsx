@@ -6,6 +6,8 @@ import { RolesV2 } from './RolesV2';
 import { MasterDataV2 } from './MasterDataV2';
 import { PipelineV2 } from './PipelineV2';
 import { TemplatesV2 } from './TemplatesV2';
+import { AuditV2 } from './AuditV2';
+import { IntegrationsV2 } from './IntegrationsV2';
 
 const UsersRolesPage = lazy(() => import('../../pages/UsersRolesPage').then((m) => ({ default: m.UsersRolesPage })));
 
@@ -23,3 +25,7 @@ export const MasterDataRoute = () => <AdminOnly v2={<MasterDataV2 />} v1={<Maste
 export const PipelineRoute = ({ v1 }: { v1: ReactNode }) => <AdminOnly v2={<PipelineV2 />} v1={v1} />;
 /** Templates are admin-only in v2 (CoS); /whatsapp-templates lands on the same page's WhatsApp tab. */
 export const TemplatesRoute = ({ v1, channel = 'email' }: { v1: ReactNode; channel?: 'email' | 'whatsapp' }) => <AdminOnly v2={<TemplatesV2 initial={channel} />} v1={v1} />;
+
+const AuditLogPage = lazy(() => import('../../pages/AuditLogPage').then((m) => ({ default: m.AuditLogPage })));
+export const AuditRoute = () => <AdminOnly v2={<AuditV2 />} v1={<AuditLogPage />} />;
+export const IntegrationsRoute = ({ v1 }: { v1: ReactNode }) => <AdminOnly v2={<IntegrationsV2 />} v1={v1} />;

@@ -27,7 +27,6 @@ const JobDetailRoute = lazy(() => import('./v2/pages/JobsRoute').then((m) => ({ 
 const ApplicationRoute = lazy(() => import('./v2/pages/ApplicationRoute').then((m) => ({ default: m.ApplicationRoute })));
 const MyWorkRoute = lazy(() => import('./v2/pages/MyWorkRoute').then((m) => ({ default: m.MyWorkRoute })));
 const ReportingTreePage = lazy(() => import('./pages/ReportingTreePage').then((m) => ({ default: m.ReportingTreePage })));
-const AuditLogPage = lazy(() => import('./pages/AuditLogPage').then((m) => ({ default: m.AuditLogPage })));
 const RequisitionsRoute = lazy(() => import('./v2/pages/RequisitionsRoute').then((m) => ({ default: m.RequisitionsRoute })));
 const CreateVacancyRequestPage = lazy(() => import('./pages/CreateVacancyRequestPage').then((m) => ({ default: m.CreateVacancyRequestPage })));
 const VacancyRequestDetailPage = lazy(() => import('./pages/VacancyRequestDetailPage').then((m) => ({ default: m.VacancyRequestDetailPage })));
@@ -62,6 +61,8 @@ const UsersRoute = lazy(() => import('./v2/admin/AdminRoutes').then((m) => ({ de
 const MasterDataRoute = lazy(() => import('./v2/admin/AdminRoutes').then((m) => ({ default: m.MasterDataRoute })));
 const PipelineRoute = lazy(() => import('./v2/admin/AdminRoutes').then((m) => ({ default: m.PipelineRoute })));
 const TemplatesRoute = lazy(() => import('./v2/admin/AdminRoutes').then((m) => ({ default: m.TemplatesRoute })));
+const AuditRoute = lazy(() => import('./v2/admin/AdminRoutes').then((m) => ({ default: m.AuditRoute })));
+const IntegrationsRoute = lazy(() => import('./v2/admin/AdminRoutes').then((m) => ({ default: m.IntegrationsRoute })));
 const RolesRoute = lazy(() => import('./v2/admin/AdminRoutes').then((m) => ({ default: m.RolesRoute })));
 const PipelineSettingsPage = lazy(() => import('./pages/PipelineSettingsPage').then((m) => ({ default: m.PipelineSettingsPage })));
 const EmailTemplatesPage = lazy(() => import('./pages/EmailTemplatesPage').then((m) => ({ default: m.EmailTemplatesPage })));
@@ -146,7 +147,7 @@ function App() {
                     path="/audit-log"
                     element={
                       <PermissionGate requiredPermission="AUDIT_VIEW">
-                        <AuditLogPage />
+                        <AuditRoute />
                       </PermissionGate>
                     }
                   />
@@ -244,7 +245,7 @@ function App() {
                     path="/integrations"
                     element={
                       <PermissionGate requiredPermission="MASTER_DATA_VIEW">
-                        <IntegrationsPage />
+                        <IntegrationsRoute v1={<IntegrationsPage />} />
                       </PermissionGate>
                     }
                   />
