@@ -80,10 +80,10 @@ describe('nav per seat', () => {
     expect(current.map((a) => a.textContent)).toEqual(['Users']);
   });
 
-  it('distinguishes Users and Roles by hash', () => {
+  it('distinguishes Users and Roles (A2: Roles is its own /roles page)', () => {
     const items = SEAT_NAV.admin.items;
     expect(activeNavKey(items, '/users', '')).toBe('users');
-    expect(activeNavKey(items, '/users', '#roles')).toBe('roles');
+    expect(activeNavKey(items, '/roles', '')).toBe('roles');
   });
 });
 
