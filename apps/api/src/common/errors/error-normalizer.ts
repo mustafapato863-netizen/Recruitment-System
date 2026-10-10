@@ -197,6 +197,8 @@ export interface NormalizedError {
   missing?: string[];
   band?: Record<string, string | number | null>;
   offeredMonthlyBase?: number;
+  /** B2-15: the first offending input on a 400 (dotted path). */
+  field?: string;
   /** Server-side diagnostic context (sanitized). Never returned to clients. */
   logContext?: string;
 }
@@ -555,6 +557,7 @@ export function normalizeError(
         ...(details ? { details } : {}),
         ...(gateInfo ?? {}),
         ...(bandInfo ?? {}),
+        ...(status === HttpStatus.BAD_REQUEST && typeof resObj.field === 'string' && /^[A-Za-z0-9_.]{1,120}$/.test(resObj.field) ? { field: resObj.field } : {}),
         retryable,
         retryAfterSeconds:
           retryAfter ?? (status === HttpStatus.TOO_MANY_REQUESTS ? null : null),
@@ -663,6 +666,7 @@ export function buildErrorEnvelope(normalized: NormalizedError, requestId: strin
   if (normalized.missing !== undefined) envelope.missing = normalized.missing;
   if (normalized.band !== undefined) envelope.band = normalized.band;
   if (normalized.offeredMonthlyBase !== undefined) envelope.offeredMonthlyBase = normalized.offeredMonthlyBase;
+  if (normalized.field !== undefined) envelope.field = normalized.field;
   return envelope;
 }
 

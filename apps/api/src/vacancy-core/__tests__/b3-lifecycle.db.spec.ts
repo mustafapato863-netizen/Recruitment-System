@@ -28,14 +28,14 @@ describe.skipIf(!url)('B3 requisition and job lifecycle (scratch Postgres)', () 
     const id = randomUUID();
     await prisma.vacancyRequest.create({ data: {
       id, organizationId: ORG, branchId: branch.id, positionId: position.id, requesterId: ids.manager,
-      requestCode: `B3-${tag}-${id.slice(0, 4)}`, status, requestedHeadcount: 2, targetFillDate: new Date('2026-10-19'),
+      requestCode: `B3-${tag}-${id.slice(0, 13)}`, status, requestedHeadcount: 2, targetFillDate: new Date('2026-10-19'),
       jobSummary: 'HRIS developer', ...extra,
     } });
     return id;
   }
   async function makeCandidate() {
     const id = randomUUID();
-    await prisma.candidate.create({ data: { id, organizationId: ORG, candidateCode: `B3-${tag}-${id.slice(0, 4)}`, firstName: 'B3', lastName: 'Candidate', email: `${id}@b3.test` } });
+    await prisma.candidate.create({ data: { id, organizationId: ORG, candidateCode: `B3-${tag}-${id.slice(0, 13)}`, firstName: 'B3', lastName: 'Candidate', email: `${id}@b3.test` } });
     return id;
   }
 
@@ -97,7 +97,7 @@ describe.skipIf(!url)('B3 requisition and job lifecycle (scratch Postgres)', () 
 
   it('an administrator can never hold, reopen or close a job (even as requester)', async () => {
     const id = await makeRequest('Approved', { assignedEmployeeId: ids.owner, requesterId: ids.admin });
-    const job = (await service.activateRequest(id, ORG, ids.manager, {})).vacancy!;
+    const job = (await service.activateRequest(id, ORG, null, {})).vacancy!;
     const admin = { userId: ids.admin!, organizationId: ORG, tokenVersion: 0, roleCodes: ['ADMINISTRATOR'] };
     await expect(service.holdVacancy(job.id, ORG, 'admin hold', admin)).rejects.toThrow(/administrator cannot/);
     await expect(service.closeVacancy(job.id, ORG, 'admin close', admin)).rejects.toThrow(ForbiddenException);

@@ -416,7 +416,7 @@ async function main() {
         'NOTIFICATION_VIEW', 'TASK_VIEW', 'TASK_UPDATE_STATUS',
       ],
       RECRUITER: [
-        'VACANCY_REQUEST_VIEW', 'VACANCY_REQUEST_CREATE',
+        // B2-3: Employees (RECRUITER) do not create or list requisitions (v2 §5).
         'VACANCY_VIEW',
         'MASTER_DATA_VIEW',
         'CANDIDATE_VIEW', 'CANDIDATE_CREATE', 'CANDIDATE_EDIT',

@@ -1,5 +1,4 @@
 -- Rollback for 20261010_b3_req_job_lifecycle. Scratch/staging only. Run, then
--- DELETE FROM "_prisma_migrations" WHERE migration_name = '20261010_b3_req_job_lifecycle';
 -- Restores the pre-B3 job/requisition statuses recorded by the migration's history rows.
 -- Status changes made by the app after B3 (hold/reopen/cancel cascade) are NOT reverted;
 -- their history rows are lost with the table.
@@ -45,3 +44,6 @@ ALTER TABLE "vacancies" ALTER COLUMN "status" SET DEFAULT 'Pending Activation';
 -- E3 additions (run after the table drop above is fine: history table is already gone)
 ALTER TABLE "vacancies" DROP COLUMN IF EXISTS "holdUntil";
 DELETE FROM "master_data_values" WHERE "category" IN ('hold-reasons', 'close-reasons');
+
+-- B2-M1: forget the migration too, so `prisma migrate deploy` re-applies it cleanly.
+DELETE FROM "_prisma_migrations" WHERE "migration_name" = '20261010_b3_req_job_lifecycle';

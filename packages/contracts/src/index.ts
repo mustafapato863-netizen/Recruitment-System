@@ -62,7 +62,7 @@ export const errorCodes = [
 function domainErrorCodes() {
   return [
     // B3 requisition / job lifecycle
-    'ADMIN_CANNOT_CHANGE_JOB_STATUS', 'ASSIGNEE_NOT_ELIGIBLE', 'ASSIGNEE_REQUIRED', 'DUE_DATE_REQUIRED', 'SEATS_BELOW_JOINED', 'REQUISITION_NOT_APPROVED', 'REQUISITION_NOT_ACTIVE', 'DEPARTMENT_NOT_FOUND',
+    'ADMIN_CANNOT_CHANGE_JOB_STATUS', 'ASSIGNEE_NOT_ELIGIBLE', 'ASSIGNEE_REQUIRED', 'DUE_DATE_REQUIRED', 'SEATS_BELOW_JOINED', 'REQUISITION_NOT_APPROVED', 'REQUISITION_NOT_ACTIVE', 'DEPARTMENT_NOT_FOUND', 'FILE_CLOSED',
     'GRADE_NOT_FOUND', 'ILLEGAL_JOB_TRANSITION', 'JOB_NOT_ACCEPTING_APPLICATIONS', 'NOT_JOB_OWNER',
     'REASON_REQUIRED', 'REQUISITION_CANCELLED', 'REASON_NOT_IN_LIST', 'HOLD_UNTIL_NOT_FUTURE',
     // B5 gates
@@ -106,6 +106,8 @@ export interface ErrorEnvelope {
   /** B7: on GRADE_BAND_MISSING / OFFER_PAY_OUTSIDE_BAND. Pay figures only for OFFER_PAY_VIEW holders. */
   band?: Record<string, string | number | null>;
   offeredMonthlyBase?: number;
+  /** B2-15: on 400s, the first offending input (dotted path, e.g. "basePay", "allowances.0.amount", "pay"). */
+  field?: string;
   requestId: string;
   retryable: boolean;
   retryAfterSeconds: number | null;
@@ -237,6 +239,8 @@ export interface VacancyRequest {
   requesterName?: string;
   owner?: { id: string; name: string } | null;
   ownerName?: string | null;
+  /** B2-16: the job's owner once activated, else the assigned employee. */
+  primaryRecruiter?: { id: string; name: string } | null;
   /** B3: active, non-admin user who owns the job once activated. */
   assignedEmployeeId?: string | null;
   activatedAt?: string | null;
