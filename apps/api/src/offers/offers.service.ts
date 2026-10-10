@@ -35,8 +35,8 @@ function cleanUuidParam(value?: string | null): string | null | undefined {
 
 /**
  * B7: offer pay (base, package, component amounts) needs OFFER_PAY_VIEW. Fields are
- * OMITTED (absent), never null, without it. Same rule as current/expected salary on
- * screening (common/access/pay-visibility.ts).
+ * OMITTED (absent), never null, without it. Current/expected salary is a separate rule
+ * (VIEW_CURRENT_SALARY, canSeeCurrentSalary in common/access/pay-visibility.ts).
  */
 type CompensationDisclosure = { viewOfferPay: boolean };
 

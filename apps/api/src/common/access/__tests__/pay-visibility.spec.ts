@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { canSeePay, PAY_VIEW_PERMISSION } from '../pay-visibility';
+import { canSeeCurrentSalary, canSeePay, PAY_VIEW_PERMISSION } from '../pay-visibility';
 import { OFFER_PAY_PERMISSION } from '../../../notifications/notification-safety';
 
-// One pay rule for offer pay and current/expected salary (B0a x B7).
+// Two explicit rules: offer pay (OFFER_PAY_VIEW) and current/expected salary (VIEW_CURRENT_SALARY).
 describe('canSeePay', () => {
   const grants: Record<string, string[]> = {
-    manager: ['OFFER_PAY_VIEW'],
+    manager: ['OFFER_PAY_VIEW'], // Hiring Manager (seed): offer pay, no current salary
     admin: ['VIEW_CURRENT_SALARY', 'ROLES_MANAGE'], // seeded admins never hold OFFER_PAY_VIEW
     employee: ['APPLICATION_VIEW'],
   };
@@ -19,7 +19,14 @@ describe('canSeePay', () => {
     expect(await canSeePay(undefined, as('manager'))).toBe(false);
   });
 
-  it('notifications use the same permission', () => {
+  it('current/expected salary: VIEW_CURRENT_SALARY only (admin yes, Hiring Manager no)', async () => {
+    expect(await canSeeCurrentSalary(checker, as('admin'))).toBe(true);
+    expect(await canSeeCurrentSalary(checker, as('manager'))).toBe(false);
+    expect(await canSeeCurrentSalary(checker, as('employee'))).toBe(false);
+    expect(await canSeeCurrentSalary(undefined, as('admin'))).toBe(false);
+  });
+
+  it('notifications use the offer-pay permission', () => {
     expect(OFFER_PAY_PERMISSION).toBe(PAY_VIEW_PERMISSION);
   });
 });

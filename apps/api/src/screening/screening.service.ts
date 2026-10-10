@@ -96,7 +96,7 @@ export class ScreeningService {
       notes: record.notes,
       noticePeriodDays: record.noticePeriodDays,
       // Compensation keys are omitted entirely (not null) for callers without
-      // OFFER_PAY_VIEW (the one pay rule, common/access/pay-visibility) so Employee payloads never carry the fields.
+      // VIEW_CURRENT_SALARY (canSeeCurrentSalary, common/access/pay-visibility) so Employee payloads never carry the fields.
       ...(options.viewSalary
         ? {
             expectedSalary: record.expectedSalary !== null ? Number(record.expectedSalary) : null,

@@ -46,7 +46,7 @@ export class OffersController {
 
   private async compensationDisclosure(user: AuthUser) {
     return {
-      // One pay rule (common/access/pay-visibility): OFFER_PAY_VIEW; VIEW_CURRENT_SALARY does not reveal pay.
+      // Offer pay rule (common/access/pay-visibility canSeePay): OFFER_PAY_VIEW; VIEW_CURRENT_SALARY does not reveal it.
       viewOfferPay: await canSeePay(this.userPermissions, user),
     };
   }

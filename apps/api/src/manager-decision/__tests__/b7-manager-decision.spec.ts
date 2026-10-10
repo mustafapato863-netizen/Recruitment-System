@@ -19,14 +19,15 @@ describe('B7 base pay for the band check', () => {
     expect(DECISION_OUTCOME.RequestChanges.version).toBe('Changes Requested');
     expect(DECISION_OUTCOME.Reject.version).toBe('Withdrawn');
   });
-  it('one pay rule (B0a x B7): offers and screening salary both go through canSeePay (OFFER_PAY_VIEW)', () => {
+  it('offer pay uses canSeePay (OFFER_PAY_VIEW); screening salary uses canSeeCurrentSalary (VIEW_CURRENT_SALARY)', () => {
     const offers = readFileSync(join(__dirname, '../../offers/offers.controller.ts'), 'utf8');
     const screening = readFileSync(join(__dirname, '../../screening/screening.controller.ts'), 'utf8');
     const rule = readFileSync(join(__dirname, '../../common/access/pay-visibility.ts'), 'utf8');
     expect(rule).toContain("PAY_VIEW_PERMISSION = 'OFFER_PAY_VIEW'");
-    for (const src of [offers, screening]) {
-      expect(src).toContain('canSeePay(');
-      expect(src).not.toContain("'VIEW_CURRENT_SALARY'");
-    }
+    expect(rule).toContain("CURRENT_SALARY_PERMISSION = 'VIEW_CURRENT_SALARY'");
+    expect(offers).toContain('canSeePay(');
+    expect(offers).not.toContain('canSeeCurrentSalary');
+    expect(screening).toContain('canSeeCurrentSalary(');
+    expect(screening).not.toContain('canSeePay(');
   });
 });
