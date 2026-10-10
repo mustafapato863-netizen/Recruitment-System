@@ -11,3 +11,11 @@ export const RequirePermissions = (...permissions: string[]) => SetMetadata(PERM
  */
 export const ANY_PERMISSIONS_KEY = 'anyPermissions';
 export const RequireAnyPermissions = (...permissions: string[]) => SetMetadata(ANY_PERMISSIONS_KEY, permissions);
+
+/**
+ * Admin-only route: the caller must hold the ADMINISTRATOR role. Enforced by
+ * PermissionsGuard on top of any permission metadata. Used for template
+ * management (create/edit/duplicate/archive), which Mustafa limited to admins.
+ */
+export const ADMIN_ONLY_KEY = 'adminOnly';
+export const RequireAdmin = () => SetMetadata(ADMIN_ONLY_KEY, true);

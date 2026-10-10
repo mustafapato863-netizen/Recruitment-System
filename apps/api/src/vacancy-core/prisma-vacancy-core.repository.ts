@@ -569,6 +569,7 @@ export class PrismaVacancyCoreRepository implements VacancyCoreRepository {
       status: vacancy.status as Vacancy['status'],
       approvedHeadcount: vacancy.approvedHeadcount,
       joinedHeadcount: vacancy.joinedHeadcount,
+      primaryRecruiterId: vacancy.primaryRecruiterId ?? null,
       openedAt: toIsoString(vacancy.openedAt),
       targetStartDate: toDateOnlyString(vacancy.targetStartDate),
       requiredSkills: vacancy.requiredSkills ?? [],
