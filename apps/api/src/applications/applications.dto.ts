@@ -53,6 +53,12 @@ export class UpdateApplicationStageDto {
   @IsString()
   @MaxLength(1000)
   reason?: string;
+
+  /** Rejection reason "Other" needs this free-text note (400 REASON_REQUIRED, field "note", without it). */
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  note?: string;
 }
 
 export class ApplicationQueryDto {

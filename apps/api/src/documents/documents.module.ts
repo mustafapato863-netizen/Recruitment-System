@@ -1,3 +1,4 @@
+import { MatchingModule } from '../matching/matching.module';
 import { Module } from '@nestjs/common';
 import { DocumentsController } from './documents.controller';
 import { DocumentsService } from './documents.service';
@@ -8,7 +9,7 @@ import { DocumentStorageService } from './document-storage.service';
 import { AccessControlModule } from '../access-control/access-control.module';
 
 @Module({
-  imports: [DatabaseModule, AuditModule, AccessControlModule],
+  imports: [DatabaseModule, AuditModule, AccessControlModule, MatchingModule],
   controllers: [DocumentsController],
   providers: [DocumentsService, DocumentScannerService, DocumentStorageService],
   exports: [DocumentsService, DocumentScannerService, DocumentStorageService],
