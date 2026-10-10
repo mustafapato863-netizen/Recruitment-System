@@ -6,7 +6,7 @@ import { ButtonV2, EmptyStateV2, ForbiddenStateV2, SkeletonV2, StatusChip } from
 import { patchApi } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import {
-  ACCEPTING_JOB_STATUSES, BOARD_LABEL, BOARD_STAGES, MOVE_GATE_HINT, blockingGate, canChangeJobStatus, errorMessage, fetchAssignable, isRedactedJob, isStaleStage, jobActions, jobErrorFromError, jobOwner, jobTitle, loadClosedFiles, loadJobBoard, moveCheck,
+  ACCEPTING_JOB_STATUSES, ADMIN_STATUS_TEXT, BOARD_LABEL, BOARD_STAGES, MOVE_GATE_HINT, blockingGate, canChangeJobStatus, errorMessage, fetchAssignable, isRedactedJob, isStaleStage, jobActions, jobErrorFromError, jobOwner, jobTitle, loadClosedFiles, loadJobBoard, moveCheck,
   type AssignablePerson, type BoardApplication, type BoardStage, type JobBoard, type JobDetail,
 } from '../api/jobs';
 import { GATE_COPY, type GateCode } from '../api/gates';
@@ -134,6 +134,7 @@ export function JobPipelineV2() {
           <div>
             <h1 className="rf2-jobhead__title">{title} <StatusChip tone={STATUS_TONE[job.status]} label={STATUS_LABEL[job.status]} /></h1>
             <p className="rf2-jtable__sub">{[job.department, job.branch?.name, owner ? `Owner: ${owner.name}` : null].filter(Boolean).join(' · ')}</p>
+            {me?.isAdmin ? <p className="rf2-jtable__sub" data-testid="admin-status-note">{ADMIN_STATUS_TEXT}</p> : null}
           </div>
           <div className="rf2-jobhead__actions">
             {actions.includes('reopen') ? <ButtonV2 kind="tertiary" icon={<Play />} onClick={() => setDrawer('status')}>Reopen job</ButtonV2>
