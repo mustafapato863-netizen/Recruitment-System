@@ -189,9 +189,11 @@ export class VacancyCoreService {
         department: { select: { id: true, name: true } },
         requester: { select: { id: true, displayName: true } },
         assignedEmployee: { select: { id: true, displayName: true } },
+        vacancy: { select: { assignments: { where: { isActive: true, assignmentKind: 'PRIMARY' }, take: 1, select: { user: { select: { id: true, displayName: true } } } } } },
       },
     });
     const extra = new Map(rows.map((r) => [r.id, {
+      primaryRecruiter: primaryRecruiterOf(r),
       title: r.position.title,
       site: { id: r.branch.id, name: r.branch.name },
       grade: r.grade,
@@ -269,7 +271,17 @@ export class VacancyCoreService {
     if (!request) {
       throw new NotFoundException(`Vacancy request ${id} was not found.`);
     }
-    return request;
+    // B2-16: the drawer shows the primary recruiter (the job's owner once active, else the assigned employee).
+    const people = await this.prisma.vacancyRequest.findFirst({ where: { id, organizationId }, select: {
+      assignedEmployee: { select: { id: true, displayName: true } },
+      vacancy: { select: { assignments: { where: { isActive: true, assignmentKind: 'PRIMARY' }, take: 1, select: { user: { select: { id: true, displayName: true } } } } } },
+    } });
+    return { ...request, primaryRecruiter: people ? primaryRecruiterOf(people) : null } as VacancyRequest;
+  }
+
+  /** B2-2: Approved requisitions are activated by VACANCY_MANAGE holders or the requesting Manager (or his manager). */
+  private async holdsPermission(userId: string, organizationId: string, code: string): Promise<boolean> {
+    return (await this.prisma.userRole.count({ where: { userId, user: { organizationId, status: 'Active' }, role: { status: 'Active', permissions: { some: { permission: { code } } } } } })) > 0;
   }
 
   async listVacancies(organizationId: string, user?: AuthUser, options: { mine?: boolean } = {}): Promise<Vacancy[]> {
@@ -721,6 +733,9 @@ export class VacancyCoreService {
     if (request.status === 'Changes Requested' || request.status === 'Pending Approval') {
       // M1: once an approver is involved, Activate waits until the requisition is (re)submitted and Approved.
       throw new ConflictException({ code: 'REQUISITION_NOT_APPROVED', message: `Request ${request.requestCode} is ${request.status}; resubmit it and get it approved before activating.` });
+    }
+    if (request.status === 'Approved' && actorUserId && !(await this.isRequesterOrManager(request.requesterId, actorUserId)) && !(await this.holdsPermission(actorUserId, organizationId, 'VACANCY_MANAGE'))) {
+      throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Only the requesting Manager (or their manager) or a VACANCY_MANAGE holder can activate this requisition.' });
     }
     if (request.status !== 'Approved' && !fromDraft) {
       throw new ConflictException(`Request ${request.requestCode} must be a Draft or Approved to activate.`);
@@ -1316,4 +1331,10 @@ function createPipelineCounts(): Record<ApplicationStage, number> {
     Rejected: 0,
     Withdrawn: 0,
   };
+}
+
+/** B2-16: primary recruiter of a requisition: the job's active PRIMARY assignee once activated, else the assigned employee. */
+function primaryRecruiterOf(r: { assignedEmployee: { id: string; displayName: string } | null; vacancy: { assignments: Array<{ user: { id: string; displayName: string } }> } | null }): { id: string; name: string } | null {
+  const owner = r.vacancy?.assignments[0]?.user ?? r.assignedEmployee;
+  return owner ? { id: owner.id, name: owner.displayName } : null;
 }

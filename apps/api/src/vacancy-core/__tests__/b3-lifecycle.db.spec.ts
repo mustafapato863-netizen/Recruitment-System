@@ -97,7 +97,7 @@ describe.skipIf(!url)('B3 requisition and job lifecycle (scratch Postgres)', () 
 
   it('an administrator can never hold, reopen or close a job (even as requester)', async () => {
     const id = await makeRequest('Approved', { assignedEmployeeId: ids.owner, requesterId: ids.admin });
-    const job = (await service.activateRequest(id, ORG, ids.manager, {})).vacancy!;
+    const job = (await service.activateRequest(id, ORG, null, {})).vacancy!;
     const admin = { userId: ids.admin!, organizationId: ORG, tokenVersion: 0, roleCodes: ['ADMINISTRATOR'] };
     await expect(service.holdVacancy(job.id, ORG, 'admin hold', admin)).rejects.toThrow(/administrator cannot/);
     await expect(service.closeVacancy(job.id, ORG, 'admin close', admin)).rejects.toThrow(ForbiddenException);
