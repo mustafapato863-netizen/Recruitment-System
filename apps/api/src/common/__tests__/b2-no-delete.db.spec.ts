@@ -59,6 +59,17 @@ describe.skipIf(!url)('B2 no delete, deactivate, anonymize (scratch Postgres)', 
     await prisma.candidateImportRow.create({ data: { jobId: job.id, rowNumber: 2, rawData: { name: 'Someone Else' }, firstName: 'Someone', lastName: 'Else', email: `other-${tag}@x.test` } });
     await prisma.emailOutbox.create({ data: { organizationId: ORG, toEmail: EMAIL, subject: 'Your interview', template: 'interview', payload: { candidateName: 'Fatima Zahra' } } });
     await prisma.emailOutbox.create({ data: { organizationId: ORG, toEmail: 'recruiter@b2.test', subject: 'New applicant Fatima Zahra', template: 'staff', payload: { candidateName: 'Fatima Zahra', applicationId: ids.application } } });
+    // QA BUG-5: notifications with no entity link that still name the candidate.
+    const unlinked = [
+      ['Fatima Zahra offer for Nurse approved by Finance.', 'Offer approved'],
+      [`Reply from ${EMAIL.toUpperCase()}`, 'Inbound email'],
+      [`Missed call from ${PHONE}`, 'Missed call'],
+      ['FATIMA ZAHRA missing: Nursing License Verification.', 'Compliance'],
+      [`Unrelated notification ${tag}`, 'Other'],
+    ];
+    for (const [message, title] of unlinked) {
+      await prisma.notification.create({ data: { organizationId: ORG, recipientUserId: adminId, type: 'Legacy', title: `${title} ${tag}`, message } });
+    }
     const put = await storage.put(ORG, ids.candidate, 'cv.pdf', Buffer.from('%PDF secret CV for Fatima'));
     storageKey = put.storageKey;
     await prisma.candidateDocument.create({ data: { id: ids.doc, organizationId: ORG, candidateId: ids.candidate, documentType: 'CV', fileName: 'Fatima_Zahra_CV.pdf', fileSize: 10, mimeType: 'application/pdf', storageKey, storageProvider: 'local-private', extractionText: `Fatima Zahra ${EMAIL}` } });
@@ -131,6 +142,13 @@ describe.skipIf(!url)('B2 no delete, deactivate, anonymize (scratch Postgres)', 
     // no PII left anywhere we touched
     const blob = JSON.stringify(await prisma.candidate.findUniqueOrThrow({ where: { id: ids.candidate }, include: { documents: true, applications: { include: { notes: true, screeningLogs: true, interviews: true } } } }));
     for (const pii of ['Fatima', 'Zahra', EMAIL, PHONE, '784-1990', 'Palm St', '1990-01-01', 'Dubai Marina']) expect(blob).not.toContain(pii);
+
+    // notifications without an entity link are scrubbed by full name / email / phone (QA BUG-5)
+    const notes = await prisma.notification.findMany({ where: { organizationId: ORG, type: 'Legacy', title: { contains: tag } } });
+    const stillNamed = await prisma.notification.count({ where: { organizationId: ORG, OR: [{ message: { contains: 'Fatima Zahra', mode: 'insensitive' } }, { message: { contains: EMAIL, mode: 'insensitive' } }, { message: { contains: PHONE } }] } });
+    expect(stillNamed).toBe(0);
+    expect(notes.filter((n) => n.message.includes('Unrelated'))).toHaveLength(1);
+    expect(await prisma.notification.count({ where: { organizationId: ORG, type: 'Legacy', title: 'Notification about an anonymized candidate', recipientUserId: adminId, message: { not: { contains: 'Unrelated' } } } })).toBeGreaterThanOrEqual(4);
 
     // cached / queued / imported CV and candidate text (B2 fix c)
     const rows = await prisma.candidateImportRow.findMany({ where: { jobId: ids.importJob }, orderBy: { rowNumber: 'asc' } });

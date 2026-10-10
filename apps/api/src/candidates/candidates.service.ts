@@ -521,6 +521,27 @@ export class CandidatesService {
         where: { organizationId, OR: linkedEntities },
         data: { title: 'Notification about an anonymized candidate', message: ANONYMIZED_TEXT },
       })).count;
+      // QA BUG-5: notifications with no entity link (seed/legacy rows, staff
+      // alerts) can still carry the candidate's full name, email or phone in
+      // their text. Match on those and scrub them too.
+      const fullName = `${candidate.firstName} ${candidate.lastName}`.trim();
+      const textNeedles = [
+        ...(fullName.length > 3 ? [fullName] : []),
+        ...(candidate.email ? [candidate.email] : []),
+        ...(candidate.phone && candidate.phone.trim().length >= 6 ? [candidate.phone.trim()] : []),
+      ];
+      if (textNeedles.length) {
+        counts.notificationsByText = (await tx.notification.updateMany({
+          where: {
+            organizationId,
+            OR: textNeedles.flatMap((needle) => [
+              { title: { contains: needle, mode: 'insensitive' as const } },
+              { message: { contains: needle, mode: 'insensitive' as const } },
+            ]),
+          },
+          data: { title: 'Notification about an anonymized candidate', message: ANONYMIZED_TEXT },
+        })).count;
+      }
       if (candidate.email) {
         counts.emailOutbox = (await tx.emailOutbox.updateMany({
           where: { organizationId, toEmail: { equals: candidate.email, mode: 'insensitive' } },
