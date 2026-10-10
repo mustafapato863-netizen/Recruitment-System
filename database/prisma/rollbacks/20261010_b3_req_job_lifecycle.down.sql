@@ -41,3 +41,7 @@ ALTER TABLE "vacancy_requests" DROP CONSTRAINT "vacancy_requests_gradeId_fkey";
 ALTER TABLE "vacancy_requests" DROP CONSTRAINT "vacancy_requests_assignedEmployeeId_fkey";
 ALTER TABLE "vacancy_requests" DROP COLUMN "activatedAt", DROP COLUMN "assignedEmployeeId", DROP COLUMN "cancelReason", DROP COLUMN "cancelledAt", DROP COLUMN "gradeId";
 ALTER TABLE "vacancies" ALTER COLUMN "status" SET DEFAULT 'Pending Activation';
+
+-- E3 additions (run after the table drop above is fine: history table is already gone)
+ALTER TABLE "vacancies" DROP COLUMN IF EXISTS "holdUntil";
+DELETE FROM "master_data_values" WHERE "category" IN ('hold-reasons', 'close-reasons');
