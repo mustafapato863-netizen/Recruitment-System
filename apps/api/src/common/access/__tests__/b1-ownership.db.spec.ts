@@ -14,6 +14,12 @@ import { Reflector } from '@nestjs/core';
 import type { AuthUser } from '@recruitflow/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PrismaService } from '../../../database/prisma.service';
+import { Prisma } from '@recruitflow/database';
+// Stack-merge guard: B5 replaces InterviewScorecard.isLocked with status. Fixtures work on both shapes.
+const scorecardDone = (done: boolean) => ('isLocked' in Prisma.InterviewScorecardScalarFieldEnum
+  ? { isLocked: done }
+  : done ? { status: 'Submitted', submittedAt: new Date() } : { status: 'Draft' }) as never;
+
 import { AccessControlService } from '../../../access-control/access-control.service';
 import { TenantScopedGuard } from '../../guards/tenant-scoped.guard';
 import { ALLOW_INTERVIEW_ATTENDEE } from '../../decorators/tenant-resource.decorator';
@@ -87,7 +93,7 @@ describe.skipIf(!url)('B1 ownership and scope (scratch Postgres)', () => {
     for (const [id, attendee] of [[ids.interview, ids.interviewer], [ids.otherInterview, ids.other]] as const) {
       await prisma.interview.create({ data: { id, organizationId: ORG, applicationId: ids.application, interviewCode: `B1-${id.slice(0, 8)}`, title: 'B1', interviewType: 'Technical', scheduledStart: start, scheduledEnd: new Date(start.getTime() + 3_600_000), attendees: { create: { userId: attendee } } } });
     }
-    await prisma.interviewScorecard.create({ data: { id: ids.scorecardOther, interviewId: ids.interview, interviewerId: ids.owner, overallRating: 4, recommendation: 'Hire', notes: 'owner notes', isLocked: true } });
+    await prisma.interviewScorecard.create({ data: { id: ids.scorecardOther, interviewId: ids.interview, interviewerId: ids.owner, overallRating: 4, recommendation: 'Hire', notes: 'owner notes', ...scorecardDone(true) } });
     await prisma.candidateDocument.create({ data: { id: ids.otherDoc, organizationId: ORG, candidateId: ids.candidate, documentType: 'Passport', fileName: 'p.pdf', mimeType: 'application/pdf', fileSize: 1, storageKey: `b1/${tag}/p`, storageProvider: 'local' } });
     await new Promise((r) => setTimeout(r, 5));
     await prisma.candidateDocument.create({ data: { id: ids.cv, organizationId: ORG, candidateId: ids.candidate, documentType: 'CV', fileName: 'cv.pdf', mimeType: 'application/pdf', fileSize: 1, storageKey: `b1/${tag}/cv`, storageProvider: 'local' } });
