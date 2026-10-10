@@ -103,6 +103,10 @@ describe.skipIf(!url)('B7 grade bands, offer pay, manager decision, reassign (sc
     expect('minMonthlyBase' in seen || 'maxMonthlyBase' in seen).toBe(false);
     expect((await bands.list(user('mgr'))).find((b) => b.id === band.id)?.maxMonthlyBase).toBe(15000);
     expect((await bands.list(user('admin'), true)).some((b) => b.id === above.id)).toBe(true);
+    // C4: MASTER_DATA_MANAGE sees band amounts (bands are master data it edits), even without OFFER_PAY_VIEW (admin has none).
+    expect((await perms.getPermissionSet(u.admin!, ORG)).has('OFFER_PAY_VIEW')).toBe(false);
+    expect((await perms.getPermissionSet(u.admin!, ORG)).has('MASTER_DATA_MANAGE')).toBe(true);
+    expect((await bands.list(user('admin'))).find((b) => b.id === band.id)).toMatchObject({ minMonthlyBase: 10000, maxMonthlyBase: 15000 });
   });
 
   it('offer pay needs OFFER_PAY_VIEW (omitted, not null); VIEW_CURRENT_SALARY alone does not show it', async () => {
