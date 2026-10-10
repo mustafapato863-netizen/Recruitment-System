@@ -5,7 +5,7 @@ import { resolveUiVersion } from '../theme/uiVersion';
  * Seat-by-seat v2 rollout (Roadmap v2 §3, §10): v2 renders only when the v2
  * flag is on AND the user's seat is enabled. Default: Employee first.
  *
- * Seats precedence: SERVER (/auth/me `v2Seats` or `flags.v2Seats`, B10) >
+ * Seats precedence: SERVER (/auth/me `v2Seats`, confirmed by Backend) >
  * ?v2seats=employee,manager (persisted) > localStorage "recruitflow.ui.v2seats"
  * > VITE_UI_V2_SEATS > "employee".
  */
@@ -24,14 +24,12 @@ export function parseSeats(raw: string | null | undefined): Seat[] | null {
 type Store = Pick<Storage, 'getItem' | 'setItem'> | null;
 
 /**
- * Server-side seat list from /auth/me. B10 ("per-seat flag, org setting") has no
- * field name yet; we read `v2Seats` or `flags.v2Seats` as string[] or a
- * comma string. Returns null when absent so client sources apply.
+ * Server-side seat list from /auth/me: `me.v2Seats` (field confirmed by Backend;
+ * the earlier `flags.v2Seats` guess is dropped), as string[] or a comma string. Returns null when absent so client sources apply.
  */
 export function serverV2Seats(me: unknown): Seat[] | null {
   if (!me || typeof me !== 'object') return null;
-  const m = me as { v2Seats?: unknown; flags?: { v2Seats?: unknown } | null };
-  const raw = m.v2Seats ?? m.flags?.v2Seats;
+  const raw = (me as { v2Seats?: unknown }).v2Seats;
   if (Array.isArray(raw)) return parseSeats(raw.filter((v) => typeof v === 'string').join(',') || 'none');
   if (typeof raw === 'string') return parseSeats(raw);
   return null;

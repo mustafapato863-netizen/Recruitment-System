@@ -98,9 +98,10 @@ describe('seat-by-seat switch', () => {
 });
 
 describe('server-side seats from /auth/me', () => {
-  it('reads v2Seats or flags.v2Seats (array or string), else null', () => {
+  it('reads me.v2Seats (array or string), else null; flags.v2Seats is ignored', () => {
     expect(serverV2Seats({ v2Seats: ['EMPLOYEE', 'manager'] })).toEqual(['employee', 'manager']);
-    expect(serverV2Seats({ flags: { v2Seats: 'admin' } })).toEqual(['admin']);
+    expect(serverV2Seats({ v2Seats: 'admin' })).toEqual(['admin']);
+    expect(serverV2Seats({ flags: { v2Seats: 'admin' } })).toBeNull();
     expect(serverV2Seats({ v2Seats: [] })).toEqual([]);
     expect(serverV2Seats({})).toBeNull();
     expect(serverV2Seats(null)).toBeNull();
