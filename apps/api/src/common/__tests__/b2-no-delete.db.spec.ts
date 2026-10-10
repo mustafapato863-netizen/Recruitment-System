@@ -36,7 +36,7 @@ describe.skipIf(!url)('B2 no delete, deactivate, anonymize (scratch Postgres)', 
     prisma = new PrismaService({ datasources: { db: { url } } });
     storage = new DocumentStorageService();
     candidates = new CandidatesService(prisma, storage);
-    adminId = (await prisma.user.findFirstOrThrow({ where: { organizationId: ORG, status: 'Active', userRoles: { some: { role: { code: 'ADMINISTRATOR' } } } } })).id;
+    adminId = (await prisma.user.findFirstOrThrow({ where: { organizationId: ORG, status: 'Active', userRoles: { some: { role: { code: 'ADMINISTRATOR' } } } }, orderBy: { createdAt: 'asc' } })).id; // the seeded admin, not another suite's temporary one
     const recruiterRole = await prisma.role.findFirstOrThrow({ where: { code: 'RECRUITER' } });
     await prisma.user.create({ data: { id: ids.owner, organizationId: ORG, email: `owner-${tag}@b2.test`, emailNormalized: `owner-${tag}@b2.test`, displayName: 'B2 Owner', passwordHash: 'x', userRoles: { create: { roleId: recruiterRole.id } } } });
     const vacancy = await prisma.vacancy.findFirstOrThrow({ where: { organizationId: ORG }, orderBy: { vacancyCode: 'asc' } });
