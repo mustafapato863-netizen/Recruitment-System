@@ -5,6 +5,8 @@ import { ButtonV2, EmptyStateV2, ForbiddenStateV2, initials, SkeletonV2, StatusC
 import { useAuth } from '../../auth/AuthContext';
 import { fetchTeamWork, fileHref, type ReportWork, type TaskTone, type TeamTask, type TeamWork, type WaitingOffer } from '../api/teamWork';
 import { ReassignDrawer } from '../drawers/ReassignDrawer';
+import { OfferDecisionDrawer } from '../drawers/OfferDecisionDrawer';
+import { canSeePay } from '../api/offerDecision';
 import './jobs.css';
 import './team.css';
 
@@ -24,7 +26,7 @@ const ago = (iso: string | null) => {
 const when = (iso: string | null) => (iso ? new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Cairo', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(iso)) : '');
 
 /** M2 Team work (Manager, v2): what is waiting on me, and each direct report's open work, with Reassign (B7). */
-export function TeamWorkV2({ reviewOffer }: { reviewOffer?: (w: WaitingOffer) => React.ReactNode } = {}) {
+export function TeamWorkV2() {
   const { user } = useAuth();
   const [params, setParams] = useSearchParams();
   const [state, setState] = useState<{ kind: 'loading' } | { kind: 'ready'; data: TeamWork } | { kind: 'forbidden' } | { kind: 'error'; message: string }>({ kind: 'loading' });
@@ -44,12 +46,14 @@ export function TeamWorkV2({ reviewOffer }: { reviewOffer?: (w: WaitingOffer) =>
     for (const [k, v] of Object.entries(next)) { if (v) n.set(k, v); else n.delete(k); }
     setParams(n);
   }, [params, setParams]);
-  const done = (m: string) => { setToast(m); go({ reassign: null, file: null }); setAttempt((n) => n + 1); };
+  const done = (m: string) => { setToast(m); go({ reassign: null, file: null, offer: null }); setAttempt((n) => n + 1); };
 
   const data = state.kind === 'ready' ? state.data : null;
   const reports = data?.reports ?? null;
   const from = reports?.find((r) => r.person.id === params.get('reassign')) ?? null;
   const waiting = data?.waiting ?? [];
+  const deciding: WaitingOffer | null = waiting.find((w) => w.offerId === params.get('offer')) ?? null;
+  const showPay = canSeePay('manager', user?.permissions);
 
   return (
     <div className="rf2-jobs rf2-team">
@@ -75,7 +79,7 @@ export function TeamWorkV2({ reviewOffer }: { reviewOffer?: (w: WaitingOffer) =>
                       <p className="rf2-jtable__sub">Offer v{w.versionNumber} submitted{w.ownerName ? ` by ${w.ownerName}` : ''}{w.submittedAt ? ` · ${when(w.submittedAt)}` : ''}</p>
                     </div>
                     {ago(w.submittedAt) ? <StatusChip tone="neutral" label={ago(w.submittedAt)!} /> : null}
-                    {reviewOffer ? reviewOffer(w) : <Link className="rf2-btn rf2-btn--primary rf2-btn--sm" to={fileHref(w.applicationId)}><Eye aria-hidden="true" /> Review offer</Link>}
+                    <ButtonV2 size="sm" icon={<Eye />} onClick={() => go({ offer: w.offerId })} aria-label={`Review offer: ${w.candidate}`}>Review offer</ButtonV2>
                   </li>
                 ))}
               </ul>
@@ -91,6 +95,7 @@ export function TeamWorkV2({ reviewOffer }: { reviewOffer?: (w: WaitingOffer) =>
             </div>
           )}
           <p className="rf2-inline-note"><Users aria-hidden="true" /> Only your direct reports appear here. Reassign changes the primary recruiter on one file, a whole job’s files or all of a person’s open files.</p>
+          {deciding ? <OfferDecisionDrawer offerId={deciding.offerId} ownerName={deciding.ownerName} showPay={showPay} onClose={() => go({ offer: null })} onDone={done} /> : null}
           {from && reports ? <ReassignDrawer from={from} reports={reports} fileId={params.get('file')} managerName={user?.displayName ?? 'you'} onClose={() => go({ reassign: null, file: null })} onDone={done} /> : null}
         </>
       ) : null}

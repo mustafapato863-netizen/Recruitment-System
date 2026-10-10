@@ -23,3 +23,23 @@
 [data-ui='v2'] .rf2-reassign { display: flex; flex-direction: column; gap: var(--rf2-space-2); }
 [data-ui='v2'] .rf2-reassign__owner { display: flex; align-items: center; gap: var(--rf2-space-1); padding: var(--rf2-space-1) var(--rf2-space-1-5); border-radius: var(--rf2-radius-card); background: var(--rf2-neutral-tint); }
 [data-ui='v2'] .rf2-reassign__owner .rf2-jtable__name { margin: 0; }
+/* M05 Offer decision */
+[data-ui='v2'] .rf2-decide { display: flex; flex-direction: column; gap: var(--rf2-space-2); }
+[data-ui='v2'] .rf2-decide p { margin: 0; }
+[data-ui='v2'] .rf2-decide__by { display: flex; align-items: center; gap: var(--rf2-space-1); padding: var(--rf2-space-1-5); border-radius: var(--rf2-radius-card); background: var(--rf2-neutral-tint); }
+[data-ui='v2'] .rf2-decide__by > div { flex: 1; min-width: 0; }
+[data-ui='v2'] .rf2-decide__facts { display: grid; grid-template-columns: 120px 1fr; gap: var(--rf2-space-1) var(--rf2-space-2); margin: 0; padding: var(--rf2-space-1-5); border: 1px solid var(--rf2-border); border-radius: var(--rf2-radius-card); font-size: var(--rf2-text-body); }
+[data-ui='v2'] .rf2-decide__facts dt { color: var(--rf2-ink-2); }
+[data-ui='v2'] .rf2-decide__facts dd { margin: 0; }
+[data-ui='v2'] .rf2-decide__pay { display: flex; flex-direction: column; gap: var(--rf2-space-0-5); }
+[data-ui='v2'] .rf2-decide__amount { padding: var(--rf2-space-1) var(--rf2-space-1-5); border: 1px solid var(--rf2-border); border-radius: var(--rf2-radius-control); font-variant-numeric: tabular-nums; font-weight: 600; }
+[data-ui='v2'] .rf2-decide__band { display: flex; flex-direction: column; gap: var(--rf2-space-1); padding: var(--rf2-space-1-5); border: 1px solid var(--rf2-border); border-radius: var(--rf2-radius-card); }
+[data-ui='v2'] .rf2-decide__band[data-state='missing'], [data-ui='v2'] .rf2-decide__band[data-state='below'], [data-ui='v2'] .rf2-decide__band[data-state='above'] { border-color: var(--rf2-danger); background: var(--rf2-danger-tint); }
+[data-ui='v2'] .rf2-decide__band .rf2-jtable__name svg { width: 16px; height: 16px; vertical-align: -3px; color: var(--rf2-danger); }
+[data-ui='v2'] .rf2-decide__bar { position: relative; height: 32px; margin-top: var(--rf2-space-2); }
+[data-ui='v2'] .rf2-decide__bar::before { content: ''; position: absolute; top: 14px; left: 0; right: 0; height: 6px; border-radius: var(--rf2-radius-pill); background: var(--rf2-neutral-tint); }
+[data-ui='v2'] .rf2-decide__range { position: absolute; top: 14px; height: 6px; border-radius: var(--rf2-radius-pill); background: var(--rf2-info-tint); outline: 1px solid var(--rf2-info); }
+[data-ui='v2'] .rf2-decide__mid { position: absolute; top: 8px; width: 2px; height: 18px; background: var(--rf2-ink-2); }
+[data-ui='v2'] .rf2-decide__offer { position: absolute; top: 6px; width: 3px; height: 22px; background: var(--rf2-action); }
+[data-ui='v2'] .rf2-decide__offer > span { position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); white-space: nowrap; color: var(--rf2-action); font-size: var(--rf2-text-caption); font-weight: 600; }
+[data-ui='v2'] .rf2-decide__reject { display: flex; flex-direction: column; align-items: flex-start; gap: var(--rf2-space-0-5); }

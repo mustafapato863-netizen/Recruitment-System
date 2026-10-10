@@ -32,7 +32,10 @@ export const apps: Record<string, unknown[]> = {
     app('n3', 'u-noura', 'Majed', 'Saleh', 'Radiology Technician', 'SGH Riyadh', 'Applied', { followUpDate: day(2) }),
   ],
 };
-const version = (id: string, n: number, status: string, createdAt: string) => ({ id, offerId: 'o', versionNumber: n, status, approvalStatus: 'Pending', monthlyPackage: 62000, annualFixed: 744000, components: [{ id: 'c', type: 'Salary', name: 'Basic', amount: 62000, currency: 'EGP' }], approvals: [], createdAt });
+const version = (id: string, n: number, status: string, createdAt: string) => ({ id, offerId: 'o', versionNumber: n, status, approvalStatus: 'Pending', monthlyPackage: 71500, annualFixed: 858000,
+  contractType: 'Full-time · 2 years', probationPeriod: '3 months', proposedJoiningDate: '2026-11-01', offerExpiry: null, workLocation: 'Offshore Cairo',
+  components: [{ id: 'c1', type: 'Salary', name: 'Basic', amount: 62000, currency: 'EGP', frequency: 'Monthly', isTaxable: true }, { id: 'c2', type: 'Allowance', name: 'Housing and transport', amount: 9500, currency: 'EGP', frequency: 'Monthly', isTaxable: false }],
+  approvals: [], createdAt });
 export const pendingOffers = [
   { id: 'o1', organizationId: 'o', applicationId: 'a3', candidateName: 'Lina Hassan', positionTitle: 'HRIS Developer', grade: { id: 'g8', name: 'Grade 8' }, location: 'Offshore Cairo', offerCode: 'OFF-1', status: 'Pending Approval', currentVersionId: 'ov1', versions: [version('ov1', 1, 'Pending Approval', at(-1, '12:20'))], createdAt: at(-2), updatedAt: at(-1) },
   { id: 'o-x', organizationId: 'o', applicationId: 'not-my-team', candidateName: 'Elsewhere', positionTitle: 'Nurse', status: 'Pending Approval', currentVersionId: 'ovx', versions: [version('ovx', 1, 'Pending Approval', at(-1))], offerCode: 'OFF-2', createdAt: at(-2), updatedAt: at(-1) },
@@ -42,3 +45,11 @@ export const teamPaths = (): Record<string, unknown> => ({
   ...Object.fromEntries(Object.entries(apps).map(([id, rows]) => [`/applications?primaryRecruiterId=${id}&pageSize=100`, { data: rows, total: rows.length }])),
   '/offers?status=Pending+Approval&pageSize=100': pendingOffers,
 });
+
+/** B7 grade bands (amounts present: the caller holds OFFER_PAY_VIEW). */
+export const bands = [
+  { id: 'gb8', grade: { id: 'g8', name: 'Grade 8' }, site: { id: 'b-cairo', name: 'Offshore Cairo' }, currency: 'EGP', status: 'Active', version: 1, minMonthlyBase: 48000, maxMonthlyBase: 72000 },
+  { id: 'gb8r', grade: { id: 'g8', name: 'Grade 8' }, site: { id: 'b-riyadh', name: 'SGH Riyadh' }, currency: 'SAR', status: 'Active', version: 1, minMonthlyBase: 9000, maxMonthlyBase: 14000 },
+  { id: 'gbold', grade: { id: 'g8', name: 'Grade 8' }, site: { id: 'b-cairo', name: 'Offshore Cairo' }, currency: 'EGP', status: 'Inactive', version: 1, minMonthlyBase: 1, maxMonthlyBase: 2 },
+];
+export const decisionPaths = (): Record<string, unknown> => ({ '/offers/o1': pendingOffers[0], '/master-data/grade-bands': bands });

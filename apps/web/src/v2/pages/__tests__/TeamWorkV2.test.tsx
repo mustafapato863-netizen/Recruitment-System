@@ -35,7 +35,7 @@ describe('M2 Team work', () => {
     const wait = screen.getByRole('heading', { name: 'Waiting on you' }).closest('section')!;
     expect(within(wait).getAllByRole('listitem')).toHaveLength(1);
     expect(wait).toHaveTextContent(/Offer approval — Lina Hassan, HRIS Developer.*Offer v1 submitted by Mariam Farag/);
-    expect(within(wait).getByRole('link', { name: /Review offer/ })).toHaveAttribute('href', '/applications/a3');
+    expect(within(wait).getByRole('button', { name: 'Review offer: Lina Hassan' })).toBeInTheDocument();
     expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent).slice(1)).toEqual(['Mariam Farag', 'Noura Al-Dosari', 'Youssef Ibrahim']);
     const m = card('Mariam Farag');
     expect(m).toHaveTextContent('3 open · 1 overdue');
@@ -46,7 +46,7 @@ describe('M2 Team work', () => {
     expect(within(card('Noura Al-Dosari')).getAllByText('Overdue')).toHaveLength(2);
     expect(card('Youssef Ibrahim')).toHaveTextContent(/Interview — Rana Adel.*BI Data Analyst · SGH Riyadh.*This week/);
     expect(within(m).getByRole('link', { name: 'Follow up — Nourhan Sami' })).toHaveAttribute('href', '/applications/a2');
-    expect(container.textContent).not.toMatch(/62,?000|744|EGP|40000/);
+    expect(container.textContent).not.toMatch(/62,?000|71,?500|858|EGP|40000/);
     expect(await axeViolations(container)).toEqual([]);
   });
   it('reports list unavailable → honest empty state; offers list failing is not fatal', async () => {
