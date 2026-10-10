@@ -23,3 +23,4 @@
 [data-ui='v2'] .rf2-reassign { display: flex; flex-direction: column; gap: var(--rf2-space-2); }
 [data-ui='v2'] .rf2-reassign__owner { display: flex; align-items: center; gap: var(--rf2-space-1); padding: var(--rf2-space-1) var(--rf2-space-1-5); border-radius: var(--rf2-radius-card); background: var(--rf2-neutral-tint); }
 [data-ui='v2'] .rf2-reassign__owner .rf2-jtable__name { margin: 0; }
+[data-ui='v2'] .rf2-team__wicon[data-tone='warning'] { color: var(--rf2-warning); }

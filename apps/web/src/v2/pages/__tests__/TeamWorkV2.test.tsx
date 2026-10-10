@@ -33,7 +33,9 @@ describe('M2 Team work', () => {
     const { container } = renderAt();
     expect(await screen.findByText('Open work of your 3 direct reports. Counts equal the rows shown.')).toBeInTheDocument();
     const wait = screen.getByRole('heading', { name: 'Waiting on you' }).closest('section')!;
-    expect(within(wait).getAllByRole('listitem')).toHaveLength(1);
+    expect(within(wait).getAllByRole('listitem')).toHaveLength(2);
+    expect(wait).toHaveTextContent(/Your scorecard — Ahmed Embaby, HRIS Developer.*Late/);
+    expect(within(wait).getByRole('link', { name: 'Submit scorecard: Ahmed Embaby' })).toHaveAttribute('href', '/interviews/i1');
     expect(wait).toHaveTextContent(/Offer approval — Lina Hassan, HRIS Developer.*Offer v1 submitted by Mariam Farag/);
     expect(within(wait).getByRole('link', { name: /Review offer/ })).toHaveAttribute('href', '/applications/a3');
     expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent).slice(1)).toEqual(['Mariam Farag', 'Noura Al-Dosari', 'Youssef Ibrahim']);
@@ -100,10 +102,10 @@ describe('M06 Reassign (B7 POST /files/reassign)', () => {
     const u = userEvent.setup();
     api.postApi.mockResolvedValue({ batchId: 'b', toUserId: 'u-mariam', moved: [{ applicationId: 'n1' }, { applicationId: 'n2' }, { applicationId: 'n3' }], unchanged: [] });
     renderAt('/my-work?reassign=u-noura');
-    const d = await screen.findByRole('dialog', { name: 'Reassign Radiology Technician' });
-    expect(within(d).getByRole('button', { name: 'Whole job' })).toHaveAttribute('aria-pressed', 'true');
+    const d = await screen.findByRole('dialog', { name: 'Reassign files on Radiology Technician' });
+    expect(within(d).getByRole('button', { name: 'All files on a job' })).toHaveAttribute('aria-pressed', 'true');
     expect(within(d).getByRole('note')).toHaveTextContent('3 open files move');
-    expect(within(d).getByRole('note')).toHaveTextContent('The job’s own owner is not changed (files only).');
+    expect(within(d).getByRole('note')).toHaveTextContent('Only files move: the job and its owner stay as they are.');
     await u.selectOptions(within(d).getByLabelText(/^New primary recruiter/), 'u-mariam');
     await u.type(within(d).getByLabelText(/^Reason/), 'Leave');
     await u.click(within(d).getByRole('button', { name: 'Reassign' }));
@@ -139,5 +141,39 @@ describe('M06 Reassign (B7 POST /files/reassign)', () => {
     expect(reassignError(e('REASSIGN_CONFLICT'))).toMatchObject({ text: expect.stringMatching(/Reload/) });
     expect(reassignError(new ApiError(403, 'x'))).toMatchObject({ text: 'You do not have permission to reassign these files.' });
     expect(reassignError(new ApiError(500, 'Boom'))).toMatchObject({ text: 'Boom' });
+  });
+});
+
+describe('M2 CoS follow-ups', () => {
+  it('prefers GET /team/work when present (server counts, waiting incl. scorecards) and skips the per-report calls', async () => {
+    serve({ '/team/work': fx.teamWorkApi });
+    renderAt();
+    expect(await screen.findByText('Open work of your 2 direct reports. Counts equal the rows shown.')).toBeInTheDocument();
+    expect(api.getApi.mock.calls.map((c) => c[0])).not.toContain('/users/assignable');
+    expect(card('Mariam Farag')).toHaveTextContent('3 open · 1 overdue');
+    const wait = screen.getByRole('heading', { name: 'Waiting on you' }).closest('section')!;
+    expect(wait).toHaveTextContent(/Offer v2 submitted by Mariam Farag/);
+    expect(wait).toHaveTextContent(/Your scorecard — Rana Adel, BI Data Analyst.*Late/);
+  });
+  it('team/work failing with 500 is an error (not a silent fallback)', async () => {
+    serve({ '/team/work': new ApiError(500, 'Team work down') });
+    renderAt();
+    expect(await screen.findByRole('alert')).toHaveTextContent('Team work down');
+  });
+  it('reason list from master data (active only); Other needs a note; sent as the name', async () => {
+    const u = userEvent.setup();
+    serve({ '/master-data/catalog/reassign-reasons': fx.reassignReasons });
+    api.postApi.mockResolvedValue({ batchId: 'b', toUserId: 'u-youssef', moved: [{ applicationId: 'n1' }], unchanged: [] });
+    renderAt('/my-work?reassign=u-noura&file=n1');
+    const d = await screen.findByRole('dialog');
+    const sel = await within(d).findByRole('combobox', { name: /^Reason/ });
+    expect(within(sel).queryByRole('option', { name: 'Old reason' })).toBeNull();
+    await u.selectOptions(within(d).getByLabelText(/^New primary recruiter/), 'u-youssef');
+    await u.selectOptions(sel, 'Other');
+    await u.click(within(d).getByRole('button', { name: 'Reassign' }));
+    expect(await within(d).findByText('Say why (at least 3 characters).')).toBeInTheDocument();
+    await u.selectOptions(sel, 'Leave');
+    await u.click(within(d).getByRole('button', { name: 'Reassign' }));
+    await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/files/reassign', { applicationIds: ['n1'], toUserId: 'u-youssef', reason: 'Leave' }));
   });
 });

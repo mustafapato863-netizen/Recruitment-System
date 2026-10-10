@@ -1,7 +1,7 @@
 /**
  * M2 adapters: Manager team work + reassign (Figma M02 / M06).
  *
- * There is no team-work aggregate yet (FRONTEND_GAP: `GET /team/work` is MISSING), so this composes existing endpoints:
+ * Preferred: GET /team/work (coming, CoS) → TeamWorkApi below. When it is absent (404/405/501) we compose existing endpoints:
  * - GET /users/assignable                         → the caller's direct reports (B1/B3)
  * - GET /applications?primaryRecruiterId=:id      → each report's files (B5 list: stage, followUpDate, gates[], interview, positionTitle, vacancyBranchName)
  * - GET /offers?status=Pending Approval           → offers waiting on the Manager's decision (B7: the owner's manager decides)
@@ -10,6 +10,8 @@
  *   Codes: REASSIGN_ADMIN_FORBIDDEN 403, REASSIGN_NOT_MANAGER, REASSIGN_TARGET_INELIGIBLE, REASSIGN_FILE_CLOSED 409,
  *   REASSIGN_CONFLICT 409, REASSIGN_REASON_REQUIRED, REASSIGN_SCOPE, REASSIGN_FILE_NOT_FOUND. All-or-nothing.
  *   Jobs are not reassigned by B7 (files only); "Whole job" = that report's open files on the job.
+ * The Manager's own pending scorecards come from GET /me/work (B4 items of type "scorecard").
+ * Reassign reasons: GET /master-data/catalog/reassign-reasons when present (coming), free text otherwise.
  * Team work never shows pay: every read goes through stripPay().
  */
 import { getApi, postApi } from '../../api/client';
@@ -17,6 +19,7 @@ import { stripPay } from './paySafety';
 import { domainError } from './gates';
 import { blockingGate, cairoToday, type CardInterview, type FileGate } from './jobs';
 import { fetchPeople, type Person } from './requisitions';
+import { fetchMyWorkApi, type WorkItem } from './myWork';
 
 const enc = encodeURIComponent;
 const list = <T,>(r: T[] | { data: T[] } | null | undefined): T[] => (Array.isArray(r) ? r : r?.data ?? []);
@@ -33,7 +36,17 @@ export type TaskKind = 'followup-overdue' | 'gate' | 'offer' | 'followup' | 'int
 export interface TeamTask { fileId: string; kind: TaskKind; title: string; meta: string; tone: TaskTone }
 export interface ReportWork { person: Person; files: TeamFile[]; tasks: TeamTask[]; open: number; overdue: number }
 export interface WaitingOffer { offerId: string; versionId: string; versionNumber: number; applicationId: string; candidate: string; job: string; ownerName: string | null; submittedAt: string | null }
-export interface TeamWork { reports: ReportWork[] | null; waiting: WaitingOffer[] }
+export interface WaitingScorecard { interviewId: string; applicationId: string | null; candidate: string; job: string | null; dueAt: string | null; overdue: boolean }
+export interface TeamWork { reports: ReportWork[] | null; waiting: WaitingOffer[]; scorecards: WaitingScorecard[]; source: 'team-work' | 'composed' }
+
+/** Typed adapter for the coming GET /team/work (shape from FRONTEND_GAP M2; every field optional so a partial server works). */
+export interface TeamWorkApi {
+  waitingOnYou?: Array<{
+    type: 'offer' | 'scorecard' | string; offerId?: string; versionId?: string; versionNumber?: number; applicationId?: string;
+    candidateName?: string; positionTitle?: string; ownerName?: string | null; submittedAt?: string | null; interviewId?: string; dueAt?: string | null;
+  }>;
+  reports: Array<{ user: { id: string; displayName?: string; name?: string; roleName?: string | null }; files: RawTeamApp[]; open?: number; overdue?: number }>;
+}
 
 const toFile = (a: RawTeamApp): TeamFile => ({
   id: a.id, code: a.applicationCode, vacancyId: a.vacancyId, stage: a.stage, followUpDate: a.followUpDate?.slice(0, 10) ?? null,
@@ -79,18 +92,57 @@ export async function fetchWaitingOffers(owners: Map<string, string>): Promise<W
   }).filter((w) => w.versionId);
 }
 
+const NOT_THERE = new Set([404, 405, 501]);
+function buildReport(person: Person, files: TeamFile[], today: string, server?: { open?: number; overdue?: number }): ReportWork {
+  const tasks = files.map((f) => taskFor(f, today)).sort((a, b) => RANK[String(a.tone)] - RANK[String(b.tone)]);
+  return { person, files, tasks, open: server?.open ?? files.length, overdue: server?.overdue ?? files.filter((f) => f.followUpDate && f.followUpDate < today).length };
+}
+/** My own scorecards still to submit (I interviewed), from /me/work. Never fatal. */
+export async function fetchMyScorecards(): Promise<WaitingScorecard[]> {
+  try {
+    const w = await fetchMyWorkApi('today');
+    const items: Array<WorkItem & { _overdue?: boolean }> = [...w.overdue.map((i) => ({ ...i, _overdue: true })), ...w.dueToday];
+    const seen = new Set<string>();
+    return items.filter((i) => i.type === 'scorecard' && !seen.has(i.entity.id) && seen.add(i.entity.id)).map((i) => ({
+      interviewId: i.entity.id, applicationId: i.applicationId ?? null, candidate: i.candidate?.name ?? i.title, job: i.reason || null, dueAt: i.dueAt, overdue: !!i._overdue,
+    }));
+  } catch { return []; }
+}
+
 export async function fetchTeamWork(): Promise<TeamWork> {
-  const people = await fetchPeople();
-  if (!people) return { reports: null, waiting: [] };
   const today = cairoToday();
-  const reports = await Promise.all([...people].sort((a, b) => a.name.localeCompare(b.name)).map(async (person) => {
-    const files = await fetchReportFiles(person.id);
-    const tasks = files.map((f) => taskFor(f, today)).sort((a, b) => RANK[String(a.tone)] - RANK[String(b.tone)]);
-    return { person, files, tasks, open: files.length, overdue: files.filter((f) => f.followUpDate && f.followUpDate < today).length };
-  }));
+  let api: TeamWorkApi | null = null;
+  try { api = stripPay(await getApi<TeamWorkApi>('/team/work')); } catch (e) {
+    if (!NOT_THERE.has((e as { statusCode?: number })?.statusCode ?? 0)) throw e;
+  }
+  if (api && Array.isArray(api.reports)) {
+    const reports = api.reports.map((r) => buildReport({ id: r.user.id, name: r.user.displayName ?? r.user.name ?? 'Unnamed', detail: r.user.roleName ?? undefined },
+      (r.files ?? []).filter((a) => !(CLOSED_STAGES as readonly string[]).includes(a.stage)).map(toFile), today, r)).sort((a, b) => a.person.name.localeCompare(b.person.name));
+    const items = api.waitingOnYou ?? [];
+    const waiting = items.filter((w) => w.type === 'offer' && w.offerId && w.versionId).map((w) => ({
+      offerId: w.offerId!, versionId: w.versionId!, versionNumber: w.versionNumber ?? 1, applicationId: w.applicationId ?? '', candidate: w.candidateName ?? 'Candidate', job: w.positionTitle ?? 'Job', ownerName: w.ownerName ?? null, submittedAt: w.submittedAt ?? null,
+    }));
+    const serverCards = items.filter((w) => w.type === 'scorecard' && w.interviewId).map((w) => ({
+      interviewId: w.interviewId!, applicationId: w.applicationId ?? null, candidate: w.candidateName ?? 'Candidate', job: w.positionTitle ?? null, dueAt: w.dueAt ?? null, overdue: !!w.dueAt && w.dueAt.slice(0, 10) < today,
+    }));
+    return { reports, waiting, scorecards: serverCards.length ? serverCards : await fetchMyScorecards(), source: 'team-work' };
+  }
+  const people = await fetchPeople();
+  if (!people) return { reports: null, waiting: [], scorecards: await fetchMyScorecards(), source: 'composed' };
+  const reports = await Promise.all([...people].sort((a, b) => a.name.localeCompare(b.name)).map(async (person) => buildReport(person, await fetchReportFiles(person.id), today)));
   const owners = new Map<string, string>();
   for (const r of reports) for (const f of r.files) owners.set(f.id, r.person.name);
-  return { reports, waiting: await fetchWaitingOffers(owners) };
+  const [waiting, scorecards] = await Promise.all([fetchWaitingOffers(owners), fetchMyScorecards()]);
+  return { reports, waiting, scorecards, source: 'composed' };
+}
+
+/** Reassign reasons from master data when the list exists (coming); null → free text. Active names only. */
+export async function fetchReassignReasons(): Promise<string[] | null> {
+  try {
+    const r = await getApi<Array<{ name?: string; status?: string }> | { data: Array<{ name?: string; status?: string }> }>('/master-data/catalog/reassign-reasons');
+    const names = list(r).filter((x) => x.name?.trim() && (x.status ?? 'Active') === 'Active').map((x) => x.name!.trim());
+    return names.length ? names : null;
+  } catch { return null; }
 }
 
 export type ReassignBody = { applicationIds: string[]; toUserId: string; reason: string } | { fromUserId: string; toUserId: string; reason: string };
