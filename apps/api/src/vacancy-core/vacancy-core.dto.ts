@@ -375,6 +375,12 @@ export class JobStatusReasonDto {
   holdUntil?: string;
 }
 
+/** B2R-2: DELETE /vacancies/:id body. Required for Administrators (close reason from master data; note for "Other"). */
+export class DeleteVacancyDto {
+  @IsOptional() @IsString() @MaxLength(1000) reason?: string;
+  @IsOptional() @IsString() @MaxLength(1000) note?: string;
+}
+
 /** B3: cancel a requisition. Reason required once approved (enforced in the service). */
 export class CancelVacancyRequestDto {
   @IsOptional()

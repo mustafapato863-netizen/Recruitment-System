@@ -350,7 +350,18 @@ export class AccessControlService {
     return { AND: [{ organizationId: user.organizationId }, vacancyFullAccessWhere(user.userId)] }; // B2-8: ownership + reporting tree
   }
 
+  /**
+   * B2R-1: jobs in scope = the role's data scope OR the jobs the caller fully sees (owns, works, requested,
+   * or whose owner is in his reporting tree). A Hiring Manager's empty data scope no longer hides his reports' jobs.
+   */
   async getVacancyScopeWhere(user: AuthUser): Promise<Prisma.VacancyWhereInput> {
+    const role = await this.getVacancyRoleScopeWhere(user);
+    if (user.roleCodes?.includes('ADMINISTRATOR')) return role;
+    return { organizationId: user.organizationId, OR: [role, vacancyFullAccessWhere(user.userId)] };
+  }
+
+  /** The role's data scope only (ALL / ASSIGNED_ONLY / BRANCH / DEPARTMENT). */
+  async getVacancyRoleScopeWhere(user: AuthUser): Promise<Prisma.VacancyWhereInput> {
     const { scopes, responsibility } = await this.resolveScopes(user);
     if (scopes.includes('ALL')) return { organizationId: user.organizationId };
 

@@ -688,6 +688,11 @@ function isSafePublicDetails(value: unknown): value is Record<string, unknown> {
   if (keys.every((key) => key === 'currentApplication' || key === 'currentStage' || key === 'currentVersion')) {
     return true;
   }
+  // B2R-4: CANDIDATE_EXISTS names the existing person by id + code only (no contact details).
+  if (keys.length === 2 && keys.includes('candidateId') && keys.includes('candidateCode')) {
+    const r = value as { candidateId?: unknown; candidateCode?: unknown };
+    return typeof r.candidateId === 'string' && /^[0-9a-f-]{36}$/i.test(r.candidateId) && typeof r.candidateCode === 'string' && r.candidateCode.length <= 60;
+  }
   if (!keys.every((key) => key === 'targetStage' || key === 'requirements')) return false;
   const record = value as { targetStage?: unknown; requirements?: unknown };
   if (typeof record.targetStage !== 'string' || !Array.isArray(record.requirements)) return false;

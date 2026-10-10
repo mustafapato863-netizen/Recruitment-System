@@ -1059,9 +1059,11 @@ export class VacancyCoreService {
     target: (job: { status: string; joinedHeadcount: number; approvedHeadcount: number }) => JobStatus,
     opts: { note?: string | null | undefined; holdUntil?: Date | null | undefined } = {},
   ): Promise<Vacancy> {
-    await this.assertVacancyVisible(organizationId, id, user);
-    let text = requireReason(reason, `${action} this job`);
+    // B2R-3 precedence: 404 (no such job in the org) -> 403 ADMIN_CANNOT_CHANGE_JOB_STATUS / JOB_NOT_OWNED -> 400 reason.
+    await this.assertJobExists(organizationId, id);
     if (!user) throw new ForbiddenException('Only the job owner or their manager can change job status.');
+    await assertJobOwnerOrManager(this.prisma, organizationId, id, user.userId);
+    let text = requireReason(reason, `${action} this job`);
     await this.prisma.$transaction(async (tx) => {
       const job = await tx.vacancy.findFirst({
         where: { id, organizationId },
@@ -1336,13 +1338,22 @@ export class VacancyCoreService {
     id: string,
     organizationId: string,
     user?: AuthUser,
+    body: { reason?: string | null; note?: string | null } = {},
   ): Promise<{ id: string; deactivated: true; status: 'Closed' }> {
-    // B1 x B2 merge: deactivating is a write, so another owner's job is 403
-    // (JOB_NOT_OWNED) and an out-of-scope job is 404, like the other job writes.
-    await this.assertVacancyVisible(organizationId, id, user);
-    // NEW-3: like close, only the job owner or the owner's manager deactivates a job (403 JOB_NOT_OWNED);
-    // VACANCY_MANAGE alone is not enough. Administrators keep B2's deactivate.
-    if (user && !user.roleCodes?.includes('ADMINISTRATOR')) await assertJobOwnerOrManager(this.prisma, organizationId, id, user.userId);
+    // B2R-3: 404 when the job isn't in the org; then the owner or the owner's manager (whole chain) only,
+    // everyone else 403 JOB_NOT_OWNED (VACANCY_MANAGE alone is not enough).
+    await this.assertJobExists(organizationId, id);
+    // B2R-2: an Administrator's DELETE is the audited override: a close reason from master data
+    // ("Other" + note) is required and an ADMIN_OVERRIDE audit row is written with the close.
+    const adminOverride = Boolean(user?.roleCodes?.includes('ADMINISTRATOR'));
+    let overrideReason: string | null = null;
+    if (adminOverride) {
+      const raw = body.reason?.trim() ?? '';
+      if (!raw) throw new BadRequestException({ code: 'REASON_REQUIRED', field: 'reason', message: 'An administrator closing a job must give a close reason.' });
+      overrideReason = await resolveJobStatusReason(this.prisma, organizationId, 'close-reasons', raw, body.note);
+    } else if (user) {
+      await assertJobOwnerOrManager(this.prisma, organizationId, id, user.userId);
+    }
     const vacancy = await this.prisma.vacancy.findFirst({
       where: { id, organizationId },
       select: { id: true, status: true, vacancyRequestId: true },
@@ -1365,6 +1376,12 @@ export class VacancyCoreService {
     if (vacancy.status !== 'Closed') {
       await this.prisma.$transaction(async (transaction) => {
         await transaction.vacancy.update({ where: { id }, data: { status: 'Closed' } });
+        if (adminOverride && user) {
+          await transaction.auditLog.create({ data: {
+            action: 'ADMIN_OVERRIDE', actorUserId: user.userId, organizationId, entityType: 'Vacancy', entityId: id, result: 'Success', reason: overrideReason,
+            beforeData: { action: 'job.close', status: vacancy.status }, afterData: { action: 'job.close', status: 'Closed' },
+          } });
+        }
         await transaction.vacancyRequest.updateMany({
           where: { id: vacancy.vacancyRequestId, status: { notIn: ['Cancelled', 'Rejected'] } },
           data: { status: 'Cancelled' },
@@ -1373,6 +1390,11 @@ export class VacancyCoreService {
     }
 
     return { id, deactivated: true, status: 'Closed' };
+  }
+
+  /** 404 unless the job exists in this organization. */
+  private async assertJobExists(organizationId: string, id: string): Promise<void> {
+    if (!(await this.prisma.vacancy.findFirst({ where: { id, organizationId }, select: { id: true } }))) throw new NotFoundException(`Vacancy ${id} was not found.`);
   }
 
   private async assertVacancyVisible(organizationId: string, id: string, user?: AuthUser): Promise<void> {
