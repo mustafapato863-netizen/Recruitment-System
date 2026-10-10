@@ -126,9 +126,16 @@ export async function loadApplicationFile(id: string, opts: { keepScreeningPay?:
 }
 
 // ── writes ────────────────────────────────────────────────────────────────
-/** = UpdateApplicationStageDto. */
-export function moveStage(app: Pick<FileApplication, 'id' | 'stage' | 'version'>, stage: FileStage, reason?: string) {
-  return patchApi<FileApplication>(`/applications/${enc(app.id)}/stage`, { stage, expectedStage: app.stage, expectedVersion: app.version, ...(reason ? { reason } : {}) });
+/** Backend #21 (B2-4): Joined, Rejected and Withdrawn are closed; nothing moves them (409 FILE_CLOSED). */
+export const CLOSED_STAGES: readonly string[] = ['Joined', 'Rejected', 'Withdrawn'];
+export const isClosedStage = (stage: string | null | undefined) => !!stage && CLOSED_STAGES.includes(stage);
+/** The rejection reason that needs a note (400 REASON_REQUIRED, field "note", under 3 characters). */
+export const OTHER_REASON = 'Other';
+export const OTHER_NOTE_MIN = 3;
+export const needsReasonNote = (reason: string | null | undefined) => (reason ?? '').trim().toLowerCase() === 'other';
+/** = UpdateApplicationStageDto (#21: + note, required with the "Other" rejection reason; stored as "Other: <note>"). */
+export function moveStage(app: Pick<FileApplication, 'id' | 'stage' | 'version'>, stage: FileStage, reason?: string, note?: string) {
+  return patchApi<FileApplication>(`/applications/${enc(app.id)}/stage`, { stage, expectedStage: app.stage, expectedVersion: app.version, ...(reason ? { reason } : {}), ...(note?.trim() ? { note: note.trim() } : {}) });
 }
 /** = CreateApplicationNoteDto. */
 export const addNote = (id: string, content: string) => postApi<NoteItem>(`/applications/${enc(id)}/notes`, { content });
