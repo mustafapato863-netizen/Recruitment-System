@@ -141,9 +141,10 @@ export async function assertJobOwnerOrManager(
   const owners = vacancy.assignments.map((a) => a.userId);
   const managers = vacancy.assignments.map((a) => a.user.managerId).filter((id): id is string => Boolean(id));
   if (owners.length === 0 && vacancy.vacancyRequest.assignedEmployeeId) owners.push(vacancy.vacancyRequest.assignedEmployeeId);
-  const allowed = new Set([...owners, ...managers, vacancy.vacancyRequest.requesterId]);
+  // NEW-3: the owner or the owner's manager only. Being the requester, or holding VACANCY_MANAGE, is not enough.
+  const allowed = new Set([...owners, ...managers]);
   if (!allowed.has(actorUserId)) {
-    throw new ForbiddenException({ code: 'NOT_JOB_OWNER', message: 'Only the job owner or their manager can hold, reopen or close this job.' });
+    throw new ForbiddenException({ code: 'JOB_NOT_OWNED', message: 'Only the job owner or their manager can hold, reopen, close or delete this job.' });
   }
 }
 
