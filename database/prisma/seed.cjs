@@ -299,6 +299,9 @@ async function main() {
       { code: 'NOTIFICATION_VIEW', description: 'View own notifications and manage read status.' },
       { code: 'TASK_VIEW', description: 'View tasks assigned to the current user.' },
       { code: 'TASK_UPDATE_STATUS', description: 'Update the status of an assigned task.' },
+      // C2: named now, wired in B0b (no endpoint checks them yet)
+      { code: 'INTERVIEW_PARTICIPATE', name: 'Participate in interviews', description: 'Be scheduled on interviews and submit scorecards for interviews you attend.' },
+      { code: 'LICENSE_CHECK', name: 'Check professional licenses', description: "Record and verify a candidate's professional license check (e.g. nursing, pharmacy)." },
     ];
 
     for (const p of permSeed) {

@@ -123,4 +123,12 @@ describe.skipIf(!url)('M1 requisitions (scratch Postgres)', () => {
     expect(await prisma.auditLog.count({ where: { entityId: id, action: 'REQUISITION_TARGET_UPDATE' } })).toBe(1);
     expect((await service.updateRequisitionTarget(id, ORG, ids.mgr, { seats: 2, reason: 'back to plan' })).request.requestedHeadcount).toBe(2);
   });
+
+  it('C2: INTERVIEW_PARTICIPATE and LICENSE_CHECK are named in the catalog; Administrator has them (wiring in B0b)', async () => {
+    const perms = await prisma.permission.findMany({ where: { code: { in: ['INTERVIEW_PARTICIPATE', 'LICENSE_CHECK'] } }, select: { code: true, name: true } });
+    expect(perms.map((p) => p.code).sort()).toEqual(['INTERVIEW_PARTICIPATE', 'LICENSE_CHECK']);
+    expect(perms.every((p) => Boolean(p.name))).toBe(true);
+    const admin = await prisma.rolePermission.count({ where: { role: { code: 'ADMINISTRATOR' }, permission: { code: { in: ['INTERVIEW_PARTICIPATE', 'LICENSE_CHECK'] } } } });
+    expect(admin).toBe(2);
+  });
 });
