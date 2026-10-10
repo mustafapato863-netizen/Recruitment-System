@@ -26,7 +26,7 @@ function targetText(r: Requisition): string {
   return `target ${r.targetChip?.label ?? `0 of ${r.requestedHeadcount}`}`;
 }
 
-/** M1 Requisitions (Manager, v2): list, create, submit, activate, add target, cancel. */
+/** M1 Requisitions (Manager, v2): list, create, activate, add target, cancel. */
 export function RequisitionsV2() {
   const { user } = useAuth();
   const perms = useMemo(() => new Set(user?.permissions ?? []), [user]);
@@ -74,7 +74,7 @@ export function RequisitionsV2() {
       <div className="rf2-row-between">
         <div>
           <h1 className="rf2-jobs__title">Requisitions</h1>
-          <p className="rf2-jobs__sub">Requisitions for your team. Activate job turns an approved requisition into an open job in one step. Cancelled lives on the requisition.</p>
+          <p className="rf2-jobs__sub">Requisitions for your team. Activate job turns a requisition with a due date into an open job in one step. Cancelled lives on the requisition.</p>
         </div>
         {canCreate ? <ButtonV2 icon={<Plus />} onClick={() => go('new')}>New requisition</ButtonV2> : null}
       </div>
@@ -119,7 +119,7 @@ export function RequisitionsV2() {
               </table>
             )}
           </section>
-          <p className="rf2-inline-note"><Info aria-hidden="true" /> Statuses: Draft → Pending approval → Approved → Job active (via Activate job), or Cancelled with a reason. There is no pending-activation step.</p>
+          <p className="rf2-inline-note"><Info aria-hidden="true" /> Statuses: Draft until a due date is set → Job active (via Activate job), or Cancelled with a reason. There is no pending state.</p>
           {open === 'new' && canCreate ? <RequisitionDrawer req={null} ctx={data.ctx} people={data.people} grades={data.grades} canActivate={canActivate} meId={user?.id} onClose={() => go(null)} onDone={done} /> : null}
           {current && drawer === 'target' ? <TargetDrawer req={current} people={data.people} canActivate={canActivate} meId={user?.id} onClose={() => go(null)} onDone={done} /> : null}
           {current && drawer !== 'target' ? <RequisitionDrawer key={current.id} req={current} ctx={data.ctx} people={data.people} grades={data.grades} canActivate={canActivate} meId={user?.id} onClose={() => go(null)} onDone={done} /> : null}
