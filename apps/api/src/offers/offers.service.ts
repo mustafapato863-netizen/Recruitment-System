@@ -119,6 +119,11 @@ export class OffersService {
     return this.accessControl.getApplicationVisibilityWhere(user);
   }
 
+  /** Read-only: owners plus the current approver of the file (B1 follow-up). */
+  private applicationReadVisibility(user: AuthUser) {
+    return this.accessControl.getApplicationReadVisibilityWhere(user);
+  }
+
   private notify(input: {
     organizationId: string;
     recipientUserId: string;
@@ -235,7 +240,7 @@ export class OffersService {
   }
 
   async getOfferById(user: AuthUser, id: string, disclosure: CompensationDisclosure) {
-    const visibility = await this.applicationVisibility(user);
+    const visibility = await this.applicationReadVisibility(user);
     const offer = await this.prisma.offer.findFirst({
       where: { id, organizationId: user.organizationId, application: visibility },
       include: {
@@ -260,6 +265,7 @@ export class OffersService {
   }
 
   async createOffer(user: AuthUser, dto: CreateOfferDto) {
+    await this.accessControl.assertApplicationAccess(user, dto.applicationId);
     const visibility = await this.applicationVisibility(user);
     const application = await this.prisma.application.findFirst({
       where: { AND: [visibility, { id: dto.applicationId }] },
@@ -484,7 +490,7 @@ export class OffersService {
   async getApprovalInbox(user: AuthUser, disclosure: CompensationDisclosure): Promise<OfferApprovalInboxItem[]> {
     const userRoleCodes = user.roleCodes;
     const isAdmin = userRoleCodes.includes('ADMINISTRATOR');
-    const visibility = await this.applicationVisibility(user);
+    const visibility = await this.applicationReadVisibility(user);
 
     const where: Prisma.OfferApprovalWhereInput = {
       status: 'Pending',
@@ -548,7 +554,7 @@ export class OffersService {
   }
 
   async submitDecision(user: AuthUser, approvalId: string, dto: OfferDecisionDto) {
-    const visibility = await this.applicationVisibility(user);
+    const visibility = await this.applicationReadVisibility(user);
     const approval = await this.prisma.offerApproval.findFirst({
       where: {
         id: approvalId,

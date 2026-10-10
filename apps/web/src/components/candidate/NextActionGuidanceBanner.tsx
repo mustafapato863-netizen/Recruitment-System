@@ -11,8 +11,9 @@ export interface NextActionPlan {
   icon: IconName;
 }
 
-export function getNextActionPlan(stage?: ApplicationStage, unassigned?: boolean): NextActionPlan {
-  if (unassigned && stage !== 'Rejected' && stage !== 'Withdrawn' && stage !== 'Joined') {
+export function getNextActionPlan(stage?: ApplicationStage, unassigned?: boolean, isAdmin = false): NextActionPlan {
+  // NEW-4: admins cannot claim work, so never offer them 'Assign to me'.
+  if (unassigned && !isAdmin && stage !== 'Rejected' && stage !== 'Withdrawn' && stage !== 'Joined') {
     return {
       kind: 'assign',
       label: 'Assign to me',
@@ -46,6 +47,8 @@ interface NextActionGuidanceBannerProps {
   stage?: ApplicationStage;
   candidateName: string;
   unassigned?: boolean;
+  /** NEW-4: hide 'Assign to me' for administrators. */
+  isAdmin?: boolean;
   assigning?: boolean;
   onAssign?: () => void;
   onAdvanceStage: () => void;
@@ -59,6 +62,7 @@ export const NextActionGuidanceBanner: React.FC<NextActionGuidanceBannerProps> =
   stage = 'Applied',
   candidateName,
   unassigned = false,
+  isAdmin = false,
   assigning = false,
   onAssign,
   onAdvanceStage,
@@ -67,7 +71,7 @@ export const NextActionGuidanceBanner: React.FC<NextActionGuidanceBannerProps> =
   onReject,
   onViewCandidate360,
 }) => {
-  const plan = getNextActionPlan(stage, unassigned && Boolean(onAssign));
+  const plan = getNextActionPlan(stage, unassigned && Boolean(onAssign), isAdmin);
   const handlers: Record<NextActionKind, () => void> = {
     assign: () => onAssign?.(),
     advance: onAdvanceStage,

@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { fetchVacancyContext } from '../utils/vacancyAccess';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getApi } from '../api/client';
 import type { Offer as BaseOffer, VacancyDetailView } from '@recruitflow/contracts';
@@ -67,7 +68,7 @@ export function OffersPage() {
   useEffect(() => {
     setIsLoading(true);
     const offersPromise = getApi<Offer[] | { data: Offer[] }>('/offers');
-    const vacancyPromise = vacancyId ? getApi<VacancyDetailView>(`/vacancies/${vacancyId}`) : Promise.resolve(null);
+    const vacancyPromise = vacancyId ? fetchVacancyContext(vacancyId) : Promise.resolve(null);
 
     Promise.allSettled([offersPromise, vacancyPromise])
       .then(([offersRes, vacRes]) => {
