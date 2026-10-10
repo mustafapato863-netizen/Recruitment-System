@@ -32,3 +32,7 @@
 [data-ui='v2'] .rf2-hsearch__head span:first-child { white-space: nowrap; }
 [data-ui='v2'] .rf2-hsearch__head span:last-child { text-align: right; }
 [data-ui='v2'] .rf2-hsearch__pop { min-width: 420px; }
+/* E07 results page: inset rows and headings inside the panel. */
+[data-ui='v2'] .rf2-panel > .rf2-sresults li { padding: var(--rf2-space-1) var(--rf2-space-2); }
+[data-ui='v2'] .rf2-panel > .rf2-sresults li:last-child { border-bottom: 0; }
+[data-ui='v2'] .rf2-panel:has(> .rf2-sresults) > .rf2-jobs__section { margin: 0; padding: var(--rf2-space-1-5) var(--rf2-space-2) var(--rf2-space-0-5); }
