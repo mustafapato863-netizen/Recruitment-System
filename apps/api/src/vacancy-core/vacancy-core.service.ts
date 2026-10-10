@@ -1311,6 +1311,13 @@ export class VacancyCoreService {
     user?: AuthUser,
   ): Promise<VacancyDetailView> {
     await this.assertVacancyVisible(organizationId, id, user);
+    // B2F-10: the job owner (or the owner's manager) may set requiredSkills without VACANCY_MANAGE; every other
+    // field still needs VACANCY_MANAGE. Skills go through the same library sync, so a deactivated skill is never reactivated (B6).
+    if (user && !(await this.holdsPermission(user.userId, organizationId, 'VACANCY_MANAGE'))) {
+      const other = Object.entries(dto).filter(([k, v]) => v !== undefined && k !== 'requiredSkills').map(([k]) => k);
+      if (other.length) throw new ForbiddenException({ code: 'FORBIDDEN', field: other[0], message: `Only requiredSkills can be changed without VACANCY_MANAGE (got ${other.join(', ')}).` });
+      await assertJobOwnerOrManager(this.prisma, organizationId, id, user.userId);
+    }
     const vacancy = await this.prisma.vacancy.findUnique({
       where: { id },
       include: { position: true },
