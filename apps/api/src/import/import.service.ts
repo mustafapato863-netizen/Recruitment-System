@@ -12,6 +12,21 @@ import type {
   PaginatedResult,
 } from '@recruitflow/contracts';
 import type { Prisma } from '@recruitflow/database';
+import { contactKeys, normalizeEmailKey, normalizePhoneKey } from '../candidates/contact-keys';
+import { catalogKey } from '../master-data/catalog-normalization';
+
+/** B6: per-row outcome of a candidate import confirm. */
+export interface ImportDuplicateReportRow {
+  rowId: string;
+  rowNumber: number;
+  action: 'created' | 'linked' | 'skipped';
+  candidateId: string | null;
+  matchedBy: Array<'email' | 'phone'>;
+  /** Empty fields on the existing person that the row filled. */
+  filled: string[];
+  /** Non-empty fields that differ; never overwritten. */
+  conflicts: Array<{ field: string; existing: unknown; incoming: unknown }>;
+}
 
 @Injectable()
 export class ImportService {
@@ -51,11 +66,12 @@ export class ImportService {
   }
 
   private normalizeEmail(email: string | null | undefined): string {
-    return email?.trim().toLowerCase() ?? '';
+    return normalizeEmailKey(email) ?? '';
   }
 
+  /** B6: E.164-ish key (see candidates/contact-keys.ts), '' when not a usable phone. */
   private normalizePhone(phone: string | null | undefined): string {
-    return phone?.replace(/\D/g, '') ?? '';
+    return normalizePhoneKey(phone) ?? '';
   }
 
   private isEmail(email: string): boolean {
@@ -104,16 +120,16 @@ export class ImportService {
       .filter((email): email is string => Boolean(email));
 
     const existingCandidates = emails.length === 0 ? [] : await this.prisma.candidate.findMany({
-      where: { organizationId, email: { in: emails, mode: 'insensitive' } },
-      select: { email: true, phone: true },
+      where: { organizationId, emailNormalized: { in: emails } },
+      select: { emailNormalized: true },
     });
-    const existingEmails = new Set(existingCandidates.map(c => this.normalizeEmail(c.email)).filter(Boolean));
+    const existingEmails = new Set(existingCandidates.map((c) => c.emailNormalized).filter((e): e is string => Boolean(e)));
     const phoneNumbers = dto.rows.map((row) => this.normalizePhone(row.phone)).filter(Boolean);
     const existingPhones = phoneNumbers.length === 0 ? new Set<string>() : new Set(
       (await this.prisma.candidate.findMany({
-        where: { organizationId, phone: { in: phoneNumbers } },
-        select: { phone: true },
-      })).map((candidate) => this.normalizePhone(candidate.phone)).filter(Boolean),
+        where: { organizationId, phoneNormalized: { in: phoneNumbers } },
+        select: { phoneNormalized: true },
+      })).map((candidate) => candidate.phoneNormalized).filter((p): p is string => Boolean(p)),
     );
     const seenEmails = new Set<string>();
     const seenPhones = new Set<string>();
@@ -335,6 +351,7 @@ export class ImportService {
       throw importInvalid('All duplicate rows must have a decision before confirming');
     }
 
+    const report: ImportDuplicateReportRow[] = [];
     const result = await this.prisma.$transaction(async (tx) => {
       const lockedJob = await tx.candidateImportJob.updateMany({
         where: { id: job.id, organizationId, status: 'Review' },
@@ -346,32 +363,76 @@ export class ImportService {
 
       let newRowsCount = 0;
       let updateRowsCount = 0;
+      const skillLibrary = await tx.masterDataValue.findMany({ where: { organizationId, category: 'skills', status: 'Active' }, select: { id: true, name: true } });
+      const skillByKey = new Map(skillLibrary.map((v) => [catalogKey(v.name), v.id]));
 
       for (const row of job.rows) {
+        const base = { rowId: row.id, rowNumber: row.rowNumber };
         if (row.result === 'Invalid') continue;
+        if (row.result === 'Duplicate' && row.decision === 'Skip') {
+          report.push({ ...base, action: 'skipped', candidateId: null, matchedBy: [], filled: [], conflicts: [] });
+          continue;
+        }
 
-        const email = row.email ? this.normalizeEmail(row.email) : null;
+        const email = row.email ? this.normalizeEmail(row.email) || null : null;
         const phone = this.normalizePhone(row.phone) || null;
         if (!email && !phone) continue;
         const raw = (row.rawData && typeof row.rawData === 'object') ? (row.rawData as Record<string, unknown>) : {};
-        const currentTitle = typeof raw.currentTitle === 'string' ? raw.currentTitle : null;
-        const currentCompany = typeof raw.currentCompany === 'string' ? raw.currentCompany : null;
-        const skills = Array.isArray(raw.skills) ? (raw.skills as string[]) : [];
-        const experienceYears = typeof raw.experienceYears === 'number' ? raw.experienceYears : null;
-        const location = typeof raw.location === 'string' ? raw.location : null;
+        const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null);
+        const incoming: Record<string, string | number | null> = {
+          firstName: str(row.firstName), lastName: str(row.lastName), email, phone,
+          currentTitle: str(raw.currentTitle), currentCompany: str(raw.currentCompany),
+          experienceYears: typeof raw.experienceYears === 'number' ? raw.experienceYears : null,
+          location: str(raw.location), source: str(raw.source), availability: str(raw.availability),
+          summary: str(raw.summary),
+        };
+        const skills = Array.isArray(raw.skills) ? (raw.skills as string[]).filter((x) => typeof x === 'string' && x.trim()) : [];
         const certifications = Array.isArray(raw.certifications) ? (raw.certifications as string[]) : [];
         const languages = Array.isArray(raw.languages) ? (raw.languages as string[]) : [];
-        const source = typeof raw.source === 'string' && raw.source.trim() ? raw.source.trim() : null;
-        const availability = typeof raw.availability === 'string' && raw.availability.trim() ? raw.availability.trim() : null;
         const importedStatus = typeof raw.status === 'string' && ['Active', 'Blacklisted', 'Archived'].includes(raw.status)
           ? raw.status
           : 'Active';
 
-        if (row.result === 'Valid') {
-          const existing = await this.findExistingByContact(tx, organizationId, email, phone);
-          if (existing) continue;
-
-          await tx.candidate.create({
+        // B6: a person already in the bank (same email OR phone) is linked, never duplicated.
+        const match = await this.findExistingByContact(tx, organizationId, email, phone);
+        let candidateId: string;
+        if (match) {
+          const existing = match.candidate as unknown as Record<string, unknown> & { id: string; skills: string[] };
+          const fill: Record<string, unknown> = {};
+          const filled: string[] = [];
+          const conflicts: Array<{ field: string; existing: unknown; incoming: unknown }> = [];
+          for (const [field, value] of Object.entries(incoming)) {
+            if (value === null || value === undefined) continue;
+            const current = existing[field];
+            const empty = current === null || current === undefined || (typeof current === 'string' && !current.trim());
+            if (empty) { fill[field] = value; filled.push(field); continue; }
+            const same = field === 'email' ? normalizeEmailKey(String(current)) === value
+              : field === 'phone' ? normalizePhoneKey(String(current)) === value
+              : String(current).trim().toLowerCase() === String(value).trim().toLowerCase();
+            if (!same) conflicts.push({ field, existing: current, incoming: value });
+          }
+          // E3: list fields from the parsed CV fill an EMPTY list only; a different non-empty list is a conflict.
+          for (const [field, list] of [['certifications', certifications], ['languages', languages]] as const) {
+            const clean = [...new Set(list.filter((x) => typeof x === 'string' && x.trim()).map((x) => x.trim()))];
+            if (!clean.length) continue;
+            const current = Array.isArray(existing[field]) ? (existing[field] as string[]) : [];
+            if (current.length === 0) { fill[field] = clean; filled.push(field); continue; }
+            const same = current.length === clean.length && current.every((c) => clean.some((x) => catalogKey(x) === catalogKey(c)));
+            if (!same) conflicts.push({ field, existing: current, incoming: clean });
+          }
+          const mergedSkills = [...existing.skills];
+          for (const sk of skills) if (!mergedSkills.some((x) => catalogKey(x) === catalogKey(sk))) mergedSkills.push(sk.trim());
+          if (mergedSkills.length !== existing.skills.length) { fill.skills = mergedSkills; filled.push('skills'); }
+          if ('email' in fill || 'phone' in fill) {
+            Object.assign(fill, contactKeys((fill.email ?? existing.email) as string | null, (fill.phone ?? existing.phone) as string | null));
+          }
+          if (Object.keys(fill).length > 0) await tx.candidate.update({ where: { id: existing.id }, data: fill });
+          candidateId = existing.id;
+          updateRowsCount++;
+          report.push({ ...base, action: 'linked', candidateId, matchedBy: match.matchedBy, filled, conflicts });
+          await tx.candidateImportRow.update({ where: { id: row.id }, data: { details: `Linked to existing candidate (${match.matchedBy.join(' + ')}).${filled.length ? ` Filled: ${filled.join(', ')}.` : ''}${conflicts.length ? ` Not overwritten: ${conflicts.map((c) => c.field).join(', ')}.` : ''}`.slice(0, 2000) } });
+        } else {
+          const created = await tx.candidate.create({
             data: {
               organizationId,
               createdById: createdById ?? null,
@@ -380,39 +441,36 @@ export class ImportService {
               lastName: row.lastName!,
               email,
               phone,
-              currentTitle,
-              currentCompany,
+              ...contactKeys(email, phone),
+              currentTitle: incoming.currentTitle as string | null,
+              currentCompany: incoming.currentCompany as string | null,
               skills,
-              experienceYears,
-              location,
+              experienceYears: incoming.experienceYears as number | null,
+              location: incoming.location as string | null,
               certifications,
               languages,
-              source,
-              availability,
+              source: incoming.source as string | null,
+              availability: incoming.availability as string | null,
               status: importedStatus,
             },
           });
+          candidateId = created.id;
           newRowsCount++;
-        } else if (row.result === 'Duplicate' && row.decision === 'Update') {
-          const existing = await this.findExistingByContact(tx, organizationId, email, phone);
+          report.push({ ...base, action: 'created', candidateId, matchedBy: [], filled: [], conflicts: [] });
+        }
 
-          if (existing) {
-            await tx.candidate.update({
-              where: { id: existing.id },
-              data: {
-                firstName: row.firstName || existing.firstName,
-                lastName: row.lastName || existing.lastName,
-                phone: phone || existing.phone,
-                currentTitle: currentTitle ?? existing.currentTitle,
-                currentCompany: currentCompany ?? existing.currentCompany,
-                skills: skills.length > 0 ? skills : existing.skills,
-                experienceYears: experienceYears ?? existing.experienceYears,
-                location: location ?? existing.location,
-                source: source ?? existing.source,
-                availability: availability ?? existing.availability,
-              },
-            });
-            updateRowsCount++;
+        // B6: skills listed on an import row are IMPORT evidence (library skills only).
+        for (const sk of skills) {
+          const skillId = skillByKey.get(catalogKey(sk));
+          if (!skillId) continue;
+          const link = await tx.candidateSkill.upsert({
+            where: { candidateId_skillId: { candidateId, skillId } },
+            create: { organizationId, candidateId, skillId },
+            update: {},
+          });
+          const exists = await tx.candidateSkillEvidence.findFirst({ where: { candidateSkillId: link.id, sourceType: 'IMPORT', sourceRef: row.id } });
+          if (!exists) {
+            await tx.candidateSkillEvidence.create({ data: { candidateSkillId: link.id, sourceType: 'IMPORT', sourceRef: row.id, snippet: `Listed on import row ${row.rowNumber}: ${sk.trim()}`.slice(0, 200), addedById: createdById ?? null } });
           }
         }
       }
@@ -423,7 +481,7 @@ export class ImportService {
       });
     });
 
-    return { success: true, status: result.status, newRows: result.newRows, updateRows: result.updateRows };
+    return { success: true, status: result.status, newRows: result.newRows, updateRows: result.updateRows, duplicateReport: report };
   }
 
   async getErrorReport(organizationId: string, jobId: string) {
@@ -453,23 +511,23 @@ export class ImportService {
     }));
   }
 
+  /** B6: match by normalized email OR phone (keys kept by the DB trigger). Email wins on ties. */
   private async findExistingByContact(
     tx: Prisma.TransactionClient,
     organizationId: string,
     email: string | null,
     phone: string | null,
-  ) {
-    if (email) {
-      const emailMatch = await tx.candidate.findFirst({
-        where: { organizationId, email: { equals: email, mode: 'insensitive' } },
-      });
-      if (emailMatch) return emailMatch;
-    }
-    if (!phone) return null;
-    const candidates = await tx.candidate.findMany({
-      where: { organizationId, phone: { not: null } },
-      take: 1000,
+  ): Promise<{ candidate: Prisma.CandidateGetPayload<{}>; matchedBy: Array<'email' | 'phone'> } | null> {
+    if (!email && !phone) return null;
+    const rows = await tx.candidate.findMany({
+      where: { organizationId, OR: [...(email ? [{ emailNormalized: email }] : []), ...(phone ? [{ phoneNormalized: phone }] : [])] },
+      orderBy: { createdAt: 'asc' },
     });
-    return candidates.find((candidate) => this.normalizePhone(candidate.phone) === phone) ?? null;
+    const candidate = rows.find((c) => email && c.emailNormalized === email) ?? rows[0];
+    if (!candidate) return null;
+    const matchedBy: Array<'email' | 'phone'> = [];
+    if (email && candidate.emailNormalized === email) matchedBy.push('email');
+    if (phone && candidate.phoneNormalized === phone) matchedBy.push('phone');
+    return { candidate, matchedBy };
   }
 }
