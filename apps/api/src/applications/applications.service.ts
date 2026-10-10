@@ -642,7 +642,7 @@ export class ApplicationsService {
       ? await assertReopenAllowed(this.prisma, application, actorUserId, dto.reason)
       : null;
     const rejectionReason = dto.stage === 'Rejected'
-      ? await resolveRejectionReason(this.prisma, organizationId, dto.reason)
+      ? await resolveRejectionReason(this.prisma, organizationId, dto.reason, dto.note)
       : null;
     await assertStageGate(this.prisma, application, dto.stage);
 
