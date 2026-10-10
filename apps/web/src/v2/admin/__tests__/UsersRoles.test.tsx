@@ -138,6 +138,22 @@ describe('A02 Users', () => {
   });
 });
 
+describe('#23 400 fields inline (admin forms)', () => {
+  it('invite: fields.email lands on Email; nothing left for the banner', async () => {
+    const u = userEvent.setup();
+    const fields = { email: ['A user with this email already exists.'] };
+    api.postApi.mockRejectedValue(new ApiError(400, 'x', { statusCode: 400, code: 'VALIDATION_ERROR', message: 'Please correct the highlighted fields.', field: 'email', fields }, { code: 'VALIDATION_ERROR', fields }));
+    renderAt('/users?drawer=invite');
+    const d = await screen.findByRole('dialog', { name: 'Invite user' });
+    await u.type(within(d).getByLabelText(/^Name/), 'Sara Ali');
+    await u.type(within(d).getByLabelText(/^Email/), 'sara@recruitflow.app');
+    await u.click(within(d).getByRole('button', { name: 'Send invitation' }));
+    expect(await within(d).findByText('A user with this email already exists.')).toBeInTheDocument();
+    expect(within(d).getByLabelText(/^Email/)).toHaveAttribute('aria-invalid', 'true');
+    expect(within(d).queryByText('Please correct the highlighted fields.')).toBeNull();
+  });
+});
+
 describe('A03 Reporting tree', () => {
   it('builds the tree (inactive hidden), edits one line via PATCH managerId; no loops offered', async () => {
     const u = userEvent.setup();

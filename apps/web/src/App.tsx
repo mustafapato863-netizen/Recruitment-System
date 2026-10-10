@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './auth/AuthContext';
 import { ProtectedRoute } from './auth/ProtectedRoute';
+import { RequisitionsGate } from './auth/RequisitionsGate';
 import { PermissionGate } from './auth/PermissionGate';
 import { LoginPage } from './auth/LoginPage';
 import { ThemeProvider } from './theme/ThemeContext';
@@ -152,9 +153,9 @@ function App() {
                   />
 
                   {/* Vacancy Management */}
-                  <Route path="/vacancy-requests" element={<PermissionGate requiredPermission="VACANCY_REQUEST_VIEW"><RequisitionsRoute /></PermissionGate>} />
-                  <Route path="/vacancy-requests/create" element={<PermissionGate requiredPermission="VACANCY_REQUEST_CREATE"><CreateVacancyRequestPage /></PermissionGate>} />
-                  <Route path="/vacancy-requests/:id" element={<PermissionGate requiredPermission="VACANCY_REQUEST_VIEW"><VacancyRequestDetailPage /></PermissionGate>} />
+                  <Route path="/vacancy-requests" element={<RequisitionsGate><PermissionGate requiredPermission="VACANCY_REQUEST_VIEW"><RequisitionsRoute /></PermissionGate></RequisitionsGate>} />
+                  <Route path="/vacancy-requests/create" element={<RequisitionsGate><PermissionGate requiredPermission="VACANCY_REQUEST_CREATE"><CreateVacancyRequestPage /></PermissionGate></RequisitionsGate>} />
+                  <Route path="/vacancy-requests/:id" element={<RequisitionsGate><PermissionGate requiredPermission="VACANCY_REQUEST_VIEW"><VacancyRequestDetailPage /></PermissionGate></RequisitionsGate>} />
                   <Route path="/approval-inbox" element={<PermissionGate requiredAnyPermission={['VACANCY_REQUEST_APPROVE', 'APPROVE_OFFERS', 'FINAL_HIRING_APPROVAL']}><ApprovalInboxPage /></PermissionGate>} />
                   <Route path="/inbox" element={<Navigate to="/approval-inbox" replace />} />
                   <Route path="/vacancies" element={<PermissionGate requiredPermission="VACANCY_VIEW"><JobsListRoute /></PermissionGate>} />

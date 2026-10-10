@@ -15,6 +15,7 @@
  * Base pay = "Salary" components only, annual amounts / 12 (allowances never count) — mirrored by monthlyBase().
  * Pay is shown only to the Manager seat holding OFFER_PAY_VIEW; everyone else gets stripPay().
  */
+import { bannerError, serverFormErrors, type ServerFormErrors } from '../forms/serverErrors';
 import { ApiError, getApi, postApi } from '../../api/client';
 import { stripPay } from './paySafety';
 import { domainError } from './gates';
@@ -101,7 +102,7 @@ export function defaultCurrency(bands: GradeBand[] | null, offer: DecisionOffer)
 }
 export const CURRENCIES = ['EGP', 'AED', 'SAR'] as const;
 
-export interface DecisionError { code?: string; field?: 'reason' | 'pay'; text: string; band?: Record<string, string | number | null>; offered?: number }
+export interface DecisionError { code?: string; field?: 'reason' | 'pay'; text: string; band?: Record<string, string | number | null>; offered?: number; inline?: ServerFormErrors }
 const TEXT: Record<string, { field?: 'reason' | 'pay'; text: string }> = {
   OFFER_DECISION_NOT_MANAGER: { text: 'Only the manager of this file’s owner can decide. If you co-own the file, your own manager decides it.' },
   OFFER_NOT_PENDING_APPROVAL: { text: 'This version is no longer waiting for a decision (someone already decided, or it was revised). Reload to see it.' },
@@ -115,13 +116,22 @@ const TEXT: Record<string, { field?: 'reason' | 'pay'; text: string }> = {
   OFFER_PAY_INVALID: { field: 'pay', text: 'Check the pay: base pay above 0, allowances 0 or more, one currency.' },
   CURRENCY_INVALID: { field: 'pay', text: 'Pick a supported currency.' },
 };
+/** Body paths the drawer has an input for. */
+export const DECISION_INPUTS = ['basePay', 'currency', 'allowances', 'reason'] as const;
 export function decisionError(e: unknown): DecisionError {
   const d = domainError(e);
   const env = (e instanceof ApiError ? e.details : null) as { band?: Record<string, string | number | null>; offeredMonthlyBase?: number } | null;
   if (d && TEXT[d.code]) return { code: d.code, ...TEXT[d.code], ...(env?.band ? { band: env.band } : {}), ...(typeof env?.offeredMonthlyBase === 'number' ? { offered: env.offeredMonthlyBase } : {}) };
   const x = e as { statusCode?: number; message?: string; details?: unknown } | null;
   if (x?.statusCode === 403) return { code: d?.code, text: x?.message && d?.code ? x.message : 'You do not have permission to decide on this offer.' };
-  // B2-15: always show the API's own message (e.g. 400 VALIDATION_ERROR), plus the fields it names.
+  // B2-15 / #23 (f64406b): a 400 VALIDATION_ERROR names `field` + flattened `fields` ("basePay", "allowances.0.amount", "pay"):
+  // each message goes inline on its input; the API's own message stays in the banner for anything no input shows.
+  const inline = serverFormErrors(e);
+  if (Object.keys(inline.byField).length) {
+    const banner = bannerError(inline, DECISION_INPUTS);
+    const payField = Object.keys(inline.byField).some((f) => /^(basePay|currency|allowances|pay)/.test(f));
+    return { code: d?.code, ...(payField ? { field: 'pay' as const } : {}), text: banner ?? '', inline };
+  }
   const fields = fieldsOf(x?.details);
   const payField = fields.some((f) => /^(basePay|currency|allowances)/.test(f));
   const text = [x?.message || 'Something went wrong. Try again.', fields.length ? `(${fields.join(', ')})` : ''].filter(Boolean).join(' ');
