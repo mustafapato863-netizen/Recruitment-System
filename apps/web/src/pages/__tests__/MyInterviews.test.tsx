@@ -170,6 +170,45 @@ describe('draft scorecard + room name', () => {
   });
 });
 
+describe('r3: #4 cards carry isLocked, no status (R3-1 / R3-2)', () => {
+  const card = (over: Record<string, unknown>) => ({ id: 's1', interviewId: 'iv1', interviewerId: 'me', overallRating: 3, recommendation: 'Neutral', notes: 'Half done', submittedAt: '2026-10-13T09:00:00Z', ...over });
+
+  it('R3-1: a locked card with no status opens read-only (submitted), even if the list says draft', async () => {
+    const u = userEvent.setup();
+    api.getApi.mockImplementation(async (p: string) => (p.endsWith('/scorecard') ? [card({ isLocked: true })] : { data: [row({ scorecardStatus: 'draft' })] }));
+    renderPage();
+    await u.click(await screen.findByRole('button', { name: 'Continue scorecard' }));
+    expect(await screen.findByTestId('my-scorecard')).toBeInTheDocument();
+    expect(screen.queryByTestId('draft-note')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Submit scorecard' })).not.toBeInTheDocument();
+  });
+
+  it('R3-1: an unlocked card with no status stays an editable draft', async () => {
+    const u = userEvent.setup();
+    api.getApi.mockImplementation(async (p: string) => (p.endsWith('/scorecard') ? [card({ isLocked: false })] : { data: [row({ scorecardStatus: 'draft' })] }));
+    renderPage();
+    await u.click(await screen.findByRole('button', { name: 'Continue scorecard' }));
+    expect(await screen.findByTestId('draft-note')).toBeInTheDocument();
+    expect(screen.getByLabelText(/Written evidence/)).toHaveValue('Half done');
+  });
+
+  it('R3-2: after submitting a draft the dialog switches to Submitted and hides Submit, without a reload', async () => {
+    const u = userEvent.setup();
+    api.getApi.mockImplementation(async (p: string) => (p.endsWith('/scorecard') ? [card({ isLocked: false })] : { data: [row({ scorecardStatus: 'draft' })] }));
+    // #4 echoes the saved card without `status` (and here without isLocked either).
+    api.postApi.mockResolvedValue(card({ notes: 'Half done, finished', submittedAt: '2026-10-13T10:00:00Z' }));
+    renderPage();
+    await u.click(await screen.findByRole('button', { name: 'Continue scorecard' }));
+    await u.type(await screen.findByLabelText(/Written evidence/), ', finished');
+    await u.click(screen.getByRole('button', { name: 'Submit scorecard' }));
+    expect(await screen.findByTestId('my-scorecard')).toHaveTextContent('Half done, finished');
+    expect(screen.queryByTestId('draft-note')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Submit scorecard' })).not.toBeInTheDocument();
+    expect(screen.getByText('Scorecard submitted')).toBeInTheDocument();
+    expect(api.getApi.mock.calls.filter(([p]) => p.startsWith('/me/interviews'))).toHaveLength(1);
+  });
+});
+
 describe('who sees My interviews', () => {
   it('INTERVIEWER role or INTERVIEW_PARTICIPATE, plus VACANCY_VIEW', () => {
     expect(canUseMyInterviews({ roles: [{ id: 'r', code: 'INTERVIEWER', name: 'Interviewer' }], permissions: ['VACANCY_VIEW'] })).toBe(true);

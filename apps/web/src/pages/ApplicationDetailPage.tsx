@@ -18,6 +18,7 @@ import { CandidateFitScorecard } from '../components/candidate/CandidateFitScore
 import { Icon } from '../components/Icon';
 import { SendWhatsAppDialog } from '../components/whatsapp/SendWhatsAppDialog';
 import { useAuth } from '../auth/AuthContext';
+import { isAdministratorUser } from '../utils/isAdministrator';
 import { Modal } from '../components/Modal';
 import { Alert } from '../components/ui/Alert';
 import { Badge } from '../components/ui/Badge';
@@ -1072,6 +1073,7 @@ export function ApplicationDetailPage() {
             stage={application?.stage}
             candidateName={candidateName}
             unassigned={!(application?.primaryRecruiterName || application?.taskOwnerName || application?.primaryRecruiterId)}
+            isAdmin={isAdministratorUser(user)}
             assigning={isAssigning}
             onAssign={() => void handleAssignToMe()}
             onAdvanceStage={() => setIsMoveStageModalOpen(true)}
@@ -1360,7 +1362,8 @@ export function ApplicationDetailPage() {
                 <span className="block text-xs font-semibold text-slate-800 dark:text-slate-100">
                   {getNextActionPlan(
                     application?.stage,
-                    !(application?.primaryRecruiterName || application?.taskOwnerName || application?.primaryRecruiterId)
+                    !(application?.primaryRecruiterName || application?.taskOwnerName || application?.primaryRecruiterId),
+                    isAdministratorUser(user),
                   ).label}
                 </span>
               </div>

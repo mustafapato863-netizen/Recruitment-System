@@ -6,6 +6,7 @@ import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/Modal';
 import { Icon } from '../components/Icon';
 import { ApiError } from '../api/client';
+import { scorecardState } from '../utils/scorecardStatus';
 import {
   RECOMMENDATIONS, downloadCv, downloadErrorMessage, downloadIcs, getMyScorecards, listMyInterviews, respond, submitScorecard,
   type ListResult, type MyInterview, type MyScorecard, type SubmitScorecardBody,
@@ -130,9 +131,10 @@ function InterviewCard({ item, onPatch, onScorecard }: { item: MyInterview; onPa
 
 /** A saved, unsubmitted scorecard stays editable (no 'locked' state). */
 function isDraft(card: MyScorecard, interview: MyInterview): boolean {
-  // B5: status only (Draft | Submitted); without a card status, the interview's scorecardStatus (missing|draft|submitted).
-  if (card.status) return card.status === 'Draft';
-  return interview.scorecardStatus === 'draft';
+  // R3-1: B5 status when present, else the legacy isLocked flag. Only a card carrying neither falls back
+  // to the interview's scorecardStatus (R3-2: the card's own state wins over that list-time snapshot).
+  if (card.status || typeof card.isLocked === 'boolean') return scorecardState(card) === 'draft';
+  return interview.scorecardStatus !== 'submitted';
 }
 
 function ScorecardModal({ interview, onClose, onSubmitted }: { interview: MyInterview; onClose: () => void; onSubmitted: () => void }) {
@@ -167,7 +169,8 @@ function ScorecardModal({ interview, onClose, onSubmitted }: { interview: MyInte
       if (form.strengths?.trim()) body.strengths = form.strengths.trim();
       if (form.concerns?.trim()) body.concerns = form.concerns.trim();
       const saved = await submitScorecard(interview.id, body);
-      setMine(saved && typeof saved === 'object' && 'id' in saved ? saved : { ...body, id: 'new', interviewId: interview.id, interviewerId: '', status: 'Submitted', submittedAt: new Date().toISOString() });
+      // R3-2: a successful submit is final — show the submitted view now, even if #4 echoes no status/isLocked.
+      setMine(saved && typeof saved === 'object' && 'id' in saved ? { ...saved, status: 'Submitted', isLocked: true } : { ...body, id: 'new', interviewId: interview.id, interviewerId: '', status: 'Submitted', submittedAt: new Date().toISOString() });
       onSubmitted();
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : 'Could not submit the scorecard.');
