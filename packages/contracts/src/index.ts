@@ -1006,6 +1006,30 @@ export interface ApplicationWorkspaceResponse {
   };
 }
 
+/** GET /me/interviews (B1, shape per the #7 frontend contract). */
+export const MY_INTERVIEW_SCOPES = ['upcoming', 'past'] as const;
+export type MyInterviewScope = (typeof MY_INTERVIEW_SCOPES)[number];
+/** No "locked" state by rule: missing, draft or submitted only. */
+export type MyInterviewScorecardStatus = 'missing' | 'draft' | 'submitted';
+export interface MyInterviewItem {
+  id: string;
+  title: string;
+  interviewType: string;
+  scheduledStart: string;
+  scheduledEnd: string;
+  timezone: string;
+  candidateName: string | null;
+  positionTitle: string | null;
+  locationUrl: string | null;
+  roomName: string | null;
+  myResponse: string;
+  scorecardStatus: MyInterviewScorecardStatus;
+  status: string;
+}
+export interface MyInterviewsResponse {
+  data: MyInterviewItem[];
+}
+
 export interface InterviewScorecardItem {
   id: string;
   interviewId: string;
