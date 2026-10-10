@@ -41,6 +41,7 @@ describe.skipIf(!url)('M1 requisitions (scratch Postgres)', () => {
     await prisma.user.create({ data: { id: ids.tm, organizationId: ORG, email: `tm-${tag}@m1.test`, emailNormalized: `tm-${tag}@m1.test`, displayName: 'M1 tm', passwordHash: 'x', userRoles: { create: { roleId: tm.id } } } });
     await prisma.user.update({ where: { id: ids.mgr }, data: { managerId: ids.boss } });
     await prisma.user.update({ where: { id: ids.report }, data: { managerId: ids.mgr } });
+    await prisma.user.update({ where: { id: ids.emp }, data: { managerId: ids.mgr } }); // B2R-5: the picked employee is in the requester's team
     ids.dept = (await prisma.masterDataValue.create({ data: { organizationId: ORG, category: 'departments', code: `D-${tag}`, name: `Nursing ${tag}` } })).id;
     ids.grade = (await prisma.masterDataValue.create({ data: { organizationId: ORG, category: 'grades', code: `G-${tag}`, name: `Grade ${tag}` } })).id;
   });
@@ -65,7 +66,7 @@ describe.skipIf(!url)('M1 requisitions (scratch Postgres)', () => {
     const byBoss = await makeRequest(ids.mgr, 'Draft', { targetFillDate: new Date('2026-11-30'), assignedEmployeeId: ids.emp });
     expect((await service.activateRequest(byBoss, ORG, ids.boss, {})).request.status).toBe('Converted to Vacancy');
     // the approval path still works, other statuses do not
-    const approved = await makeRequest(ids.stranger, 'Approved', { targetFillDate: new Date('2026-11-30'), assignedEmployeeId: ids.emp });
+    const approved = await makeRequest(ids.stranger, 'Approved', { targetFillDate: new Date('2026-11-30'), assignedEmployeeId: ids.stranger }); // B2R-5: the requester may own it himself
     // B2-2: Approved: the requester (or his manager) or a VACANCY_MANAGE holder; nobody else
     await expect(service.activateRequest(approved, ORG, ids.boss, {})).rejects.toMatchObject({ status: 403 });
     expect((await service.activateRequest(approved, ORG, ids.tm, {})).request.status).toBe('Converted to Vacancy');
@@ -114,6 +115,7 @@ describe.skipIf(!url)('M1 requisitions (scratch Postgres)', () => {
     expect(boss.has(assignedToEmp) && boss.has(requestedByEmp)).toBe(true); // emp now reports to boss
     const all = (await service.listRequests(ORG, as(ids.emp, true) as never)).map((r) => r.id);
     expect(all).toEqual(expect.arrayContaining([assignedToEmp, assignedToReport, requestedByEmp, unrelated]));
+    await prisma.user.update({ where: { id: ids.emp }, data: { managerId: ids.mgr } }); // restore (B2R-5 fixtures)
   });
 
   it('PATCH target after activation: Manager only, reason required, history, never below joined', async () => {
@@ -178,5 +180,14 @@ describe.skipIf(!url)('M1 requisitions (scratch Postgres)', () => {
 
     const grants = await prisma.rolePermission.findMany({ where: { role: { code: 'RECRUITER' }, permission: { code: { in: ['VACANCY_REQUEST_CREATE', 'VACANCY_REQUEST_VIEW'] } } } });
     expect(grants).toEqual([]);
+  });
+
+  it('B2R-5: the requisition employee must be in the requesting manager\'s tree (400 ASSIGNEE_NOT_IN_TEAM)', async () => {
+    const draft = await makeRequest(ids.report, 'Draft', { targetFillDate: new Date('2026-11-30') });
+    await expect(service.updateRequest(draft, ORG, { assignedEmployeeId: ids.emp })).rejects.toMatchObject({ status: 400, response: { code: 'ASSIGNEE_NOT_IN_TEAM', field: 'assignedEmployeeId' } });
+    await expect(service.activateRequest(draft, ORG, ids.report, { assignedEmployeeId: ids.emp })).rejects.toMatchObject({ response: { code: 'ASSIGNEE_NOT_IN_TEAM' } });
+    // boss -> mgr -> report: boss may pick report (two levels down)
+    const bossDraft = await makeRequest(ids.boss, 'Draft', { targetFillDate: new Date('2026-11-30') });
+    expect(await service.updateRequest(bossDraft, ORG, { assignedEmployeeId: ids.report })).toMatchObject({ assignedEmployeeId: ids.report });
   });
 });
