@@ -267,7 +267,7 @@ describe.skipIf(!url)('B7 grade bands, offer pay, manager decision, reassign (sc
     const hassan = await prisma.user.findFirstOrThrow({ where: { email: 'hassan.ali@recruitflow.local' } });
     expect(mona.managerId).toBe(hassan.id);
     expect(await prisma.user.count({ where: { organizationId: ORG, managerId: mona.id } })).toBeGreaterThan(0);
-    const demoJobs = await prisma.vacancy.findMany({ where: { organizationId: ORG, vacancyCode: { startsWith: 'VAC-2026-' } }, include: { vacancyRequest: { include: { grade: true } } } });
+    const demoJobs = await prisma.vacancy.findMany({ where: { organizationId: ORG, vacancyCode: { in: ['VAC-2026-001', 'VAC-2026-002', 'VAC-2026-003', 'VAC-2026-004', 'VAC-2026-005', 'VAC-2026-006', 'VAC-2026-007', 'VAC-2026-008'] } }, include: { vacancyRequest: { include: { grade: true } } } });
     expect(demoJobs.length).toBeGreaterThan(0);
     // Other DB specs re-grade a couple of jobs in this shared scratch DB; the rest keep the seeded Grade 6.
     const g6 = demoJobs.filter((x) => x.vacancyRequest.grade?.name === 'Grade 6');
