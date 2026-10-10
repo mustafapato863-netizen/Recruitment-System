@@ -3,13 +3,20 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, CircleCheck, CircleMinus, CircleX, FileText, Info } from 'lucide-react';
 import { EmptyStateV2, ForbiddenStateV2, SkeletonV2, StatusChip } from '../../components/v2';
 import { getApi } from '../../api/client';
-import { fetchCompare, matchErrorFromError, sourceLabel, type CompareResponse } from '../api/matching';
+import { fetchCompare, matchErrorFromError, sourceLabel, type CompareInfoCell, type CompareResponse } from '../api/matching';
 import { jobTitle, type JobDetail } from '../api/jobs';
 import { formatDay } from './OpenJobsV2';
 import './jobs.css';
 
 type App = { id: string; candidateId: string; stage: string; source?: string | null };
 const initials = (n: string) => n.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join('');
+
+function infoText(key: 'notice-period' | 'fit-note', cell?: CompareInfoCell) {
+  if (!cell || cell.value === null || cell.value === '') return <p className="rf2-jtable__sub">Not recorded.</p>;
+  const main = key === 'notice-period' && typeof cell.value === 'number' ? (cell.value === 0 ? 'Available now' : `${cell.value} days`) : String(cell.value);
+  const meta = [cell.source === 'screening' ? 'screening' : cell.source === 'profile' ? 'profile' : null, cell.by?.name, cell.at ? formatDay(cell.at) : null].filter(Boolean).join(' · ');
+  return <><p>{key === 'fit-note' ? `“${main}”` : main}</p>{meta ? <p className="rf2-jtable__sub">{meta}</p> : null}</>;
+}
 
 /** E24 Compare on skills (B6 #13): each cell is written evidence or a written gap. No scores or percentages. */
 export function CompareV2() {
@@ -67,6 +74,15 @@ export function CompareV2() {
                   )}
                 </td>
               ))}
+            </tr>
+          ))}
+          {(data.infoRows ?? []).map((r) => (
+            <tr key={r.key} data-info={r.key}>
+              <th scope="row"><p className="rf2-jtable__name">{r.label}</p><p className="rf2-jtable__sub">{r.key === 'fit-note' ? 'From this job’s screening' : 'Screening, else profile'}</p></th>
+              {data.candidates.map((c) => {
+                const cell = r.cells.find((x) => x.candidateId === c.id);
+                return <td key={c.id}>{infoText(r.key, cell)}</td>;
+              })}
             </tr>
           ))}</tbody>
         </table>
