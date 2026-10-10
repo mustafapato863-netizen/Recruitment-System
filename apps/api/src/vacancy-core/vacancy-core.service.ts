@@ -459,7 +459,24 @@ export class VacancyCoreService {
 
     this.validateRequestPlan(payload, false);
     await this.assertRequisitionRefs(organizationId, payload);
+    if (payload.assignedEmployeeId) await this.assertAssigneeInTree(organizationId, actorUserId, payload.assignedEmployeeId);
     return this.repository.createRequest(payload);
+  }
+
+  /**
+   * B2R-5: a requisition's employee must be the requesting manager or someone in his reporting tree
+   * (up to 4 levels). 400 ASSIGNEE_NOT_IN_TEAM, field assignedEmployeeId. Administrator requesters are exempt.
+   */
+  private async assertAssigneeInTree(organizationId: string, managerId: string, assigneeId: string): Promise<void> {
+    if (assigneeId === managerId) return;
+    if ((await this.prisma.userRole.count({ where: { userId: managerId, role: { code: 'ADMINISTRATOR' } } })) > 0) return;
+    let current: string | null = assigneeId;
+    for (let hop = 0; hop < 4 && current; hop += 1) {
+      const row: { managerId: string | null } | null = await this.prisma.user.findFirst({ where: { id: current, organizationId }, select: { managerId: true } });
+      current = row?.managerId ?? null;
+      if (current === managerId) return;
+    }
+    throw new BadRequestException({ code: 'ASSIGNEE_NOT_IN_TEAM', field: 'assignedEmployeeId', message: 'Pick someone from your own team (your reports and their reports).' });
   }
 
   /** B3: grade from master data; assigned employee active and non-admin. */
@@ -532,6 +549,7 @@ export class VacancyCoreService {
     if (input.assignedEmployeeId !== undefined) request.assignedEmployeeId = input.assignedEmployeeId;
     this.validateRequestPlan(request, false);
     await this.assertRequisitionRefs(organizationId, request);
+    if (input.assignedEmployeeId) await this.assertAssigneeInTree(organizationId, request.requesterId, input.assignedEmployeeId);
     request.updatedAt = new Date().toISOString();
 
     return this.repository.saveRequest(request);
@@ -747,6 +765,9 @@ export class VacancyCoreService {
     if (!assigneeId) {
       throw new BadRequestException({ code: 'ASSIGNEE_REQUIRED', message: `Request ${request.requestCode} needs an assigned employee before activation.` });
     }
+
+    await assertEligibleAssignee(this.prisma, organizationId, assigneeId); // eligibility errors first
+    await this.assertAssigneeInTree(organizationId, request.requesterId, assigneeId);
 
     const deferred = request.recruitmentTiming === 'Deferred';
     const vacancyCode = existingVacancy ? null : await this.repository.nextVacancyCode();
