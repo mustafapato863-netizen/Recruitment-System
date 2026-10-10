@@ -4,7 +4,8 @@ import { resolve } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PrismaService } from '../../database/prisma.service';
 
-const url = process.env.B3_TEST_DATABASE_URL;
+// Re-running the seed rewrites demo fixtures, so this needs its OWN scratch DB (never the shared suite DB).
+const url = process.env.SEED_TEST_DATABASE_URL;
 const ORG = '10000000-0000-4000-8000-000000000001';
 const seed = resolve(__dirname, '../../../../../database/prisma/seed.cjs');
 // Only what other (parallel) suites never write, plus seed-owned master data, so the comparison is stable.
