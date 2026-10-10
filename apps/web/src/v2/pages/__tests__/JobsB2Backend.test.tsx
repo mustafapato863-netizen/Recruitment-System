@@ -97,3 +97,49 @@ describe('#23 CANDIDATE_EXISTS on import', () => {
     expect(within(d).getByRole('radio', { name: /Link to Nourhan Sami/ })).toBeChecked();
   });
 });
+
+describe('B2R: APPLICATION_EXISTS, admin status, open-files 409, job list paging', () => {
+  it('409 APPLICATION_EXISTS on import links to the existing file instead of failing', async () => {
+    const u = userEvent.setup({ applyAccept: false });
+    serve({ '/applications': { data: [{ id: 'app-old', candidateId: 'c-new', vacancyId: 'v1' }], total: 1 } });
+    api.postFormDataApi.mockImplementation(async (p: string) => (p === '/resume/parse' ? fx.parsed : { id: 'doc1' }));
+    api.postApi.mockImplementation(async (p: string) => {
+      if (p === '/candidates/duplicate-check') return fx.noDup;
+      if (p === '/candidates') return { id: 'c-new' };
+      if (p === '/applications') throw new ApiError(409, 'Already applied.', { statusCode: 409, code: 'APPLICATION_EXISTS', message: 'Already applied.' }, { code: 'APPLICATION_EXISTS' });
+      return {};
+    });
+    renderAt('/vacancies/v1?drawer=import');
+    const d = await screen.findByRole('dialog', { name: 'Add candidates to Applied' });
+    await u.upload(within(d).getByLabelText(/Drop CVs or/), [new File(['%PDF'], 'rania.pdf', { type: 'application/pdf' })]);
+    await waitFor(() => expect(within(d).getByRole('button', { name: 'Import 1 to Applied' })).toBeEnabled());
+    await u.click(within(d).getByRole('button', { name: 'Import 1 to Applied' }));
+    const note = await within(d).findByTestId('application-exists');
+    expect(within(note).getByRole('link', { name: 'Open the existing file' })).toHaveAttribute('href', '/applications/app-old');
+    expect(api.getApi).toHaveBeenCalledWith(expect.stringMatching(/^\/applications\?vacancyId=v1&candidateId=c-new/));
+  });
+  it('error texts for ADMIN_CANNOT_CHANGE_JOB_STATUS and JOB_HAS_OPEN_APPLICATIONS', async () => {
+    const { errorMessage, ADMIN_STATUS_TEXT } = await import('../../api/jobs');
+    expect(errorMessage(new ApiError(403, 'x', { statusCode: 403, code: 'ADMIN_CANNOT_CHANGE_JOB_STATUS' }, { code: 'ADMIN_CANNOT_CHANGE_JOB_STATUS' }), 'f')).toBe(ADMIN_STATUS_TEXT);
+    const e = Object.assign(new ApiError(409, 'x', { statusCode: 409, code: 'JOB_HAS_OPEN_APPLICATIONS', counts: { openApplications: 4 } }, { code: 'JOB_HAS_OPEN_APPLICATIONS' }), { counts: { openApplications: 4 } });
+    expect(errorMessage(e, 'f')).toBe('This job still has 4 open files. Close or move them first.');
+  });
+  it('an admin sees no status actions and is pointed to the override', async () => {
+    who.user = { id: 'u-admin', displayName: 'Admin', roles: [{ code: 'ADMINISTRATOR' }] };
+    renderAt('/vacancies/v1');
+    expect(await screen.findByTestId('admin-status-note')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Hold job|Reopen job/ })).toBeNull();
+  });
+  it('open jobs page through the work queue at pageSize 100', async () => {
+    const { fetchOpenJobs } = await import('../../api/jobs');
+    const row = (i: number) => ({ id: `j${i}`, code: `J${i}`, title: `Job ${i}`, status: 'Active', pipelineCounts: {}, headcount: { joined: 0, approved: 1 } });
+    api.getApi.mockImplementation(async (path: string) => {
+      const q = new URLSearchParams(path.split('?')[1]);
+      expect(Number(q.get('pageSize'))).toBeLessThanOrEqual(100);
+      if (q.get('mine') === 'true') return { data: q.get('page') === '1' ? Array.from({ length: 100 }, (_, i) => row(i)) : [row(100)], total: 101 };
+      return { data: [], total: 0 };
+    });
+    const r = await fetchOpenJobs();
+    expect(r.mine).toHaveLength(101);
+  });
+});
