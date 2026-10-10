@@ -142,6 +142,7 @@ Table users {
   filesReassignedFrom file_reassignments [not null]
   filesReassignedTo file_reassignments [not null]
   filesReassignedBy file_reassignments [not null]
+  joiningChecksVerified joining_checks [not null]
 
   indexes {
     (organizationId, emailNormalized) [unique]
@@ -441,6 +442,8 @@ Table applications {
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [not null]
   reassignments file_reassignments [not null]
+  followUpDate DateTime [note: 'B5 follow-up: owner-editable follow-up date (plain date, no timer).']
+  joiningChecks joining_checks [not null]
 
   indexes {
     (vacancyId, candidateId) [unique]
@@ -531,6 +534,7 @@ Table candidate_documents {
   complianceRequirements compliance_requirements [not null]
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [not null]
+  joiningChecks joining_checks [not null]
 }
 
 Table screening_logs {
@@ -651,6 +655,10 @@ Table offer_versions {
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [not null]
   decisions offer_version_decisions [not null]
+  sentChannel String [note: 'B5 follow-up: how the version was sent (channel email|whatsapp, template, who, when).']
+  sentTemplateId String
+  sentAt DateTime
+  sentById String
 
   indexes {
     (offerId, versionNumber) [unique]
@@ -1036,6 +1044,27 @@ Table file_reassignments {
   Note: 'B7: owner change on an open file (application), with reason. One row per file moved.'
 }
 
+Table joining_checks {
+  id String [pk]
+  applicationId String [not null]
+  application applications [not null]
+  type String [not null]
+  verified Boolean [not null, default: false]
+  verifiedById String
+  verifiedBy users
+  verifiedAt DateTime
+  documentId String
+  document candidate_documents
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
+
+  indexes {
+    (applicationId, type) [unique]
+  }
+
+  Note: 'B5 follow-up: typed joining checks read by gate 4 (Pre-Hire -> Joined). type: ID | CONTRACT | SCFHS_LICENCE.'
+}
+
 Ref: branches.organizationId > organizations.id [delete: Restrict]
 
 Ref: positions.organizationId > organizations.id [delete: Restrict]
@@ -1239,3 +1268,9 @@ Ref: file_reassignments.fromUserId > users.id [delete: Restrict]
 Ref: file_reassignments.toUserId > users.id [delete: Restrict]
 
 Ref: file_reassignments.reassignedById > users.id [delete: Restrict]
+
+Ref: joining_checks.applicationId > applications.id [delete: Cascade]
+
+Ref: joining_checks.verifiedById > users.id [delete: Set Null]
+
+Ref: joining_checks.documentId > candidate_documents.id [delete: Set Null]

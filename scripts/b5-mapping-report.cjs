@@ -87,6 +87,24 @@ async function main() {
     const [locked] = await q(`SELECT count(*)::int c FROM information_schema.columns WHERE column_name='isLocked' AND table_name IN ('interview_scorecards','offer_versions')`);
     p(`isLocked columns left: ${locked.c} (expected 0)`);
   }
+  // B5 follow-ups (migration 20261010_b5b_file_followups): typed joining checks.
+  {
+    const names = await q(`SELECT cr.name, cr.status FROM compliance_requirements cr JOIN hiring_cases hc ON hc.id = cr."hiringCaseId"`);
+    const ID_RE = /(^|[^a-z])(id|identity|passport|emirates id|national id|iqama)([^a-z]|$)/i;
+    const typeOf = (n) => [ID_RE.test(n) && 'ID', /contract/i.test(n) && 'CONTRACT', /(scfhs|licen[cs]e)/i.test(n) && 'SCFHS_LICENCE'].filter(Boolean);
+    const unmatched = names.filter((r) => typeOf(r.name).length === 0);
+    p(`Compliance requirements on hiring cases: ${names.length}; match a joining-check type: ${names.length - unmatched.length}; unmatched (not mapped): ${unmatched.length}`);
+    for (const n of [...new Set(unmatched.map((r) => r.name))].slice(0, 20)) p(`    unmatched: ${n}`);
+    if ((await q(`SELECT to_regclass('public.joining_checks') IS NOT NULL ok`))[0].ok) {
+      const rows = await q(`SELECT type, verified, count(*)::int c FROM joining_checks GROUP BY 1,2 ORDER BY 1,2`);
+      p('joining_checks (type/verified -> count): ' + (rows.map((r) => `${r.type}/${r.verified ? 'verified' : 'not verified'}=${r.c}`).join(', ') || 'none'));
+      const [pre] = await q(`SELECT count(*)::int c FROM applications a WHERE a.stage = 'Pre-Hire'`);
+      const [ready] = await q(`SELECT count(*)::int c FROM applications a WHERE a.stage = 'Pre-Hire' AND (SELECT count(*) FROM joining_checks j WHERE j."applicationId" = a.id AND j.verified) = 3`);
+      p(`Pre-Hire files: ${pre.c}; gate 4 satisfied by typed checks: ${ready.c}`);
+    } else {
+      p('joining_checks: (table not present)');
+    }
+  }
   p('');
   const text = out.join('\n') + '\n';
   if (arg('--out')) fs.appendFileSync(arg('--out'), text);
