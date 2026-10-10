@@ -66,9 +66,15 @@ export class MyWorkService {
             { requesterId: me, status: { in: ['Draft', 'Changes Requested', 'Pending Approval', 'Approved'] } },
             // Approved, not yet activated: also the requester's manager's work (next action Activate).
             { requester: { managerId: me }, status: 'Approved' },
+            // M1: a report's Draft is also the manager's work (they may activate it once it has a due date + assignee).
+            { requester: { managerId: me }, status: 'Draft' },
           ],
         },
-        select: { id: true, requestCode: true, status: true, targetFillDate: true, position: { select: { title: true } } },
+        select: {
+          id: true, requestCode: true, status: true, targetFillDate: true, requesterId: true, position: { select: { title: true } },
+          requester: { select: { managerId: true } },
+          assignedEmployee: { select: { status: true, userRoles: { where: { role: { code: 'ADMINISTRATOR' } }, select: { roleId: true } } } },
+        },
       }),
       this.prisma.task.findMany({
         where: { organizationId: org, assigneeUserId: me, status: { in: ['Open', 'In Progress'] }, dueAt: { not: null } },
@@ -113,6 +119,17 @@ export class MyWorkService {
       (i.application.primaryRecruiterId === me || i.application.taskOwnerId === me || i.application.vacancy.assignments.length > 0);
     const submitted = (i: (typeof interviews)[number], userId: string) => i.scorecards.some((s) => s.interviewerId === userId);
 
+    // M1: same rules as POST /vacancy-requests/:id/activate, so the button matches the API.
+    const activateBlocked = (r: (typeof requisitions)[number]): string | undefined => {
+      if (r.status === 'Changes Requested') return 'Changes requested: resubmit and get it approved before activating';
+      if (r.status === 'Pending Approval') return 'Waiting for approval';
+      if (r.status !== 'Draft' && r.status !== 'Approved') return 'Not activatable';
+      if (r.status === 'Draft' && r.requesterId !== me && r.requester?.managerId !== me) return 'Only the requester or their manager can activate';
+      if (!r.targetFillDate) return 'Set a due date first';
+      if (!r.assignedEmployee) return r.status === 'Draft' ? 'Assign an employee first' : undefined; // Approved: assignee may be picked at activation
+      if (r.assignedEmployee.status !== 'Active' || r.assignedEmployee.userRoles.length) return 'The assigned employee is not eligible (inactive or administrator)';
+      return undefined;
+    };
     return buildMyWork({
       jobs: jobs.map((j) => ({
         id: j.id, code: j.vacancyCode, title: j.position?.title ?? j.vacancyCode, status: j.status, joined: j.joinedHeadcount,
@@ -125,6 +142,7 @@ export class MyWorkService {
       requisitions: requisitions.map((r) => ({
         id: r.id, code: r.requestCode, title: r.position?.title ?? r.requestCode, status: r.status,
         dueDate: r.targetFillDate ? r.targetFillDate.toISOString().slice(0, 10) : null,
+        activateBlocked: activateBlocked(r),
       })),
       tasks,
       interviews: interviews

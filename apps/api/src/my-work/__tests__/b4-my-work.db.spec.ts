@@ -111,8 +111,33 @@ describe.skipIf(!url)('B4 My Work, target chip and reminders (scratch Postgres)'
       expect(w.overdue.find((i) => i.id === late)?.nextAction.label).toBe('Activate');
     }
     const bossWork = await myWork.getMyWork(user(boss), NOW);
-    expect(JSON.stringify(bossWork)).not.toContain(draft); // drafts stay the requester's
+    // M1: a report's Draft is the manager's work too; without an assignee Activate is disabled, with the reason.
+    const d = bossWork.dueToday.find((i) => i.id === draft);
+    expect(d?.actions.find((a) => a.key === 'activate-requisition')).toEqual({ key: 'activate-requisition', label: 'Activate', disabled: true, reason: 'Assign an employee first' });
     expect(JSON.stringify(await myWork.getMyWork(user(ids.a!), NOW))).not.toContain(dueToday);
+  });
+
+  it('M1: an activatable Draft (due date + eligible assignee, caller requester/manager) offers Activate; others see it disabled with the reason', async () => {
+    const branch = await prisma.branch.findFirstOrThrow({ where: { organizationId: ORG } });
+    const position = await prisma.position.findFirstOrThrow({ where: { organizationId: ORG } });
+    const admin = await prisma.user.findFirstOrThrow({ where: { organizationId: ORG, userRoles: { some: { role: { code: 'ADMINISTRATOR' } } } }, orderBy: { createdAt: 'asc' } });
+    const ok = randomUUID(); const badAssignee = randomUUID(); const changes = randomUUID();
+    for (const [id, status, assignee] of [[ok, 'Draft', ids.a!], [badAssignee, 'Draft', admin.id], [changes, 'Changes Requested', ids.a!]] as const) {
+      await prisma.vacancyRequest.create({ data: { id, organizationId: ORG, branchId: branch.id, positionId: position.id, requesterId: ids.manager!, requestCode: `B4M-${tag}-${id.slice(0, 4)}`, status, requestedHeadcount: 1, targetFillDate: new Date(`${TODAY}T00:00:00Z`), assignedEmployeeId: assignee } });
+    }
+    const w = await myWork.getMyWork(user(ids.manager!), NOW);
+    const act = (id: string) => w.dueToday.find((i) => i.id === id)?.actions.find((a) => a.key === 'activate-requisition');
+    expect(w.dueToday.find((i) => i.id === ok)?.nextAction).toEqual({ code: 'activate-requisition', label: 'Activate' });
+    expect(act(ok)).toEqual({ key: 'activate-requisition', label: 'Activate', disabled: false });
+    expect(act(badAssignee)).toMatchObject({ disabled: true, reason: 'The assigned employee is not eligible (inactive or administrator)' });
+    expect(act(changes)).toMatchObject({ disabled: true, reason: 'Changes requested: resubmit and get it approved before activating' });
+    // and the API agrees
+    await expect(vacancies.activateRequest(changes, ORG, ids.manager!, {})).rejects.toMatchObject({ status: 409 });
+    const res = await vacancies.activateRequest(ok, ORG, ids.manager!, {});
+    expect(res.request.status).toBe('Converted to Vacancy');
+    // keep the reminder test below unaffected by these fixtures
+    await prisma.vacancy.update({ where: { id: res.vacancy!.id }, data: { status: 'Closed' } });
+    await prisma.vacancyRequest.updateMany({ where: { id: { in: [badAssignee, changes] } }, data: { status: 'Cancelled' } });
   });
 
   it('E1 (DB): candidate/stage on file items, department/site/owner on targets, ?day=tomorrow, worker heartbeat', async () => {
