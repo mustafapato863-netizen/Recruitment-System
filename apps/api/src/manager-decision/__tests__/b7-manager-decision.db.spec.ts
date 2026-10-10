@@ -112,7 +112,7 @@ describe.skipIf(!url)('B7 grade bands, offer pay, manager decision, reassign (sc
   it('offer pay needs OFFER_PAY_VIEW (omitted, not null); VIEW_CURRENT_SALARY alone does not show it', async () => {
     const app = await file('owner', jobId);
     const { offerId } = await pendingOffer(app.id, 12000, 3000);
-    const access = { getApplicationVisibilityWhere: async () => ({ organizationId: ORG }) };
+    const access = { getApplicationVisibilityWhere: async () => ({ organizationId: ORG }), getApplicationReadVisibilityWhere: async () => ({ organizationId: ORG }) }; // B1 follow-up adds the read variant
     const ctl = new OffersController(new OffersService(prisma, notifications as never, access as never), perms);
     const hidden = await ctl.getOfferById(user('salaryOnly'), offerId) as unknown as { currentVersion: Record<string, unknown> & { components: Array<Record<string, unknown>> } };
     expect('monthlyPackage' in hidden.currentVersion).toBe(false);
@@ -192,7 +192,7 @@ describe.skipIf(!url)('B7 grade bands, offer pay, manager decision, reassign (sc
     // Mustafa: Reject withdraws only that version; the offer goes back to Draft and the file stays in Offer.
     expect((await prisma.offer.findUniqueOrThrow({ where: { id: o2.offerId } })).status).toBe('Draft');
     expect((await prisma.application.findUniqueOrThrow({ where: { id: app2.id } })).stage).toBe('Offer');
-    const access = { getApplicationVisibilityWhere: async () => ({ organizationId: ORG }) };
+    const access = { getApplicationVisibilityWhere: async () => ({ organizationId: ORG }), getApplicationReadVisibilityWhere: async () => ({ organizationId: ORG }) }; // B1 follow-up adds the read variant
     const svc = new OffersService(prisma, notifications as never, access as never);
     const v2 = await svc.createOfferRevision(user('owner') as never, o2.offerId, { components: [{ type: 'Salary', name: 'Basic', amount: 12000, currency: 'AED', frequency: 'Monthly', isTaxable: true }] } as never);
     expect(await prisma.offerVersion.findUniqueOrThrow({ where: { id: v2 } })).toMatchObject({ versionNumber: 2, status: 'Draft' });
@@ -240,7 +240,7 @@ describe.skipIf(!url)('B7 grade bands, offer pay, manager decision, reassign (sc
   });
 
   it('approver inbox decision runs the same band check (same codes; pay only for OFFER_PAY_VIEW)', async () => {
-    const access = { getApplicationVisibilityWhere: async () => ({ organizationId: ORG }) };
+    const access = { getApplicationVisibilityWhere: async () => ({ organizationId: ORG }), getApplicationReadVisibilityWhere: async () => ({ organizationId: ORG }) }; // B1 follow-up adds the read variant
     const inbox = new OffersService(prisma, notifications as never, access as never, undefined, perms);
     const approver = (k: string) => ({ ...user(k), roleCodes: [...(roles[k] ?? []), 'OFFER_APPROVER'] });
     const approvalOf = async (versionId: string) => (await prisma.offerApproval.findFirstOrThrow({ where: { offerVersionId: versionId } })).id;
@@ -291,7 +291,9 @@ describe.skipIf(!url)('B7 grade bands, offer pay, manager decision, reassign (sc
     // allowances are excluded from the band check: 12000 base + 9000 allowances is still inside 10000-15000
     const ok = await decisions.decide(user('mgr'), o.offerId, o.versionId, { decision: 'Approve', basePay: 12000, allowances: [{ name: 'Housing', amount: 6000 }, { name: 'Transport', amount: 36000, frequency: 'Annual' }], currency: 'aed' });
     expect(ok.toStatus).toBe('Approved');
-    const v = await prisma.offerVersion.findUniqueOrThrow({ where: { id: o.versionId }, include: { components: true } });
+    const v = await prisma.offerVersion.findUniqueOrThrow({ where: { id: o.versionId }, include: { components: { where: { supersededAt: null } } } });
+    // B2-21: the submitted 99999 row is kept as superseded history, never hard-deleted.
+    expect(await prisma.offerComponent.count({ where: { offerVersionId: o.versionId, amount: 99999, supersededAt: { not: null } } })).toBe(1);
     expect(v.components.map((c) => [c.type, c.name, Number(c.amount), c.currency, c.frequency]).sort()).toEqual([
       ['Allowance', 'Housing', 6000, 'AED', 'Monthly'], ['Allowance', 'Transport', 36000, 'AED', 'Annual'], ['Salary', 'Base pay', 12000, 'AED', 'Monthly'],
     ].sort());
@@ -304,7 +306,7 @@ describe.skipIf(!url)('B7 grade bands, offer pay, manager decision, reassign (sc
   it('M3: GET /offers/:id carries branchId/siteId for band matching', async () => {
     const app = await file('owner', jobId);
     const { offerId } = await pendingOffer(app.id, 12000);
-    const access = { getApplicationVisibilityWhere: async () => ({ organizationId: ORG }) };
+    const access = { getApplicationVisibilityWhere: async () => ({ organizationId: ORG }), getApplicationReadVisibilityWhere: async () => ({ organizationId: ORG }) }; // B1 follow-up adds the read variant
     const ctl = new OffersController(new OffersService(prisma, notifications as never, access as never), perms);
     const job = await prisma.vacancy.findUniqueOrThrow({ where: { id: jobId } });
     expect(await ctl.getOfferById(user('mgr'), offerId)).toMatchObject({ branchId: job.branchId, siteId: job.branchId });

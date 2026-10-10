@@ -799,6 +799,8 @@ model OfferComponent {
   currency       String?      @db.VarChar(10)
   frequency      String?      @db.VarChar(50) // Monthly, Annual, Once
   isTaxable      Boolean      @default(true)
+  /// B2-21: set when a manager decision replaces the version's pay; superseded rows are kept (no hard delete), never read as live pay.
+  supersededAt   DateTime?    @db.Timestamptz(6)
   createdAt      DateTime     @default(now()) @db.Timestamptz(6)
   updatedAt      DateTime     @updatedAt @db.Timestamptz(6)
 

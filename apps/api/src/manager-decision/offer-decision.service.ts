@@ -63,7 +63,7 @@ export class OfferDecisionService {
     const version = await this.prisma.offerVersion.findFirst({
       where: { id: versionId, offerId, offer: { organizationId: user.organizationId } },
       include: {
-        components: true,
+        components: { where: { supersededAt: null } },
         offer: { include: { application: { include: { vacancy: { select: { id: true, branchId: true, branch: { select: { name: true } }, vacancyRequest: { select: { gradeId: true, grade: { select: { name: true } } } } } } } } } },
       },
     });
@@ -96,7 +96,8 @@ export class OfferDecisionService {
       const locked = await tx.offerVersion.updateMany({ where: { id: version.id, status: 'Pending Approval' }, data: { status: outcome.version, approvalStatus: outcome.approvalStatus } });
       if (locked.count !== 1) throw new ConflictException({ code: 'OFFER_NOT_PENDING_APPROVAL', message: 'This version was decided by someone else.' });
       if (newComponents) {
-        await tx.offerComponent.deleteMany({ where: { offerVersionId: version.id } }); // version-local pay rows, replaced by the approver's figures
+        // B2-21: no hard delete. The submitted pay rows are kept as superseded history; the approver's figures become the live rows.
+        await tx.offerComponent.updateMany({ where: { offerVersionId: version.id, supersededAt: null }, data: { supersededAt: now } });
         await tx.offerComponent.createMany({ data: newComponents.map((c) => ({ offerVersionId: version.id, ...c })) });
         const monthlyAllow = (input.allowances ?? []).reduce((t, a) => t + ((a.frequency ?? 'Monthly') === 'Monthly' ? a.amount : (a.frequency === 'Annual' ? a.amount / 12 : 0)), 0);
         const monthly = Math.round((input.basePay! + monthlyAllow) * 100) / 100;
