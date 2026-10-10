@@ -91,9 +91,15 @@ describe.skipIf(!url)('B8 /results (scratch Postgres)', () => {
     const team = await run(auth(u.mgr, ['RECRUITER']), 'team');
     expect(team.people.map((p) => p.id)).toEqual([u.r1]);
     expect(team.tiles.offersAccepted.of).toBe(5);
+    // M2-M4: one row per direct report, same tiles; rows sum to the team (single report here)
+    expect(team.rows).toHaveLength(1);
+    expect(team.rows![0]!.person).toEqual({ id: u.r1, name: team.people[0]!.name });
+    expect(team.rows![0]!.tiles).toEqual(team.tiles);
+    expect((await run(auth(u.r1, ['RECRUITER']), 'me')).rows).toBeUndefined();
     await expect(run(auth(u.r2, ['RECRUITER']), 'team')).rejects.toMatchObject({ status: 403 });
     const narrowed = await run(auth(u.mgr, ['RECRUITER']), 'team', { managerId: u.r2 });
     expect(narrowed.people).toEqual([]);
+    expect(narrowed.rows).toEqual([]);
     expect(narrowed.tiles.offersAccepted.of).toBe(0);
   });
 

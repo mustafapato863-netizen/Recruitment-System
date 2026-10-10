@@ -171,13 +171,21 @@ export class VacancyCoreService {
   }
 
   /**
-   * M1: requisitions with display names, scoped server-side: a Manager sees their own requests plus their
-   * direct reports' (users.managerId); Administrators see all. Called without a user (internal), no scope.
+   * M1: requisitions with display names, scoped server-side for every non-admin (Manager, Recruiter, HR alike):
+   * the ones they requested or are assigned to, plus the same for their direct reports (users.managerId).
+   * Administrators see all. Called without a user (internal), no scope.
    */
   async listRequests(organizationId: string, user?: AuthUser): Promise<VacancyRequest[]> {
     const all = await this.repository.listRequests(organizationId);
     const scope = user && !user.roleCodes.includes('ADMINISTRATOR')
-      ? { OR: [{ requesterId: user.userId }, { requester: { managerId: user.userId } }] }
+      ? {
+          OR: [
+            { requesterId: user.userId },
+            { assignedEmployeeId: user.userId },
+            { requester: { managerId: user.userId } },
+            { assignedEmployee: { managerId: user.userId } },
+          ],
+        }
       : {};
     const rows = await this.prisma.vacancyRequest.findMany({
       where: { organizationId, ...scope },
@@ -751,6 +759,10 @@ export class VacancyCoreService {
     const fromDraft = request.status === 'Draft';
     if (fromDraft && !(await this.isRequesterOrManager(request.requesterId, actorUserId))) {
       throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Only the requesting Manager (or their manager) can activate a Draft requisition.' });
+    }
+    if (request.status === 'Changes Requested' || request.status === 'Pending Approval') {
+      // M1: once an approver is involved, Activate waits until the requisition is (re)submitted and Approved.
+      throw new ConflictException({ code: 'REQUISITION_NOT_APPROVED', message: `Request ${request.requestCode} is ${request.status}; resubmit it and get it approved before activating.` });
     }
     if (request.status !== 'Approved' && !fromDraft) {
       throw new ConflictException(`Request ${request.requestCode} must be a Draft or Approved to activate.`);

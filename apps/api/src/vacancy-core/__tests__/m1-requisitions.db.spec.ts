@@ -63,7 +63,11 @@ describe.skipIf(!url)('M1 requisitions (scratch Postgres)', () => {
     const approved = await makeRequest(ids.stranger, 'Approved', { targetFillDate: new Date('2026-11-30'), assignedEmployeeId: ids.emp });
     expect((await service.activateRequest(approved, ORG, ids.boss, {})).request.status).toBe('Converted to Vacancy');
     const pending = await makeRequest(ids.mgr, 'Pending Approval', { targetFillDate: new Date('2026-11-30'), assignedEmployeeId: ids.emp });
-    await expect(service.activateRequest(pending, ORG, ids.mgr, {})).rejects.toMatchObject({ status: 409 });
+    await expect(service.activateRequest(pending, ORG, ids.mgr, {})).rejects.toMatchObject({ status: 409, response: { code: 'REQUISITION_NOT_APPROVED' } });
+    const changes = await makeRequest(ids.mgr, 'Changes Requested', { targetFillDate: new Date('2026-11-30'), assignedEmployeeId: ids.emp });
+    await expect(service.activateRequest(changes, ORG, ids.mgr, {})).rejects.toMatchObject({ status: 409, response: { code: 'REQUISITION_NOT_APPROVED' } });
+    await prisma.vacancyRequest.update({ where: { id: changes }, data: { status: 'Approved' } }); // resubmitted + approved
+    expect((await service.activateRequest(changes, ORG, ids.mgr, {})).request.status).toBe('Converted to Vacancy');
   });
 
   it('GET is scoped (own + direct reports; admin all) and carries names', async () => {
@@ -81,6 +85,26 @@ describe.skipIf(!url)('M1 requisitions (scratch Postgres)', () => {
     expect((await service.listRequests(ORG, as(ids.report) as never)).some((r) => r.id === own)).toBe(false);
     const all = (await service.listRequests(ORG, as(ids.stranger, true) as never)).map((r) => r.id);
     expect(all).toEqual(expect.arrayContaining([own, reports, foreign]));
+  });
+
+  it('recruiters and HR: requested or assigned to, plus direct reports\' (same rule as managers); admin all', async () => {
+    const assignedToEmp = await makeRequest(ids.stranger, 'Draft', { assignedEmployeeId: ids.emp });
+    const assignedToReport = await makeRequest(ids.stranger, 'Draft', { assignedEmployeeId: ids.report });
+    const requestedByEmp = await makeRequest(ids.emp);
+    const unrelated = await makeRequest(ids.stranger);
+    await prisma.user.update({ where: { id: ids.emp }, data: { managerId: ids.boss } });
+    for (const roleCodes of [['RECRUITER'], ['HR']]) {
+      const emp = new Set((await service.listRequests(ORG, { ...as(ids.emp), roleCodes } as never)).map((r) => r.id));
+      expect(emp.has(assignedToEmp) && emp.has(requestedByEmp)).toBe(true);
+      expect(emp.has(unrelated) || emp.has(assignedToReport)).toBe(false);
+    }
+    const mgr = new Set((await service.listRequests(ORG, { ...as(ids.mgr), roleCodes: ['RECRUITER'] } as never)).map((r) => r.id));
+    expect(mgr.has(assignedToReport)).toBe(true); // assigned to a direct report
+    expect(mgr.has(unrelated)).toBe(false);
+    const boss = new Set((await service.listRequests(ORG, { ...as(ids.boss), roleCodes: ['HR'] } as never)).map((r) => r.id));
+    expect(boss.has(assignedToEmp) && boss.has(requestedByEmp)).toBe(true); // emp now reports to boss
+    const all = (await service.listRequests(ORG, as(ids.emp, true) as never)).map((r) => r.id);
+    expect(all).toEqual(expect.arrayContaining([assignedToEmp, assignedToReport, requestedByEmp, unrelated]));
   });
 
   it('PATCH target after activation: Manager only, reason required, history, never below joined', async () => {

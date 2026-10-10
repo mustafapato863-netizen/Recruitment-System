@@ -40,7 +40,8 @@ type AppInfo = { applicationId: string; candidate: Person; stage: string };
 export interface MyWorkInput {
   me?: string;
   jobs: Array<{ id: string; code: string; title: string; status: string; joined: number; target: number; dueDate: string | null; department?: string | null; site?: string | null; owner?: Person | null }>;
-  requisitions: Array<{ id: string; code: string; title: string; status: string; dueDate: string | null }>;
+  /** activateBlocked: why Activate is unavailable for this caller (undefined = activatable). */
+  requisitions: Array<{ id: string; code: string; title: string; status: string; dueDate: string | null; activateBlocked?: string | undefined }>;
   tasks: Array<{ id: string; title: string; dueAt: Date | null; entityType: string | null; entityId: string | null }>;
   interviews: Array<{ id: string; title: string; start: Date; end: Date; applicationId: string; roomUrl?: string | null; roomName?: string | null; interviewers?: Array<{ id: string | null; name: string }>; app?: AppInfo; iAmInterviewer?: boolean }>;
   myMissingScorecards: Array<{ interviewId: string; title: string; end: Date; app?: AppInfo }>;
@@ -110,18 +111,25 @@ export function buildMyWork(input: MyWorkInput, now: Date, day: MyWorkDay = 'tod
       continue;
     }
     if (!['Draft', 'Changes Requested', 'Approved'].includes(req.status)) continue;
-    const action = req.status === 'Approved'
+    // M1: Approved, or a Draft that is activatable (due date + eligible assignee + requester/manager), is activated directly.
+    const canActivate = (req.status === 'Approved' || req.status === 'Draft') && !req.activateBlocked;
+    const action = canActivate
       ? { code: 'activate-requisition', label: 'Activate' }
       : { code: 'submit-requisition', label: 'Submit for approval' };
+    const activateAct = canActivate
+      ? act('activate-requisition', 'Activate')
+      : act('activate-requisition', 'Activate', req.status === 'Changes Requested'
+        ? 'Changes requested: resubmit and get it approved before activating'
+        : req.activateBlocked ?? 'Not activatable');
     if (!req.dueDate) {
       if (req.status === 'Draft' && day === 'today') {
         dueToday.push({ ...base, reason: 'Set a due date', nextAction: { code: 'set-due-date', label: 'Set due date' },
-          actions: [act('set-due-date', 'Set due date'), act('submit-requisition', 'Submit for approval', 'Set a due date first'), act('cancel-requisition', 'Cancel')] });
+          actions: [act('set-due-date', 'Set due date'), act('activate-requisition', 'Activate', 'Set a due date first'), act('submit-requisition', 'Submit for approval', 'Set a due date first'), act('cancel-requisition', 'Cancel')] });
       }
       continue;
     }
     place({ ...base, reason: `Requisition ${req.status}`, nextAction: action,
-      actions: [act(action.code, action.label), act('cancel-requisition', 'Cancel')] }, req.dueDate);
+      actions: [activateAct, ...(req.status === 'Approved' ? [] : [act('submit-requisition', 'Submit for approval')]), act('cancel-requisition', 'Cancel')] }, req.dueDate);
   }
 
   for (const task of input.tasks) {

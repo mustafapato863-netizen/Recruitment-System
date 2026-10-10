@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { AuthUser } from '@recruitflow/contracts';
+import type { TeamWorkResponse, AuthUser } from '@recruitflow/contracts';
 // Runtime service imports must remain value imports for Nest DI metadata reflection.
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { PrismaService } from '../database/prisma.service';
@@ -35,6 +35,33 @@ const WORKING_JOB = ['Open', 'Partially Filled'];
 export class MyWorkService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
+  /**
+   * M2-M4: GET /team/work — the My Work buckets of each ACTIVE direct report of the caller (users.managerId),
+   * merged, every item tagged with owner{id,name}. Scoped server-side to direct reports only (no admin bypass).
+   * Items keep the report's own actions/reasons (they are the report's work).
+   */
+  async getTeamWork(user: AuthUser, now: Date = new Date(), day: MyWorkDay = 'today'): Promise<TeamWorkResponse> {
+    const reports = await this.prisma.user.findMany({
+      where: { organizationId: user.organizationId, managerId: user.userId, status: 'Active' },
+      select: { id: true, displayName: true },
+      orderBy: { displayName: 'asc' },
+    });
+    const per = await Promise.all(reports.map(async (r) => ({ r, w: await this.getMyWork({ ...user, userId: r.id, roleCodes: [] }, now, day) })));
+    const tag = <T>(items: T[], r: { id: string; displayName: string }) => items.map((i) => ({ ...i, owner: { id: r.id, name: r.displayName } }));
+    const pick = (k: 'overdue' | 'dueToday' | 'waitingOnOthers') => per.flatMap(({ r, w }) => tag(w[k], r));
+    const overdue = pick('overdue'); const dueToday = pick('dueToday'); const waitingOnOthers = pick('waitingOnOthers');
+    const first = per[0]?.w;
+    const empty = overdue.length + dueToday.length + waitingOnOthers.length === 0;
+    return {
+      timezone: first?.timezone ?? 'Africa/Cairo', day, date: first?.date ?? '', generatedAt: now.toISOString(),
+      people: reports.map((r) => ({ id: r.id, name: r.displayName })),
+      counts: { overdue: overdue.length, today: dueToday.length, waitingOnOthers: waitingOnOthers.length },
+      overdue, dueToday, waitingOnOthers,
+      targets: per.flatMap(({ r, w }) => tag(w.targets, r)),
+      empty, emptyMessage: empty ? (reports.length ? 'Your team has nothing due.' : 'You have no direct reports.') : null,
+    };
+  }
+
   async getMyWork(user: AuthUser, now: Date = new Date(), day: MyWorkDay = 'today'): Promise<MyWorkResponse> {
     const org = user.organizationId;
     const me = user.userId;
@@ -66,9 +93,15 @@ export class MyWorkService {
             { requesterId: me, status: { in: ['Draft', 'Changes Requested', 'Pending Approval', 'Approved'] } },
             // Approved, not yet activated: also the requester's manager's work (next action Activate).
             { requester: { managerId: me }, status: 'Approved' },
+            // M1: a report's Draft is also the manager's work (they may activate it once it has a due date + assignee).
+            { requester: { managerId: me }, status: 'Draft' },
           ],
         },
-        select: { id: true, requestCode: true, status: true, targetFillDate: true, position: { select: { title: true } } },
+        select: {
+          id: true, requestCode: true, status: true, targetFillDate: true, requesterId: true, position: { select: { title: true } },
+          requester: { select: { managerId: true } },
+          assignedEmployee: { select: { status: true, userRoles: { where: { role: { code: 'ADMINISTRATOR' } }, select: { roleId: true } } } },
+        },
       }),
       this.prisma.task.findMany({
         where: { organizationId: org, assigneeUserId: me, status: { in: ['Open', 'In Progress'] }, dueAt: { not: null } },
@@ -87,7 +120,7 @@ export class MyWorkService {
           id: true, title: true, scheduledStart: true, scheduledEnd: true, applicationId: true, locationUrl: true, roomName: true, legacyInterviewerName: true,
           application: { select: { ...appSelect, primaryRecruiterId: true, taskOwnerId: true, vacancy: { select: { status: true, assignments: { where: { userId: me, isActive: true, assignmentKind: 'PRIMARY' }, select: { id: true } } } } } },
           attendees: { select: { userId: true, role: true, user: { select: { displayName: true } } } },
-          scorecards: { select: { interviewerId: true } },
+          scorecards: { select: { interviewerId: true, status: true } },
         },
         take: 200,
       }),
@@ -111,8 +144,19 @@ export class MyWorkService {
     const ownsFile = (i: (typeof interviews)[number]) =>
       WORKING_JOB.includes(i.application.vacancy.status) &&
       (i.application.primaryRecruiterId === me || i.application.taskOwnerId === me || i.application.vacancy.assignments.length > 0);
-    const submitted = (i: (typeof interviews)[number], userId: string) => i.scorecards.some((s) => s.interviewerId === userId);
+    const submitted = (i: (typeof interviews)[number], userId: string) => i.scorecards.some((s) => s.interviewerId === userId && s.status === 'Submitted'); // B5: a Draft is still pending
 
+    // M1: same rules as POST /vacancy-requests/:id/activate, so the button matches the API.
+    const activateBlocked = (r: (typeof requisitions)[number]): string | undefined => {
+      if (r.status === 'Changes Requested') return 'Changes requested: resubmit and get it approved before activating';
+      if (r.status === 'Pending Approval') return 'Waiting for approval';
+      if (r.status !== 'Draft' && r.status !== 'Approved') return 'Not activatable';
+      if (r.status === 'Draft' && r.requesterId !== me && r.requester?.managerId !== me) return 'Only the requester or their manager can activate';
+      if (!r.targetFillDate) return 'Set a due date first';
+      if (!r.assignedEmployee) return r.status === 'Draft' ? 'Assign an employee first' : undefined; // Approved: assignee may be picked at activation
+      if (r.assignedEmployee.status !== 'Active' || r.assignedEmployee.userRoles.length) return 'The assigned employee is not eligible (inactive or administrator)';
+      return undefined;
+    };
     return buildMyWork({
       jobs: jobs.map((j) => ({
         id: j.id, code: j.vacancyCode, title: j.position?.title ?? j.vacancyCode, status: j.status, joined: j.joinedHeadcount,
@@ -125,6 +169,7 @@ export class MyWorkService {
       requisitions: requisitions.map((r) => ({
         id: r.id, code: r.requestCode, title: r.position?.title ?? r.requestCode, status: r.status,
         dueDate: r.targetFillDate ? r.targetFillDate.toISOString().slice(0, 10) : null,
+        activateBlocked: activateBlocked(r),
       })),
       tasks,
       interviews: interviews
