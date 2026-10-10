@@ -103,6 +103,18 @@ describe.skipIf(!url)('B3 requisition and job lifecycle (scratch Postgres)', () 
     expect((await service.closeVacancy(job.id, ORG, 'Position no longer needed', as2(ids.manager!))).status).toBe('Closed');
   });
 
+  it('B2R-1: a skip-level manager (owner -> manager -> skip) can hold the job too', async () => {
+    const rec = await prisma.role.findFirstOrThrow({ where: { code: 'RECRUITER' } });
+    const skip = randomUUID();
+    await prisma.user.create({ data: { id: skip, organizationId: ORG, email: `skip-${tag}@b3.test`, emailNormalized: `skip-${tag}@b3.test`, displayName: 'B3 skip', passwordHash: 'x', userRoles: { create: { roleId: rec.id } } } });
+    await prisma.user.update({ where: { id: ids.manager! }, data: { managerId: skip } });
+    const id = await makeRequest('Approved', { assignedEmployeeId: ids.owner });
+    const job = (await service.activateRequest(id, ORG, null, {})).vacancy!;
+    const as2 = (userId: string) => ({ userId, organizationId: ORG, tokenVersion: 0, roleCodes: ['RECRUITER'] });
+    expect((await service.holdVacancy(job.id, ORG, 'Hiring freeze', as2(skip))).status).toBe('On Hold');
+    await prisma.user.update({ where: { id: ids.manager! }, data: { managerId: null } });
+  });
+
   it('an administrator can never hold, reopen or close a job (even as requester)', async () => {
     const id = await makeRequest('Approved', { assignedEmployeeId: ids.owner, requesterId: ids.admin });
     const job = (await service.activateRequest(id, ORG, null, {})).vacancy!;
