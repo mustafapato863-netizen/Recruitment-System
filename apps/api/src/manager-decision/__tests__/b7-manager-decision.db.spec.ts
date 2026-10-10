@@ -208,6 +208,20 @@ describe.skipIf(!url)('B7 grade bands, offer pay, manager decision, reassign (sc
     expect((await prisma.application.findUniqueOrThrow({ where: { id: open.id } })).primaryRecruiterId).toBe(u.owner); // atomic: nothing moved
   });
 
+  it('B9 admin override file.reassign: admin-only, routed through reassign rules (no admin owners), audited', async () => {
+    const f1 = await file('owner', jobId, 'Screening');
+    const body = { applicationIds: [f1.id], toUserId: u.target!, reason: 'Owner on leave' };
+    expect((await err(reassign.adminOverride(user('mgr'), body))).status).toBe(403);
+    expect((await err(reassign.adminOverride(user('admin'), { ...body, reason: ' ' }))).body.code).toBe('REASSIGN_REASON_REQUIRED');
+    expect((await err(reassign.adminOverride(user('admin'), { ...body, toUserId: u.admin! }))).body.code).toBe('REASSIGN_TARGET_INELIGIBLE');
+    const res = await reassign.adminOverride(user('admin'), body);
+    expect(res.moved).toEqual([{ applicationId: f1.id, fromUserId: u.owner }]);
+    expect((await prisma.application.findUniqueOrThrow({ where: { id: f1.id } })).primaryRecruiterId).toBe(u.target);
+    expect(await prisma.auditLog.count({ where: { action: 'ADMIN_OVERRIDE', entityId: res.batchId, actorUserId: u.admin! } })).toBe(1);
+    expect(await prisma.auditLog.count({ where: { action: 'FILE_REASSIGN', entityId: f1.id } })).toBe(1);
+    // f1 now belongs to target and stays out of the bulk test below.
+  });
+
   it('bulk reassign of all open files: history, audit, notifications; owner is left with no open files', async () => {
     const closed = await file('owner', jobId, 'Joined');
     sent.length = 0;

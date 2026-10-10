@@ -86,6 +86,12 @@ export class ManagerDecisionController {
     return this.decisions.decide(user, id, versionId, dto);
   }
 
+  /** B9 admin override file.reassign (lives here because it routes through B7's reassign logic). Admin-only, audited. */
+  @Post('admin/overrides/file-reassign')
+  overrideReassign(@CurrentUser() user: AuthUser, @Body() dto: ReassignFilesDto) {
+    return this.reassignments.adminOverride(user, dto);
+  }
+
   @Post('files/reassign')
   @RequirePermissions('APPLICATION_VIEW')
   reassign(@CurrentUser() user: AuthUser, @Body() dto: ReassignFilesDto) {

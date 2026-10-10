@@ -27,7 +27,21 @@ export class ReassignService {
   ) {}
 
   async reassign(user: AuthUser, input: ReassignInput) {
-    if (isAdmin(user.roleCodes)) throw new ForbiddenException({ code: 'REASSIGN_ADMIN_FORBIDDEN', message: 'Administrators cannot reassign files; the owner\'s manager does.' });
+    if (isAdmin(user.roleCodes)) throw new ForbiddenException({ code: 'REASSIGN_ADMIN_FORBIDDEN', message: 'Administrators cannot reassign files; the owner\'s manager does. Use the admin override (POST /admin/overrides/file-reassign).' });
+    return this.run(user, input, false);
+  }
+
+  /**
+   * B9 admin override file.reassign: admin-only, same rules as the manager reassign (reason from master data,
+   * open files only, atomic, target must be an active NON-admin user, so admins can't become owners),
+   * except the "you must be the owner's manager" check. Writes FILE_REASSIGN rows plus one ADMIN_OVERRIDE audit row.
+   */
+  async adminOverride(user: AuthUser, input: ReassignInput) {
+    if (!isAdmin(user.roleCodes)) throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Only an administrator can use an override.' });
+    return this.run(user, input, true);
+  }
+
+  private async run(user: AuthUser, input: ReassignInput, override: boolean) {
     if (!input.reason?.trim()) throw new BadRequestException({ code: 'REASSIGN_REASON_REQUIRED', message: 'A reason is required to reassign files.' });
     // M2-M4: the reason comes from master data 'reassign-reasons' ("Other" needs a note), like hold/close reasons.
     const reason = await resolveJobStatusReason(this.prisma, user.organizationId, 'reassign-reasons', input.reason, input.note);
@@ -52,7 +66,7 @@ export class ReassignService {
     // The reassigning manager is the (escalated) manager of the file's owner (primaryRecruiterId):
     // a manager who also owns the file is skipped and their own manager decides (same rule as offers).
     const notMine: typeof files = [];
-    for (const f of files) {
+    for (const f of override ? [] : files) {
       if (!f.primaryRecruiterId) { notMine.push(f); continue; }
       const owners = await fileOwnerIds(this.prisma, f);
       if (owners.includes(user.userId) || !(await escalatedManagers(this.prisma, [f.primaryRecruiterId], owners)).has(user.userId)) notMine.push(f);
@@ -68,6 +82,10 @@ export class ReassignService {
       }
       if (moving.length) {
         await tx.fileReassignment.createMany({ data: moving.map((f) => ({ organizationId: user.organizationId, applicationId: f.id, fromUserId: f.primaryRecruiterId, toUserId: target.id, reason, reassignedById: user.userId, batchId })) });
+        if (override) {
+          await tx.auditLog.create({ data: { action: 'ADMIN_OVERRIDE', actorUserId: user.userId, organizationId: user.organizationId, entityType: 'FileReassignmentBatch', entityId: batchId, result: 'Success', reason,
+            beforeData: { action: 'file.reassign', owners: moving.map((f) => ({ applicationId: f.id, ownerId: f.primaryRecruiterId })) }, afterData: { action: 'file.reassign', toUserId: target.id } } });
+        }
         await tx.auditLog.createMany({ data: moving.map((f) => ({ action: 'FILE_REASSIGN', actorUserId: user.userId, organizationId: user.organizationId, entityType: 'Application', entityId: f.id, result: 'SUCCESS', reason: `${f.primaryRecruiterId} -> ${target.id}: ${reason}` })) });
       }
     });
