@@ -120,7 +120,7 @@ export class MyWorkService {
           id: true, title: true, scheduledStart: true, scheduledEnd: true, applicationId: true, locationUrl: true, roomName: true, legacyInterviewerName: true,
           application: { select: { ...appSelect, primaryRecruiterId: true, taskOwnerId: true, vacancy: { select: { status: true, assignments: { where: { userId: me, isActive: true, assignmentKind: 'PRIMARY' }, select: { id: true } } } } } },
           attendees: { select: { userId: true, role: true, user: { select: { displayName: true } } } },
-          scorecards: { select: { interviewerId: true } },
+          scorecards: { select: { interviewerId: true, status: true } },
         },
         take: 200,
       }),
@@ -144,7 +144,7 @@ export class MyWorkService {
     const ownsFile = (i: (typeof interviews)[number]) =>
       WORKING_JOB.includes(i.application.vacancy.status) &&
       (i.application.primaryRecruiterId === me || i.application.taskOwnerId === me || i.application.vacancy.assignments.length > 0);
-    const submitted = (i: (typeof interviews)[number], userId: string) => i.scorecards.some((s) => s.interviewerId === userId);
+    const submitted = (i: (typeof interviews)[number], userId: string) => i.scorecards.some((s) => s.interviewerId === userId && s.status === 'Submitted'); // B5: a Draft is still pending
 
     // M1: same rules as POST /vacancy-requests/:id/activate, so the button matches the API.
     const activateBlocked = (r: (typeof requisitions)[number]): string | undefined => {
