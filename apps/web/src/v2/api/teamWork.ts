@@ -154,7 +154,8 @@ export async function fetchReassignReasons(): Promise<string[] | null> {
   } catch { return null; }
 }
 
-export type ReassignBody = { applicationIds: string[]; toUserId: string; reason: string } | { fromUserId: string; toUserId: string; reason: string };
+/** = ReassignFilesDto: reason is a reassign-reasons list value; "Other" sends the free text in `note` (REASON_REQUIRED if < 3). */
+export type ReassignBody = ({ applicationIds: string[] } | { fromUserId: string }) & { toUserId: string; reason: string; note?: string };
 export interface ReassignResult { batchId: string; toUserId: string; moved: Array<{ applicationId: string; fromUserId: string | null }>; unchanged: string[] }
 export const reassignFiles = (body: ReassignBody) => postApi<ReassignResult>('/files/reassign', body);
 
@@ -167,12 +168,14 @@ const REASSIGN_TEXT: Record<string, { field?: 'to' | 'reason' | 'what'; text: st
   REASSIGN_REASON_REQUIRED: { field: 'reason', text: 'A reason is required.' },
   REASSIGN_SCOPE: { field: 'what', text: 'Pick a file, a job or a person to move.' },
   REASSIGN_FILE_NOT_FOUND: { field: 'what', text: 'That file no longer exists or is not visible to you.' },
+  REASON_NOT_IN_LIST: { field: 'reason', text: 'Pick a reason from the Reassign reasons list.' },
+  REASON_REQUIRED: { field: 'reason', text: '"Other" needs a short note (at least 3 characters).' },
 };
 /** Codes first (B7 passes them through), else the server message. */
 export function reassignError(e: unknown): { field?: 'to' | 'reason' | 'what'; text: string; code?: string } {
   // #23: a 400's field/fields name the body path (toUserId, reason, applicationIds…): put it on that input.
   const f = serverFormErrors(e);
-  const API: Record<string, 'to' | 'reason' | 'what'> = { toUserId: 'to', reason: 'reason', applicationIds: 'what', fromUserId: 'what' };
+  const API: Record<string, 'to' | 'reason' | 'what'> = { toUserId: 'to', reason: 'reason', note: 'reason', applicationIds: 'what', fromUserId: 'what' };
   const hit = Object.keys(f.byField).find((k) => API[k.split('.')[0]]);
   if (hit) return { field: API[hit.split('.')[0]], text: f.byField[hit], ...(f.code ? { code: f.code } : {}) };
   const d = domainError(e);
