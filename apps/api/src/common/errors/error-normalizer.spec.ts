@@ -189,4 +189,19 @@ describe('Error Normalizer', () => {
     expect(result.details?.targetStage).toBe('Interview');
     expect(result.details?.requirements).toHaveLength(1);
   });
+
+  // QA BUG-1: B1 machine codes must reach clients in the HTTP envelope.
+  it.each([
+    [403, 'FILE_NOT_OWNED', 'Access denied: this file belongs to another owner.'],
+    [403, 'JOB_NOT_OWNED', 'Access denied: this job belongs to another owner.'],
+    [403, 'ADMIN_CANNOT_REASSIGN', 'Administrators cannot reassign a job owner.'],
+    [400, 'OWNER_NOT_ELIGIBLE', 'An inactive user cannot own a job or file.'],
+    [403, 'ADMIN_ONLY', 'Access denied: only administrators can manage templates.'],
+    [403, 'DOCUMENT_DOWNLOAD_DENIED', 'Access denied: downloading this document requires DOWNLOAD_DOCUMENTS.'],
+  ])('keeps the B1 code %s/%s and its message', (status, code, message) => {
+    const result = normalizeError(new HttpException({ code, message }, status));
+    expect(result.statusCode).toBe(status);
+    expect(result.code).toBe(code);
+    expect(result.message).toBe(message);
+  });
 });

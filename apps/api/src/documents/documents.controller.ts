@@ -16,7 +16,7 @@ import {
 import { createReadStream } from 'node:fs';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { TenantScopedGuard } from '../common/guards/tenant-scoped.guard';
-import { TenantResource } from '../common/decorators/tenant-resource.decorator';
+import { AllowApproverCvDownload, AllowFileApprover, TenantResource } from '../common/decorators/tenant-resource.decorator';
 // DTO classes must remain runtime imports for Nest metadata reflection.
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { DocumentsService } from './documents.service';
@@ -29,7 +29,7 @@ import {
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { RequirePermissions } from '../common/decorators/require-permissions.decorator';
+import { RequireAnyPermissions, RequirePermissions } from '../common/decorators/require-permissions.decorator';
 import { AuditAction } from '../common/decorators/audit-action.decorator';
 import { fileInvalid } from '../common/errors/api-error';
 import type { AuthUser } from '@recruitflow/contracts';
@@ -47,9 +47,10 @@ export class DocumentsController {
   constructor(private readonly documentsService: DocumentsService) {}
 
   @Get('candidate/:candidateId')
-  @RequirePermissions('CANDIDATE_VIEW')
+  @RequireAnyPermissions('CANDIDATE_VIEW', 'APPROVE_OFFERS', 'FINAL_HIRING_APPROVAL')
   @UseGuards(TenantScopedGuard)
   @TenantResource({ resource: 'candidate', param: 'candidateId' })
+  @AllowFileApprover()
   listCandidateDocuments(
     @CurrentUser() user: AuthUser,
     @Param('candidateId', ParseUUIDPipe) candidateId: string,
@@ -161,9 +162,13 @@ export class DocumentsController {
   }
 
   @Get(':id/download')
-  @RequirePermissions('CANDIDATE_VIEW', 'DOWNLOAD_DOCUMENTS')
+  // DOWNLOAD_DOCUMENTS is enforced in TenantScopedGuard so a pending approver
+  // can download the candidate's CV/Resume without it (@AllowApproverCvDownload).
+  @RequireAnyPermissions('CANDIDATE_VIEW', 'APPROVE_OFFERS', 'FINAL_HIRING_APPROVAL')
   @UseGuards(TenantScopedGuard)
   @TenantResource({ resource: 'candidateDocument', param: 'id' })
+  @AllowFileApprover()
+  @AllowApproverCvDownload()
   async downloadFile(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
     const file = await this.documentsService.getFile(user.organizationId, id, user);
     return new StreamableFile(createReadStream(file.path), {

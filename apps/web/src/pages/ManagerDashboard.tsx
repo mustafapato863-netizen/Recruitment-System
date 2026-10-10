@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, useMemo } from 'react';
+import { fetchVacancyList } from '../utils/vacancyAccess';
 import { Link, useNavigate } from 'react-router-dom';
 import type { Vacancy, Application, ReportOverview, Interview } from '@recruitflow/contracts';
 import { getApi, postApi } from '../api/client';
@@ -230,7 +231,8 @@ export function ManagerDashboard() {
     setIsLoading(true);
     try {
       const [vacanciesRes, applicationsRes, overviewRes, interviewsRes, recruitersRes] = await Promise.allSettled([
-        getApi<Vacancy[]>('/vacancies'),
+        // B1: redacted jobs carry no workflow data; excluded from metrics and assignment.
+        fetchVacancyList().then(({ full }) => full),
         getApi<{ data: Application[] }>('/applications?pageSize=100'),
         getApi<ReportOverview>(
           '/reports/overview?from=' +

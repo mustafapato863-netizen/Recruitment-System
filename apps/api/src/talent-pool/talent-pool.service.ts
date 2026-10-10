@@ -74,6 +74,7 @@ export class TalentPoolService {
     const recent = await this.prisma.talentPoolCandidate.findMany({
       where: {
         talentPool: { organizationId },
+        removedAt: null,
       },
       include: {
         candidate: true,
@@ -99,7 +100,7 @@ export class TalentPoolService {
 
   async getHealthMetrics(organizationId: string): Promise<TalentPoolHealthMetrics> {
     const totalCandidates = await this.prisma.talentPoolCandidate.count({
-      where: { talentPool: { organizationId } },
+      where: { talentPool: { organizationId }, removedAt: null },
     });
 
     if (totalCandidates === 0) {
@@ -114,12 +115,14 @@ export class TalentPoolService {
       this.prisma.talentPoolCandidate.count({
         where: {
           talentPool: { organizationId },
+          removedAt: null,
           consentStatus: 'Active',
         },
       }),
       this.prisma.talentPoolCandidate.count({
         where: {
           talentPool: { organizationId },
+          removedAt: null,
           candidate: {
             updatedAt: {
               gte: new Date(Date.now() - 365 * 24 * 60 * 60 * 1000), // ~12m
@@ -130,6 +133,7 @@ export class TalentPoolService {
       this.prisma.talentPoolCandidate.count({
         where: {
           talentPool: { organizationId },
+          removedAt: null,
           candidate: {
             updatedAt: {
               gte: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000), // ~90d approx for recent contact since we don't have explicit contact tracking
@@ -158,10 +162,10 @@ export class TalentPoolService {
     const skip = (page - 1) * pageSize;
     const [total, candidates] = await Promise.all([
       this.prisma.talentPoolCandidate.count({
-        where: { talentPoolId: id },
+        where: { talentPoolId: id, removedAt: null },
       }),
       this.prisma.talentPoolCandidate.findMany({
-        where: { talentPoolId: id },
+        where: { talentPoolId: id, removedAt: null },
         include: { candidate: true },
         orderBy: { addedAt: 'desc' },
         skip,
@@ -216,8 +220,15 @@ export class TalentPoolService {
     const existing = await this.prisma.talentPoolCandidate.findUnique({
       where: { talentPoolId_candidateId: { talentPoolId: id, candidateId: dto.candidateId } },
     });
-    if (existing) {
+    if (existing && !existing.removedAt) {
       throw new ConflictException('Candidate is already in this talent pool');
+    }
+    if (existing) {
+      // B2: re-adding restores the soft-unlinked membership (history kept).
+      return this.prisma.talentPoolCandidate.update({
+        where: { id: existing.id },
+        data: { removedAt: null, addedAt: new Date(), source: dto.source ?? existing.source, consentExpiry: dto.consentExpiry ? new Date(dto.consentExpiry) : existing.consentExpiry },
+      });
     }
 
     const tpc = await this.prisma.talentPoolCandidate.create({
@@ -242,17 +253,19 @@ export class TalentPoolService {
     }
 
     const tpc = await this.prisma.talentPoolCandidate.findFirst({
-      where: { talentPoolId: poolId, candidateId },
+      where: { talentPoolId: poolId, candidateId, removedAt: null },
     });
 
     if (!tpc) {
       throw new NotFoundException('Candidate not found in pool');
     }
 
-    await this.prisma.talentPoolCandidate.delete({
+    // B2: no hard delete. The link is soft-removed and kept as history.
+    await this.prisma.talentPoolCandidate.update({
       where: { id: tpc.id },
+      data: { removedAt: new Date() },
     });
 
-    return { success: true };
+    return { success: true, deactivated: true };
   }
 }

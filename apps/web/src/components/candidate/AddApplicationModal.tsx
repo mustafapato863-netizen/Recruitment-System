@@ -1,4 +1,7 @@
 import { useEffect, useState, useMemo } from 'react';
+import { fetchVacancyList } from '../../utils/vacancyAccess';
+import type { RedactedVacancy } from '../../types/redactedVacancy';
+import { RedactedJobOptions } from '../access/RedactedJobOptions';
 import { useNavigate } from 'react-router-dom';
 import type { Candidate, PaginatedResult, Vacancy, Application } from '@recruitflow/contracts';
 import { getApi, postApi } from '../../api/client';
@@ -45,6 +48,7 @@ export function AddApplicationModal({
 
   // Vacancy Data State
   const [vacancies, setVacancies] = useState<Vacancy[]>([]);
+  const [redactedVacancies, setRedactedVacancies] = useState<RedactedVacancy[]>([]);
   const [selectedVacancyId, setSelectedVacancyId] = useState(preselectedVacancyId || '');
   const [isVacanciesLoading, setIsVacanciesLoading] = useState(false);
 
@@ -99,9 +103,10 @@ export function AddApplicationModal({
       // Load vacancies if not preselected
       if (!preselectedVacancyId) {
         setIsVacanciesLoading(true);
-        getApi<Vacancy[] | { data: Vacancy[] }>('/vacancies')
-          .then((res) => {
-            const vList = Array.isArray(res) ? res : (res as unknown as { data: Vacancy[] })?.data || [];
+        fetchVacancyList()
+          .then(({ full: vList, redacted }) => {
+            // B1: other owners' jobs are shown disabled with the reason, never selectable.
+            setRedactedVacancies(redacted);
             const availableVacancies = vList.filter((vacancy) =>
               vacancy.status !== 'Open' || vacancy.assignments?.some((assignment) =>
                 assignment.isActive && (assignment.assignmentKind ?? 'PRIMARY') === 'PRIMARY',
@@ -268,6 +273,7 @@ export function AddApplicationModal({
                     {v.position?.title || v.title || v.id}
                   </option>
                 ))}
+                <RedactedJobOptions jobs={redactedVacancies} />
               </Select>
             </div>
           )}

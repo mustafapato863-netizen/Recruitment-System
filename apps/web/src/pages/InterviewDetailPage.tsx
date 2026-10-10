@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { isScorecardSubmitted, scorecardState } from '../utils/scorecardStatus';
+import { ForbiddenState } from '../components/access/ForbiddenState';
+import { isForbiddenError } from '../utils/vacancyAccess';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getApi, postApi, patchApi, type ApiError } from '../api/client';
 import type { Application, Interview as BaseInterview, InterviewScorecardItem } from '@recruitflow/contracts';
@@ -155,6 +157,7 @@ export function InterviewDetailPage() {
   const { user } = useAuth();
 
   const [interview, setInterview] = useState<Interview | null>(null);
+  const [isForbidden, setIsForbidden] = useState(false);
   const [isLoadingInterview, setIsLoadingInterview] = useState(true);
 
   useSetBreadcrumbTitle(interview?.title || 'Interview Details');
@@ -290,8 +293,9 @@ export function InterviewDetailPage() {
         setRoleCompetencyCategory(roleCat);
         setCategories([roleCat, ...DEFAULT_SCORECARD_CATEGORIES]);
       }
-    } catch {
-      // Ignored
+    } catch (err) {
+      // B1: another owner's file → 403 FILE_NOT_OWNED.
+      if (isForbiddenError(err)) setIsForbidden(true);
     } finally {
       setIsLoadingInterview(false);
     }
@@ -588,6 +592,10 @@ export function InterviewDetailPage() {
     }
     return best;
   }, [scorecards]);
+
+  if (!isLoadingInterview && !interview && isForbidden) {
+    return <ForbiddenState title="You do not have access to this interview" backLabel="Back to interviews" onBack={() => navigate('/interviews')} />;
+  }
 
   if (isLoadingInterview && !interview) {
     return (

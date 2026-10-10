@@ -41,6 +41,13 @@ export const errorCodes = [
   'ASYNC_JOB_FAILED',
   'INTEGRATION_UNAVAILABLE',
   'INTERNAL_ERROR',
+  // B1 ownership/scope codes (PR #4); clients branch on these.
+  'FILE_NOT_OWNED',
+  'JOB_NOT_OWNED',
+  'ADMIN_CANNOT_REASSIGN',
+  'OWNER_NOT_ELIGIBLE',
+  'ADMIN_ONLY',
+  'DOCUMENT_DOWNLOAD_DENIED',
 ] as const;
 
 export type ErrorCode = (typeof errorCodes)[number];
@@ -90,6 +97,8 @@ export const vacancyStatuses = [
   'On Hold',
   'Partially Filled',
   'Filled',
+  // B2: a deactivated job is Closed. Cancelled is legacy here (requisition-only per v2 §3; removed in B3).
+  'Closed',
   'Cancelled',
 ] as const;
 
@@ -165,9 +174,23 @@ export interface Vacancy {
   joinedHeadcount: number;
   openedAt: string | null;
   targetStartDate: string | null;
+  /** B1: the single job owner (never an administrator). */
+  primaryRecruiterId?: string | null;
   assignments: VacancyAssignment[];
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * B1 (Roadmap v2 §5): another owner's job as seen by a non-oversight user.
+ * Only title, site and seats; every other field is withheld server-side.
+ */
+export interface RedactedVacancy {
+  id: string;
+  redacted: true;
+  title: string | null;
+  site: { id: string; name: string } | null;
+  seats: { filled: number; target: number };
 }
 
 export * from './candidate-activity.ts';
@@ -503,6 +526,8 @@ export interface PermissionRecord {
   description: string | null;
   /** 'system' permissions are shared catalog entries; organization permissions are tenant-local. */
   scope?: 'system' | 'organization';
+  /** B2: Active | Inactive | Retired. Only Active is effective. */
+  status?: string;
 }
 
 export interface CreatePermissionInput {
@@ -983,6 +1008,30 @@ export interface ApplicationWorkspaceResponse {
     actualJoiningDate?: string | null;
     documentCount: number;
   };
+}
+
+/** GET /me/interviews (B1, shape per the #7 frontend contract). */
+export const MY_INTERVIEW_SCOPES = ['upcoming', 'past'] as const;
+export type MyInterviewScope = (typeof MY_INTERVIEW_SCOPES)[number];
+/** No "locked" state by rule: missing, draft or submitted only. */
+export type MyInterviewScorecardStatus = 'missing' | 'draft' | 'submitted';
+export interface MyInterviewItem {
+  id: string;
+  title: string;
+  interviewType: string;
+  scheduledStart: string;
+  scheduledEnd: string;
+  timezone: string;
+  candidateName: string | null;
+  positionTitle: string | null;
+  locationUrl: string | null;
+  roomName: string | null;
+  myResponse: string;
+  scorecardStatus: MyInterviewScorecardStatus;
+  status: string;
+}
+export interface MyInterviewsResponse {
+  data: MyInterviewItem[];
 }
 
 export interface InterviewScorecardItem {
@@ -1547,6 +1596,8 @@ export interface GlobalSearchItem {
   title: string;
   subtitle?: string;
   status?: string;
+  /** B1: another owner's job, shown as title/site/seats only. */
+  redacted?: boolean;
 }
 
 export interface GlobalSearchGroup {
