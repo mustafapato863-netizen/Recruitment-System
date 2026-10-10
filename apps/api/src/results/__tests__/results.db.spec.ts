@@ -30,9 +30,12 @@ describe.skipIf(!url)('B8 /results (scratch Postgres)', () => {
     job = jobs[0]!.id; otherJob = jobs[1]!.id;
     await prisma.vacancy.update({ where: { id: job }, data: { approvedHeadcount: 3 } });
     // Same shape the API writes: one active PRIMARY (+ Vacancy.primaryRecruiterId once B1 is under this branch).
-    await prisma.vacancyAssignment.updateMany({ where: { vacancyId: job, assignmentKind: 'PRIMARY', isActive: true }, data: { isActive: false } });
-    await prisma.vacancyAssignment.create({ data: { vacancyId: job, userId: u.r1, roleCode: 'RECRUITER', assignmentKind: 'PRIMARY', isActive: true } });
-    if (HAS_VACANCY_OWNER) await prisma.vacancy.update({ where: { id: job }, data: { primaryRecruiterId: u.r1 } as never });
+    // One transaction: other suites check the single-PRIMARY invariant concurrently.
+    await prisma.$transaction([
+      prisma.vacancyAssignment.updateMany({ where: { vacancyId: job, assignmentKind: 'PRIMARY', isActive: true }, data: { isActive: false } }),
+      prisma.vacancyAssignment.create({ data: { vacancyId: job, userId: u.r1, roleCode: 'RECRUITER', assignmentKind: 'PRIMARY', isActive: true } }),
+      ...(HAS_VACANCY_OWNER ? [prisma.vacancy.update({ where: { id: job }, data: { primaryRecruiterId: u.r1 } as never })] : []),
+    ]);
     const mkCand = async (i: number | string) => (await prisma.candidate.create({ data: { organizationId: ORG, candidateCode: `R8-${tag}-${i}`, firstName: 'R8', lastName: `C${i}` } })).id;
     const apps: string[] = [];
     for (let i = 0; i < 6; i += 1) {
