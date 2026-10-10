@@ -190,6 +190,7 @@ export class AuthService {
             role: {
               include: {
                 permissions: {
+                  where: { permission: { status: 'Active' } },
                   include: {
                     permission: true,
                   },

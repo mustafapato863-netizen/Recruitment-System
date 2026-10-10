@@ -23,7 +23,7 @@ import {
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { AuthUser } from '@recruitflow/contracts';
-import { RequireAnyPermissions, RequirePermissions } from '../common/decorators/require-permissions.decorator';
+import { RequireAdmin, RequireAnyPermissions } from '../common/decorators/require-permissions.decorator';
 import { AuditAction } from '../common/decorators/audit-action.decorator';
 
 @Controller('whatsapp-templates')
@@ -57,7 +57,7 @@ export class WhatsAppTemplatesController {
   }
 
   @Post()
-  @RequireAnyPermissions('MASTER_DATA_MANAGE', 'APPLICATION_VIEW', 'VACANCY_VIEW')
+  @RequireAdmin()
   @AuditAction('whatsapp_template.create')
   async createTemplate(
     @CurrentUser() user: AuthUser,
@@ -67,7 +67,7 @@ export class WhatsAppTemplatesController {
   }
 
   @Patch(':id')
-  @RequireAnyPermissions('MASTER_DATA_MANAGE', 'APPLICATION_VIEW', 'VACANCY_VIEW')
+  @RequireAdmin()
   @AuditAction('whatsapp_template.update')
   async updateTemplate(
     @CurrentUser() user: AuthUser,
@@ -78,7 +78,7 @@ export class WhatsAppTemplatesController {
   }
 
   @Post(':id/duplicate')
-  @RequireAnyPermissions('MASTER_DATA_MANAGE', 'APPLICATION_VIEW', 'VACANCY_VIEW')
+  @RequireAdmin()
   @AuditAction('whatsapp_template.duplicate')
   async duplicateTemplate(
     @CurrentUser() user: AuthUser,
@@ -114,7 +114,7 @@ export class WhatsAppTemplatesController {
   }
 
   @Delete(':id')
-  @RequireAnyPermissions('MASTER_DATA_MANAGE', 'APPLICATION_VIEW', 'VACANCY_VIEW')
+  @RequireAdmin()
   @AuditAction('whatsapp_template.archive')
   @HttpCode(HttpStatus.NO_CONTENT)
   async archiveTemplate(

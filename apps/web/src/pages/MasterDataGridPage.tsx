@@ -265,10 +265,10 @@ export function MasterDataGridPage() {
       removeRowLocally(deleteTarget.id);
       setDeleteTarget(null);
       setNoticeKind('success');
-      setNotice(`${deletedName} deleted.`);
+      setNotice(`${deletedName} archived.`);
     } catch (err) {
       setErrorKind('save');
-      setError(err instanceof Error ? err.message : 'Unable to delete this Master Data row.');
+      setError(err instanceof Error ? err.message : 'Unable to archive this Master Data row.');
       setDeleteTarget(null);
     } finally {
       setIsDeleting(false);
@@ -535,20 +535,20 @@ export function MasterDataGridPage() {
                 {category === 'branches' && <td className="px-3 py-2"><Select aria-label={`city for ${row.name || 'new row'}`} value={row.city || ''} disabled={!canManage} onFocus={() => setActiveCell({ row: actualIndex, field: 'city' })} onChange={(event) => updateRow(row.id, { city: event.target.value || null })}><option value="">Select city</option>{cityOptions(row.city || '').map((city) => <option key={city} value={city}>{city}</option>)}</Select></td>}
                 {metadataFields.map((field) => <td key={field.key} className="px-3 py-2">{field.type === 'select' && field.key === 'branchId' ? <Select aria-label={`${field.label} for ${row.name || 'new row'}`} value={metadataValue(row, field.key)} disabled={!canManage} onChange={(event) => updateMetadata(row.id, field.key, event.target.value)}><option value="">Any branch</option>{branchOptions.map((branch) => <option key={branch.id} value={branch.id}>{branch.name}{branch.code ? ` (${branch.code})` : ''}</option>)}</Select> : field.type === 'select' && field.key === 'departmentId' ? <Select aria-label={`${field.label} for ${row.name || 'new row'}`} value={metadataValue(row, field.key)} disabled={!canManage} onChange={(event) => updateMetadata(row.id, field.key, event.target.value)}><option value="">Any department</option>{departmentOptions.map((department) => <option key={department.id} value={department.id}>{department.name}{department.code ? ` (${department.code})` : ''}</option>)}</Select> : <Input aria-label={`${field.label} for ${row.name || 'new row'}`} value={metadataValue(row, field.key)} disabled={!canManage} onFocus={() => setActiveCell({ row: actualIndex, field: field.key })} onChange={(event) => updateMetadata(row.id, field.key, event.target.value)} placeholder={field.key === 'defaultDuration' ? 'Minutes' : ''} />}</td>)}
                 <td className="px-3 py-2"><Select aria-label={`status for ${row.name || 'new row'}`} value={row.status} disabled={!canManage} onChange={(event) => updateRow(row.id, { status: event.target.value })}><option>Active</option><option>Inactive</option><option>Archived</option></Select></td>
-                {canManage && <td className="px-3 py-2 text-right"><Button variant="ghost" size="icon" className="text-rf-danger hover:bg-rf-danger-soft hover:text-rf-danger" aria-label={row.isNew ? `Remove unsaved row ${row.name || 'new row'}` : `Delete ${row.name || 'Master Data row'}`} title={row.isNew ? 'Remove unsaved row' : 'Delete row'} onClick={() => requestDelete(row)} disabled={isSaving || isDeleting}><Icon name="trash" size={15} /></Button></td>}
+                {canManage && <td className="px-3 py-2 text-right"><Button variant="ghost" size="icon" className="text-rf-danger hover:bg-rf-danger-soft hover:text-rf-danger" aria-label={row.isNew ? `Remove unsaved row ${row.name || 'new row'}` : `Archive ${row.name || 'Master Data row'}`} title={row.isNew ? 'Remove unsaved row' : 'Archive row'} onClick={() => requestDelete(row)} disabled={isSaving || isDeleting}><Icon name="trash" size={15} /></Button></td>}
               </tr>; })}
             </tbody>
           </table>
         </div>
       )}
-      <p className="mt-3 text-[11px] text-rf-ink-muted">Changes remain unsaved until Save Changes. Paste is limited to the visible columns and saves up to 250 rows per transaction. Referenced values cannot be deleted; archive them instead so historical records stay intact.</p>
+      <p className="mt-3 text-[11px] text-rf-ink-muted">Changes remain unsaved until Save Changes. Paste is limited to the visible columns and saves up to 250 rows per transaction. Values are never deleted; archiving keeps historical records intact.</p>
       <ConfirmDialog
         isOpen={deleteTarget !== null}
         onClose={() => setDeleteTarget(null)}
         onConfirm={confirmDelete}
-        title="Delete Master Data row"
-        description={deleteTarget ? `Delete “${deleteTarget.name}”? This removes the value permanently. Values used by vacancies, candidates, applications, or interviews must be archived instead.` : undefined}
-        confirmLabel="Delete row"
+        title="Archive Master Data row"
+        description={deleteTarget ? `Archive “${deleteTarget.name}”? It leaves pickers but stays on existing records. Nothing is deleted.` : undefined}
+        confirmLabel="Archive row"
         tone="danger"
         isLoading={isDeleting}
       />
