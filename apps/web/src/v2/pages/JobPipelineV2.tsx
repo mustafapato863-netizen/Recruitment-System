@@ -4,9 +4,10 @@ import { DragDropProvider, useDraggable, useDroppable, type DragEndEvent } from 
 import { ArrowRight, CalendarDays, CircleAlert, CircleX, Clock, MoveRight, Pause, Play, RotateCw, Sparkles, Upload } from 'lucide-react';
 import { ButtonV2, EmptyStateV2, ForbiddenStateV2, SkeletonV2, StatusChip } from '../../components/v2';
 import { patchApi } from '../../api/client';
+import { useAuth } from '../../auth/AuthContext';
 import {
-  ACCEPTING_JOB_STATUSES, BOARD_LABEL, BOARD_STAGES, MOVE_GATE_HINT, blockingGate, isRedactedJob, isStaleStage, jobActions, jobErrorFromError, jobOwner, jobTitle, loadClosedFiles, loadJobBoard, moveCheck,
-  type BoardApplication, type BoardStage, type JobBoard, type JobDetail,
+  ACCEPTING_JOB_STATUSES, BOARD_LABEL, BOARD_STAGES, MOVE_GATE_HINT, blockingGate, canChangeJobStatus, errorMessage, fetchAssignable, isRedactedJob, isStaleStage, jobActions, jobErrorFromError, jobOwner, jobTitle, loadClosedFiles, loadJobBoard, moveCheck,
+  type AssignablePerson, type BoardApplication, type BoardStage, type JobBoard, type JobDetail,
 } from '../api/jobs';
 import { GATE_COPY, type GateCode } from '../api/gates';
 import { JobStatusDrawer } from '../drawers/JobStatusDrawer';
@@ -44,6 +45,17 @@ export function JobPipelineV2() {
   const [moving, setMoving] = useState<string | null>(null);
   const [toast, setToast] = useState<Toast>(null);
   const [closedOpen, setClosedOpen] = useState(false);
+  const { user } = useAuth();
+  const me = user ? { id: user.id, isAdmin: (user.roles ?? []).some((r) => r.code === 'ADMINISTRATOR') } : null;
+  const [reports, setReports] = useState<AssignablePerson[] | null>(null);
+  const boardOwnerId = state.kind === 'ready' && !isRedactedJob(state.board.job) ? jobOwner(state.board.job)?.id ?? null : null;
+  // Owner's manager check needs the owner's line manager: only asked when the viewer is not the owner.
+  useEffect(() => {
+    if (!boardOwnerId || !user || boardOwnerId === user.id) return;
+    let live = true;
+    fetchAssignable().then((r) => { if (live) setReports(r); }).catch(() => { if (live) setReports([]); });
+    return () => { live = false; };
+  }, [boardOwnerId, user]);
 
   const reload = useCallback(() => setAttempt((n) => n + 1), []);
   useEffect(() => {
@@ -79,11 +91,13 @@ export function JobPipelineV2() {
     } catch (e) {
       const d = jobErrorFromError(e);
       const gate = d && 'gate' in d && d.gate ? GATE_COPY[d.gate as GateCode] : null;
+      const closedFile = d?.code === 'FILE_CLOSED';
       const body = gate
         ? `Missing gate: ${gate.gate.toLowerCase()}. ${name.split(' ')[0]} stays in ${BOARD_LABEL[app.stage as BoardStage]}. ${gate.fix}`
-        : isStaleStage(e) ? 'Someone changed this file first. The board was refreshed.' : (d?.message || (e as Error)?.message || 'The move failed.');
+        : isStaleStage(e) ? 'Someone changed this file first. The board was refreshed.'
+        : closedFile ? `${d?.message || 'This file is closed.'} The board was refreshed.` : errorMessage(e, 'The move failed.');
       setToast({ tone: 'danger', title: `Can't move ${name} to ${BOARD_LABEL[target]}`, body });
-      if (isStaleStage(e)) reload();
+      if (isStaleStage(e) || closedFile) reload();
     } finally { setMoving(null); }
   };
 
@@ -104,7 +118,9 @@ export function JobPipelineV2() {
   const title = jobTitle(job);
   const owner = jobOwner(job);
   const accepting = ACCEPTING_JOB_STATUSES.includes(job.status);
-  const actions = jobActions(job.status);
+  // #23 NEW-3: hold/reopen/close only for the owner or the owner's manager (else 403 JOB_NOT_OWNED).
+  const mayChangeStatus = canChangeJobStatus(job, me, reports);
+  const actions = mayChangeStatus ? jobActions(job.status) : [];
   const seats = { filled: job.targetChip?.filled ?? job.joinedHeadcount, target: job.targetChip?.target ?? job.approvedHeadcount };
   const due = job.targetChip?.dueDate ?? null;
   const overdue = due ? due < new Date().toISOString().slice(0, 10) : false;
@@ -164,7 +180,7 @@ export function JobPipelineV2() {
       </div>
       {closedOpen ? <ClosedFiles id="closed-files" vacancyId={job.id} /> : null}
 
-      {drawer === 'status' ? <JobStatusDrawer job={job} onClose={() => setDrawer(null)} onDone={() => { setDrawer(null); reload(); }} /> : null}
+      {drawer === 'status' && mayChangeStatus ? <JobStatusDrawer job={job} onClose={() => setDrawer(null)} onDone={() => { setDrawer(null); reload(); }} /> : null}
       {drawer === 'suggest' ? <SuggestDrawer job={job} accepting={accepting} onClose={() => setDrawer(null)} onAdded={reload} /> : null}
       {drawer === 'import' ? <ImportCvsDrawer job={job} onClose={() => setDrawer(null)} onDone={() => { setDrawer(null); reload(); }} /> : null}
     </div>

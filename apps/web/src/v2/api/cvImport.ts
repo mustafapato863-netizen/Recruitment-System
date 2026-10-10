@@ -32,6 +32,28 @@ export const parseCv = (file: File) => {
 };
 export const duplicateCheck = (body: { email?: string; phone?: string }) => postApi<DuplicateCheckResult>('/candidates/duplicate-check', body);
 
+/**
+ * #23 (B2-12): POST /candidates answers 409 CANDIDATE_EXISTS when the email or phone is already in the bank
+ * ({code, message, details: {candidateId, candidateCode}}). The API's error normalizer only lets allow-listed
+ * `details` through, so the id may be missing: then the person is found again with the duplicate check.
+ */
+export interface ExistingPerson { candidateId: string; candidateCode?: string; name?: string }
+export function candidateExistsDetails(e: unknown): ExistingPerson | null | undefined {
+  const err = e as { code?: unknown; details?: { code?: unknown; details?: { candidateId?: unknown; candidateCode?: unknown } } } | null;
+  const code = typeof err?.code === 'string' ? err.code : err?.details?.code;
+  if (code !== 'CANDIDATE_EXISTS') return undefined; // not this error
+  const d = err?.details?.details;
+  return typeof d?.candidateId === 'string' ? { candidateId: d.candidateId, ...(typeof d.candidateCode === 'string' ? { candidateCode: d.candidateCode } : {}) } : null;
+}
+export async function existingPerson(e: unknown, contact: { email?: string; phone?: string }): Promise<ExistingPerson | null | undefined> {
+  const hit = candidateExistsDetails(e);
+  if (hit === undefined || hit) return hit;
+  if (!contact.email && !contact.phone) return null;
+  const dup = await duplicateCheck({ ...(contact.email ? { email: contact.email } : {}), ...(contact.phone ? { phone: contact.phone } : {}) }).catch(() => null);
+  const m = dup?.matches[0];
+  return m ? { candidateId: m.candidateId, candidateCode: m.candidateCode, name: m.name } : null;
+}
+
 export const ACCEPTED_CV = ['.pdf', '.doc', '.docx'];
 export const MAX_CV_BYTES = 10 * 1024 * 1024;
 export function cvFileProblem(file: File): string | null {

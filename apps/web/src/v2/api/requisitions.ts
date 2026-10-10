@@ -24,6 +24,7 @@
 import { getApi, patchApi, postApi } from '../../api/client';
 import { stripPay } from './paySafety';
 import { domainError } from './gates';
+import { bannerError, serverFormErrors } from '../forms/serverErrors';
 
 const enc = encodeURIComponent;
 export type ReqStatus = 'Draft' | 'Pending Approval' | 'Changes Requested' | 'Approved' | 'Rejected' | 'Cancelled' | 'Converted to Vacancy';
@@ -36,6 +37,8 @@ export interface Requisition {
   gradeId?: string | null; assignedEmployeeId?: string | null; justification: string | null;
   /** Coming from Backend (CoS): server-filled names and department. Optional; client fill is the fallback. */
   positionTitle?: string | null; branchName?: string | null; assignedEmployeeName?: string | null; requesterName?: string | null;
+  /** #21 (B2-16): the job's owner once activated, else the assigned employee. Present = the server named them (null = nobody). */
+  primaryRecruiter?: { id: string; name: string } | null;
   departmentId?: string | null; department?: { id: string; name: string } | string | null; departmentName?: string | null;
   targetChip?: TargetChip; activatedAt?: string | null; cancelledAt?: string | null; cancelReason?: string | null;
   createdAt: string; updatedAt: string;
@@ -91,7 +94,13 @@ export const cancelRequisition = (id: string, reason: string) => postApi<{ reque
 /** Server names first, then the client fill from /context and /users/assignable. */
 export const titleOf = (r: Requisition, ctx: ReqContext | null) => r.positionTitle ?? r.position?.title ?? ctx?.positions.find((p) => p.id === r.positionId)?.title ?? r.requestCode;
 export const siteOf = (r: Requisition, ctx: ReqContext | null) => r.branchName ?? ctx?.branches.find((b) => b.id === r.branchId)?.name ?? '—';
-export const ownerOf = (r: Requisition, people: Person[] | null) => (r.assignedEmployeeId ? r.assignedEmployeeName ?? people?.find((p) => p.id === r.assignedEmployeeId)?.name ?? 'Assigned' : '—');
+/** #21: primaryRecruiter{id,name} names the owner; the client fill from /users/assignable is only for an older server that doesn't send it. */
+export function ownerOf(r: Requisition, people: Person[] | null): string {
+  if (r.primaryRecruiter !== undefined) return r.primaryRecruiter?.name || '—';
+  return r.assignedEmployeeId ? r.assignedEmployeeName ?? people?.find((p) => p.id === r.assignedEmployeeId)?.name ?? 'Assigned' : '—';
+}
+/** The owner's id: primaryRecruiter first (#21), else the assigned employee. */
+export const ownerIdOf = (r: Requisition): string | null => (r.primaryRecruiter !== undefined ? r.primaryRecruiter?.id ?? null : r.assignedEmployeeId ?? null);
 export function deptOf(r: Requisition, ctx: ReqContext | null): string | null {
   if (r.departmentName) return r.departmentName;
   if (r.department && typeof r.department === 'object') return r.department.name;
@@ -119,7 +128,7 @@ export const updateTarget = (id: string, body: TargetUpdate) => patchApi<Requisi
 export function mineOrTeam(rows: Requisition[], meId: string | undefined, people: Person[] | null): Requisition[] {
   if (!people) return rows; // reports unknown: show what the API returned
   const team = new Set(people.map((p) => p.id));
-  return rows.filter((r) => r.requesterId === meId || (r.assignedEmployeeId && (team.has(r.assignedEmployeeId) || r.assignedEmployeeId === meId)));
+  return rows.filter((r) => { const o = ownerIdOf(r); return r.requesterId === meId || (!!o && (team.has(o) || o === meId)); });
 }
 
 const CODE_TEXT: Record<string, { field?: 'dueDate' | 'assignee' | 'reason' | 'grade'; text: string }> = {
@@ -131,8 +140,21 @@ const CODE_TEXT: Record<string, { field?: 'dueDate' | 'assignee' | 'reason' | 'g
   REQUISITION_CANCELLED: { text: 'This requisition is cancelled and cannot be activated.' },
   REASON_REQUIRED: { field: 'reason', text: 'A reason is required.' },
 };
-/** Codes first; otherwise the server's message. */
-export function reqError(e: unknown): { field?: 'dueDate' | 'assignee' | 'reason' | 'grade'; text: string } {
+export type ReqField = 'positionId' | 'branchId' | 'seats' | 'dueDate' | 'assignee' | 'grade' | 'reason' | 'notes' | 'departmentId';
+/** API body path → the drawer input that shows it (#23: 400 field/fields go inline). */
+const API_FIELD: Record<string, ReqField> = {
+  positionId: 'positionId', branchId: 'branchId', requestedHeadcount: 'seats', dueDate: 'dueDate', targetFillDate: 'dueDate', gradeId: 'grade',
+  assignedEmployeeId: 'assignee', reason: 'reason', justification: 'notes', departmentId: 'departmentId',
+};
+/** Codes first; then 400 field/fields inline (`inline`, the banner keeps the rest); otherwise the server's message. */
+export function reqError(e: unknown): { field?: 'dueDate' | 'assignee' | 'reason' | 'grade'; text: string; inline?: Partial<Record<ReqField, string>> } {
+  const f = serverFormErrors(e);
+  const keys = Object.keys(f.byField);
+  if (keys.length) {
+    const inline: Partial<Record<ReqField, string>> = {};
+    for (const k of keys) { const to = API_FIELD[k.split('.')[0]]; if (to && !inline[to]) inline[to] = f.byField[k]; }
+    if (Object.keys(inline).length) return { inline, text: bannerError(f, keys.filter((k) => API_FIELD[k.split('.')[0]])) ?? '' };
+  }
   const d = domainError(e);
   if (d && CODE_TEXT[d.code]) return { field: CODE_TEXT[d.code].field, text: d.message || CODE_TEXT[d.code].text };
   const x = e as { statusCode?: number; message?: string } | null;

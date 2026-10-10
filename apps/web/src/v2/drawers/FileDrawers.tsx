@@ -13,7 +13,9 @@ import {
   RECOMMENDATIONS, addNote, candidateName, createHiringCase, createOfferDraft, createOfferRevision,
   gateState, logScreening, moveStage, offerTemplates, rejectionReasons, reviseScorecard, scheduleInterview, sendOffer, setJoiningCheck, setOfferStatus, submitOffer, submitScorecard,
   type ApplicationFile, type FileStage, type InterviewItem, type OfferTemplate, type OfferTerms, type Recommendation, type ScorecardItem, type SendChannel, type SendOfferResult,
+  needsReasonNote, OTHER_NOTE_MIN,
 } from '../api/applicationFile';
+import { bannerError, fieldError, serverFormErrors, NO_SERVER_ERRORS, type ServerFormErrors } from '../forms/serverErrors';
 import { GATE_COPY, JOINING_CHECK_TYPES, SYSTEM_REJECTION_REASONS, WITHDRAWN_BY_CANDIDATE_REASON, domainError } from '../api/gates';
 
 export type DrawerKey = 'screen' | 'schedule' | 'scorecard' | 'offer' | 'waiting' | 'send' | 'answer' | 'prehire' | 'reject';
@@ -27,6 +29,8 @@ const CHECK_LABEL: Record<string, string> = Object.fromEntries(JOINING_CHECK_TYP
 /** Error copy by code (no message matching): GATE_* → gate copy + missing[]; other domain codes → the server's message; 403 is explicit. */
 export function errorText(error: unknown): string {
   const d = domainError(error);
+  if (d?.code === 'FILE_CLOSED') return d.message || 'This file is closed. Joined, Rejected and Withdrawn files do not move.';
+  if (d?.code === 'JOB_NOT_OWNED') return 'Only the job owner or their manager can do this.';
   if (d?.gate) return `${GATE_COPY[d.gate].message}${d.missing?.length ? ` Missing: ${d.missing.map((m) => CHECK_LABEL[m] ?? m).join(', ')}.` : ''} ${GATE_COPY[d.gate].fix}`;
   if (d?.message) return d.message;
   const e = error as { statusCode?: number; message?: string } | null;
@@ -34,14 +38,25 @@ export function errorText(error: unknown): string {
   return e?.message || 'Something went wrong. Try again.';
 }
 
-function useSubmit(onDone: () => void) {
+/**
+ * #23 (B2-15/B2-7): a 400's `field`/`fields` go inline on the inputs named in `shown` (API paths);
+ * the banner keeps whatever no input shows, so nothing is dropped.
+ */
+function useSubmit(onDone: () => void, shown: readonly string[] = []) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [server, setServer] = useState<ServerFormErrors>(NO_SERVER_ERRORS);
   const run = async (fn: () => Promise<unknown>) => {
-    setBusy(true); setError(null);
-    try { await fn(); onDone(); } catch (e) { setError(errorText(e)); } finally { setBusy(false); }
+    setBusy(true); setError(null); setServer(NO_SERVER_ERRORS);
+    try { await fn(); onDone(); } catch (e) {
+      const f = serverFormErrors(e);
+      const inline = Object.keys(f.byField).length > 0;
+      setServer(f);
+      setError(inline ? bannerError(f, shown) : errorText(e));
+    } finally { setBusy(false); }
   };
-  return { busy, error, run, setError };
+  const at = (...names: string[]) => fieldError(server, ...names);
+  return { busy, error, run, setError, server, at };
 }
 
 function FormError({ text }: { text: string | null }) {
@@ -79,7 +94,7 @@ export function ScreenDrawer({ file, onClose, onDone }: DrawerProps) {
   const [notice, setNotice] = useState('');
   const [move, setMove] = useState(true);
   const [fieldErr, setFieldErr] = useState<string | undefined>();
-  const s = useSubmit(onDone);
+  const s = useSubmit(onDone, ['notes', 'noticePeriodDays', 'outcome']);
   const canMove = ['Applied', 'Screening'].includes(app.stage);
   const submit = (e?: FormEvent) => {
     e?.preventDefault();
@@ -99,9 +114,9 @@ export function ScreenDrawer({ file, onClose, onDone }: DrawerProps) {
         <SelectV2 label="Outcome" value={outcome} onChange={(e) => setOutcome(e.target.value as typeof outcome)}>
           <option value="Passed">Pass</option><option value="On Hold">On hold</option><option value="Failed">Fail</option>
         </SelectV2>
-        <TextareaV2 label="Screen note" required value={notes} onChange={(e) => setNotes(e.target.value)} error={fieldErr}
+        <TextareaV2 label="Screen note" required value={notes} onChange={(e) => setNotes(e.target.value)} error={fieldErr ?? s.at('notes')}
           hint="What you checked and what you found, with evidence. Required to move to Interview." rows={6} />
-        <InputV2 label="Notice period (days)" type="number" min={0} max={3650} inputMode="numeric" value={notice} onChange={(e) => setNotice(e.target.value)} />
+        <InputV2 label="Notice period (days)" type="number" min={0} max={3650} inputMode="numeric" value={notice} onChange={(e) => setNotice(e.target.value)} error={s.at('noticePeriodDays')} />
         {canMove && outcome === 'Passed' ? (
           <label className="rf2-check"><input type="checkbox" checked={move} onChange={(e) => setMove(e.target.checked)} /> Move to Interview after saving</label>
         ) : null}
@@ -134,7 +149,7 @@ export function ScheduleDrawer({ file, onClose, onDone }: DrawerProps) {
   const [people, setPeople] = useState<UserOption[]>([]);
   const [errs, setErrs] = useState<Record<string, string>>({});
   const adapter = useMemo(() => interviewersAdapter(), []);
-  const s = useSubmit(onDone);
+  const s = useSubmit(onDone, ['scheduledStart', 'scheduledEnd', 'locationUrl', 'attendeeUserIds', 'interviewType', 'title']);
   const gate = gateState(file);
   const needsMove = ['Applied', 'Screening'].includes(app.stage);
   const submit = () => {
@@ -166,15 +181,15 @@ export function ScheduleDrawer({ file, onClose, onDone }: DrawerProps) {
           {['Screening', 'Technical', 'Behavioral', 'Managerial'].map((t) => <option key={t}>{t}</option>)}
         </SelectV2>
         <div className="rf2-drawer-form__row">
-          <InputV2 label="Date" type="date" required value={date} onChange={(e) => setDate(e.target.value)} error={errs.date} />
-          <InputV2 label="Start (Cairo)" type="time" required value={time} onChange={(e) => setTime(e.target.value)} error={errs.time} />
+          <InputV2 label="Date" type="date" required value={date} onChange={(e) => setDate(e.target.value)} error={errs.date ?? s.at('scheduledStart')} />
+          <InputV2 label="Start (Cairo)" type="time" required value={time} onChange={(e) => setTime(e.target.value)} error={errs.time ?? s.at('scheduledEnd')} />
           <SelectV2 label="Length" value={duration} onChange={(e) => setDuration(e.target.value)}>
             {['30', '45', '60', '90'].map((m) => <option key={m} value={m}>{m} min</option>)}
           </SelectV2>
         </div>
-        <InputV2 label="Room URL" required type="url" placeholder="https://" value={room} onChange={(e) => setRoom(e.target.value)} error={errs.room}
+        <InputV2 label="Room URL" required type="url" placeholder="https://" value={room} onChange={(e) => setRoom(e.target.value)} error={errs.room ?? s.at('locationUrl')}
           hint="The meeting room link. It must be on an approved meeting host." />
-        <UserPicker label="Interviewers" required multiple adapter={adapter} value={people} onChange={setPeople} error={errs.people} />
+        <UserPicker label="Interviewers" required multiple adapter={adapter} value={people} onChange={setPeople} error={errs.people ?? s.at('attendeeUserIds')} />
         <FormError text={s.error} />
       </div>
     </DrawerV2>
@@ -194,7 +209,7 @@ export function ScorecardDrawer({ file, onClose, onDone, params }: DrawerProps) 
   const [form, setForm] = useState({ overallRating: mine?.overallRating ?? 0, recommendation: (mine?.recommendation ?? 'Hire') as Recommendation, strengths: mine?.strengths ?? '', concerns: mine?.concerns ?? '', notes: mine?.notes ?? '', reason: '' });
   const [revising, setRevising] = useState(false);
   const [errs, setErrs] = useState<Record<string, string>>({});
-  const s = useSubmit(onDone);
+  const s = useSubmit(onDone, ['overallRating', 'recommendation', 'strengths', 'concerns', 'notes', 'reason']);
   const ended = iv ? new Date(iv.scheduledEnd).getTime() <= Date.now() : false;
   const editable = !submitted || revising;
 
@@ -226,22 +241,22 @@ export function ScorecardDrawer({ file, onClose, onDone, params }: DrawerProps) 
         {submitted && !revising ? <ScorecardSummary card={mine} own /> : null}
         {editable && iv ? (
           <>
-            <fieldset className="rf2-rating" aria-describedby={errs.rating ? 'sc-rating-err' : undefined}>
+            <fieldset className="rf2-rating" aria-describedby={errs.rating ?? s.at('overallRating') ? 'sc-rating-err' : undefined}>
               <legend className="rf2-field__label">Overall rating<span className="rf2-field__req" aria-hidden="true">*</span></legend>
               <div className="rf2-rating__options">
                 {[1, 2, 3, 4, 5].map((n) => (
                   <label key={n} className="rf2-rating__option"><input type="radio" name="rating" value={n} checked={form.overallRating === n} onChange={() => setForm({ ...form, overallRating: n })} /> <span>{n}</span></label>
                 ))}
               </div>
-              {errs.rating ? <p id="sc-rating-err" className="rf2-field__msg rf2-field__msg--error" role="alert">{errs.rating}</p> : null}
+              {errs.rating ?? s.at('overallRating') ? <p id="sc-rating-err" className="rf2-field__msg rf2-field__msg--error" role="alert">{errs.rating ?? s.at('overallRating')}</p> : null}
             </fieldset>
-            <SelectV2 label="Recommendation" value={form.recommendation} onChange={(e) => setForm({ ...form, recommendation: e.target.value as Recommendation })}>
+            <SelectV2 label="Recommendation" value={form.recommendation} onChange={(e) => setForm({ ...form, recommendation: e.target.value as Recommendation })} error={s.at('recommendation')}>
               {RECOMMENDATIONS.map((r) => <option key={r}>{r}</option>)}
             </SelectV2>
-            <TextareaV2 label="Strengths" rows={2} value={form.strengths} onChange={(e) => setForm({ ...form, strengths: e.target.value })} />
-            <TextareaV2 label="Concerns" rows={2} value={form.concerns} onChange={(e) => setForm({ ...form, concerns: e.target.value })} />
-            <TextareaV2 label="Evidence" required rows={5} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} error={errs.notes} />
-            {revising ? <TextareaV2 label="Reason for revising" required rows={2} value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} error={errs.reason} hint="The first version stays in the history." /> : null}
+            <TextareaV2 label="Strengths" rows={2} value={form.strengths} onChange={(e) => setForm({ ...form, strengths: e.target.value })} error={s.at('strengths')} />
+            <TextareaV2 label="Concerns" rows={2} value={form.concerns} onChange={(e) => setForm({ ...form, concerns: e.target.value })} error={s.at('concerns')} />
+            <TextareaV2 label="Evidence" required rows={5} value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} error={errs.notes ?? s.at('notes')} />
+            {revising ? <TextareaV2 label="Reason for revising" required rows={2} value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} error={errs.reason ?? s.at('reason')} hint="The first version stays in the history." /> : null}
           </>
         ) : null}
         <FormError text={s.error} />
@@ -261,22 +276,22 @@ function ScorecardSummary({ card, own }: { card: ScorecardItem; own?: boolean })
 }
 
 /* ── E17 Offer draft (NO pay) ───────────────────────────────────────────── */
-function TermsFields({ terms, set, errs }: { terms: OfferTerms; set: (t: OfferTerms) => void; errs: Record<string, string> }) {
+function TermsFields({ terms, set, errs, at = () => undefined }: { terms: OfferTerms; set: (t: OfferTerms) => void; errs: Record<string, string>; at?: (...names: string[]) => string | undefined }) {
   return (
     <>
       <div className="rf2-drawer-form__row">
-        <SelectV2 label="Contract" value={terms.contractType ?? ''} onChange={(e) => set({ ...terms, contractType: e.target.value || undefined })} placeholder="Choose">
+        <SelectV2 label="Contract" value={terms.contractType ?? ''} onChange={(e) => set({ ...terms, contractType: e.target.value || undefined })} placeholder="Choose" error={at('contractType')}>
           {['Full-time · 2 years', 'Full-time · 1 year', 'Full-time · open-ended', 'Part-time'].map((c) => <option key={c}>{c}</option>)}
         </SelectV2>
-        <SelectV2 label="Probation" value={terms.probationPeriod ?? ''} onChange={(e) => set({ ...terms, probationPeriod: e.target.value || undefined })} placeholder="Choose">
+        <SelectV2 label="Probation" value={terms.probationPeriod ?? ''} onChange={(e) => set({ ...terms, probationPeriod: e.target.value || undefined })} placeholder="Choose" error={at('probationPeriod')}>
           {['3 months', '6 months', 'None'].map((c) => <option key={c}>{c}</option>)}
         </SelectV2>
       </div>
       <div className="rf2-drawer-form__row">
-        <InputV2 label="Start date" type="date" required value={terms.proposedJoiningDate ?? ''} onChange={(e) => set({ ...terms, proposedJoiningDate: e.target.value || undefined })} error={errs.start} />
-        <InputV2 label="Offer valid until" type="date" value={terms.offerExpiry ?? ''} onChange={(e) => set({ ...terms, offerExpiry: e.target.value || undefined })} />
+        <InputV2 label="Start date" type="date" required value={terms.proposedJoiningDate ?? ''} onChange={(e) => set({ ...terms, proposedJoiningDate: e.target.value || undefined })} error={errs.start ?? at('proposedJoiningDate')} />
+        <InputV2 label="Offer valid until" type="date" value={terms.offerExpiry ?? ''} onChange={(e) => set({ ...terms, offerExpiry: e.target.value || undefined })} error={at('offerExpiry')} />
       </div>
-      <InputV2 label="Work location" value={terms.workLocation ?? ''} onChange={(e) => set({ ...terms, workLocation: e.target.value || undefined })} />
+      <InputV2 label="Work location" value={terms.workLocation ?? ''} onChange={(e) => set({ ...terms, workLocation: e.target.value || undefined })} error={at('workLocation')} />
     </>
   );
 }
@@ -298,7 +313,7 @@ export function OfferDraftDrawer({ file, onClose, onDone }: DrawerProps) {
   } : { workLocation: app.vacancyLocation ?? app.vacancyBranchName ?? undefined });
   const [note, setNote] = useState('');
   const [errs, setErrs] = useState<Record<string, string>>({});
-  const s = useSubmit(onDone);
+  const s = useSubmit(onDone, ['contractType', 'probationPeriod', 'proposedJoiningDate', 'offerExpiry', 'workLocation']);
   const gate = gateState(file);
   const needsMove = app.stage === 'Interview';
   const nextVersion = prior ? (pv?.versionNumber ?? 1) + 1 : 1;
@@ -325,7 +340,7 @@ export function OfferDraftDrawer({ file, onClose, onDone }: DrawerProps) {
         {needsMove ? <ul className="rf2-gates" aria-label="Gate to Offer"><Gate ok={gate.scorecard} label="A scorecard is submitted" hint="submit or chase the scorecard first" /></ul> : null}
         {prior && sentBack(prior) ? <Note tone="warning">The manager sent v{pv?.versionNumber} back{back?.comment ? `: “${back.comment}”` : ''}. Change the terms and submit v{nextVersion}.</Note> : null}
         <InputV2 label="Job" readOnly value={[app.positionTitle, app.vacancyBranchName].filter(Boolean).join(' · ')} />
-        <TermsFields terms={terms} set={setTerms} errs={errs} />
+        <TermsFields terms={terms} set={setTerms} errs={errs} at={s.at} />
         <TextareaV2 label="Note to approver" rows={3} value={note} onChange={(e) => setNote(e.target.value)} hint="Saved as a note on the file (the offer has no approver-note field yet)." />
         <Note>Saved as a Draft, then sent to the approving manager.</Note>
         <PayNote />
@@ -454,7 +469,7 @@ export function AnswerDrawer({ file, onClose, onDone }: DrawerProps) {
   const [answer, setAnswer] = useState<'Accepted' | 'Declined' | 'Expired' | 'Withdrawn' | ''>('');
   const [why, setWhy] = useState('');
   const [errs, setErrs] = useState<Record<string, string>>({});
-  const s = useSubmit(onDone);
+  const s = useSubmit(onDone, ['status', 'reason', 'note']);
   const submit = () => {
     const next: Record<string, string> = {};
     if (!answer) next.answer = 'Choose the candidate\'s answer.';
@@ -496,7 +511,7 @@ export function AnswerDrawer({ file, onClose, onDone }: DrawerProps) {
           {errs.answer ? <p id="ans-err" className="rf2-field__msg rf2-field__msg--error" role="alert">{errs.answer}</p> : null}
         </fieldset>
         {answer === 'Declined' || answer === 'Withdrawn' ? (
-          <TextareaV2 label={answer === 'Declined' ? 'Why they declined' : 'Why they withdrew'} required rows={3} value={why} onChange={(e) => setWhy(e.target.value)} error={errs.why} />
+          <TextareaV2 label={answer === 'Declined' ? 'Why they declined' : 'Why they withdrew'} required rows={3} value={why} onChange={(e) => setWhy(e.target.value)} error={errs.why ?? s.at('reason', 'note')} />
         ) : null}
         <PayNote />
         <FormError text={s.error} />
@@ -557,30 +572,38 @@ export function RejectDrawer({ file, onClose, onDone }: DrawerProps) {
   const [reasons, setReasons] = useState<string[]>(SYSTEM_REJECTION_REASONS);
   const [reason, setReason] = useState('');
   const [note, setNote] = useState('');
-  const [err, setErr] = useState<string | undefined>();
-  const s = useSubmit(onDone);
+  const [errs, setErrs] = useState<{ reason?: string; note?: string }>({});
+  const s = useSubmit(onDone, ['reason', 'note']);
   useEffect(() => {
     rejectionReasons().then((list) => setReasons(Array.from(new Set([...list, ...SYSTEM_REJECTION_REASONS])))).catch(() => undefined);
   }, []);
+  const other = needsReasonNote(reason);
   const submit = () => {
-    if (!reason) { setErr('Pick a reason. Rejected needs a reason from the list.'); return; }
-    setErr(undefined);
+    const next: { reason?: string; note?: string } = {};
+    if (!reason) next.reason = 'Pick a reason. Rejected needs a reason from the list.';
+    // #21: "Other" needs a short note (400 REASON_REQUIRED, field "note"); it is stored as "Other: <note>".
+    if (other && note.trim().length < OTHER_NOTE_MIN) next.note = 'Say why in a short note (at least 3 characters). "Other" needs it.';
+    setErrs(next);
+    if (next.reason || next.note) return;
     void s.run(async () => {
+      if (other) { await moveStage(app, 'Rejected', reason, note); return; }
       await moveStage(app, 'Rejected', reason);
       if (note.trim()) await addNote(app.id, `Rejected (${reason}): ${note.trim()}`);
     });
   };
+  const noteErr = errs.note ?? s.at('note') ?? (s.server.code === 'REASON_REQUIRED' ? s.server.message ?? undefined : undefined);
   return (
     <DrawerV2 open onClose={onClose} kicker="Reject" title={`Reject — ${candidateName(app)}`} subtitle={`${app.positionTitle ?? ''} · ${app.stage}`}
       primaryAction={<ButtonV2 kind="danger" onClick={submit} loading={s.busy}>Reject</ButtonV2>}
       secondaryAction={<ButtonV2 kind="secondary" onClick={onClose}>Cancel</ButtonV2>}>
       <div className="rf2-drawer-form">
-        <SelectV2 label="Reason" required value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Choose a reason" error={err}>
+        <SelectV2 label="Reason" required value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Choose a reason" error={errs.reason ?? s.at('reason')}>
           {reasons.map((r) => <option key={r}>{r}</option>)}
         </SelectV2>
-        <TextareaV2 label="Note (optional)" rows={3} value={note} onChange={(e) => setNote(e.target.value)} hint="Saved as a note on the file." />
+        <TextareaV2 label={other ? 'Note' : 'Note (optional)'} required={other} rows={3} value={note} onChange={(e) => setNote(e.target.value)} error={noteErr}
+          hint={other ? 'Required for "Other". Saved with the reason as "Other: <note>".' : 'Saved as a note on the file.'} />
         <Note>The file closes. Its history stays.</Note>
-        <FormError text={s.error} />
+        <FormError text={s.server.code === 'REASON_REQUIRED' && noteErr ? null : s.error} />
       </div>
     </DrawerV2>
   );

@@ -5,6 +5,7 @@ import {
   bandFor, bandPosition, CURRENCIES, currentVersion, decide, decisionError, defaultCurrency, loadDecision, money, payOf,
   type Decision, type DecisionError, type DecisionPay, type DecisionOffer, type GradeBand,
 } from '../api/offerDecision';
+import { fieldError } from '../forms/serverErrors';
 
 const fmtDay = (d?: string | null) => (d ? new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${d.slice(0, 10)}T12:00:00Z`)).replace(/^(\w{3}),/, '$1') : '—');
 const fmtWhen = (iso?: string | null) => (iso ? new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Cairo', weekday: 'short', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(iso)).replace(/^(\w{3}),/, '$1') : '');
@@ -97,18 +98,18 @@ export function OfferDecisionDrawer({ offerId, ownerName, showPay, onClose, onDo
               {form ? (
                 <fieldset className="rf2-decide__payform" disabled={!pending}>
                   <legend className="rf2-field__label">Pay (set by you on Approve)</legend>
-                  {err?.field === 'pay' ? <p className="rf2-form-error" role="alert" ref={(el) => el?.scrollIntoView?.({ block: 'nearest' })} data-testid="decision-error">{err.text}</p> : null}
+                  {err?.field === 'pay' && err.text ? <p className="rf2-form-error" role="alert" ref={(el) => el?.scrollIntoView?.({ block: 'nearest' })} data-testid="decision-error">{err.text}</p> : null}
                   {pay?.mixed ? <p className="rf2-jtable__sub">The version mixes currencies; pick one.</p> : null}
                   <div className="rf2-req__row">
-                    <InputV2 label={`Monthly basic pay (${form.currency})`} required type="number" min={0} inputMode="numeric" value={form.base} onChange={(e) => { setForm({ ...form, base: e.target.value }); setErr(null); }} data-testid="base-pay" />
-                    <SelectV2 label="Currency" value={form.currency} onChange={(e) => { setForm({ ...form, currency: e.target.value }); setErr(null); }}>
+                    <InputV2 label={`Monthly basic pay (${form.currency})`} required type="number" min={0} inputMode="numeric" value={form.base} onChange={(e) => { setForm({ ...form, base: e.target.value }); setErr(null); }} data-testid="base-pay" error={fieldError(err?.inline, 'basePay', 'pay')} />
+                    <SelectV2 label="Currency" value={form.currency} onChange={(e) => { setForm({ ...form, currency: e.target.value }); setErr(null); }} error={fieldError(err?.inline, 'currency')}>
                       {[...new Set([form.currency, ...CURRENCIES])].map((c) => <option key={c} value={c}>{c}</option>)}
                     </SelectV2>
                   </div>
                   {form.allowances.map((a, i) => (
                     <div className="rf2-decide__allow" key={i}>
-                      <InputV2 label={`Allowance ${i + 1} name`} value={a.name} onChange={(e) => setAllow(i, 'name', e.target.value)} />
-                      <InputV2 label={`Allowance ${i + 1} (${form.currency})`} type="number" min={0} value={a.amount} onChange={(e) => setAllow(i, 'amount', e.target.value)} />
+                      <InputV2 label={`Allowance ${i + 1} name`} value={a.name} onChange={(e) => setAllow(i, 'name', e.target.value)} error={fieldError(err?.inline, `allowances.${i}.name`)} />
+                      <InputV2 label={`Allowance ${i + 1} (${form.currency})`} type="number" min={0} value={a.amount} onChange={(e) => setAllow(i, 'amount', e.target.value)} error={fieldError(err?.inline, `allowances.${i}.amount`, `allowances.${i}.frequency`, `allowances.${i}`)} />
                       <ButtonV2 kind="tertiary" size="sm" icon={<Trash2 />} aria-label={`Remove allowance ${i + 1}`} onClick={() => setForm({ ...form, allowances: form.allowances.filter((_, j) => j !== i) })} />
                     </div>
                   ))}
@@ -121,8 +122,8 @@ export function OfferDecisionDrawer({ offerId, ownerName, showPay, onClose, onDo
               <BandPanel band={shownBand} grade={offer.grade?.name ?? null} amount={amount} pos={shownPos} code={err?.code} bandsListed={state.kind === 'ready' && state.bands !== null} />
             </>
           ) : <p className="rf2-inline-note"><ShieldCheck aria-hidden="true" /> Pay and the band are visible to the Manager only.</p>}
-          {err && !err.field ? <p className="rf2-form-error" role="alert" ref={(el) => el?.scrollIntoView?.({ block: 'nearest' })} data-testid="decision-error">{err.text}</p> : null}
-          <TextareaV2 label={`Comment to ${first} (required for Request changes or Reject)`} rows={2} value={reason} onChange={(e) => { setReason(e.target.value); setErr(null); }} error={err?.field === 'reason' ? err.text : undefined} disabled={!pending} />
+          {err && !err.field && err.text ? <p className="rf2-form-error" role="alert" ref={(el) => el?.scrollIntoView?.({ block: 'nearest' })} data-testid="decision-error">{err.text}</p> : null}
+          <TextareaV2 label={`Comment to ${first} (required for Request changes or Reject)`} rows={2} value={reason} onChange={(e) => { setReason(e.target.value); setErr(null); }} error={err?.field === 'reason' ? err.text : fieldError(err?.inline, 'reason')} disabled={!pending} />
           {pending ? (
             <div className="rf2-decide__reject">
               <DangerConfirmButton size="sm" confirmLabel={`Confirm reject v${v.versionNumber}`} loading={busy === 'Reject'} disabled={!!busy} onConfirm={() => void run('Reject')}>Reject this version</DangerConfirmButton>

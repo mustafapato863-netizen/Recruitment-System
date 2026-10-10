@@ -145,11 +145,14 @@ describe('M06 Reassign (B7 POST /files/reassign)', () => {
 });
 
 describe('M2 CoS follow-ups', () => {
-  it('prefers GET /team/work when present (server counts, waiting incl. scorecards) and skips the per-report calls', async () => {
+  it('prefers GET /team/work for files (server counts, waiting incl. scorecards); people come from /users/assignable (#21); no per-report calls', async () => {
     serve({ '/team/work': fx.teamWorkApi });
     renderAt();
-    expect(await screen.findByText('Open work of your 2 direct reports. Counts equal the rows shown.')).toBeInTheDocument();
-    expect(api.getApi.mock.calls.map((c) => c[0])).not.toContain('/users/assignable');
+    // #21 B2-16: the roster is /users/assignable, so a report with nothing open on /team/work still has a row.
+    expect(await screen.findByText('Open work of your 3 direct reports. Counts equal the rows shown.')).toBeInTheDocument();
+    const calls = api.getApi.mock.calls.map((c) => String(c[0]));
+    expect(calls).toContain('/users/assignable');
+    expect(calls.some((c) => c.startsWith('/applications?primaryRecruiterId='))).toBe(false);
     expect(card('Mariam Farag')).toHaveTextContent('3 open · 1 overdue');
     const wait = screen.getByRole('heading', { name: 'Waiting on you' }).closest('section')!;
     expect(wait).toHaveTextContent(/Offer v2 submitted by Mariam Farag/);
