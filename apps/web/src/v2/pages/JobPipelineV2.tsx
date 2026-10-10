@@ -180,7 +180,7 @@ export function JobPipelineV2() {
       {closedOpen ? <ClosedFiles id="closed-files" vacancyId={job.id} /> : null}
 
       {drawer === 'status' && mayChangeStatus ? <JobStatusDrawer job={job} onClose={() => setDrawer(null)} onDone={() => { setDrawer(null); reload(); }} /> : null}
-      {drawer === 'import' ? <ImportCvsDrawer job={job} onClose={() => setDrawer(null)} onDone={() => { setDrawer(null); reload(); }} /> : null}
+      {drawer === 'import' ? <ImportCvsDrawer job={job} onClose={() => setDrawer(null)} onDone={() => { setDrawer(null); reload(); }} onImported={reload} /> : null}
     </div>
   );
 }

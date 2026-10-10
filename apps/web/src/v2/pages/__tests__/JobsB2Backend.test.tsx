@@ -166,3 +166,31 @@ describe('B2R: APPLICATION_EXISTS, admin status, open-files 409, job list paging
     expect(r.mine).toHaveLength(101);
   });
 });
+
+describe('B2F-2 / B2F-13 import order and board refresh', () => {
+  it('links a bank person: POST /applications BEFORE candidate read and CV upload; board reloads while the drawer stays open', async () => {
+    const u = userEvent.setup({ applyAccept: false });
+    const calls: string[] = [];
+    api.postFormDataApi.mockImplementation(async (p: string) => { calls.push(`form ${p}`); return p === '/resume/parse' ? fx.parsed : { id: 'doc1' }; });
+    api.postApi.mockImplementation(async (p: string) => {
+      calls.push(`post ${p}`);
+      if (p === '/candidates/duplicate-check') return fx.dup;
+      return { id: 'app-new' };
+    });
+    const base = api.getApi.getMockImplementation()!;
+    api.getApi.mockImplementation(async (p: string) => { calls.push(`get ${p.split('?')[0]}`); if (p.startsWith('/candidates/')) return { id: 'c-a4', firstName: 'Nourhan', lastName: 'Sami', email: 'x@y.z', currentTitle: 'Analyst' }; return base(p); });
+    renderAt('/vacancies/v1?drawer=import');
+    const d = await screen.findByRole('dialog', { name: 'Add candidates to Applied' });
+    await u.upload(within(d).getByLabelText(/Drop CVs or/), [new File(['%PDF'], 'rania.pdf', { type: 'application/pdf' })]);
+    await waitFor(() => expect(within(d).getByRole('button', { name: 'Import 1 to Applied' })).toBeEnabled());
+    const boardLoadsBefore = calls.filter((c) => c === 'get /vacancies/v1').length;
+    await u.click(within(d).getByRole('button', { name: 'Import 1 to Applied' }));
+    await waitFor(() => expect(calls).toContain('form /documents/upload'));
+    const i = (c: string) => calls.indexOf(c);
+    expect(i('post /applications')).toBeGreaterThan(-1);
+    expect(i('post /applications')).toBeLessThan(i('form /documents/upload'));
+    expect(i('post /applications')).toBeLessThan(calls.findIndex((c) => c.startsWith('get /candidates/c-')));
+    // the link filled/conflict summary keeps the drawer open; the board still reloads behind it
+    await waitFor(() => expect(calls.filter((c) => c === 'get /vacancies/v1').length).toBeGreaterThan(boardLoadsBefore));
+  });
+});
