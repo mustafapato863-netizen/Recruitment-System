@@ -1,3 +1,4 @@
+import { findActiveReason } from '../master-data/reason-lists';
 import { BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
 import type { Prisma } from '@recruitflow/database';
 
@@ -58,10 +59,7 @@ export async function resolveRejectionReason(tx: Tx, organizationId: string, rea
   if (!text) throw blocked(GATE_CODES.rejectReason, 'reject-reason', 'Rejected needs a reason from the rejection reasons list.', ['reason']);
   const system = SYSTEM_REJECTION_REASONS.find((r) => r.toLowerCase() === text.toLowerCase());
   if (system) return system;
-  const value = await tx.masterDataValue.findFirst({
-    where: { organizationId, category: 'rejection-reasons', status: 'Active', OR: [{ name: { equals: text, mode: 'insensitive' } }, { code: { equals: text, mode: 'insensitive' } }] },
-    select: { name: true },
-  });
+  const value = await findActiveReason(tx, organizationId, 'rejection-reasons', text); // C3: shared reason-list base
   if (!value) throw blocked(GATE_CODES.rejectReason, 'reject-reason', `"${text}" is not in the rejection reasons list.`, ['reason']);
   return value.name;
 }

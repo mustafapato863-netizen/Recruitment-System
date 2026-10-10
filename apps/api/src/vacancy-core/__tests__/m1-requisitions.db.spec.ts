@@ -4,6 +4,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PrismaService } from '../../database/prisma.service';
 import { VacancyCoreService } from '../vacancy-core.service';
 import { PrismaVacancyCoreRepository } from '../prisma-vacancy-core.repository';
+import { MasterDataService } from '../../master-data/master-data.service';
+import { REASON_CATEGORIES, resolveListReason } from '../../master-data/reason-lists';
 
 const url = process.env.B3_TEST_DATABASE_URL;
 const ORG = '10000000-0000-4000-8000-000000000001';
@@ -122,5 +124,31 @@ describe.skipIf(!url)('M1 requisitions (scratch Postgres)', () => {
     expect(h.at(-1)?.reason).toBe('Target changed: seats 2 -> 4; due date 2026-11-30 -> 2026-12-31. Reason: Ward expansion');
     expect(await prisma.auditLog.count({ where: { entityId: id, action: 'REQUISITION_TARGET_UPDATE' } })).toBe(1);
     expect((await service.updateRequisitionTarget(id, ORG, ids.mgr, { seats: 2, reason: 'back to plan' })).request.requestedHeadcount).toBe(2);
+  });
+
+  it('C2: INTERVIEW_PARTICIPATE and LICENSE_CHECK are named in the catalog; Administrator has them (wiring in B0b)', async () => {
+    const perms = await prisma.permission.findMany({ where: { code: { in: ['INTERVIEW_PARTICIPATE', 'LICENSE_CHECK'] } }, select: { code: true, name: true } });
+    expect(perms.map((p) => p.code).sort()).toEqual(['INTERVIEW_PARTICIPATE', 'LICENSE_CHECK']);
+    expect(perms.every((p) => Boolean(p.name))).toBe(true);
+    const admin = await prisma.rolePermission.count({ where: { role: { code: 'ADMINISTRATOR' }, permission: { code: { in: ['INTERVIEW_PARTICIPATE', 'LICENSE_CHECK'] } } } });
+    expect(admin).toBe(2);
+  });
+
+  it('C3: hold/close/rejection/reassign reasons share one master-data base: seeded, listed, deactivate via PATCH {status}', async () => {
+    const md = new MasterDataService(prisma);
+    for (const category of REASON_CATEGORIES) {
+      expect((await md.listCatalog(ORG, category)).length).toBeGreaterThan(3); // seeded
+      const name = `Test ${category} ${tag}`;
+      const v = await prisma.masterDataValue.create({ data: { organizationId: ORG, category, name, status: 'Active' } });
+      expect(await resolveListReason(prisma, ORG, category, name)).toBe(name);
+      expect(await md.setCatalogValueStatus(ORG, category, v.id, 'Inactive')).toMatchObject({ status: 'Inactive' });
+      await expect(resolveListReason(prisma, ORG, category, name)).rejects.toMatchObject({ status: 400, response: { code: 'REASON_NOT_IN_LIST' } });
+      await expect(md.deleteCatalogValue(ORG, category, v.id)).resolves.toMatchObject({ deactivated: true }); // DELETE never hard-deletes
+      expect(await prisma.masterDataValue.count({ where: { id: v.id } })).toBe(1);
+    }
+    await expect(resolveListReason(prisma, ORG, 'reassign-reasons', 'Other')).rejects.toMatchObject({ response: { code: 'REASON_REQUIRED' } });
+    expect(await resolveListReason(prisma, ORG, 'reassign-reasons', 'Other', 'Team merge')).toBe('Other: Team merge');
+    const any = await prisma.masterDataValue.findFirstOrThrow({ where: { organizationId: ORG, category: 'hold-reasons' } });
+    await expect(md.setCatalogValueStatus(ORG, 'hold-reasons', any.id, 'Deleted')).rejects.toMatchObject({ status: 400 });
   });
 });
