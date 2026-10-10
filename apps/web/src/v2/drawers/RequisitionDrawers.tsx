@@ -116,8 +116,8 @@ export function RequisitionDrawer({ req, ctx, people, grades, canActivate, meId,
     if (!closeReasons && reason.trim().length < 3) { setErrs({ reason: 'A reason is required (at least 3 characters).' }); return; }
     setBusy('cancel');
     try {
-      // The cancel endpoint stores free text; a list value goes as is, "Other" as "Other: <note>" (the server's own format).
-      const r = await cancelRequisition(req.id, cancelOther ? `${OTHER_REASON}: ${cancelNote.trim()}` : reason.trim());
+      // #23 2d76bdd CancelVacancyRequestDto: list value in `reason`, the "Other" text in `note`.
+      const r = await cancelRequisition(req.id, reason.trim(), cancelOther ? cancelNote : undefined);
       onDone(`${req.requestCode} cancelled.${r?.closedJob ? ` Its job was closed${r.rejectedApplications ? ` and ${r.rejectedApplications} open file${r.rejectedApplications === 1 ? '' : 's'} rejected` : ''}.` : ''}`);
     } catch (e) { fail(e); } finally { setBusy(null); }
   };
