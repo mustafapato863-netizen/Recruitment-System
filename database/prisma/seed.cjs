@@ -39,6 +39,21 @@ async function resyncCodeSequences() {
   }
 }
 
+// B6: minimal skill library (master data, category "skills"; metadata.category is optional).
+async function seedSkillLibrary(tx, organizationId) {
+  const skills = [
+    ['ICU', 'Clinical'], ['Critical Care', 'Clinical'], ['Emergency Care', 'Clinical'], ['Triage', 'Clinical'],
+    ['Pediatrics', 'Clinical'], ['Wound Care', 'Clinical'], ['IV Therapy', 'Clinical'],
+    ['BLS', 'Certification'], ['ACLS', 'Certification'],
+    ['Clinical Pharmacy', 'Pharmacy'], ['ICD-10', 'Medical Coding'], ['CPT', 'Medical Coding'],
+    ['MRI', 'Imaging'], ['HRIS', 'HR'], ['Active Directory', 'IT'],
+  ];
+  await tx.masterDataValue.createMany({
+    data: skills.map(([name, category]) => ({ organizationId, category: 'skills', name, status: 'Active', metadata: { category } })),
+    skipDuplicates: true,
+  });
+}
+
 async function main() {
   const result = await prisma.$transaction(async (tx) => {
     // ── Organization ──────────────────────────────────────────
@@ -51,6 +66,8 @@ async function main() {
         name: 'RecruitFlow Demo Organization',
       },
     });
+
+    await seedSkillLibrary(tx, organization.id);
 
     // ── Branch ────────────────────────────────────────────────
     const branch = await tx.branch.upsert({

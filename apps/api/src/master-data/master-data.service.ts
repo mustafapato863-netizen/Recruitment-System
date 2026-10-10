@@ -228,8 +228,16 @@ export class MasterDataService {
     return { saved: saved.length, data: await this.listCatalog(organizationId, category) };
   }
 
-  async deleteCatalogValue(organizationId: string, category: string, id: string): Promise<{ deleted: true }> {
+  async deleteCatalogValue(organizationId: string, category: string, id: string): Promise<{ deleted: true } | { id: string; deactivated: true; status: 'Inactive' }> {
     this.assertCatalog(category);
+
+    // B6: the skill library is deactivate-only (candidate skills and evidence point at it).
+    if (category === 'skills') {
+      const skill = await this.prisma.masterDataValue.findFirst({ where: { id, organizationId, category }, select: { id: true } });
+      if (!skill) throw new NotFoundException('Master Data value not found.');
+      await this.prisma.masterDataValue.update({ where: { id }, data: { status: 'Inactive', version: { increment: 1 } } });
+      return { id, deactivated: true, status: 'Inactive' };
+    }
 
     // Branches and job titles are backed by legacy entities with real foreign
     // keys, so keep their existing reference checks and error messages.

@@ -1,3 +1,4 @@
+import { linkCandidateSkills } from '../matching/skill-links';
 import {
   ConflictException,
   BadRequestException,
@@ -337,6 +338,7 @@ export class CandidatesService {
           : {}),
       },
     });
+    if (created.skills.length > 0) await linkCandidateSkills(this.prisma, organizationId, created.id, created.skills);
 
     return created;
   }
@@ -389,6 +391,7 @@ export class CandidatesService {
       where: { id },
       data: dataToUpdate,
     });
+    if (dto.skills?.length) await linkCandidateSkills(this.prisma, organizationId, id, dto.skills);
 
     return this.toCandidate(updated, { viewPii: true });
   }

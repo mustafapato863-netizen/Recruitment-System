@@ -133,6 +133,7 @@ Table users {
   createdCandidates candidates [not null]
   recruiterTargetsReceived recruiter_targets [not null]
   recruiterTargetsSet recruiter_targets [not null]
+  skillEvidenceAdded candidate_skill_evidence [not null]
 
   indexes {
     (organizationId, emailNormalized) [unique]
@@ -378,6 +379,9 @@ Table candidates {
   consentCapturedAt DateTime
   consentSource String
   skills String[] [not null]
+  emailNormalized String [note: 'B6: lower(trim(email)); maintained by a DB trigger (rf_candidate_contact_keys).']
+  phoneNormalized String [note: 'B6: E.164-ish phone (+digits); maintained by a DB trigger (rf_normalize_phone).']
+  skillLinks candidate_skills [not null]
   experienceYears Int
   location String
   certifications String[] [not null]
@@ -886,6 +890,7 @@ Table master_data_values {
   metadata Json
   status String [not null, default: 'Active']
   version Int [not null, default: 1]
+  candidateSkills candidate_skills [not null]
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [default: `now()`, not null]
 
@@ -919,6 +924,41 @@ Table recruiter_targets {
   indexes {
     (organizationId, recruiterId, period, month) [unique]
   }
+}
+
+Table candidate_skills {
+  id String [pk]
+  organizationId String [not null]
+  candidateId String [not null]
+  candidate candidates [not null]
+  skillId String [not null]
+  skill master_data_values [not null]
+  evidence candidate_skill_evidence [not null]
+  createdAt DateTime [default: `now()`, not null]
+
+  indexes {
+    (candidateId, skillId) [unique]
+  }
+
+  Note: 'B6: a candidate\'s skill, linked to the skill library (master data, category "skills").'
+}
+
+Table candidate_skill_evidence {
+  id String [pk]
+  candidateSkillId String [not null]
+  candidateSkill candidate_skills [not null]
+  sourceType String [not null]
+  sourceRef String
+  snippet String
+  addedById String
+  addedBy users
+  createdAt DateTime [default: `now()`, not null]
+
+  indexes {
+    (candidateSkillId, sourceType, sourceRef) [unique]
+  }
+
+  Note: 'B6: evidence for a candidate skill. sourceType: CV_TEXT | SCREENING_NOTE | SCORECARD | IMPORT | MANUAL.'
 }
 
 Ref: branches.organizationId > organizations.id [delete: Restrict]
@@ -1094,3 +1134,11 @@ Ref: recruiter_targets.organizationId > organizations.id [delete: Restrict]
 Ref: recruiter_targets.recruiterId > users.id [delete: Restrict]
 
 Ref: recruiter_targets.setById > users.id [delete: Restrict]
+
+Ref: candidate_skills.candidateId > candidates.id [delete: Cascade]
+
+Ref: candidate_skills.skillId > master_data_values.id [delete: Restrict]
+
+Ref: candidate_skill_evidence.candidateSkillId > candidate_skills.id [delete: Cascade]
+
+Ref: candidate_skill_evidence.addedById > users.id [delete: Restrict]

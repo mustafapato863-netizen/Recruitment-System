@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ConflictException } from '@nestjs/common';
 import { MasterDataService } from '../master-data.service';
 
 function createPrisma(overrides: Record<string, unknown> = {}) {
@@ -28,26 +27,27 @@ describe('MasterDataService catalog deletion', () => {
     const prisma = createPrisma();
     const service = new MasterDataService(prisma as never);
 
-    await expect(service.deleteCatalogValue('org-1', 'skills', 'skill-1')).resolves.toEqual({ deleted: true });
+    await expect(service.deleteCatalogValue('org-1', 'interview-types', 'skill-1')).resolves.toEqual({ deleted: true });
     expect(prisma.masterDataValue.findFirst).toHaveBeenCalledWith({
-      where: { id: 'skill-1', organizationId: 'org-1', category: 'skills' },
+      where: { id: 'skill-1', organizationId: 'org-1', category: 'interview-types' },
       select: { id: true, name: true, code: true },
     });
     expect(prisma.masterDataValue.delete).toHaveBeenCalledWith({ where: { id: 'skill-1' } });
   });
 
-  it('blocks deleting a skill that is used by a vacancy or candidate', async () => {
+  it('B6: never deletes a skill, used or not; it is deactivated instead', async () => {
     const prisma = createPrisma({
-      vacancy: {
-        findMany: vi.fn().mockResolvedValue([{ requiredSkills: ['ICU'] }]),
-        count: vi.fn(),
+      masterDataValue: {
+        findFirst: vi.fn().mockResolvedValue({ id: 'skill-1' }),
+        update: vi.fn().mockResolvedValue({}),
+        delete: vi.fn(),
       },
+      vacancy: { findMany: vi.fn().mockResolvedValue([{ requiredSkills: ['ICU'] }]), count: vi.fn() },
     });
     const service = new MasterDataService(prisma as never);
 
-    const error = await service.deleteCatalogValue('org-1', 'skills', 'skill-1').catch((reason: unknown) => reason);
-    expect(error).toBeInstanceOf(ConflictException);
-    expect((error as ConflictException).message).toContain('referenced by 1 vacancies');
+    await expect(service.deleteCatalogValue('org-1', 'skills', 'skill-1')).resolves.toEqual({ id: 'skill-1', deactivated: true, status: 'Inactive' });
+    expect(prisma.masterDataValue.update).toHaveBeenCalledWith({ where: { id: 'skill-1' }, data: { status: 'Inactive', version: { increment: 1 } } });
     expect(prisma.masterDataValue.delete).not.toHaveBeenCalled();
   });
 });
