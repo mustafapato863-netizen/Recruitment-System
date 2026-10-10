@@ -54,13 +54,19 @@ export async function assertJoiningChecks(tx: Pick<Tx, 'joiningCheck'>, applicat
 }
 
 /** Resolves a rejection reason against the org's active list (plus the system reasons). */
-export async function resolveRejectionReason(tx: Tx, organizationId: string, reason: string | null | undefined): Promise<string> {
+export async function resolveRejectionReason(tx: Tx, organizationId: string, reason: string | null | undefined, note?: string | null): Promise<string> {
   const text = reason?.trim() ?? '';
   if (!text) throw blocked(GATE_CODES.rejectReason, 'reject-reason', 'Rejected needs a reason from the rejection reasons list.', ['reason']);
   const system = SYSTEM_REJECTION_REASONS.find((r) => r.toLowerCase() === text.toLowerCase());
   if (system) return system;
   const value = await findActiveReason(tx, organizationId, 'rejection-reasons', text); // C3: shared reason-list base
   if (!value) throw blocked(GATE_CODES.rejectReason, 'reject-reason', `"${text}" is not in the rejection reasons list.`, ['reason']);
+  // "Other" needs a free-text note; it is stored as "Other: <note>".
+  if (value.name.toLowerCase() === 'other') {
+    const free = note?.trim() ?? '';
+    if (free.length < 3) throw new BadRequestException({ code: 'REASON_REQUIRED', field: 'note', message: 'Rejection reason "Other" needs a short note.' });
+    return `Other: ${free}`;
+  }
   return value.name;
 }
 
