@@ -13,6 +13,7 @@ import type { ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import type { AuthUser } from '@recruitflow/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { privateVacancy } from '../../testing/private-vacancy';
 import { PrismaService } from '../../../database/prisma.service';
 import { Prisma } from '@recruitflow/database';
 // Stack-merge guard: B5 replaces InterviewScorecard.isLocked with status. Fixtures work on both shapes.
@@ -82,8 +83,8 @@ describe.skipIf(!url)('B1 ownership and scope (scratch Postgres)', () => {
     await mkUser(ids.inactive, 'inactive', 'RECRUITER', { status: 'Inactive' });
     await mkUser(ids.admin, 'admin', 'ADMINISTRATOR');
 
-    const [v, w] = await prisma.vacancy.findMany({ where: { organizationId: ORG, primaryRecruiterId: null, assignments: { none: {} } }, orderBy: { vacancyCode: 'asc' }, take: 2 });
-    vacancyId = v!.id; otherVacancyId = w!.id;
+    // Private unowned jobs: seeded unowned jobs are few and other suites pick them concurrently.
+    vacancyId = await privateVacancy(prisma, ORG, 'B1a'); otherVacancyId = await privateVacancy(prisma, ORG, 'B1b');
     await vacancies.assignTeamMember(vacancyId, ORG, { userId: ids.owner, roleCode: 'RECRUITER', assignmentKind: 'PRIMARY' });
     await vacancies.assignTeamMember(otherVacancyId, ORG, { userId: ids.other, roleCode: 'RECRUITER', assignmentKind: 'PRIMARY' });
 

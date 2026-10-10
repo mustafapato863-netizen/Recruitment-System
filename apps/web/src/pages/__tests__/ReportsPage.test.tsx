@@ -196,7 +196,7 @@ describe('ReportsPage - Recruitment KPIs Scorecard & Extraction', () => {
     vi.mocked(getApi).mockResolvedValue(b8);
     render(<MemoryRouter><ReportsPage /></MemoryRouter>);
     expect(await screen.findByText('Reports')).toBeInTheDocument();
-    expect(screen.getAllByText('Selected period').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Selected period (no prior-period comparison)').length).toBeGreaterThan(0);
     expect(screen.queryByText(/vs previous period/)).toBeNull();
   });
 });

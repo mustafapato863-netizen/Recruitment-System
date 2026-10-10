@@ -10,11 +10,14 @@ import {
   Pie,
   Cell,
 } from 'recharts';
-import type { ReportOverview, RecruitmentKpiItem } from '@recruitflow/contracts';
+import type { ReportOverview, RecruitmentKpiItem, RecruiterWorkload } from '@recruitflow/contracts';
 import { Icon } from '../components/Icon';
 import { Modal } from '../components/Modal';
 import { getApi, downloadApi } from '../api/client';
 import './PageEnhancementsV2.css';
+
+// B8: the API no longer returns activity counters; kept as optional so this page still renders until it is redesigned.
+type LegacyRecruiterWorkload = RecruiterWorkload & { activity?: { total: number; applications: number; screening: number; interviews: number; offers: number; hiring: number } };
 
 type SourceDatum = { name: string; value: number; pct: string; color: string };
 type OfferDatum = { name: string; value: number; pct: string; color: string };
@@ -29,14 +32,6 @@ function formatChip(label: string, value: string | number, detail?: string) {
       {detail ? <span className="text-slate-500">{detail}</span> : null}
     </span>
   );
-}
-
-/** B8 (#20) removed `comparison`, `comparisonRange` and `kpis.*.change` from /reports: without a previous figure we say "Selected period". */
-function formatPeriodChange(current: number, previous: number | undefined): string {
-  if (typeof previous !== 'number') return 'Selected period';
-  if (previous === 0) return current === 0 ? 'No activity in either period' : 'New activity vs previous period';
-  const change = Math.round(((current - previous) / previous) * 100);
-  return `${change > 0 ? '+' : ''}${change}% vs previous period`;
 }
 
 // ── Department Breakdown Data ──
@@ -133,14 +128,13 @@ export function ReportsPage() {
         ? ttf > 0
         : reportOverview.kpis.timeToFill.sampleCount > 0;
 
-      const cmp = (reportOverview as { comparison?: Partial<Record<'applications' | 'interviews' | 'offers', number>> }).comparison;
       return {
         applications: appCount,
-        appTrend: formatPeriodChange(appCount, cmp?.applications),
+        appTrend: 'Selected period (no prior-period comparison)',
         interviews: intCount,
-        intTrend: formatPeriodChange(intCount, cmp?.interviews),
+        intTrend: 'Selected period (no prior-period comparison)',
         offers: offCount,
-        offTrend: formatPeriodChange(offCount, cmp?.offers),
+        offTrend: 'Selected period (no prior-period comparison)',
         hires: hireCount,
         hireTrend: hireCount > 0 ? `${hireCount} joined in period` : 'No hires in period',
         timeToFill: ttf,
@@ -263,7 +257,7 @@ export function ReportsPage() {
   }, [reportOverview]);
 
   const recruiterActivityRows = useMemo(
-    () => [...(reportOverview?.recruiterWorkload ?? [])].sort((left, right) => (right.activity?.total ?? 0) - (left.activity?.total ?? 0)),
+    () => [...((reportOverview?.recruiterWorkload ?? []) as LegacyRecruiterWorkload[])].sort((left, right) => (right.activity?.total ?? 0) - (left.activity?.total ?? 0)),
     [reportOverview],
   );
   const recruiterActivityTotals = useMemo(
@@ -827,7 +821,7 @@ export function ReportsPage() {
           </div>
 
           <div className="flex items-center justify-between text-[11px] text-slate-600 dark:text-slate-400 border-t border-slate-100 dark:border-slate-800 pt-2">
-            <span>Selected period</span>
+            <span>vs comparison period</span>
             <span className="font-bold text-emerald-700 dark:text-emerald-400">{reportOverview?.kpis?.offerAcceptanceRate ? `${reportOverview.kpis.offerAcceptanceRate.value}% acceptance` : 'No data'}</span>
           </div>
         </div>
