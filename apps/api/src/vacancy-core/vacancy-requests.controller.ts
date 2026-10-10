@@ -19,6 +19,7 @@ import {
   VacancyRequestActionDto,
   CancelVacancyRequestDto,
   ActivateVacancyRequestDto,
+  UpdateRequisitionTargetDto,
 } from './vacancy-core.dto';
 import { VacancyCoreService } from './vacancy-core.service';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
@@ -43,7 +44,7 @@ export class VacancyRequestsController {
   @Get()
   @RequirePermissions('VACANCY_REQUEST_VIEW')
   listRequests(@CurrentUser() user: AuthUser) {
-    return this.vacancyCoreService.listRequests(user.organizationId);
+    return this.vacancyCoreService.listRequests(user.organizationId, user);
   }
 
   @Get('inbox')
@@ -151,6 +152,20 @@ export class VacancyRequestsController {
     @Body() body: CancelVacancyRequestDto = {},
   ) {
     return this.vacancyCoreService.cancelRequest(id, user.organizationId, user.userId, body?.reason);
+  }
+
+  /** M1: Manager changes seats / due date of an activated requisition (reason required; history + audit). */
+  @Patch(':id/target')
+  @RequirePermissions('VACANCY_REQUEST_CREATE')
+  @AuditAction('VACANCY_REQUEST_TARGET_UPDATE')
+  @UseGuards(TenantScopedGuard)
+  @TenantResource({ resource: 'vacancyRequest', param: 'id' })
+  updateTarget(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: UpdateRequisitionTargetDto,
+  ) {
+    return this.vacancyCoreService.updateRequisitionTarget(id, user.organizationId, user.userId, body);
   }
 
   @Post(':id/activate')
