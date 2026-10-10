@@ -875,6 +875,7 @@ export class InterviewsService {
     return this.documents.getFile(organizationId, cv.id);
   }
 
+  /**
    * E3: owner nudges interviewers whose scorecard is not submitted. At most one per interview per Cairo day
    * (409 SCORECARD_REMINDER_ALREADY_SENT), claimed in the B4 sent-log (due_date_reminders, kind "scorecard-nudge").
    * Owner = the file's primary recruiter or the job's active PRIMARY assignee. TODO(B1): Vacancy.primaryRecruiterId.

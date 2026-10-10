@@ -62,12 +62,12 @@ describe('B11 rules pack — static', () => {
     expect(JOB_STATUSES as readonly string[]).not.toContain('Pending Activation');
   });
 
-  it('R6 interviewer exception: only CV, own scorecard (read/submit), plus RSVP/.ics of the interview itself', () => {
+  it('R6 interviewer exception: only CV, own scorecard (read/submit/revise), plus RSVP/.ics of the interview itself', () => {
     const proto = InterviewsController.prototype as unknown as Record<string, unknown>;
     const allowed = Object.getOwnPropertyNames(proto)
       .filter((m) => typeof proto[m] === 'function' && Reflect.getMetadata(ALLOW_INTERVIEW_ATTENDEE, proto[m] as object) === true)
       .sort();
-    expect(allowed).toEqual(['getInterviewIcs', 'getCandidateCv', 'getScorecards', 'respondToInterview', 'submitScorecard'].sort());
+    expect(allowed).toEqual(['getInterviewIcs', 'getCandidateCv', 'getScorecards', 'respondToInterview', 'reviseScorecard', 'submitScorecard'].sort());
   });
 
   it('R7 another owner\'s job is title / site / seats only', () => {
