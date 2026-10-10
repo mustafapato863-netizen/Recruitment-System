@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, ParseUUIDPipe, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, ParseUUIDPipe, UseGuards, HttpException, HttpStatus } from '@nestjs/common';
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { UsersService } from './users.service';
 import { CreateUserDto, UpdateUserDto, CreateInvitationDto } from './users.dto';
@@ -8,7 +8,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { TenantScopedGuard } from '../common/guards/tenant-scoped.guard';
 import { TenantResource } from '../common/decorators/tenant-resource.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { RequirePermissions, RequireAnyPermissions } from '../common/decorators/require-permissions.decorator';
+import { RequirePermissions } from '../common/decorators/require-permissions.decorator';
 import { AuditAction } from '../common/decorators/audit-action.decorator';
 import type { AuthUser } from '@recruitflow/contracts';
 
@@ -32,8 +32,8 @@ export class UsersController {
     return this.usersService.list(user.organizationId);
   }
 
+  /** B2-16: any signed-in user gets HIS OWN reports (the list is the caller's reporting tree only), so a Hiring Manager's Team work and requisition picker work. */
   @Get('assignable')
-  @RequireAnyPermissions('VACANCY_MANAGE', 'VACANCY_ASSIGN', 'VACANCY_REASSIGN')
   listAssignable(@CurrentUser() user: AuthUser) {
     return this.usersService.listAssignable(user.organizationId, user.userId);
   }
@@ -98,5 +98,12 @@ export class UsersController {
     @Param('roleId', ParseUUIDPipe) roleId: string,
   ) {
     return this.usersService.removeRole(user.organizationId, id, roleId);
+  }
+
+  /** B9 (B2 pattern): users are never deleted. Deactivate with PATCH /users/:id { status: 'Inactive' }. */
+  @Delete(':id')
+  @RequirePermissions('USERS_MANAGE')
+  deleteUser() {
+    throw new HttpException({ code: 'USER_DELETE_NOT_ALLOWED', message: 'Users cannot be deleted. Deactivate the user instead (status Inactive).' }, HttpStatus.METHOD_NOT_ALLOWED);
   }
 }

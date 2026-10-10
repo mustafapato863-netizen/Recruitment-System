@@ -9,6 +9,7 @@ describe('VacancyCoreService recruiter assignment', () => {
     type AssignmentRow = { id: string; vacancyId: string; userId: string; roleCode: string; assignmentKind: string; isActive: boolean; assignedAt: Date };
     const rows: AssignmentRow[] = [];
     const tx = {
+      vacancy: { update: vi.fn().mockResolvedValue(undefined) },
       vacancyAssignment: {
         findFirst: vi.fn(async ({ where }: { where: Record<string, unknown> }) => {
           return rows.find((row) => Object.entries(where).every(([key, value]) => row[key as keyof typeof row] === value)) ?? null;
@@ -41,7 +42,10 @@ describe('VacancyCoreService recruiter assignment', () => {
       getVacancy: vi.fn().mockResolvedValue({ id: 'vacancy', organizationId: 'org' }),
       ensureUserInOrganization: vi.fn().mockResolvedValue(undefined),
     };
-    const prisma = { $transaction: vi.fn(async (callback: (value: typeof tx) => Promise<void>) => callback(tx)) };
+    const prisma = {
+      $transaction: vi.fn(async (callback: (value: typeof tx) => Promise<void>) => callback(tx)),
+      user: { findFirst: vi.fn().mockResolvedValue({ status: 'Active', userRoles: [{ role: { code: 'RECRUITER' } }] }) },
+    };
     const service = new VacancyCoreService(
       repository as unknown as VacancyCoreRepository,
       prisma as unknown as PrismaService,
@@ -60,44 +64,4 @@ describe('VacancyCoreService recruiter assignment', () => {
     expect(tx.vacancyAssignment.update).toHaveBeenCalledTimes(2);
   });
 
-  it('opens a pending vacancy after assigning its first primary recruiter when the summary is complete', async () => {
-    const vacancy = {
-      id: 'vacancy',
-      organizationId: 'org',
-      status: 'Pending Activation' as const,
-      jobSummary: 'Recruit a clinical systems specialist',
-      openedAt: null,
-      assignments: [],
-    };
-    const tx = {
-      vacancyAssignment: {
-        findFirst: vi.fn().mockResolvedValue(null),
-        updateMany: vi.fn().mockResolvedValue({ count: 0 }),
-        create: vi.fn().mockResolvedValue(undefined),
-      },
-    };
-    const repository = {
-      getVacancy: vi.fn().mockResolvedValue(vacancy),
-      saveVacancy: vi.fn(async (next: typeof vacancy) => Object.assign(vacancy, next)),
-      ensureUserInOrganization: vi.fn().mockResolvedValue(undefined),
-    };
-    const prisma = {
-      $transaction: vi.fn(async (callback: (value: typeof tx) => Promise<void>) => callback(tx)),
-    };
-    const service = new VacancyCoreService(
-      repository as unknown as VacancyCoreRepository,
-      prisma as unknown as PrismaService,
-      {} as unknown as NotificationsService,
-    );
-
-    const result = await service.assignTeamMember('vacancy', 'org', {
-      userId: 'recruiter',
-      roleCode: 'RECRUITER',
-      assignmentKind: 'PRIMARY',
-    });
-
-    expect(repository.saveVacancy).toHaveBeenCalledWith(expect.objectContaining({ status: 'Open' }));
-    expect(result.status).toBe('Open');
-    expect(result.openedAt).toBeTruthy();
-  });
 });

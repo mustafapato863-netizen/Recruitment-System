@@ -1,3 +1,5 @@
+import { assertJoiningChecks } from '../applications/application-gates';
+import { recordJoin } from '../vacancy-core/vacancy-lifecycle';
 import {
   BadRequestException,
   ForbiddenException,
@@ -34,7 +36,16 @@ export class HiringService {
       : undefined;
   }
 
+  /** Read-only: owners plus the current final-hire/offer approver of the file (B1 follow-up). */
+  private async applicationReadVisibility(user?: AuthUser) {
+    return user && this.accessControl
+      ? this.accessControl.getApplicationReadVisibilityWhere(user)
+      : undefined;
+  }
+
   async createHiringCase(organizationId: string, dto: CreateHiringCaseDto, user: AuthUser) {
+    const offerFile = await this.prisma.offer.findFirst({ where: { id: dto.offerId, organizationId }, select: { applicationId: true } });
+    if (offerFile && this.accessControl) await this.accessControl.assertApplicationAccess(user, offerFile.applicationId);
     const visibility = await this.applicationVisibility(user);
     const offer = await this.prisma.offer.findFirst({
       where: { id: dto.offerId, organizationId, ...(visibility ? { application: visibility } : {}) },
@@ -121,10 +132,10 @@ export class HiringService {
     }, {} as Record<string, number>);
   }
 
-  async listHiringCases(organizationId: string, status?: string, user?: AuthUser) {
+  async listHiringCases(organizationId: string, status?: string, user?: AuthUser, applicationId?: string) {
     const visibility = await this.applicationVisibility(user);
     const cases = await this.prisma.hiringCase.findMany({
-      where: { organizationId, ...(status ? { status } : {}), ...(visibility ? { application: visibility } : {}) },
+      where: { organizationId, ...(status ? { status } : {}), ...(applicationId ? { applicationId } : {}), ...(visibility ? { application: visibility } : {}) },
       include: {
         application: {
           include: { candidate: true, vacancy: { include: { position: true, branch: true } } }
@@ -171,7 +182,7 @@ export class HiringService {
   }
 
   async getHiringCase(organizationId: string, id: string, user?: AuthUser) {
-    const visibility = await this.applicationVisibility(user);
+    const visibility = await this.applicationReadVisibility(user);
     const hiringCase = await this.prisma.hiringCase.findFirst({
       where: { id, organizationId, ...(visibility ? { application: visibility } : {}) },
       include: {
@@ -283,7 +294,7 @@ export class HiringService {
   }
 
   async getFinalApprovalInbox(organizationId: string, user?: AuthUser) {
-    const visibility = await this.applicationVisibility(user);
+    const visibility = await this.applicationReadVisibility(user);
     const cases = await this.prisma.hiringCase.findMany({
       where: { organizationId, status: 'Pending Final Approval', ...(visibility ? { application: visibility } : {}) },
       include: {
@@ -301,7 +312,7 @@ export class HiringService {
   }
 
   async decideFinalApproval(organizationId: string, caseId: string, dto: FinalApprovalDto, user: AuthUser) {
-    const visibility = await this.applicationVisibility(user);
+    const visibility = await this.applicationReadVisibility(user);
     const hiringCase = await this.prisma.hiringCase.findFirst({
       where: { id: caseId, organizationId, ...(visibility ? { application: visibility } : {}) },
       include: { approvals: true }
@@ -379,6 +390,9 @@ export class HiringService {
       throw new BadRequestException('Vacancy headcount is already full');
     }
 
+    // B5 gate 4: Joined needs ID, contract and SCFHS licence checked.
+    if (dto.status === 'Joined') await assertJoiningChecks(this.prisma, hiringCase.applicationId);
+
     const updateData: Prisma.HiringCaseUpdateInput = { status: dto.status };
     if (dto.actualJoiningDate) {
       updateData.actualJoiningDate = new Date(dto.actualJoiningDate);
@@ -398,16 +412,8 @@ export class HiringService {
           throw new BadRequestException('Vacancy headcount is already full');
         }
 
-        const newJoined = vacancy.joinedHeadcount + 1;
-        const shouldClose = newJoined >= vacancy.approvedHeadcount;
-
-        await tx.vacancy.update({
-          where: { id: vacancy.id },
-          data: {
-            joinedHeadcount: { increment: 1 },
-            ...(shouldClose ? { status: 'Closed' } : {}),
-          },
-        });
+        // B3: Joined fills one seat -> Partially Filled / Filled, with history.
+        await recordJoin(tx, vacancy, user.userId);
 
         await tx.application.update({
           where: { id: hiringCase.applicationId },

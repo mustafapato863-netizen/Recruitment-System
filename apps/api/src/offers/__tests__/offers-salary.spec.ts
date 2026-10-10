@@ -32,7 +32,7 @@ function makeService() {
         offerVersion: { ...version, offer } }]),
     },
   };
-  const accessControl = { getApplicationVisibilityWhere: vi.fn().mockResolvedValue({ organizationId: ORG }) };
+  const accessControl = { getApplicationVisibilityWhere: vi.fn().mockResolvedValue({ organizationId: ORG }), getApplicationReadVisibilityWhere: vi.fn().mockResolvedValue({ organizationId: ORG }) };
   return new OffersService(prisma as unknown as PrismaService, {} as NotificationsService, accessControl as unknown as AccessControlService);
 }
 
@@ -43,12 +43,12 @@ function collectKeys(value: unknown, keys = new Set<string>()): Set<string> {
 }
 
 describe('Offer pay disclosure', () => {
-  it('omits pay keys from list, detail and approval inbox for users without the salary permission', async () => {
+  it('omits pay keys from list, detail and approval inbox for users without OFFER_PAY_VIEW', async () => {
     const service = makeService();
     const payloads = [
-      await service.getOffers(user, {}, { viewSalary: false }),
-      await service.getOfferById(user, 'o1', { viewSalary: false }),
-      await service.getApprovalInbox(user, { viewSalary: false }),
+      await service.getOffers(user, {}, { viewOfferPay: false }),
+      await service.getOfferById(user, 'o1', { viewOfferPay: false }),
+      await service.getApprovalInbox(user, { viewOfferPay: false }),
     ];
     for (const payload of payloads) {
       const keys = collectKeys(payload);
@@ -57,12 +57,12 @@ describe('Offer pay disclosure', () => {
     }
   });
 
-  it('keeps pay for users with the salary permission', async () => {
+  it('keeps pay for users with OFFER_PAY_VIEW', async () => {
     const service = makeService();
-    const detail = await service.getOfferById(user, 'o1', { viewSalary: true });
+    const detail = await service.getOfferById(user, 'o1', { viewOfferPay: true });
     expect(detail.currentVersion).toMatchObject({ monthlyPackage: 20000, annualFixed: 240000 });
     expect(detail.currentVersion?.components[0]).toMatchObject({ amount: 20000 });
-    const [inbox] = await service.getApprovalInbox(user, { viewSalary: true });
+    const [inbox] = await service.getApprovalInbox(user, { viewOfferPay: true });
     expect(inbox).toMatchObject({ monthlyPackage: 20000, packageCurrency: 'EGP' });
   });
 });

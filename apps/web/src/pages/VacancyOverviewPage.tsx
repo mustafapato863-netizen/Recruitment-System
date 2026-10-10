@@ -1,18 +1,22 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import type { VacancyDetailView, Application, PaginatedResult, Interview, Offer, VacancyStatus } from '@recruitflow/contracts';
-import { deleteApi, fetchApi, getApi, patchApi, postApi } from '../api/client';
+import { fetchApi, getApi, patchApi, postApi } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { isTeamLeaderOrAdmin } from '../auth/workspacePersona';
 import { Icon } from '../components/Icon';
 import { Modal } from '../components/Modal';
-import { ConfirmDialog } from '../components/ConfirmDialog';
+import { CloseJobDialog } from '../components/vacancy/CloseJobDialog';
 import { AddApplicationModal } from '../components/candidate/AddApplicationModal';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { Textarea } from '../components/ui/Textarea';
 import { PageState } from '../components/ui/PageState';
+import { ForbiddenState } from '../components/access/ForbiddenState';
+import { RedactedJobDetail } from '../components/access/RedactedJobDetail';
+import { isForbiddenError, isRedactedVacancy } from '../utils/vacancyAccess';
+import type { MaybeRedacted, RedactedVacancy } from '../types/redactedVacancy';
 import { useSetBreadcrumbTitle } from '../context/BreadcrumbContext';
 import { getVacancyBlockingReasons } from '../utils/vacancyActivation';
 
@@ -37,6 +41,8 @@ export function VacancyOverviewPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
   const [vacancy, setVacancy] = useState<VacancyDetailView | null>(null);
+  const [redactedJob, setRedactedJob] = useState<RedactedVacancy | null>(null);
+  const [isForbidden, setIsForbidden] = useState(false);
   const [applications, setApplications] = useState<Application[]>([]);
   const [interviews, setInterviews] = useState<Interview[]>([]);
   const [offers, setOffers] = useState<Offer[]>([]);
@@ -53,7 +59,6 @@ export function VacancyOverviewPage() {
   const [isAssigningRecruiter, setIsAssigningRecruiter] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
   const [isRoleDetailsExpanded, setIsRoleDetailsExpanded] = useState(false);
 
   const [editFormData, setEditFormData] = useState<{
@@ -114,12 +119,15 @@ export function VacancyOverviewPage() {
 
   const handleStatusChange = async (newStatus: VacancyStatus) => {
     if (!id) return;
+    // B3: hold / reopen / close need a reason (written to the job's status history).
+    const reason = window.prompt(`Reason for setting this job to ${newStatus}`)?.trim();
+    if (!reason) return;
     try {
-      const updated = await patchApi<VacancyDetailView>(`/vacancies/${id}/status`, { status: newStatus });
+      const updated = await patchApi<VacancyDetailView>(`/vacancies/${id}/status`, { status: newStatus, reason });
       if (updated) {
         setVacancy(updated);
       }
-      showToast(`✓ Requisition status updated to ${newStatus}`);
+      showToast(`✓ Job status updated to ${newStatus}`);
       setIsActionsDropdownOpen(false);
       void loadAllData();
     } catch (err: unknown) {
@@ -127,19 +135,6 @@ export function VacancyOverviewPage() {
     }
   };
 
-  const handleDeleteVacancy = async () => {
-    if (!vacancy || !isAdministrator) return;
-    setIsDeleting(true);
-    try {
-      await deleteApi(`/vacancies/${vacancy.id}`);
-      navigate('/vacancies', { replace: true });
-    } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : 'Failed to delete vacancy');
-      setIsDeleteDialogOpen(false);
-    } finally {
-      setIsDeleting(false);
-    }
-  };
 
   const openEditModal = () => {
     if (vacancy) {
@@ -194,14 +189,26 @@ export function VacancyOverviewPage() {
     setIsLoading(true);
     try {
       const [vRes, appsRes, intsRes, offsRes, usersRes] = await Promise.allSettled([
-        fetchApi<VacancyDetailView>(`/vacancies/${id}`),
+        fetchApi<MaybeRedacted<VacancyDetailView>>(`/vacancies/${id}`),
         getApi<PaginatedResult<Application>>(`/applications?vacancyId=${id}&pageSize=100`),
         getApi<Interview[]>('/interviews'),
         getApi<Offer[]>('/offers'),
         getApi<InterviewerUser[]>('/users/interviewers'),
       ]);
+      // B1: another owner's job comes back redacted (200) or 403 for actions.
+      setRedactedJob(null);
+      setIsForbidden(false);
       if (vRes.status === 'fulfilled' && vRes.value) {
+        if (isRedactedVacancy(vRes.value)) {
+          setRedactedJob(vRes.value);
+          setVacancy(null);
+          return;
+        }
         setVacancy(vRes.value);
+      } else if (vRes.status === 'rejected' && isForbiddenError(vRes.reason)) {
+        setIsForbidden(true);
+        setVacancy(null);
+        return;
       }
       if (appsRes.status === 'fulfilled' && appsRes.value?.data) {
         setApplications(appsRes.value.data);
@@ -312,7 +319,7 @@ export function VacancyOverviewPage() {
         roleCode: 'RECRUITER',
         assignmentKind: 'PRIMARY',
       });
-      const isActivation = vacancy.status === 'Pending Activation';
+      const isActivation = (vacancy.status as string) === 'Pending Activation'; // legacy, removed in B3
       const willBeOpen =
         isActivation &&
         (updated?.status === 'Open' || Boolean(vacancy.jobSummary?.trim()));
@@ -419,6 +426,20 @@ export function VacancyOverviewPage() {
     );
   }
 
+  if (!isLoading && redactedJob) {
+    return <RedactedJobDetail job={redactedJob} onBack={() => navigate('/vacancies')} />;
+  }
+
+  if (!isLoading && isForbidden) {
+    return (
+      <ForbiddenState
+        title="You do not have access to this job"
+        backLabel="Back to Job Positions"
+        onBack={() => navigate('/vacancies')}
+      />
+    );
+  }
+
   if (!isLoading && !vacancy && id) {
     return (
       <div className="flex w-full flex-col p-3 sm:p-4 max-w-[1720px] mx-auto">
@@ -466,7 +487,7 @@ export function VacancyOverviewPage() {
               Assign a primary recruiter before working on this open vacancy.
             </p>
           )}
-          {vacancy?.status === 'Pending Activation' && (() => {
+          {vacancy && (vacancy.status as string) === 'Pending Activation' && (() => {
             const blockingReasons = getVacancyBlockingReasons(vacancy);
             return (
               <div className="mt-3 rounded-2xl border border-amber-300 bg-amber-50/80 p-3.5 text-xs dark:border-amber-800 dark:bg-amber-950/30">
@@ -591,7 +612,7 @@ export function VacancyOverviewPage() {
                       className="flex w-full cursor-pointer items-center gap-2 px-3.5 py-2.5 text-left font-semibold text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/30"
                     >
                       <Icon name="trash" size={13} />
-                      <span>Delete requisition</span>
+                      <span>Close job</span>
                     </button>
                   </>
                 )}
@@ -599,7 +620,7 @@ export function VacancyOverviewPage() {
                 <div className="px-3.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
                   Status
                 </div>
-                {(['Open', 'On Hold', 'Cancelled'] as VacancyStatus[]).map((st) => (
+                {(['Open', 'On Hold', 'Closed'] as VacancyStatus[]).map((st) => (
                   <button
                     key={st}
                     type="button"
@@ -1741,19 +1762,14 @@ export function VacancyOverviewPage() {
         }}
       />
 
-      <ConfirmDialog
-        isOpen={isDeleteDialogOpen}
-        onClose={() => {
-          if (!isDeleting) setIsDeleteDialogOpen(false);
-        }}
-        onConfirm={handleDeleteVacancy}
-        title="Delete requisition permanently?"
-        description="This removes the requisition and its setup records permanently. Requisitions with applications cannot be deleted and must be cancelled instead."
-        confirmLabel="Delete permanently"
-        tone="danger"
-        icon="trash"
-        isLoading={isDeleting}
-      />
+      {vacancy ? (
+        <CloseJobDialog
+          isOpen={isDeleteDialogOpen}
+          jobId={vacancy.id}
+          onClose={() => setIsDeleteDialogOpen(false)}
+          onClosed={() => navigate('/vacancies', { replace: true })}
+        />
+      ) : null}
 
       {/* Toast Notification */}
       {toastMessage && (

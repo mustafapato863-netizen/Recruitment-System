@@ -10,6 +10,7 @@ import * as path from 'node:path';
 import * as XLSX from 'xlsx';
 import type { Prisma } from '@recruitflow/database';
 import type { CandidateDocument, CvBankBackupStatus } from '@recruitflow/contracts';
+import { MatchingService } from '../matching/matching.service';
 import { PrismaService } from '../database/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { DocumentScannerService } from './document-scanner.service';
@@ -29,16 +30,21 @@ export class DocumentsService {
     @Inject(DocumentScannerService) private readonly scanner: DocumentScannerService,
     @Inject(DocumentStorageService) private readonly storage: DocumentStorageService,
     @Optional() @Inject(AccessControlService) private readonly accessControl?: AccessControlService,
+    @Optional() @Inject(MatchingService) private readonly matching?: MatchingService,
   ) {}
 
-  private async candidateWhere(organizationId: string, candidateId: string, user?: AuthUser): Promise<Prisma.CandidateWhereInput> {
-    if (user && this.accessControl) return { id: candidateId, ...(await this.accessControl.getCandidateVisibilityWhere(user)) };
+  private async candidateWhere(organizationId: string, candidateId: string, user?: AuthUser, read = false): Promise<Prisma.CandidateWhereInput> {
+    if (user && this.accessControl) {
+      const visibility = read ? await this.accessControl.getCandidateReadVisibilityWhere(user) : await this.accessControl.getCandidateVisibilityWhere(user);
+      return { id: candidateId, ...visibility };
+    }
     return { id: candidateId, organizationId };
   }
 
-  private async documentWhere(organizationId: string, documentId: string, user?: AuthUser): Promise<Prisma.CandidateDocumentWhereInput> {
+  private async documentWhere(organizationId: string, documentId: string, user?: AuthUser, read = false): Promise<Prisma.CandidateDocumentWhereInput> {
     if (user && this.accessControl) {
-      return { id: documentId, organizationId, candidate: await this.accessControl.getCandidateVisibilityWhere(user) };
+      const candidate = read ? await this.accessControl.getCandidateReadVisibilityWhere(user) : await this.accessControl.getCandidateVisibilityWhere(user);
+      return { id: documentId, organizationId, candidate };
     }
     return { id: documentId, organizationId };
   }
@@ -49,7 +55,7 @@ export class DocumentsService {
     user?: AuthUser,
   ): Promise<CandidateDocument[]> {
     const candidate = await this.prisma.candidate.findFirst({
-      where: await this.candidateWhere(organizationId, candidateId, user),
+      where: await this.candidateWhere(organizationId, candidateId, user, true),
     });
 
     if (!candidate || candidate.organizationId !== organizationId) {
@@ -136,6 +142,7 @@ export class DocumentsService {
       include: { uploadedBy: true, candidate: true },
     });
 
+    if (created.extractionText) void this.matching?.deriveEvidenceInBackground(organizationId, { candidateId: dto.candidateId }, uploadedById, 'CV text stored');
     return this.toCandidateDocument(created);
   }
 
@@ -212,6 +219,8 @@ export class DocumentsService {
         },
         include: { uploadedBy: true, candidate: true },
       });
+      // B6: CV text stored (where parsing completes on this base) -> derive evidence after commit.
+      if (created.extractionText) void this.matching?.deriveEvidenceInBackground(organizationId, { candidateId: candidate.id }, uploadedById, 'CV text stored');
       void this.auditService.log({
         action: 'CV_SCAN_RESULT',
         actorUserId: uploadedById,
@@ -229,7 +238,7 @@ export class DocumentsService {
   }
 
   async getFile(organizationId: string, id: string, user?: AuthUser) {
-    const document = await this.prisma.candidateDocument.findFirst({ where: { ...(await this.documentWhere(organizationId, id, user)), deletedAt: null } });
+    const document = await this.prisma.candidateDocument.findFirst({ where: { ...(await this.documentWhere(organizationId, id, user, true)), deletedAt: null } });
     if (!document || document.storageProvider === 'metadata-only' || document.storageKey.startsWith('metadata-only/')) {
       throw new NotFoundException('This document has no stored file.');
     }

@@ -11,12 +11,9 @@ import {
   type ExportUserInput,
 } from './access-export.builder';
 
-/** Job (vacancy) statuses that still represent open work. */
-export const OPEN_JOB_STATUSES = ['Pending Activation', 'Open', 'On Hold', 'Partially Filled'];
-/** Requisition (vacancy request) statuses that still represent open work. */
-export const OPEN_REQUISITION_STATUSES = ['Draft', 'Pending Approval', 'Changes Requested', 'Approved'];
-/** Application stages that close a file. */
-export const CLOSED_APPLICATION_STAGES = ['Joined', 'Rejected', 'Withdrawn'];
+// Same open-work definitions as B2's owner block (users.service countOpenOwnership): one rule, not two.
+import { CLOSED_APPLICATION_STAGES, OPEN_JOB_STATUSES, OPEN_REQUISITION_STATUSES } from '../../users/users.service';
+export { CLOSED_APPLICATION_STAGES, OPEN_JOB_STATUSES, OPEN_REQUISITION_STATUSES };
 
 type CountRow = { key: string | null; count: number };
 
@@ -94,11 +91,12 @@ export class AccessExportService {
   }
 
   private async ownershipCounts(organizationId: string): Promise<(userId: string) => ExportOwnershipCounts> {
-    const [jobAssignments, requisitions, primaryApps, taskApps] = await Promise.all([
-      this.prisma.vacancyAssignment.groupBy({
-        by: ['userId', 'assignmentKind'],
-        where: { isActive: true, vacancy: { organizationId, status: { in: OPEN_JOB_STATUSES } } },
-        _count: { _all: true },
+    const [openJobs, requisitions, primaryApps, taskApps] = await Promise.all([
+      // B1: the job owner is Vacancy.primaryRecruiterId; an active PRIMARY assignment still counts (as in B2's owner block).
+      // Inactive (revoked) assignments and closed jobs never count.
+      this.prisma.vacancy.findMany({
+        where: { organizationId, status: { in: OPEN_JOB_STATUSES } },
+        select: { primaryRecruiterId: true, assignments: { where: { isActive: true }, select: { userId: true, assignmentKind: true } } },
       }),
       this.prisma.vacancyRequest.groupBy({
         by: ['requesterId'],
@@ -118,8 +116,15 @@ export class AccessExportService {
     ]);
 
     const toMap = (rows: CountRow[]) => new Map(rows.map((row) => [row.key, row.count]));
-    const primaryJobs = toMap(jobAssignments.filter((r) => r.assignmentKind === 'PRIMARY').map((r) => ({ key: r.userId, count: r._count._all })));
-    const supportJobs = toMap(jobAssignments.filter((r) => r.assignmentKind !== 'PRIMARY').map((r) => ({ key: r.userId, count: r._count._all })));
+    const primaryJobs = new Map<string, number>();
+    const supportJobs = new Map<string, number>();
+    const bump = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + 1);
+    for (const job of openJobs) {
+      const owners = new Set<string>(job.primaryRecruiterId ? [job.primaryRecruiterId] : []);
+      for (const a of job.assignments) if (a.assignmentKind === 'PRIMARY') owners.add(a.userId);
+      owners.forEach((id) => bump(primaryJobs, id)); // distinct jobs per owner
+      for (const id of new Set(job.assignments.filter((a) => a.assignmentKind !== 'PRIMARY' && !owners.has(a.userId)).map((a) => a.userId))) bump(supportJobs, id);
+    }
     const reqs = toMap(requisitions.map((r) => ({ key: r.requesterId, count: r._count._all })));
     const primary = toMap(primaryApps.map((r) => ({ key: r.primaryRecruiterId, count: r._count._all })));
     const task = toMap(taskApps.map((r) => ({ key: r.taskOwnerId, count: r._count._all })));

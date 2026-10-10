@@ -3,6 +3,7 @@ import {
   Controller,
   Delete,
   Get,
+  HttpCode,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -16,12 +17,14 @@ import { TenantResource } from '../common/decorators/tenant-resource.decorator';
 // Runtime service and DTO imports must remain value imports for Nest DI metadata reflection.
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { CandidatesService } from './candidates.service';
+import { CandidateFillService } from './candidate-fill.service';
 import { CandidateActivityService } from './candidate-activity.service';
 import { CreateCandidateActivityDto, CandidateActivityQueryDto, RescheduleCandidateActivityDto } from './candidate-activity.dto';
 import {
   CreateCandidateDto,
   UpdateCandidateDto,
   CandidateQueryDto,
+  AnonymizeCandidateDto,
 } from './candidates.dto';
 import { UserPermissionsService } from '../common/user-permissions.service';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
@@ -39,6 +42,7 @@ export class CandidatesController {
     private readonly candidatesService: CandidatesService,
     private readonly userPermissions: UserPermissionsService,
     private readonly activityService: CandidateActivityService,
+    private readonly candidateFill: CandidateFillService,
   ) {}
 
   @Get()
@@ -150,6 +154,16 @@ export class CandidatesController {
     return this.candidatesService.createCandidate(tenantId, body, user.userId);
   }
 
+  /** E3: fill empty fields from the candidate's latest parsed CV. Never overwrites; returns { filled[], conflicts[] }. */
+  @Post(':id/fill-from-cv')
+  @RequirePermissions('CANDIDATE_EDIT')
+  @AuditAction('CANDIDATE_FILL_FROM_CV')
+  @UseGuards(TenantScopedGuard)
+  @TenantResource({ resource: 'candidate', param: 'id' })
+  fillFromCv(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.candidateFill.fillFromCv(user, id);
+  }
+
   @Patch(':id')
   @RequirePermissions('CANDIDATE_EDIT')
   @AuditAction('CANDIDATE_UPDATE')
@@ -164,16 +178,35 @@ export class CandidatesController {
     return this.candidatesService.updateCandidate(tenantId, id, body, user);
   }
 
+  /**
+   * B2 (v2 §3): no delete for anyone. DELETE archives (deactivates) the
+   * candidate; the record and its history stay. CANDIDATE_DELETE is retired.
+   */
   @Delete(':id')
-  @RequirePermissions('CANDIDATE_DELETE')
-  @AuditAction('CANDIDATE_DELETE')
+  @RequirePermissions('CANDIDATE_EDIT')
+  @AuditAction('CANDIDATE_ARCHIVE')
   @UseGuards(TenantScopedGuard)
   @TenantResource({ resource: 'candidate', param: 'id' })
-  async deleteCandidate(
-    @CurrentUser() user: AuthUser,
+  archiveCandidate(
     @CurrentTenant() tenantId: string,
     @Param('id', ParseUUIDPipe) id: string,
   ) {
-    return this.candidatesService.deleteCandidate(tenantId, id, user);
+    return this.candidatesService.archiveCandidate(tenantId, id);
+  }
+
+  /** B2 legal erasure: Administrator only, irreversible, idempotent. */
+  @Post(':id/anonymize')
+  @RequirePermissions('CANDIDATE_ANONYMIZE')
+  @UseGuards(TenantScopedGuard)
+  @TenantResource({ resource: 'candidate', param: 'id' })
+  @HttpCode(200)
+  async anonymizeCandidate(
+    @CurrentUser() user: AuthUser,
+    @CurrentTenant() tenantId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: AnonymizeCandidateDto,
+  ) {
+    await this.candidatesService.assertAdministrator(tenantId, user.userId);
+    return this.candidatesService.anonymizeCandidate(tenantId, id, body.reason.trim(), user);
   }
 }

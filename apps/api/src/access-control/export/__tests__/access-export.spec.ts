@@ -41,10 +41,11 @@ function makePrisma() {
       ]),
     },
     user: { findMany: vi.fn().mockResolvedValue(users) },
-    vacancyAssignment: {
-      groupBy: vi.fn().mockResolvedValue([
-        { userId: ADMIN_ID, assignmentKind: 'PRIMARY', _count: { _all: 2 } },
-        { userId: RECRUITER_ID, assignmentKind: 'SUPPORT', _count: { _all: 1 } },
+    vacancy: {
+      // B1 owner column, active PRIMARY assignment (same job counted once), and a support link.
+      findMany: vi.fn().mockResolvedValue([
+        { primaryRecruiterId: ADMIN_ID, assignments: [{ userId: ADMIN_ID, assignmentKind: 'PRIMARY' }] },
+        { primaryRecruiterId: ADMIN_ID, assignments: [{ userId: RECRUITER_ID, assignmentKind: 'SUPPORT' }] },
       ]),
     },
     vacancyRequest: { groupBy: vi.fn().mockResolvedValue([{ requesterId: RECRUITER_ID, _count: { _all: 3 } }]) },

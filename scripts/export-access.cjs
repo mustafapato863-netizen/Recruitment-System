@@ -108,14 +108,22 @@ async function scopeResolver(prisma, organizationId, orgRoles) {
 
 async function ownershipCounts(prisma, organizationId) {
   const [jobs, reqs, primaryApps, taskApps] = await Promise.all([
-    prisma.vacancyAssignment.groupBy({ by: ['userId', 'assignmentKind'], where: { isActive: true, vacancy: { organizationId, status: { in: OPEN_JOB_STATUSES } } }, _count: { _all: true } }),
+    // B1 owner column + active PRIMARY assignment, distinct per job (same rule as the API export / B2 owner block).
+    prisma.vacancy.findMany({ where: { organizationId, status: { in: OPEN_JOB_STATUSES } }, select: { primaryRecruiterId: true, assignments: { where: { isActive: true }, select: { userId: true, assignmentKind: true } } } }),
     prisma.vacancyRequest.groupBy({ by: ['requesterId'], where: { organizationId, status: { in: OPEN_REQUISITION_STATUSES } }, _count: { _all: true } }),
     prisma.application.groupBy({ by: ['primaryRecruiterId'], where: { organizationId, stage: { notIn: CLOSED_APPLICATION_STAGES }, primaryRecruiterId: { not: null } }, _count: { _all: true } }),
     prisma.application.groupBy({ by: ['taskOwnerId'], where: { organizationId, stage: { notIn: CLOSED_APPLICATION_STAGES }, taskOwnerId: { not: null } }, _count: { _all: true } }),
   ]);
   const map = (rows, key, filter = () => true) => new Map(rows.filter(filter).map((r) => [r[key], r._count._all]));
-  const primaryJobs = map(jobs, 'userId', (r) => r.assignmentKind === 'PRIMARY');
-  const supportJobs = map(jobs, 'userId', (r) => r.assignmentKind !== 'PRIMARY');
+  const primaryJobs = new Map();
+  const supportJobs = new Map();
+  const bump = (m, k) => m.set(k, (m.get(k) || 0) + 1);
+  for (const job of jobs) {
+    const owners = new Set(job.primaryRecruiterId ? [job.primaryRecruiterId] : []);
+    for (const a of job.assignments) if (a.assignmentKind === 'PRIMARY') owners.add(a.userId);
+    owners.forEach((id) => bump(primaryJobs, id));
+    for (const id of new Set(job.assignments.filter((a) => a.assignmentKind !== 'PRIMARY' && !owners.has(a.userId)).map((a) => a.userId))) bump(supportJobs, id);
+  }
   const requisitions = map(reqs, 'requesterId');
   const primary = map(primaryApps, 'primaryRecruiterId');
   const task = map(taskApps, 'taskOwnerId');

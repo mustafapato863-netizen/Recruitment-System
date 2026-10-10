@@ -20,10 +20,10 @@ import {
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { TenantScopedGuard } from '../common/guards/tenant-scoped.guard';
-import { TenantResource } from '../common/decorators/tenant-resource.decorator';
+import { AllowFileApprover, TenantResource } from '../common/decorators/tenant-resource.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { AuthUser } from '@recruitflow/contracts';
-import { RequirePermissions } from '../common/decorators/require-permissions.decorator';
+import { RequireAnyPermissions, RequirePermissions } from '../common/decorators/require-permissions.decorator';
 import { AuditAction } from '../common/decorators/audit-action.decorator';
 
 @UseGuards(JwtAuthGuard)
@@ -58,12 +58,16 @@ export class HiringController {
   listHiringCases(
     @CurrentUser() user: AuthUser,
     @Query('status') status?: string,
+    @Query('applicationId') applicationId?: string,
   ) {
-    return this.hiringService.listHiringCases(user.organizationId, status, user);
+    // B5 follow-up: filter by file. A malformed id matches nothing (no DB uuid error).
+    if (applicationId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(applicationId.trim())) return [];
+    return this.hiringService.listHiringCases(user.organizationId, status, user, applicationId?.trim() || undefined);
   }
 
   @Get(':id')
-  @RequirePermissions('APPLICATION_VIEW')
+  @RequireAnyPermissions('APPLICATION_VIEW', 'APPROVE_OFFERS', 'FINAL_HIRING_APPROVAL')
+  @AllowFileApprover()
   @UseGuards(TenantScopedGuard)
   @TenantResource({ resource: 'hiringCase', param: 'id' })
   getHiringCase(
@@ -110,6 +114,10 @@ export class HiringController {
   @AuditAction('HIRING_FINAL_APPROVAL_DECIDE')
   @UseGuards(TenantScopedGuard)
   @TenantResource({ resource: 'hiringCase', param: 'id' })
+  // B1 follow-up: the pending final-hire approver records their decision on the
+  // case they are approving (the approval act itself, checked again in the
+  // service). No other write on the file is opened to approvers.
+  @AllowFileApprover()
   decideFinalApproval(
     @CurrentUser() user: AuthUser,
     @Param('id', ParseUUIDPipe) id: string,

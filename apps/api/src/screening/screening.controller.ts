@@ -19,6 +19,7 @@ import { TenantResource } from '../common/decorators/tenant-resource.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { RequirePermissions } from '../common/decorators/require-permissions.decorator';
 import { AuditAction } from '../common/decorators/audit-action.decorator';
+import { canSeePay } from '../common/access/pay-visibility';
 import type { AuthUser } from '@recruitflow/contracts';
 
 @UseGuards(JwtAuthGuard)
@@ -40,7 +41,7 @@ export class ScreeningController {
     return this.screeningService.listScreeningLogs(
       user.organizationId,
       applicationId,
-      { viewSalary: await this.userPermissions.hasPermission(user.userId, user.organizationId, 'VIEW_CURRENT_SALARY') },
+      { viewSalary: await canSeePay(this.userPermissions, user) },
       user,
     );
   }
@@ -56,7 +57,7 @@ export class ScreeningController {
       user.organizationId,
       user.userId,
       body,
-      { viewSalary: await this.userPermissions.hasPermission(user.userId, user.organizationId, 'VIEW_CURRENT_SALARY') },
+      { viewSalary: await canSeePay(this.userPermissions, user) },
       user,
     );
   }

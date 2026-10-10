@@ -29,7 +29,7 @@ export class ScreeningService {
     const visibility = user
       ? await this.accessControl.getApplicationVisibilityWhere(user)
       : { organizationId };
-    const app = await this.prisma.application.findFirst({ where: { id: applicationId, ...visibility } });
+    const app = await this.prisma.application.findFirst({ where: { AND: [visibility, { id: applicationId }] } });
 
     if (!app || app.organizationId !== organizationId) {
       throw new NotFoundException(`Application ${applicationId} was not found.`);
@@ -51,10 +51,11 @@ export class ScreeningService {
     options: { viewSalary: boolean } = { viewSalary: false },
     user?: AuthUser,
   ): Promise<ScreeningLog> {
+    if (user) await this.accessControl.assertApplicationAccess(user, dto.applicationId);
     const visibility = user
       ? await this.accessControl.getApplicationVisibilityWhere(user)
       : { organizationId };
-    const app = await this.prisma.application.findFirst({ where: { id: dto.applicationId, ...visibility } });
+    const app = await this.prisma.application.findFirst({ where: { AND: [visibility, { id: dto.applicationId }] } });
 
     if (!app || app.organizationId !== organizationId) {
       throw new NotFoundException(`Application ${dto.applicationId} was not found.`);
@@ -95,7 +96,7 @@ export class ScreeningService {
       notes: record.notes,
       noticePeriodDays: record.noticePeriodDays,
       // Compensation keys are omitted entirely (not null) for callers without
-      // VIEW_CURRENT_SALARY so Employee payloads never carry the fields.
+      // OFFER_PAY_VIEW (the one pay rule, common/access/pay-visibility) so Employee payloads never carry the fields.
       ...(options.viewSalary
         ? {
             expectedSalary: record.expectedSalary !== null ? Number(record.expectedSalary) : null,

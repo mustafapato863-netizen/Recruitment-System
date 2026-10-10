@@ -23,7 +23,7 @@ function makeService() {
 }
 
 describe('Screening salary disclosure', () => {
-  it('omits salary keys entirely (not null) for users without VIEW_CURRENT_SALARY', async () => {
+  it('omits salary keys entirely (not null) for users without OFFER_PAY_VIEW (one pay rule)', async () => {
     const service = makeService();
     const [log] = await service.listScreeningLogs(ORG, APP, { viewSalary: false });
     const created = await service.createScreeningLog(ORG, 'u1', { applicationId: APP, outcome: 'Passed' } as never, { viewSalary: false });
@@ -34,7 +34,7 @@ describe('Screening salary disclosure', () => {
     }
   });
 
-  it('keeps salary for users with VIEW_CURRENT_SALARY', async () => {
+  it('keeps salary for users with OFFER_PAY_VIEW (one pay rule)', async () => {
     const service = makeService();
     const [log] = await service.listScreeningLogs(ORG, APP, { viewSalary: true });
     expect(log).toMatchObject({ currentSalary: 15000, expectedSalary: 18000, salaryCurrency: 'AED' });

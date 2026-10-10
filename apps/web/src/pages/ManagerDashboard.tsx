@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, useMemo } from 'react';
+import { fetchVacancyList } from '../utils/vacancyAccess';
 import { Link, useNavigate } from 'react-router-dom';
 import type { Vacancy, Application, ReportOverview, Interview } from '@recruitflow/contracts';
 import { getApi, postApi } from '../api/client';
@@ -230,7 +231,8 @@ export function ManagerDashboard() {
     setIsLoading(true);
     try {
       const [vacanciesRes, applicationsRes, overviewRes, interviewsRes, recruitersRes] = await Promise.allSettled([
-        getApi<Vacancy[]>('/vacancies'),
+        // B1: redacted jobs carry no workflow data; excluded from metrics and assignment.
+        fetchVacancyList().then(({ full }) => full),
         getApi<{ data: Application[] }>('/applications?pageSize=100'),
         getApi<ReportOverview>(
           '/reports/overview?from=' +
@@ -277,7 +279,7 @@ export function ManagerDashboard() {
       }
 
       const mappedVacancies: OpenVacancyOption[] = loadedVacancies
-        .filter((v) => v.status === 'Open' || v.status === 'Pending Activation')
+        .filter((v) => v.status === 'Open')
         .map((v) => {
         const title = v.title || v.position?.title || 'No position';
         const department = (v as unknown as { department?: string }).department || v.branch?.name || 'Operations';
@@ -292,7 +294,7 @@ export function ManagerDashboard() {
           title,
           department,
           location,
-          status: v.status === 'Pending Activation' ? 'Pending Activation' : 'Open',
+          status: 'Open',
           currentRecruiter: recruiter,
           currentRecruiterId: recruiterId,
           targetHires,

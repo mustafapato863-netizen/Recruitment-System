@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { ForbiddenState } from '../components/access/ForbiddenState';
+import { isForbiddenError } from '../utils/vacancyAccess';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { getApi, postApi, patchApi } from '../api/client';
 import type { Offer as BaseOffer } from '@recruitflow/contracts';
@@ -30,6 +32,7 @@ export function OfferDetailPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [offer, setOffer] = useState<Offer | null>(null);
+  const [isForbidden, setIsForbidden] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   useSetBreadcrumbTitle(offer?.offerCode ? `Offer ${offer.offerCode}` : 'Offer Details');
@@ -53,8 +56,8 @@ export function OfferDetailPage() {
     if (!id) return;
     setIsLoading(true);
     getApi<Offer>(`/offers/${id}`)
-      .then((data) => setOffer(data))
-      .catch(() => setOffer(null))
+      .then((data) => { setOffer(data); setIsForbidden(false); })
+      .catch((err: unknown) => { setOffer(null); setIsForbidden(isForbiddenError(err)); })
       .finally(() => setIsLoading(false));
   }, [id]);
 
@@ -266,6 +269,10 @@ export function OfferDetailPage() {
         />
       </div>
     );
+  }
+
+  if (!offer && isForbidden) {
+    return <ForbiddenState title="You do not have access to this offer" backLabel="Back to Offers" onBack={() => navigate('/offers')} />;
   }
 
   if (!offer) {

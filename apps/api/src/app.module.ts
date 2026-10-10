@@ -1,3 +1,6 @@
+import { ManagerDecisionModule } from './manager-decision/manager-decision.module';
+import { MyWorkModule } from './my-work/my-work.module';
+import { ResultsModule } from './results/results.module';
 import { Module } from '@nestjs/common';
 import type { NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
@@ -32,6 +35,8 @@ import { WhatsAppTemplatesModule } from './whatsapp-templates/whatsapp-templates
 import { AccessControlModule } from './access-control/access-control.module';
 import { RecruiterTargetsModule } from './recruiter-targets/recruiter-targets.module';
 import { ResumeModule } from './resume/resume.module';
+import { AdminOverrideModule } from './admin-override/admin-override.module';
+import { MatchingModule } from './matching/matching.module';
 import { CorrelationIdMiddleware, TenantContextMiddleware } from './common/middleware';
 
 @Module({
@@ -42,6 +47,9 @@ import { CorrelationIdMiddleware, TenantContextMiddleware } from './common/middl
     }),
     DatabaseModule,
     VacancyCoreModule,
+    MyWorkModule,
+    ResultsModule,
+    ManagerDecisionModule,
     CommonModule,
     AuthModule,
     UsersModule,
@@ -70,6 +78,8 @@ import { CorrelationIdMiddleware, TenantContextMiddleware } from './common/middl
     EmailTemplatesModule,
     WhatsAppTemplatesModule,
     RecruiterTargetsModule,
+    MatchingModule,
+    AdminOverrideModule,
   ],
   controllers: [HealthController],
 })

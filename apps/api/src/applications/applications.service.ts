@@ -1,6 +1,9 @@
+import { gateStates, REOPEN_TARGETS, WITHDRAWN_BY_CANDIDATE_REASON, assertReopenAllowed, assertStageGate, resolveRejectionReason } from './application-gates';
+import { assertJobAcceptsApplications, recordJoin } from '../vacancy-core/vacancy-lifecycle';
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Inject,
   Injectable,
   Logger,
@@ -26,6 +29,7 @@ import { EmailOutboxService } from '../email/email-outbox.service';
 import { AccessControlService } from '../access-control/access-control.service';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import { EmailTemplatesService } from '../email-templates/email-templates.service';
+import { assertEligibleOwner } from '../common/access/file-access';
 import type {
   ApplicationQueryDto,
   CreateApplicationDto,
@@ -34,14 +38,15 @@ import type {
 } from './applications.dto';
 
 const ALLOWED_STAGE_TRANSITIONS: Record<ApplicationStage, ApplicationStage[]> = {
-  Applied: ['Screening', 'Rejected', 'Withdrawn'],
-  Screening: ['Interview', 'Rejected', 'Withdrawn'],
-  Interview: ['Offer', 'Rejected', 'Withdrawn'],
-  Offer: ['Pre-Hire', 'Rejected', 'Withdrawn'],
-  'Pre-Hire': ['Joined', 'Rejected', 'Withdrawn'],
+  // B5: the only exit is Rejected (with a reason). Withdrawn is legacy history.
+  Applied: ['Screening', 'Rejected'],
+  Screening: ['Interview', 'Rejected'],
+  Interview: ['Offer', 'Rejected'],
+  Offer: ['Pre-Hire', 'Rejected'],
+  'Pre-Hire': ['Joined', 'Rejected'],
   Joined: [],
   Rejected: ['Applied', 'Screening', 'Interview'],
-  Withdrawn: ['Applied'],
+  Withdrawn: [],
 };
 
 type GateContext = {
@@ -49,7 +54,7 @@ type GateContext = {
   screeningOutcome: string | null;
   interviews: Array<{
     status: string;
-    scorecards: Array<{ isLocked: boolean; notes: string | null }>;
+    scorecards: Array<{ status: string; notes: string | null }>;
   }>;
   offerStatus: string | null;
   hiringStatus: string | null;
@@ -127,6 +132,9 @@ function gateActionTab(code: string): string {
   if (code === 'cv' || code === 'document') return 'Applied';
   return 'Applied';
 }
+
+/** B2-4: terminal file stages nothing moves. Rejected is not here: B5's audited reopen moves it back. */
+export const CLOSED_STAGES = ['Joined'];
 
 @Injectable()
 export class ApplicationsService {
@@ -248,7 +256,26 @@ export class ApplicationsService {
           nextFollowUpByCandidate.set(followUp.entityId, followUp.dueAt);
         }
       }
+      // E3: gate state per file, and the card's interview (next upcoming, else the last one).
+      const [gates, interviews] = await Promise.all([
+        gateStates(this.prisma, items.map((a) => ({ id: a.id, stage: a.stage, rejectionReason: a.rejectionReason }))),
+        this.prisma.interview.findMany({
+          where: { applicationId: { in: applicationIds }, status: { not: 'Cancelled' } },
+          select: { applicationId: true, scheduledStart: true, scheduledEnd: true, roomName: true, locationUrl: true },
+          orderBy: { scheduledStart: 'asc' },
+        }),
+      ]);
+      const now = Date.now();
+      const cardInterview = new Map<string, { when: 'next' | 'last'; startAt: string; endAt: string; room: { name: string | null; url: string | null } }>();
+      for (const id of applicationIds) {
+        const mine = interviews.filter((i) => i.applicationId === id);
+        const next = mine.find((i) => i.scheduledEnd.getTime() >= now);
+        const pick = next ?? mine[mine.length - 1];
+        if (pick) cardInterview.set(id, { when: next ? 'next' : 'last', startAt: pick.scheduledStart.toISOString(), endAt: pick.scheduledEnd.toISOString(), room: { name: pick.roomName, url: pick.locationUrl } });
+      }
       for (const item of data) {
+        item.gates = gates.get(item.id) ?? [];
+        item.interview = cardInterview.get(item.id) ?? null;
         const event = latest.get(item.id);
         item.lastActivityAt = event?.at.toISOString() ?? item.updatedAt;
         item.lastActivityLabel = event?.label ?? 'Application updated';
@@ -272,11 +299,12 @@ export class ApplicationsService {
     const policy = user
       ? await this.accessControl.getUserEffectiveScope(organizationId, user.userId, user.roleCodes)
       : null;
+    // Read-only file view: also open to the current offer/final-hire approver (B1 follow-up).
     const visibility = user
-      ? await this.accessControl.getApplicationVisibilityWhere(user)
+      ? await this.accessControl.getApplicationReadVisibilityWhere(user)
       : { organizationId };
     const application = await this.prisma.application.findFirst({
-      where: { id, ...visibility },
+      where: { AND: [visibility, { id }] },
       include: {
         candidate: true,
         vacancy: {
@@ -329,7 +357,7 @@ export class ApplicationsService {
         where: { organizationId, applicationId: id },
         select: {
           status: true,
-          scorecards: { select: { isLocked: true, notes: true } },
+          scorecards: { where: { status: 'Submitted' }, select: { status: true, notes: true } },
         },
       }),
       this.prisma.offer.findFirst({
@@ -455,18 +483,10 @@ export class ApplicationsService {
     const vacancyVisibility = user
       ? await this.accessControl.getVacancyVisibilityWhere(user)
       : { organizationId };
-    const applicationVisibility = user
-      ? await this.accessControl.getApplicationVisibilityWhere(user)
-      : { organizationId };
-    const candidateVisibility: Prisma.CandidateWhereInput = user
-      ? {
-          organizationId,
-          OR: [
-            { createdById: user.userId },
-            { applications: { some: applicationVisibility } },
-          ],
-        }
-      : { organizationId };
+    // B2-12 (v2 §7 "Import links a person already in the bank"): linking a bank person to a job the caller
+    // fully sees (vacancyVisibility below) is allowed for any candidate in the organization. Nothing about the
+    // person is returned beyond the new file, which the caller owns.
+    const candidateVisibility: Prisma.CandidateWhereInput = { organizationId };
 
     const [vacancy, candidate] = await Promise.all([
       this.prisma.vacancy.findFirst({
@@ -485,6 +505,9 @@ export class ApplicationsService {
       throw new NotFoundException(`Vacancy ${dto.vacancyId} was not found.`);
     }
 
+    // B3 (v2 §3 Hold): a held, filled or closed job accepts no new applications.
+    assertJobAcceptsApplications(vacancy);
+
     if (vacancy.status === 'Open' && vacancy.assignments.length === 0) {
       throw new BadRequestException(
         `Vacancy ${vacancy.vacancyCode} has no assigned primary recruiter. Assign the vacancy before adding candidates.`,
@@ -493,6 +516,11 @@ export class ApplicationsService {
 
     if (!candidate || candidate.organizationId !== organizationId) {
       throw new NotFoundException(`Candidate ${dto.candidateId} was not found.`);
+    }
+
+    // B1: an administrator or inactive user can never own a file.
+    for (const ownerId of new Set([dto.primaryRecruiterId, dto.taskOwnerId].filter((id): id is string => Boolean(id)))) {
+      await assertEligibleOwner(this.prisma, organizationId, ownerId);
     }
 
     const relatedUserIds = [dto.primaryRecruiterId, dto.taskOwnerId].filter(
@@ -522,9 +550,10 @@ export class ApplicationsService {
     });
 
     if (existing) {
-      throw new ConflictException(
-        `Candidate ${candidate.firstName} ${candidate.lastName} has already applied to vacancy ${vacancy.vacancyCode}.`,
-      );
+      throw new ConflictException({
+        code: 'APPLICATION_EXISTS',
+        message: `Candidate ${candidate.firstName} ${candidate.lastName} has already applied to vacancy ${vacancy.vacancyCode}.`,
+      });
     }
 
     const applicationCode = await this.nextApplicationCode();
@@ -538,7 +567,8 @@ export class ApplicationsService {
           candidateId: dto.candidateId,
           stage: 'Applied',
           source: dto.source?.trim() ?? candidate.source ?? null,
-          primaryRecruiterId: dto.primaryRecruiterId ?? null,
+          // Default the file owner to the job owner (B1); never an admin.
+          primaryRecruiterId: dto.primaryRecruiterId ?? vacancy.primaryRecruiterId ?? null,
           taskOwnerId: dto.taskOwnerId ?? null,
         },
         include: {
@@ -576,6 +606,10 @@ export class ApplicationsService {
     if (application.stage !== dto.expectedStage || application.version !== dto.expectedVersion) {
       this.throwTransitionConflict(application);
     }
+    // B2-4 (v2 §7 "Closed files do not move"): Joined is terminal; nothing moves it (not even to Rejected).
+    if (CLOSED_STAGES.includes(application.stage)) {
+      throw new ConflictException({ code: 'FILE_CLOSED', message: `This file is ${application.stage} (closed); it cannot move to ${dto.stage}.` });
+    }
 
     // Applications created before a pipeline template was configured (or
     // using a custom stage name) do not have a canonical transition map
@@ -583,13 +617,19 @@ export class ApplicationsService {
     // ordering is authoritative; only the immediate next stage (plus the
     // terminal rejection paths) can be selected. The canonical map remains
     // the fallback for legacy records without a matching pipeline stage.
+    if (dto.stage === 'Withdrawn') {
+      throw new ConflictException({
+        code: 'WITHDRAWN_NOT_AN_EXIT',
+        message: `Withdrawn is not a manual exit. Reject with the reason "${WITHDRAWN_BY_CANDIDATE_REASON}".`,
+      });
+    }
     const allowed = ALLOWED_STAGE_TRANSITIONS[application.stage] ?? [];
     const workspace = await this.getWorkspace(organizationId, id, user);
     const configuredNextAllowed = workspace.stages.some(
       (stage) => stage.isNext && stage.name === dto.stage,
     );
     const hasPersistedCurrentStage = workspace.stages.some((stage) => stage.isCurrent);
-    const isTerminalEscape = dto.stage === 'Rejected' || dto.stage === 'Withdrawn';
+    const isTerminalEscape = dto.stage === 'Rejected';
     const transitionAllowed = hasPersistedCurrentStage
       ? configuredNextAllowed || isTerminalEscape
       : allowed.includes(dto.stage);
@@ -598,6 +638,15 @@ export class ApplicationsService {
         `Cannot transition application from ${application.stage} to ${dto.stage}. Allowed transitions: ${allowed.join(', ')}.`,
       );
     }
+
+    // B5: the five v2 gates are API checks, independent of the pipeline config.
+    const reopenReason = application.stage === 'Rejected' && REOPEN_TARGETS.includes(dto.stage)
+      ? await assertReopenAllowed(this.prisma, application, actorUserId, dto.reason)
+      : null;
+    const rejectionReason = dto.stage === 'Rejected'
+      ? await resolveRejectionReason(this.prisma, organizationId, dto.reason, dto.note)
+      : null;
+    await assertStageGate(this.prisma, application, dto.stage);
 
     const gateRequirements = workspace.nextStage === dto.stage
       ? workspace.nextStageRequirements
@@ -633,6 +682,9 @@ export class ApplicationsService {
         data: {
           stage: dto.stage,
           version: { increment: 1 },
+          ...(rejectionReason ? { rejectionReason } : {}),
+          // Reopen clears the current rejection reason; history keeps the rejection row.
+          ...(reopenReason ? { rejectionReason: null } : {}),
         },
       });
 
@@ -643,15 +695,8 @@ export class ApplicationsService {
           where: { id: application.vacancyId },
         });
         if (vacancy) {
-          const newJoined = vacancy.joinedHeadcount + 1;
-          const shouldClose = newJoined >= vacancy.approvedHeadcount;
-          await tx.vacancy.update({
-            where: { id: vacancy.id },
-            data: {
-              joinedHeadcount: { increment: 1 },
-              ...(shouldClose ? { status: 'Closed' } : {}),
-            },
-          });
+          // B3: Joined fills one seat -> Partially Filled / Filled, with history.
+          await recordJoin(tx, vacancy, actorUserId ?? null);
         }
       }
 
@@ -661,7 +706,7 @@ export class ApplicationsService {
           fromStage: dto.expectedStage,
           toStage: dto.stage,
           changedById: actorUserId,
-          reason: dto.reason?.trim() ?? null,
+          reason: rejectionReason ?? reopenReason ?? dto.reason?.trim() ?? null,
         },
       });
 
@@ -697,6 +742,17 @@ export class ApplicationsService {
     user?: AuthUser,
   ): Promise<Application> {
     await this.getApplication(organizationId, id, user);
+
+    // B1: Admin never owns or reassigns files (reassignment proper is B7).
+    if ((dto.primaryRecruiterId !== undefined || dto.taskOwnerId !== undefined) && user && this.accessControl) {
+      const profile = await this.accessControl.getAccessProfile(user);
+      if (profile.isAdmin) {
+        throw new ForbiddenException({ code: 'ADMIN_CANNOT_REASSIGN', message: 'Administrators cannot assign or reassign file owners.' });
+      }
+    }
+    for (const ownerId of [dto.primaryRecruiterId, dto.taskOwnerId]) {
+      if (ownerId) await assertEligibleOwner(this.prisma, organizationId, ownerId);
+    }
 
     const updateData: Prisma.ApplicationUpdateInput = {};
 
@@ -899,12 +955,12 @@ export class ApplicationsService {
         return context.interviews.some(
           (interview) =>
             interview.status === 'Completed' ||
-            interview.scorecards.some((scorecard) => scorecard.isLocked),
+            interview.scorecards.some((scorecard) => scorecard.status === 'Submitted'),
         );
       case 'feedback':
       case 'scorecard':
         return context.interviews.some((interview) =>
-          interview.scorecards.some((scorecard) => scorecard.isLocked && Boolean(scorecard.notes?.trim())),
+          interview.scorecards.some((scorecard) => scorecard.status === 'Submitted' && Boolean(scorecard.notes?.trim())),
         );
       case 'offer':
         return Boolean(context.offerStatus && context.offerStatus !== 'Rejected');
@@ -951,6 +1007,8 @@ export class ApplicationsService {
       primaryRecruiterName: record.primaryRecruiter?.displayName,
       taskOwnerId: record.taskOwnerId,
       taskOwnerName: record.taskOwner?.displayName,
+      /** B5: owner-editable follow-up date (YYYY-MM-DD). */
+      followUpDate: record.followUpDate ? record.followUpDate.toISOString().slice(0, 10) : null,
       candidate: record.candidate
         ? {
             id: record.candidate.id,

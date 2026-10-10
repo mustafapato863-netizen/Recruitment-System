@@ -109,7 +109,7 @@ describe('MasterDataGridPage Excel actions', () => {
     expect(deleteApi).not.toHaveBeenCalled();
   });
 
-  it('confirms deletion of a saved row and uses the legacy branch endpoint', async () => {
+  it('confirms archiving a saved row (DELETE archives, B2) and uses the legacy branch endpoint', async () => {
     const user = userEvent.setup();
     vi.mocked(fetchApi).mockImplementation((path: string) => {
       if (path === '/master-data/catalog/branches') {
@@ -123,13 +123,13 @@ describe('MasterDataGridPage Excel actions', () => {
     vi.mocked(deleteApi).mockResolvedValue({ deleted: true });
     renderPage();
 
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Delete Cairo' })).toBeInTheDocument());
-    await user.click(screen.getByRole('button', { name: 'Delete Cairo' }));
-    expect(screen.getAllByText('Delete Master Data row')).toHaveLength(2);
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Archive Cairo' })).toBeInTheDocument());
+    await user.click(screen.getByRole('button', { name: 'Archive Cairo' }));
+    expect(screen.getAllByText('Archive Master Data row')).toHaveLength(2);
 
-    await user.click(screen.getByRole('button', { name: 'Delete row' }));
+    await user.click(screen.getByRole('button', { name: 'Archive row' }));
 
     await waitFor(() => expect(deleteApi).toHaveBeenCalledWith('/branches/branch-1'));
-    expect(screen.queryByRole('button', { name: 'Delete Cairo' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Archive Cairo' })).not.toBeInTheDocument();
   });
 });

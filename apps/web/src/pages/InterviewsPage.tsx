@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { fetchVacancyContext } from '../utils/vacancyAccess';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { getApi, postApi } from '../api/client';
 import type { Interview, InterviewType, Application, PaginatedResult, VacancyDetailView } from '@recruitflow/contracts';
@@ -86,7 +87,15 @@ export function InterviewsPage() {
     return d.toISOString().slice(0, 16);
   });
   const [meetingLink, setMeetingLink] = useState('');
-  const [interviewerName, setInterviewerName] = useState('');
+  const [roomName, setRoomName] = useState('');
+  // B5: the interviewer is a user (picked by id), never free text.
+  const [interviewerUserId, setInterviewerUserId] = useState('');
+  const [interviewerUsers, setInterviewerUsers] = useState<Array<{ id: string; displayName?: string }>>([]);
+  useEffect(() => {
+    getApi<Array<{ id: string; displayName?: string }>>('/users/assignable')
+      .then((rows) => setInterviewerUsers(Array.isArray(rows) ? rows : []))
+      .catch(() => setInterviewerUsers([]));
+  }, []);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { options: interviewTypeOptions, isLoading: isLoadingInterviewTypes } = useInterviewTypeOptions();
 
@@ -108,7 +117,7 @@ export function InterviewsPage() {
         const [intRes, appRes, vacRes] = await Promise.allSettled([
           getApi<InterviewListItem[] | { data?: InterviewListItem[] }>('/interviews'),
           getApi<PaginatedResult<Application>>(`/applications?vacancyId=${vacancyId}&page=1&pageSize=100`),
-          getApi<VacancyDetailView>(`/vacancies/${vacancyId}`),
+          fetchVacancyContext(vacancyId),
         ]);
 
         const appList = appRes.status === 'fulfilled' && appRes.value?.data ? appRes.value.data : [];
@@ -415,8 +424,8 @@ export function InterviewsPage() {
       showToast('Please select a target application');
       return;
     }
-    if (!interviewerName.trim()) {
-      showToast('Enter an interviewer name before saving.');
+    if (!interviewerUserId) {
+      showToast('Pick an interviewer before saving.');
       return;
     }
 
@@ -428,19 +437,20 @@ export function InterviewsPage() {
 
       await postApi('/interviews', {
         applicationId: selectedAppId,
-        interviewerName: interviewerName.trim(),
-        attendeeUserIds: [],
+        attendeeUserIds: [interviewerUserId],
         interviewType,
         scheduledStart: startDate.toISOString(),
         scheduledEnd: endDate.toISOString(),
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Riyadh',
         locationUrl: meetingLink.trim() || null,
+        roomName: roomName.trim() || null,
       });
 
       showToast(`✓ ${interviewType} interview scheduled successfully.`);
       setIsScheduleModalOpen(false);
       setMeetingLink('');
-      setInterviewerName('');
+      setRoomName('');
+      setInterviewerUserId('');
       await loadData();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to schedule interview';
@@ -799,16 +809,20 @@ export function InterviewsPage() {
 
           <div>
             <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300" htmlFor="interview-interviewer-name">
-              Interviewer name <span className="text-rose-500">*</span>
+              Interviewer <span className="text-rose-500">*</span>
             </label>
-            <input
+            <select
               id="interview-interviewer-name"
-              value={interviewerName}
-              onChange={(e) => setInterviewerName(e.target.value)}
-              placeholder="Type the person conducting the interview"
+              value={interviewerUserId}
+              onChange={(e) => setInterviewerUserId(e.target.value)}
               required
               className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
-            />
+            >
+              <option value="">Select a user</option>
+              {interviewerUsers.map((u) => (
+                <option key={u.id} value={u.id}>{u.displayName ?? u.id}</option>
+              ))}
+            </select>
             <p className="mt-1 text-[10px] text-slate-500">The interview is saved immediately. No email or calendar invitation is sent.</p>
           </div>
 
@@ -825,7 +839,7 @@ export function InterviewsPage() {
           </div>
 
           <div>
-            <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300" htmlFor="interview-meeting-link">Meeting link <span className="font-normal text-slate-400">(optional)</span></label>
+            <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300" htmlFor="interview-meeting-link">Meeting link <span className="font-normal text-slate-400">(https, Teams / Zoom / Meet)</span></label>
             <input
               id="interview-meeting-link"
               type="url"
@@ -835,7 +849,18 @@ export function InterviewsPage() {
               placeholder="https://meet.google.com/..."
               className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
             />
-            <p className="mt-1 text-[10px] text-slate-500">Add the online meeting URL or leave blank for an on-site interview.</p>
+            <p className="mt-1 text-[10px] text-slate-500">Add the online meeting URL, or a physical room below for an on-site interview.</p>
+          </div>
+
+          <div>
+            <label className="font-bold block mb-1 text-slate-700 dark:text-slate-300" htmlFor="interview-room-name">Physical room</label>
+            <input
+              id="interview-room-name"
+              value={roomName}
+              onChange={(e) => setRoomName(e.target.value)}
+              placeholder="e.g. HR building, room 2.14"
+              className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
+            />
           </div>
 
           <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">

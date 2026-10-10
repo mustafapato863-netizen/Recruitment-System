@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useInRouterContext, useLocation } from 'react-router-dom';
 import type { NavigationItemRecord, PermissionRecord, RoleRecord, UserRecord } from '@recruitflow/contracts';
 import { fetchApi } from '../api/client';
 import { Modal } from '../components/Modal';
@@ -63,7 +64,11 @@ function responseList<T>(response: T[] | { data?: T[] }): T[] {
 
 
 export function UsersRolesPage() {
-  const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'access' | 'rls'>('users');
+  // /users#roles opens the Roles tab (v2 nav "Roles"); every other entry keeps the v1 default.
+  const [activeTab, setActiveTab] = useState<'users' | 'roles' | 'access' | 'rls'>(() =>
+    typeof window !== 'undefined' && window.location.hash === '#roles' ? 'roles' : 'users',
+  );
+  const inRouter = useInRouterContext();
   const [users, setUsers] = useState<UserRecord[]>([]);
   const [roles, setRoles] = useState<RoleRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -529,6 +534,7 @@ export function UsersRolesPage() {
       </div>
 
       {/* TAB 1: USERS */}
+      {inRouter && <RolesHashSync onRoles={() => setActiveTab('roles')} />}
       {activeTab === 'users' && (
         <section className="rf-table-shell overflow-hidden rounded-2xl border border-rf-border-subtle bg-white shadow-xs">
           <DataToolbar
@@ -1166,4 +1172,16 @@ export function UsersRolesPage() {
       />
     </PageFrame>
   );
+}
+
+/** Selects the Roles tab when the router hash becomes #roles (e.g. clicking v2 nav "Roles" while on /users). */
+function RolesHashSync({ onRoles }: { onRoles: () => void }) {
+  const { hash } = useLocation();
+  const onRolesRef = useRef(onRoles);
+  onRolesRef.current = onRoles;
+  // Only reacts to a hash *change*, so the user can still switch tabs afterwards.
+  useEffect(() => {
+    if (hash === '#roles') onRolesRef.current();
+  }, [hash]);
+  return null;
 }

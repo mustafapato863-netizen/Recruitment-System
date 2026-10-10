@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '@recruitflow/database';
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { PrismaService } from '../database/prisma.service';
@@ -16,6 +16,14 @@ import type {
   UpdateRoleNavigationVisibilityDto,
 } from './access-control.dto';
 import type { AuthUser } from '@recruitflow/contracts';
+import {
+  applicationApprovalWhere,
+  applicationOwnershipWhere,
+  canAccessApplication,
+  loadAccessProfile,
+  vacancyFullAccessWhere,
+  type AccessProfile,
+} from '../common/access/file-access';
 import { NAVIGATION_CATALOG } from './navigation.catalog';
 import type { NavigationItemRecord } from '@recruitflow/contracts';
 
@@ -239,6 +247,65 @@ export class AccessControlService {
    * Administrators are handled by their effective ALL scope.
    */
   async getApplicationVisibilityWhere(user: AuthUser): Promise<Prisma.ApplicationWhereInput> {
+    const scoped = await this.getApplicationScopeWhere(user);
+    // B1 (v2 §5): non-oversight users only see files they own or work.
+    const profile = await loadAccessProfile(this.prisma, user);
+    if (profile.isOversight) return scoped;
+    // B2-8: ownership (incl. the reporting tree) decides, not the role's data scope; a Manager's
+    // narrow scope must not hide his reports' files.
+    return { AND: [{ organizationId: user.organizationId }, applicationOwnershipWhere(user.userId)] };
+  }
+
+  /**
+   * B1 follow-up (Mustafa #2): READ-ONLY visibility for the approver-readable
+   * routes (application view, offer, hiring case, approval inboxes/decision).
+   * Same as getApplicationVisibilityWhere, plus the files the caller is
+   * currently approving. Never use this for writes on the file.
+   */
+  async getApplicationReadVisibilityWhere(user: AuthUser): Promise<Prisma.ApplicationWhereInput> {
+    const profile = await loadAccessProfile(this.prisma, user);
+    const scoped = await this.getApplicationScopeWhere(user);
+    if (profile.isOversight) return scoped;
+    const approval = applicationApprovalWhere(profile);
+    const owned: Prisma.ApplicationWhereInput = { AND: [{ organizationId: user.organizationId }, applicationOwnershipWhere(user.userId)] }; // B2-8
+    if (!approval) return owned;
+    return { OR: [owned, { AND: [{ organizationId: user.organizationId }, approval] }] };
+  }
+
+  /** Candidate visibility for CV/document reads: the bank scope plus candidates whose file the caller is approving. */
+  async getCandidateReadVisibilityWhere(user: AuthUser): Promise<Prisma.CandidateWhereInput> {
+    const base = await this.getCandidateVisibilityWhere(user);
+    if (user.roleCodes.includes('ADMINISTRATOR')) return base;
+    const profile = await loadAccessProfile(this.prisma, user);
+    const approval = applicationApprovalWhere(profile);
+    if (!approval) return base;
+    return { organizationId: user.organizationId, OR: [base, { applications: { some: approval } }] };
+  }
+
+  /** B1 access profile (admin / oversight flags) for the caller. */
+  getAccessProfile(user: AuthUser): Promise<AccessProfile> {
+    return loadAccessProfile(this.prisma, user);
+  }
+
+  /**
+   * B1: body-addressed writes (e.g. POST /screening with applicationId) get the
+   * same answer as id-addressed routes: 404 when the file is not in this
+   * organization, 403 when it belongs to another owner.
+   */
+  async assertApplicationAccess(user: AuthUser, applicationId: string): Promise<void> {
+    const exists = await this.prisma.application.findFirst({
+      where: { id: applicationId, organizationId: user.organizationId },
+      select: { id: true },
+    });
+    if (!exists) throw new NotFoundException(`Application ${applicationId} was not found.`);
+    const profile = await loadAccessProfile(this.prisma, user);
+    if (!(await canAccessApplication(this.prisma, profile, applicationId))) {
+      throw new ForbiddenException({ code: 'FILE_NOT_OWNED', message: 'Access denied: this file belongs to another owner.' });
+    }
+  }
+
+  /** Scope-only application predicate (data scope, branch, department), before ownership. */
+  async getApplicationScopeWhere(user: AuthUser): Promise<Prisma.ApplicationWhereInput> {
     const { scopes, responsibility } = await this.resolveScopes(user);
 
     if (scopes.includes('ALL')) return { organizationId: user.organizationId };
@@ -276,6 +343,25 @@ export class AccessControlService {
 
   /** Build the matching vacancy predicate for list/detail/export endpoints. */
   async getVacancyVisibilityWhere(user: AuthUser): Promise<Prisma.VacancyWhereInput> {
+    const scoped = await this.getVacancyScopeWhere(user);
+    // B1 (v2 §5): non-oversight users see other owners' jobs only in redacted form.
+    const profile = await loadAccessProfile(this.prisma, user);
+    if (profile.isOversight) return scoped;
+    return { AND: [{ organizationId: user.organizationId }, vacancyFullAccessWhere(user.userId)] }; // B2-8: ownership + reporting tree
+  }
+
+  /**
+   * B2R-1: jobs in scope = the role's data scope OR the jobs the caller fully sees (owns, works, requested,
+   * or whose owner is in his reporting tree). A Hiring Manager's empty data scope no longer hides his reports' jobs.
+   */
+  async getVacancyScopeWhere(user: AuthUser): Promise<Prisma.VacancyWhereInput> {
+    const role = await this.getVacancyRoleScopeWhere(user);
+    if (user.roleCodes?.includes('ADMINISTRATOR')) return role;
+    return { organizationId: user.organizationId, OR: [role, vacancyFullAccessWhere(user.userId)] };
+  }
+
+  /** The role's data scope only (ALL / ASSIGNED_ONLY / BRANCH / DEPARTMENT). */
+  async getVacancyRoleScopeWhere(user: AuthUser): Promise<Prisma.VacancyWhereInput> {
     const { scopes, responsibility } = await this.resolveScopes(user);
     if (scopes.includes('ALL')) return { organizationId: user.organizationId };
 
@@ -309,7 +395,9 @@ export class AccessControlService {
       organizationId: user.organizationId,
       OR: [
         { createdById: user.userId },
-        { applications: { some: await this.getApplicationVisibilityWhere(user) } },
+        // The bank stays visible by data scope (v2 §5 "the bank"); file
+        // ownership is enforced on application-level records instead.
+        { applications: { some: await this.getApplicationScopeWhere(user) } },
       ],
     };
   }

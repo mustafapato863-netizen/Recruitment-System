@@ -103,12 +103,26 @@ export class OfferDecisionDto {
   @IsEnum(['Approve', 'Reject'])
   decision!: 'Approve' | 'Reject';
 
+  /** The approver's note (who and when are recorded on the approval). */
   @IsOptional()
   @IsString()
   comment?: string;
+
+  /** Alias of comment. */
+  @IsOptional()
+  @IsString()
+  note?: string;
 }
 
 export class UpdateOfferStatusDto {
   @IsEnum(['Sent', 'Accepted', 'Declined', 'Withdrawn', 'Expired'])
   status!: 'Sent' | 'Accepted' | 'Declined' | 'Withdrawn' | 'Expired';
+}
+
+export class SendOfferDto {
+  @IsString()
+  channel!: string;
+
+  @IsString()
+  templateId!: string;
 }

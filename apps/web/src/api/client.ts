@@ -4,6 +4,12 @@ export interface ErrorFieldErrors {
   [field: string]: string[];
 }
 
+/** B1 ownership codes (main) + the v2 domain 403s whose server message is shown as-is. Other 403s stay generic. */
+const OWNERSHIP_403_CODES = new Set([
+  'JOB_NOT_OWNED', 'FILE_NOT_OWNED', 'ADMIN_CANNOT_REASSIGN', 'OWNER_NOT_ELIGIBLE', 'DOCUMENT_DOWNLOAD_DENIED', 'ADMIN_ONLY',
+  'NOT_JOB_OWNER', 'FOLLOW_UP_NOT_OWNER', 'ADMIN_CANNOT_CHANGE_JOB_STATUS', 'REASSIGN_ADMIN_FORBIDDEN', 'REASSIGN_NOT_MANAGER',
+]);
+
 export class ApiError extends Error {
   readonly statusCode: number;
   readonly details?: unknown;
@@ -12,6 +18,9 @@ export class ApiError extends Error {
   readonly requestId?: string;
   readonly retryable?: boolean;
   readonly retryAfterSeconds?: number | null;
+  /** B5: present on GATE_* 409s (which gate blocked, what is missing). */
+  readonly gate?: string;
+  readonly missing?: string[];
 
   constructor(
     statusCode: number,
@@ -34,6 +43,9 @@ export class ApiError extends Error {
     this.requestId = meta?.requestId;
     this.retryable = meta?.retryable;
     this.retryAfterSeconds = meta?.retryAfterSeconds;
+    const body = (details && typeof details === 'object' ? details : {}) as { gate?: unknown; missing?: unknown };
+    if (typeof body.gate === 'string') this.gate = body.gate;
+    if (Array.isArray(body.missing) && body.missing.every((m) => typeof m === 'string')) this.missing = body.missing as string[];
   }
 
   get isUnauthorized(): boolean {
@@ -74,6 +86,9 @@ function normalizeFieldErrors(value: unknown): ErrorFieldErrors | undefined {
   }
   return Object.keys(result).length > 0 ? result : undefined;
 }
+
+
+// #4 passes every B1 code through its error normalizer, so the client reads `code` and never matches message text.
 
 let refreshPromise: Promise<boolean> | null = null;
 
@@ -133,6 +148,9 @@ async function handleResponseError(response: Response, path: string): Promise<ne
       message += minutes !== null
         ? ` Try again in ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}.`
         : ' Please try again later.';
+    } else if (code && OWNERSHIP_403_CODES.has(code) && typeof problem?.message === 'string' && problem.message.trim()) {
+      // B1 + v2 domain 403s carry a specific, user-safe message; any other 403 stays generic.
+      message = problem.message.trim();
     } else {
       message = 'Access denied: you do not have permission to perform this action.';
     }
@@ -211,6 +229,26 @@ export function postFormDataApi<T>(path: string, formData: FormData): Promise<T>
   });
 }
 
+/** Blob download that also returns the filename from Content-Disposition. */
+export async function downloadFileApi(path: string, fallbackName = 'download', allowRefresh = true): Promise<{ blob: Blob; filename: string }> {
+  const response = await fetch(`${API_BASE_URL}${path}`, { method: 'GET', credentials: 'include' });
+  if (response.status === 401 && allowRefresh && shouldRefreshSession(path)) {
+    if (await refreshAccessToken()) return downloadFileApi(path, fallbackName, false);
+  }
+  if (!response.ok) return handleResponseError(response, path);
+  return { blob: await response.blob(), filename: filenameFromDisposition(response.headers.get('Content-Disposition')) ?? fallbackName };
+}
+
+export function filenameFromDisposition(header: string | null): string | null {
+  if (!header) return null;
+  const star = /filename\*\s*=\s*(?:UTF-8'')?([^;]+)/i.exec(header);
+  if (star) {
+    try { return decodeURIComponent(star[1].trim().replace(/^"|"$/g, '')); } catch { /* fall through */ }
+  }
+  const plain = /filename\s*=\s*"?([^";]+)"?/i.exec(header);
+  return plain ? plain[1].trim() : null;
+}
+
 export async function downloadApi(path: string, allowRefresh = true): Promise<Blob> {
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: 'GET',
@@ -244,6 +282,6 @@ export function putApi<T>(path: string, body?: unknown): Promise<T> {
   });
 }
 
-export function deleteApi<T>(path: string): Promise<T> {
-  return fetchApi<T>(path, { method: 'DELETE' });
+export function deleteApi<T>(path: string, body?: unknown): Promise<T> {
+  return fetchApi<T>(path, { method: 'DELETE', ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
 }
