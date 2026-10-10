@@ -1,5 +1,4 @@
 -- Rollback for 20261010_b5_application_file_gates (scratch/staging only). Then:
--- DELETE FROM "_prisma_migrations" WHERE migration_name = '20261010_b5_application_file_gates';
 -- Notes: scorecard revisions > 1 must not exist (delete is not allowed; rollback refuses below).
 -- isLocked is derived back from status. Attendees created from matched free-text names stay
 -- (they are real users). Rejection-reason master data rows stay (harmless catalog rows).
@@ -50,3 +49,6 @@ WHERE h."applicationId" = a."id" AND h."reason" = 'B5 migration: legacy New stag
 ALTER TABLE "applications" DROP COLUMN "rejectionReason";
 -- remove the migration's own history markers so a re-upgrade is exact
 DELETE FROM "application_status_histories" WHERE "reason" LIKE 'B5 migration:%';
+
+-- B2-M1: forget the migration too, so `prisma migrate deploy` re-applies it cleanly.
+DELETE FROM "_prisma_migrations" WHERE "migration_name" = '20261010_b5_application_file_gates';
