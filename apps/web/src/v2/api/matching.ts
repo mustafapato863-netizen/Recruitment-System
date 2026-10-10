@@ -3,6 +3,7 @@
  *
  * Mirrors backend B6 PR #13 (`feat/b6-suggest-compare`, matching.service.ts) exactly:
  * - GET /vacancies/:id/suggestions → SuggestionsResponse (no score, no %, documented ordering).
+ * - Suggestions carry alreadyOnJob / stage / addable (ca137e3); Compare adds infoRows (notice period, fit note).
  * - GET /vacancies/:id/compare?candidateIds=a,b[,c,d] → CompareResponse; 400 COMPARE_COUNT, 404 COMPARE_CANDIDATE_NOT_FOUND.
  * - Both: 403 NOT_JOB_OWNER for non-owners.
  * Add to this job: POST /applications {vacancyId, candidateId, source}.
@@ -20,11 +21,17 @@ export interface EvidenceItem { id: string; sourceType: string; sourceRef: strin
 export interface SkillRef { id: string | null; name: string }
 export interface MatchedSkill { skill: SkillRef; hasEvidence: boolean; evidence: EvidenceItem[] }
 export interface SuggestionCandidate { id: string; code: string; name: string; currentTitle: string | null; location: string | null }
-export interface Suggestion { candidate: SuggestionCandidate; matchedSkills: MatchedSkill[]; missingSkills: SkillRef[] }
+/** ca137e3: people already on the job come back too, with their stage and addable:false. */
+export interface Suggestion { candidate: SuggestionCandidate; matchedSkills: MatchedSkill[]; missingSkills: SkillRef[]; alreadyOnJob?: boolean; stage?: string | null; addable?: boolean }
 export interface SuggestionsResponse { vacancyId: string; requiredSkills: SkillRef[]; unmappedRequiredSkills: string[]; orderedBy: string[]; suggestions: Suggestion[] }
 export type CompareStatus = 'evidence' | 'no-evidence' | 'missing';
 export interface CompareCell { candidateId: string; status: CompareStatus; evidence: EvidenceItem[] }
-export interface CompareResponse { vacancyId: string; candidates: SuggestionCandidate[]; rows: Array<{ skill: SkillRef; cells: CompareCell[] }> }
+/** notice-period: days (number) or profile availability text; fit-note: this job's screening note. null = not recorded. */
+export interface CompareInfoCell { candidateId: string; value: number | string | null; source: 'screening' | 'profile' | null; by?: { id: string; name: string } | null; at?: string | null }
+export interface CompareInfoRow { key: 'notice-period' | 'fit-note'; label: string; cells: CompareInfoCell[] }
+export interface CompareResponse { vacancyId: string; candidates: SuggestionCandidate[]; rows: Array<{ skill: SkillRef; cells: CompareCell[] }>; infoRows?: CompareInfoRow[] }
+/** Server sends addable; older servers did not list people on the job at all, so missing = addable. */
+export const canAdd = (s: Suggestion) => s.addable !== false && !s.alreadyOnJob;
 
 /** Defensive: drop any numeric "score"/"percent"/"rank"-like field a future server might add. Never rendered. */
 const SCORE_KEY = /score|percent|pct|rank|match(ing)?rate|confidence/i;
@@ -65,11 +72,19 @@ export async function fetchActiveApplications(): Promise<ActiveRow[]> {
     owner: a.primaryRecruiterName ?? null, next: a.lastActivityLabel ?? null, nextAt: a.nextFollowUpAt ?? null,
   }));
 }
+/** Bank = everyone Active in the org (CoS: all seats see the whole bank, never contact fields). Pages through up to 1000. */
 export async function fetchBank(search: string): Promise<BankRow[]> {
-  const q = new URLSearchParams({ pageSize: '50', status: 'Active' });
-  if (search.trim()) q.set('search', search.trim());
-  const raw = list(await getApi<RawCand[] | { data: RawCand[] }>(`/candidates?${q}`));
-  return raw.map((c) => ({ candidateId: c.id, code: c.candidateCode, name: `${c.firstName} ${c.lastName}`.trim(), title: c.currentTitle ?? null, location: c.location ?? null, experienceYears: c.experienceYears ?? null, status: c.status }));
+  const raw: RawCand[] = [];
+  for (let page = 1; page <= 10; page++) {
+    const q = new URLSearchParams({ pageSize: '100', page: String(page), status: 'Active' });
+    if (search.trim()) q.set('search', search.trim());
+    const r = await getApi<RawCand[] | { data: RawCand[]; total?: number }>(`/candidates?${q}`);
+    const rows = list(r);
+    raw.push(...rows);
+    const total = !Array.isArray(r) && typeof r?.total === 'number' ? r.total : null;
+    if (rows.length < 100 || (total !== null && raw.length >= total)) break;
+  }
+  return raw.filter((c) => c.status === 'Active').map((c) => ({ candidateId: c.id, code: c.candidateCode, name: `${c.firstName} ${c.lastName}`.trim(), title: c.currentTitle ?? null, location: c.location ?? null, experienceYears: c.experienceYears ?? null, status: c.status }));
 }
 
 // ── errors ──────────────────────────────────────────────────────────────────

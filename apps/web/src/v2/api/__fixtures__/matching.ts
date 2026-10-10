@@ -19,7 +19,9 @@ export const suggestions = {
         { skill: PAYROLL, hasEvidence: false, evidence: [] },
       ], missingSkills: [] },
     { candidate: { id: 'c-amr', code: 'CAN-2026-0050', name: 'Amr Fathy', currentTitle: 'HR Officer', location: null },
-      matchedSkills: [{ skill: HRIS, hasEvidence: false, evidence: [] }], missingSkills: [PAYROLL, ORACLE] },
+      matchedSkills: [{ skill: HRIS, hasEvidence: false, evidence: [] }], missingSkills: [PAYROLL, ORACLE], alreadyOnJob: false, stage: null, addable: true },
+    { candidate: { id: 'c-a4', code: 'CAN-2026-0007', name: 'Nourhan Sami', currentTitle: 'HRIS Analyst', location: 'Cairo' },
+      matchedSkills: [{ skill: HRIS, hasEvidence: true, evidence: [ev('e12', 'NOTE', 'HRIS data owner on SAP SuccessFactors for 1,200 staff.', '2026-09-28T09:00:00Z', 'referral note')] }], missingSkills: [PAYROLL, ORACLE], alreadyOnJob: true, stage: 'Screening', addable: false },
   ],
 };
 export const compare = {
@@ -29,6 +31,10 @@ export const compare = {
     { skill: HRIS, cells: [{ candidateId: 'c-a7', status: 'evidence', evidence: [ev('e9', 'CV', 'Maintained in-house HRIS modules (leave, attendance) in Laravel at Vezeeta.', '2026-09-30T09:00:00Z')] }, { candidateId: 'c-a4', status: 'evidence', evidence: [ev('e10', 'NOTE', 'HRIS data owner on SAP SuccessFactors for 1,200 staff.', '2026-09-28T09:00:00Z', 'referral note')] }] },
     { skill: PAYROLL, cells: [{ candidateId: 'c-a7', status: 'no-evidence', evidence: [] }, { candidateId: 'c-a4', status: 'evidence', evidence: [ev('e11', 'CV', 'Ran monthly payroll for 1,200 staff at Cleopatra Hospitals.', '2026-09-28T09:00:00Z')] }] },
     { skill: ORACLE, cells: [{ candidateId: 'c-a7', status: 'missing', evidence: [] }, { candidateId: 'c-a4', status: 'no-evidence', evidence: [] }] },
+  ],
+  infoRows: [
+    { key: 'notice-period', label: 'Notice period', cells: [{ candidateId: 'c-a7', value: 30, source: 'screening', at: '2026-10-01T09:00:00Z' }, { candidateId: 'c-a4', value: 'Immediately', source: 'profile' }] },
+    { key: 'fit-note', label: 'Fit note', cells: [{ candidateId: 'c-a7', value: 'Strong Laravel; HRIS from leave/attendance only.', source: 'screening', by: { id: 'u-mariam', name: 'Mariam Farag' }, at: '2026-10-01T09:00:00Z' }, { candidateId: 'c-a4', value: null, source: null, by: null, at: null }] },
   ],
   overallScore: 77,
 };
