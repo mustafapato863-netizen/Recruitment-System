@@ -14,6 +14,12 @@ import { Reflector } from '@nestjs/core';
 import type { AuthUser } from '@recruitflow/contracts';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PrismaService } from '../../../database/prisma.service';
+import { Prisma } from '@recruitflow/database';
+// Stack-merge guard: B5 replaces InterviewScorecard.isLocked with status. Fixtures work on both shapes.
+const scorecardDone = (done: boolean) => ('isLocked' in Prisma.InterviewScorecardScalarFieldEnum
+  ? { isLocked: done }
+  : done ? { status: 'Submitted', submittedAt: new Date() } : { status: 'Draft' }) as never;
+
 import { AccessControlService } from '../../../access-control/access-control.service';
 import { TenantScopedGuard } from '../../guards/tenant-scoped.guard';
 import { PermissionsGuard } from '../../guards/permissions.guard';
@@ -169,8 +175,8 @@ describe.skipIf(!url)('B1 follow-ups (scratch Postgres)', () => {
       await mk(ids.past1, -3, ids.interviewer);
       await mk(ids.past2, -1, ids.interviewer);
       await mk(ids.pastOther, -2, ids.other);
-      await prisma.interviewScorecard.create({ data: { interviewId: ids.upcoming2, interviewerId: ids.interviewer, overallRating: 4, recommendation: 'Hire', isLocked: true } });
-      await prisma.interviewScorecard.create({ data: { interviewId: ids.past1, interviewerId: ids.interviewer, overallRating: 3, recommendation: 'Neutral', isLocked: false } });
+      await prisma.interviewScorecard.create({ data: { interviewId: ids.upcoming2, interviewerId: ids.interviewer, overallRating: 4, recommendation: 'Hire', ...scorecardDone(true) } });
+      await prisma.interviewScorecard.create({ data: { interviewId: ids.past1, interviewerId: ids.interviewer, overallRating: 3, recommendation: 'Neutral', ...scorecardDone(false) } });
 
       const upcoming = await interviews.listMyInterviews(ORG, ids.interviewer, 'upcoming');
       expect(Object.keys(upcoming)).toEqual(['data']);
