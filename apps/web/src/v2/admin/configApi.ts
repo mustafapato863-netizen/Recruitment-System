@@ -5,9 +5,10 @@
  *   (PATCH /pipeline-templates/:id/stages/:stageId {name}). Create is offered only when the list is empty.
  * - Templates: /email-templates and /whatsapp-templates (GET, POST, PATCH; no DELETE, B2). Admin seat only (route-gated).
  * - Master data: GET /master-data/catalog/:category, POST /master-data/catalog/:category/batch {rows:[{name}]} to add.
- *   Deactivate / reactivate = PATCH /master-data/catalog/:category/:id {status:'Inactive'|'Active'} (CoS Oct 10; B3 C3). Never DELETE. Grade bands: B7 /master-data/grade-bands (POST/PATCH).
+ *   Deactivate / reactivate = PATCH /master-data/catalog/:category/:id {status:'Inactive'|'Active'} (CoS Oct 10; B3 C3).
+ *   Skills (#21 B2-21) deactivate as Archived through DELETE (archive, never a hard delete). Grade bands: B7 /master-data/grade-bands (POST/PATCH).
  */
-import { getApi, patchApi, postApi } from '../../api/client';
+import { getApi, patchApi, postApi, deleteApi } from '../../api/client';
 import { domainError } from '../api/gates';
 
 const list = <T,>(r: T[] | { data: T[] } | null | undefined): T[] => (Array.isArray(r) ? r : r?.data ?? []);
@@ -78,8 +79,17 @@ export async function fetchCatalog(category: string): Promise<CatalogValue[] | n
   catch (e) { const s = (e as { statusCode?: number })?.statusCode; if (s === 404 || s === 400) return null; throw e; }
 }
 export const addValue = (category: string, name: string) => postApi(`/master-data/catalog/${enc(category)}/batch`, { rows: [{ name }] });
+/**
+ * #21 (B2-21, test 2962657): a deactivated skill is `Archived` (the single deactivated-skill status). PATCH only
+ * takes 'Active'|'Inactive', so skills deactivate via DELETE /master-data/catalog/skills/:id (→ {status:'Archived'},
+ * nothing is deleted). Every other list stays PATCH {status:'Inactive'}. Reactivating is PATCH {status:'Active'} for all.
+ */
+export const ARCHIVED_ON_DEACTIVATE: ReadonlySet<string> = new Set(['skills']);
+export const deactivatedStatus = (category: string): 'Archived' | 'Inactive' => (ARCHIVED_ON_DEACTIVATE.has(category) ? 'Archived' : 'Inactive');
 export const setValueStatus = (category: string, v: CatalogValue, status: 'Active' | 'Inactive') =>
-  patchApi(`/master-data/catalog/${enc(category)}/${enc(v.id)}`, { status });
+  status === 'Inactive' && ARCHIVED_ON_DEACTIVATE.has(category)
+    ? deleteApi<{ id: string; deactivated: true; status: 'Archived' }>(`/master-data/catalog/${enc(category)}/${enc(v.id)}`)
+    : patchApi(`/master-data/catalog/${enc(category)}/${enc(v.id)}`, { status });
 
 export interface Band { id: string; grade?: { id: string; name: string } | null; site?: { id: string; name: string } | null; currency: string; status: string; minMonthlyBase?: number | null; maxMonthlyBase?: number | null }
 /** CoS: Admins see band amounts when they hold MASTER_DATA_MANAGE (they maintain the bands); the server decides what it returns. */

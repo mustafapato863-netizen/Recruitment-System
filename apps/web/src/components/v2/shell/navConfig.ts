@@ -14,6 +14,8 @@ export interface SeatNavItem {
   requires?: string[];
   /** …or ANY of these. */
   requiresAny?: string[];
+  /** Backend #21 (B2-3): absent for a Recruiter-only user (the API answers 403). */
+  notForRecruiter?: boolean;
 }
 
 /**
@@ -37,7 +39,7 @@ export const SEAT_NAV: Record<Seat, { heading: string; searchPlaceholder: string
     searchPlaceholder: 'Search candidates and jobs',
     items: [
       { key: 'team-work', label: 'Team work', to: '/my-work', icon: 'team' },
-      { key: 'requisitions', label: 'Requisitions', to: '/vacancy-requests', icon: 'requisitions', requires: ['VACANCY_REQUEST_VIEW'] },
+      { key: 'requisitions', label: 'Requisitions', to: '/vacancy-requests', icon: 'requisitions', requires: ['VACANCY_REQUEST_VIEW'], notForRecruiter: true },
       // Approvals dropped (v2 §6: not a destination; the offer decision opens from Team work).
       { key: 'team-result', label: 'Team result', to: '/reports', icon: 'result', requires: ['APPLICATION_VIEW'] },
     ],
@@ -58,9 +60,10 @@ export const SEAT_NAV: Record<Seat, { heading: string; searchPlaceholder: string
   },
 };
 
-export function permittedNavItems(seat: Seat, permissions: readonly string[] | undefined, isAdministrator = false): SeatNavItem[] {
+export function permittedNavItems(seat: Seat, permissions: readonly string[] | undefined, isAdministrator = false, recruiterOnly = false): SeatNavItem[] {
   const held = new Set(permissions ?? []);
   return SEAT_NAV[seat].items.filter((item) => {
+    if (item.notForRecruiter && recruiterOnly) return false;
     if (isAdministrator) return true; // PermissionGate lets ADMINISTRATOR through
     if (item.requires && !item.requires.every((p) => held.has(p))) return false;
     if (item.requiresAny && !item.requiresAny.some((p) => held.has(p))) return false;

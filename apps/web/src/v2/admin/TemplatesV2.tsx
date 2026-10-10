@@ -1,3 +1,4 @@
+import { toFormErrs } from './formErrors';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { CircleCheck, Info, Mail, MessageCircle, Plus, RotateCw, Save } from 'lucide-react';
@@ -49,7 +50,7 @@ export function TemplatesV2({ initial = 'email' }: { initial?: Channel } = {}) {
     try {
       const saved = await saveTemplate(ch, draft.id, { name: draft.name.trim(), category: draft.category, bodyTemplate: draft.bodyTemplate, ...(ch === 'email' ? { subject: draft.subject.trim() } : {}) });
       setNote(`“${draft.name.trim()}” saved.`); setDraft((d) => d && { ...d, id: saved?.id ?? d.id }); setAttempt((n) => n + 1);
-    } catch (x) { setErrs({ form: (x as { message?: string })?.message || 'Could not save.' }); } finally { setBusy(false); }
+    } catch (x) { setErrs(toFormErrs(x, { name: 'name', subject: 'subject', bodyTemplate: 'body', body: 'body', category: 'category' }, 'Could not save.')); } finally { setBusy(false); }
   };
   const used = (c: string) => CATEGORIES[ch].find(([k]) => k === c)?.[1] ?? c;
   return (
@@ -81,7 +82,7 @@ export function TemplatesV2({ initial = 'email' }: { initial?: Channel } = {}) {
           <section className="rf2-panel rf2-admin__editor" aria-label="Template editor">
             <div className="rf2-req__row">
               <InputV2 label="Name" required value={draft.name} onChange={(e) => set('name')(e.target.value)} error={errs.name} />
-              <SelectV2 label="Used by" value={draft.category} onChange={(e) => set('category')(e.target.value)}>
+              <SelectV2 label="Used by" value={draft.category} onChange={(e) => set('category')(e.target.value)} error={errs.category}>
                 {CATEGORIES[ch].map(([k, l]) => <option key={k} value={k}>{l}</option>)}
               </SelectV2>
             </div>

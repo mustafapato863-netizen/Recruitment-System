@@ -6,7 +6,16 @@ import {
   submitRequisition, TARGET_UPDATE_LIVE, titleOf, updateRequisition, updateTarget, type Grade, type Person, type ReqContext, type ReqFields, type Requisition,
 } from '../api/requisitions';
 
-type Errs = Partial<Record<'positionId' | 'branchId' | 'seats' | 'dueDate' | 'assignee' | 'grade' | 'reason' | 'form', string>>;
+type Errs = Partial<Record<'positionId' | 'branchId' | 'seats' | 'dueDate' | 'assignee' | 'grade' | 'reason' | 'notes' | 'departmentId' | 'form', string>>;
+/** reqError → drawer errors: inline field messages (#23) plus whatever the banner keeps. */
+const toErrs = (r: ReturnType<typeof reqError>, only?: ReadonlyArray<keyof Errs>): Errs => {
+  if (r.inline) {
+    const kept = only ? Object.fromEntries(Object.entries(r.inline).filter(([k]) => only.includes(k as keyof Errs))) : r.inline;
+    const dropped = Object.keys(r.inline).length > Object.keys(kept).length;
+    return { ...kept, ...(r.text || dropped ? { form: r.text || Object.values(r.inline).join(' ') } : {}) };
+  }
+  return r.field && (!only || only.includes(r.field)) ? { [r.field]: r.text } : { form: r.text };
+};
 const cairoToday = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
 
 export interface ReqDrawerProps {
@@ -36,7 +45,7 @@ export function RequisitionDrawer({ req, ctx, people, grades, canActivate, meId,
   const editable = !req || isEditable(req.status);
   const [f, setF] = useState({
     positionId: req?.positionId ?? '', branchId: req?.branchId ?? '', seats: String(req?.requestedHeadcount ?? 1),
-    dueDate: req ? dueOf(req) ?? '' : '', departmentId: req?.departmentId ?? '', gradeId: req?.gradeId ?? '', assignee: req?.assignedEmployeeId ?? '', notes: req?.justification ?? '',
+    dueDate: req ? dueOf(req) ?? '' : '', departmentId: req?.departmentId ?? '', gradeId: req?.gradeId ?? '', assignee: req?.assignedEmployeeId ?? req?.primaryRecruiter?.id ?? '', notes: req?.justification ?? '',
   });
   const initial = useMemo(() => JSON.stringify(f), []); // eslint-disable-line react-hooks/exhaustive-deps
   const [busy, setBusy] = useState<null | 'save' | 'submit' | 'activate' | 'cancel'>(null);
@@ -58,7 +67,7 @@ export function RequisitionDrawer({ req, ctx, people, grades, canActivate, meId,
     if (Object.keys(e).length) return null;
     return { ...(departments ? { departmentId: f.departmentId || null } : {}), positionId: f.positionId, branchId: f.branchId, requestedHeadcount: seats, dueDate: f.dueDate, gradeId: f.gradeId || null, assignedEmployeeId: f.assignee || null, justification: f.notes.trim() || null };
   };
-  const fail = (e: unknown) => { const r = reqError(e); setErrs(r.field ? { [r.field]: r.text } : { form: r.text }); };
+  const fail = (e: unknown) => setErrs(toErrs(reqError(e)));
   const save = async (then?: 'submit') => {
     const body = fields(); if (!body) return;
     setBusy(then ?? 'save');
@@ -143,7 +152,7 @@ export function RequisitionDrawer({ req, ctx, people, grades, canActivate, meId,
             </SelectV2>
           ) : null}
           {departments ? (
-            <SelectV2 label="Department" value={f.departmentId} onChange={(e) => set('departmentId')(e.target.value)} disabled={ro}>
+            <SelectV2 label="Department" value={f.departmentId} onChange={(e) => set('departmentId')(e.target.value)} disabled={ro} error={errs.departmentId}>
               <option value="">No department</option>
               {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
             </SelectV2>
@@ -161,7 +170,7 @@ export function RequisitionDrawer({ req, ctx, people, grades, canActivate, meId,
         <span id="req-due-why" className="rf2-sr-only">Save is disabled until a due date is set.</span>
         <PersonSelect people={people} value={f.assignee} onChange={set('assignee')} error={errs.assignee} disabled={!(editable || approved)}
           hint={approved ? 'Activate job makes this person the owner.' : undefined} />
-        <TextareaV2 label="Notes" rows={3} value={f.notes} onChange={(e) => set('notes')(e.target.value)} disabled={ro} />
+        <TextareaV2 label="Notes" rows={3} value={f.notes} onChange={(e) => set('notes')(e.target.value)} disabled={ro} error={errs.notes} />
         <section className="rf2-req__status" aria-labelledby="req-status-h">
           <div className="rf2-row-between"><h3 id="req-status-h" className="rf2-field__label">Status</h3><StatusChip tone={STATUS_TONE[status]} label={STATUS_LABEL[status]} /></div>
           <p className="rf2-jtable__sub">{
@@ -197,11 +206,11 @@ export function TargetDrawer({ req, people, canActivate, targetUpdate = TARGET_U
   const approved = req.status === 'Approved';
   const [seats, setSeats] = useState(String(req.requestedHeadcount));
   const [due, setDue] = useState(dueOf(req) ?? '');
-  const [assignee, setAssignee] = useState(req.assignedEmployeeId ?? '');
+  const [assignee, setAssignee] = useState(req.assignedEmployeeId ?? req.primaryRecruiter?.id ?? '');
   const [busy, setBusy] = useState(false);
   const [errs, setErrs] = useState<Errs>({});
   const title = titleOf(req, null);
-  const who = people?.find((p) => p.id === assignee)?.name;
+  const who = people?.find((p) => p.id === assignee)?.name ?? (req.primaryRecruiter?.id === assignee ? req.primaryRecruiter.name : undefined);
   const n = Number(seats);
   const filled = req.targetChip?.filled ?? 0;
 
@@ -224,7 +233,7 @@ export function TargetDrawer({ req, people, canActivate, targetUpdate = TARGET_U
         await activateRequisition(req.id, assignee);
         onDone(`Job active — target appears on ${who ?? 'the owner'}’s My Work as “${filled} of ${n} · due ${formatDue(due).replace(/ \d{4}$/, '')}”.`);
       }
-    } catch (x) { const r = reqError(x); setErrs(r.field === 'dueDate' || r.field === 'assignee' || r.field === 'reason' ? { [r.field]: r.text } : { form: r.text }); } finally { setBusy(false); }
+    } catch (x) { setErrs(toErrs(reqError(x), ['seats', 'dueDate', 'assignee', 'reason'])); } finally { setBusy(false); }
   };
 
   const locked = !editable && !approved;
