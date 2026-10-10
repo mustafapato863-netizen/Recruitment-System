@@ -270,7 +270,7 @@ describe('M1 CoS follow-ups', () => {
   it('live target update is hidden until the endpoint exists; typed adapter posts seats, due and reason', async () => {
     expect(TARGET_UPDATE_LIVE).toBe(false);
     const u = userEvent.setup();
-    api.postApi.mockResolvedValue({ id: 'r412' });
+    api.patchApi.mockResolvedValue({ id: 'r412' });
     const onDone = vi.fn();
     const live = fx.requisitions[0] as never;
     const { unmount } = render(<TargetDrawer req={live} people={null} canActivate onClose={() => {}} onDone={onDone} />);
@@ -283,7 +283,14 @@ describe('M1 CoS follow-ups', () => {
     expect(await screen.findByText(/Say why the target changes/)).toBeInTheDocument();
     await u.type(screen.getByLabelText(/^Reason for the change/), 'Second shift approved');
     await u.click(screen.getByRole('button', { name: 'Save target' }));
-    await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/vacancy-requests/r412/target', { requestedHeadcount: 4, dueDate: '2026-10-19', reason: 'Second shift approved' }));
+    await waitFor(() => expect(api.patchApi).toHaveBeenCalledWith('/vacancy-requests/r412/target', { requestedHeadcount: 4, dueDate: '2026-10-19', reason: 'Second shift approved' }));
     expect(onDone).toHaveBeenCalledWith(expect.stringContaining('1 of 4'));
+  });
+  it('Changes requested drafts never offer Activate, even with a due date', async () => {
+    serve({ '/vacancy-requests': fx.requisitions.map((r) => (r.id === 'r421' ? { ...r, status: 'Changes Requested', dueDate: '2099-11-20', targetFillDate: '2099-11-20' } : r)) });
+    renderAt('/vacancy-requests?req=r421');
+    const d = await screen.findByRole('dialog');
+    expect(within(d).queryByRole('button', { name: 'Activate job' })).toBeNull();
+    expect(within(d).getByRole('button', { name: 'Submit for approval' })).toBeEnabled();
   });
 });
