@@ -124,6 +124,21 @@ describe('A07 Templates (admin-only)', () => {
     await u.click(screen.getByRole('button', { name: 'Create template' }));
     await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/whatsapp-templates', { name: 'Document request', category: 'interview_invite', bodyTemplate: 'Hi, please send your ID' }));
   });
+  it('B2F-8: Archive (two-step) DELETEs = soft-archive; the template leaves the list; New drafts have no Archive', async () => {
+    const u = userEvent.setup();
+    api.deleteApi.mockResolvedValue({ id: 'e1', status: 'Archived' });
+    renderAt('/email-templates');
+    await screen.findByRole('navigation', { name: 'Email templates' });
+    await u.click(screen.getByRole('button', { name: 'Archive' }));
+    expect(api.deleteApi).not.toHaveBeenCalled();
+    const before = api.getApi.mock.calls.length;
+    await u.click(screen.getByRole('button', { name: 'Confirm archive' }));
+    await waitFor(() => expect(api.deleteApi).toHaveBeenCalledWith('/email-templates/e1'));
+    expect(await screen.findByRole('status')).toHaveTextContent('“Interview invite” archived.');
+    await waitFor(() => expect(api.getApi.mock.calls.length).toBeGreaterThan(before));
+    await u.click(within(screen.getByRole('navigation', { name: 'Email templates' })).getByRole('button', { name: 'New' }));
+    expect(screen.queryByRole('button', { name: 'Archive' })).toBeNull();
+  });
   it('non-admin seats keep v1 templates', async () => {
     shell.value = { seat: 'employee' };
     renderAt('/email-templates');

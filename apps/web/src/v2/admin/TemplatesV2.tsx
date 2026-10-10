@@ -1,9 +1,9 @@
 import { toFormErrs } from './formErrors';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { CircleCheck, Info, Mail, MessageCircle, Plus, RotateCw, Save } from 'lucide-react';
-import { ButtonV2, EmptyStateV2, InputV2, SelectV2, SkeletonV2, TextareaV2 } from '../../components/v2';
-import { CATEGORIES, VARIABLES, fetchTemplates, render, saveTemplate, unknownVars, type Channel, type MessageTemplate } from './configApi';
+import { Archive, CircleCheck, Info, Mail, MessageCircle, Plus, RotateCw, Save } from 'lucide-react';
+import { ButtonV2, DangerConfirmButton, EmptyStateV2, InputV2, SelectV2, SkeletonV2, TextareaV2 } from '../../components/v2';
+import { CATEGORIES, VARIABLES, archiveTemplate, fetchTemplates, render, saveTemplate, unknownVars, type Channel, type MessageTemplate } from './configApi';
 import '../pages/jobs.css';
 import './admin.css';
 
@@ -52,6 +52,16 @@ export function TemplatesV2({ initial = 'email' }: { initial?: Channel } = {}) {
       setNote(`“${draft.name.trim()}” saved.`); setDraft((d) => d && { ...d, id: saved?.id ?? d.id }); setAttempt((n) => n + 1);
     } catch (x) { setErrs(toFormErrs(x, { name: 'name', subject: 'subject', bodyTemplate: 'body', body: 'body', category: 'category' }, 'Could not save.')); } finally { setBusy(false); }
   };
+  const archive = async () => {
+    if (!draft?.id) return;
+    const name = draft.name.trim() || 'Template';
+    setBusy(true);
+    try {
+      await archiveTemplate(ch, draft.id);
+      setNote(`“${name}” archived. It is no longer offered when sending; history keeps it.`);
+      setDraft(null); setErrs({}); setAttempt((n) => n + 1);
+    } catch (x) { setErrs(toFormErrs(x, {}, 'Could not archive.')); } finally { setBusy(false); }
+  };
   const used = (c: string) => CATEGORIES[ch].find(([k]) => k === c)?.[1] ?? c;
   return (
     <div className="rf2-jobs rf2-admin">
@@ -98,7 +108,10 @@ export function TemplatesV2({ initial = 'email' }: { initial?: Channel } = {}) {
               <p className="rf2-admin__pre">{render(draft.bodyTemplate) || '—'}</p>
             </div>
             {errs.form ? <p className="rf2-form-error" role="alert">{errs.form}</p> : null}
-            <div className="rf2-admin__actions"><ButtonV2 icon={<Save />} loading={busy} onClick={() => void save()}>{draft.id ? 'Save template' : 'Create template'}</ButtonV2></div>
+            <div className="rf2-admin__actions">
+              <ButtonV2 icon={<Save />} loading={busy} onClick={() => void save()}>{draft.id ? 'Save template' : 'Create template'}</ButtonV2>
+              {draft.id ? <DangerConfirmButton icon={<Archive />} confirmLabel="Confirm archive" disabled={busy} onConfirm={() => void archive()}>Archive</DangerConfirmButton> : null}
+            </div>
           </section>
         </div>
       ) : null}
