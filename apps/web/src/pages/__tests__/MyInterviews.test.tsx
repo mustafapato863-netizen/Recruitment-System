@@ -218,3 +218,17 @@ describe('who sees My interviews', () => {
     expect(canUseMyInterviews(null)).toBe(false);
   });
 });
+
+describe('B2F-3 deep link from My Work', () => {
+  it('?interview=<id>&scorecard=1 opens that interview’s scorecard; ?interview alone marks the card', async () => {
+    api.getApi.mockImplementation(async (p: string) => (p.startsWith('/me/interviews') ? { data: [row(), row({ id: 'iv2', candidateName: 'Nourhan Sami' })] } : []));
+    const { unmount } = render(<MemoryRouter initialEntries={['/my-interviews?interview=iv2&scorecard=1']}><MyInterviewsPage /></MemoryRouter>);
+    expect(await screen.findByRole('dialog', { name: /Scorecard — Nourhan Sami/ })).toBeInTheDocument();
+    unmount();
+    render(<MemoryRouter initialEntries={['/my-interviews?interview=iv2']}><MyInterviewsPage /></MemoryRouter>);
+    const cards = await screen.findAllByTestId('my-interview');
+    expect(cards[1]).toHaveAttribute('aria-current', 'true');
+    expect(cards[0]).not.toHaveAttribute('aria-current');
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+});
