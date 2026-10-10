@@ -35,7 +35,7 @@ export function OpenJobsV2() {
   useEffect(() => {
     let live = true;
     setState({ kind: 'loading' });
-    fetchOpenJobs(user?.id ?? '')
+    fetchOpenJobs()
       .then((data) => { if (live) setState({ kind: 'ready', data }); })
       .catch((e: { statusCode?: number; message?: string }) => { if (live) setState(e?.statusCode === 403 ? { kind: 'forbidden' } : { kind: 'error', message: e?.message || 'Something went wrong.' }); });
     return () => { live = false; };
@@ -86,7 +86,7 @@ export function OpenJobsV2() {
                       <td><p className="rf2-jtable__name">{j.title}</p><p className="rf2-jtable__sub">{[j.department, j.ownerName ? `Owner: ${j.ownerName}` : null].filter(Boolean).join(' · ')}</p></td>
                       <td>{j.site ?? '—'}</td>
                       <td className="rf2-num" data-tone={j.seats.filled > 0 ? 'success' : undefined}>{j.seats.filled} of {j.seats.target}</td>
-                      <td className="rf2-num">{formatDay(j.dueDate)}</td>
+                      <td className="rf2-num">{formatDay(j.dueDate)}{j.status === 'On Hold' && j.holdUntil ? <p className="rf2-jtable__sub">Hold until {formatDay(`${j.holdUntil}T12:00:00Z`)}</p> : null}</td>
                       <td><span title={stageTitle(j.pipelineCounts)}>{j.active} active</span><span className="rf2-sr-only">: {stageTitle(j.pipelineCounts)}</span></td>
                       <td><StatusChip tone={STATUS_TONE[j.status]} label={STATUS_LABEL[j.status]} /></td>
                       <td className="rf2-jtable__act">

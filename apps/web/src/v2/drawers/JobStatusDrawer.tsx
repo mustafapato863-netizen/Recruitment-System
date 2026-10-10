@@ -1,68 +1,111 @@
 import { useEffect, useState } from 'react';
 import { Info, Pause, Play } from 'lucide-react';
-import { ButtonV2, DangerConfirmButton, DrawerV2, SelectV2, SkeletonV2, StatusChip, TextareaV2 } from '../../components/v2';
-import { changeJobStatus, errorMessage, jobActions, jobErrorFromError, jobReasonPresets, jobStatusHistory, jobTitle, type JobAction, type JobDetail, type JobStatusHistoryItem } from '../api/jobs';
+import { ButtonV2, DangerConfirmButton, DrawerV2, InputV2, SelectV2, SkeletonV2, StatusChip, TextareaV2 } from '../../components/v2';
+import {
+  OTHER_REASON, cairoToday, changeJobStatus, errorMessage, jobActions, jobErrorFromError, jobReasons, jobStatusHistory, jobTitle,
+  type JobAction, type JobDetail, type JobStatusHistoryItem,
+} from '../api/jobs';
 import { STATUS_LABEL, STATUS_TONE, formatDay } from '../pages/OpenJobsV2';
 
-const EFFECT: Record<'hold' | 'reopen', string> = {
-  hold: 'Hold lives on the job: files stay in their stages. A held job takes no new application and is off My Work.',
+const EFFECT: Record<JobAction, string> = {
+  hold: 'Hold lives on the job: files stay in their stages. A held job takes no new application and is off My Work. Nothing reopens it automatically.',
   reopen: 'Reopen returns the job to Open (or Partially filled if seats are already filled).',
+  close: 'Close job is final: a closed job cannot be reopened. Click it, then confirm.',
 };
+const ACTION_LABEL: Record<JobAction, string> = { hold: 'Put on hold', reopen: 'Reopen job', close: 'Close job' };
+
+type Errs = { reason?: string; note?: string; holdUntil?: string; form?: string };
 
 /**
- * E12 (B3). ONE primary: Put on hold (from Open/Partially filled) or Reopen (from On hold).
- * Close is a secondary danger-outline action (F2 DangerConfirmButton: click, then confirm). Reason required (≥ 3 chars).
+ * E12 (B3 @2e2fc7d). Choose the change: Put on hold / Reopen (primary) or Close job (secondary danger, click then confirm).
+ * Hold and close reasons come only from master data ('hold-reasons' / 'close-reasons', active values); "Other" needs a note.
+ * Hold takes an optional "Hold until" (a future Cairo day). Reopen takes a free-text reason.
  */
 export function JobStatusDrawer({ job, onClose, onDone }: { job: JobDetail; onClose: () => void; onDone: () => void }) {
   const allowed = jobActions(job.status);
-  const primary = (allowed.find((a) => a !== 'close') ?? null) as 'hold' | 'reopen' | null;
-  const canClose = allowed.includes('close');
-  const [preset, setPreset] = useState('');
-  const [presets, setPresets] = useState<string[]>([]);
-  const [closePresets, setClosePresets] = useState<string[]>([]);
+  const [action, setAction] = useState<JobAction | null>(allowed[0] ?? null);
+  const [lists, setLists] = useState<Partial<Record<'hold' | 'close', string[] | 'error'>>>({});
+  const [reason, setReason] = useState('');
   const [note, setNote] = useState('');
-  const [err, setErr] = useState<{ field?: string; form?: string }>({});
-  const [busy, setBusy] = useState<JobAction | null>(null);
+  const [holdUntil, setHoldUntil] = useState('');
+  const [err, setErr] = useState<Errs>({});
+  const [busy, setBusy] = useState(false);
   const [history, setHistory] = useState<JobStatusHistoryItem[] | null>(null);
+  const [reload, setReload] = useState(0);
   useEffect(() => { void jobStatusHistory(job.id).then(setHistory).catch(() => setHistory([])); }, [job.id]);
   useEffect(() => {
-    if (primary) void jobReasonPresets(primary).then((r) => setPresets(r.reasons));
-    if (canClose) void jobReasonPresets('close').then((r) => setClosePresets(r.reasons));
-  }, [primary, canClose]);
+    for (const a of ['hold', 'close'] as const) {
+      if (allowed.includes(a)) void jobReasons(a).then((r) => setLists((l) => ({ ...l, [a]: r }))).catch(() => setLists((l) => ({ ...l, [a]: 'error' })));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [job.status, reload]);
 
-  const reason = [preset, note.trim()].filter(Boolean).join(' — ');
-  const submit = async (action: JobAction) => {
-    if (reason.trim().length < 3) { setErr({ field: 'A reason is required (at least 3 characters).' }); return; }
-    setErr({}); setBusy(action);
-    try { await changeJobStatus(job.id, action, reason); onDone(); }
-    catch (e) {
+  const listAction = action === 'hold' || action === 'close' ? action : null;
+  const list = listAction ? lists[listAction] : undefined;
+  const isOther = reason.toLowerCase() === OTHER_REASON.toLowerCase();
+  const tomorrow = (() => { const d = new Date(`${cairoToday()}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); })();
+
+  const pick = (a: JobAction) => { setAction(a); setReason(''); setNote(''); setErr({}); if (a !== 'hold') setHoldUntil(''); };
+  const submit = async () => {
+    if (!action) return;
+    const next: Errs = {};
+    if (action === 'reopen') { if (note.trim().length < 3) next.note = 'Write why you are reopening (at least 3 characters).'; }
+    else {
+      if (!reason) next.reason = 'Pick a reason from the list.';
+      if (isOther && note.trim().length < 3) next.note = '"Other" needs a short note.';
+      if (action === 'hold' && holdUntil && holdUntil <= cairoToday()) next.holdUntil = 'Pick a day after today (Cairo).';
+    }
+    setErr(next);
+    if (Object.keys(next).length) return;
+    setBusy(true);
+    try {
+      await changeJobStatus(job.id, action, action === 'reopen' ? { reason: note } : { reason, note, ...(action === 'hold' && holdUntil ? { holdUntil } : {}) });
+      onDone();
+    } catch (e) {
       const d = jobErrorFromError(e);
-      setErr(d?.code === 'REASON_REQUIRED' ? { field: d.message } : { form: errorMessage(e, 'Could not change the job status.') });
-    } finally { setBusy(null); }
+      if (d?.code === 'REASON_NOT_IN_LIST') { setErr({ reason: d.message }); setReason(''); setReload((n) => n + 1); }
+      else if (d?.code === 'REASON_REQUIRED') setErr(action === 'reopen' || isOther ? { note: d.message } : { reason: d.message });
+      else if (d?.code === 'HOLD_UNTIL_NOT_FUTURE') setErr({ holdUntil: 'Pick a day after today (Cairo).' });
+      else setErr({ form: errorMessage(e, 'Could not change the job status.') });
+    } finally { setBusy(false); }
   };
-  const label = primary === 'reopen' ? 'Reopen job' : 'Put on hold';
+  const primary = action === 'hold' || action === 'reopen' ? action : null;
 
   return (
-    <DrawerV2 open onClose={onClose} kicker={`Job status · ${jobTitle(job)}`} title={primary === 'reopen' ? 'Reopen this job' : 'Hold or close this job'}
+    <DrawerV2 open onClose={onClose} kicker={`Job status · ${jobTitle(job)}`} title={allowed.includes('reopen') ? 'Reopen or close this job' : 'Hold or close this job'}
       confirmClose={() => !note.trim() || window.confirm('Discard this change?')}
-      primaryAction={primary ? <ButtonV2 icon={primary === 'hold' ? <Pause /> : <Play />} loading={busy === primary} onClick={() => void submit(primary)}>{label}</ButtonV2> : undefined}
+      primaryAction={primary ? <ButtonV2 icon={primary === 'hold' ? <Pause /> : <Play />} loading={busy} onClick={() => void submit()}>{ACTION_LABEL[primary]}</ButtonV2> : undefined}
       secondaryAction={<>
         <ButtonV2 kind="secondary" onClick={onClose}>Cancel</ButtonV2>
-        {canClose ? <DangerConfirmButton confirmLabel="Confirm close — final" loading={busy === 'close'} onConfirm={() => void submit('close')}>Close job</DangerConfirmButton> : null}
+        {action === 'close' ? <DangerConfirmButton confirmLabel="Confirm close — final" loading={busy} onConfirm={() => void submit()}>Close job</DangerConfirmButton> : null}
       </>}>
-      <div className="rf2-drawer-form">
+      <div className="rf2-drawer-form rf2-jstatus">
         <div className="rf2-row-between"><span className="rf2-field__label">Current status</span><StatusChip tone={STATUS_TONE[job.status]} label={STATUS_LABEL[job.status]} /></div>
+        {job.status === 'On Hold' && job.holdUntil ? <p className="rf2-jtable__sub">On hold until {formatDay(`${job.holdUntil}T12:00:00Z`)}.</p> : null}
         {allowed.length === 0 ? <p className="rf2-inline-note"><Info aria-hidden="true" /> A closed job is final and cannot be reopened. A cancelled requisition cannot be activated again.</p> : (
           <>
-            <SelectV2 label="Reason" required value={preset} onChange={(e) => setPreset(e.target.value)}>
-              <option value="">Choose a reason (or write one below)</option>
-              {primary ? <optgroup label={label}>{presets.map((p) => <option key={p} value={p}>{p}</option>)}</optgroup> : null}
-              {canClose ? <optgroup label="Close job">{closePresets.map((p) => <option key={`c-${p}`} value={p}>{p}</option>)}</optgroup> : null}
-            </SelectV2>
-            <TextareaV2 label="Note for the job history" rows={3} value={note} onChange={(e) => setNote(e.target.value)} error={err.field}
-              hint="Saved with the status change. Required if you don't pick a reason." />
-            {primary ? <p className="rf2-inline-note"><Info aria-hidden="true" /> {EFFECT[primary]}</p> : null}
-            {canClose ? <p className="rf2-jtable__sub">Close job is final: a closed job cannot be reopened. Click it, then confirm.</p> : null}
+            <fieldset className="rf2-choices">
+              <legend className="rf2-field__label">Change</legend>
+              {allowed.map((a) => (
+                <label key={a} className="rf2-choice"><input type="radio" name="job-action" value={a} checked={action === a} onChange={() => pick(a)} /><span><strong>{ACTION_LABEL[a]}</strong></span></label>
+              ))}
+            </fieldset>
+            {listAction ? (
+              list === 'error' || (Array.isArray(list) && list.length === 0)
+                ? <p className="rf2-form-error" role="alert">No {listAction} reasons are set up. Ask an administrator to add them in Master data ({listAction === 'hold' ? 'Hold reasons' : 'Close reasons'}).</p>
+                : <SelectV2 label="Reason" required value={reason} onChange={(e) => setReason(e.target.value)} error={err.reason} disabled={!list}>
+                    <option value="">{list ? 'Choose a reason' : 'Loading…'}</option>
+                    {(list ?? []).map((p) => <option key={p} value={p}>{p}</option>)}
+                  </SelectV2>
+            ) : null}
+            {action === 'hold' ? (
+              <InputV2 label="Hold until (optional)" type="date" min={tomorrow} value={holdUntil} onChange={(e) => setHoldUntil(e.target.value)} error={err.holdUntil}
+                hint="A future day. It is a reminder only: the job does not reopen by itself." />
+            ) : null}
+            <TextareaV2 label={action === 'reopen' ? 'Reason' : isOther ? 'Note' : 'Note (optional)'} required={action === 'reopen' || isOther} rows={3} value={note}
+              onChange={(e) => setNote(e.target.value)} error={err.note}
+              hint={action === 'reopen' ? 'Saved in the job history.' : isOther ? 'Required for "Other". Saved as "Other: your note".' : 'Saved with the reason in the job history.'} />
+            {action ? <p className={action === 'close' ? 'rf2-jtable__sub' : 'rf2-inline-note'}>{action === 'close' ? null : <Info aria-hidden="true" />} {EFFECT[action]}</p> : null}
           </>
         )}
         {err.form ? <p className="rf2-form-error" role="alert">{err.form}</p> : null}
@@ -71,7 +114,9 @@ export function JobStatusDrawer({ job, onClose, onDone }: { job: JobDetail; onCl
           {history === null ? <SkeletonV2 lines={2} label="Loading history…" /> : history.length === 0 ? <p className="rf2-jtable__sub">No status changes yet.</p> : (
             <ol className="rf2-history__list">
               {[...history].reverse().map((h) => (
-                <li key={h.id}><time dateTime={h.createdAt}>{formatDay(h.createdAt)}</time> <span>{h.fromStatus ? `${h.fromStatus} → ` : ''}{h.toStatus}</span>{h.reason ? <span className="rf2-jtable__sub"> · {h.reason}</span> : null}</li>
+                <li key={h.id}><time dateTime={h.createdAt}>{formatDay(h.createdAt)}</time> <span>{h.fromStatus ? `${h.fromStatus} → ` : ''}{h.toStatus}</span>
+                  {h.reason ? <span className="rf2-jtable__sub"> · {h.reason}</span> : null}
+                  {h.holdUntil ? <span className="rf2-jtable__sub"> · until {formatDay(`${h.holdUntil.slice(0, 10)}T12:00:00Z`)}</span> : null}</li>
               ))}
             </ol>
           )}

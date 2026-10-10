@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
-import { CircleCheck, Clock, Info, ShieldCheck } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { CircleCheck, Clock, Copy, ExternalLink, Info, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../../auth/AuthContext';
 import { ButtonV2 } from '../../components/v2/Button';
 import { DrawerV2 } from '../../components/v2/Drawer';
@@ -8,11 +9,11 @@ import { InputV2, SelectV2, TextareaV2 } from '../../components/v2/Field';
 import { StatusChip } from '../../components/v2/StatusChip';
 import { UserPicker, interviewersAdapter, type UserOption } from '../../components/v2/UserPicker';
 import {
-  RECOMMENDATIONS, addNote, candidateName, checkCompliance, createHiringCase, createOfferDraft, createOfferRevision,
-  gateState, logScreening, moveStage, rejectionReasons, reviseScorecard, scheduleInterview, setOfferStatus, submitScorecard,
-  type ApplicationFile, type FileStage, type InterviewItem, type OfferTerms, type Recommendation, type ScorecardItem,
+  RECOMMENDATIONS, addNote, candidateName, createHiringCase, createOfferDraft, createOfferRevision,
+  gateState, logScreening, moveStage, offerTemplates, rejectionReasons, reviseScorecard, scheduleInterview, sendOffer, setJoiningCheck, setOfferStatus, submitOffer, submitScorecard,
+  type ApplicationFile, type FileStage, type InterviewItem, type OfferTemplate, type OfferTerms, type Recommendation, type ScorecardItem, type SendChannel, type SendOfferResult,
 } from '../api/applicationFile';
-import { GATE_COPY, SYSTEM_REJECTION_REASONS, WITHDRAWN_BY_CANDIDATE_REASON, gateFromError } from '../api/gates';
+import { GATE_COPY, JOINING_CHECK_TYPES, SYSTEM_REJECTION_REASONS, WITHDRAWN_BY_CANDIDATE_REASON, domainError } from '../api/gates';
 
 export type DrawerKey = 'screen' | 'schedule' | 'scorecard' | 'offer' | 'waiting' | 'send' | 'answer' | 'prehire' | 'reject';
 export const DRAWER_KEYS: DrawerKey[] = ['screen', 'schedule', 'scorecard', 'offer', 'waiting', 'send', 'answer', 'prehire', 'reject'];
@@ -21,11 +22,12 @@ export interface DrawerProps { file: ApplicationFile; onClose: () => void; onDon
 
 const TZ = 'Africa/Cairo';
 
-/** Error copy: GATE_* / room / scorecard codes become clear inline messages; 403 is explicit. */
+const CHECK_LABEL: Record<string, string> = Object.fromEntries(JOINING_CHECK_TYPES.map((c) => [c.type, c.label]));
+/** Error copy by code (no message matching): GATE_* → gate copy + missing[]; other domain codes → the server's message; 403 is explicit. */
 export function errorText(error: unknown): string {
-  const d = gateFromError(error);
-  if (d?.gate) return `${GATE_COPY[d.gate].message}${d.missing?.length ? ` Missing: ${d.missing.join(', ')}.` : ''} ${GATE_COPY[d.gate].fix}`;
-  if (d) return d.message;
+  const d = domainError(error);
+  if (d?.gate) return `${GATE_COPY[d.gate].message}${d.missing?.length ? ` Missing: ${d.missing.map((m) => CHECK_LABEL[m] ?? m).join(', ')}.` : ''} ${GATE_COPY[d.gate].fix}`;
+  if (d?.message) return d.message;
   const e = error as { statusCode?: number; message?: string } | null;
   if (e?.statusCode === 403) return 'You can\'t change this file: it belongs to another owner.';
   return e?.message || 'Something went wrong. Try again.';
@@ -279,16 +281,27 @@ function TermsFields({ terms, set, errs }: { terms: OfferTerms; set: (t: OfferTe
 }
 const PayNote = () => <p className="rf2-drawer-form__note rf2-drawer-form__note--info" data-testid="pay-note"><ShieldCheck aria-hidden="true" /> <span>Pay is not shown to you. The approving manager sets and approves pay at the offer decision.</span></p>;
 
+/** Current version of an offer (B5 offers carry status per version). */
+const currentVersion = (o: ApplicationFile['offer']) => o?.currentVersion ?? o?.versions?.[0] ?? null;
+/** The Manager sent the version back (B7: Reject → version Changes Requested, offer Draft, file stays in Offer). */
+export const sentBack = (o: ApplicationFile['offer']) => o?.status === 'Draft' && currentVersion(o)?.status === 'Changes Requested';
+
+/** E17: create a Draft (no pay; CreateOfferDto has no grade/approver-note field) then POST /offers/:id/submit. From Expired or sent back: a new version, then submit. */
 export function OfferDraftDrawer({ file, onClose, onDone }: DrawerProps) {
   const app = file.workspace.application;
-  const [terms, setTerms] = useState<OfferTerms>({ workLocation: app.vacancyLocation ?? app.vacancyBranchName ?? undefined });
+  const prior = file.offer && (file.offer.status === 'Expired' || sentBack(file.offer)) ? file.offer : null;
+  const pv = currentVersion(prior);
+  const [terms, setTerms] = useState<OfferTerms>(pv ? {
+    contractType: pv.contractType ?? undefined, probationPeriod: pv.probationPeriod ?? undefined, proposedJoiningDate: pv.proposedJoiningDate?.slice(0, 10) ?? undefined,
+    offerExpiry: undefined, workLocation: pv.workLocation ?? undefined,
+  } : { workLocation: app.vacancyLocation ?? app.vacancyBranchName ?? undefined });
   const [note, setNote] = useState('');
   const [errs, setErrs] = useState<Record<string, string>>({});
   const s = useSubmit(onDone);
   const gate = gateState(file);
   const needsMove = app.stage === 'Interview';
-  const expired = file.offer?.status === 'Expired' ? file.offer : null;
-  const nextVersion = expired ? ((expired.currentVersion ?? expired.versions?.[0])?.versionNumber ?? 1) + 1 : 1;
+  const nextVersion = prior ? (pv?.versionNumber ?? 1) + 1 : 1;
+  const back = prior && sentBack(prior) ? pv?.approvals?.find((x) => x.status === 'Rejected') : undefined;
   const submit = () => {
     const next: Record<string, string> = {};
     if (!terms.proposedJoiningDate) next.start = 'Pick the start date.';
@@ -296,20 +309,24 @@ export function OfferDraftDrawer({ file, onClose, onDone }: DrawerProps) {
     if (Object.keys(next).length) return;
     void s.run(async () => {
       if (needsMove) await advanceTo(app, 'Offer');
-      if (expired) await createOfferRevision(expired.id, terms);
-      else await createOfferDraft(app.id, terms);
+      let offerId: string;
+      if (prior) { await createOfferRevision(prior.id, terms); offerId = prior.id; }
+      else offerId = await createOfferDraft(app.id, terms);
       if (note.trim()) await addNote(app.id, `Note to approver: ${note.trim()}`);
+      await submitOffer(offerId);
     });
   };
   return (
-    <DrawerV2 open onClose={onClose} kicker={`Offer · Draft v${nextVersion}`} title={`${expired ? 'New offer version' : 'Draft offer'} — ${candidateName(app)}`}
+    <DrawerV2 open onClose={onClose} kicker={`Offer · Draft v${nextVersion}`} title={`${prior ? (sentBack(prior) ? 'Revise and resubmit' : 'New offer version') : 'Draft offer'} — ${candidateName(app)}`}
       primaryAction={<ButtonV2 onClick={submit} loading={s.busy} disabled={needsMove && !gate.scorecard}>Submit for approval</ButtonV2>}
       secondaryAction={<ButtonV2 kind="secondary" onClick={onClose}>Cancel</ButtonV2>}>
       <div className="rf2-drawer-form">
         {needsMove ? <ul className="rf2-gates" aria-label="Gate to Offer"><Gate ok={gate.scorecard} label="A scorecard is submitted" hint="submit or chase the scorecard first" /></ul> : null}
+        {prior && sentBack(prior) ? <Note tone="warning">The manager sent v{pv?.versionNumber} back{back?.comment ? `: “${back.comment}”` : ''}. Change the terms and submit v{nextVersion}.</Note> : null}
         <InputV2 label="Job" readOnly value={[app.positionTitle, app.vacancyBranchName].filter(Boolean).join(' · ')} />
         <TermsFields terms={terms} set={setTerms} errs={errs} />
-        <TextareaV2 label="Note to approver" rows={3} value={note} onChange={(e) => setNote(e.target.value)} hint="Saved as a note on the file." />
+        <TextareaV2 label="Note to approver" rows={3} value={note} onChange={(e) => setNote(e.target.value)} hint="Saved as a note on the file (the offer has no approver-note field yet)." />
+        <Note>Saved as a Draft, then sent to the approving manager.</Note>
         <PayNote />
         <FormError text={s.error} />
       </div>
@@ -318,46 +335,111 @@ export function OfferDraftDrawer({ file, onClose, onDone }: DrawerProps) {
 }
 
 /* ── E18 Waiting on approval ────────────────────────────────────────────── */
-export function WaitingDrawer({ file, onClose }: DrawerProps) {
+export function WaitingDrawer({ file, onClose, onDone }: DrawerProps) {
   const app = file.workspace.application;
   const offer = file.offer;
-  const v = offer?.currentVersion ?? offer?.versions?.[0];
+  const v = currentVersion(offer);
+  const s = useSubmit(onDone);
+  const back = sentBack(offer);
+  const unsentDraft = offer?.status === 'Draft' && !back;
+  const chip = back ? { tone: 'danger' as const, label: 'Sent back by the manager' } : unsentDraft ? { tone: 'neutral' as const, label: 'Draft — not submitted' }
+    : offer?.status === 'Approved' ? { tone: 'success' as const, label: 'Approved' } : { tone: 'warning' as const, label: 'Waiting on approver' };
   return (
-    <DrawerV2 open onClose={onClose} kicker={`Offer · v${v?.versionNumber ?? 1}`} title={`Waiting on approval — ${candidateName(app)}`}
-      primaryAction={<ButtonV2 onClick={onClose}>Back to the file</ButtonV2>}>
+    <DrawerV2 open onClose={onClose} kicker={`Offer · v${v?.versionNumber ?? 1}`} title={`${back ? 'Sent back' : unsentDraft ? 'Draft offer' : 'Waiting on approval'} — ${candidateName(app)}`}
+      primaryAction={back ? <Link className="rf2-btn rf2-btn--primary rf2-btn--md" to="?drawer=offer">Revise and resubmit</Link>
+        : unsentDraft && offer ? <ButtonV2 onClick={() => s.run(() => submitOffer(offer.id))} loading={s.busy}>Submit for approval</ButtonV2>
+        : <ButtonV2 onClick={onClose}>Back to the file</ButtonV2>}
+      secondaryAction={back || unsentDraft ? <ButtonV2 kind="secondary" onClick={onClose}>Close</ButtonV2> : undefined}>
       <div className="rf2-drawer-form">
-        <p><StatusChip tone="warning" label={offer?.status === 'Approved' ? 'Approved' : 'Waiting on approver'} /> {offer?.offerCode}</p>
+        <p><StatusChip tone={chip.tone} label={chip.label} /> {offer?.offerCode}</p>
         <ul className="rf2-approvals" aria-label="Approvals">
           {(v?.approvals ?? []).map((a) => <li key={a.id}>{a.approverName ?? 'Offer approver'} · {a.status}{a.comment ? ` · “${a.comment}”` : ''}</li>)}
-          {!v?.approvals?.length ? <li>Offer approver · Pending</li> : null}
+          {!v?.approvals?.length && !unsentDraft ? <li>Offer approver · Pending</li> : null}
         </ul>
         <dl className="rf2-terms">
           <dt>Start date</dt><dd>{v?.proposedJoiningDate?.slice(0, 10) ?? '—'}</dd>
           <dt>Contract</dt><dd>{v?.contractType ?? '—'}</dd>
           <dt>Probation</dt><dd>{v?.probationPeriod ?? '—'}</dd>
         </dl>
-        <Note>Nothing to do until the manager decides. You'll see it on My Work when it's approved.</Note>
+        {back ? <Note tone="warning">The manager rejected v{v?.versionNumber}. The offer is back in Draft and the file stays in Offer. Change the terms and submit again.</Note>
+          : unsentDraft ? <Note>This draft has not gone to the manager yet.</Note>
+          : <Note>Nothing to do until the manager decides. You'll see it on My Work when it's approved.</Note>}
         <PayNote />
+        <FormError text={s.error} />
       </div>
     </DrawerV2>
   );
 }
 
 /* ── E19 Send offer ─────────────────────────────────────────────────────── */
+/** E19: POST /offers/:id/send {channel, templateId}. Email → outbox; WhatsApp → filled text + wa.me link, sent by hand (already recorded as Sent; there is no "mark as sent" endpoint). */
 export function SendOfferDrawer({ file, onClose, onDone }: DrawerProps) {
   const app = file.workspace.application;
   const offer = file.offer;
-  const s = useSubmit(onDone);
   const approved = offer?.status === 'Approved';
+  const [channel, setChannel] = useState<SendChannel>('email');
+  const [templates, setTemplates] = useState<OfferTemplate[] | null>(null);
+  const [templateId, setTemplateId] = useState('');
+  const [result, setResult] = useState<SendOfferResult | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    setTemplates(null); setTemplateId('');
+    offerTemplates(channel).then((t) => { if (alive) { setTemplates(t); setTemplateId(t[0]?.id ?? ''); } }).catch(() => alive && setTemplates([]));
+    return () => { alive = false; };
+  }, [channel]);
+  const send = async () => {
+    if (!offer) return;
+    if (!templateId) { setError('Pick a template.'); return; }
+    setBusy(true); setError(null);
+    try { setResult(await sendOffer(offer.id, { channel, templateId })); } catch (e) { setError(errorText(e)); } finally { setBusy(false); }
+  };
+  const copy = async () => { if (result?.message) { try { await navigator.clipboard.writeText(result.message); setCopied(true); } catch { setCopied(false); } } };
+  if (result) {
+    return (
+      <DrawerV2 open onClose={onDone} kicker={`Offer · ${offer?.offerCode ?? ''}`} title={`Offer sent — ${candidateName(app)}`}
+        primaryAction={<ButtonV2 onClick={onDone}>Done</ButtonV2>}>
+        <div className="rf2-drawer-form">
+          {result.channel === 'email' ? (
+            <>
+              <p><StatusChip tone={result.queued ? 'info' : 'neutral'} label={result.queued ? 'Queued' : 'Recorded'} /> Email</p>
+              <Note>{result.queued ? 'The offer email is queued in the outbox and goes to the candidate’s email address.' : 'Recorded as sent by email. No outbox is configured, so nothing was queued.'}</Note>
+            </>
+          ) : (
+            <>
+              <p><StatusChip tone="success" label="Recorded as sent" /> WhatsApp</p>
+              <TextareaV2 label="Message to send" readOnly rows={7} value={result.message ?? ''} />
+              <div className="rf2-drawer-form__actions">
+                <ButtonV2 kind="secondary" icon={<Copy />} onClick={() => void copy()}>{copied ? 'Copied' : 'Copy text'}</ButtonV2>
+                {result.waLink ? <a className="rf2-btn rf2-btn--secondary rf2-btn--md" href={result.waLink} target="_blank" rel="noreferrer"><ExternalLink aria-hidden="true" /> Open WhatsApp</a> : null}
+              </div>
+              <Note>RecruitFlow recorded the offer as Sent by WhatsApp now (channel, template, you, time). Send the message from WhatsApp yourself; there is no separate "mark as sent" step.</Note>
+            </>
+          )}
+        </div>
+      </DrawerV2>
+    );
+  }
   return (
     <DrawerV2 open onClose={onClose} kicker={`Offer · ${offer?.offerCode ?? ''}`} title={`Send offer — ${candidateName(app)}`}
-      primaryAction={<ButtonV2 onClick={() => offer && s.run(() => setOfferStatus(offer.id, 'Sent'))} loading={s.busy} disabled={!approved}>Mark as sent</ButtonV2>}
+      primaryAction={<ButtonV2 onClick={() => void send()} loading={busy} disabled={!approved || !templateId}>Send offer</ButtonV2>}
       secondaryAction={<ButtonV2 kind="secondary" onClick={onClose}>Cancel</ButtonV2>}>
       <div className="rf2-drawer-form">
         <ul className="rf2-gates" aria-label="Before sending"><Gate ok={approved} label="The manager approved this version" hint="waiting on approval" /></ul>
-        <Note>Send the approved offer letter to the candidate, then mark it as sent here. Choosing a channel and template from RecruitFlow is not available yet.</Note>
+        <fieldset className="rf2-choices">
+          <legend className="rf2-field__label">Channel</legend>
+          {([['email', 'Email', 'Goes out from RecruitFlow through the email outbox.'], ['whatsapp', 'WhatsApp', 'You get the filled message and a WhatsApp link, and send it yourself.']] as const).map(([v, l, h]) => (
+            <label key={v} className="rf2-choice"><input type="radio" name="channel" value={v} checked={channel === v} onChange={() => setChannel(v)} /><span><strong>{l}</strong><span className="rf2-choice__help">{h}</span></span></label>
+          ))}
+        </fieldset>
+        <SelectV2 label="Template" required value={templateId} onChange={(e) => setTemplateId(e.target.value)} disabled={!templates?.length}>
+          {templates === null ? <option value="">Loading…</option> : templates.length === 0 ? <option value="">No active {channel === 'email' ? 'email' : 'WhatsApp'} template</option>
+            : templates.map((t) => <option key={t.id} value={t.id}>{t.name}{t.isDefault ? ' (default)' : ''}</option>)}
+        </SelectV2>
         <PayNote />
-        <FormError text={s.error} />
+        <FormError text={error} />
       </div>
     </DrawerV2>
   );
@@ -423,32 +505,46 @@ export function AnswerDrawer({ file, onClose, onDone }: DrawerProps) {
 }
 
 /* ── E21 Pre-hire checklist ─────────────────────────────────────────────── */
-export function PreHireDrawer({ file, onClose, onDone }: DrawerProps) {
+/** E21: gate 4 reads only the typed joining checks (GET/PUT /applications/:id/joining-checks/:type). */
+export function PreHireDrawer({ file, onDone }: DrawerProps) {
   const app = file.workspace.application;
   const gate = gateState(file);
   const s = useSubmit(onDone);
-  const allDone = gate.joining.every((j) => j.done);
+  const [checks, setChecks] = useState(file.joiningChecks);
+  const [busyType, setBusyType] = useState<string | null>(null);
+  const [checkErr, setCheckErr] = useState<string | null>(null);
+  const done = (t: string) => Boolean(checks.find((c) => c.type === t)?.verified);
+  const allDone = JOINING_CHECK_TYPES.every((c) => done(c.type));
   const inOffer = app.stage === 'Offer';
+  const toggle = async (type: (typeof JOINING_CHECK_TYPES)[number]['type'], verified: boolean) => {
+    setBusyType(type); setCheckErr(null);
+    try { setChecks(await setJoiningCheck(app.id, type, verified)); } catch (e) { setCheckErr(errorText(e)); } finally { setBusyType(null); }
+  };
   return (
-    <DrawerV2 open onClose={onClose} kicker="Pre-hire" title={`Pre-hire checklist — ${candidateName(app)}`}
+    <DrawerV2 open onClose={onDone} kicker="Pre-hire" title={`Pre-hire checklist — ${candidateName(app)}`}
       primaryAction={inOffer
         ? <ButtonV2 onClick={() => s.run(async () => { await advanceTo(app, 'Pre-Hire'); if (!file.hiring && file.offer) await createHiringCase(file.offer.id); })} loading={s.busy} disabled={!gate.offerAccepted}>Move to Pre-hire</ButtonV2>
         : <ButtonV2 onClick={() => s.run(() => moveStage(app, 'Joined'))} loading={s.busy} disabled={!allDone || app.stage !== 'Pre-Hire'}>Move to Joined</ButtonV2>}
-      secondaryAction={<ButtonV2 kind="secondary" onClick={onClose}>Close</ButtonV2>}>
+      secondaryAction={<ButtonV2 kind="secondary" onClick={onDone}>Close</ButtonV2>}>
       <div className="rf2-drawer-form">
         {inOffer ? <ul className="rf2-gates" aria-label="Gate to Pre-hire"><Gate ok={gate.offerAccepted} label="The candidate accepted the offer" hint="record the answer first" /></ul> : null}
         <ul className="rf2-checklist" aria-label="Joining checks">
-          {gate.joining.map((j) => (
-            <li key={j.key} className="rf2-checklist__item" data-done={j.done}>
-              <span>{j.done ? <CircleCheck aria-hidden="true" /> : <Clock aria-hidden="true" />} {j.label}</span>
-              {j.done ? <StatusChip tone="success" label="Checked" />
-                : j.reqId && file.hiring ? <ButtonV2 kind="secondary" size="sm" disabled={s.busy} onClick={() => s.run(() => checkCompliance(file.hiring!.id, j.reqId!))} aria-label={`Mark ${j.label} checked`}>Mark checked</ButtonV2>
-                : <span className="rf2-checklist__missing">{file.hiring ? 'Not on this hiring case' : 'Starts at Pre-hire'}</span>}
-            </li>
-          ))}
+          {JOINING_CHECK_TYPES.map((c) => {
+            const row = checks.find((x) => x.type === c.type);
+            const ok = Boolean(row?.verified);
+            return (
+              <li key={c.type} className="rf2-checklist__item" data-done={ok}>
+                <span>{ok ? <CircleCheck aria-hidden="true" /> : <Clock aria-hidden="true" />} {c.label}
+                  {ok && row?.verifiedBy ? <span className="rf2-checklist__by"> · verified by {row.verifiedBy.name}{row.verifiedAt ? `, ${new Date(row.verifiedAt).toLocaleDateString('en-GB', { timeZone: TZ, day: 'numeric', month: 'short' })}` : ''}</span> : null}</span>
+                {ok
+                  ? <ButtonV2 kind="tertiary" size="sm" loading={busyType === c.type} onClick={() => void toggle(c.type, false)} aria-label={`Undo ${c.label} verified`}>Undo</ButtonV2>
+                  : <ButtonV2 kind="secondary" size="sm" loading={busyType === c.type} onClick={() => void toggle(c.type, true)} aria-label={`Mark ${c.label} verified`}>Mark verified</ButtonV2>}
+              </li>
+            );
+          })}
         </ul>
-        <Note>All three checked = the file can move to Joined.</Note>
-        <FormError text={s.error} />
+        <Note>All three verified = the file can move to Joined.</Note>
+        <FormError text={checkErr ?? s.error} />
       </div>
     </DrawerV2>
   );

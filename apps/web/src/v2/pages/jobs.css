@@ -136,3 +136,15 @@
 [data-ui='v2'] .rf2-kpi__sub { margin: 0; padding-bottom: var(--rf2-space-1); border-bottom: 1px solid var(--rf2-divider); color: var(--rf2-ink-2); font-size: var(--rf2-text-body); }
 [data-ui='v2'] .rf2-kpi__foot { margin: 0; color: var(--rf2-ink-2); font-size: var(--rf2-text-caption); }
 [data-ui='v2'] .rf2-kpi__n { font-variant-numeric: tabular-nums; }
+[data-ui='v2'] .rf2-kcard__iv { display: flex; align-items: center; gap: 4px; margin: 0; color: var(--rf2-ink-2); font-size: var(--rf2-text-caption); }
+[data-ui='v2'] .rf2-kcard__iv svg { width: 14px; height: 14px; flex: none; }
+[data-ui='v2'] .rf2-conflicts { border: 1px solid var(--rf2-warning); background: var(--rf2-warning-tint); border-radius: var(--rf2-radius-md); padding: var(--rf2-space-1) var(--rf2-space-2); font-size: var(--rf2-text-caption); }
+[data-ui='v2'] .rf2-conflicts__title { display: flex; gap: 4px; align-items: center; margin: 0 0 4px; font-weight: 600; }
+[data-ui='v2'] .rf2-conflicts__title svg { width: 14px; height: 14px; }
+[data-ui='v2'] .rf2-conflicts ul { margin: 0; padding-left: 18px; }
+/* E12: action radios (application-file.css is not loaded on job pages). */
+[data-ui='v2'] .rf2-jstatus .rf2-choices { display: flex; flex-direction: row; gap: var(--rf2-space-3); margin: 0 0 var(--rf2-space-2); padding: 0; border: 0; }
+[data-ui='v2'] .rf2-jstatus .rf2-choices legend { margin-bottom: var(--rf2-space-1); }
+[data-ui='v2'] .rf2-jstatus .rf2-choice { display: flex; align-items: center; gap: var(--rf2-space-1); font-size: var(--rf2-text-body); }
+[data-ui='v2'] .rf2-jstatus { display: flex; flex-direction: column; gap: var(--rf2-space-2); }
+[data-ui='v2'] .rf2-jtable__sub > svg { display: inline; width: 14px; height: 14px; vertical-align: -2px; }
