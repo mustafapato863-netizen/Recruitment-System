@@ -4,6 +4,7 @@ import type { AuthUser, ResultsResponse } from '@recruitflow/contracts';
 import { PrismaService } from '../database/prisma.service';
 import { AccessControlService } from '../access-control/access-control.service';
 import { cairoToday, monthRange, tile } from './results.calc';
+import { HAS_VACANCY_OWNER } from '../common/schema-features';
 
 export type ResultsScope = 'me' | 'team' | 'org';
 export interface ResultsQuery { month?: string; vacancyId?: string; managerId?: string }
@@ -49,7 +50,10 @@ export class ResultsService {
 
     // 2) Access scope of the caller, ANDed with every filter (never replaced).
     const appScope = await this.access.getApplicationVisibilityWhere(user);
-    const jobScope = await this.access.getVacancyVisibilityWhere(user);
+    // Jobs in the caller's scope. With B1 (#4) under this branch, other owners' jobs are in scope (just redacted),
+    // so use B1's scope predicate; without B1, the visibility predicate is the scope. Files keep their own visibility.
+    const access = this.access as AccessControlService & { getVacancyScopeWhere?: (u: AuthUser) => Promise<Prisma.VacancyWhereInput> };
+    const jobScope = access.getVacancyScopeWhere ? await access.getVacancyScopeWhere(user) : await this.access.getVacancyVisibilityWhere(user);
     const jobFilter: Prisma.VacancyWhereInput[] = [jobScope, { organizationId: org }];
     if (query.vacancyId) jobFilter.push({ id: query.vacancyId });
     const fileWhere = (extra: Prisma.ApplicationWhereInput): Prisma.ApplicationWhereInput => ({
@@ -60,9 +64,9 @@ export class ResultsService {
     const today = cairoToday(now);
     const monthName = new Date(`${range.month}-15T12:00:00Z`).toLocaleString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 
-    // Seats: joins this month on jobs the people own, against those jobs' targets. TODO(B1): Vacancy.primaryRecruiterId.
+    // Seats: joins this month on jobs the people own, against those jobs' targets. Owner = Vacancy.primaryRecruiterId when B1 is present (HAS_VACANCY_OWNER), else the active PRIMARY assignee.
     const jobs = await this.prisma.vacancy.findMany({
-      where: { AND: [...jobFilter, { assignments: { some: { userId: { in: subjects }, isActive: true, assignmentKind: 'PRIMARY' } } }, { OR: [{ openedAt: null }, { openedAt: { lt: to } }] }, { OR: [{ status: { not: 'Closed' } }, { updatedAt: { gte: from } }] }] },
+      where: { AND: [...jobFilter, (HAS_VACANCY_OWNER ? { primaryRecruiterId: { in: subjects } } as Prisma.VacancyWhereInput : { assignments: { some: { userId: { in: subjects }, isActive: true, assignmentKind: 'PRIMARY' } } }), { OR: [{ openedAt: null }, { openedAt: { lt: to } }] }, { OR: [{ status: { not: 'Closed' } }, { updatedAt: { gte: from } }] }] },
       select: { id: true, approvedHeadcount: true },
     });
     const joined = jobs.length ? await this.prisma.applicationStatusHistory.count({
