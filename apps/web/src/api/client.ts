@@ -76,7 +76,35 @@ function normalizeFieldErrors(value: unknown): ErrorFieldErrors | undefined {
 }
 
 /** 403 codes from B1 ownership checks whose server message is shown as-is. */
-const OWNERSHIP_403_CODES = new Set(['JOB_NOT_OWNED', 'FILE_NOT_OWNED', 'ADMIN_CANNOT_REASSIGN', 'OWNER_NOT_ELIGIBLE']);
+const OWNERSHIP_403_CODES = new Set(['JOB_NOT_OWNED', 'FILE_NOT_OWNED', 'ADMIN_CANNOT_REASSIGN', 'OWNER_NOT_ELIGIBLE', 'DOCUMENT_DOWNLOAD_DENIED']);
+
+/**
+ * QA BUG-1: on #4 the global error normalizer only passes registry codes
+ * (packages/contracts `errorCodes`), so B1 domain codes reach the client as
+ * `code: "FORBIDDEN"` (403) or `"VALIDATION_ERROR"` (400) while the server
+ * `message` is kept. Recover the domain code from the exact #4 messages so each
+ * branch still triggers; a raw domain code (if Backend adds them to the
+ * registry) is used as-is.
+ */
+const B1_MESSAGE_CODES: ReadonlyArray<[number, string, string]> = [
+  [403, 'Access denied: this file belongs to another owner.', 'FILE_NOT_OWNED'],
+  [403, 'Access denied: you are not approving a file for this candidate.', 'FILE_NOT_OWNED'],
+  [403, 'Access denied: this job belongs to another owner.', 'JOB_NOT_OWNED'],
+  [403, 'Administrators cannot assign or reassign file owners.', 'ADMIN_CANNOT_REASSIGN'],
+  [403, 'Administrators cannot reassign a job owner.', 'ADMIN_CANNOT_REASSIGN'],
+  [403, 'Access denied: downloading this document requires DOWNLOAD_DOCUMENTS, or a pending approval on this candidate (CV only).', 'DOCUMENT_DOWNLOAD_DENIED'],
+  [400, 'Owner must be a user in this organization.', 'OWNER_NOT_ELIGIBLE'],
+  [400, 'An inactive user cannot own a job or file.', 'OWNER_NOT_ELIGIBLE'],
+  [400, 'An administrator cannot own a job or file.', 'OWNER_NOT_ELIGIBLE'],
+];
+
+export function resolveDomainCode(status: number, code: string | undefined, message: unknown): string | undefined {
+  if (code && OWNERSHIP_403_CODES.has(code)) return code;
+  if (typeof message !== 'string') return code;
+  const text = message.trim();
+  const hit = B1_MESSAGE_CODES.find(([s, m]) => s === status && m === text);
+  return hit ? hit[2] : code;
+}
 
 let refreshPromise: Promise<boolean> | null = null;
 
@@ -103,7 +131,11 @@ async function refreshAccessToken(): Promise<boolean> {
 
 async function handleResponseError(response: Response, path: string): Promise<never> {
   const problem = (await response.json().catch(() => null)) as ErrorEnvelopeBody | null;
-  const code = typeof problem?.code === 'string' && problem.code ? problem.code : undefined;
+  const code = resolveDomainCode(
+    response.status,
+    typeof problem?.code === 'string' && problem.code ? problem.code : undefined,
+    problem?.message,
+  );
   const fields = normalizeFieldErrors(problem?.fields);
   const requestId =
     response.headers.get('X-Request-Id') ??
@@ -215,6 +247,26 @@ export function postFormDataApi<T>(path: string, formData: FormData): Promise<T>
     method: 'POST',
     body: formData,
   });
+}
+
+/** Blob download that also returns the filename from Content-Disposition. */
+export async function downloadFileApi(path: string, fallbackName = 'download', allowRefresh = true): Promise<{ blob: Blob; filename: string }> {
+  const response = await fetch(`${API_BASE_URL}${path}`, { method: 'GET', credentials: 'include' });
+  if (response.status === 401 && allowRefresh && shouldRefreshSession(path)) {
+    if (await refreshAccessToken()) return downloadFileApi(path, fallbackName, false);
+  }
+  if (!response.ok) return handleResponseError(response, path);
+  return { blob: await response.blob(), filename: filenameFromDisposition(response.headers.get('Content-Disposition')) ?? fallbackName };
+}
+
+export function filenameFromDisposition(header: string | null): string | null {
+  if (!header) return null;
+  const star = /filename\*\s*=\s*(?:UTF-8'')?([^;]+)/i.exec(header);
+  if (star) {
+    try { return decodeURIComponent(star[1].trim().replace(/^"|"$/g, '')); } catch { /* fall through */ }
+  }
+  const plain = /filename\s*=\s*"?([^";]+)"?/i.exec(header);
+  return plain ? plain[1].trim() : null;
 }
 
 export async function downloadApi(path: string, allowRefresh = true): Promise<Blob> {
