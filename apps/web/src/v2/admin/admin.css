@@ -64,3 +64,7 @@
 [data-ui='v2'] .rf2-admin__add > :first-child { flex: 1; }
 [data-ui='v2'] .rf2-admin__more { margin: 6px var(--rf2-space-2); }
 @media (max-width: 1100px) { [data-ui='v2'] .rf2-admin__grid { grid-template-columns: 1fr 1fr; } [data-ui='v2'] .rf2-admin__split { grid-template-columns: 1fr; } }
+[data-ui='v2'] .rf2-admin th[scope='row'] { background: transparent; }
+[data-ui='v2'] .rf2-admin__matrix td svg { display: inline-block; margin-inline-end: 4px; }
+[data-ui='v2'] .rf2-admin__matrix td { white-space: nowrap; }
+[data-ui='v2'] .rf2-admin__card > .rf2-jtable__sub:last-child { margin: 0; padding: var(--rf2-space-1) var(--rf2-space-2); }
