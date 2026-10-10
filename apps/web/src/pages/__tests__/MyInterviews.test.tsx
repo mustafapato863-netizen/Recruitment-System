@@ -200,13 +200,13 @@ describe('r3: #4 cards carry isLocked, no status (R3-1 / R3-2)', () => {
     renderPage();
     await u.click(await screen.findByRole('button', { name: 'Continue scorecard' }));
     await u.type(await screen.findByLabelText(/Written evidence/), ', finished');
-    await u.click(screen.getByRole('button', { name: 'Submit scorecard' }));
+    await u.click(await screen.findByRole('button', { name: 'Submit scorecard' }));
     expect(await screen.findByTestId('my-scorecard')).toHaveTextContent('Half done, finished');
     expect(screen.queryByTestId('draft-note')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Submit scorecard' })).not.toBeInTheDocument();
     expect(screen.getByText('Scorecard submitted')).toBeInTheDocument();
     expect(api.getApi.mock.calls.filter(([p]) => p.startsWith('/me/interviews'))).toHaveLength(1);
-  }, 15000); // typing-heavy: flaked on the 5 s default under the full suite
+  }, 15000); // typing-heavy; Submit is found async (flaked under the full suite)
 });
 
 describe('who sees My interviews', () => {
