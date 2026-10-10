@@ -492,6 +492,12 @@ export interface UserProfile {
   roles: RoleSummary[];
   permissions: string[];
   lastLoginAt: string | null;
+  /** B10 rollout switch: the caller's seat, the seats on v2 (org config > env RF_V2_SEATS > ['employee']), and whether this user gets v2. */
+  seat?: 'employee' | 'manager' | 'admin';
+  v2Seats?: Array<'employee' | 'manager' | 'admin'>;
+  v2Enabled?: boolean;
+  /** Same list, under flags (as promised in FRONTEND_GAP F4). */
+  flags?: { v2Seats: Array<'employee' | 'manager' | 'admin'> };
 }
 
 export type UserThemePreference = 'light' | 'dark';
