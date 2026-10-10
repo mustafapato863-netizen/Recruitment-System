@@ -62,6 +62,9 @@ export interface WorkItem {
   room?: { name: string | null; url: string | null };
   interviewer?: MyWorkPerson | null;
   interviewers?: MyWorkPerson[];
+  /** B4 C6: offers waiting on approval name the approver (approver{id,name} / approvers[]). */
+  approver?: MyWorkPerson | null;
+  approvers?: MyWorkPerson[];
   applicationId?: string;
   candidate?: { id: string; name: string };
   stage?: string;
@@ -209,4 +212,13 @@ export function fileActionHref(item: WorkItem, action: MyWorkAction): string | n
     case 'open-offer':
     default: return base;
   }
+}
+
+/** A role code (OFFER_APPROVER) is not a person; only real names are shown (B2-13). */
+const isRoleCode = (name: string) => /^[A-Z][A-Z0-9_]+$/.test(name.trim());
+/** The person a waiting item waits on, when the API names one. */
+export function waitingOnName(item: WorkItem): string | null {
+  const people = [item.approver, ...(item.approvers ?? [])].filter((p): p is MyWorkPerson => Boolean(p?.name && !isRoleCode(p.name)));
+  const names = Array.from(new Set(people.map((p) => p.name)));
+  return names.length ? names.join(', ') : null;
 }

@@ -2285,6 +2285,7 @@ export function ApplicationsPage() {
                     {column.cards.map((card) => (
                       <ApplicationKanbanCard
                         key={card.id}
+                        canClaim={!(user?.roles ?? []).some((r) => r.code === 'ADMINISTRATOR')}
                         card={{
                           id: card.id,
                           applicationCode: card.applicationCode,
