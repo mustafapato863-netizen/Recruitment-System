@@ -2,7 +2,7 @@
  * A2 Roles (Admin seat). Contracts RoleRecord / PermissionRecord:
  *   GET /roles (each with permissions[]) · GET /roles/permissions · POST|DELETE /roles/:id/permissions/:permissionId.
  * Roadmap §3: three seats; Interviewer and licence-check are PERMISSIONS, not seats/roles.
- * BACKEND_GAP R1 names them INTERVIEW_PARTICIPATE and LICENSE_CHECK. Until the catalog has them, today's stand-ins are the
+ * Names confirmed by CoS (Oct 10): INTERVIEW_PARTICIPATE and LICENSE_CHECK (BACKEND_GAP R1). Until the catalog has them, today's stand-ins are the
  * INTERVIEWER and LICENSE_SPECIALIST roles; the page says so and offers no toggle.
  */
 import { deleteApi, getApi, postApi } from '../../api/client';

@@ -25,7 +25,7 @@ const serve = (extra: Record<string, unknown> = {}) => {
 function Loc() { const l = useLocation(); return <div data-testid="loc">{l.pathname + l.search}</div>; }
 const renderAt = (path = '/my-work?offer=o1') => {
   document.documentElement.setAttribute('data-ui', 'v2');
-  return render(<MemoryRouter initialEntries={[path]}><Routes><Route path="/my-work" element={<><TeamWorkV2 /><Loc /></>} /></Routes></MemoryRouter>);
+  return render(<MemoryRouter initialEntries={[path]}><Routes><Route path="/my-work" element={<><TeamWorkV2 /><Loc /></>} /><Route path="*" element={<Loc />} /></Routes></MemoryRouter>);
 };
 const err = (status: number, code: string, extra: Record<string, unknown> = {}) => new ApiError(status, 'm', { code, message: 'server text', ...extra }, { code });
 beforeEach(() => { vi.clearAllMocks(); serve(); auth.perms = ['APPLICATION_VIEW', 'OFFER_PAY_VIEW']; });
@@ -34,8 +34,12 @@ describe('M3 offer decision (B7)', () => {
   it('opens from Team work; Manager sees base pay, allowances apart, the Grade 8 band (inside); approve → toast; axe', async () => {
     const u = userEvent.setup();
     api.postApi.mockResolvedValue({ id: 'd1', decision: 'Approve', toStatus: 'Approved' });
-    const { baseElement } = renderAt('/my-work');
+    const first = renderAt('/my-work');
     await u.click(await screen.findByRole('button', { name: 'Review offer: Lina Hassan' }));
+    // B2-23: Review offer opens the decision over the file, not over Team work.
+    expect(screen.getByTestId('loc')).toHaveTextContent('/applications/a3?decide=o1');
+    first.unmount();
+    const { baseElement } = renderAt('/my-work?offer=o1'); // legacy deep link still opens the same drawer
     const d = await screen.findByRole('dialog', { name: 'Offer for Lina Hassan' });
     expect(await within(d).findByText('Submitted by Mariam Farag')).toBeInTheDocument();
     expect(within(d).getByLabelText(/^Monthly basic pay \(EGP\)/)).toHaveValue(62000);
@@ -49,7 +53,7 @@ describe('M3 offer decision (B7)', () => {
     expect(d).toHaveTextContent(/Grade 8.*Sun 1 Nov 2026.*Full-time · 2 years.*3 months/);
     expect(await axeViolations(baseElement)).toEqual([]);
     await u.click(within(d).getByRole('button', { name: 'Approve offer' }));
-    await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/offers/o1/versions/ov1/decision', { decision: 'Approve', pay: { basePay: 62000, currency: 'EGP', allowances: [{ name: 'Housing and transport', amount: 9500 }] } }));
+    await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/offers/o1/versions/ov1/decision', { decision: 'Approve', basePay: 62000, currency: 'EGP', allowances: [{ name: 'Housing and transport', amount: 9500, frequency: 'Monthly' }] }));
     expect(await screen.findByRole('status')).toHaveTextContent('Offer for Lina Hassan approved. Mariam can send it now.');
     expect(screen.getByTestId('loc')).toHaveTextContent('/my-work');
   });
@@ -153,7 +157,7 @@ describe('M3 CoS follow-ups: pay on Approve, band by branchId', () => {
     await u.type(within(d).getByLabelText(/^Allowance 2 \(EGP\)/), '500');
     await u.click(within(d).getByRole('button', { name: 'Remove allowance 1' }));
     await u.click(within(d).getByRole('button', { name: 'Approve offer' }));
-    await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/offers/o1/versions/ov1/decision', { decision: 'Approve', pay: { basePay: 58000, currency: 'EGP', allowances: [{ name: 'Phone', amount: 500 }] } }));
+    await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/offers/o1/versions/ov1/decision', { decision: 'Approve', basePay: 58000, currency: 'EGP', allowances: [{ name: 'Phone', amount: 500, frequency: 'Monthly' }] }));
   });
   it('empty base pay blocks Approve; Request changes never sends pay', async () => {
     const u = userEvent.setup();

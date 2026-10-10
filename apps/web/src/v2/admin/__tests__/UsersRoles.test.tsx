@@ -71,7 +71,7 @@ describe('A02 Users', () => {
     await u.click(within(d).getByRole('button', { name: 'Reactivate' }));
     await waitFor(() => expect(api.patchApi).toHaveBeenCalledWith('/users/u-old', { status: 'Active' }));
   });
-  it('409 USER_OWNS_OPEN_WORK shows the counts and offers reassign of the files (B7 fromUserId)', async () => {
+  it('B2-9: 409 USER_OWNS_OPEN_WORK shows the counts and reassigns the files via the B9 override', async () => {
     const u = userEvent.setup();
     api.patchApi.mockRejectedValue(new ApiError(409, 'Mariam owns open work. Reassign it before deactivating the user.', { code: 'USER_OWNS_OPEN_WORK', counts: { openApplicationsPrimary: 2, openApplicationsTaskOwner: 1, openJobsPrimary: 1, openRequisitions: 0 } }, { code: 'USER_OWNS_OPEN_WORK' }));
     api.postApi.mockResolvedValue({ moved: [] });
@@ -87,24 +87,40 @@ describe('A02 Users', () => {
     await u.click(within(block).getByRole('button', { name: 'Reassign 3 files' }));
     expect(within(block).getByText('Pick who takes the files.')).toBeInTheDocument();
     await u.selectOptions(to, 'u-youssef');
-    await u.type(within(block).getByLabelText(/^Reason/), 'Leaving on 31 Oct');
+    await u.type(within(block).getByLabelText(/^Reason/), 'Leaving');
     await u.click(within(block).getByRole('button', { name: 'Reassign 3 files' }));
-    await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/files/reassign', { fromUserId: 'u-mariam', toUserId: 'u-youssef', reason: 'Leaving on 31 Oct' }));
-    expect(await within(d).findByRole('status')).toHaveTextContent('Files moved to Youssef Ibrahim. Deactivate again.');
+    expect(within(block).getByText(/at least 10 characters/)).toBeInTheDocument();
+    expect(api.postApi).not.toHaveBeenCalled();
+    await u.type(within(block).getByLabelText(/^Reason/), ' on 31 Oct');
+    await u.click(within(block).getByRole('button', { name: 'Reassign 3 files' }));
+    await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/admin/overrides', { action: 'file.reassign', entityId: 'u-mariam', toUserId: 'u-youssef', reason: 'Leaving on 31 Oct' }));
+    expect(api.postApi).not.toHaveBeenCalledWith('/files/reassign', expect.anything());
+    expect(await within(d).findByRole('status')).toHaveTextContent('Files moved to Youssef Ibrahim (admin override, in Audit). Deactivate again.');
   });
-  it('B7 refuses the Admin (ADMIN_CANNOT_REASSIGN) → names the manager who can', async () => {
+  it('override not enabled yet (OVERRIDE_NOT_ALLOWED) → server message + the manager who can', async () => {
     const u = userEvent.setup();
     api.patchApi.mockRejectedValue(new ApiError(409, 'x', { code: 'USER_OWNS_OPEN_WORK', counts: { openApplicationsPrimary: 1 } }, { code: 'USER_OWNS_OPEN_WORK' }));
-    api.postApi.mockRejectedValue(new ApiError(403, 'Admins cannot reassign.', { code: 'ADMIN_CANNOT_REASSIGN' }, { code: 'ADMIN_CANNOT_REASSIGN' }));
+    api.postApi.mockRejectedValue(new ApiError(400, 'file.reassign override is not available on this build.', { code: 'OVERRIDE_NOT_ALLOWED' }, { code: 'OVERRIDE_NOT_ALLOWED' }));
     renderAt('/users?user=u-mariam');
     const d = await screen.findByRole('dialog', { name: 'Mariam Farag' });
     await u.click(within(d).getByRole('button', { name: 'Deactivate' }));
     await u.click(within(d).getByRole('button', { name: 'Confirm deactivate' }));
     const block = await within(d).findByRole('alert', { name: 'Open work blocks deactivation' });
     await u.selectOptions(within(block).getByLabelText(/Move their open files to/), 'u-youssef');
-    await u.type(within(block).getByLabelText(/^Reason/), 'Leaving');
+    await u.type(within(block).getByLabelText(/^Reason/), 'Leaving the company');
     await u.click(within(block).getByRole('button', { name: 'Reassign 1 file' }));
-    expect(await within(block).findByText(/Admins cannot reassign files\. Karim Hassan \(their manager\) can move them from Team work/)).toBeInTheDocument();
+    expect(await within(block).findByText(/file\.reassign override is not available on this build\. Meanwhile Karim Hassan \(their manager\) can move them from Team work/)).toBeInTheDocument();
+  });
+  it('B2-9: a 409 without the code/counts (today\'s normalizer) still opens the reassign path', async () => {
+    const u = userEvent.setup();
+    api.patchApi.mockRejectedValue(new ApiError(409, 'This user still owns open work. Reassign it first.', { code: 'CONFLICT', message: 'This user still owns open work. Reassign it first.' }, { code: 'CONFLICT' }));
+    renderAt('/users?user=u-mariam');
+    const d = await screen.findByRole('dialog', { name: 'Mariam Farag' });
+    await u.click(within(d).getByRole('button', { name: 'Deactivate' }));
+    await u.click(within(d).getByRole('button', { name: 'Confirm deactivate' }));
+    const block = await within(d).findByRole('alert', { name: 'Open work blocks deactivation' });
+    expect(block).toHaveTextContent('no counts');
+    expect(within(block).getByRole('button', { name: 'Reassign all open files' })).toBeInTheDocument();
   });
   it('invite: validates, then POST /users/invitations with the picked role', async () => {
     const u = userEvent.setup();
@@ -148,7 +164,7 @@ describe('A03 Reporting tree', () => {
     expect(flatten(buildTree(cyc))).toHaveLength(2);
     expect(isDescendant(fx.users as never[], 'u-hala', 'u-mariam')).toBe(true);
     expect(isDescendant(fx.users as never[], 'u-mariam', 'u-hala')).toBe(false);
-    expect(ownedWork(new ApiError(409, 'x', { code: 'USER_OWNS_OPEN_WORK' }, { code: 'USER_OWNS_OPEN_WORK' }))).toEqual({ openApplicationsPrimary: 0, openApplicationsTaskOwner: 0, openJobsPrimary: 0, openRequisitions: 0 });
+    expect(ownedWork(new ApiError(409, 'x', { code: 'USER_OWNS_OPEN_WORK' }, { code: 'USER_OWNS_OPEN_WORK' }))).toEqual({ openApplicationsPrimary: 0, openApplicationsTaskOwner: 0, openJobsPrimary: 0, openRequisitions: 0, countsUnknown: true });
     expect(ownedWork(new ApiError(409, 'x', { code: 'OTHER' }, { code: 'OTHER' }))).toBeNull();
   });
 });
