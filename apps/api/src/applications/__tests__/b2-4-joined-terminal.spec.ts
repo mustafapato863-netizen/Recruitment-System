@@ -1,4 +1,4 @@
-/** B2-4: Joined (and Rejected/Withdrawn) are terminal: no move, not even to Rejected; 409 FILE_CLOSED. */
+/** B2-4: Joined is terminal: no move, not even to Rejected; 409 FILE_CLOSED. */
 import { describe, expect, it } from 'vitest';
 import { ApplicationsService, CLOSED_STAGES } from '../applications.service';
 

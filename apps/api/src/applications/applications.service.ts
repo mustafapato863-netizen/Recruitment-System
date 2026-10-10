@@ -129,8 +129,8 @@ function gateActionTab(code: string): string {
   return 'Applied';
 }
 
-/** B2-4: closed (terminal) file stages. */
-export const CLOSED_STAGES = ['Joined', 'Rejected', 'Withdrawn'];
+/** B2-4: terminal file stages nothing moves. Rejected is not here: B5's audited reopen moves it back. */
+export const CLOSED_STAGES = ['Joined'];
 
 @Injectable()
 export class ApplicationsService {
@@ -583,7 +583,7 @@ export class ApplicationsService {
     if (application.stage !== dto.expectedStage || application.version !== dto.expectedVersion) {
       this.throwTransitionConflict(application);
     }
-    // B2-4 (v2 §7 "Closed files do not move"): Joined, Rejected and Withdrawn are terminal; nothing moves them (not even to Rejected).
+    // B2-4 (v2 §7 "Closed files do not move"): Joined is terminal; nothing moves it (not even to Rejected).
     if (CLOSED_STAGES.includes(application.stage)) {
       throw new ConflictException({ code: 'FILE_CLOSED', message: `This file is ${application.stage} (closed); it cannot move to ${dto.stage}.` });
     }
