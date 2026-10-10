@@ -23,7 +23,7 @@ describe.skipIf(!url)('M1 requisitions (scratch Postgres)', () => {
     const id = randomUUID();
     await prisma.vacancyRequest.create({ data: {
       id, organizationId: ORG, branchId: branch.id, positionId: position.id, requesterId: requester,
-      requestCode: `M1-${tag}-${id.slice(0, 4)}`, status, requestedHeadcount: 2, ...extra,
+      requestCode: `M1-${tag}-${id.slice(0, 13)}`, status, requestedHeadcount: 2, ...extra,
     } });
     return id;
   }
