@@ -1,3 +1,6 @@
+// B3: public careers show and accept Open and Partially Filled jobs (not held/filled/closed).
+import { ACCEPTING_JOB_STATUSES } from '../vacancy-core/vacancy-lifecycle';
+import { contactKeys } from '../candidates/contact-keys';
 import {
   BadRequestException,
   ConflictException,
@@ -55,7 +58,7 @@ export class PublicJobsService {
     const now = new Date();
     const where: Prisma.VacancyWhereInput = {
       organizationId: organization.id,
-      status: 'Open',
+      status: { in: [...ACCEPTING_JOB_STATUSES] },
       openedAt: { not: null, lte: now },
       assignments: { some: { isActive: true, assignmentKind: 'PRIMARY' } },
       ...(search
@@ -191,7 +194,7 @@ export class PublicJobsService {
             FROM "vacancies" v
             WHERE v."organizationId" = CAST(${organization.id} AS uuid)
               AND LOWER(v."vacancyCode") = LOWER(${normalizeIdentifier(vacancyCode, 'vacancy')})
-              AND v."status" = 'Open'
+              AND v."status" IN ('Open', 'Partially Filled')
               AND v."openedAt" IS NOT NULL
               AND v."openedAt" <= CURRENT_TIMESTAMP
               AND EXISTS (
@@ -212,7 +215,7 @@ export class PublicJobsService {
           where: { id: vacancyId },
           include: { position: true },
         });
-        if (!vacancy || vacancy.status !== 'Open') throw this.publicNotFound();
+        if (!vacancy || !ACCEPTING_JOB_STATUSES.includes(vacancy.status)) throw this.publicNotFound();
 
         const candidateMatches = await tx.candidate.findMany({
           where: {
@@ -262,6 +265,7 @@ export class PublicJobsService {
                 lastName: dto.lastName.trim(),
                 email,
                 phone,
+                ...contactKeys(email, phone),
                 currentTitle: cleanOptional(dto.currentTitle),
                 currentCompany: cleanOptional(dto.currentCompany),
                 location: cleanOptional(dto.location),
@@ -377,7 +381,7 @@ export class PublicJobsService {
       where: {
         organizationId,
         vacancyCode: { equals: normalizedCode, mode: 'insensitive' },
-        status: 'Open',
+        status: { in: [...ACCEPTING_JOB_STATUSES] },
         openedAt: { not: null, lte: new Date() },
         assignments: { some: { isActive: true, assignmentKind: 'PRIMARY' } },
       },

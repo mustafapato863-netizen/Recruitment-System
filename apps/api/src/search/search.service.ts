@@ -132,7 +132,13 @@ export class SearchService {
   private async searchVacancies(user: AuthUser, oversight: boolean, query: string, limit: number): Promise<GlobalSearchGroup> {
     const scope = await this.accessControl.getVacancyScopeWhere(user);
     const full = oversight ? {} : vacancyFullAccessWhere(user.userId);
-    const vacancies = await this.prisma.vacancy.findMany({
+    // B2-21: an exact job code (the caller may see codes) ranks first, so it is never cut off by the limit.
+    const exact = await this.prisma.vacancy.findMany({
+      where: { AND: [scope, { organizationId: user.organizationId }, full, { vacancyCode: { equals: query.trim(), mode: 'insensitive' } }] },
+      take: 1,
+      select: { id: true, vacancyCode: true, status: true, approvedHeadcount: true, joinedHeadcount: true, position: { select: { title: true } }, branch: { select: { name: true } } },
+    });
+    const found = await this.prisma.vacancy.findMany({
       where: {
         AND: [
           scope,
@@ -153,6 +159,7 @@ export class SearchService {
         position: { select: { title: true } }, branch: { select: { name: true } },
       },
     });
+    const vacancies = [...exact, ...found.filter((v) => !exact.some((e) => e.id === v.id))].slice(0, limit);
     const fullIds = oversight
       ? new Set(vacancies.map((v) => v.id))
       : new Set((await this.prisma.vacancy.findMany({ where: { AND: [{ id: { in: vacancies.map((v) => v.id) } }, full] }, select: { id: true } })).map((v) => v.id));

@@ -1,3 +1,4 @@
+import { MatchingModule } from '../matching/matching.module';
 import { Module } from '@nestjs/common';
 import { InterviewsController } from './interviews.controller';
 import { MeInterviewsController } from './me-interviews.controller';
@@ -10,7 +11,7 @@ import { AccessControlModule } from '../access-control/access-control.module';
 import { DocumentsModule } from '../documents/documents.module';
 
 @Module({
-  imports: [DatabaseModule, NotificationsModule, AccessControlModule, DocumentsModule],
+  imports: [DatabaseModule, NotificationsModule, AccessControlModule, DocumentsModule, MatchingModule],
   controllers: [InterviewsController, PublicInterviewsController, MeInterviewsController],
   providers: [InterviewsService, SelfScheduleService],
   exports: [InterviewsService, SelfScheduleService],

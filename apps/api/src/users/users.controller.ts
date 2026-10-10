@@ -8,7 +8,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { TenantScopedGuard } from '../common/guards/tenant-scoped.guard';
 import { TenantResource } from '../common/decorators/tenant-resource.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { RequirePermissions, RequireAnyPermissions } from '../common/decorators/require-permissions.decorator';
+import { RequirePermissions } from '../common/decorators/require-permissions.decorator';
 import { AuditAction } from '../common/decorators/audit-action.decorator';
 import type { AuthUser } from '@recruitflow/contracts';
 
@@ -32,8 +32,8 @@ export class UsersController {
     return this.usersService.list(user.organizationId);
   }
 
+  /** B2-16: any signed-in user gets HIS OWN reports (the list is the caller's reporting tree only), so a Hiring Manager's Team work and requisition picker work. */
   @Get('assignable')
-  @RequireAnyPermissions('VACANCY_MANAGE', 'VACANCY_ASSIGN', 'VACANCY_REASSIGN')
   listAssignable(@CurrentUser() user: AuthUser) {
     return this.usersService.listAssignable(user.organizationId, user.userId);
   }

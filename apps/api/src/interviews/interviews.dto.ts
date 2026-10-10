@@ -31,10 +31,9 @@ export class CreateInterviewDto {
   @MaxLength(120)
   interviewerJobTitle?: string | null;
 
+  /** B5: no longer accepted. Kept only so the API can answer 400 INTERVIEWER_NOT_A_USER. */
   @IsOptional()
-  @IsString()
-  @MaxLength(200)
-  interviewerName?: string | null;
+  interviewerName?: unknown;
 
   @IsOptional()
   @IsObject()
@@ -55,11 +54,17 @@ export class CreateInterviewDto {
   @MaxLength(50)
   timezone?: string;
 
+  /** B5: online room. https only, host on INTERVIEW_ROOM_HOSTS (validated in the service). */
   @IsOptional()
   @IsString()
-  @IsUrl({ protocols: ['http', 'https'], require_protocol: true }, { message: 'Meeting link must be a valid HTTP or HTTPS URL.' })
   @MaxLength(500)
   locationUrl?: string | null;
+
+  /** B5: physical room when the interview is not online. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  roomName?: string | null;
 
   @IsOptional()
   @IsArray()
@@ -85,11 +90,17 @@ export class UpdateInterviewDto {
   @IsISO8601()
   scheduledEnd?: string;
 
+  /** B5: online room. https only, host on INTERVIEW_ROOM_HOSTS (validated in the service). */
   @IsOptional()
   @IsString()
-  @IsUrl({ protocols: ['http', 'https'], require_protocol: true }, { message: 'Meeting link must be a valid HTTP or HTTPS URL.' })
   @MaxLength(500)
   locationUrl?: string | null;
+
+  /** B5: physical room when the interview is not online. */
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  roomName?: string | null;
 
   @IsOptional()
   @IsEnum(['Scheduled', 'Completed', 'Cancelled', 'Rescheduled'])
@@ -133,6 +144,42 @@ export class SubmitScorecardDto {
   @MinLength(1)
   @MaxLength(5000)
   notes!: string;
+
+  /** B5: Draft saves without submitting; default Submitted. */
+  @IsOptional()
+  @IsEnum(['Draft', 'Submitted'])
+  status?: 'Draft' | 'Submitted';
+}
+
+/** B5: revise a Submitted scorecard (new revision, reason required). */
+export class ReviseScorecardDto {
+  @IsInt()
+  @Min(1)
+  @Max(5)
+  overallRating!: number;
+
+  @IsEnum(['Strong Hire', 'Hire', 'Neutral', 'No Hire', 'Strong No Hire'])
+  recommendation!: 'Strong Hire' | 'Hire' | 'Neutral' | 'No Hire' | 'Strong No Hire';
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(5000)
+  strengths?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(5000)
+  concerns?: string;
+
+  @IsString()
+  @MinLength(1)
+  @MaxLength(5000)
+  notes!: string;
+
+  @IsString()
+  @MinLength(3)
+  @MaxLength(1000)
+  reason!: string;
 }
 
 export class UpdateInterviewResponseDto {

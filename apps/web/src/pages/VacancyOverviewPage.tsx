@@ -120,12 +120,15 @@ export function VacancyOverviewPage() {
 
   const handleStatusChange = async (newStatus: VacancyStatus) => {
     if (!id) return;
+    // B3: hold / reopen / close need a reason (written to the job's status history).
+    const reason = window.prompt(`Reason for setting this job to ${newStatus}`)?.trim();
+    if (!reason) return;
     try {
-      const updated = await patchApi<VacancyDetailView>(`/vacancies/${id}/status`, { status: newStatus });
+      const updated = await patchApi<VacancyDetailView>(`/vacancies/${id}/status`, { status: newStatus, reason });
       if (updated) {
         setVacancy(updated);
       }
-      showToast(`✓ Requisition status updated to ${newStatus}`);
+      showToast(`✓ Job status updated to ${newStatus}`);
       setIsActionsDropdownOpen(false);
       void loadAllData();
     } catch (err: unknown) {
@@ -330,7 +333,7 @@ export function VacancyOverviewPage() {
         roleCode: 'RECRUITER',
         assignmentKind: 'PRIMARY',
       });
-      const isActivation = vacancy.status === 'Pending Activation';
+      const isActivation = (vacancy.status as string) === 'Pending Activation'; // legacy, removed in B3
       const willBeOpen =
         isActivation &&
         (updated?.status === 'Open' || Boolean(vacancy.jobSummary?.trim()));
@@ -498,7 +501,7 @@ export function VacancyOverviewPage() {
               Assign a primary recruiter before working on this open vacancy.
             </p>
           )}
-          {vacancy?.status === 'Pending Activation' && (() => {
+          {vacancy && (vacancy.status as string) === 'Pending Activation' && (() => {
             const blockingReasons = getVacancyBlockingReasons(vacancy);
             return (
               <div className="mt-3 rounded-2xl border border-amber-300 bg-amber-50/80 p-3.5 text-xs dark:border-amber-800 dark:bg-amber-950/30">
