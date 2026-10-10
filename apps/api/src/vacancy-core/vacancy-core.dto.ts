@@ -375,12 +375,17 @@ export class JobStatusReasonDto {
   holdUntil?: string;
 }
 
-/** B3: cancel a requisition. Reason required once approved (enforced in the service). */
+/** B3 / B2F-9: cancel a requisition. A close reason from master data is always required ("Other" + note; enforced in the service). */
 export class CancelVacancyRequestDto {
   @IsOptional()
   @IsString()
   @MaxLength(1000)
   reason?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(1000)
+  note?: string;
 }
 
 /** B3: activate an approved requisition. */
