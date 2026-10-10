@@ -51,6 +51,7 @@ export class ScreeningService {
     options: { viewSalary: boolean } = { viewSalary: false },
     user?: AuthUser,
   ): Promise<ScreeningLog> {
+    if (user) await this.accessControl.assertApplicationAccess(user, dto.applicationId);
     const visibility = user
       ? await this.accessControl.getApplicationVisibilityWhere(user)
       : { organizationId };
