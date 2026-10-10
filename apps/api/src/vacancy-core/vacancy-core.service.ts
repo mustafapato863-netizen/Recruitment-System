@@ -1367,14 +1367,12 @@ export class VacancyCoreService {
     // B2R-2: an Administrator's DELETE is the audited override: a close reason from master data
     // ("Other" + note) is required and an ADMIN_OVERRIDE audit row is written with the close.
     const adminOverride = Boolean(user?.roleCodes?.includes('ADMINISTRATOR'));
-    let overrideReason: string | null = null;
-    if (adminOverride) {
-      const raw = body.reason?.trim() ?? '';
-      if (!raw) throw new BadRequestException({ code: 'REASON_REQUIRED', field: 'reason', message: 'An administrator closing a job must give a close reason.' });
-      overrideReason = await resolveJobStatusReason(this.prisma, organizationId, 'close-reasons', raw, body.note);
-    } else if (user) {
-      await assertJobOwnerOrManager(this.prisma, organizationId, id, user.userId);
-    }
+    if (!adminOverride && user) await assertJobOwnerOrManager(this.prisma, organizationId, id, user.userId);
+    // Every DELETE (owner, manager, admin) needs a close reason from master data ("Other" + note),
+    // checked after authorization like close. It goes to status history and the audit entry.
+    const raw = body.reason?.trim() ?? '';
+    if (!raw) throw new BadRequestException({ code: 'REASON_REQUIRED', field: 'reason', message: 'A close reason is required to deactivate a job.' });
+    const closeReason = await resolveJobStatusReason(this.prisma, organizationId, 'close-reasons', raw, body.note);
     const vacancy = await this.prisma.vacancy.findFirst({
       where: { id, organizationId },
       select: { id: true, status: true, vacancyRequestId: true },
@@ -1396,13 +1394,11 @@ export class VacancyCoreService {
 
     if (vacancy.status !== 'Closed') {
       await this.prisma.$transaction(async (transaction) => {
-        await transaction.vacancy.update({ where: { id }, data: { status: 'Closed' } });
-        if (adminOverride && user) {
-          await transaction.auditLog.create({ data: {
-            action: 'ADMIN_OVERRIDE', actorUserId: user.userId, organizationId, entityType: 'Vacancy', entityId: id, result: 'Success', reason: overrideReason,
-            beforeData: { action: 'job.close', status: vacancy.status }, afterData: { action: 'job.close', status: 'Closed' },
-          } });
-        }
+        await writeJobStatus(transaction, vacancy, 'Closed', closeReason, user?.userId ?? null, { holdUntil: null });
+        await transaction.auditLog.create({ data: {
+          action: adminOverride ? 'ADMIN_OVERRIDE' : 'VACANCY_CLOSE', actorUserId: user?.userId ?? null, organizationId, entityType: 'Vacancy', entityId: id, result: 'Success', reason: closeReason,
+          beforeData: { action: 'job.close', via: 'DELETE', status: vacancy.status }, afterData: { action: 'job.close', via: 'DELETE', status: 'Closed' },
+        } });
         await transaction.vacancyRequest.updateMany({
           where: { id: vacancy.vacancyRequestId, status: { notIn: ['Cancelled', 'Rejected'] } },
           data: { status: 'Cancelled' },

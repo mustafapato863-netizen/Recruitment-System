@@ -375,8 +375,9 @@ export class JobStatusReasonDto {
   holdUntil?: string;
 }
 
-/** B2R-2: DELETE /vacancies/:id body. Required for Administrators (close reason from master data; note for "Other"). */
+/** DELETE /vacancies/:id body, required for everyone: a close reason from master data; note for "Other". */
 export class DeleteVacancyDto {
+  // Optional at the pipe so authorization (403) is checked before the reason (400 REASON_REQUIRED) in the service.
   @IsOptional() @IsString() @MaxLength(1000) reason?: string;
   @IsOptional() @IsString() @MaxLength(1000) note?: string;
 }
