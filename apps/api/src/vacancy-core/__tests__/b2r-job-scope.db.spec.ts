@@ -83,4 +83,27 @@ describe.skipIf(!url)('B2R job scope and actions (scratch Postgres)', () => {
     expect(audit[0]).toMatchObject({ actorUserId: u.admin, entityType: 'Vacancy', reason: 'Other: Duplicate job' });
     expect((await prisma.vacancyStatusHistory.findFirstOrThrow({ where: { vacancyId: job, toStatus: 'Closed' } })).reason).toBe('Other: Duplicate job');
   });
+
+  it('B2F-1: DELETE with "Other" and no note is 400 REASON_REQUIRED on field note', async () => {
+    const job = await newJob();
+    const e = await svc.deleteVacancy(job, ORG, as('hm'), { reason: 'Other' }).catch((x: { response?: unknown }) => x.response);
+    expect(e).toMatchObject({ code: 'REASON_REQUIRED', field: 'note' });
+    const r = await svc.deleteVacancy(job, ORG, as('hm'), { reason: 'Nope' }).catch((x: { response?: unknown }) => x.response);
+    expect(r).toMatchObject({ code: 'REASON_NOT_IN_LIST', field: 'reason' });
+  });
+
+  it('B2F-4: the admin override holds, reopens and closes past the owner check; audited, with status history', async () => {
+    const job = await newJob();
+    expect(await code(svc.overrideJobStatus(job, ORG, as('hm'), 'hold', 'Hiring freeze'))).toBe('FORBIDDEN');
+    expect((await svc.overrideJobStatus(job, ORG, as('admin'), 'hold', 'Hiring freeze')).status).toBe('On Hold');
+    expect((await svc.overrideJobStatus(job, ORG, as('admin'), 'reopen', 'Freeze lifted by the board')).status).toBe('Open');
+    expect(await code(svc.overrideJobStatus(job, ORG, as('admin'), 'close', 'Other'))).toBe('REASON_REQUIRED');
+    expect((await svc.overrideJobStatus(job, ORG, as('admin'), 'close', 'Other', { note: 'Org restructure' })).status).toBe('Closed');
+    const audit = await prisma.auditLog.findMany({ where: { entityId: job, action: 'ADMIN_OVERRIDE' }, orderBy: { createdAt: 'asc' } });
+    expect(audit.map((a) => a.reason)).toEqual(['Hiring freeze', 'Freeze lifted by the board', 'Other: Org restructure']);
+    const hist = await prisma.vacancyStatusHistory.findMany({ where: { vacancyId: job }, orderBy: { createdAt: 'asc' } });
+    expect(hist.map((h) => [h.toStatus, h.changedById])).toEqual([['On Hold', u.admin], ['Open', u.admin], ['Closed', u.admin]]);
+    // the owner's path still refuses the admin
+    expect(await code(svc.holdVacancy(job, ORG, 'Hiring freeze', as('admin')))).toBe('ADMIN_CANNOT_CHANGE_JOB_STATUS');
+  });
 });

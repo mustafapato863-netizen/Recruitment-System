@@ -1074,6 +1074,21 @@ export class VacancyCoreService {
     return this.changeJobStatus(id, organizationId, user, 'close', reason, () => 'Closed', { note: opts.note });
   }
 
+  /**
+   * B2F-4: admin override of hold / reopen / close (POST /admin/overrides). Administrators only. Runs the same
+   * transition table, reason lists (hold/close: list value or "Other" + note) and status history as the owner's
+   * path, skips the owner check, and writes the ADMIN_OVERRIDE audit row in the same transaction.
+   */
+  async overrideJobStatus(id: string, organizationId: string, admin: AuthUser, action: 'hold' | 'reopen' | 'close', reason: string, opts: { note?: string | null; holdUntil?: string | null } = {}): Promise<Vacancy> {
+    if (!admin.roleCodes?.includes('ADMINISTRATOR')) throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Only an administrator can use an override.' });
+    if (action === 'hold') return this.changeJobStatus(id, organizationId, admin, 'hold', reason, () => 'On Hold', { note: opts.note, holdUntil: parseHoldUntil(opts.holdUntil), adminOverride: true });
+    if (action === 'close') return this.changeJobStatus(id, organizationId, admin, 'close', reason, () => 'Closed', { note: opts.note, adminOverride: true });
+    return this.changeJobStatus(id, organizationId, admin, 'reopen', reason, (job) => {
+      if (job.status !== 'On Hold') throw new ConflictException({ code: 'ILLEGAL_JOB_TRANSITION', message: `Only a held job can be reopened (job is ${job.status}).` });
+      return seatStatus(job.joinedHeadcount, job.approvedHeadcount);
+    }, { adminOverride: true });
+  }
+
   private async changeJobStatus(
     id: string,
     organizationId: string,
@@ -1081,12 +1096,14 @@ export class VacancyCoreService {
     action: 'hold' | 'reopen' | 'close',
     reason: string | null | undefined,
     target: (job: { status: string; joinedHeadcount: number; approvedHeadcount: number }) => JobStatus,
-    opts: { note?: string | null | undefined; holdUntil?: Date | null | undefined } = {},
+    opts: { note?: string | null | undefined; holdUntil?: Date | null | undefined; adminOverride?: boolean } = {},
   ): Promise<Vacancy> {
     // B2R-3 precedence: 404 (no such job in the org) -> 403 ADMIN_CANNOT_CHANGE_JOB_STATUS / JOB_NOT_OWNED -> 400 reason.
+    // B2F-4: the audited admin override (POST /admin/overrides) skips the owner check; nothing else does.
+    const override = Boolean(opts.adminOverride && user?.roleCodes?.includes('ADMINISTRATOR'));
     await this.assertJobExists(organizationId, id);
     if (!user) throw new ForbiddenException('Only the job owner or their manager can change job status.');
-    await assertJobOwnerOrManager(this.prisma, organizationId, id, user.userId);
+    if (!override) await assertJobOwnerOrManager(this.prisma, organizationId, id, user.userId);
     let text = requireReason(reason, `${action} this job`);
     await this.prisma.$transaction(async (tx) => {
       const job = await tx.vacancy.findFirst({
@@ -1094,7 +1111,7 @@ export class VacancyCoreService {
         select: { id: true, status: true, joinedHeadcount: true, approvedHeadcount: true },
       });
       if (!job) throw new NotFoundException(`Vacancy ${id} was not found.`);
-      await assertJobOwnerOrManager(tx, organizationId, id, user.userId);
+      if (!override) await assertJobOwnerOrManager(tx, organizationId, id, user.userId);
       // B3: hold and close reasons come from master data ('hold-reasons' / 'close-reasons');
       // "Other" needs a free-text note. Reopen keeps a free-text reason. Checked after authorization.
       if (action === 'hold' || action === 'close') {
@@ -1105,6 +1122,12 @@ export class VacancyCoreService {
         throw new ConflictException({ code: 'ILLEGAL_JOB_TRANSITION', message: `Job is already ${to}.` });
       }
       await writeJobStatus(tx, job, to, text, user.userId, action === 'hold' ? { holdUntil: opts.holdUntil ?? null } : { holdUntil: null }, action === 'hold' ? opts.holdUntil ?? null : null);
+      if (override) {
+        await tx.auditLog.create({ data: {
+          organizationId, actorUserId: user.userId, action: 'ADMIN_OVERRIDE', entityType: 'Vacancy', entityId: id, result: 'Success', reason: text,
+          beforeData: { action: `job.${action}`, status: job.status }, afterData: { action: `job.${action}`, status: to },
+        } });
+      }
     });
     const updated = await this.repository.getVacancy(organizationId, id);
     if (!updated) throw new NotFoundException(`Vacancy ${id} was not found.`);
