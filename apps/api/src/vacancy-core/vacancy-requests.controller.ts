@@ -27,7 +27,7 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { TenantScopedGuard } from '../common/guards/tenant-scoped.guard';
 import { TenantResource } from '../common/decorators/tenant-resource.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { RequirePermissions } from '../common/decorators/require-permissions.decorator';
+import { RequireAnyPermissions, RequirePermissions } from '../common/decorators/require-permissions.decorator';
 import { AuditAction } from '../common/decorators/audit-action.decorator';
 
 @UseGuards(JwtAuthGuard)
@@ -170,7 +170,8 @@ export class VacancyRequestsController {
 
   @Post(':id/activate')
   @HttpCode(HttpStatus.OK)
-  @RequirePermissions('VACANCY_MANAGE')
+  // B2-2: the requesting Manager activates his own requisition (the service checks requester/manager or VACANCY_MANAGE).
+  @RequireAnyPermissions('VACANCY_MANAGE', 'VACANCY_REQUEST_CREATE')
   @AuditAction('VACANCY_REQUEST_ACTIVATE')
   @UseGuards(TenantScopedGuard)
   @TenantResource({ resource: 'vacancyRequest', param: 'id' })

@@ -131,6 +131,9 @@ function gateActionTab(code: string): string {
   return 'Applied';
 }
 
+/** B2-4: closed (terminal) file stages. */
+export const CLOSED_STAGES = ['Joined', 'Rejected', 'Withdrawn'];
+
 @Injectable()
 export class ApplicationsService {
   private readonly logger = new Logger(ApplicationsService.name);
@@ -600,6 +603,10 @@ export class ApplicationsService {
 
     if (application.stage !== dto.expectedStage || application.version !== dto.expectedVersion) {
       this.throwTransitionConflict(application);
+    }
+    // B2-4 (v2 §7 "Closed files do not move"): Joined, Rejected and Withdrawn are terminal; nothing moves them (not even to Rejected).
+    if (CLOSED_STAGES.includes(application.stage)) {
+      throw new ConflictException({ code: 'FILE_CLOSED', message: `This file is ${application.stage} (closed); it cannot move to ${dto.stage}.` });
     }
 
     // Applications created before a pipeline template was configured (or
