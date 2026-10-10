@@ -183,7 +183,7 @@ export function JobPipelineV2() {
 
       {drawer === 'status' && mayChangeStatus ? <JobStatusDrawer job={job} onClose={() => setDrawer(null)} onDone={() => { setDrawer(null); reload(); }} /> : null}
       {drawer === 'suggest' ? <SuggestDrawer job={job} accepting={accepting} onClose={() => setDrawer(null)} onAdded={reload} /> : null}
-      {drawer === 'import' ? <ImportCvsDrawer job={job} onClose={() => setDrawer(null)} onDone={() => { setDrawer(null); reload(); }} /> : null}
+      {drawer === 'import' ? <ImportCvsDrawer job={job} onClose={() => setDrawer(null)} onDone={() => { setDrawer(null); reload(); }} onImported={reload} /> : null}
     </div>
   );
 }
