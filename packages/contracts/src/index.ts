@@ -52,7 +52,7 @@ export const errorCodes = [
 function domainErrorCodes() {
   return [
     // B3 requisition / job lifecycle
-    'ADMIN_CANNOT_CHANGE_JOB_STATUS', 'ASSIGNEE_NOT_ELIGIBLE', 'ASSIGNEE_REQUIRED', 'DUE_DATE_REQUIRED', 'SEATS_BELOW_JOINED', 'REQUISITION_NOT_ACTIVE', 'DEPARTMENT_NOT_FOUND',
+    'ADMIN_CANNOT_CHANGE_JOB_STATUS', 'ASSIGNEE_NOT_ELIGIBLE', 'ASSIGNEE_REQUIRED', 'DUE_DATE_REQUIRED', 'SEATS_BELOW_JOINED', 'REQUISITION_NOT_APPROVED', 'REQUISITION_NOT_ACTIVE', 'DEPARTMENT_NOT_FOUND',
     'GRADE_NOT_FOUND', 'ILLEGAL_JOB_TRANSITION', 'JOB_NOT_ACCEPTING_APPLICATIONS', 'NOT_JOB_OWNER',
     'REASON_REQUIRED', 'REQUISITION_CANCELLED', 'REASON_NOT_IN_LIST', 'HOLD_UNTIL_NOT_FUTURE',
     // B5 gates
@@ -1873,6 +1873,23 @@ export interface MyWorkTarget extends TargetChip {
   department: string | null;
   site: string | null;
   owner: { id: string; name: string } | null;
+}
+
+/** M2-M4: GET /team/work — direct reports' My Work, each item tagged with its owner. */
+export type TeamWorkItem = MyWorkItem & { owner: { id: string; name: string } };
+export interface TeamWorkResponse {
+  timezone: string;
+  day: MyWorkDay;
+  date: string;
+  generatedAt: string;
+  people: Array<{ id: string; name: string }>;
+  counts: { overdue: number; today: number; waitingOnOthers: number };
+  overdue: TeamWorkItem[];
+  dueToday: TeamWorkItem[];
+  waitingOnOthers: TeamWorkItem[];
+  targets: Array<MyWorkTarget & { owner: { id: string; name: string } }>;
+  empty: boolean;
+  emptyMessage: string | null;
 }
 
 export interface MyWorkResponse {
