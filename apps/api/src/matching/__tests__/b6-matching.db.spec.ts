@@ -3,6 +3,7 @@
  * B6_TEST_DATABASE_URL is set. NEVER point this at production.
  */
 import { randomUUID } from 'node:crypto';
+import { Prisma } from '@recruitflow/database';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PrismaService } from '../../database/prisma.service';
 import { UserPermissionsService } from '../../common/user-permissions.service';
@@ -67,7 +68,14 @@ describe.skipIf(!url)('B6 suggest, compare, evidence, duplicates (scratch Postgr
     const tpl = await prisma.vacancy.findFirstOrThrow({ where: { organizationId: ORG }, orderBy: { createdAt: 'asc' } });
     const vac = await prisma.vacancy.update({ where: { id: tpl.id }, data: { requiredSkills: [` iCu   ${tag} `, `BLS ${tag}`, `Triage ${tag}`, 'Not In Library'] } });
     ids.vac = vac.id;
-    await prisma.vacancyAssignment.create({ data: { vacancyId: vac.id, userId: ids.owner!, roleCode: 'RECRUITER', assignmentKind: 'PRIMARY' } });
+    // Same shape the API writes: exactly one active PRIMARY (mirrored in Vacancy.primaryRecruiterId when B1 is on the base), atomically,
+    // because other suites check that invariant concurrently.
+    const hasOwnerCol = 'primaryRecruiterId' in Prisma.VacancyScalarFieldEnum;
+    await prisma.$transaction([
+      prisma.vacancyAssignment.updateMany({ where: { vacancyId: vac.id, assignmentKind: 'PRIMARY', isActive: true }, data: { isActive: false } }),
+      prisma.vacancyAssignment.create({ data: { vacancyId: vac.id, userId: ids.owner!, roleCode: 'RECRUITER', assignmentKind: 'PRIMARY', isActive: true } }),
+      ...(hasOwnerCol ? [prisma.vacancy.update({ where: { id: vac.id }, data: { primaryRecruiterId: ids.owner! } as never })] : []),
+    ]);
 
     // A: 2 skills with evidence; B: 3 skills, 1 evidenced; C: 2 skills no evidence; D: 1 evidenced (older)
     ids.A = await cand('A'); ids.B = await cand('B'); ids.C = await cand('C'); ids.D = await cand('D');
