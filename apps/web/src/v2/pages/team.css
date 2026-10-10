@@ -44,3 +44,6 @@
 [data-ui='v2'] .rf2-decide__offer > span { position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); white-space: nowrap; color: var(--rf2-action); font-size: var(--rf2-text-caption); font-weight: 600; }
 [data-ui='v2'] .rf2-decide__reject { display: flex; flex-direction: column; align-items: flex-start; gap: var(--rf2-space-0-5); }
 [data-ui='v2'] .rf2-team__wicon[data-tone='warning'] { color: var(--rf2-warning); }
+[data-ui='v2'] .rf2-decide__payform { display: flex; flex-direction: column; gap: var(--rf2-space-1); margin: 0; padding: var(--rf2-space-1-5); border: 1px solid var(--rf2-border); border-radius: var(--rf2-radius-card); }
+[data-ui='v2'] .rf2-decide__payform legend { padding: 0 var(--rf2-space-0-5); }
+[data-ui='v2'] .rf2-decide__allow { display: grid; grid-template-columns: 1fr 140px auto; gap: var(--rf2-space-1); align-items: end; }
