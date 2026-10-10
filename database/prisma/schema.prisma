@@ -221,6 +221,8 @@ model Permission {
   description    String?
   organizationId String?          @db.Uuid
   organization   Organization?    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  /// B2: Active | Inactive | Retired. Only Active permissions are effective.
+  status         String           @default("Active") @db.VarChar(30)
   roleLinks      RolePermission[]
   createdAt      DateTime         @default(now()) @db.Timestamptz(6)
   updatedAt      DateTime         @updatedAt @db.Timestamptz(6)
@@ -435,6 +437,8 @@ model Candidate {
   languages             String[]              @default([]) @db.VarChar(50)
   availability          String?               @db.VarChar(60)
   metadata              Json?
+  /// B2: set once by the admin-only legal-erasure anonymize action (irreversible).
+  anonymizedAt          DateTime?             @db.Timestamptz(6)
   applications          Application[]
   createdById           String?               @db.Uuid
   createdBy             User?                 @relation("CandidateCreator", fields: [createdById], references: [id], onDelete: SetNull)
@@ -544,6 +548,8 @@ model CandidateDocument {
   deletedById            String?                 @db.Uuid
   deletedBy              User?                   @relation("DocumentDeleter", fields: [deletedById], references: [id], onDelete: Restrict)
   deletionReason         String?                 @db.Text
+  /// B2: file bytes removed and metadata scrubbed by candidate anonymize.
+  anonymizedAt           DateTime?               @db.Timestamptz(6)
   uploadedById           String?                 @db.Uuid
   uploadedBy             User?                   @relation(fields: [uploadedById], references: [id], onDelete: Restrict)
   complianceRequirements ComplianceRequirement[]
@@ -815,6 +821,8 @@ model TalentPoolCandidate {
   consentExpiry   DateTime?  @db.Timestamptz(6)
   source          String?    @db.VarChar(100)
   addedAt         DateTime   @default(now()) @db.Timestamptz(6)
+  /// B2: soft unlink. Removing a candidate from a pool sets this; re-adding clears it.
+  removedAt       DateTime?  @db.Timestamptz(6)
 
   @@unique([talentPoolId, candidateId])
   @@index([candidateId])

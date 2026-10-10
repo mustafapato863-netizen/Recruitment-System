@@ -134,7 +134,7 @@ export function VacancyOverviewPage() {
       await deleteApi(`/vacancies/${vacancy.id}`);
       navigate('/vacancies', { replace: true });
     } catch (err: unknown) {
-      showToast(err instanceof Error ? err.message : 'Failed to delete vacancy');
+      showToast(err instanceof Error ? err.message : 'Failed to deactivate job');
       setIsDeleteDialogOpen(false);
     } finally {
       setIsDeleting(false);
@@ -591,7 +591,7 @@ export function VacancyOverviewPage() {
                       className="flex w-full cursor-pointer items-center gap-2 px-3.5 py-2.5 text-left font-semibold text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-950/30"
                     >
                       <Icon name="trash" size={13} />
-                      <span>Delete requisition</span>
+                      <span>Deactivate job</span>
                     </button>
                   </>
                 )}
@@ -599,7 +599,7 @@ export function VacancyOverviewPage() {
                 <div className="px-3.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
                   Status
                 </div>
-                {(['Open', 'On Hold', 'Cancelled'] as VacancyStatus[]).map((st) => (
+                {(['Open', 'On Hold', 'Closed'] as VacancyStatus[]).map((st) => (
                   <button
                     key={st}
                     type="button"
@@ -1747,9 +1747,9 @@ export function VacancyOverviewPage() {
           if (!isDeleting) setIsDeleteDialogOpen(false);
         }}
         onConfirm={handleDeleteVacancy}
-        title="Delete requisition permanently?"
-        description="This removes the requisition and its setup records permanently. Requisitions with applications cannot be deleted and must be cancelled instead."
-        confirmLabel="Delete permanently"
+        title="Deactivate this job?"
+        description="The job is set to Cancelled and its open requisition is cancelled. Nothing is deleted; history stays. Jobs with open applications must have them closed first."
+        confirmLabel="Deactivate job"
         tone="danger"
         icon="trash"
         isLoading={isDeleting}

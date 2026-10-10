@@ -191,6 +191,7 @@ Table permissions {
   description String
   organizationId String
   organization organizations
+  status String [not null, default: 'Active', note: 'B2: Active | Inactive | Retired. Only Active permissions are effective.']
   roleLinks role_permissions [not null]
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [not null]
@@ -387,6 +388,7 @@ Table candidates {
   languages String[] [not null]
   availability String
   metadata Json
+  anonymizedAt DateTime [note: 'B2: set once by the admin-only legal-erasure anonymize action (irreversible).']
   applications applications [not null]
   createdById String
   createdBy users
@@ -482,6 +484,7 @@ Table candidate_documents {
   deletedById String
   deletedBy users
   deletionReason String
+  anonymizedAt DateTime [note: 'B2: file bytes removed and metadata scrubbed by candidate anonymize.']
   uploadedById String
   uploadedBy users
   complianceRequirements compliance_requirements [not null]
@@ -707,6 +710,7 @@ Table talent_pool_candidates {
   consentExpiry DateTime
   source String
   addedAt DateTime [default: `now()`, not null]
+  removedAt DateTime [note: 'B2: soft unlink. Removing a candidate from a pool sets this; re-adding clears it.']
 
   indexes {
     (talentPoolId, candidateId) [unique]

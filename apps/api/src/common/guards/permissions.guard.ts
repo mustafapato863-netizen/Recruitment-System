@@ -54,6 +54,7 @@ export class PermissionsGuard implements CanActivate {
             role: {
               include: {
                 permissions: {
+                  where: { permission: { status: 'Active' } },
                   include: { permission: true },
                 },
               },

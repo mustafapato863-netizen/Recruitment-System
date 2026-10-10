@@ -170,7 +170,9 @@ export class VacancyCoreService {
   }
 
   async listVacancies(organizationId: string, user?: AuthUser): Promise<Array<Vacancy | RedactedVacancy>> {
-    const vacancies = await this.repository.listVacancies(organizationId);
+    // B2: deactivated (Closed) jobs drop out of default lists and pickers;
+    // they stay readable by id and in history. Legacy Cancelled jobs too.
+    const vacancies = (await this.repository.listVacancies(organizationId)).filter((vacancy) => !INACTIVE_JOB_STATUSES.includes(vacancy.status));
     if (!user || !this.accessControl || vacancies.length === 0) return vacancies;
     const access = await this.vacancyAccess(organizationId, user);
     const inScope = await this.prisma.vacancy.findMany({
@@ -215,7 +217,8 @@ export class VacancyCoreService {
     const access = await this.vacancyAccess(organizationId, user);
     // AND-composed so the search OR can never widen the scope predicate.
     const filters: Prisma.VacancyWhereInput[] = [access.scopeWhere];
-    if (query.status) filters.push({ status: query.status });
+    // B2: default lists hide deactivated (Closed/legacy Cancelled) jobs.
+    filters.push(query.status ? { status: query.status } : { status: { notIn: INACTIVE_JOB_STATUSES } });
     if (query.search?.trim()) {
       const term = query.search.trim();
       filters.push({
@@ -1027,55 +1030,49 @@ export class VacancyCoreService {
     return detail!;
   }
 
+  /**
+   * B2 (v2 §3): no delete for anyone, including Admin. DELETE /vacancies/:id
+   * deactivates the job (status Closed; Cancelled is a requisition-only
+   * state per v2 §3) and cancels its requisition when that is still open. Assignments, approvals and history are kept.
+   */
   async deleteVacancy(
     id: string,
     organizationId: string,
     user?: AuthUser,
-  ): Promise<{ deleted: true; id: string }> {
-    if (!user) {
-      throw new ForbiddenException('Only administrators can delete vacancies.');
-    }
-
-    // Keep this check server-side and authoritative. The UI hides the action for
-    // non-admins, but the role guard must still protect direct API requests.
-    const administrator = await this.prisma.user.findFirst({
-      where: {
-        id: user.userId,
-        organizationId,
-        status: 'Active',
-        userRoles: {
-          some: { role: { code: 'ADMINISTRATOR', status: 'Active' } },
-        },
-      },
-      select: { id: true },
-    });
-    if (!administrator) {
-      throw new ForbiddenException('Only administrators can delete vacancies.');
-    }
-
+  ): Promise<{ id: string; deactivated: true; status: 'Closed' }> {
+    // B1 x B2 merge: deactivating is a write, so another owner's job is 403
+    // (JOB_NOT_OWNED) and an out-of-scope job is 404, like the other job writes.
+    await this.assertVacancyVisible(organizationId, id, user);
     const vacancy = await this.prisma.vacancy.findFirst({
       where: { id, organizationId },
-      select: { id: true, vacancyRequestId: true },
+      select: { id: true, status: true, vacancyRequestId: true },
     });
     if (!vacancy) {
       throw new NotFoundException(`Vacancy ${id} was not found.`);
     }
 
-    const applicationCount = await this.prisma.application.count({ where: { vacancyId: id } });
-    if (applicationCount > 0) {
-      throw new ConflictException(
-        'This vacancy has applications and cannot be deleted. Cancel or archive it instead.',
-      );
+    const openApplications = await this.prisma.application.count({
+      where: { vacancyId: id, stage: { notIn: ['Joined', 'Rejected', 'Withdrawn'] } },
+    });
+    if (openApplications > 0) {
+      throw new ConflictException({
+        code: 'JOB_HAS_OPEN_APPLICATIONS',
+        message: `This job has ${openApplications} open application(s). Close or move them before deactivating the job.`,
+        counts: { openApplications },
+      });
     }
 
-    await this.prisma.$transaction(async (transaction) => {
-      await transaction.vacancyAssignment.deleteMany({ where: { vacancyId: id } });
-      await transaction.vacancyRequestApproval.deleteMany({ where: { vacancyRequestId: vacancy.vacancyRequestId } });
-      await transaction.vacancy.delete({ where: { id } });
-      await transaction.vacancyRequest.delete({ where: { id: vacancy.vacancyRequestId } });
-    });
+    if (vacancy.status !== 'Closed') {
+      await this.prisma.$transaction(async (transaction) => {
+        await transaction.vacancy.update({ where: { id }, data: { status: 'Closed' } });
+        await transaction.vacancyRequest.updateMany({
+          where: { id: vacancy.vacancyRequestId, status: { notIn: ['Cancelled', 'Rejected'] } },
+          data: { status: 'Cancelled' },
+        });
+      });
+    }
 
-    return { deleted: true, id };
+    return { id, deactivated: true, status: 'Closed' };
   }
 
   private async assertVacancyVisible(organizationId: string, id: string, user?: AuthUser): Promise<void> {
@@ -1099,6 +1096,9 @@ export class VacancyCoreService {
     return full ? 'full' : 'redacted';
   }
 }
+
+/** B2: jobs in these states are deactivated (hidden from default lists). */
+const INACTIVE_JOB_STATUSES: string[] = ['Closed', 'Cancelled'];
 
 function createPipelineCounts(): Record<ApplicationStage, number> {
   return {
