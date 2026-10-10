@@ -32,8 +32,8 @@ export class VacanciesController {
 
   @Get()
   @RequirePermissions('VACANCY_VIEW')
-  listVacancies(@CurrentUser() user: AuthUser) {
-    return this.vacancyCoreService.listVacancies(user.organizationId, user);
+  listVacancies(@CurrentUser() user: AuthUser, @Query('mine') mine?: string) {
+    return this.vacancyCoreService.listVacancies(user.organizationId, user, { mine: mine === 'true' });
   }
 
   @Get('work-queue')
@@ -88,7 +88,7 @@ export class VacanciesController {
   @UseGuards(TenantScopedGuard)
   @TenantResource({ resource: 'vacancy', param: 'id' })
   hold(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Body() body: JobStatusReasonDto) {
-    return this.vacancyCoreService.holdVacancy(id, user.organizationId, body.reason, user);
+    return this.vacancyCoreService.holdVacancy(id, user.organizationId, body.reason, user, { note: body.note, holdUntil: body.holdUntil });
   }
 
   @Post(':id/reopen')
@@ -108,7 +108,7 @@ export class VacanciesController {
   @UseGuards(TenantScopedGuard)
   @TenantResource({ resource: 'vacancy', param: 'id' })
   close(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Body() body: JobStatusReasonDto) {
-    return this.vacancyCoreService.closeVacancy(id, user.organizationId, body.reason, user);
+    return this.vacancyCoreService.closeVacancy(id, user.organizationId, body.reason, user, { note: body.note });
   }
 
   @Get(':id/status-history')

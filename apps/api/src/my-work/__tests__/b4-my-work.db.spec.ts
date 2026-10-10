@@ -82,7 +82,7 @@ describe.skipIf(!url)('B4 My Work, target chip and reminders (scratch Postgres)'
   });
 
   it('held jobs are off My Work; manager sees Pending Approval as waiting on others', async () => {
-    await vacancies.holdVacancy(ids.jobB!, ORG, 'budget freeze', user(ids.b!));
+    await vacancies.holdVacancy(ids.jobB!, ORG, 'Hiring freeze', user(ids.b!));
     expect((await myWork.getMyWork(user(ids.b!), NOW)).targets).toEqual([]);
     const branch = await prisma.branch.findFirstOrThrow({ where: { organizationId: ORG } });
     const position = await prisma.position.findFirstOrThrow({ where: { organizationId: ORG } });

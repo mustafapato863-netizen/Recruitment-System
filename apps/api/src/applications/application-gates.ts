@@ -114,3 +114,43 @@ export async function assertReopenAllowed(
   if (managed > 0) return text;
   throw new ForbiddenException({ code: 'REOPEN_NOT_OWNER', message: 'Only the owner of this file or their manager can reopen it.' });
 }
+
+export type GateKey = 'screen-note' | 'scorecard' | 'offer-accepted' | 'joining-checks' | 'reject-reason';
+export interface GateState { gate: GateKey; code: string; met: boolean; missing: string[] }
+
+/**
+ * B5/E3: state of the five gates for a page of applications (batched, read-only).
+ * met = the gate's requirement is satisfied today. Gate 5 (reject reason) is only
+ * "met" for a Rejected file that carries a reason; for open files it reports
+ * missing ['reason'] because a reason must be given at the time of rejecting.
+ */
+export async function gateStates(
+  tx: Pick<Tx, 'screeningLog' | 'interviewScorecard' | 'offerVersion' | 'joiningCheck'>,
+  apps: Array<{ id: string; stage: string; rejectionReason?: string | null }>,
+): Promise<Map<string, GateState[]>> {
+  const ids = apps.map((a) => a.id);
+  const out = new Map<string, GateState[]>();
+  if (!ids.length) return out;
+  const [notes, cards, offers, checks] = await Promise.all([
+    tx.screeningLog.findMany({ where: { applicationId: { in: ids }, notes: { not: null } }, select: { applicationId: true, notes: true } }),
+    tx.interviewScorecard.findMany({ where: { status: 'Submitted', interview: { applicationId: { in: ids }, status: { not: 'Cancelled' } } }, select: { interview: { select: { applicationId: true } } } }),
+    tx.offerVersion.findMany({ where: { status: 'Accepted', offer: { applicationId: { in: ids } } }, select: { offer: { select: { applicationId: true } } } }),
+    tx.joiningCheck.findMany({ where: { applicationId: { in: ids }, verified: true }, select: { applicationId: true, type: true } }),
+  ]);
+  const noted = new Set(notes.filter((n) => n.notes?.trim()).map((n) => n.applicationId));
+  const carded = new Set(cards.map((c) => c.interview.applicationId));
+  const accepted = new Set(offers.map((o) => o.offer.applicationId));
+  for (const a of apps) {
+    const done = new Set(checks.filter((c) => c.applicationId === a.id).map((c) => c.type));
+    const missingChecks = JOINING_CHECK_TYPES.filter((t) => !done.has(t));
+    const rejectedWithReason = a.stage === 'Rejected' && Boolean(a.rejectionReason?.trim());
+    out.set(a.id, [
+      { gate: 'screen-note', code: GATE_CODES.screenNote, met: noted.has(a.id), missing: noted.has(a.id) ? [] : ['screen note'] },
+      { gate: 'scorecard', code: GATE_CODES.scorecard, met: carded.has(a.id), missing: carded.has(a.id) ? [] : ['submitted scorecard'] },
+      { gate: 'offer-accepted', code: GATE_CODES.offer, met: accepted.has(a.id), missing: accepted.has(a.id) ? [] : ['accepted offer'] },
+      { gate: 'joining-checks', code: GATE_CODES.joining, met: missingChecks.length === 0, missing: [...missingChecks] },
+      { gate: 'reject-reason', code: GATE_CODES.rejectReason, met: rejectedWithReason, missing: rejectedWithReason ? [] : ['reason'] },
+    ]);
+  }
+  return out;
+}

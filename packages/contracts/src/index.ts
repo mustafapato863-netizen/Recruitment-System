@@ -54,7 +54,7 @@ function domainErrorCodes() {
     // B3 requisition / job lifecycle
     'ADMIN_CANNOT_CHANGE_JOB_STATUS', 'ASSIGNEE_NOT_ELIGIBLE', 'ASSIGNEE_REQUIRED', 'DUE_DATE_REQUIRED',
     'GRADE_NOT_FOUND', 'ILLEGAL_JOB_TRANSITION', 'JOB_NOT_ACCEPTING_APPLICATIONS', 'NOT_JOB_OWNER',
-    'REASON_REQUIRED', 'REQUISITION_CANCELLED',
+    'REASON_REQUIRED', 'REQUISITION_CANCELLED', 'REASON_NOT_IN_LIST', 'HOLD_UNTIL_NOT_FUTURE',
     // B5 gates
     'GATE_SCREEN_NOTE_MISSING', 'GATE_SCORECARD_NOT_SUBMITTED', 'GATE_OFFER_NOT_ACCEPTED',
     'GATE_JOINING_CHECKS_INCOMPLETE', 'GATE_REJECT_REASON_REQUIRED',
@@ -303,6 +303,11 @@ export interface JobWorkQueueItem {
   health: WorkHealth | null;
   lastActivity: { at: string; label: string } | null;
   nextAction: NextActionDescriptor | null;
+  /** B3/E3: requisition due date (YYYY-MM-DD, plain fact) and department. */
+  dueDate?: string | null;
+  department?: string | null;
+  /** B3: optional hold-until date (data only). */
+  holdUntil?: string | null;
 }
 
 export interface CreateVacancyRequestInput {
@@ -861,6 +866,12 @@ export interface Application {
   lastActivityLabel?: string | null | undefined;
   /** Earliest persisted follow-up due date, when one is visible to the caller. */
   nextFollowUpAt?: string | null | undefined;
+  /** B5: owner-editable follow-up date (YYYY-MM-DD). */
+  followUpDate?: string | null | undefined;
+  /** E3 (list only): the five gates for this file. */
+  gates?: Array<{ gate: 'screen-note' | 'scorecard' | 'offer-accepted' | 'joining-checks' | 'reject-reason'; code: string; met: boolean; missing: string[] }> | undefined;
+  /** E3 (list/board card only): next upcoming interview, else the last one. */
+  interview?: { when: 'next' | 'last'; startAt: string; endAt: string; room: { name: string | null; url: string | null } } | null | undefined;
   appliedAt: string;
   createdAt: string;
   updatedAt: string;

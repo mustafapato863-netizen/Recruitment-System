@@ -1,4 +1,4 @@
-import { REOPEN_TARGETS, WITHDRAWN_BY_CANDIDATE_REASON, assertReopenAllowed, assertStageGate, resolveRejectionReason } from './application-gates';
+import { gateStates, REOPEN_TARGETS, WITHDRAWN_BY_CANDIDATE_REASON, assertReopenAllowed, assertStageGate, resolveRejectionReason } from './application-gates';
 import { assertJobAcceptsApplications, recordJoin } from '../vacancy-core/vacancy-lifecycle';
 import {
   BadRequestException,
@@ -251,7 +251,26 @@ export class ApplicationsService {
           nextFollowUpByCandidate.set(followUp.entityId, followUp.dueAt);
         }
       }
+      // E3: gate state per file, and the card's interview (next upcoming, else the last one).
+      const [gates, interviews] = await Promise.all([
+        gateStates(this.prisma, items.map((a) => ({ id: a.id, stage: a.stage, rejectionReason: a.rejectionReason }))),
+        this.prisma.interview.findMany({
+          where: { applicationId: { in: applicationIds }, status: { not: 'Cancelled' } },
+          select: { applicationId: true, scheduledStart: true, scheduledEnd: true, roomName: true, locationUrl: true },
+          orderBy: { scheduledStart: 'asc' },
+        }),
+      ]);
+      const now = Date.now();
+      const cardInterview = new Map<string, { when: 'next' | 'last'; startAt: string; endAt: string; room: { name: string | null; url: string | null } }>();
+      for (const id of applicationIds) {
+        const mine = interviews.filter((i) => i.applicationId === id);
+        const next = mine.find((i) => i.scheduledEnd.getTime() >= now);
+        const pick = next ?? mine[mine.length - 1];
+        if (pick) cardInterview.set(id, { when: next ? 'next' : 'last', startAt: pick.scheduledStart.toISOString(), endAt: pick.scheduledEnd.toISOString(), room: { name: pick.roomName, url: pick.locationUrl } });
+      }
       for (const item of data) {
+        item.gates = gates.get(item.id) ?? [];
+        item.interview = cardInterview.get(item.id) ?? null;
         const event = latest.get(item.id);
         item.lastActivityAt = event?.at.toISOString() ?? item.updatedAt;
         item.lastActivityLabel = event?.label ?? 'Application updated';
@@ -279,7 +298,7 @@ export class ApplicationsService {
       ? await this.accessControl.getApplicationVisibilityWhere(user)
       : { organizationId };
     const application = await this.prisma.application.findFirst({
-      where: { id, ...visibility },
+      where: { AND: [visibility, { id }] },
       include: {
         candidate: true,
         vacancy: {
@@ -968,6 +987,8 @@ export class ApplicationsService {
       primaryRecruiterName: record.primaryRecruiter?.displayName,
       taskOwnerId: record.taskOwnerId,
       taskOwnerName: record.taskOwner?.displayName,
+      /** B5: owner-editable follow-up date (YYYY-MM-DD). */
+      followUpDate: record.followUpDate ? record.followUpDate.toISOString().slice(0, 10) : null,
       candidate: record.candidate
         ? {
             id: record.candidate.id,

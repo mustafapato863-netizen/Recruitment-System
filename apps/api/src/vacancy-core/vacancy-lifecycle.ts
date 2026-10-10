@@ -84,6 +84,7 @@ export async function writeJobStatus(
   reason: string | null,
   actorUserId: string | null,
   extra: Prisma.VacancyUpdateInput = {},
+  holdUntil: Date | null = null,
 ): Promise<boolean> {
   if (vacancy.status === to) {
     if (Object.keys(extra).length) await tx.vacancy.update({ where: { id: vacancy.id }, data: extra });
@@ -92,7 +93,7 @@ export async function writeJobStatus(
   assertJobTransition(vacancy.status, to);
   await tx.vacancy.update({ where: { id: vacancy.id }, data: { ...extra, status: to } });
   await tx.vacancyStatusHistory.create({
-    data: { vacancyId: vacancy.id, fromStatus: vacancy.status, toStatus: to, reason, changedById: actorUserId },
+    data: { vacancyId: vacancy.id, fromStatus: vacancy.status, toStatus: to, reason, changedById: actorUserId, holdUntil },
   });
   return true;
 }
@@ -162,4 +163,46 @@ export async function assertEligibleAssignee(tx: Tx, organizationId: string, use
 export async function assertGrade(tx: Tx, organizationId: string, gradeId: string): Promise<void> {
   const grade = await tx.masterDataValue.findFirst({ where: { id: gradeId, organizationId, category: 'grades', status: 'Active' }, select: { id: true } });
   if (!grade) throw new BadRequestException({ code: 'GRADE_NOT_FOUND', message: 'Grade must be an active value from master data (Grades).' });
+}
+
+/** B3: categories of job status reasons (master data, deactivate-only). */
+export const JOB_REASON_CATEGORIES = ['hold-reasons', 'close-reasons'] as const;
+export const OTHER_REASON = 'Other';
+
+/**
+ * Hold/close reason must be an ACTIVE value of the category (case-insensitive, by name or code).
+ * "Other" requires a free-text note and is stored as "Other: <note>".
+ */
+export async function resolveJobStatusReason(
+  db: Pick<Prisma.TransactionClient, 'masterDataValue'>,
+  organizationId: string,
+  category: (typeof JOB_REASON_CATEGORIES)[number],
+  reason: string,
+  note?: string | null,
+): Promise<string> {
+  const text = reason.trim();
+  const value = await db.masterDataValue.findFirst({
+    where: { organizationId, category, status: 'Active', OR: [{ name: { equals: text, mode: 'insensitive' } }, { code: { equals: text, mode: 'insensitive' } }] },
+    select: { name: true },
+  });
+  if (!value) {
+    throw new BadRequestException({ code: 'REASON_NOT_IN_LIST', message: `"${text}" is not an active ${category === 'hold-reasons' ? 'hold' : 'close'} reason. Pick one from the list, or "Other" with a note.` });
+  }
+  if (value.name.toLowerCase() === OTHER_REASON.toLowerCase()) {
+    const free = note?.trim() ?? '';
+    if (free.length < 3) throw new BadRequestException({ code: 'REASON_REQUIRED', message: '"Other" needs a short note.' });
+    return `${OTHER_REASON}: ${free}`;
+  }
+  return note?.trim() ? `${value.name}: ${note.trim()}` : value.name;
+}
+
+/** B3: optional holdUntil (YYYY-MM-DD) must be a future Cairo day. Data only: nothing auto-reopens. */
+export function parseHoldUntil(raw: string | null | undefined, now: Date = new Date()): Date | null {
+  if (raw === undefined || raw === null || raw === '') return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw) || Number.isNaN(Date.parse(`${raw}T00:00:00Z`))) {
+    throw new BadRequestException({ code: 'VALIDATION_ERROR', message: 'holdUntil must be YYYY-MM-DD.' });
+  }
+  const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+  if (raw <= today) throw new BadRequestException({ code: 'HOLD_UNTIL_NOT_FUTURE', message: 'holdUntil must be a future date.' });
+  return new Date(`${raw}T00:00:00Z`);
 }

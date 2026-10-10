@@ -200,7 +200,7 @@ export class InterviewsService {
       ? await this.accessControl.getApplicationVisibilityWhere(user)
       : { organizationId };
     const app = await this.prisma.application.findFirst({
-      where: { id: dto.applicationId, ...visibility },
+      where: { AND: [visibility, { id: dto.applicationId }] },
       include: { candidate: true, vacancy: { include: { position: true } } },
     });
 

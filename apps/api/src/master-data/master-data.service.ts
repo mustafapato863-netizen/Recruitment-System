@@ -17,7 +17,9 @@ import { Prisma } from '@recruitflow/database';
 import type { MasterDataCategory, MasterDataValueRecord } from '@recruitflow/contracts';
 import { catalogKey, normalizeBranchCity, normalizeCatalogText, uniqueCatalogNames } from './catalog-normalization';
 
-const CATALOG_CATEGORIES = new Set<MasterDataCategory>(['departments', 'skills', 'candidate-sources', 'interview-types', 'grades' as MasterDataCategory, 'rejection-reasons' as MasterDataCategory]);
+const CATALOG_CATEGORIES = new Set<MasterDataCategory>(['departments', 'skills', 'candidate-sources', 'interview-types', ...(['grades', 'rejection-reasons', 'hold-reasons', 'close-reasons'] as unknown as MasterDataCategory[])]);
+/** B3: reason lists are deactivate-only (history rows quote them). */
+const DEACTIVATE_ONLY = new Set<string>(['hold-reasons', 'close-reasons']);
 const SUPPORTED_CATALOGS = new Set(['branches', 'job-titles', ...CATALOG_CATEGORIES]);
 
 type MasterDataBatchRow = {
@@ -228,8 +230,15 @@ export class MasterDataService {
     return { saved: saved.length, data: await this.listCatalog(organizationId, category) };
   }
 
-  async deleteCatalogValue(organizationId: string, category: string, id: string): Promise<{ deleted: true }> {
+  async deleteCatalogValue(organizationId: string, category: string, id: string): Promise<{ deleted: true } | { id: string; deactivated: true; status: 'Inactive' }> {
     this.assertCatalog(category);
+
+    if (DEACTIVATE_ONLY.has(category)) {
+      const value = await this.prisma.masterDataValue.findFirst({ where: { id, organizationId, category }, select: { id: true } });
+      if (!value) throw new NotFoundException('Master Data value not found.');
+      await this.prisma.masterDataValue.update({ where: { id }, data: { status: 'Inactive', version: { increment: 1 } } });
+      return { id, deactivated: true, status: 'Inactive' };
+    }
 
     // Branches and job titles are backed by legacy entities with real foreign
     // keys, so keep their existing reference checks and error messages.

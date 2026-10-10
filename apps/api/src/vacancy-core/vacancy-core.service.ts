@@ -48,7 +48,7 @@ import {
   assertJobOwnerOrManager,
   requireReason,
   seatStatus,
-  writeJobStatus,
+  writeJobStatus, parseHoldUntil, resolveJobStatusReason,
   type JobStatus,
 } from './vacancy-lifecycle';
 import { MasterDataService } from '../master-data/master-data.service';
@@ -172,12 +172,20 @@ export class VacancyCoreService {
     return request;
   }
 
-  async listVacancies(organizationId: string, user?: AuthUser): Promise<Vacancy[]> {
-    const vacancies = await this.repository.listVacancies(organizationId);
+  async listVacancies(organizationId: string, user?: AuthUser, options: { mine?: boolean } = {}): Promise<Vacancy[]> {
+    let vacancies = await this.repository.listVacancies(organizationId);
+    if (options.mine) {
+      if (!user) return [];
+      // B3: jobs owned by the caller = active PRIMARY assignee. TODO(B1): use Vacancy.primaryRecruiterId once #4 merges.
+      const owned = await this.prisma.vacancyAssignment.findMany({ where: { userId: user.userId, isActive: true, assignmentKind: 'PRIMARY', vacancy: { organizationId } }, select: { vacancyId: true } });
+      const ownedIds = new Set(owned.map((o) => o.vacancyId));
+      vacancies = vacancies.filter((v) => ownedIds.has(v.id));
+    }
     if (!user || !this.accessControl || vacancies.length === 0) return vacancies;
     const visibility = await this.accessControl.getVacancyVisibilityWhere(user);
     const visible = await this.prisma.vacancy.findMany({
-      where: { ...visibility, id: { in: vacancies.map((vacancy) => vacancy.id) } },
+      // The id filter is ANDed with the access scope (never replaces it).
+      where: { AND: [visibility, { id: { in: vacancies.map((vacancy) => vacancy.id) } }] },
       select: { id: true },
     });
     const ids = new Set(visible.map((vacancy) => vacancy.id));
@@ -191,18 +199,25 @@ export class VacancyCoreService {
   ): Promise<PaginatedResult<JobWorkQueueItem>> {
     const page = Number(query.page) > 0 ? Number(query.page) : 1;
     const pageSize = Number(query.pageSize) > 0 ? Number(query.pageSize) : 20;
-    const where: Prisma.VacancyWhereInput = user && this.accessControl
+    const scope: Prisma.VacancyWhereInput = user && this.accessControl
       ? await this.accessControl.getVacancyVisibilityWhere(user)
       : { organizationId };
-    if (query.status) where.status = query.status;
+    // Filters are ANDed with the access scope (a scope using OR/id is never overwritten).
+    const filters: Prisma.VacancyWhereInput[] = [scope];
+    if (query.status) filters.push({ status: query.status });
     if (query.search?.trim()) {
       const term = query.search.trim();
-      where.OR = [
+      filters.push({ OR: [
         { vacancyCode: { contains: term, mode: 'insensitive' } },
         { position: { title: { contains: term, mode: 'insensitive' } } },
         { branch: { name: { contains: term, mode: 'insensitive' } } },
-      ];
+      ] });
     }
+    if (query.mine === 'true' || query.mine === true) {
+      // TODO(B1): Vacancy.primaryRecruiterId once #4 merges.
+      filters.push({ assignments: { some: { userId: user?.userId ?? '00000000-0000-0000-0000-000000000000', isActive: true, assignmentKind: 'PRIMARY' } } });
+    }
+    const where: Prisma.VacancyWhereInput = { AND: filters };
 
     const [total, vacancies] = await Promise.all([
       this.prisma.vacancy.count({ where }),
@@ -220,6 +235,7 @@ export class VacancyCoreService {
             include: { user: { select: { id: true, displayName: true } } },
           },
           applications: { select: { stage: true, updatedAt: true } },
+          vacancyRequest: { select: { targetFillDate: true } },
         },
       }),
     ]);
@@ -271,6 +287,10 @@ export class VacancyCoreService {
         health,
         lastActivity: { at: lastActivityAt.toISOString(), label: latestApplication && latestApplication > vacancy.updatedAt ? 'Applicant activity' : 'Job updated' },
         nextAction,
+        // B3/E3: the requisition's due date (plain YYYY-MM-DD) and department.
+        dueDate: vacancy.vacancyRequest?.targetFillDate ? vacancy.vacancyRequest.targetFillDate.toISOString().slice(0, 10) : null,
+        department: vacancy.department ?? null,
+        holdUntil: vacancy.holdUntil ? vacancy.holdUntil.toISOString().slice(0, 10) : null,
       };
     });
 
@@ -831,8 +851,9 @@ export class VacancyCoreService {
     throw new BadRequestException(`Status ${status} is set by the system (seats) and cannot be chosen.`);
   }
 
-  async holdVacancy(id: string, organizationId: string, reason: string | null | undefined, user?: AuthUser): Promise<Vacancy> {
-    return this.changeJobStatus(id, organizationId, user, 'hold', reason, () => 'On Hold');
+  async holdVacancy(id: string, organizationId: string, reason: string | null | undefined, user?: AuthUser, opts: { note?: string | null | undefined; holdUntil?: string | null | undefined } = {}): Promise<Vacancy> {
+    const holdUntil = parseHoldUntil(opts.holdUntil);
+    return this.changeJobStatus(id, organizationId, user, 'hold', reason, () => 'On Hold', { note: opts.note, holdUntil });
   }
 
   async reopenVacancy(id: string, organizationId: string, reason: string | null | undefined, user?: AuthUser): Promise<Vacancy> {
@@ -844,8 +865,8 @@ export class VacancyCoreService {
     });
   }
 
-  async closeVacancy(id: string, organizationId: string, reason: string | null | undefined, user?: AuthUser): Promise<Vacancy> {
-    return this.changeJobStatus(id, organizationId, user, 'close', reason, () => 'Closed');
+  async closeVacancy(id: string, organizationId: string, reason: string | null | undefined, user?: AuthUser, opts: { note?: string | null | undefined } = {}): Promise<Vacancy> {
+    return this.changeJobStatus(id, organizationId, user, 'close', reason, () => 'Closed', { note: opts.note });
   }
 
   private async changeJobStatus(
@@ -855,9 +876,10 @@ export class VacancyCoreService {
     action: 'hold' | 'reopen' | 'close',
     reason: string | null | undefined,
     target: (job: { status: string; joinedHeadcount: number; approvedHeadcount: number }) => JobStatus,
+    opts: { note?: string | null | undefined; holdUntil?: Date | null | undefined } = {},
   ): Promise<Vacancy> {
     await this.assertVacancyVisible(organizationId, id, user);
-    const text = requireReason(reason, `${action} this job`);
+    let text = requireReason(reason, `${action} this job`);
     if (!user) throw new ForbiddenException('Only the job owner or their manager can change job status.');
     await this.prisma.$transaction(async (tx) => {
       const job = await tx.vacancy.findFirst({
@@ -866,11 +888,16 @@ export class VacancyCoreService {
       });
       if (!job) throw new NotFoundException(`Vacancy ${id} was not found.`);
       await assertJobOwnerOrManager(tx, organizationId, id, user.userId);
+      // B3: hold and close reasons come from master data ('hold-reasons' / 'close-reasons');
+      // "Other" needs a free-text note. Reopen keeps a free-text reason. Checked after authorization.
+      if (action === 'hold' || action === 'close') {
+        text = await resolveJobStatusReason(tx, organizationId, action === 'hold' ? 'hold-reasons' : 'close-reasons', text, opts.note);
+      }
       const to = target(job);
       if (job.status === to) {
         throw new ConflictException({ code: 'ILLEGAL_JOB_TRANSITION', message: `Job is already ${to}.` });
       }
-      await writeJobStatus(tx, job, to, text, user.userId);
+      await writeJobStatus(tx, job, to, text, user.userId, action === 'hold' ? { holdUntil: opts.holdUntil ?? null } : { holdUntil: null }, action === 'hold' ? opts.holdUntil ?? null : null);
     });
     const updated = await this.repository.getVacancy(organizationId, id);
     if (!updated) throw new NotFoundException(`Vacancy ${id} was not found.`);
@@ -882,7 +909,7 @@ export class VacancyCoreService {
     return this.prisma.vacancyStatusHistory.findMany({
       where: { vacancyId: id, vacancy: { organizationId } },
       orderBy: { createdAt: 'asc' },
-      select: { id: true, fromStatus: true, toStatus: true, reason: true, changedById: true, createdAt: true },
+      select: { id: true, fromStatus: true, toStatus: true, reason: true, holdUntil: true, changedById: true, createdAt: true },
     });
   }
 
@@ -1158,7 +1185,7 @@ export class VacancyCoreService {
   private async assertVacancyVisible(organizationId: string, id: string, user?: AuthUser): Promise<void> {
     if (!user || !this.accessControl) return;
     const visibility = await this.accessControl.getVacancyVisibilityWhere(user);
-    const vacancy = await this.prisma.vacancy.findFirst({ where: { id, ...visibility }, select: { id: true } });
+    const vacancy = await this.prisma.vacancy.findFirst({ where: { AND: [visibility, { id }] }, select: { id: true } });
     if (!vacancy) throw new NotFoundException(`Vacancy ${id} was not found.`);
   }
 }
