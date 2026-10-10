@@ -43,6 +43,7 @@ const IntegrationsRoute = lazy(() => import('./v2/admin/AdminRoutes').then((m) =
 const RolesRoute = lazy(() => import('./v2/admin/AdminRoutes').then((m) => ({ default: m.RolesRoute })));
 const NotificationsPage = lazy(() => import('./pages/NotificationsPage').then((m) => ({ default: m.NotificationsPage })));
 const ProfilePage = lazy(() => import('./pages/ProfilePage').then((m) => ({ default: m.ProfilePage })));
+const ApplicantPortalPage = lazy(() => import('./pages/ApplicantPortalPage').then((m) => ({ default: m.ApplicantPortalPage })));
 const V2Shell = lazy(() => import('./layout/V2Shell').then((m) => ({ default: m.V2Shell })));
 
 const ForgotPasswordPage = lazy(() => import('./auth/ForgotPasswordPage').then((m) => ({ default: m.ForgotPasswordPage })));
@@ -73,6 +74,9 @@ function App() {
                 <Route path="/careers/:organizationCode/jobs/:vacancyCode/apply" element={<PublicApplyPage />} />
                 <Route path="/careers/:organizationCode/jobs/:vacancyCode" element={<PublicJobDetailPage />} />
                 <Route element={<ProtectedRoute />}>
+                  {/* Applicant portal: candidates still use it; outside the seat shell, never redirected. */}
+                  <Route path="/portal/*" element={<ApplicantPortalPage />} />
+                  <Route path="/my-applications" element={<ApplicantPortalPage />} />
                   <Route element={<V2Shell />}>
                   <Route path="/my-work" element={<MyWorkRoute />} />
                   <Route path="/my-result" element={<MyResultV2 />} />

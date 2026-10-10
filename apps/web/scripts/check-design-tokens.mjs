@@ -28,13 +28,7 @@ const legacyPaletteBaseline = 10420;
 // files must not gain new violations. Migrate them to rf-* tokens per the
 // burn-down plan, then remove them from this list.
 const grandfatheredStrictFiles = {
-  'src/components/ui/BreadcrumbsBar.tsx': 9,
-  'src/components/ui/CommandPalette.tsx': 1,
-  'src/components/ui/CommentsThread.tsx': 2,
-  'src/components/ui/DataTable.tsx': 6,
   'src/components/ui/Drawer.tsx': 3,
-  'src/components/ui/notification-alert-dialog.tsx': 39,
-  'src/layout/AppShell.tsx': 16,
 };
 
 

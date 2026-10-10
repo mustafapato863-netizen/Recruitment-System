@@ -71,6 +71,7 @@ export function canUseRequisitions(user: { roles?: ReadonlyArray<{ code: string 
   if (!user || isRecruiterOnly(user.roles)) return false;
   return (user.roles ?? []).some((r) => r.code === 'ADMINISTRATOR') || (user.permissions ?? []).includes('VACANCY_REQUEST_VIEW');
 }
+const PORTAL = /^\/(portal|my-applications)(\/|$)/;
 const REQUISITIONS = /^\/vacancy-requests([/?]|$)/;
 const MY_INTERVIEWS = /^\/my-interviews\/?$/;
 
@@ -86,6 +87,8 @@ export function isInterviewerOnly(user: { permissions?: readonly string[] } | nu
 }
 export function v2Redirect(seat: Seat, pathname: string, opts: { requisitions?: boolean; interviews?: boolean; interviewerOnly?: boolean } = {}): string | null {
   if (pathname === '/' || pathname === '') return SEAT_HOME[seat];
+  // The applicant portal lives outside the seat shell (candidates use it); never redirect it.
+  if (PORTAL.test(pathname)) return null;
   for (const rule of PARAM_EQUIVALENT) {
     const m = rule.from.exec(pathname);
     const to = m ? rule.to[seat] : undefined;

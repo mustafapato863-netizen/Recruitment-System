@@ -52,7 +52,7 @@ describe('v2 default: every v1 URL redirects to its v2 equivalent', () => {
     ['employee', '/candidates/c1', '/candidates?tab=bank'], ['employee', '/candidates/c1/documents', '/candidates?tab=bank'],
     ['employee', '/cv-intake/j1', '/candidates'], ['employee', '/import', '/candidates'], ['employee', '/sourcing-match', '/candidates'],
     ['employee', '/offers/create', '/my-work'], ['employee', '/licenses', '/my-work'], ['employee', '/joinings', '/my-work'],
-    ['employee', '/portal', '/my-work'], ['employee', '/reports', '/my-work'], ['employee', '/settings/targets', '/my-work'],
+    ['employee', '/reports', '/my-work'], ['employee', '/settings/targets', '/my-work'],
     // Manager
     ['manager', '/interviews/i 1', '/my-interviews?interview=i%201&scorecard=1'],
     ['manager', '/vacancy-requests/create', '/vacancy-requests?req=new'], ['manager', '/vacancy-requests/r1', '/vacancy-requests?req=r1'],
