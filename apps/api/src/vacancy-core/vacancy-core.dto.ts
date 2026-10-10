@@ -131,6 +131,11 @@ export class CreateVacancyRequestDto {
   @IsUUID()
   gradeId?: string | null;
 
+  /** M1: master-data department (category 'departments'). */
+  @IsOptional()
+  @IsUUID()
+  departmentId?: string | null;
+
   @IsOptional()
   @IsUUID()
   assignedEmployeeId?: string | null;
@@ -246,6 +251,11 @@ export class UpdateVacancyRequestDto {
   @IsOptional()
   @IsUUID()
   gradeId?: string | null;
+
+  /** M1: master-data department (category 'departments'). */
+  @IsOptional()
+  @IsUUID()
+  departmentId?: string | null;
 
   @IsOptional()
   @IsUUID()
@@ -378,6 +388,24 @@ export class ActivateVacancyRequestDto {
   @IsOptional()
   @IsUUID()
   assignedEmployeeId?: string;
+}
+
+/** M1: Manager adjusts the target of an activated requisition. */
+export class UpdateRequisitionTargetDto {
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  seats?: number;
+
+  @IsOptional()
+  @IsDateString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  dueDate?: string;
+
+  @IsString()
+  @MaxLength(500)
+  reason!: string;
 }
 
 export class VacancyWorkQueueQueryDto {
