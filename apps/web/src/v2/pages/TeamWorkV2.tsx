@@ -1,0 +1,129 @@
+import { useCallback, useEffect, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { ArrowLeftRight, CalendarClock, CircleAlert, CircleCheck, Clock, Eye, Info, RotateCw, TriangleAlert, Users } from 'lucide-react';
+import { ButtonV2, EmptyStateV2, ForbiddenStateV2, initials, SkeletonV2, StatusChip } from '../../components/v2';
+import { useAuth } from '../../auth/AuthContext';
+import { fetchTeamWork, fileHref, type ReportWork, type TaskTone, type TeamTask, type TeamWork, type WaitingOffer } from '../api/teamWork';
+import { ReassignDrawer } from '../drawers/ReassignDrawer';
+import './jobs.css';
+import './team.css';
+
+const CHIP: Record<Exclude<TaskTone, null>, { tone: 'danger' | 'info' | 'neutral'; label: string }> = {
+  overdue: { tone: 'danger', label: 'Overdue' }, today: { tone: 'info', label: 'Today' }, week: { tone: 'info', label: 'This week' }, waiting: { tone: 'neutral', label: 'Waiting' },
+};
+const ICON: Record<TeamTask['kind'], React.ReactNode> = {
+  'followup-overdue': <Clock aria-hidden="true" />, gate: <TriangleAlert aria-hidden="true" />, offer: <Clock aria-hidden="true" />,
+  followup: <Clock aria-hidden="true" />, interview: <CalendarClock aria-hidden="true" />, next: <CircleCheck aria-hidden="true" />,
+};
+const MAX_TASKS = 5;
+const ago = (iso: string | null) => {
+  if (!iso) return null;
+  const days = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000));
+  return days === 0 ? 'Waiting today' : `Waiting ${days} ${days === 1 ? 'day' : 'days'}`;
+};
+const when = (iso: string | null) => (iso ? new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Cairo', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(iso)) : '');
+
+/** M2 Team work (Manager, v2): what is waiting on me, and each direct report's open work, with Reassign (B7). */
+export function TeamWorkV2({ reviewOffer }: { reviewOffer?: (w: WaitingOffer) => React.ReactNode } = {}) {
+  const { user } = useAuth();
+  const [params, setParams] = useSearchParams();
+  const [state, setState] = useState<{ kind: 'loading' } | { kind: 'ready'; data: TeamWork } | { kind: 'forbidden' } | { kind: 'error'; message: string }>({ kind: 'loading' });
+  const [attempt, setAttempt] = useState(0);
+  const [toast, setToast] = useState<string | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    fetchTeamWork()
+      .then((data) => live && setState({ kind: 'ready', data }))
+      .catch((e: { statusCode?: number; message?: string }) => live && setState(e?.statusCode === 403 ? { kind: 'forbidden' } : { kind: 'error', message: e?.message || 'Something went wrong.' }));
+    return () => { live = false; };
+  }, [attempt]);
+
+  const go = useCallback((next: Record<string, string | null>) => {
+    const n = new URLSearchParams(params);
+    for (const [k, v] of Object.entries(next)) { if (v) n.set(k, v); else n.delete(k); }
+    setParams(n);
+  }, [params, setParams]);
+  const done = (m: string) => { setToast(m); go({ reassign: null, file: null }); setAttempt((n) => n + 1); };
+
+  const data = state.kind === 'ready' ? state.data : null;
+  const reports = data?.reports ?? null;
+  const from = reports?.find((r) => r.person.id === params.get('reassign')) ?? null;
+  const waiting = data?.waiting ?? [];
+
+  return (
+    <div className="rf2-jobs rf2-team">
+      <div>
+        <h1 className="rf2-jobs__title">Team work</h1>
+        <p className="rf2-jobs__sub">{reports ? `Open work of your ${reports.length} direct ${reports.length === 1 ? 'report' : 'reports'}. Counts equal the rows shown.` : 'Open work of your direct reports.'}</p>
+      </div>
+      {toast ? <p className="rf2-inline-note" data-tone="success" role="status"><CircleCheck aria-hidden="true" /> {toast}</p> : null}
+      {state.kind === 'loading' ? <SkeletonV2 lines={6} label="Loading team work…" /> : null}
+      {state.kind === 'forbidden' ? <ForbiddenStateV2 body="Your role does not include your team’s files." /> : null}
+      {state.kind === 'error' ? <div role="alert"><EmptyStateV2 title="Could not load team work" body={state.message} action={<ButtonV2 kind="secondary" icon={<RotateCw />} onClick={() => setAttempt((n) => n + 1)}>Try again</ButtonV2>} /></div> : null}
+      {data ? (
+        <>
+          <section className="rf2-panel rf2-team__waiting" aria-labelledby="tw-wait-h">
+            <div className="rf2-row-between"><h2 id="tw-wait-h" className="rf2-team__h">Waiting on you</h2><span className="rf2-task-section__count" aria-label={`${waiting.length} waiting`}>{waiting.length}</span></div>
+            {waiting.length === 0 ? <p className="rf2-jtable__sub">Nothing is waiting on your decision.</p> : (
+              <ul className="rf2-team__list">
+                {waiting.map((w) => (
+                  <li key={w.offerId} className="rf2-team__wrow">
+                    <CircleCheck aria-hidden="true" className="rf2-team__wicon" />
+                    <div className="rf2-team__wtext">
+                      <p className="rf2-jtable__name">Offer approval — {w.candidate}, {w.job}</p>
+                      <p className="rf2-jtable__sub">Offer v{w.versionNumber} submitted{w.ownerName ? ` by ${w.ownerName}` : ''}{w.submittedAt ? ` · ${when(w.submittedAt)}` : ''}</p>
+                    </div>
+                    {ago(w.submittedAt) ? <StatusChip tone="neutral" label={ago(w.submittedAt)!} /> : null}
+                    {reviewOffer ? reviewOffer(w) : <Link className="rf2-btn rf2-btn--primary rf2-btn--sm" to={fileHref(w.applicationId)}><Eye aria-hidden="true" /> Review offer</Link>}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+          {!reports ? (
+            <EmptyStateV2 title="Your reports list is not available" body="Team work needs the list of people who report to you (users/assignable). Ask an admin to check your role." />
+          ) : reports.length === 0 ? (
+            <EmptyStateV2 title="No direct reports" body="People whose manager is you appear here with their open files." />
+          ) : (
+            <div className="rf2-team__grid">
+              {reports.map((r) => <ReportCard key={r.person.id} r={r} onReassign={() => go({ reassign: r.person.id, file: null })} canReassign={reports.length > 1} />)}
+            </div>
+          )}
+          <p className="rf2-inline-note"><Users aria-hidden="true" /> Only your direct reports appear here. Reassign changes the primary recruiter on one file, a whole job’s files or all of a person’s open files.</p>
+          {from && reports ? <ReassignDrawer from={from} reports={reports} fileId={params.get('file')} managerName={user?.displayName ?? 'you'} onClose={() => go({ reassign: null, file: null })} onDone={done} /> : null}
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+function ReportCard({ r, onReassign, canReassign }: { r: ReportWork; onReassign: () => void; canReassign: boolean }) {
+  const jobs = [...new Set(r.files.map((f) => f.job))];
+  const shown = r.tasks.slice(0, MAX_TASKS);
+  return (
+    <section className="rf2-panel rf2-team__card" aria-labelledby={`tw-${r.person.id}`}>
+      <div className="rf2-team__head">
+        <span className="rf2-avatar rf2-team__avatar" aria-hidden="true">{initials(r.person.name)}</span>
+        <div className="rf2-team__who">
+          <h2 id={`tw-${r.person.id}`} className="rf2-jtable__name">{r.person.name}</h2>
+          <p className="rf2-jtable__sub">{[r.person.detail, jobs.length ? jobs.slice(0, 2).join(', ') + (jobs.length > 2 ? ` +${jobs.length - 2}` : '') : null].filter(Boolean).join(' · ')}</p>
+        </div>
+        {canReassign ? <ButtonV2 kind="tertiary" size="sm" icon={<ArrowLeftRight />} onClick={onReassign} aria-label={`Reassign ${r.person.name}’s files`}>Reassign</ButtonV2> : null}
+      </div>
+      <p className="rf2-team__counts">{r.open} open · <span data-tone={r.overdue ? 'danger' : undefined}>{r.overdue} overdue</span></p>
+      {shown.length === 0 ? <p className="rf2-jtable__sub">No open files.</p> : (
+        <ul className="rf2-team__list">
+          {shown.map((t) => (
+            <li key={t.fileId} className="rf2-team__task" data-kind={t.kind}>
+              <span className="rf2-team__ticon" data-tone={t.tone ?? undefined}>{t.tone === 'overdue' && t.kind === 'gate' ? <CircleAlert aria-hidden="true" /> : ICON[t.kind]}</span>
+              <div className="rf2-team__ttext"><Link className="rf2-link rf2-jtable__name" to={fileHref(t.fileId)}>{t.title}</Link><p className="rf2-jtable__sub">{t.meta}</p></div>
+              {t.tone ? <StatusChip tone={CHIP[t.tone].tone} label={CHIP[t.tone].label} /> : null}
+            </li>
+          ))}
+        </ul>
+      )}
+      {r.tasks.length > MAX_TASKS ? <p className="rf2-jtable__sub"><Info aria-hidden="true" /> {r.tasks.length - MAX_TASKS} more in {r.person.name.split(' ')[0]}’s Open jobs.</p> : null}
+    </section>
+  );
+}

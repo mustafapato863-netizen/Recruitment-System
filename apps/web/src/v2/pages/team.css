@@ -1,0 +1,25 @@
+/* M2 Team work + M06 Reassign (Manager, v2). Tokens only. */
+[data-ui='v2'] .rf2-team { display: flex; flex-direction: column; gap: var(--rf2-space-3); }
+[data-ui='v2'] .rf2-team__h { margin: 0; font-size: var(--rf2-text-card); font-weight: var(--rf2-weight-card); line-height: var(--rf2-leading-card); }
+[data-ui='v2'] .rf2-team__waiting { display: flex; flex-direction: column; gap: var(--rf2-space-1); padding: var(--rf2-space-2); }
+[data-ui='v2'] .rf2-team__list { display: flex; flex-direction: column; margin: 0; padding: 0; list-style: none; }
+[data-ui='v2'] .rf2-team__wrow { display: flex; align-items: center; gap: var(--rf2-space-1-5); padding: var(--rf2-space-1-5) 0; border-top: 1px solid var(--rf2-divider); }
+[data-ui='v2'] .rf2-team__wicon { width: 16px; height: 16px; color: var(--rf2-action); flex: none; }
+[data-ui='v2'] .rf2-team__wtext, [data-ui='v2'] .rf2-team__ttext, [data-ui='v2'] .rf2-team__who { flex: 1; min-width: 0; }
+[data-ui='v2'] .rf2-team__wtext p, [data-ui='v2'] .rf2-team__ttext p, [data-ui='v2'] .rf2-team__who p, [data-ui='v2'] .rf2-team__who h2 { margin: 0; }
+[data-ui='v2'] .rf2-team__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: var(--rf2-space-2); align-items: start; }
+[data-ui='v2'] .rf2-team__card { display: flex; flex-direction: column; gap: var(--rf2-space-1); padding: var(--rf2-space-2); }
+[data-ui='v2'] .rf2-team__head { display: flex; align-items: flex-start; gap: var(--rf2-space-1); }
+[data-ui='v2'] .rf2-team__avatar { width: 32px; height: 32px; font-size: var(--rf2-text-caption); flex: none; }
+[data-ui='v2'] .rf2-team__counts { margin: 0; font-size: var(--rf2-text-label); font-weight: 600; font-variant-numeric: tabular-nums; }
+[data-ui='v2'] .rf2-team__counts [data-tone='danger'] { color: var(--rf2-danger); }
+[data-ui='v2'] .rf2-team__task { display: flex; align-items: flex-start; gap: var(--rf2-space-1); padding: var(--rf2-space-1) 0; border-top: 1px solid var(--rf2-divider); }
+[data-ui='v2'] .rf2-team__ticon { display: inline-flex; padding-top: 2px; color: var(--rf2-info); }
+[data-ui='v2'] .rf2-team__ticon[data-tone='overdue'] { color: var(--rf2-danger); }
+[data-ui='v2'] .rf2-team__ticon svg { width: 16px; height: 16px; }
+[data-ui='v2'] .rf2-team__ttext .rf2-link { color: var(--rf2-ink); text-decoration: none; }
+[data-ui='v2'] .rf2-team__ttext .rf2-link:hover { color: var(--rf2-action); text-decoration: underline; }
+[data-ui='v2'] .rf2-team__wrow > a.rf2-btn { display: inline-flex; align-items: center; gap: var(--rf2-space-0-5); text-decoration: none; }
+[data-ui='v2'] .rf2-reassign { display: flex; flex-direction: column; gap: var(--rf2-space-2); }
+[data-ui='v2'] .rf2-reassign__owner { display: flex; align-items: center; gap: var(--rf2-space-1); padding: var(--rf2-space-1) var(--rf2-space-1-5); border-radius: var(--rf2-radius-card); background: var(--rf2-neutral-tint); }
+[data-ui='v2'] .rf2-reassign__owner .rf2-jtable__name { margin: 0; }
