@@ -196,6 +196,9 @@ describe.skipIf(!url)('B6 suggest, compare, evidence, duplicates (scratch Postgr
     const sk = await prisma.masterDataValue.create({ data: { organizationId: ORG, category: 'skills', name: `Batch ${tag}`, status: 'Active' } });
     await md.saveCatalogBatch(ORG, 'skills', [{ id: sk.id, name: sk.name, status: 'Inactive', expectedVersion: sk.version } as never]);
     expect((await prisma.masterDataValue.findUniqueOrThrow({ where: { id: sk.id } })).status).toBe('Archived');
+    // PATCH {status:'Inactive'} on a skill also lands Archived; Active brings it back
+    expect((await md.setCatalogValueStatus(ORG, 'skills', sk.id, 'Active')).status).toBe('Active');
+    expect((await md.setCatalogValueStatus(ORG, 'skills', sk.id, 'Inactive')).status).toBe('Archived');
   });
 
   it('saving a job never reactivates a deactivated skill; it comes back under unmappedRequiredSkills', async () => {
