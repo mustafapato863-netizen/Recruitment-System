@@ -24,8 +24,9 @@ export function ReassignDrawer({ from, reports, fileId, managerName, onClose, on
   const [picked, setPicked] = useState('');
   useEffect(() => { let live = true; void fetchReassignReasons().then((r) => live && setReasons(r)); return () => { live = false; }; }, []);
   const isOther = !!reasons && /^other$/i.test(picked);
-  /** List picked → that name ("Other: note" for Other); no list → free text. */
-  const finalReason = reasons ? (isOther ? (reason.trim() ? `Other: ${reason.trim()}` : '') : picked) : reason.trim();
+  /** #21 ReassignFilesDto: the list value goes in `reason`; for "Other" the free text goes in `note` (server stores "Other: note"). */
+  const finalReason = reasons ? picked : reason.trim();
+  const note = isOther ? reason.trim() : '';
   const [busy, setBusy] = useState(false);
   const [errs, setErrs] = useState<Errs>({});
   const targets = reports.filter((r) => r.person.id !== from.person.id);
@@ -39,11 +40,12 @@ export function ReassignDrawer({ from, reports, fileId, managerName, onClose, on
     if (!ids.length) e.what = 'Nothing to move.';
     if (!to) e.to = 'Pick the new primary recruiter.';
     if (reasons && !picked) e.reason = 'Pick a reason.';
-    else if (finalReason.length < 3) e.reason = isOther ? 'Say why (at least 3 characters).' : 'A reason is required (at least 3 characters).';
+    else if (isOther ? note.length < 3 : finalReason.length < 3) e.reason = isOther ? 'Say why (at least 3 characters).' : 'A reason is required (at least 3 characters).';
     setErrs(e); if (Object.keys(e).length) return;
     setBusy(true);
     try {
-      const body: ReassignBody = mode === 'all' ? { fromUserId: from.person.id, toUserId: to, reason: finalReason } : { applicationIds: ids, toUserId: to, reason: finalReason };
+      const why = { toUserId: to, reason: finalReason, ...(note ? { note } : {}) };
+      const body: ReassignBody = mode === 'all' ? { fromUserId: from.person.id, ...why } : { applicationIds: ids, ...why };
       const r = await reassignFiles(body);
       const n = r?.moved?.length ?? ids.length;
       const left = r?.unchanged?.length ?? 0;
