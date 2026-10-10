@@ -2,8 +2,8 @@ import { useMemo, useState } from 'react';
 import { Briefcase, CircleCheck, Clock, Info, Play, Save, Send, Target } from 'lucide-react';
 import { ButtonV2, DangerConfirmButton, DrawerV2, InputV2, SelectV2, StatusChip, TextareaV2 } from '../../components/v2';
 import {
-  activateRequisition, cancelRequisition, createRequisition, dueOf, formatDue, isEditable, reqError, STATUS_LABEL, STATUS_TONE,
-  submitRequisition, updateRequisition, type Grade, type Person, type ReqContext, type ReqFields, type Requisition,
+  activateRequisition, canActivateDraft, cancelRequisition, createRequisition, deptOf, draftActivateRefused, dueOf, formatDue, isEditable, reqError, STATUS_LABEL, STATUS_TONE,
+  submitRequisition, TARGET_UPDATE_LIVE, titleOf, updateRequisition, updateTarget, type Grade, type Person, type ReqContext, type ReqFields, type Requisition,
 } from '../api/requisitions';
 
 type Errs = Partial<Record<'positionId' | 'branchId' | 'seats' | 'dueDate' | 'assignee' | 'grade' | 'reason' | 'form', string>>;
@@ -15,6 +15,8 @@ export interface ReqDrawerProps {
   people: Person[] | null;
   grades: Grade[] | null;
   canActivate: boolean;
+  /** The signed-in Manager (own-draft activation). */
+  meId?: string;
   onClose: () => void;
   onDone: (message: string) => void;
 }
@@ -30,18 +32,19 @@ function PersonSelect({ people, value, onChange, error, disabled, label = 'Prima
 }
 
 /** M03 Requisition: create / edit a draft, submit, activate, cancel. One primary per state. */
-export function RequisitionDrawer({ req, ctx, people, grades, canActivate, onClose, onDone }: ReqDrawerProps) {
+export function RequisitionDrawer({ req, ctx, people, grades, canActivate, meId, onClose, onDone }: ReqDrawerProps) {
   const editable = !req || isEditable(req.status);
   const [f, setF] = useState({
     positionId: req?.positionId ?? '', branchId: req?.branchId ?? '', seats: String(req?.requestedHeadcount ?? 1),
-    dueDate: req ? dueOf(req) ?? '' : '', gradeId: req?.gradeId ?? '', assignee: req?.assignedEmployeeId ?? '', notes: req?.justification ?? '',
+    dueDate: req ? dueOf(req) ?? '' : '', departmentId: req?.departmentId ?? '', gradeId: req?.gradeId ?? '', assignee: req?.assignedEmployeeId ?? '', notes: req?.justification ?? '',
   });
   const initial = useMemo(() => JSON.stringify(f), []); // eslint-disable-line react-hooks/exhaustive-deps
   const [busy, setBusy] = useState<null | 'save' | 'submit' | 'activate' | 'cancel'>(null);
   const [errs, setErrs] = useState<Errs>({});
   const [reason, setReason] = useState('');
   const set = (k: keyof typeof f) => (v: string) => { setF((x) => ({ ...x, [k]: v })); setErrs((e) => ({ ...e, [k === 'seats' ? 'seats' : k === 'assignee' ? 'assignee' : k === 'gradeId' ? 'grade' : k]: undefined, form: undefined })); };
-  const title = req?.position?.title ?? ctx?.positions.find((p) => p.id === f.positionId)?.title ?? (req ? req.requestCode : 'New requisition');
+  const title = req ? titleOf(req, ctx) : ctx?.positions.find((p) => p.id === f.positionId)?.title ?? 'New requisition';
+  const departments = ctx?.departments;
   const seats = Number(f.seats);
 
   const fields = (): ReqFields | null => {
@@ -53,7 +56,7 @@ export function RequisitionDrawer({ req, ctx, people, grades, canActivate, onClo
     else if (f.dueDate < cairoToday()) e.dueDate = 'Pick today or a later day.';
     setErrs(e);
     if (Object.keys(e).length) return null;
-    return { positionId: f.positionId, branchId: f.branchId, requestedHeadcount: seats, dueDate: f.dueDate, gradeId: f.gradeId || null, assignedEmployeeId: f.assignee || null, justification: f.notes.trim() || null };
+    return { ...(departments ? { departmentId: f.departmentId || null } : {}), positionId: f.positionId, branchId: f.branchId, requestedHeadcount: seats, dueDate: f.dueDate, gradeId: f.gradeId || null, assignedEmployeeId: f.assignee || null, justification: f.notes.trim() || null };
   };
   const fail = (e: unknown) => { const r = reqError(e); setErrs(r.field ? { [r.field]: r.text } : { form: r.text }); };
   const save = async (then?: 'submit') => {
@@ -66,6 +69,23 @@ export function RequisitionDrawer({ req, ctx, people, grades, canActivate, onClo
     } catch (e) { fail(e); } finally { setBusy(null); }
   };
   const activate = async () => {
+    if (draftActivate) {
+      const body = fields(); if (!body) return;
+      if (!f.assignee) { setErrs({ assignee: 'Pick the primary recruiter who will own the job.' }); return; }
+      setBusy('activate');
+      let id = req?.id;
+      try {
+        const saved = req ? await updateRequisition(req.id, body) : await createRequisition(body);
+        id = saved?.id ?? id;
+        await activateRequisition(id!, f.assignee);
+        const who = people?.find((p) => p.id === f.assignee)?.name ?? 'the owner';
+        onDone(`Job active — ${title} is now in ${who}’s Open jobs.`);
+      } catch (e) {
+        if (draftActivateRefused(e)) setErrs({ form: `Activating a draft directly is not live yet${id ? ' — your changes are saved' : ''}. Submit it for approval for now, then activate once it is approved.` });
+        else fail(e);
+      } finally { setBusy(null); }
+      return;
+    }
     if (!req) return;
     if (!f.assignee) { setErrs({ assignee: 'Pick the primary recruiter who will own the job.' }); return; }
     setBusy('activate');
@@ -89,7 +109,12 @@ export function RequisitionDrawer({ req, ctx, people, grades, canActivate, onClo
   const approved = status === 'Approved';
   const ro = !editable;
   const canCancel = !!req && status !== 'Cancelled' && status !== 'Rejected';
-  const primary = editable
+  // CoS: a Manager's own Draft activates directly once it has a due date (Backend adding it; refusal handled above).
+  const draftActivate = canActivateDraft(req, meId, f.dueDate || null);
+  const ownDraft = status === 'Draft' && (!req || req.requesterId === meId);
+  const primary = ownDraft && f.dueDate
+    ? <ButtonV2 icon={<Play />} loading={busy === 'activate'} disabled={!!busy} onClick={() => void activate()}>Activate job</ButtonV2>
+    : editable
     ? <ButtonV2 icon={<Send />} loading={busy === 'submit'} disabled={!!busy || !f.dueDate} onClick={() => void save('submit')}>Submit for approval</ButtonV2>
     : approved && canActivate
       ? <ButtonV2 icon={<Play />} loading={busy === 'activate'} disabled={!!busy} onClick={() => void activate()}>Activate job</ButtonV2>
@@ -117,6 +142,12 @@ export function RequisitionDrawer({ req, ctx, people, grades, canActivate, onClo
               {ctx.branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
             </SelectV2>
           ) : null}
+          {departments ? (
+            <SelectV2 label="Department" value={f.departmentId} onChange={(e) => set('departmentId')(e.target.value)} disabled={ro}>
+              <option value="">No department</option>
+              {departments.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+            </SelectV2>
+          ) : req && deptOf(req, ctx) ? <p className="rf2-jtable__sub">Department: {deptOf(req, ctx)}</p> : null}
           <SelectV2 label="Grade" value={f.gradeId} onChange={(e) => set('gradeId')(e.target.value)} disabled={ro || !grades} error={errs.grade} hint={grades ? undefined : 'Grades list not available.'}>
             <option value="">No grade</option>
             {(grades ?? []).map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
@@ -134,13 +165,15 @@ export function RequisitionDrawer({ req, ctx, people, grades, canActivate, onClo
         <section className="rf2-req__status" aria-labelledby="req-status-h">
           <div className="rf2-row-between"><h3 id="req-status-h" className="rf2-field__label">Status</h3><StatusChip tone={STATUS_TONE[status]} label={STATUS_LABEL[status]} /></div>
           <p className="rf2-jtable__sub">{
-            editable ? 'Submit sends it for approval. Once approved, Activate job creates the job, assigns the owner and shows it in their Open jobs — one step, no pending state.'
+            ownDraft ? (f.dueDate ? 'Activate job creates the job, assigns the owner and shows it in their Open jobs — one step. Or submit it for approval first.' : 'Add a due date to activate it directly, or submit it for approval.')
+            : editable ? 'Submit sends it for approval. Once approved, Activate job creates the job, assigns the owner and shows it in their Open jobs — one step, no pending state.'
             : status === 'Pending Approval' ? 'Waiting on approval. Activate job is available once it is approved.'
             : approved ? (canActivate ? 'Approved. Activate job creates the job and assigns the owner in one step.' : 'Approved. Activating needs job management access.')
             : status === 'Converted to Vacancy' ? `Job active${req?.activatedAt ? ` since ${formatDue(req.activatedAt)}` : ''}.`
             : status === 'Cancelled' ? `Cancelled${req?.cancelReason ? `: ${req.cancelReason}` : ''}. Nothing is deleted.`
             : 'Rejected by the approver.'
           }</p>
+          {ownDraft && f.dueDate ? <ButtonV2 kind="secondary" size="sm" icon={<Send />} loading={busy === 'submit'} disabled={!!busy} onClick={() => void save('submit')}>Submit for approval</ButtonV2> : null}
           {canCancel ? (
             <div className="rf2-req__cancel">
               <TextareaV2 label="Reason to cancel" rows={2} value={reason} onChange={(e) => { setReason(e.target.value); setErrs((x) => ({ ...x, reason: undefined })); }} error={errs.reason}
@@ -155,15 +188,19 @@ export function RequisitionDrawer({ req, ctx, people, grades, canActivate, onClo
 }
 
 /** M04 Add target: seats + due date + owner on the requisition; previews the chip the owner sees on My Work. */
-export function TargetDrawer({ req, people, canActivate, onClose, onDone }: Omit<ReqDrawerProps, 'ctx' | 'grades'> & { req: Requisition }) {
-  const editable = isEditable(req.status);
+export function TargetDrawer({ req, people, canActivate, targetUpdate = TARGET_UPDATE_LIVE, onClose, onDone }: Omit<ReqDrawerProps, 'ctx' | 'grades'> & { req: Requisition; targetUpdate?: boolean }) {
+  const live = req.status === 'Converted to Vacancy';
+  /** Live job + the target-update endpoint (hidden until Backend ships it). */
+  const liveEdit = live && targetUpdate;
+  const editable = isEditable(req.status) || liveEdit;
+  const [why, setWhy] = useState('');
   const approved = req.status === 'Approved';
   const [seats, setSeats] = useState(String(req.requestedHeadcount));
   const [due, setDue] = useState(dueOf(req) ?? '');
   const [assignee, setAssignee] = useState(req.assignedEmployeeId ?? '');
   const [busy, setBusy] = useState(false);
   const [errs, setErrs] = useState<Errs>({});
-  const title = req.position?.title ?? req.requestCode;
+  const title = titleOf(req, null);
   const who = people?.find((p) => p.id === assignee)?.name;
   const n = Number(seats);
   const filled = req.targetChip?.filled ?? 0;
@@ -172,18 +209,22 @@ export function TargetDrawer({ req, people, canActivate, onClose, onDone }: Omit
     const e: Errs = {};
     if (!Number.isInteger(n) || n < 1) e.seats = 'At least 1 seat.';
     if (!due) e.dueDate = 'Required — a target needs a due date.';
-    if (!assignee) e.assignee = 'Pick who the target is for.';
+    if (!assignee && !liveEdit) e.assignee = 'Pick who the target is for.';
+    if (liveEdit && why.trim().length < 3) e.reason = 'Say why the target changes (at least 3 characters).';
     setErrs(e); if (Object.keys(e).length) return;
     setBusy(true);
     try {
-      if (editable) {
+      if (liveEdit) {
+        await updateTarget(req.id, { requestedHeadcount: n, dueDate: due, reason: why.trim() });
+        onDone(`Target updated — ${who ?? 'the owner'}’s My Work now shows “${filled} of ${n} · due ${formatDue(due).replace(/ \d{4}$/, '')}”.`);
+      } else if (editable) {
         await updateRequisition(req.id, { requestedHeadcount: n, dueDate: due, assignedEmployeeId: assignee });
         onDone(`Target saved — it appears on ${who ?? 'the owner'}’s My Work as “${filled} of ${n} · due ${formatDue(due).replace(/ \d{4}$/, '')}” once the job is active.`);
       } else {
         await activateRequisition(req.id, assignee);
         onDone(`Job active — target appears on ${who ?? 'the owner'}’s My Work as “${filled} of ${n} · due ${formatDue(due).replace(/ \d{4}$/, '')}”.`);
       }
-    } catch (x) { const r = reqError(x); setErrs(r.field === 'dueDate' || r.field === 'assignee' ? { [r.field]: r.text } : { form: r.text }); } finally { setBusy(false); }
+    } catch (x) { const r = reqError(x); setErrs(r.field === 'dueDate' || r.field === 'assignee' || r.field === 'reason' ? { [r.field]: r.text } : { form: r.text }); } finally { setBusy(false); }
   };
 
   const locked = !editable && !approved;
@@ -198,7 +239,8 @@ export function TargetDrawer({ req, people, canActivate, onClose, onDone }: Omit
         <InputV2 label="Seats" required type="number" min={1} value={seats} onChange={(e) => { setSeats(e.target.value); setErrs({}); }} error={errs.seats} disabled={!editable} />
         <InputV2 label="Due date" required type="date" value={due} onChange={(e) => { setDue(e.target.value); setErrs({}); }} error={errs.dueDate} disabled={!editable}
           hint={!due && editable ? 'Required — a target needs a due date. Save target stays disabled while it is empty.' : undefined} />
-        <PersonSelect label="Assign to" people={people} value={assignee} onChange={(v) => { setAssignee(v); setErrs({}); }} error={errs.assignee} disabled={locked} />
+        <PersonSelect label="Assign to" people={people} value={assignee} onChange={(v) => { setAssignee(v); setErrs({}); }} error={errs.assignee} disabled={locked || liveEdit} />
+        {liveEdit ? <TextareaV2 label="Reason for the change" required rows={2} value={why} onChange={(e) => { setWhy(e.target.value); setErrs({}); }} error={errs.reason} hint="Kept on the job’s history." /> : null}
         {locked ? <p className="rf2-inline-note"><Info aria-hidden="true" /> {req.status === 'Converted to Vacancy' ? 'The job is active. Its seats and due date can no longer be changed here (no API for a live target yet).' : req.status === 'Pending Approval' ? 'Waiting on approval: the target is locked until it comes back.' : 'This requisition is closed.'}</p> : null}
         {approved ? <p className="rf2-inline-note"><Info aria-hidden="true" /> Approved: seats and due date are locked. Pick the owner and activate.</p> : null}
         <section className="rf2-req__preview" aria-label={`Preview — ${who ?? 'owner'}’s My Work`}>

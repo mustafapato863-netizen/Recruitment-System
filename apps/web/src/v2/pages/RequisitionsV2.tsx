@@ -4,7 +4,7 @@ import { CircleCheck, Info, Plus, RotateCw, Search, Target } from 'lucide-react'
 import { ButtonV2, EmptyStateV2, ForbiddenStateV2, InputV2, SelectV2, SkeletonV2, StatusChip } from '../../components/v2';
 import { useAuth } from '../../auth/AuthContext';
 import {
-  dueOf, fetchContext, fetchGrades, fetchPeople, fetchRequisitions, formatDue, isClosed, isEditable, mineOrTeam, STATUS_LABEL, STATUS_TONE,
+  deptOf, dueOf, fetchContext, ownerOf, siteOf, TARGET_UPDATE_LIVE, titleOf, fetchGrades, fetchPeople, fetchRequisitions, formatDue, isClosed, isEditable, mineOrTeam, STATUS_LABEL, STATUS_TONE,
   type Grade, type Person, type ReqContext, type Requisition,
 } from '../api/requisitions';
 import { RequisitionDrawer, TargetDrawer } from '../drawers/RequisitionDrawers';
@@ -59,9 +59,11 @@ export function RequisitionsV2() {
 
   const data = state.kind === 'ready' ? state.data : null;
   const scoped = data ? mineOrTeam(data.rows, user?.id, data.people) : [];
-  const title = (r: Requisition) => r.position?.title ?? data?.ctx?.positions.find((p) => p.id === r.positionId)?.title ?? r.requestCode;
-  const site = (r: Requisition) => data?.ctx?.branches.find((b) => b.id === r.branchId)?.name ?? '—';
-  const owner = (r: Requisition) => (r.assignedEmployeeId ? data?.people?.find((p) => p.id === r.assignedEmployeeId)?.name ?? 'Assigned' : '—');
+  // Server names first (Backend adding them); /context + /users/assignable fill the rest.
+  const title = (r: Requisition) => titleOf(r, data?.ctx ?? null);
+  const site = (r: Requisition) => siteOf(r, data?.ctx ?? null);
+  const owner = (r: Requisition) => ownerOf(r, data?.people ?? null);
+  const showDept = scoped.some((r) => deptOf(r, data?.ctx ?? null));
   const rows = scoped.filter((r) => FILTERS[filter].test(r) && (!q.trim() || `${title(r)} ${r.requestCode} ${site(r)}`.toLowerCase().includes(q.trim().toLowerCase())));
   const current = open && open !== 'new' ? scoped.find((r) => r.id === open) ?? data?.rows.find((r) => r.id === open) ?? null : null;
   const canCreate = can('VACANCY_REQUEST_CREATE') && !!data?.ctx;
@@ -95,18 +97,19 @@ export function RequisitionsV2() {
               <EmptyStateV2 headingLevel={3} title={scoped.length ? 'No requisitions match these filters' : 'No requisitions yet'} body={scoped.length ? 'Change the status filter or search.' : canCreate ? 'Start one with New requisition.' : 'Requisitions you raise or assign to your team show here.'} />
             ) : (
               <table className="rf2-jtable">
-                <thead><tr><th scope="col">Requisition</th><th scope="col">Site</th><th scope="col">Seats</th><th scope="col">Due</th><th scope="col">Primary recruiter</th><th scope="col">Status</th><th scope="col"><span className="rf2-sr-only">Actions</span></th></tr></thead>
+                <thead><tr><th scope="col">Requisition</th>{showDept ? <th scope="col">Department</th> : null}<th scope="col">Site</th><th scope="col">Seats</th><th scope="col">Due</th><th scope="col">Primary recruiter</th><th scope="col">Status</th><th scope="col"><span className="rf2-sr-only">Actions</span></th></tr></thead>
                 <tbody>
                   {rows.map((r) => (
                     <tr key={r.id}>
                       <td><button type="button" className="rf2-link rf2-jtable__name" onClick={() => go(r.id)}>{title(r)}</button><p className="rf2-jtable__sub">{r.requestCode} · {targetText(r)}</p></td>
+                      {showDept ? <td>{deptOf(r, data.ctx) ?? '—'}</td> : null}
                       <td>{site(r)}</td>
                       <td className="rf2-num">{r.requestedHeadcount}</td>
                       <td className="rf2-num">{formatDue(dueOf(r))}</td>
                       <td>{owner(r)}</td>
                       <td><StatusChip tone={STATUS_TONE[r.status]} label={r.status === 'Converted to Vacancy' ? 'Job active' : STATUS_LABEL[r.status]} /></td>
                       <td className="rf2-jtable__act">
-                        {isEditable(r.status) || (r.status === 'Approved' && canActivate)
+                        {isEditable(r.status) || (r.status === 'Approved' && canActivate) || (r.status === 'Converted to Vacancy' && TARGET_UPDATE_LIVE)
                           ? <ButtonV2 kind="secondary" size="sm" icon={<Target />} onClick={() => go(r.id, 'target')} aria-label={`${dueOf(r) ? 'Edit' : 'Add'} target: ${title(r)}`}>{dueOf(r) ? 'Edit target' : 'Add target'}</ButtonV2>
                           : null}
                       </td>
@@ -117,9 +120,9 @@ export function RequisitionsV2() {
             )}
           </section>
           <p className="rf2-inline-note"><Info aria-hidden="true" /> Statuses: Draft → Pending approval → Approved → Job active (via Activate job), or Cancelled with a reason. There is no pending-activation step.</p>
-          {open === 'new' && canCreate ? <RequisitionDrawer req={null} ctx={data.ctx} people={data.people} grades={data.grades} canActivate={canActivate} onClose={() => go(null)} onDone={done} /> : null}
-          {current && drawer === 'target' ? <TargetDrawer req={current} people={data.people} canActivate={canActivate} onClose={() => go(null)} onDone={done} /> : null}
-          {current && drawer !== 'target' ? <RequisitionDrawer key={current.id} req={current} ctx={data.ctx} people={data.people} grades={data.grades} canActivate={canActivate} onClose={() => go(null)} onDone={done} /> : null}
+          {open === 'new' && canCreate ? <RequisitionDrawer req={null} ctx={data.ctx} people={data.people} grades={data.grades} canActivate={canActivate} meId={user?.id} onClose={() => go(null)} onDone={done} /> : null}
+          {current && drawer === 'target' ? <TargetDrawer req={current} people={data.people} canActivate={canActivate} meId={user?.id} onClose={() => go(null)} onDone={done} /> : null}
+          {current && drawer !== 'target' ? <RequisitionDrawer key={current.id} req={current} ctx={data.ctx} people={data.people} grades={data.grades} canActivate={canActivate} meId={user?.id} onClose={() => go(null)} onDone={done} /> : null}
         </>
       ) : null}
     </div>

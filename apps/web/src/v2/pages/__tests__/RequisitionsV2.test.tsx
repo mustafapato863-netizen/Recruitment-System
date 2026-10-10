@@ -15,7 +15,8 @@ vi.mock('../../../auth/AuthContext', () => ({ useAuth: () => ({ user: { id: 'u-k
 vi.mock('../../../pages/VacancyRequestsPage', () => ({ VacancyRequestsPage: () => <p>v1 requisitions</p> }));
 import { RequisitionsV2 } from '../RequisitionsV2';
 import { RequisitionsRoute } from '../RequisitionsRoute';
-import { mineOrTeam, reqError } from '../../api/requisitions';
+import { draftActivateRefused, mineOrTeam, reqError, TARGET_UPDATE_LIVE } from '../../api/requisitions';
+import { TargetDrawer } from '../../drawers/RequisitionDrawers';
 
 let responses: Record<string, unknown> = {};
 const serve = (extra: Record<string, unknown> = {}) => {
@@ -204,5 +205,85 @@ describe('/vacancy-requests route', () => {
     expect(reqError(new ApiError(400, 'm', { code: 'ASSIGNEE_REQUIRED', message: 'needs owner' }, { code: 'ASSIGNEE_REQUIRED' }))).toEqual({ field: 'assignee', text: 'needs owner' });
     expect(reqError(new ApiError(403, 'x', undefined, { code: 'FORBIDDEN' })).text).toMatch(/permission/);
     expect(reqError(new ApiError(409, 'Request REQ-1 cannot be updated from Approved.', undefined, { code: 'CONFLICT' })).text).toBe('Request REQ-1 cannot be updated from Approved.');
+  });
+});
+
+describe('M1 CoS follow-ups', () => {
+  it('own draft with a due date: Activate job saves then activates; today’s refusal is explained and Submit stays', async () => {
+    const u = userEvent.setup();
+    api.patchApi.mockResolvedValue({ id: 'r421' });
+    api.postApi.mockRejectedValueOnce(new ApiError(409, 'Request REQ-IT-0421 must be approved before activation.'));
+    renderAt('/vacancy-requests?req=r421');
+    const d = await screen.findByRole('dialog', { name: 'Payroll Systems Analyst' });
+    expect(within(d).queryByRole('button', { name: 'Activate job' })).toBeNull();
+    await u.type(within(d).getByLabelText(/^Due date/), '2099-11-20');
+    await u.click(within(d).getByRole('button', { name: 'Activate job' }));
+    await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/vacancy-requests/r421/activate', { assignedEmployeeId: 'u-youssef' }));
+    expect(api.patchApi).toHaveBeenCalledWith('/vacancy-requests/r421', expect.objectContaining({ dueDate: '2099-11-20' }));
+    expect(await within(d).findByRole('alert')).toHaveTextContent('Activating a draft directly is not live yet — your changes are saved. Submit it for approval');
+    expect(within(d).getByRole('button', { name: 'Submit for approval' })).toBeEnabled();
+    api.postApi.mockResolvedValueOnce({ request: { id: 'r421' } });
+    await u.click(within(d).getByRole('button', { name: 'Activate job' }));
+    expect(await screen.findByRole('status')).toHaveTextContent('Job active — Payroll Systems Analyst is now in Youssef Ibrahim’s Open jobs.');
+  });
+  it('someone else’s draft never offers Activate', async () => {
+    serve({ '/vacancy-requests': fx.requisitions.map((r) => (r.id === 'r421' ? { ...r, requesterId: 'u-other', dueDate: '2099-11-20', targetFillDate: '2099-11-20' } : r)) });
+    renderAt('/vacancy-requests?req=r421');
+    const d = await screen.findByRole('dialog');
+    expect(within(d).queryByRole('button', { name: 'Activate job' })).toBeNull();
+    expect(within(d).getByRole('button', { name: 'Submit for approval' })).toBeInTheDocument();
+  });
+  it('refusal helper: 409/403 without a known code', () => {
+    expect(draftActivateRefused(new ApiError(409, 'must be approved'))).toBe(true);
+    expect(draftActivateRefused(new ApiError(403, 'no'))).toBe(true);
+    expect(draftActivateRefused(new ApiError(400, 'x', { code: 'DUE_DATE_REQUIRED' }, { code: 'DUE_DATE_REQUIRED' }))).toBe(false);
+  });
+  it('server names and department win; department shows only when the API has it, and is sent', async () => {
+    const u = userEvent.setup();
+    api.postApi.mockResolvedValue({ id: 'r-new' });
+    serve({
+      '/vacancy-requests': fx.requisitions.map((r) => (r.id === 'r412' ? { ...r, positionTitle: 'HRIS Developer II', branchName: 'Cairo HQ', assignedEmployeeName: 'M. Farag', departmentName: 'IT Applications' } : r)),
+      '/vacancy-requests/context': { ...fx.context, departments: [{ id: 'd-it', name: 'IT Applications' }] },
+    });
+    renderAt();
+    const rows = within(await screen.findByRole('table')).getAllByRole('row');
+    expect(rows[0]).toHaveTextContent('Department');
+    expect(rows[1]).toHaveTextContent(/HRIS Developer II.*IT Applications.*Cairo HQ.*M\. Farag/);
+    await u.click(screen.getByRole('button', { name: 'New requisition' }));
+    const d = await screen.findByRole('dialog', { name: 'New requisition' });
+    await u.selectOptions(within(d).getByLabelText(/^Department/), 'd-it');
+    await u.selectOptions(within(d).getByLabelText(/^Title/), 'p-payroll');
+    await u.selectOptions(within(d).getByLabelText(/^Site/), 'b-riyadh');
+    await u.type(within(d).getByLabelText(/^Due date/), '2099-11-20');
+    await u.click(within(d).getByRole('button', { name: 'Save draft' }));
+    await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/vacancy-requests', expect.objectContaining({ departmentId: 'd-it' })));
+  });
+  it('no department from the API → no column, no field, not sent', async () => {
+    const u = userEvent.setup();
+    api.postApi.mockResolvedValue({ id: 'r-new' });
+    renderAt();
+    expect(within(await screen.findByRole('table')).getAllByRole('row')[0]).not.toHaveTextContent('Department');
+    await u.click(screen.getByRole('button', { name: 'New requisition' }));
+    const d = await screen.findByRole('dialog', { name: 'New requisition' });
+    expect(within(d).queryByLabelText(/^Department/)).toBeNull();
+  });
+  it('live target update is hidden until the endpoint exists; typed adapter posts seats, due and reason', async () => {
+    expect(TARGET_UPDATE_LIVE).toBe(false);
+    const u = userEvent.setup();
+    api.postApi.mockResolvedValue({ id: 'r412' });
+    const onDone = vi.fn();
+    const live = fx.requisitions[0] as never;
+    const { unmount } = render(<TargetDrawer req={live} people={null} canActivate onClose={() => {}} onDone={onDone} />);
+    expect(screen.getByLabelText(/^Seats/)).toBeDisabled();
+    expect(screen.queryByLabelText(/^Reason for the change/)).toBeNull();
+    unmount();
+    render(<TargetDrawer req={live} people={null} canActivate targetUpdate onClose={() => {}} onDone={onDone} />);
+    await u.clear(screen.getByLabelText(/^Seats/)); await u.type(screen.getByLabelText(/^Seats/), '4');
+    await u.click(screen.getByRole('button', { name: 'Save target' }));
+    expect(await screen.findByText(/Say why the target changes/)).toBeInTheDocument();
+    await u.type(screen.getByLabelText(/^Reason for the change/), 'Second shift approved');
+    await u.click(screen.getByRole('button', { name: 'Save target' }));
+    await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/vacancy-requests/r412/target', { requestedHeadcount: 4, dueDate: '2026-10-19', reason: 'Second shift approved' }));
+    expect(onDone).toHaveBeenCalledWith(expect.stringContaining('1 of 4'));
   });
 });

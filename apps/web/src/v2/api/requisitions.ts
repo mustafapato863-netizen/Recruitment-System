@@ -12,6 +12,14 @@
  * - POST /vacancy-requests/:id/cancel {reason}  (reason required once approved) → closes the live job and rejects its open files.
  * - Grades: GET /master-data/catalog/grades (active only). People: GET /users/assignable (the caller's reports).
  * Budget fields exist on the DTO but are pay: never read, never sent (stripPay drops budget*).
+ *
+ * CoS answers (Oct 10), coded ahead of Backend:
+ * - A Manager can activate their OWN Draft once it has a due date. Until Backend lands it, /activate refuses a Draft
+ *   (409 "must be approved before activation", or 403 without VACANCY_MANAGE): draftActivateRefused() spots that and the UI says so.
+ * - Department is optional: `departmentId`/`department`/`departmentName` on the row and `departments[]` on /context. Shown only when present.
+ * - Names (positionTitle, branchName, assignedEmployeeName) and team scope come from the server; the client fill and
+ *   mineOrTeam() stay as the fallback.
+ * - Target update (seats + due date + reason) on a live job: typed adapter below, hidden while TARGET_UPDATE_LIVE is false.
  */
 import { getApi, patchApi, postApi } from '../../api/client';
 import { stripPay } from './paySafety';
@@ -26,10 +34,13 @@ export interface Requisition {
   position?: { title: string } | null;
   requestedHeadcount: number; targetFillDate: string | null; dueDate?: string | null;
   gradeId?: string | null; assignedEmployeeId?: string | null; justification: string | null;
+  /** Coming from Backend (CoS): server-filled names and department. Optional; client fill is the fallback. */
+  positionTitle?: string | null; branchName?: string | null; assignedEmployeeName?: string | null; requesterName?: string | null;
+  departmentId?: string | null; department?: { id: string; name: string } | string | null; departmentName?: string | null;
   targetChip?: TargetChip; activatedAt?: string | null; cancelledAt?: string | null; cancelReason?: string | null;
   createdAt: string; updatedAt: string;
 }
-export interface ReqContext { branches: Array<{ id: string; name: string }>; positions: Array<{ id: string; title: string }> }
+export interface ReqContext { branches: Array<{ id: string; name: string }>; positions: Array<{ id: string; title: string }>; departments?: Array<{ id: string; name: string }> }
 export interface Person { id: string; name: string; detail?: string }
 export interface Grade { id: string; name: string }
 
@@ -50,7 +61,7 @@ export const fetchRequisition = async (id: string) => stripPay(await getApi<Requ
 export async function fetchContext(): Promise<ReqContext | null> {
   try {
     const c = await getApi<Partial<ReqContext>>('/vacancy-requests/context');
-    return { branches: c?.branches ?? [], positions: c?.positions ?? [] };
+    return { branches: c?.branches ?? [], positions: c?.positions ?? [], ...(Array.isArray(c?.departments) ? { departments: c.departments } : {}) };
   } catch { return null; }
 }
 export async function fetchGrades(): Promise<Grade[] | null> {
@@ -69,13 +80,40 @@ export async function fetchPeople(): Promise<Person[] | null> {
 }
 
 /** The fields M1 edits. Never budget, never pay. */
-export interface ReqFields { positionId: string; branchId: string; requestedHeadcount: number; dueDate: string | null; gradeId: string | null; assignedEmployeeId: string | null; justification: string | null }
+export interface ReqFields { departmentId?: string | null; positionId: string; branchId: string; requestedHeadcount: number; dueDate: string | null; gradeId: string | null; assignedEmployeeId: string | null; justification: string | null }
 export const createRequisition = (f: ReqFields) => postApi<Requisition>('/vacancy-requests', f);
 export const updateRequisition = (id: string, f: Partial<ReqFields>) => patchApi<Requisition>(`/vacancy-requests/${enc(id)}`, f);
 export const submitRequisition = (id: string) => postApi<Requisition>(`/vacancy-requests/${enc(id)}/submit`, {});
 export const activateRequisition = (id: string, assignedEmployeeId: string | null) =>
   postApi<{ request: Requisition; vacancy?: { id: string; vacancyCode?: string } }>(`/vacancy-requests/${enc(id)}/activate`, assignedEmployeeId ? { assignedEmployeeId } : {});
 export const cancelRequisition = (id: string, reason: string) => postApi<{ request: Requisition; rejectedApplications?: number; closedJob?: boolean }>(`/vacancy-requests/${enc(id)}/cancel`, { reason });
+
+/** Server names first, then the client fill from /context and /users/assignable. */
+export const titleOf = (r: Requisition, ctx: ReqContext | null) => r.positionTitle ?? r.position?.title ?? ctx?.positions.find((p) => p.id === r.positionId)?.title ?? r.requestCode;
+export const siteOf = (r: Requisition, ctx: ReqContext | null) => r.branchName ?? ctx?.branches.find((b) => b.id === r.branchId)?.name ?? '—';
+export const ownerOf = (r: Requisition, people: Person[] | null) => (r.assignedEmployeeId ? r.assignedEmployeeName ?? people?.find((p) => p.id === r.assignedEmployeeId)?.name ?? 'Assigned' : '—');
+export function deptOf(r: Requisition, ctx: ReqContext | null): string | null {
+  if (r.departmentName) return r.departmentName;
+  if (r.department && typeof r.department === 'object') return r.department.name;
+  if (typeof r.department === 'string' && r.department) return r.department;
+  return r.departmentId ? ctx?.departments?.find((d) => d.id === r.departmentId)?.name ?? null : null;
+}
+
+/** CoS: a Manager may activate their own Draft once it has a due date. */
+export const canActivateDraft = (r: Pick<Requisition, 'status' | 'requesterId'> | null, meId: string | undefined, due: string | null) =>
+  (!r || (r.status === 'Draft' && r.requesterId === meId)) && !!due;
+/** The current backend refusing a Draft activation (not yet live): 409 without a known code, or 403. */
+export function draftActivateRefused(e: unknown): boolean {
+  const x = e as { statusCode?: number } | null;
+  const d = domainError(e);
+  if (d && CODE_TEXT[d.code]) return false;
+  return x?.statusCode === 409 || x?.statusCode === 403;
+}
+
+/** Target update on a live job (seats + due date + reason). Endpoint announced by Backend, not live: hidden until TARGET_UPDATE_LIVE. */
+export const TARGET_UPDATE_LIVE = false;
+export interface TargetUpdate { requestedHeadcount: number; dueDate: string; reason: string }
+export const updateTarget = (id: string, body: TargetUpdate) => postApi<Requisition>(`/vacancy-requests/${enc(id)}/target`, body);
 
 /** Manager scope: requisitions I raised or that are assigned to one of my reports. Defence-in-depth over an org-wide list. */
 export function mineOrTeam(rows: Requisition[], meId: string | undefined, people: Person[] | null): Requisition[] {
