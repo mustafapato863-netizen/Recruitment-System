@@ -424,9 +424,9 @@ model Candidate {
   consentCapturedAt     DateTime?             @db.Timestamptz(6)
   consentSource         String?               @db.VarChar(80)
   skills                String[]              @default([]) @db.VarChar(100)
-  /// B6: lower(trim(email)); maintained by a DB trigger (rf_candidate_contact_keys).
+  /// B6: lower(trim(email)); written by the API (contact-keys.ts) and repaired at boot.
   emailNormalized       String?               @db.VarChar(255)
-  /// B6: E.164-ish phone (+digits); maintained by a DB trigger (rf_normalize_phone).
+  /// B6: E.164-ish phone (+digits), cc from env DEFAULT_PHONE_COUNTRY_CODE; written by the API, repaired at boot.
   phoneNormalized       String?               @db.VarChar(20)
   skillLinks            CandidateSkill[]
   experienceYears       Int?

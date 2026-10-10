@@ -1,11 +1,4 @@
-import {
-  BadRequestException,
-  ConflictException,
-  ForbiddenException,
-  Inject,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import type { Prisma } from '@recruitflow/database';
 import type {
   Interview,
@@ -15,6 +8,7 @@ import type {
   InterviewerConflict,
   AvailabilityResult,
 } from '@recruitflow/contracts';
+import { MatchingService } from '../matching/matching.service';
 import { PrismaService } from '../database/prisma.service';
 // Runtime service import must remain a value import for Nest DI metadata reflection.
 /* eslint-disable @typescript-eslint/consistent-type-imports */
@@ -40,6 +34,7 @@ export class InterviewsService {
     @Inject(PrismaService) private readonly prisma: PrismaService,
     private readonly notifications: NotificationsService,
     private readonly accessControl: AccessControlService,
+    @Optional() @Inject(MatchingService) private readonly matching?: MatchingService,
   ) {}
 
   async listInterviews(
@@ -664,6 +659,9 @@ export class InterviewsService {
       },
       include: { interviewer: true },
     });
+
+    // B6: scorecard is committed; derive skill evidence in the background (never blocks/throws).
+    void this.matching?.deriveEvidenceInBackground(organizationId, { interviewId }, interviewerId, 'scorecard submit');
 
     const [attendeeCount, submittedCount] = await Promise.all([
       this.prisma.interviewAttendee.count({ where: { interviewId } }),

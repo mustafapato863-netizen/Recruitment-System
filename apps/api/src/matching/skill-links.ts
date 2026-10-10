@@ -14,9 +14,9 @@ export async function linkCandidateSkills(
 ): Promise<number> {
   const keys = new Set(skills.map(catalogKey).filter(Boolean));
   if (keys.size === 0) return 0;
-  const library = await tx.masterDataValue.findMany({ where: { organizationId, category: 'skills' }, select: { id: true, name: true, status: true }, orderBy: { createdAt: 'asc' } });
+  const library = await tx.masterDataValue.findMany({ where: { organizationId, category: 'skills', status: 'Active' }, select: { id: true, name: true }, orderBy: { createdAt: 'asc' } });
   const ids = new Map<string, string>();
-  for (const v of [...library.filter((x) => x.status === 'Active'), ...library.filter((x) => x.status !== 'Active')]) {
+  for (const v of library) {
     const k = catalogKey(v.name);
     if (keys.has(k) && !ids.has(k)) ids.set(k, v.id);
   }

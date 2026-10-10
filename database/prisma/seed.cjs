@@ -47,6 +47,7 @@ async function seedSkillLibrary(tx, organizationId) {
     ['BLS', 'Certification'], ['ACLS', 'Certification'],
     ['Clinical Pharmacy', 'Pharmacy'], ['ICD-10', 'Medical Coding'], ['CPT', 'Medical Coding'],
     ['MRI', 'Imaging'], ['HRIS', 'HR'], ['Active Directory', 'IT'],
+    ['Clinical Experience', 'Clinical'], ['DHA/MOH License', 'Licensing'],
   ];
   await tx.masterDataValue.createMany({
     data: skills.map(([name, category]) => ({ organizationId, category: 'skills', name, status: 'Active', metadata: { category } })),

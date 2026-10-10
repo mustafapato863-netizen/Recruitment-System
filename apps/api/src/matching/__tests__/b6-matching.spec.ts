@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeEmailKey, normalizePhoneKey } from '../../candidates/contact-keys';
+import { contactKeys, defaultPhoneCountryCode, normalizeEmailKey, normalizePhoneKey } from '../../candidates/contact-keys';
+import { vi } from 'vitest';
+import { MatchingService } from '../matching.service';
 import { findSkillSnippet } from '../skill-evidence';
 import { SUGGESTION_ORDER } from '../matching.service';
 import { MasterDataService } from '../../master-data/master-data.service';
@@ -15,6 +17,21 @@ describe('B6 contact keys', () => {
     }
     expect(normalizePhoneKey('+20 100 123 4567')).toBe('+201001234567');
     expect(normalizePhoneKey('1234')).toBeNull();
+  });
+  it('country code is configuration: DEFAULT_PHONE_COUNTRY_CODE, fallback only when unset/invalid', () => {
+    expect(defaultPhoneCountryCode({})).toBe('966');
+    expect(defaultPhoneCountryCode({ DEFAULT_PHONE_COUNTRY_CODE: '+20' })).toBe('20');
+    expect(defaultPhoneCountryCode({ DEFAULT_PHONE_COUNTRY_CODE: 'abc' })).toBe('966');
+    expect(normalizePhoneKey('01001234567', '20')).toBe('+201001234567');
+    expect(normalizePhoneKey('0501234567', null)).toBeNull();
+    expect(normalizePhoneKey('+966501234567', null)).toBe('+966501234567');
+    const before = process.env.DEFAULT_PHONE_COUNTRY_CODE;
+    process.env.DEFAULT_PHONE_COUNTRY_CODE = '20';
+    try {
+      expect(contactKeys(' A@B.co ', '0100 123 4567')).toEqual({ emailNormalized: 'a@b.co', phoneNormalized: '+201001234567' });
+    } finally {
+      if (before === undefined) delete process.env.DEFAULT_PHONE_COUNTRY_CODE; else process.env.DEFAULT_PHONE_COUNTRY_CODE = before;
+    }
     expect(normalizePhoneKey('')).toBeNull();
   });
 });
@@ -48,5 +65,19 @@ describe('B6 skill library is deactivate-only', () => {
     const svc = new MasterDataService(prisma as never);
     await expect(svc.deleteCatalogValue('org', 'skills', 's1')).resolves.toEqual({ id: 's1', deactivated: true, status: 'Inactive' });
     expect(calls).toEqual(['update:Inactive']);
+  });
+});
+
+describe('B6 auto-derive is non-blocking and never throws', () => {
+  it('logs and swallows a failure, resolves the candidate from an interview', async () => {
+    const prisma = { interview: { findFirst: vi.fn().mockResolvedValue({ application: { candidateId: 'c1' } }) } };
+    const svc = new MatchingService(prisma as never, {} as never);
+    const derive = vi.spyOn(svc, 'deriveEvidence').mockRejectedValue(new Error('boom'));
+    const warn = vi.spyOn((svc as unknown as { logger: { warn: (m: string) => void } }).logger, 'warn').mockImplementation(() => undefined);
+    const p = svc.deriveEvidenceInBackground('org', { interviewId: 'i1' }, 'u1', 'scorecard submit');
+    expect(derive).not.toHaveBeenCalled(); // deferred past the caller's commit
+    await expect(p).resolves.toBeUndefined();
+    expect(derive).toHaveBeenCalledWith('org', 'c1', 'u1');
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('scorecard submit failed: boom'));
   });
 });

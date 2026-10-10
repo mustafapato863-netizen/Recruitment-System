@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import type { AuthUser } from '@recruitflow/contracts';
 import type { Prisma } from '@recruitflow/database';
 // Runtime service imports must remain value imports for Nest DI metadata reflection.
@@ -57,6 +57,7 @@ type CandidateWithSkills = {
 
 @Injectable()
 export class MatchingService {
+  private readonly logger = new Logger(MatchingService.name);
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(UserPermissionsService) private readonly permissions: UserPermissionsService,
@@ -80,13 +81,14 @@ export class MatchingService {
   }
 
   private async resolveRequired(organizationId: string, requiredSkills: string[]) {
+    // Only ACTIVE library skills count; a deactivated skill comes back under unmappedRequiredSkills.
     const library = await this.prisma.masterDataValue.findMany({
-      where: { organizationId, category: 'skills' },
-      select: { id: true, name: true, status: true },
+      where: { organizationId, category: 'skills', status: 'Active' },
+      select: { id: true, name: true },
       orderBy: [{ createdAt: 'asc' }],
     });
     const byKey = new Map<string, { id: string; name: string }>();
-    for (const v of [...library.filter((x) => x.status === 'Active'), ...library.filter((x) => x.status !== 'Active')]) {
+    for (const v of library) {
       if (!byKey.has(catalogKey(v.name))) byKey.set(catalogKey(v.name), v);
     }
     const required: Array<{ id: string; name: string }> = [];
@@ -226,18 +228,21 @@ export class MatchingService {
   }
 
   async recordEvidence(
-    tx: Pick<PrismaService, 'candidateSkill' | 'candidateSkillEvidence'>,
+    tx: Pick<Prisma.TransactionClient, 'candidateSkill' | 'candidateSkillEvidence'>,
     organizationId: string, candidateId: string, skillId: string,
     sourceType: EvidenceSourceType, sourceRef: string | null, snippet: string | null, addedById: string | null,
   ) {
-    const link = await tx.candidateSkill.upsert({
-      where: { candidateId_skillId: { candidateId, skillId } },
-      create: { organizationId, candidateId, skillId },
-      update: {},
-    });
+    // Concurrency-safe (two background derives can race): insert-if-absent, then read.
+    await tx.candidateSkill.createMany({ data: [{ organizationId, candidateId, skillId }], skipDuplicates: true });
+    const link = await tx.candidateSkill.findUniqueOrThrow({ where: { candidateId_skillId: { candidateId, skillId } } });
     // NULL sourceRef never conflicts in a unique index, so dedupe manual-without-ref by snippet.
-    const existing = await tx.candidateSkillEvidence.findFirst({ where: { candidateSkillId: link.id, sourceType, sourceRef, ...(sourceRef ? {} : { snippet }) } });
+    const find = () => tx.candidateSkillEvidence.findFirst({ where: { candidateSkillId: link.id, sourceType, sourceRef, ...(sourceRef ? {} : { snippet }) } });
+    const existing = await find();
     if (existing) return existing;
+    if (sourceRef) {
+      await tx.candidateSkillEvidence.createMany({ data: [{ candidateSkillId: link.id, sourceType, sourceRef, snippet, addedById }], skipDuplicates: true });
+      return (await find())!;
+    }
     return tx.candidateSkillEvidence.create({ data: { candidateSkillId: link.id, sourceType, sourceRef, snippet, addedById } });
   }
 
@@ -270,6 +275,26 @@ export class MatchingService {
       }
     });
     return { candidateId, found };
+  }
+
+  /**
+   * Non-blocking auto-derive, called AFTER the caller's write has committed
+   * (CV text stored, scorecard submitted). Idempotent; failures are logged, never thrown.
+   * Returns the background promise so tests can await it.
+   */
+  deriveEvidenceInBackground(organizationId: string, target: { candidateId?: string; interviewId?: string }, actorUserId: string | null, trigger: string): Promise<void> {
+    return new Promise<void>((resolve) => setImmediate(resolve))
+      .then(async () => {
+        let candidateId = target.candidateId;
+        if (!candidateId && target.interviewId) {
+          const iv = await this.prisma.interview.findFirst({ where: { id: target.interviewId, organizationId }, select: { application: { select: { candidateId: true } } } });
+          candidateId = iv?.application.candidateId;
+        }
+        if (candidateId) await this.deriveEvidence(organizationId, candidateId, actorUserId);
+      })
+      .catch((error: unknown) => {
+        this.logger.warn(`Skill evidence auto-derive after ${trigger} failed: ${error instanceof Error ? error.message : String(error)}`);
+      });
   }
 
   // ─── Duplicate check ──────────────────────────────────────────

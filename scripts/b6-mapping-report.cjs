@@ -14,10 +14,11 @@ const q = (sql) => prisma.$queryRawUnsafe(sql);
 // Same rules as apps/api/src/master-data/catalog-normalization.ts and candidates/contact-keys.ts
 const key = (v) => String(v ?? '').replace(/[\u00a0\u2007\u202f]/g, ' ').trim().replace(/\s+/g, ' ').toLocaleLowerCase('en-US');
 const email = (v) => (String(v ?? '').trim().toLowerCase() || null);
+const CC = /^\+?\d{1,3}$/.test((process.env.DEFAULT_PHONE_COUNTRY_CODE ?? '').trim()) ? process.env.DEFAULT_PHONE_COUNTRY_CODE.trim().replace('+', '') : '966';
 function phone(raw) {
   const s = String(raw ?? '').trim(); let d = s.replace(/\D/g, '');
   if (!d) return null;
-  if (s.startsWith('+')) {} else if (d.startsWith('00')) d = d.slice(2); else if (d.startsWith('0')) d = '966' + d.slice(1); else if (d.length <= 9) d = '966' + d;
+  if (s.startsWith('+')) {} else if (d.startsWith('00')) d = d.slice(2); else if (d.startsWith('0')) d = CC + d.slice(1); else if (d.length <= 9) d = CC + d;
   return d.length < 8 || d.length > 15 ? null : '+' + d;
 }
 
@@ -28,12 +29,12 @@ async function main() {
   p(`DB: ${(process.env.DATABASE_URL || '').replace(/\/\/[^@]*@/, '//***@')}`);
   p('-'.repeat(72));
   const lib = await q(`SELECT id, "organizationId" org, name, status FROM master_data_values WHERE category='skills'`);
-  const libKeys = new Map(); for (const v of lib) libKeys.set(`${v.org}|${key(v.name)}`, v);
+  const libKeys = new Map(); for (const v of lib.filter((x) => x.status === 'Active')) libKeys.set(`${v.org}|${key(v.name)}`, v);
   p(`Skill library entries: ${lib.length} (active ${lib.filter((v) => v.status === 'Active').length})`);
   const cands = await q(`SELECT id, "organizationId" org, "candidateCode" code, email, phone, skills FROM candidates`);
   let total = 0, matched = 0; const unmatched = new Map();
   for (const c of cands) for (const s of c.skills) { total++; if (libKeys.has(`${c.org}|${key(s)}`)) matched++; else unmatched.set(s.trim(), (unmatched.get(s.trim()) ?? 0) + 1); }
-  p(`Candidate free-text skills: ${total}; ${pre ? 'will map' : 'map'} to library: ${matched}; unmatched (kept as free text): ${total - matched}`);
+  p(`Candidate free-text skills: ${total}; ${pre ? 'will map' : 'map'} to library: ${matched}; unmatched or inactive in library (kept as free text): ${total - matched}`);
   if (unmatched.size) p('  Unmatched: ' + [...unmatched.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([s, n]) => `${s} (${n})`).join(', '));
   const vacs = await q(`SELECT "organizationId" org, "requiredSkills" req FROM vacancies`);
   let vt = 0, vm = 0; const vun = new Set();
@@ -44,8 +45,14 @@ async function main() {
     const [links] = await q(`SELECT count(*)::int c FROM candidate_skills`);
     const [ev] = await q(`SELECT count(*)::int c FROM candidate_skill_evidence`);
     p(`candidate_skills rows: ${links.c}; evidence rows: ${ev.c} (migration creates no evidence: a listed skill is "No evidence")`);
-    const [mism] = await q(`SELECT count(*)::int c FROM candidates WHERE "emailNormalized" IS DISTINCT FROM rf_normalize_email(email) OR "phoneNormalized" IS DISTINCT FROM rf_normalize_phone(phone)`);
-    p(`Normalized contact keys out of sync: ${mism.c} (expected 0)`);
+    const sync = `SELECT count(*)::int c FROM candidates WHERE "emailNormalized" IS DISTINCT FROM rf_normalize_email(email) OR "phoneNormalized" IS DISTINCT FROM rf_normalize_phone(phone, '${CC}')`;
+    const [mism] = await q(sync);
+    p(`Contact keys pending the API boot repair (local-format phones need cc=${CC} from DEFAULT_PHONE_COUNTRY_CODE): ${mism.c}`);
+    if (args.includes('--repair')) {
+      const n = await prisma.$executeRawUnsafe(`UPDATE candidates SET "emailNormalized" = rf_normalize_email(email), "phoneNormalized" = rf_normalize_phone(phone, $1) WHERE "emailNormalized" IS DISTINCT FROM rf_normalize_email(email) OR "phoneNormalized" IS DISTINCT FROM rf_normalize_phone(phone, $1)`, CC);
+      const [after] = await q(sync);
+      p(`  Boot repair (same SQL as repairContactKeys) updated ${n}; out of sync after: ${after.c} (expected 0)`);
+    }
   }
   // duplicates (report only)
   const groups = (fn) => { const m = new Map(); for (const c of cands) { const k = fn(c); if (!k) continue; const g = m.get(`${c.org}|${k}`) ?? []; g.push(c.code); m.set(`${c.org}|${k}`, g); } return [...m.entries()].filter(([, g]) => g.length > 1); };

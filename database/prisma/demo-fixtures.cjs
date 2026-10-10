@@ -241,6 +241,33 @@ async function upsertOfferVersion(tx, id, data) {
   });
 }
 
+// B6: link demo candidates' typed skills to the active skill library, and give a few
+// clinical candidates evidenced "Clinical Experience" / "DHA/MOH License" (the demo jobs'
+// required skills) so a fresh demo DB has suggestions. Idempotent.
+async function linkDemoSkills(tx, orgId) {
+  const key = (v) => String(v ?? '').replace(/[\u00a0\u2007\u202f]/g, ' ').trim().replace(/\s+/g, ' ').toLocaleLowerCase('en-US');
+  const library = await tx.masterDataValue.findMany({ where: { organizationId: orgId, category: 'skills', status: 'Active' }, select: { id: true, name: true } });
+  const byKey = new Map(library.map((v) => [key(v.name), v.id]));
+  const candidates = await tx.candidate.findMany({ where: { organizationId: orgId, status: 'Active' }, select: { id: true, skills: true }, orderBy: { candidateCode: 'asc' } });
+  const links = [];
+  for (const c of candidates) for (const s of c.skills) { const id = byKey.get(key(s)); if (id) links.push({ organizationId: orgId, candidateId: c.id, skillId: id }); }
+  if (links.length) await tx.candidateSkill.createMany({ data: links, skipDuplicates: true });
+  const clinical = new Set(['icu', 'critical care', 'emergency care', 'pediatrics', 'wound care', 'iv therapy', 'bls', 'acls', 'triage']);
+  const evidenced = candidates.filter((c) => c.skills.some((s) => clinical.has(key(s))));
+  const addEvidence = async (candidateId, skillName, snippet) => {
+    const skillId = byKey.get(key(skillName));
+    if (!skillId) return;
+    const link = await tx.candidateSkill.upsert({ where: { candidateId_skillId: { candidateId, skillId } }, create: { organizationId: orgId, candidateId, skillId }, update: {} });
+    const exists = await tx.candidateSkillEvidence.findFirst({ where: { candidateSkillId: link.id, sourceType: 'MANUAL', sourceRef: 'demo-fixture' } });
+    if (!exists) await tx.candidateSkillEvidence.create({ data: { candidateSkillId: link.id, sourceType: 'MANUAL', sourceRef: 'demo-fixture', snippet } });
+  };
+  for (const [i, c] of evidenced.entries()) {
+    await addEvidence(c.id, 'Clinical Experience', 'Demo fixture: clinical experience confirmed at screening.');
+    if (i < 3) await addEvidence(c.id, 'DHA/MOH License', 'Demo fixture: license number recorded on file.');
+  }
+  return links.length;
+}
+
 async function seedDemoFixtures(tx, { organization, branch, position, users: seededUsers }) {
   const userRows = await tx.user.findMany({ where: { organizationId: organization.id } });
   const usersByEmail = Object.fromEntries(userRows.map((user) => [user.email, user]));
@@ -661,7 +688,10 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
     create: { id: fixtureId(953), organizationId: orgId, name: 'Healthcare IT Specialists', description: 'Medical coders, HIS engineers, cybersecurity.', tags: ['IT', 'Medical-Coding'], status: 'Active' },
   });
 
+  const skillLinks = await linkDemoSkills(tx, orgId);
+
   return {
+    skillLinks,
     candidates: candidateSeeds.length,
     vacancyRequests: requestSeeds.length,
     vacancies: vacancySeeds.length,

@@ -8,6 +8,11 @@ import { PrismaService } from '../../database/prisma.service';
 import { UserPermissionsService } from '../../common/user-permissions.service';
 import { MatchingService } from '../matching.service';
 import { ImportService } from '../../import/import.service';
+import { MasterDataService } from '../../master-data/master-data.service';
+import { InterviewsService } from '../../interviews/interviews.service';
+import { DocumentsService } from '../../documents/documents.service';
+import { linkCandidateSkills } from '../skill-links';
+import { normalizePhoneKey, repairContactKeys } from '../../candidates/contact-keys';
 
 const url = process.env.B6_TEST_DATABASE_URL;
 const ORG = '10000000-0000-4000-8000-000000000001';
@@ -145,8 +150,10 @@ describe.skipIf(!url)('B6 suggest, compare, evidence, duplicates (scratch Postgr
     }
   });
 
-  it('duplicate check by email and by phone, normalized; trigger keeps keys in sync', async () => {
+  it('duplicate check by email and by phone, normalized; boot repair fills keys for raw writes', async () => {
     const id = await cand('DUP', { email: `  Mixed.Case-${tag}@Example.COM `, phone: '050 777 1234' });
+    expect((await prisma.candidate.findUniqueOrThrow({ where: { id } })).phoneNormalized).toBeNull();
+    await repairContactKeys(prisma, '966');
     const row = await prisma.candidate.findUniqueOrThrow({ where: { id } });
     expect(row.emailNormalized).toBe(`mixed.case-${tag}@example.com`);
     expect(row.phoneNormalized).toBe('+966507771234');
@@ -158,8 +165,69 @@ describe.skipIf(!url)('B6 suggest, compare, evidence, duplicates (scratch Postgr
     expect(await statusOf(matching.duplicateCheck(ORG, {}))).toBe('400 CONTACT_REQUIRED');
   });
 
+  it('SQL rf_normalize_phone and TS normalizePhoneKey agree for every cc (incl. none)', async () => {
+    const corpus = ['0501234567', '+966 50 123 4567', '00966-501-234-567', '501234567', '966501234567', '(050) 123-4567', '+20 100 123 4567', '01001234567', '1234', '', '  ', '+1 (415) 555-0100', '0044 20 7946 0958', '1234567890123456'];
+    for (const cc of ['966', '20', '1', null]) {
+      const rows = await prisma.$queryRawUnsafe<Array<{ raw: string; k: string | null }>>(
+        `SELECT raw, rf_normalize_phone(raw, $1) k FROM unnest($2::text[]) raw`, cc, corpus);
+      for (const r of rows) expect([cc, r.raw, r.k]).toEqual([cc, r.raw, normalizePhoneKey(r.raw, cc)]);
+    }
+  });
+
+  it('typed profile skills are never evidence', async () => {
+    const id = await cand('TYPED', { skills: [`ICU ${tag}`, `BLS ${tag}`] });
+    await linkCandidateSkills(prisma, ORG, id, [`ICU ${tag}`, `BLS ${tag}`]);
+    const res = await matching.suggestions(user(ids.owner!), ids.vac!);
+    const typed = res.suggestions.find((s) => s.candidate.id === id)!;
+    expect(typed.matchedSkills.map((m) => [m.hasEvidence, m.evidence.length])).toEqual([[false, 0], [false, 0]]);
+    expect(await prisma.candidateSkillEvidence.count({ where: { candidateSkill: { candidateId: id } } })).toBe(0);
+  });
+
+  it('saving a job never reactivates a deactivated skill; it comes back under unmappedRequiredSkills', async () => {
+    const md = new MasterDataService(prisma);
+    const dead = await prisma.masterDataValue.create({ data: { organizationId: ORG, category: 'skills', name: `Retired ${tag}`, status: 'Active' } });
+    await md.deleteCatalogValue(ORG, 'skills', dead.id);
+    const names = await prisma.$transaction((tx) => md.syncSkillsInTransaction(tx, ORG, [`retired  ${tag}`]));
+    expect(names).toEqual([`Retired ${tag}`]);
+    expect((await prisma.masterDataValue.findUniqueOrThrow({ where: { id: dead.id } })).status).toBe('Inactive');
+    const v = await prisma.vacancy.findUniqueOrThrow({ where: { id: ids.vac! } });
+    await prisma.vacancy.update({ where: { id: ids.vac! }, data: { requiredSkills: [...v.requiredSkills, `Retired ${tag}`] } });
+    const res = await matching.suggestions(user(ids.owner!), ids.vac!);
+    expect(res.unmappedRequiredSkills).toContain(`Retired ${tag}`);
+    expect(res.requiredSkills.map((r) => r.id)).not.toContain(dead.id);
+    await prisma.vacancy.update({ where: { id: ids.vac! }, data: { requiredSkills: v.requiredSkills } });
+  });
+
+  it('auto-derives evidence after CV text is stored and after a scorecard is submitted (idempotent)', async () => {
+    const pending: Promise<void>[] = [];
+    const orig = matching.deriveEvidenceInBackground.bind(matching);
+    matching.deriveEvidenceInBackground = (...a: Parameters<typeof orig>) => { const p = orig(...a); pending.push(p); return p; };
+    const audit = { log: async () => undefined };
+    const docs = new DocumentsService(prisma, audit as never, {} as never, {} as never, undefined, matching);
+    const cid = await cand('AUTO');
+    for (let i = 0; i < 2; i++) {
+      await docs.createDocument(ORG, ids.owner!, { candidateId: cid, documentType: 'CV', fileName: 'cv.pdf', mimeType: 'application/pdf', fileSize: 10, extractionText: `Charge nurse, triage ${tag} lead.` } as never);
+    }
+    await Promise.all(pending);
+    const cv = await prisma.candidateSkillEvidence.findMany({ where: { candidateSkill: { candidateId: cid, skillId: skill.Triage! }, sourceType: 'CV_TEXT' } });
+    expect(cv).toHaveLength(2); // one per document, re-runs add nothing
+    await matching.deriveEvidence(ORG, cid, null);
+    expect(await prisma.candidateSkillEvidence.count({ where: { candidateSkill: { candidateId: cid, skillId: skill.Triage! }, sourceType: 'CV_TEXT' } })).toBe(2);
+
+    const app = await prisma.application.create({ data: { organizationId: ORG, applicationCode: `B6S-${tag}`, vacancyId: (await prisma.vacancy.findFirstOrThrow({ where: { organizationId: ORG, id: { not: ids.vac! } } })).id, candidateId: cid, stage: 'Interview' } });
+    const iv = await prisma.interview.create({ data: { organizationId: ORG, interviewCode: `B6I-${tag}`, title: 'B6 interview', applicationId: app.id, interviewType: 'Technical', scheduledStart: new Date('2031-01-01T08:00:00Z'), scheduledEnd: new Date('2031-01-01T09:00:00Z'), status: 'Scheduled', attendees: { create: { userId: ids.owner! } } } as never });
+    const access = { getApplicationVisibilityWhere: async () => ({ organizationId: ORG }), getInterviewVisibilityWhere: async () => ({ organizationId: ORG }) };
+    const interviews = new InterviewsService(prisma, { create: async () => undefined } as never, access as never, matching);
+    pending.length = 0;
+    await interviews.submitScorecard(ORG, iv.id, ids.owner!, { overallRating: 4, recommendation: 'Hire', notes: `Strong ICU ${tag} background.` } as never);
+    await Promise.all(pending);
+    const sc = await prisma.candidateSkillEvidence.findMany({ where: { candidateSkill: { candidateId: cid, skillId: skill.ICU! }, sourceType: 'SCORECARD' } });
+    expect(sc).toHaveLength(1);
+  });
+
   it('import links to the existing person, fills only empty fields, reports conflicts, never creates a duplicate', async () => {
     const id = await cand('IMP', { email: `imp-${tag}@b6.test`, phone: null, currentTitle: 'Staff Nurse', location: null, skills: [] });
+    await repairContactKeys(prisma, '966'); // raw test write; the API's boot repair does this
     const { jobId } = await imports.upload(ORG, ids.owner!, { fileName: 'b6.xlsx', rows: [
       { firstName: 'B6', lastName: 'IMP', email: ` IMP-${tag}@B6.TEST`, phone: '0508889999', currentTitle: 'Charge Nurse', location: 'Riyadh', skills: [`ICU ${tag}`] },
       { firstName: 'New', lastName: 'Person', email: `new-${tag}@b6.test` },

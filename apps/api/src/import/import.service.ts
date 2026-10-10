@@ -12,7 +12,7 @@ import type {
   PaginatedResult,
 } from '@recruitflow/contracts';
 import type { Prisma } from '@recruitflow/database';
-import { normalizeEmailKey, normalizePhoneKey } from '../candidates/contact-keys';
+import { contactKeys, normalizeEmailKey, normalizePhoneKey } from '../candidates/contact-keys';
 import { catalogKey } from '../master-data/catalog-normalization';
 
 /** B6: per-row outcome of a candidate import confirm. */
@@ -413,6 +413,9 @@ export class ImportService {
           const mergedSkills = [...existing.skills];
           for (const sk of skills) if (!mergedSkills.some((x) => catalogKey(x) === catalogKey(sk))) mergedSkills.push(sk.trim());
           if (mergedSkills.length !== existing.skills.length) { fill.skills = mergedSkills; filled.push('skills'); }
+          if ('email' in fill || 'phone' in fill) {
+            Object.assign(fill, contactKeys((fill.email ?? existing.email) as string | null, (fill.phone ?? existing.phone) as string | null));
+          }
           if (Object.keys(fill).length > 0) await tx.candidate.update({ where: { id: existing.id }, data: fill });
           candidateId = existing.id;
           updateRowsCount++;
@@ -428,6 +431,7 @@ export class ImportService {
               lastName: row.lastName!,
               email,
               phone,
+              ...contactKeys(email, phone),
               currentTitle: incoming.currentTitle as string | null,
               currentCompany: incoming.currentCompany as string | null,
               skills,

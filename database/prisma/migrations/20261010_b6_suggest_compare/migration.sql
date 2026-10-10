@@ -62,15 +62,19 @@ ALTER TABLE "candidate_skill_evidence" ADD CONSTRAINT "candidate_skill_evidence_
 
 
 -- ─── Contact normalization (must match apps/api/src/candidates/contact-keys.ts) ──
--- Email: lower(trim). Phone (E.164-ish, default country 966 = Saudi Arabia):
---   "+..." or "00..." -> international; leading "0" -> +966 + rest; <= 9 digits -> +966 + digits;
+-- No country code is hard-coded here. The API writes the keys on every candidate
+-- write and, at boot, runs repairContactKeys() with env DEFAULT_PHONE_COUNTRY_CODE,
+-- which also fills local-format phones this backfill leaves NULL (cc unknown here).
+-- Email: lower(trim). Phone (E.164-ish), cc = default country calling code:
+--   "+..." or "00..." -> international; leading "0" -> cc + rest; <= 9 digits -> cc + digits;
 --   otherwise the digits already include a country code. Valid when 8..15 digits.
+--   cc NULL -> local formats return NULL.
 CREATE OR REPLACE FUNCTION rf_normalize_email(raw TEXT) RETURNS TEXT
 LANGUAGE sql IMMUTABLE AS $$
   SELECT NULLIF(lower(btrim(raw)), '')
 $$;
 
-CREATE OR REPLACE FUNCTION rf_normalize_phone(raw TEXT) RETURNS TEXT
+CREATE OR REPLACE FUNCTION rf_normalize_phone(raw TEXT, cc TEXT) RETURNS TEXT
 LANGUAGE plpgsql IMMUTABLE AS $$
 DECLARE
   s TEXT := btrim(COALESCE(raw, ''));
@@ -82,27 +86,17 @@ BEGIN
   ELSIF left(d, 2) = '00' THEN
     d := substr(d, 3);
   ELSIF left(d, 1) = '0' THEN
-    d := '966' || substr(d, 2);
+    IF cc IS NULL THEN RETURN NULL; END IF;
+    d := cc || substr(d, 2);
   ELSIF length(d) <= 9 THEN
-    d := '966' || d;
+    IF cc IS NULL THEN RETURN NULL; END IF;
+    d := cc || d;
   END IF;
   IF length(d) < 8 OR length(d) > 15 THEN RETURN NULL; END IF;
   RETURN '+' || d;
 END $$;
 
-CREATE OR REPLACE FUNCTION rf_candidate_contact_keys() RETURNS trigger
-LANGUAGE plpgsql AS $$
-BEGIN
-  NEW."emailNormalized" := rf_normalize_email(NEW."email");
-  NEW."phoneNormalized" := rf_normalize_phone(NEW."phone");
-  RETURN NEW;
-END $$;
-
-CREATE TRIGGER rf_candidate_contact_keys
-BEFORE INSERT OR UPDATE OF "email", "phone", "emailNormalized", "phoneNormalized" ON "candidates"
-FOR EACH ROW EXECUTE FUNCTION rf_candidate_contact_keys();
-
-UPDATE "candidates" SET "emailNormalized" = rf_normalize_email("email"), "phoneNormalized" = rf_normalize_phone("phone");
+UPDATE "candidates" SET "emailNormalized" = rf_normalize_email("email"), "phoneNormalized" = rf_normalize_phone("phone", NULL);
 
 -- ─── Map free-text candidate skills to the library (case/whitespace-insensitive) ──
 -- Unmatched free text stays in candidates.skills untouched (reported, no entries invented).
@@ -116,7 +110,8 @@ JOIN LATERAL (
   WHERE v."organizationId" = c."organizationId" AND v."category" = 'skills'
     AND lower(regexp_replace(regexp_replace(translate(v."name", E'\u00a0\u2007\u202f', '   '), '^\s+|\s+$', '', 'g'), '\s+', ' ', 'g'))
       = lower(regexp_replace(regexp_replace(translate(cs.name, E'\u00a0\u2007\u202f', '   '), '^\s+|\s+$', '', 'g'), '\s+', ' ', 'g'))
-  ORDER BY (v."status" = 'Active') DESC, v."createdAt" ASC
+    AND v."status" = 'Active'
+  ORDER BY v."createdAt" ASC
   LIMIT 1
 ) m ON TRUE
 ON CONFLICT ("candidateId", "skillId") DO NOTHING;
