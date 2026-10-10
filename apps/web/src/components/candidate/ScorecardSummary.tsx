@@ -3,6 +3,7 @@ import type { Interview, InterviewScorecardItem } from '@recruitflow/contracts';
 import { Badge } from '../ui/Badge';
 import { ProgressBar, type ProgressTone } from '../ui/ProgressBar';
 import { Icon } from '../Icon';
+import { roundScorecardState } from '../../utils/scorecardStatus';
 
 export type UiRecommendation = 'strong_hire' | 'hire' | 'no_hire';
 
@@ -13,7 +14,7 @@ export interface ScorecardSummaryProps {
   recommendation: 'strong_hire' | 'hire' | 'no_hire' | null;
   averageRating: number | null;
   interviewId: string;
-  isLocked: boolean;
+  submitted: boolean;
   pendingLabel?: string;
   className?: string;
 }
@@ -22,7 +23,7 @@ export interface AggregatedScorecard {
   averageRating: number | null;
   recommendation: UiRecommendation | null;
   interviewerNames: string;
-  isLocked: boolean;
+  submitted: boolean;
 }
 
 export interface InterviewStats {
@@ -58,7 +59,7 @@ export function mapBackendToUiRecommendation(rec?: string | null): UiRecommendat
  * - averageRating: average of valid overallRating (1-5), rounded to 1 decimal
  * - recommendation: majority/top recommendation (tie-break: strong_hire > hire > no_hire)
  * - interviewerNames: deduplicated comma-separated list of interviewer names
- * - isLocked: true if any scorecard is locked
+ * - submitted: true if any scorecard has status Submitted (B5)
  */
 export function aggregateInterviewScorecards(scorecards?: InterviewScorecardItem[]): AggregatedScorecard {
   if (!scorecards || scorecards.length === 0) {
@@ -66,7 +67,7 @@ export function aggregateInterviewScorecards(scorecards?: InterviewScorecardItem
       averageRating: null,
       recommendation: null,
       interviewerNames: '',
-      isLocked: false,
+      submitted: false,
     };
   }
 
@@ -110,13 +111,13 @@ export function aggregateInterviewScorecards(scorecards?: InterviewScorecardItem
     ),
   ).join(', ');
 
-  const isLocked = scorecards.some((s) => s.isLocked);
+  const submitted = roundScorecardState(scorecards) === 'submitted';
 
   return {
     averageRating,
     recommendation: topRec,
     interviewerNames,
-    isLocked,
+    submitted,
   };
 }
 
@@ -166,7 +167,7 @@ export function ScorecardSummary({
   recommendation,
   averageRating,
   interviewId,
-  isLocked,
+  submitted,
   pendingLabel = 'Pending',
   className = '',
 }: ScorecardSummaryProps) {
@@ -210,7 +211,7 @@ export function ScorecardSummary({
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           <Badge variant={recBadge.variant}>{recBadge.label}</Badge>
-          {isLocked && (
+          {submitted && (
             <span title="Scorecard finalized" className="text-rf-ink-muted inline-flex items-center">
               <Icon name="lock" size={12} />
             </span>
