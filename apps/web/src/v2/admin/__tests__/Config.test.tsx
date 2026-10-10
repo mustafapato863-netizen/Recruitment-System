@@ -159,6 +159,16 @@ describe('A06 Master data', () => {
     await waitFor(() => expect(api.patchApi).toHaveBeenCalledWith('/master-data/catalog/rejection-reasons/r2', { status: 'Inactive' }));
     expect(api.deleteApi).not.toHaveBeenCalled();
   });
+  it('B2R-7: non-reason lists (departments) archive via DELETE, never PATCH Inactive', async () => {
+    const u = userEvent.setup();
+    api.deleteApi.mockResolvedValue({ id: 'd1', deactivated: true, status: 'Archived' });
+    renderAt('/master-data');
+    const region = await screen.findByRole('region', { name: 'Departments' });
+    const btn = within(region).getAllByRole('button', { name: /^Deactivate / })[0];
+    await u.click(btn);
+    await waitFor(() => expect(api.deleteApi).toHaveBeenCalledWith(expect.stringMatching(/^\/master-data\/catalog\/departments\//)));
+    expect(api.patchApi).not.toHaveBeenCalledWith(expect.stringContaining('/departments/'), { status: 'Inactive' });
+  });
   it('#21 B2-21: a skill deactivates as Archived (DELETE archives it); an archived skill reactivates with PATCH Active', async () => {
     const u = userEvent.setup();
     api.deleteApi.mockResolvedValue({ id: 'k1', deactivated: true, status: 'Archived' });

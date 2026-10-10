@@ -80,11 +80,13 @@ export async function fetchCatalog(category: string): Promise<CatalogValue[] | n
 }
 export const addValue = (category: string, name: string) => postApi(`/master-data/catalog/${enc(category)}/batch`, { rows: [{ name }] });
 /**
- * #21 (B2-21, test 2962657): a deactivated skill is `Archived` (the single deactivated-skill status). PATCH only
- * takes 'Active'|'Inactive', so skills deactivate via DELETE /master-data/catalog/skills/:id (→ {status:'Archived'},
- * nothing is deleted). Every other list stays PATCH {status:'Inactive'}. Reactivating is PATCH {status:'Active'} for all.
+ * #21/#23 (B2-21, B2R-7): a deactivated catalog value is `Archived`, sent as DELETE /master-data/catalog/:category/:id
+ * (→ {status:'Archived'}, nothing is deleted). PATCH only accepts 'Active'|'Inactive', so it never sends 'Inactive' for these.
+ * Exception per master-data.service DEACTIVATE_ONLY: the reason lists (hold/close/rejection/reassign) are deactivate-only;
+ * their DELETE and PATCH both store 'Inactive', so they keep PATCH {status:'Inactive'}. Reactivating is PATCH {status:'Active'}.
  */
-export const ARCHIVED_ON_DEACTIVATE: ReadonlySet<string> = new Set(['skills']);
+export const REASON_LISTS: ReadonlySet<string> = new Set(['rejection-reasons', 'hold-reasons', 'close-reasons', 'reassign-reasons']);
+export const ARCHIVED_ON_DEACTIVATE = { has: (category: string) => !REASON_LISTS.has(category) } as const;
 export const deactivatedStatus = (category: string): 'Archived' | 'Inactive' => (ARCHIVED_ON_DEACTIVATE.has(category) ? 'Archived' : 'Inactive');
 export const setValueStatus = (category: string, v: CatalogValue, status: 'Active' | 'Inactive') =>
   status === 'Inactive' && ARCHIVED_ON_DEACTIVATE.has(category)
