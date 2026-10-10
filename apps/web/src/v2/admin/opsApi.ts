@@ -12,6 +12,7 @@
  *   CoS: also sends the B3 list reason (statusReason, + statusNote for "Other") and holdUntil when the B3 lists exist.
  *   400 OVERRIDE_REASON_REQUIRED / OVERRIDE_NOT_ALLOWED, 409 wrong state (OVERRIDE_NOT_ALLOWED), 403 non-admin.
  */
+import { override403Text } from './overrideErrors';
 import { serverFormErrors } from '../forms/serverErrors';
 import { getApi, postApi } from '../../api/client';
 import { fetchAllPages } from '../api/paged';
@@ -81,6 +82,15 @@ export async function fetchTeamReport(month: string, managers: Array<{ id: strin
   return out;
 }
 
+/**
+ * B2F-12: audit text (reason) can carry raw user ids, e.g. FILE_REASSIGN "<from> -> <to>: Owner leaving".
+ * Show names: every UUID that is a known user becomes their name; "->" reads as "→". Unknown ids stay short.
+ */
+const UUID = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi;
+export function namedAuditText(text: string | null | undefined, names: ReadonlyMap<string, string>): string {
+  if (!text) return '';
+  return text.replace(UUID, (id) => names.get(id.toLowerCase()) ?? names.get(id) ?? `${id.slice(0, 8)}…`).replace(/\s*->\s*/g, ' → ');
+}
 export interface AuditEntry { id: string; actorUserId: string | null; actorDisplayName?: string; action: string; entityType: string; entityId: string; result: string; reason: string | null; createdAt: string }
 export interface AuditQuery { from?: string; to?: string; actor?: string; entity?: string; page?: number }
 export interface AuditPage { rows: AuditEntry[]; total: number; page: number; pageSize: number; server: boolean }
@@ -167,6 +177,7 @@ export function overrideError(e: unknown): { field?: OverrideField; text: string
   if (d?.code === 'OVERRIDE_NOT_ALLOWED') return { text: d.message || 'That override is not allowed for this job now.' };
   if (d?.code === 'REASON_NOT_IN_LIST') return { field: 'statusReason', text: 'Pick a reason from the list.' };
   if (d?.code === 'HOLD_UNTIL_NOT_FUTURE') return { field: 'holdUntil', text: 'Pick a day after today (Cairo).' };
-  if (s === 403) return { text: 'Only an administrator can use an override.' };
+  // B2F-4: the caller is an admin; say what the server refused (e.g. the job owner check), by code.
+  if (s === 403) return { text: override403Text(e) };
   return { text: (e as { message?: string })?.message || 'Could not apply the override.' };
 }

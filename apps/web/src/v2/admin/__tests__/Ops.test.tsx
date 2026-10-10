@@ -16,7 +16,7 @@ vi.mock('../../../pages/AuditLogPage', () => ({ AuditLogPage: () => <p>v1 audit<
 import { ReportsRoute } from '../../pages/ReportsRoute';
 import { AuditRoute, IntegrationsRoute } from '../AdminRoutes';
 import { AuditV2 } from '../AuditV2';
-import { auditArea, toCsv } from '../opsApi';
+import { auditArea, namedAuditText, overrideError, toCsv } from '../opsApi';
 import { cairoMonth } from '../../api/myResult';
 
 const M = cairoMonth();
@@ -188,13 +188,30 @@ describe('A09 Audit', () => {
     });
     render(<MemoryRouter><AuditV2 /></MemoryRouter>);
     expect(await screen.findByText(/page 1 of 2 \(150 in total\)/)).toBeInTheDocument();
-    expect(calls[0]).toMatch(/^\/audit\?page=1&pageSize=100&from=\d{4}-\d{2}-\d{2}$/);
+    expect(calls.find((c) => c.startsWith('/audit'))).toMatch(/^\/audit\?page=1&pageSize=100&from=\d{4}-\d{2}-\d{2}$/);
     await u.click(screen.getByRole('button', { name: 'Older' }));
     expect(await screen.findByText(/page 2 of 2/)).toBeInTheDocument();
     expect(calls.at(-1)).toMatch(/page=2&pageSize=100/);
     await u.selectOptions(screen.getByLabelText('Who'), 'u-omar');
     await waitFor(() => expect(calls.at(-1)).toMatch(/page=1&pageSize=100&from=.*&actor=u-omar/));
     expect(calls.every((c) => !/pageSize=(\d{3,})/.test(c) || Number(/pageSize=(\d+)/.exec(c)![1]) <= 100)).toBe(true);
+  });
+  it('B2F-12: user ids in audit text show as names (FILE_REASSIGN "<from> -> <to>: reason")', async () => {
+    const a = '9c5d717d-2b38-4ad2-a423-8531564e4ce2'; const b = '1b96bd13-61bf-4581-ad17-56136e15f850';
+    api.getApi.mockImplementation(async (p: string) => {
+      if (p.startsWith('/users')) return { data: [{ id: a, displayName: 'Mariam Farag', email: 'm@x', status: 'Active', managerId: null, roles: [] }, { id: b, displayName: 'Youssef Ibrahim', email: 'y@x', status: 'Active', managerId: null, roles: [] }], total: 2 };
+      if (p.startsWith('/audit?')) return { data: [{ id: 'z1', actorUserId: 'u-karim', actorDisplayName: 'Karim Hassan', action: 'FILE_REASSIGN', entityType: 'Application', entityId: 'edc827c3-4007', result: 'SUCCESS', reason: `${a} -> ${b}: Owner leaving`, createdAt: new Date().toISOString() }], total: 1 };
+      throw new ApiError(404, 'no');
+    });
+    render(<MemoryRouter><AuditV2 /></MemoryRouter>);
+    expect(await screen.findByText(/File reassign — Mariam Farag → Youssef Ibrahim: Owner leaving/)).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain(a);
+    expect(namedAuditText(`${a} -> ffffffff-2b38-4ad2-a423-8531564e4ce2: x`, new Map([[a, 'Mariam Farag']]))).toBe('Mariam Farag → ffffffff…: x');
+  });
+  it('B2F-4: an override 403 (owner check) shows the server’s reason, not "Only an administrator"', () => {
+    const t = overrideError(new ApiError(403, 'Access denied: you do not have permission to perform this action.', { code: 'FORBIDDEN', message: 'Only the job owner or their manager can change job status.' }, { code: 'FORBIDDEN' })).text;
+    expect(t).toMatch(/Only the job owner or their manager can change job status/);
+    expect(t).not.toMatch(/Only an administrator/);
   });
   it('helpers: area mapping and CSV escaping (formula-safe)', () => {
     expect(auditArea({ entityType: 'User', action: 'USER_UPDATE' })).toBe('Users');

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Download, RotateCw } from 'lucide-react';
 import { ButtonV2, EmptyStateV2, SelectV2, SkeletonV2, StatusChip, initials } from '../../components/v2';
-import { auditArea, downloadCsv, fetchAudit, humanize, toCsv, type AuditPage } from './opsApi';
+import { auditArea, downloadCsv, fetchAudit, humanize, namedAuditText, toCsv, type AuditPage } from './opsApi';
+import { fetchUsers } from './usersApi';
 import '../pages/jobs.css';
 import '../pages/team.css';
 import './admin.css';
@@ -16,6 +17,13 @@ export function AuditV2({ now = () => Date.now() }: { now?: () => number } = {})
   const [page, setPage] = useState(1);
   const [actorNames, setActorNames] = useState<Map<string, string>>(new Map());
   const [error, setError] = useState<string | null>(null);
+  // B2F-12: user ids inside audit text (FILE_REASSIGN "<from> -> <to>: reason") read as names.
+  const [userNames, setUserNames] = useState<Map<string, string>>(new Map());
+  useEffect(() => {
+    let live = true;
+    fetchUsers().then((us) => live && setUserNames(new Map(us.map((u) => [u.id.toLowerCase(), u.displayName])))).catch(() => undefined);
+    return () => { live = false; };
+  }, []);
   const [attempt, setAttempt] = useState(0);
   const [period, setPeriod] = useState('7');
   const [who, setWho] = useState('all');
@@ -30,6 +38,7 @@ export function AuditV2({ now = () => Date.now() }: { now?: () => number } = {})
       .catch((e: { message?: string }) => live && setError(e?.message || 'Something went wrong.'));
     return () => { live = false; };
   }, [attempt, page, from, who]);
+  const names = useMemo(() => { const n = new Map(userNames); for (const [id, nm] of actorNames) if (!n.has(id.toLowerCase())) n.set(id.toLowerCase(), nm); return n; }, [userNames, actorNames]);
   const actors = useMemo(() => [...actorNames.entries()].sort((a, b) => a[1].localeCompare(b[1])), [actorNames]);
   const server = !!data?.server;
   const pages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
@@ -37,7 +46,7 @@ export function AuditV2({ now = () => Date.now() }: { now?: () => number } = {})
   const rows = (data?.rows ?? []).filter((r) => (server || !days || now() - new Date(r.createdAt).getTime() <= days * 86400000) && (server || who === 'all' || r.actorUserId === who) && (area === 'all' || auditArea(r) === area))
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   const exportCsv = () => downloadCsv('recruitflow-audit.csv', toCsv(['When (Cairo)', 'Who', 'Area', 'What', 'Reason', 'Result', 'Object', 'Object id'],
-    rows.map((r) => [`${fmtDay(r.createdAt)} ${fmtTime(r.createdAt)}`, r.actorDisplayName ?? 'System', auditArea(r), humanize(r.action), r.reason, r.result, r.entityType, r.entityId])));
+    rows.map((r) => [`${fmtDay(r.createdAt)} ${fmtTime(r.createdAt)}`, r.actorDisplayName ?? 'System', auditArea(r), humanize(r.action), namedAuditText(r.reason, names), r.result, r.entityType, r.entityId])));
   return (
     <div className="rf2-jobs rf2-admin">
       <div className="rf2-row-between">
@@ -63,7 +72,7 @@ export function AuditV2({ now = () => Date.now() }: { now?: () => number } = {})
                 <td><span className="rf2-jtable__name">{fmtDay(r.createdAt)}</span><span className="rf2-jtable__sub">{fmtTime(r.createdAt)}</span></td>
                 <td><span className="rf2-admin__who"><span className="rf2-avatar rf2-team__avatar" aria-hidden="true">{initials(r.actorDisplayName ?? 'System')}</span>{r.actorDisplayName ?? 'System'}</span></td>
                 <td><StatusChip tone={auditArea(r) === 'Override' ? 'warning' : 'neutral'} label={auditArea(r)} /></td>
-                <td>{humanize(r.action)}{r.reason ? ` — ${r.reason}` : ''}{r.result && r.result !== 'Success' && r.result !== 'SUCCESS' ? <span className="rf2-jtable__sub">Result: {r.result}</span> : null}</td>
+                <td>{humanize(r.action)}{r.reason ? ` — ${namedAuditText(r.reason, names)}` : ''}{r.result && r.result !== 'Success' && r.result !== 'SUCCESS' ? <span className="rf2-jtable__sub">Result: {r.result}</span> : null}</td>
                 <td><span className="rf2-jtable__sub">{humanize(r.entityType)} · {r.entityId.slice(0, 8)}</span></td>
               </tr>
             ))}{rows.length === 0 ? <tr><td colSpan={5}>No entries match.</td></tr> : null}</tbody>
