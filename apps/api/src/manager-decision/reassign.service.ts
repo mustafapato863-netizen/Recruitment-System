@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import type { AuthUser } from '@recruitflow/contracts';
 import { PrismaService } from '../database/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
-import { isAdmin } from './file-ownership';
+import { escalatedManagers, fileOwnerIds, isAdmin } from './file-ownership';
 
 /** A file is open until it reaches an exit stage; closed files never move (v2 §7 Reassign). */
 export const CLOSED_FILE_STAGES = ['Joined', 'Rejected', 'Withdrawn'];
@@ -41,12 +41,19 @@ export class ReassignService {
 
     const files = await this.prisma.application.findMany({
       where: { organizationId: user.organizationId, ...(byIds ? { id: { in: [...new Set(input.applicationIds)] } } : { primaryRecruiterId: input.fromUserId!, stage: { notIn: CLOSED_FILE_STAGES } }) },
-      select: { id: true, applicationCode: true, stage: true, primaryRecruiterId: true, primaryRecruiter: { select: { managerId: true } } },
+      select: { id: true, applicationCode: true, stage: true, vacancyId: true, primaryRecruiterId: true, taskOwnerId: true, primaryRecruiter: { select: { managerId: true } } },
     });
     if (byIds && files.length !== new Set(input.applicationIds).size) throw new BadRequestException({ code: 'REASSIGN_FILE_NOT_FOUND', message: 'One or more files were not found.' });
     const closed = files.filter((f) => CLOSED_FILE_STAGES.includes(f.stage));
     if (closed.length) throw new ConflictException({ code: 'REASSIGN_FILE_CLOSED', message: 'Closed files do not move.', applicationIds: closed.map((f) => f.id) });
-    const notMine = files.filter((f) => !f.primaryRecruiterId || f.primaryRecruiter?.managerId !== user.userId);
+    // The reassigning manager is the (escalated) manager of the file's owner (primaryRecruiterId):
+    // a manager who also owns the file is skipped and their own manager decides (same rule as offers).
+    const notMine: typeof files = [];
+    for (const f of files) {
+      if (!f.primaryRecruiterId) { notMine.push(f); continue; }
+      const owners = await fileOwnerIds(this.prisma, f);
+      if (owners.includes(user.userId) || !(await escalatedManagers(this.prisma, [f.primaryRecruiterId], owners)).has(user.userId)) notMine.push(f);
+    }
     if (notMine.length) throw new ForbiddenException({ code: 'REASSIGN_NOT_MANAGER', message: 'You can only reassign files owned by your direct reports.', applicationIds: notMine.map((f) => f.id) });
     const moving = files.filter((f) => f.primaryRecruiterId !== target.id);
 

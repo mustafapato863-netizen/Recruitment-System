@@ -55,6 +55,8 @@ describe.skipIf(!url)('B5 follow-ups: offer Draft/submit/send, approver note + g
     gradeId = (await prisma.masterDataValue.create({ data: { organizationId: ORG, category: 'grades', name: `B5F Grade ${tag}`, status: 'Active' } })).id;
     const vacancy = await prisma.vacancy.findFirstOrThrow({ where: { organizationId: ORG, status: 'Open' }, orderBy: { createdAt: 'asc' } });
     await prisma.vacancyRequest.update({ where: { id: vacancy.vacancyRequestId }, data: { gradeId } });
+    // B7: approving runs the band check, so give this grade a band at the job's site.
+    await prisma.gradeBand.create({ data: { organizationId: ORG, gradeId, branchId: vacancy.branchId, currency: 'AED', minMonthlyBase: 1000, maxMonthlyBase: 50000 } });
     ids.email = (await prisma.emailTemplate.create({ data: { organizationId: ORG, name: `B5F offer ${tag}`, subject: 'Your offer {{offerCode}}', bodyTemplate: 'Dear {{candidateName}}, your offer for {{positionTitle}} is ready.' } })).id;
     ids.emailOff = (await prisma.emailTemplate.create({ data: { organizationId: ORG, name: `B5F off ${tag}`, subject: 's', bodyTemplate: 'b', status: 'Inactive' } })).id;
     ids.wa = (await prisma.whatsAppTemplate.create({ data: { organizationId: ORG, name: `B5F wa ${tag}`, bodyTemplate: 'Hi {{candidateName}}, offer {{offerCode}}' } })).id;

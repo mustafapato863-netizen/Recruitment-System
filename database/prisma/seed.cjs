@@ -84,6 +84,29 @@ async function seedJobStatusReasons(organizationId) {
   }
 }
 
+/**
+ * B7 demo: manager links (users.managerId), a grade on every demo job's requisition and
+ * matching AED bands for each demo job's site, so a demo can show decide and reassign.
+ * Recruiters report to the Talent Manager (Mona); Mona reports to the Hiring Manager (Hassan),
+ * which also demonstrates escalation when Mona owns a file herself.
+ */
+async function seedDecisionDemo(tx, organizationId, users) {
+  const mona = users['mona.manager@recruitflow.local'];
+  const hassan = users['hassan.ali@recruitflow.local'];
+  if (!mona || !hassan) return;
+  await tx.user.update({ where: { id: mona.id }, data: { managerId: hassan.id } });
+  const recruiters = await tx.user.findMany({
+    where: { organizationId, managerId: null, id: { notIn: [mona.id, hassan.id] }, userRoles: { some: { role: { code: 'RECRUITER' } } } },
+    select: { id: true },
+  });
+  for (const r of recruiters) await tx.user.update({ where: { id: r.id }, data: { managerId: mona.id } });
+  const jobs = await tx.vacancy.findMany({ where: { organizationId }, select: { branchId: true, vacancyRequestId: true } });
+  const branchIds = [...new Set(jobs.map((j) => j.branchId))];
+  for (const branchId of branchIds) await seedGradeBands(tx, organizationId, branchId);
+  const g6 = await tx.masterDataValue.findFirst({ where: { organizationId, category: 'grades', name: 'Grade 6' } });
+  if (g6) await tx.vacancyRequest.updateMany({ where: { id: { in: jobs.map((j) => j.vacancyRequestId) }, gradeId: null }, data: { gradeId: g6.id } });
+}
+
 async function main() {
   const result = await prisma.$transaction(async (tx) => {
     // ── Organization ──────────────────────────────────────────
@@ -515,6 +538,7 @@ async function main() {
     }
 
     const demo = await seedDemoFixtures(tx, { organization, branch, position, users });
+    await seedDecisionDemo(tx, organization.id, users);
 
     // ── Organization B (for Cross-Tenant Isolation Testing) ─────
     const orgB = await tx.organization.upsert({

@@ -12,7 +12,9 @@ export type ManagerDecision = 'Approve' | 'Reject' | 'RequestChanges';
 export const DECISION_OUTCOME: Record<ManagerDecision, { version: string; approvalStatus: string; offer: string; approvals: string }> = {
   Approve: { version: 'Approved', approvalStatus: 'Approved', offer: 'Approved', approvals: 'Approved' },
   RequestChanges: { version: 'Changes Requested', approvalStatus: 'Changes Requested', offer: 'Draft', approvals: 'Rejected' },
-  Reject: { version: 'Withdrawn', approvalStatus: 'Rejected', offer: 'Withdrawn', approvals: 'Rejected' },
+  // Mustafa: Reject withdraws only THIS version. The offer goes back to Draft and the file stays in Offer;
+  // the owner drafts a new version or rejects the file.
+  Reject: { version: 'Withdrawn', approvalStatus: 'Rejected', offer: 'Draft', approvals: 'Rejected' },
 };
 
 const ALLOWANCE_TYPES = new Set(['allowance', 'benefit']);
@@ -68,7 +70,7 @@ export class OfferDecisionService {
     }
 
     let bandId: string | null = null;
-    if (input.decision === 'Approve') bandId = await this.assertInsideBand(user, version.components, app.vacancy);
+    if (input.decision === 'Approve') bandId = await assertOfferInsideBand(this.prisma, user.organizationId, () => this.permissions.hasPermission(user.userId, user.organizationId, 'OFFER_PAY_VIEW'), version.components, app.vacancy);
 
     const outcome = DECISION_OUTCOME[input.decision];
     const now = new Date();
@@ -99,32 +101,40 @@ export class OfferDecisionService {
     }
     return { id: decision.id, offerId, offerVersionId: version.id, decision: input.decision, fromStatus: decision.fromStatus, toStatus: decision.toStatus, reason, decidedById: user.userId, decidedAt: decision.createdAt.toISOString() };
   }
+}
 
-  /** 409 GRADE_BAND_MISSING / OFFER_PAY_OUTSIDE_BAND. Pay figures only for OFFER_PAY_VIEW holders. */
-  private async assertInsideBand(
-    user: AuthUser,
-    components: Array<{ type: string; amount: Prisma.Decimal | null; currency: string | null; frequency: string | null }>,
-    vacancy: { branchId: string; branch: { name: string }; vacancyRequest: { gradeId: string | null; grade: { name: string } | null } },
-  ): Promise<string> {
-    const base = monthlyBase(components);
-    if (!base) throw new ConflictException({ code: 'OFFER_BASE_PAY_MISSING', message: 'The offer has no base pay (Salary) component.' });
-    const gradeId = vacancy.vacancyRequest.gradeId;
-    const band = gradeId ? await this.prisma.gradeBand.findFirst({
-      where: { organizationId: user.organizationId, gradeId, branchId: vacancy.branchId, currency: base.currency, status: 'Active' },
-      orderBy: { createdAt: 'asc' },
-    }) : null;
-    const where = { grade: vacancy.vacancyRequest.grade?.name ?? null, site: vacancy.branch.name, currency: base.currency };
-    if (!band) throw new ConflictException({ code: 'GRADE_BAND_MISSING', message: gradeId ? 'No active band for this job\'s grade, site and currency.' : 'The job has no grade, so no band applies.', band: where });
-    const min = Number(band.minMonthlyBase); const max = Number(band.maxMonthlyBase);
-    if (base.amount < min || base.amount > max) {
-      const pay = await this.permissions.hasPermission(user.userId, user.organizationId, 'OFFER_PAY_VIEW');
-      throw new ConflictException({
-        code: 'OFFER_PAY_OUTSIDE_BAND',
-        message: 'Base pay is outside the band for this job\'s grade, site and currency.',
-        band: { id: band.id, ...where, ...(pay ? { minMonthlyBase: min, maxMonthlyBase: max } : {}) },
-        ...(pay ? { offeredMonthlyBase: base.amount } : {}),
-      });
-    }
-    return band.id;
+type BandVacancy = { branchId: string; branch: { name: string }; vacancyRequest: { gradeId: string | null; grade: { name: string } | null } };
+
+/**
+ * B7 band check, shared by the manager decision and the offer-approver inbox decision.
+ * 409 OFFER_BASE_PAY_MISSING / GRADE_BAND_MISSING / OFFER_PAY_OUTSIDE_BAND (band in the error;
+ * pay figures only when canSeePay() is true, i.e. OFFER_PAY_VIEW). Returns the band id.
+ */
+export async function assertOfferInsideBand(
+  prisma: Pick<Prisma.TransactionClient, 'gradeBand'>,
+  organizationId: string,
+  canSeePay: () => Promise<boolean>,
+  components: Array<{ type: string; amount: Prisma.Decimal | null; currency: string | null; frequency: string | null }>,
+  vacancy: BandVacancy,
+): Promise<string> {
+  const base = monthlyBase(components);
+  if (!base) throw new ConflictException({ code: 'OFFER_BASE_PAY_MISSING', message: 'The offer has no base pay (Salary) component.' });
+  const gradeId = vacancy.vacancyRequest.gradeId;
+  const band = gradeId ? await prisma.gradeBand.findFirst({
+    where: { organizationId, gradeId, branchId: vacancy.branchId, currency: base.currency, status: 'Active' },
+    orderBy: { createdAt: 'asc' },
+  }) : null;
+  const where = { grade: vacancy.vacancyRequest.grade?.name ?? null, site: vacancy.branch.name, currency: base.currency };
+  if (!band) throw new ConflictException({ code: 'GRADE_BAND_MISSING', message: gradeId ? 'No active band for this job\'s grade, site and currency.' : 'The job has no grade, so no band applies.', band: where });
+  const min = Number(band.minMonthlyBase); const max = Number(band.maxMonthlyBase);
+  if (base.amount < min || base.amount > max) {
+    const pay = await canSeePay();
+    throw new ConflictException({
+      code: 'OFFER_PAY_OUTSIDE_BAND',
+      message: 'Base pay is outside the band for this job\'s grade, site and currency.',
+      band: { id: band.id, ...where, ...(pay ? { minMonthlyBase: min, maxMonthlyBase: max } : {}) },
+      ...(pay ? { offeredMonthlyBase: base.amount } : {}),
+    });
   }
+  return band.id;
 }

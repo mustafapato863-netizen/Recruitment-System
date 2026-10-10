@@ -2,6 +2,8 @@ import { DECLINED_OFFER_REASON } from '../applications/application-gates';
 import { Injectable, NotFoundException, BadRequestException, ConflictException, ForbiddenException, Optional } from '@nestjs/common';
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { EmailOutboxService } from '../email/email-outbox.service';
+import { UserPermissionsService } from '../common/user-permissions.service';
+import { assertOfferInsideBand } from '../manager-decision/offer-decision.service';
 import { PrismaService } from '../database/prisma.service';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import type {
@@ -109,6 +111,7 @@ export class OffersService {
     private readonly notifications: NotificationsService,
     private readonly accessControl: AccessControlService,
     @Optional() private readonly outbox?: EmailOutboxService,
+    @Optional() private readonly userPermissions?: UserPermissionsService,
   ) {}
 
   private applicationVisibility(user: AuthUser) {
@@ -577,6 +580,20 @@ export class OffersService {
     };
     const note = (dto.note ?? dto.comment)?.trim();
     if (note) updateData.comment = note;
+
+    // B7 (Mustafa): the approver inbox runs the same band check as the manager decision
+    // (same codes; pay figures in the error only for OFFER_PAY_VIEW holders).
+    if (dto.decision === 'Approve') {
+      const v = await this.prisma.offerVersion.findUniqueOrThrow({
+        where: { id: approval.offerVersionId },
+        include: { components: true, offer: { include: { application: { include: { vacancy: { select: { branchId: true, branch: { select: { name: true } }, vacancyRequest: { select: { gradeId: true, grade: { select: { name: true } } } } } } } } } } },
+      });
+      await assertOfferInsideBand(
+        this.prisma, user.organizationId,
+        async () => Boolean(await this.userPermissions?.hasPermission(user.userId, user.organizationId, 'OFFER_PAY_VIEW')),
+        v.components, v.offer.application.vacancy,
+      );
+    }
 
     const application = await this.prisma.application.findUnique({
       where: { id: approval.offerVersion.offer.applicationId },

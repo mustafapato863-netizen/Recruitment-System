@@ -185,6 +185,13 @@ describe.skipIf(!url)('B7 grade bands, offer pay, manager decision, reassign (sc
     const rej = await decisions.decide(user('mgr'), o2.offerId, o2.versionId, { decision: 'Reject', reason: 'Role on hold' });
     expect(rej.toStatus).toBe('Withdrawn');
     expect((await prisma.offerVersionDecision.findFirstOrThrow({ where: { offerVersionId: o2.versionId } })).reason).toBe('Role on hold');
+    // Mustafa: Reject withdraws only that version; the offer goes back to Draft and the file stays in Offer.
+    expect((await prisma.offer.findUniqueOrThrow({ where: { id: o2.offerId } })).status).toBe('Draft');
+    expect((await prisma.application.findUniqueOrThrow({ where: { id: app2.id } })).stage).toBe('Offer');
+    const access = { getApplicationVisibilityWhere: async () => ({ organizationId: ORG }) };
+    const svc = new OffersService(prisma, notifications as never, access as never);
+    const v2 = await svc.createOfferRevision(user('owner') as never, o2.offerId, { components: [{ type: 'Salary', name: 'Basic', amount: 12000, currency: 'AED', frequency: 'Monthly', isTaxable: true }] } as never);
+    expect(await prisma.offerVersion.findUniqueOrThrow({ where: { id: v2 } })).toMatchObject({ versionNumber: 2, status: 'Draft' });
   });
 
   it('reassign: admin 403, reason required, target eligible, manager only, closed files do not move', async () => {
@@ -212,5 +219,61 @@ describe.skipIf(!url)('B7 grade bands, offer pay, manager decision, reassign (sc
     expect(await prisma.fileReassignment.count({ where: { batchId: res.batchId, fromUserId: u.owner!, toUserId: u.target!, reason: 'Owner leaving' } })).toBe(res.moved.length);
     expect(await prisma.auditLog.count({ where: { action: 'FILE_REASSIGN', entityId: { in: res.moved.map((m) => m.applicationId) } } })).toBe(res.moved.length);
     expect(sent.map((n) => n.recipientUserId).sort()).toEqual([u.owner!, u.target!].sort());
+  });
+
+  it('approver inbox decision runs the same band check (same codes; pay only for OFFER_PAY_VIEW)', async () => {
+    const access = { getApplicationVisibilityWhere: async () => ({ organizationId: ORG }) };
+    const inbox = new OffersService(prisma, notifications as never, access as never, undefined, perms);
+    const approver = (k: string) => ({ ...user(k), roleCodes: [...(roles[k] ?? []), 'OFFER_APPROVER'] });
+    const approvalOf = async (versionId: string) => (await prisma.offerApproval.findFirstOrThrow({ where: { offerVersionId: versionId } })).id;
+    const out = await pendingOffer((await file('owner', jobId)).id, 16000);
+    const withPay = await err(inbox.submitDecision(approver('mgr') as never, await approvalOf(out.versionId), { decision: 'Approve' } as never));
+    expect(withPay.body).toMatchObject({ code: 'OFFER_PAY_OUTSIDE_BAND', offeredMonthlyBase: 16000, band: { minMonthlyBase: 10000, maxMonthlyBase: 15000 } });
+    const noPay = await err(inbox.submitDecision(approver('other') as never, await approvalOf(out.versionId), { decision: 'Approve' } as never));
+    expect(noPay.body.code).toBe('OFFER_PAY_OUTSIDE_BAND');
+    expect(JSON.stringify(noPay.body)).not.toMatch(/16000|10000|15000|MonthlyBase/);
+    expect((await prisma.offerApproval.findFirstOrThrow({ where: { offerVersionId: out.versionId } })).status).toBe('Pending');
+    const missing = await pendingOffer((await file('owner', ungradedJobId)).id, 12000);
+    expect((await err(inbox.submitDecision(approver('mgr') as never, await approvalOf(missing.versionId), { decision: 'Approve' } as never))).body.code).toBe('GRADE_BAND_MISSING');
+    const inside = await pendingOffer((await file('owner', jobId)).id, 14000, 6000);
+    await inbox.submitDecision(approver('mgr') as never, await approvalOf(inside.versionId), { decision: 'Approve' } as never);
+    expect((await prisma.offerVersion.findUniqueOrThrow({ where: { id: inside.versionId } })).status).toBe('Approved');
+    // A reject in the inbox has no band check.
+    const rej = await pendingOffer((await file('owner', jobId)).id, 99000);
+    await inbox.submitDecision(approver('other') as never, await approvalOf(rej.versionId), { decision: 'Reject', note: 'No' } as never);
+  });
+
+  it('owner who is also the manager stays blocked; the decision (and reassign) escalates to their own manager', async () => {
+    await mkUser('top', 'HIRING_MANAGER');
+    await mkUser('midMgr', 'TALENT_MANAGER', { managerId: u.top });
+    await mkUser('rep', 'RECRUITER', { managerId: u.midMgr });
+    const app = await file('rep', jobId);
+    await prisma.application.update({ where: { id: app.id }, data: { taskOwnerId: u.midMgr! } }); // the manager co-owns the file
+    const o = await pendingOffer(app.id, 12000);
+    expect((await err(decisions.decide(user('midMgr'), o.offerId, o.versionId, { decision: 'Approve' }))).body.code).toBe('OFFER_DECISION_NOT_MANAGER');
+    expect((await decisions.decide(user('top'), o.offerId, o.versionId, { decision: 'Approve' })).toStatus).toBe('Approved');
+    const body = { applicationIds: [app.id], toUserId: u.target!, reason: 'Rebalance' };
+    expect((await err(reassign.reassign(user('midMgr'), body))).body.code).toBe('REASSIGN_NOT_MANAGER');
+    expect((await reassign.reassign(user('top'), body)).moved).toHaveLength(1);
+    // Without co-ownership the direct manager decides, and the grand-manager does not.
+    const plain = await file('rep', jobId);
+    const o2 = await pendingOffer(plain.id, 12000);
+    expect((await err(decisions.decide(user('top'), o2.offerId, o2.versionId, { decision: 'Approve' }))).body.code).toBe('OFFER_DECISION_NOT_MANAGER');
+    expect((await decisions.decide(user('midMgr'), o2.offerId, o2.versionId, { decision: 'Approve' })).toStatus).toBe('Approved');
+  });
+
+  it('seed demo: manager links, graded demo jobs and matching bands', async () => {
+    const mona = await prisma.user.findFirstOrThrow({ where: { email: 'mona.manager@recruitflow.local' } });
+    const hassan = await prisma.user.findFirstOrThrow({ where: { email: 'hassan.ali@recruitflow.local' } });
+    expect(mona.managerId).toBe(hassan.id);
+    expect(await prisma.user.count({ where: { organizationId: ORG, managerId: mona.id } })).toBeGreaterThan(0);
+    const demoJobs = await prisma.vacancy.findMany({ where: { organizationId: ORG, vacancyCode: { startsWith: 'VAC-2026-' } }, include: { vacancyRequest: { include: { grade: true } } } });
+    expect(demoJobs.length).toBeGreaterThan(0);
+    // Other DB specs re-grade a couple of jobs in this shared scratch DB; the rest keep the seeded Grade 6.
+    const g6 = demoJobs.filter((x) => x.vacancyRequest.grade?.name === 'Grade 6');
+    expect(g6.length).toBeGreaterThanOrEqual(demoJobs.length - 3);
+    for (const j of g6) {
+      expect(await prisma.gradeBand.count({ where: { organizationId: ORG, gradeId: j.vacancyRequest.gradeId!, branchId: j.branchId, currency: 'AED', status: 'Active' } })).toBe(1);
+    }
   });
 });
