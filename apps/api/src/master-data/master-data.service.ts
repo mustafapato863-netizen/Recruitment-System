@@ -15,11 +15,12 @@ import type {
 } from '@recruitflow/contracts';
 import { Prisma } from '@recruitflow/database';
 import type { MasterDataCategory, MasterDataValueRecord } from '@recruitflow/contracts';
+import { REASON_CATEGORIES } from './reason-lists';
 import { catalogKey, normalizeBranchCity, normalizeCatalogText, uniqueCatalogNames } from './catalog-normalization';
 
-const CATALOG_CATEGORIES = new Set<MasterDataCategory>(['departments', 'skills', 'candidate-sources', 'interview-types', ...(['grades', 'rejection-reasons', 'hold-reasons', 'close-reasons'] as unknown as MasterDataCategory[])]);
-/** B3: reason lists are deactivate-only (history rows quote them). */
-const DEACTIVATE_ONLY = new Set<string>(['hold-reasons', 'close-reasons']);
+const CATALOG_CATEGORIES = new Set<MasterDataCategory>(['departments', 'skills', 'candidate-sources', 'interview-types', ...(['grades', ...REASON_CATEGORIES] as unknown as MasterDataCategory[])]);
+/** C3: every reason list (hold, close, rejection, reassign) is deactivate-only (history rows quote them). */
+const DEACTIVATE_ONLY = new Set<string>(REASON_CATEGORIES);
 const SUPPORTED_CATALOGS = new Set(['branches', 'job-titles', ...CATALOG_CATEGORIES]);
 
 type MasterDataBatchRow = {
@@ -228,6 +229,17 @@ export class MasterDataService {
       throw new ConflictException('Master Data could not be saved because one or more rows conflict with existing values.');
     });
     return { saved: saved.length, data: await this.listCatalog(organizationId, category) };
+  }
+
+  /** C3: PATCH /master-data/catalog/:category/:id {status} — activate/deactivate one value (how reason lists are retired). */
+  async setCatalogValueStatus(organizationId: string, category: string, id: string, status: string) {
+    this.assertCatalog(category);
+    if (category === 'branches' || category === 'job-titles') throw new BadRequestException('Use the batch save for branches and job titles.');
+    if (!['Active', 'Inactive'].includes(status)) throw new BadRequestException({ code: 'VALIDATION_ERROR', message: "status must be 'Active' or 'Inactive'." });
+    const value = await this.prisma.masterDataValue.findFirst({ where: { id, organizationId, category }, select: { id: true } });
+    if (!value) throw new NotFoundException('Master Data value not found.');
+    const r = await this.prisma.masterDataValue.update({ where: { id }, data: { status, version: { increment: 1 } } });
+    return { id: r.id, category, name: r.name, status: r.status, version: r.version };
   }
 
   async deleteCatalogValue(organizationId: string, category: string, id: string): Promise<{ id: string; deactivated: true; status: 'Inactive' | 'Archived' }> {

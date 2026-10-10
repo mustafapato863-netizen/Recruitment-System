@@ -1,3 +1,4 @@
+import { OTHER_REASON, resolveListReason, type ReasonCategory } from '../master-data/reason-lists';
 import { BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
 import type { Prisma } from '@recruitflow/database';
 
@@ -171,35 +172,19 @@ export async function assertDepartment(tx: Tx, organizationId: string, departmen
   if (!d) throw new BadRequestException({ code: 'DEPARTMENT_NOT_FOUND', message: 'Department must be an active value from master data (Departments).' });
 }
 
-/** B3: categories of job status reasons (master data, deactivate-only). */
+/** B3: categories of job status reasons. C3: all reason lists share one base (master-data/reason-lists). */
 export const JOB_REASON_CATEGORIES = ['hold-reasons', 'close-reasons'] as const;
-export const OTHER_REASON = 'Other';
+export { OTHER_REASON };
 
-/**
- * Hold/close reason must be an ACTIVE value of the category (case-insensitive, by name or code).
- * "Other" requires a free-text note and is stored as "Other: <note>".
- */
+/** Kept for callers: same as resolveListReason (any reason list, incl. reassign-reasons). */
 export async function resolveJobStatusReason(
   db: Pick<Prisma.TransactionClient, 'masterDataValue'>,
   organizationId: string,
-  category: (typeof JOB_REASON_CATEGORIES)[number],
+  category: ReasonCategory,
   reason: string,
   note?: string | null,
 ): Promise<string> {
-  const text = reason.trim();
-  const value = await db.masterDataValue.findFirst({
-    where: { organizationId, category, status: 'Active', OR: [{ name: { equals: text, mode: 'insensitive' } }, { code: { equals: text, mode: 'insensitive' } }] },
-    select: { name: true },
-  });
-  if (!value) {
-    throw new BadRequestException({ code: 'REASON_NOT_IN_LIST', message: `"${text}" is not an active ${category === 'hold-reasons' ? 'hold' : 'close'} reason. Pick one from the list, or "Other" with a note.` });
-  }
-  if (value.name.toLowerCase() === OTHER_REASON.toLowerCase()) {
-    const free = note?.trim() ?? '';
-    if (free.length < 3) throw new BadRequestException({ code: 'REASON_REQUIRED', message: '"Other" needs a short note.' });
-    return `${OTHER_REASON}: ${free}`;
-  }
-  return note?.trim() ? `${value.name}: ${note.trim()}` : value.name;
+  return resolveListReason(db, organizationId, category, reason, note);
 }
 
 /** B3: optional holdUntil (YYYY-MM-DD) must be a future Cairo day. Data only: nothing auto-reopens. */
