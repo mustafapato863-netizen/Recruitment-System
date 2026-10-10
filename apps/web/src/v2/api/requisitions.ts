@@ -88,7 +88,9 @@ export const createRequisition = (f: ReqFields) => postApi<Requisition>('/vacanc
 export const updateRequisition = (id: string, f: Partial<ReqFields>) => patchApi<Requisition>(`/vacancy-requests/${enc(id)}`, f);
 export const activateRequisition = (id: string, assignedEmployeeId: string | null) =>
   postApi<{ request: Requisition; vacancy?: { id: string; vacancyCode?: string } }>(`/vacancy-requests/${enc(id)}/activate`, assignedEmployeeId ? { assignedEmployeeId } : {});
-export const cancelRequisition = (id: string, reason: string) => postApi<{ request: Requisition; rejectedApplications?: number; closedJob?: boolean }>(`/vacancy-requests/${enc(id)}/cancel`, { reason });
+/** = CancelVacancyRequestDto (#23 2d76bdd): { reason: close-reasons value, note? (required when reason is "Other") }. */
+export const cancelRequisition = (id: string, reason: string, note?: string) =>
+  postApi<{ request: Requisition; rejectedApplications?: number; closedJob?: boolean }>(`/vacancy-requests/${enc(id)}/cancel`, { reason, ...(note?.trim() ? { note: note.trim() } : {}) });
 
 /** Server names first, then the client fill from /context and /users/assignable. */
 export const titleOf = (r: Requisition, ctx: ReqContext | null) => r.positionTitle ?? r.position?.title ?? ctx?.positions.find((p) => p.id === r.positionId)?.title ?? r.requestCode;
