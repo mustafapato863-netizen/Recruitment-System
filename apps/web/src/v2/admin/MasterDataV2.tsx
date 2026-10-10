@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react';
 import { CircleCheck, CircleMinus, Info, Plus, RotateCw, Undo2 } from 'lucide-react';
 import { ButtonV2, DrawerV2, InputV2, SelectV2, SkeletonV2, StatusChip } from '../../components/v2';
 import {
-  CATALOGS, addValue, createBand, fetchBands, fetchCatalog, fetchOptions, setValueStatus, updateBand,
+  CATALOGS, addValue, canSeeBandAmounts, createBand, fetchBands, fetchCatalog, fetchOptions, setValueStatus, updateBand,
   type Band, type CatalogDef, type CatalogValue,
 } from './configApi';
+import { useAuth } from '../../auth/AuthContext';
 import '../pages/jobs.css';
 import './admin.css';
 
@@ -93,6 +94,8 @@ function CatalogCard({ def }: { def: CatalogDef }) {
 }
 
 function BandsCard() {
+  const { user } = useAuth();
+  const mayManage = canSeeBandAmounts(user?.permissions, (user?.roles ?? []).some((r) => r.code === 'ADMINISTRATOR'));
   const [bands, setBands] = useState<Band[] | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
@@ -114,7 +117,7 @@ function BandsCard() {
       {error ? <p className="rf2-form-error rf2-admin__pad" role="alert">{error}</p> : null}
       {bands === null ? <p className="rf2-inline-note rf2-admin__pad" data-tone="warning"><Info aria-hidden="true" /> Grade bands are not on this server yet (B7).</p> : null}
       {msg ? <p className="rf2-inline-note rf2-admin__pad" data-tone="success" role="status"><CircleCheck aria-hidden="true" /> {msg}</p> : null}
-      {hidden ? <p className="rf2-inline-note rf2-admin__pad"><Info aria-hidden="true" /> Amounts are hidden: only the Manager sees pay. You can still add bands and change their status.</p> : null}
+      {hidden ? <p className="rf2-inline-note rf2-admin__pad"><Info aria-hidden="true" /> {mayManage ? 'Amounts are not returned by this server yet (Admins with MASTER_DATA_MANAGE will see them). You can still add bands, replace amounts and change status.' : 'Amounts are hidden: you need MASTER_DATA_MANAGE to see them. You can still change a band’s status.'}</p> : null}
       {bands?.length ? (
         <table className="rf2-jtable" aria-label="Grade bands">
           <thead><tr><th scope="col">Grade</th><th scope="col">Site</th><th scope="col">Currency</th><th scope="col" className="rf2-num">Min</th><th scope="col" className="rf2-num">Max</th><th scope="col">Status</th><th scope="col"><span className="rf2-sr-only">Actions</span></th></tr></thead>

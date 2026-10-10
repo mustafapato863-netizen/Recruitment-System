@@ -10,6 +10,8 @@ const api = vi.hoisted(() => ({ getApi: vi.fn(), patchApi: vi.fn(), postApi: vi.
 vi.mock('../../../api/client', async () => ({ ...(await vi.importActual<object>('../../../api/client')), ...api }));
 const shell = vi.hoisted(() => ({ value: { seat: 'admin' } as null | { seat: string } }));
 vi.mock('../../../components/v2/shell/AppShellV2', () => ({ useV2Shell: () => shell.value }));
+const auth = vi.hoisted(() => ({ perms: ['MASTER_DATA_VIEW'] as string[] }));
+vi.mock('../../../auth/AuthContext', () => ({ useAuth: () => ({ user: { id: 'u-admin', displayName: 'Omar Khalil', permissions: auth.perms, roles: [] } }) }));
 vi.mock('../../../pages/MasterDataPage', () => ({ MasterDataPage: () => <p>v1 master data</p> }));
 import { MasterDataRoute, PipelineRoute, TemplatesRoute } from '../AdminRoutes';
 
@@ -142,7 +144,7 @@ describe('A06 Master data', () => {
     expect(screen.queryByRole('button', { name: /delete/i })).toBeNull();
     expect(await axeViolations(container)).toEqual([]);
   });
-  it('add (duplicate refused) and deactivate via batch rows, never DELETE', async () => {
+  it('add via batch; deactivate via PATCH {status:Inactive} (CoS), never DELETE', async () => {
     const u = userEvent.setup();
     api.postApi.mockResolvedValue({});
     renderAt('/master-data');
@@ -154,15 +156,22 @@ describe('A06 Master data', () => {
     await u.clear(screen.getByLabelText('New skill')); await u.type(screen.getByLabelText('New skill'), 'Power BI{Enter}');
     await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/master-data/catalog/skills/batch', { rows: [{ name: 'Power BI' }] }));
     await u.click(screen.getByRole('button', { name: 'Deactivate Terms not aligned' }));
-    await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/master-data/catalog/rejection-reasons/batch', { rows: [{ id: 'r2', name: 'Terms not aligned', status: 'Inactive', expectedVersion: 1 }] }));
+    await waitFor(() => expect(api.patchApi).toHaveBeenCalledWith('/master-data/catalog/rejection-reasons/r2', { status: 'Inactive' }));
     expect(api.deleteApi).not.toHaveBeenCalled();
+  });
+  it('grade bands: an Admin with MASTER_DATA_MANAGE is told amounts come once the server returns them', async () => {
+    auth.perms = ['MASTER_DATA_VIEW', 'MASTER_DATA_MANAGE'];
+    renderAt('/master-data');
+    const card = await screen.findByRole('region', { name: 'Grade bands' });
+    expect(await within(card).findByText(/Admins with MASTER_DATA_MANAGE will see them/)).toBeInTheDocument();
+    auth.perms = ['MASTER_DATA_VIEW'];
   });
   it('grade bands: amounts hidden note for Admin; add band validates and POSTs; deactivate via PATCH status', async () => {
     const u = userEvent.setup();
     api.postApi.mockResolvedValue({}); api.patchApi.mockResolvedValue({});
     renderAt('/master-data');
     const card = await screen.findByRole('region', { name: 'Grade bands' });
-    expect(await within(card).findByText(/Amounts are hidden: only the Manager sees pay/)).toBeInTheDocument();
+    expect(await within(card).findByText(/Amounts are hidden: you need MASTER_DATA_MANAGE/)).toBeInTheDocument();
     await u.click(within(card).getByRole('button', { name: 'Add band' }));
     const d = screen.getByRole('dialog', { name: 'Add grade band' });
     await u.click(within(d).getByRole('button', { name: 'Add band' }));
