@@ -5,7 +5,7 @@ import { FIELD_LABEL, cvFileProblem, duplicateCheck, existingPerson, importRow, 
 import { errorMessage, jobTitle, type JobDetail } from '../api/jobs';
 
 type RowStatus = 'parsing' | 'ready' | 'unreadable' | 'invalid' | 'importing' | 'done' | 'failed';
-interface Row { key: string; file: File; status: RowStatus; cv?: ExtractedCv; dup?: DuplicateCheckResult | null; decision?: ImportDecision; problem?: string; link?: LinkResult; existing?: ExistingPerson }
+interface Row { key: string; file: File; status: RowStatus; cv?: ExtractedCv; dup?: DuplicateCheckResult | null; decision?: ImportDecision; problem?: string; link?: LinkResult; existing?: ExistingPerson; onJob?: { applicationId: string | null } }
 
 const MATCH_LABEL = { email: 'same email', phone: 'same phone' } as const;
 
@@ -45,11 +45,12 @@ export function ImportCvsDrawer({ job, onClose, onDone }: { job: JobDetail; onCl
   const parsing = rows.some((r) => r.status === 'parsing');
   const run = async () => {
     setBusy(true);
-    let ok = 0; let linked = 0; let failed = 0; let conflicted = 0;
+    let ok = 0; let linked = 0; let failed = 0; let conflicted = 0; let already = 0;
     for (const r of ready) {
       patch(r.key, { status: 'importing' });
       try {
         const res = await importRow(job.id, r.file, r.cv ?? {}, r.decision ?? { kind: 'create' });
+        if (res.alreadyOnJob) { already += 1; patch(r.key, { status: 'done', link: res.link, onJob: { applicationId: res.applicationId } }); continue; }
         ok += 1; if (r.decision?.kind === 'link') linked += 1;
         if (res.link?.conflicts.length) conflicted += 1;
         patch(r.key, { status: 'done', link: res.link });
@@ -69,9 +70,9 @@ export function ImportCvsDrawer({ job, onClose, onDone }: { job: JobDetail; onCl
       }
     }
     setBusy(false);
-    setSummary(`${ok} added to Applied${linked ? ` (${linked} linked to an existing person)` : ''}${failed ? ` · ${failed} failed` : ''}.`);
+    setSummary(`${ok} added to Applied${linked ? ` (${linked} linked to an existing person)` : ''}${already ? ` · ${already} already on this job` : ''}${failed ? ` · ${failed} failed` : ''}.`);
     // Keep the drawer open when there are conflicts to read; otherwise close and refresh the board.
-    if (ok && !failed && !conflicted) onDone();
+    if (ok && !failed && !conflicted && !already) onDone();
   };
 
   return (
@@ -141,7 +142,11 @@ function ImportRow({ row, onDecide }: { row: Row; onDecide: (d: ImportDecision) 
           ))}
         </fieldset>
       ) : null}
-      {row.status === 'done' ? <p className="rf2-jtable__sub"><CircleCheck aria-hidden="true" /> Added to Applied.{row.link?.filled.length ? ` Filled from the CV: ${row.link.filled.map((f) => FIELD_LABEL[f] ?? f).join(', ')}.` : ''}</p> : null}
+      {row.status === 'done' && row.onJob ? (
+        <p className="rf2-inline-note" data-tone="warning" role="note" data-testid="application-exists"><Link2 aria-hidden="true" /> Already on this job.{' '}
+          {row.onJob.applicationId ? <a className="rf2-link" href={`/applications/${encodeURIComponent(row.onJob.applicationId)}`}>Open the existing file</a> : 'Find the existing file on the board.'}</p>
+      ) : null}
+      {row.status === 'done' && !row.onJob ? <p className="rf2-jtable__sub"><CircleCheck aria-hidden="true" /> Added to Applied.{row.link?.filled.length ? ` Filled from the CV: ${row.link.filled.map((f) => FIELD_LABEL[f] ?? f).join(', ')}.` : ''}</p> : null}
       {row.status === 'done' && row.link?.conflicts.length ? (
         <div className="rf2-conflicts" role="group" aria-label={`Not overwritten for ${row.file.name}`}>
           <p className="rf2-conflicts__title"><TriangleAlert aria-hidden="true" /> Not overwritten — the bank keeps its value. Check these on the person:</p>
