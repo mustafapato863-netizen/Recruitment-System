@@ -167,6 +167,9 @@ describe('keyboard + a11y', () => {
     await u.tab();
     expect(screen.getByRole('link', { name: 'HRIS Developer' })).toHaveFocus();
     await u.tab();
+    expect(screen.getByRole('link', { name: 'My result' })).toHaveAttribute('href', expect.stringMatching(/^\/my-result\?job=/));
+    expect(screen.getByRole('link', { name: 'My result' })).toHaveFocus();
+    await u.tab();
     expect(screen.getByRole('link', { name: /^Submit scorecard/ })).toHaveFocus();
   });
   it.each(['mariam', 'empty', 'targets-only', 'multi-target', 'stale-worker'] as const)('%s has no axe violations', async (variant) => {

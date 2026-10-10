@@ -127,3 +127,12 @@
 [data-ui='v2'] .rf2-jobs .rf2-file__back svg { width: 16px; height: 16px; }
 [data-ui='v2'] .rf2-cmp thead th { font-weight: 400; }
 [data-ui='v2'] .rf2-cmp thead .rf2-jtable__name { font-size: var(--rf2-text-section); font-weight: 600; }
+/* E5 */
+[data-ui='v2'] .rf2-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--rf2-space-1-5); }
+[data-ui='v2'] .rf2-kpi { display: flex; flex-direction: column; gap: 4px; padding: var(--rf2-space-2); }
+[data-ui='v2'] .rf2-kpi__title { margin: 0; font-size: var(--rf2-text-body); font-weight: 600; }
+[data-ui='v2'] .rf2-kpi__value { margin: 0; font-size: var(--rf2-text-page); font-weight: 700; font-variant-numeric: tabular-nums; }
+[data-ui='v2'] .rf2-kpi__value[data-few] { font-size: var(--rf2-text-section); color: var(--rf2-ink-2); }
+[data-ui='v2'] .rf2-kpi__sub { margin: 0; padding-bottom: var(--rf2-space-1); border-bottom: 1px solid var(--rf2-divider); color: var(--rf2-ink-2); font-size: var(--rf2-text-body); }
+[data-ui='v2'] .rf2-kpi__foot { margin: 0; color: var(--rf2-ink-2); font-size: var(--rf2-text-caption); }
+[data-ui='v2'] .rf2-kpi__n { font-variant-numeric: tabular-nums; }

@@ -278,6 +278,7 @@ function TargetStrip({ target, format }: { target: MyWorkTarget; format: ReturnT
         <span className="rf2-jobstrip__due-label">Due</span>
         <span className="rf2-jobstrip__due-value">{target.dueDate ? format.full(target.dueDate) : 'No due date'}</span>
       </div>
+      <Link className="rf2-jobstrip__result" to={`/my-result?job=${encodeURIComponent(target.vacancyId)}`}>My result</Link>
     </section>
   );
 }

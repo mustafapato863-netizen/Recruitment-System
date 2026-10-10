@@ -62,3 +62,4 @@
 [data-ui='v2'] .rf2-mywork__meta-bit a { color: var(--rf2-action); text-decoration: underline; }
 [data-ui='v2'] .rf2-visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 [data-ui='v2'] .rf2-mywork__meta-line { display: block; overflow: hidden; text-overflow: ellipsis; }
+[data-ui='v2'] .rf2-jobstrip__result { align-self: center; color: var(--rf2-action); font-size: var(--rf2-text-body); font-weight: 600; text-decoration: none; }
