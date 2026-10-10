@@ -22,7 +22,7 @@ describe('E08 adapter (B3 work queue ?mine=true + dueDate/department/holdUntil +
     expect(r.others).toEqual([
       { id: 'r1', title: 'Pharmacist', site: 'SGH Jeddah', seats: { filled: 1, target: 4 } },
       { id: 'r2', title: 'Radiology Technician', site: 'SGH Dammam', seats: { filled: 0, target: 4 } },
-      { id: 'v9', title: 'BI Data Analyst', site: 'SGH Riyadh', seats: { filled: 0, target: 1 } },
+      { id: 'v9', title: 'BI Data Analyst', site: 'SGH Riyadh', seats: { filled: 0, target: 1 }, full: true, ownerName: expect.anything() },
     ]);
     expect(JSON.stringify(r)).not.toMatch(/budget|salary|42000|99000/i);
   });
