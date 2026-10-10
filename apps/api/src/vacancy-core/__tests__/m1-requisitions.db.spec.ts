@@ -23,7 +23,7 @@ describe.skipIf(!url)('M1 requisitions (scratch Postgres)', () => {
     const id = randomUUID();
     await prisma.vacancyRequest.create({ data: {
       id, organizationId: ORG, branchId: branch.id, positionId: position.id, requesterId: requester,
-      requestCode: `M1-${tag}-${id.slice(0, 4)}`, status, requestedHeadcount: 2, ...extra,
+      requestCode: `M1-${tag}-${id.slice(0, 13)}`, status, requestedHeadcount: 2, ...extra,
     } });
     return id;
   }
@@ -36,6 +36,9 @@ describe.skipIf(!url)('M1 requisitions (scratch Postgres)', () => {
       ids[key] = randomUUID();
       await prisma.user.create({ data: { id: ids[key], organizationId: ORG, email: `${key}-${tag}@m1.test`, emailNormalized: `${key}-${tag}@m1.test`, displayName: `M1 ${key}`, passwordHash: 'x', userRoles: { create: { roleId: recruiter.id } } } });
     }
+    const tm = await prisma.role.findFirstOrThrow({ where: { code: 'TALENT_MANAGER' } });
+    ids.tm = randomUUID();
+    await prisma.user.create({ data: { id: ids.tm, organizationId: ORG, email: `tm-${tag}@m1.test`, emailNormalized: `tm-${tag}@m1.test`, displayName: 'M1 tm', passwordHash: 'x', userRoles: { create: { roleId: tm.id } } } });
     await prisma.user.update({ where: { id: ids.mgr }, data: { managerId: ids.boss } });
     await prisma.user.update({ where: { id: ids.report }, data: { managerId: ids.mgr } });
     ids.dept = (await prisma.masterDataValue.create({ data: { organizationId: ORG, category: 'departments', code: `D-${tag}`, name: `Nursing ${tag}` } })).id;
@@ -63,7 +66,11 @@ describe.skipIf(!url)('M1 requisitions (scratch Postgres)', () => {
     expect((await service.activateRequest(byBoss, ORG, ids.boss, {})).request.status).toBe('Converted to Vacancy');
     // the approval path still works, other statuses do not
     const approved = await makeRequest(ids.stranger, 'Approved', { targetFillDate: new Date('2026-11-30'), assignedEmployeeId: ids.emp });
-    expect((await service.activateRequest(approved, ORG, ids.boss, {})).request.status).toBe('Converted to Vacancy');
+    // B2-2: Approved: the requester (or his manager) or a VACANCY_MANAGE holder; nobody else
+    await expect(service.activateRequest(approved, ORG, ids.boss, {})).rejects.toMatchObject({ status: 403 });
+    expect((await service.activateRequest(approved, ORG, ids.tm, {})).request.status).toBe('Converted to Vacancy');
+    const ownApproved = await makeRequest(ids.mgr, 'Approved', { targetFillDate: new Date('2026-11-30'), assignedEmployeeId: ids.emp });
+    expect((await service.activateRequest(ownApproved, ORG, ids.mgr, {})).request.status).toBe('Converted to Vacancy');
     const pending = await makeRequest(ids.mgr, 'Pending Approval', { targetFillDate: new Date('2026-11-30'), assignedEmployeeId: ids.emp });
     await expect(service.activateRequest(pending, ORG, ids.mgr, {})).rejects.toMatchObject({ status: 409, response: { code: 'REQUISITION_NOT_APPROVED' } });
     const changes = await makeRequest(ids.mgr, 'Changes Requested', { targetFillDate: new Date('2026-11-30'), assignedEmployeeId: ids.emp });
@@ -150,5 +157,26 @@ describe.skipIf(!url)('M1 requisitions (scratch Postgres)', () => {
     expect(await resolveListReason(prisma, ORG, 'reassign-reasons', 'Other', 'Team merge')).toBe('Other: Team merge');
     const any = await prisma.masterDataValue.findFirstOrThrow({ where: { organizationId: ORG, category: 'hold-reasons' } });
     await expect(md.setCatalogValueStatus(ORG, 'hold-reasons', any.id, 'Deleted')).rejects.toMatchObject({ status: 400 });
+  });
+
+  it('B2-2/B2-16/B2-3: activate route open to requesters; assignable needs no permission; requisitions carry the primary recruiter; RECRUITER cannot create/list', async () => {
+    const { VacancyRequestsController } = await import('../vacancy-requests.controller');
+    const { UsersController } = await import('../../users/users.controller');
+    const { ANY_PERMISSIONS_KEY, PERMISSIONS_KEY } = await import('../../common/decorators/require-permissions.decorator');
+    const activate = VacancyRequestsController.prototype.activate;
+    expect(Reflect.getMetadata(ANY_PERMISSIONS_KEY, activate)).toEqual(['VACANCY_MANAGE', 'VACANCY_REQUEST_CREATE']);
+    expect(Reflect.getMetadata(PERMISSIONS_KEY, activate)).toBeUndefined();
+    const assignable = UsersController.prototype.listAssignable;
+    expect(Reflect.getMetadata(ANY_PERMISSIONS_KEY, assignable) ?? []).toEqual([]);
+    expect(Reflect.getMetadata(PERMISSIONS_KEY, assignable) ?? []).toEqual([]);
+
+    const draft = await makeRequest(ids.mgr, 'Draft', { targetFillDate: new Date('2026-11-30'), assignedEmployeeId: ids.emp });
+    expect((await service.getRequest(ORG, draft)).primaryRecruiter).toEqual({ id: ids.emp, name: 'M1 emp' });
+    await service.activateRequest(draft, ORG, ids.mgr, {});
+    expect((await service.getRequest(ORG, draft)).primaryRecruiter).toEqual({ id: ids.emp, name: 'M1 emp' });
+    expect((await service.listRequests(ORG, as(ids.mgr))).find((r) => r.id === draft)?.primaryRecruiter).toEqual({ id: ids.emp, name: 'M1 emp' });
+
+    const grants = await prisma.rolePermission.findMany({ where: { role: { code: 'RECRUITER' }, permission: { code: { in: ['VACANCY_REQUEST_CREATE', 'VACANCY_REQUEST_VIEW'] } } } });
+    expect(grants).toEqual([]);
   });
 });
