@@ -115,7 +115,8 @@ describe.skipIf(!url)('B1 ownership and scope (scratch Postgres)', () => {
     await prisma.auditLog.deleteMany({ where: { actorUserId: { in: users } } }).catch(() => undefined);
     await prisma.userRole.deleteMany({ where: { userId: { in: users } } });
     await prisma.user.updateMany({ where: { id: { in: users } }, data: { managerId: null } });
-    await prisma.user.deleteMany({ where: { id: { in: users } } });
+    // Rows written by other suites on the shared CI DB may still reference these users: fall back to deactivation.
+    await prisma.user.deleteMany({ where: { id: { in: users } } }).catch(() => prisma.user.updateMany({ where: { id: { in: users } }, data: { status: 'Inactive' } }));
     await prisma.$disconnect();
   });
 
