@@ -22,6 +22,8 @@ import './styles/tokens-v2.css';
 
 // Lazy loaded page components for optimal bundle splitting
 const DashboardPage = lazy(() => import('./pages/DashboardPage').then((m) => ({ default: m.DashboardPage })));
+const JobsListRoute = lazy(() => import('./v2/pages/JobsRoute').then((m) => ({ default: m.JobsListRoute })));
+const JobDetailRoute = lazy(() => import('./v2/pages/JobsRoute').then((m) => ({ default: m.JobDetailRoute })));
 const ApplicationRoute = lazy(() => import('./v2/pages/ApplicationRoute').then((m) => ({ default: m.ApplicationRoute })));
 const MyWorkRoute = lazy(() => import('./v2/pages/MyWorkRoute').then((m) => ({ default: m.MyWorkRoute })));
 const UsersRolesPage = lazy(() => import('./pages/UsersRolesPage').then((m) => ({ default: m.UsersRolesPage })));
@@ -32,8 +34,6 @@ const VacancyRequestsPage = lazy(() => import('./pages/VacancyRequestsPage').the
 const CreateVacancyRequestPage = lazy(() => import('./pages/CreateVacancyRequestPage').then((m) => ({ default: m.CreateVacancyRequestPage })));
 const VacancyRequestDetailPage = lazy(() => import('./pages/VacancyRequestDetailPage').then((m) => ({ default: m.VacancyRequestDetailPage })));
 const ApprovalInboxPage = lazy(() => import('./pages/ApprovalInboxPage').then((m) => ({ default: m.ApprovalInboxPage })));
-const VacantListPage = lazy(() => import('./pages/VacantListPage').then((m) => ({ default: m.VacantListPage })));
-const VacancyOverviewPage = lazy(() => import('./pages/VacancyOverviewPage').then((m) => ({ default: m.VacancyOverviewPage })));
 const JobAnalyticsPage = lazy(() => import('./pages/JobAnalyticsPage').then((m) => ({ default: m.JobAnalyticsPage })));
 const CandidatesPage = lazy(() => import('./pages/CandidatesPage').then((m) => ({ default: m.CandidatesPage })));
 const CVBankPage = lazy(() => import('./pages/CVBankPage').then((m) => ({ default: m.CVBankPage })));
@@ -142,8 +142,8 @@ function App() {
                   <Route path="/vacancy-requests/:id" element={<PermissionGate requiredPermission="VACANCY_REQUEST_VIEW"><VacancyRequestDetailPage /></PermissionGate>} />
                   <Route path="/approval-inbox" element={<PermissionGate requiredAnyPermission={['VACANCY_REQUEST_APPROVE', 'APPROVE_OFFERS', 'FINAL_HIRING_APPROVAL']}><ApprovalInboxPage /></PermissionGate>} />
                   <Route path="/inbox" element={<Navigate to="/approval-inbox" replace />} />
-                  <Route path="/vacancies" element={<PermissionGate requiredPermission="VACANCY_VIEW"><VacantListPage /></PermissionGate>} />
-                  <Route path="/vacancies/:id" element={<PermissionGate requiredPermission="VACANCY_VIEW"><VacancyOverviewPage /></PermissionGate>} />
+                  <Route path="/vacancies" element={<PermissionGate requiredPermission="VACANCY_VIEW"><JobsListRoute /></PermissionGate>} />
+                  <Route path="/vacancies/:id" element={<PermissionGate requiredPermission="VACANCY_VIEW"><JobDetailRoute /></PermissionGate>} />
                   <Route path="/vacancies/:id/analytics" element={<PermissionGate requiredPermission="VACANCY_VIEW"><JobAnalyticsPage /></PermissionGate>} />
 
                   {/* Talent */}

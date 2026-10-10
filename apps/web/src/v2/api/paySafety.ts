@@ -3,7 +3,7 @@
  * application file reads goes through stripPay() before it reaches state, so a
  * pay field the API happens to return can never render, even by accident.
  */
-const PAY_KEY = /salary|^pay|pay$|package|compensation|currency|^amount$|annualfixed|monthlypackage|allowance|bonus|^components$|packagetotal|grade(band)?(min|max)/i;
+const PAY_KEY = /salary|^budget|^pay|pay$|package|compensation|currency|^amount$|annualfixed|monthlypackage|allowance|bonus|^components$|packagetotal|grade(band)?(min|max)/i;
 
 export function isPayKey(key: string): boolean {
   return PAY_KEY.test(key);
