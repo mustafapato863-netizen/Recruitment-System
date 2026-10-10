@@ -7,6 +7,7 @@ import { AccessControlService } from '../../access-control/access-control.servic
 import { ApplicationsService } from '../applications.service';
 import { CandidatesService } from '../../candidates/candidates.service';
 import { privateVacancy } from '../../common/testing/private-vacancy';
+import { DocumentsService } from '../../documents/documents.service';
 import { HAS_VACANCY_OWNER } from '../../common/schema-features';
 
 const url = process.env.B1_TEST_DATABASE_URL;
@@ -16,7 +17,7 @@ const tag = randomUUID().slice(0, 8);
 describe.skipIf(!url)('B2-12 link a bank person (scratch Postgres)', () => {
   let prisma: PrismaService;
   const me = randomUUID();
-  let vac = ''; let person = '';
+  let vac = ''; let person = ''; let person2 = '';
   const auth = (): AuthUser => ({ userId: me, organizationId: ORG, tokenVersion: 0, roleCodes: ['RECRUITER'] });
 
   beforeAll(async () => {
@@ -28,9 +29,20 @@ describe.skipIf(!url)('B2-12 link a bank person (scratch Postgres)', () => {
       prisma.vacancy.update({ where: { id: vac }, data: { status: 'Open', ...(HAS_VACANCY_OWNER ? { primaryRecruiterId: me } : {}) } as never }),
       prisma.vacancyAssignment.create({ data: { vacancyId: vac, userId: me, roleCode: 'RECRUITER', assignmentKind: 'PRIMARY', isActive: true } }),
     ]);
+    person2 = (await prisma.candidate.create({ data: { organizationId: ORG, candidateCode: `B2F2-${tag}`, firstName: 'Jane', lastName: 'Bank', email: `jane-${tag}@b212.test` } })).id;
     person = (await prisma.candidate.create({ data: { organizationId: ORG, candidateCode: `B212-${tag}`, firstName: 'Lina', lastName: 'Bank', email: `lina-${tag}@b212.test` } })).id;
   });
   afterAll(async () => { await prisma?.$disconnect(); });
+
+  it('B2F-2: create-application-then-upload: before the link the CV upload is 404; after POST /applications it passes the candidate check', async () => {
+    const docs = Object.create(DocumentsService.prototype) as DocumentsService;
+    Object.assign(docs, { prisma, accessControl: new AccessControlService(prisma) });
+    const upload = () => docs.uploadFile(ORG, me, { candidateId: person2 } as never, { buffer: Buffer.alloc(0), size: 0 } as never, auth()).catch((e: { status?: number; response?: { code?: string } }) => e.response?.code ?? e.status);
+    expect(await upload()).toBe(404);
+    const apps = new ApplicationsService(prisma, { createForUser: async () => undefined } as never, {} as never, new AccessControlService(prisma));
+    await apps.createApplication(ORG, { vacancyId: vac, candidateId: person2, primaryRecruiterId: me } as never, auth());
+    expect(await upload()).toBe('FILE_INVALID'); // past the candidate check: only the (empty) file is refused
+  });
 
   it('POST /applications with a bank person on my job creates Applied', async () => {
     const apps = new ApplicationsService(prisma, { createForUser: async () => undefined } as never, {} as never, new AccessControlService(prisma));

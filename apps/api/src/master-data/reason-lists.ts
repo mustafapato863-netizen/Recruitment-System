@@ -38,11 +38,11 @@ export async function resolveListReason(
   const text = reason.trim();
   const value = await findActiveReason(db, organizationId, category, text);
   if (!value) {
-    throw new BadRequestException({ code: 'REASON_NOT_IN_LIST', message: `"${text}" is not an active ${LABEL[category]} reason. Pick one from the list, or "Other" with a note.` });
+    throw new BadRequestException({ code: 'REASON_NOT_IN_LIST', field: 'reason', message: `"${text}" is not an active ${LABEL[category]} reason. Pick one from the list, or "Other" with a note.` });
   }
   if (value.name.toLowerCase() === OTHER_REASON.toLowerCase()) {
     const free = note?.trim() ?? '';
-    if (free.length < 3) throw new BadRequestException({ code: 'REASON_REQUIRED', message: '"Other" needs a short note.' });
+    if (free.length < 3) throw new BadRequestException({ code: 'REASON_REQUIRED', field: 'note', message: '"Other" needs a short note.' });
     return `${OTHER_REASON}: ${free}`;
   }
   return note?.trim() ? `${value.name}: ${note.trim()}` : value.name;

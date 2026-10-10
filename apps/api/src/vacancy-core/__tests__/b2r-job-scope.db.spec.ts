@@ -8,6 +8,7 @@ import { VacancyCoreService } from '../vacancy-core.service';
 import { PrismaVacancyCoreRepository } from '../prisma-vacancy-core.repository';
 import { VacanciesController } from '../vacancies.controller';
 import { ANY_PERMISSIONS_KEY, PERMISSIONS_KEY } from '../../common/decorators/require-permissions.decorator';
+import { MasterDataService } from '../../master-data/master-data.service';
 import { privateVacancy } from '../../common/testing/private-vacancy';
 
 const url = process.env.B1_TEST_DATABASE_URL;
@@ -31,7 +32,7 @@ describe.skipIf(!url)('B2R job scope and actions (scratch Postgres)', () => {
 
   beforeAll(async () => {
     prisma = new PrismaService({ datasources: { db: { url } } });
-    svc = new VacancyCoreService(new PrismaVacancyCoreRepository(prisma), prisma, { create: async () => undefined } as never, new AccessControlService(prisma));
+    svc = new VacancyCoreService(new PrismaVacancyCoreRepository(prisma), prisma, { create: async () => undefined } as never, new AccessControlService(prisma), new MasterDataService(prisma));
     const roles = Object.fromEntries((await prisma.role.findMany()).map((r) => [r.code, r.id]));
     const mgr: Record<string, string | undefined> = { hm: u.skip, rep: u.hm };
     for (const k of Object.keys(u) as (keyof typeof u)[]) {
@@ -82,5 +83,44 @@ describe.skipIf(!url)('B2R job scope and actions (scratch Postgres)', () => {
     expect(audit).toHaveLength(1);
     expect(audit[0]).toMatchObject({ actorUserId: u.admin, entityType: 'Vacancy', reason: 'Other: Duplicate job' });
     expect((await prisma.vacancyStatusHistory.findFirstOrThrow({ where: { vacancyId: job, toStatus: 'Closed' } })).reason).toBe('Other: Duplicate job');
+  });
+
+  it('B2F-1: DELETE with "Other" and no note is 400 REASON_REQUIRED on field note', async () => {
+    const job = await newJob();
+    const e = await svc.deleteVacancy(job, ORG, as('hm'), { reason: 'Other' }).catch((x: { response?: unknown }) => x.response);
+    expect(e).toMatchObject({ code: 'REASON_REQUIRED', field: 'note' });
+    const r = await svc.deleteVacancy(job, ORG, as('hm'), { reason: 'Nope' }).catch((x: { response?: unknown }) => x.response);
+    expect(r).toMatchObject({ code: 'REASON_NOT_IN_LIST', field: 'reason' });
+  });
+
+  it('B2F-4: the admin override holds, reopens and closes past the owner check; audited, with status history', async () => {
+    const job = await newJob();
+    expect(await code(svc.overrideJobStatus(job, ORG, as('hm'), 'hold', 'Hiring freeze'))).toBe('FORBIDDEN');
+    expect((await svc.overrideJobStatus(job, ORG, as('admin'), 'hold', 'Hiring freeze')).status).toBe('On Hold');
+    expect((await svc.overrideJobStatus(job, ORG, as('admin'), 'reopen', 'Freeze lifted by the board')).status).toBe('Open');
+    expect(await code(svc.overrideJobStatus(job, ORG, as('admin'), 'close', 'Other'))).toBe('REASON_REQUIRED');
+    expect((await svc.overrideJobStatus(job, ORG, as('admin'), 'close', 'Other', { note: 'Org restructure' })).status).toBe('Closed');
+    const audit = await prisma.auditLog.findMany({ where: { entityId: job, action: 'ADMIN_OVERRIDE' }, orderBy: { createdAt: 'asc' } });
+    expect(audit.map((a) => a.reason)).toEqual(['Hiring freeze', 'Freeze lifted by the board', 'Other: Org restructure']);
+    const hist = await prisma.vacancyStatusHistory.findMany({ where: { vacancyId: job }, orderBy: { createdAt: 'asc' } });
+    expect(hist.map((h) => [h.toStatus, h.changedById])).toEqual([['On Hold', u.admin], ['Open', u.admin], ['Closed', u.admin]]);
+    // the owner's path still refuses the admin
+    expect(await code(svc.holdVacancy(job, ORG, 'Hiring freeze', as('admin')))).toBe('ADMIN_CANNOT_CHANGE_JOB_STATUS');
+  });
+
+  it('B2F-10: the job owner sets requiredSkills (only); a deactivated skill stays deactivated', async () => {
+    const job = await newJob();
+    const live = await prisma.masterDataValue.create({ data: { organizationId: ORG, category: 'skills', name: `B2F live ${tag}`, status: 'Active' } });
+    const dead = await prisma.masterDataValue.create({ data: { organizationId: ORG, category: 'skills', name: `B2F dead ${tag}`, status: 'Archived' } });
+    const saved = await svc.updateVacancy(job, ORG, { requiredSkills: [live.name, dead.name] } as never, as('rep'));
+    expect((await prisma.vacancy.findUniqueOrThrow({ where: { id: job } })).requiredSkills).toEqual(expect.arrayContaining([live.name]));
+    expect(saved).toBeTruthy();
+    expect((await prisma.masterDataValue.findUniqueOrThrow({ where: { id: dead.id } })).status).toBe('Archived');
+    // the owner's manager too; other fields still need VACANCY_MANAGE; strangers are refused
+    await svc.updateVacancy(job, ORG, { requiredSkills: [live.name] } as never, as('hm'));
+    const e = await svc.updateVacancy(job, ORG, { approvedHeadcount: 9 } as never, as('rep')).catch((x: { response?: unknown }) => x.response);
+    expect(e).toMatchObject({ code: 'FORBIDDEN', field: 'approvedHeadcount' });
+    expect(await code(svc.updateVacancy(job, ORG, { requiredSkills: [live.name] } as never, as('emp')))).not.toBe('OK');
+    expect(Reflect.getMetadata(ANY_PERMISSIONS_KEY, VacanciesController.prototype.updateVacancy)).toEqual(['VACANCY_MANAGE', 'VACANCY_VIEW']);
   });
 });

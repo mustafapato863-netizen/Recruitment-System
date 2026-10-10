@@ -235,8 +235,8 @@ export class VacancyCoreService {
   ): Promise<VacancyRequestActionResult> {
     const request = await this.requireRequest(id, organizationId);
     const reason = input.reason?.trim();
-    if (!reason) throw new BadRequestException({ code: 'REASON_REQUIRED', message: 'A reason is required to change the target.' });
-    if (input.seats === undefined && input.dueDate === undefined) throw new BadRequestException({ code: 'VALIDATION_FAILED', message: 'Give seats and/or dueDate.' });
+    if (!reason) throw new BadRequestException({ code: 'REASON_REQUIRED', field: 'reason', message: 'A reason is required to change the target.' });
+    if (input.seats === undefined && input.dueDate === undefined) throw new BadRequestException({ code: 'VALIDATION_FAILED', field: 'seats', message: 'Give seats and/or dueDate.' });
     if (!(await this.isRequesterOrManager(request.requesterId, actorUserId))) {
       throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Only the requesting Manager (or their manager) can change the target.' });
     }
@@ -248,7 +248,7 @@ export class VacancyCoreService {
       throw new ConflictException({ code: 'SEATS_BELOW_JOINED', message: `Seats cannot drop below the ${vacancy.joinedHeadcount} already joined.`, joined: vacancy.joinedHeadcount });
     }
     if (input.dueDate !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(input.dueDate)) {
-      throw new BadRequestException({ code: 'VALIDATION_FAILED', message: 'dueDate must be YYYY-MM-DD.' });
+      throw new BadRequestException({ code: 'VALIDATION_FAILED', field: 'dueDate', message: 'dueDate must be YYYY-MM-DD.' });
     }
     const changes: string[] = [];
     const before = { seats: vacancy.approvedHeadcount, dueDate: request.targetFillDate ? String(request.targetFillDate).slice(0, 10) : null };
@@ -539,19 +539,19 @@ export class VacancyCoreService {
     if ((required || hasAnyBudgetValue) &&
       (request.budgetMin == null || request.budgetMax == null || !request.budgetCurrency ||
         request.budgetMin <= 0 || request.budgetMax < request.budgetMin)) {
-      throw new BadRequestException('Enter a valid budget range from minimum to maximum and select AED or EGP.');
+      throw new BadRequestException({ code: 'VALIDATION_ERROR', field: 'budgetMin', message: 'Enter a valid budget range from minimum to maximum and select AED or EGP.' });
     }
     if (required && (!request.recruitmentTiming || !request.targetFillDate)) {
-      throw new BadRequestException('Choose when recruitment starts and a target fill date before submitting.');
+      throw new BadRequestException({ code: 'VALIDATION_ERROR', field: 'targetFillDate', message: 'Choose when recruitment starts and a target fill date before submitting.' });
     }
     if (request.recruitmentTiming === 'Deferred' && !request.plannedOpenDate) {
-      throw new BadRequestException('A deferred request needs a planned opening date.');
+      throw new BadRequestException({ code: 'VALIDATION_ERROR', field: 'plannedOpenDate', message: 'A deferred request needs a planned opening date.' });
     }
     if (request.recruitmentTiming !== 'Deferred' && request.plannedOpenDate) {
-      throw new BadRequestException('A planned opening date is only valid for deferred recruitment.');
+      throw new BadRequestException({ code: 'VALIDATION_ERROR', field: 'plannedOpenDate', message: 'A planned opening date is only valid for deferred recruitment.' });
     }
     if (request.plannedOpenDate && request.targetFillDate && request.targetFillDate < request.plannedOpenDate) {
-      throw new BadRequestException('Target fill date must be on or after the planned opening date.');
+      throw new BadRequestException({ code: 'VALIDATION_ERROR', field: 'targetFillDate', message: 'Target fill date must be on or after the planned opening date.' });
     }
   }
 
@@ -703,14 +703,17 @@ export class VacancyCoreService {
     organizationId: string,
     actorUserId: string,
     reason?: string | null,
+    note?: string | null,
   ): Promise<VacancyRequestActionResult & { rejectedApplications?: number; closedJob?: boolean }> {
     const request = await this.requireRequest(id, organizationId);
     if (request.status === 'Cancelled') return { request, idempotent: true };
     if (request.status === 'Rejected') {
       throw new ConflictException(`Request ${request.requestCode} cannot be cancelled from ${request.status}.`);
     }
-    const afterApproval = request.status === 'Approved' || request.status === 'Converted to Vacancy';
-    const cancelReason = afterApproval ? requireReason(reason, 'cancel an approved requisition') : (reason?.trim() || null);
+    // B2F-9: every cancel needs a reason from the close-reason list ("Other" + note). B2F-6: an active
+    // requisition's job is closed with that same reason; its live files are rejected 'Requisition cancelled'.
+    if (!reason?.trim()) throw new BadRequestException({ code: 'REASON_REQUIRED', field: 'reason', message: 'A close reason is required to cancel a requisition.' });
+    const cancelReason = await resolveJobStatusReason(this.prisma, organizationId, 'close-reasons', reason, note);
 
     const result = await this.prisma.$transaction(async (tx) => {
       // Re-read under the transaction so a concurrent cancel is a no-op.
@@ -729,7 +732,7 @@ export class VacancyCoreService {
       let rejected = 0;
       let closed = false;
       if (job && job.status !== 'Closed') {
-        closed = await writeJobStatus(tx, job, 'Closed', `${REQUISITION_CANCELLED_REASON}: ${cancelReason ?? 'no reason given'}`, actorUserId);
+        closed = await writeJobStatus(tx, job, 'Closed', cancelReason, actorUserId, { holdUntil: null });
         const live = await tx.application.findMany({
           where: { vacancyId: job.id, stage: { notIn: [...CLOSED_APPLICATION_STAGES] } },
           select: { id: true, stage: true },
@@ -801,11 +804,11 @@ export class VacancyCoreService {
       throw new ConflictException(`Request ${request.requestCode} must be a Draft or Approved to activate.`);
     }
     if (!request.targetFillDate) {
-      throw new BadRequestException({ code: 'DUE_DATE_REQUIRED', message: `Request ${request.requestCode} needs a due date before activation.` });
+      throw new BadRequestException({ code: 'DUE_DATE_REQUIRED', field: 'targetFillDate', message: `Request ${request.requestCode} needs a due date before activation.` });
     }
     const assigneeId = input.assignedEmployeeId ?? request.assignedEmployeeId ?? null;
     if (!assigneeId) {
-      throw new BadRequestException({ code: 'ASSIGNEE_REQUIRED', message: `Request ${request.requestCode} needs an assigned employee before activation.` });
+      throw new BadRequestException({ code: 'ASSIGNEE_REQUIRED', field: 'assignedEmployeeId', message: `Request ${request.requestCode} needs an assigned employee before activation.` });
     }
 
     await assertEligibleAssignee(this.prisma, organizationId, assigneeId); // eligibility errors first
@@ -1071,6 +1074,21 @@ export class VacancyCoreService {
     return this.changeJobStatus(id, organizationId, user, 'close', reason, () => 'Closed', { note: opts.note });
   }
 
+  /**
+   * B2F-4: admin override of hold / reopen / close (POST /admin/overrides). Administrators only. Runs the same
+   * transition table, reason lists (hold/close: list value or "Other" + note) and status history as the owner's
+   * path, skips the owner check, and writes the ADMIN_OVERRIDE audit row in the same transaction.
+   */
+  async overrideJobStatus(id: string, organizationId: string, admin: AuthUser, action: 'hold' | 'reopen' | 'close', reason: string, opts: { note?: string | null; holdUntil?: string | null } = {}): Promise<Vacancy> {
+    if (!admin.roleCodes?.includes('ADMINISTRATOR')) throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Only an administrator can use an override.' });
+    if (action === 'hold') return this.changeJobStatus(id, organizationId, admin, 'hold', reason, () => 'On Hold', { note: opts.note, holdUntil: parseHoldUntil(opts.holdUntil), adminOverride: true });
+    if (action === 'close') return this.changeJobStatus(id, organizationId, admin, 'close', reason, () => 'Closed', { note: opts.note, adminOverride: true });
+    return this.changeJobStatus(id, organizationId, admin, 'reopen', reason, (job) => {
+      if (job.status !== 'On Hold') throw new ConflictException({ code: 'ILLEGAL_JOB_TRANSITION', message: `Only a held job can be reopened (job is ${job.status}).` });
+      return seatStatus(job.joinedHeadcount, job.approvedHeadcount);
+    }, { adminOverride: true });
+  }
+
   private async changeJobStatus(
     id: string,
     organizationId: string,
@@ -1078,12 +1096,14 @@ export class VacancyCoreService {
     action: 'hold' | 'reopen' | 'close',
     reason: string | null | undefined,
     target: (job: { status: string; joinedHeadcount: number; approvedHeadcount: number }) => JobStatus,
-    opts: { note?: string | null | undefined; holdUntil?: Date | null | undefined } = {},
+    opts: { note?: string | null | undefined; holdUntil?: Date | null | undefined; adminOverride?: boolean } = {},
   ): Promise<Vacancy> {
     // B2R-3 precedence: 404 (no such job in the org) -> 403 ADMIN_CANNOT_CHANGE_JOB_STATUS / JOB_NOT_OWNED -> 400 reason.
+    // B2F-4: the audited admin override (POST /admin/overrides) skips the owner check; nothing else does.
+    const override = Boolean(opts.adminOverride && user?.roleCodes?.includes('ADMINISTRATOR'));
     await this.assertJobExists(organizationId, id);
     if (!user) throw new ForbiddenException('Only the job owner or their manager can change job status.');
-    await assertJobOwnerOrManager(this.prisma, organizationId, id, user.userId);
+    if (!override) await assertJobOwnerOrManager(this.prisma, organizationId, id, user.userId);
     let text = requireReason(reason, `${action} this job`);
     await this.prisma.$transaction(async (tx) => {
       const job = await tx.vacancy.findFirst({
@@ -1091,7 +1111,7 @@ export class VacancyCoreService {
         select: { id: true, status: true, joinedHeadcount: true, approvedHeadcount: true },
       });
       if (!job) throw new NotFoundException(`Vacancy ${id} was not found.`);
-      await assertJobOwnerOrManager(tx, organizationId, id, user.userId);
+      if (!override) await assertJobOwnerOrManager(tx, organizationId, id, user.userId);
       // B3: hold and close reasons come from master data ('hold-reasons' / 'close-reasons');
       // "Other" needs a free-text note. Reopen keeps a free-text reason. Checked after authorization.
       if (action === 'hold' || action === 'close') {
@@ -1102,6 +1122,12 @@ export class VacancyCoreService {
         throw new ConflictException({ code: 'ILLEGAL_JOB_TRANSITION', message: `Job is already ${to}.` });
       }
       await writeJobStatus(tx, job, to, text, user.userId, action === 'hold' ? { holdUntil: opts.holdUntil ?? null } : { holdUntil: null }, action === 'hold' ? opts.holdUntil ?? null : null);
+      if (override) {
+        await tx.auditLog.create({ data: {
+          organizationId, actorUserId: user.userId, action: 'ADMIN_OVERRIDE', entityType: 'Vacancy', entityId: id, result: 'Success', reason: text,
+          beforeData: { action: `job.${action}`, status: job.status }, afterData: { action: `job.${action}`, status: to },
+        } });
+      }
     });
     const updated = await this.repository.getVacancy(organizationId, id);
     if (!updated) throw new NotFoundException(`Vacancy ${id} was not found.`);
@@ -1285,6 +1311,13 @@ export class VacancyCoreService {
     user?: AuthUser,
   ): Promise<VacancyDetailView> {
     await this.assertVacancyVisible(organizationId, id, user);
+    // B2F-10: the job owner (or the owner's manager) may set requiredSkills without VACANCY_MANAGE; every other
+    // field still needs VACANCY_MANAGE. Skills go through the same library sync, so a deactivated skill is never reactivated (B6).
+    if (user && !(await this.holdsPermission(user.userId, organizationId, 'VACANCY_MANAGE'))) {
+      const other = Object.entries(dto).filter(([k, v]) => v !== undefined && k !== 'requiredSkills').map(([k]) => k);
+      if (other.length) throw new ForbiddenException({ code: 'FORBIDDEN', field: other[0], message: `Only requiredSkills can be changed without VACANCY_MANAGE (got ${other.join(', ')}).` });
+      await assertJobOwnerOrManager(this.prisma, organizationId, id, user.userId);
+    }
     const vacancy = await this.prisma.vacancy.findUnique({
       where: { id },
       include: { position: true },

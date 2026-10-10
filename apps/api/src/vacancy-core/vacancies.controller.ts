@@ -119,8 +119,9 @@ export class VacanciesController {
     return this.vacancyCoreService.getVacancyStatusHistory(user.organizationId, id, user);
   }
 
+  /** B2F-10: VACANCY_MANAGE edits everything; the job owner / owner's manager may set requiredSkills only. */
   @Patch(':id')
-  @RequirePermissions('VACANCY_MANAGE')
+  @RequireAnyPermissions('VACANCY_MANAGE', 'VACANCY_VIEW')
   @AuditAction('VACANCY_UPDATE')
   @UseGuards(TenantScopedGuard)
   @TenantResource({ resource: 'vacancy', param: 'id' })

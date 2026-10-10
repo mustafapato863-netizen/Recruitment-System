@@ -151,7 +151,7 @@ export class VacancyRequestsController {
     @Param('id', ParseUUIDPipe) id: string,
     @Body() body: CancelVacancyRequestDto = {},
   ) {
-    return this.vacancyCoreService.cancelRequest(id, user.organizationId, user.userId, body?.reason);
+    return this.vacancyCoreService.cancelRequest(id, user.organizationId, user.userId, body?.reason, body?.note);
   }
 
   /** M1: Manager changes seats / due date of an activated requisition (reason required; history + audit). */
