@@ -1,3 +1,4 @@
+import { bannerError, fieldError, serverFormErrors, type ServerFormErrors } from '../forms/serverErrors';
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { ArrowRight, CircleCheck, Info, Network, RotateCw, Search, ShieldCheck, UserMinus, UserPlus, UserCheck, TriangleAlert } from 'lucide-react';
@@ -144,18 +145,22 @@ function OwnedWorkPanel({ user, users, manager, owned, onMoved }: { user: AdminU
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ text: string; adminBlocked?: boolean } | null>(null);
+  const [inline, setInline] = useState<ServerFormErrors | null>(null);
   const files = owned.openApplicationsPrimary + owned.openApplicationsTaskOwner;
   const peers = users.filter((u) => u.id !== user.id && isActive(u) && seatOf(u) !== 'admin').sort((a, b) => a.displayName.localeCompare(b.displayName));
   const move = async () => {
     if (!to) return setMsg({ text: 'Pick who takes the files.' });
     if (reason.trim().length < OVERRIDE_REASON_MIN) return setMsg({ text: `An override needs a reason of at least ${OVERRIDE_REASON_MIN} characters; it is kept in the audit log.` });
-    setBusy(true); setMsg(null);
+    setBusy(true); setMsg(null); setInline(null);
     try {
       await overrideReassign(user.id, to, reason.trim());
       onMoved(`Files moved to ${users.find((u) => u.id === to)?.displayName ?? 'the new owner'} (admin override, in Audit). Deactivate again.`);
     } catch (e) {
       const d = domainError(e);
       const x = e as { statusCode?: number; message?: string };
+      // #23: 400 field/fields go on the inputs (toUserId → person, reason → reason).
+      const f = serverFormErrors(e);
+      if (Object.keys(f.byField).length) { setInline(f); const b = bannerError(f, ['toUserId', 'reason']); if (b) setMsg({ text: b }); return; }
       setMsg(d?.code === 'OVERRIDE_REASON_REQUIRED'
         ? { text: `An override needs a reason of at least ${OVERRIDE_REASON_MIN} characters.` }
         : d?.code === 'OVERRIDE_NOT_ALLOWED'
@@ -170,11 +175,11 @@ function OwnedWorkPanel({ user, users, manager, owned, onMoved }: { user: AdminU
       <p className="rf2-jtable__sub">Move it first, then deactivate. Jobs and requisitions are changed on the job or requisition itself.</p>
       {files > 0 || owned.countsUnknown ? (
         <>
-          <SelectV2 label="Move their open files to" value={to} onChange={(e) => { setTo(e.target.value); setMsg(null); }}>
+          <SelectV2 label="Move their open files to" value={to} onChange={(e) => { setTo(e.target.value); setMsg(null); setInline(null); }} error={fieldError(inline, 'toUserId')}>
             <option value="">Choose a person</option>
             {peers.map((p) => <option key={p.id} value={p.id}>{p.displayName} · {SEAT_LABEL[seatOf(p)]}</option>)}
           </SelectV2>
-          <TextareaV2 label="Reason (admin override, kept in Audit)" required rows={2} value={reason} onChange={(e) => { setReason(e.target.value); setMsg(null); }} placeholder={`${user.displayName.split(' ')[0]} is leaving`} />
+          <TextareaV2 label="Reason (admin override, kept in Audit)" required rows={2} value={reason} onChange={(e) => { setReason(e.target.value); setMsg(null); setInline(null); }} placeholder={`${user.displayName.split(' ')[0]} is leaving`} error={fieldError(inline, 'reason')} />
           {msg ? <p className={msg.adminBlocked ? 'rf2-inline-note' : 'rf2-form-error'}>{msg.adminBlocked ? <Info aria-hidden="true" /> : null}{msg.text}</p> : null}
           <ButtonV2 kind="secondary" icon={<ArrowRight />} loading={busy} onClick={() => void move()}>{owned.countsUnknown ? 'Reassign all open files' : `Reassign ${plural(files, 'file')}`}</ButtonV2>
           <p className="rf2-jtable__sub">Uses the admin override (file.reassign). Jobs keep their owner.</p>
@@ -193,14 +198,20 @@ function TreeDrawer({ users, focus, onClose, onDone }: { users: AdminUser[]; foc
   const [mgr, setMgr] = useState<string>(picked?.managerId ?? '');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  useEffect(() => { setMgr(picked?.managerId ?? ''); setErr(null); }, [picked?.id, picked?.managerId]);
+  const [mgrErr, setMgrErr] = useState<string | undefined>();
+  useEffect(() => { setMgr(picked?.managerId ?? ''); setErr(null); setMgrErr(undefined); }, [picked?.id, picked?.managerId]);
   const options = picked ? activeUsers.filter((u) => u.id !== picked.id && seatOf(u) !== 'employee' && !isDescendant(activeUsers, picked.id, u.id)).sort((a, b) => a.displayName.localeCompare(b.displayName)) : [];
   const directs = (id: string) => activeUsers.filter((u) => u.managerId === id).length;
   const save = async () => {
     if (!picked) return;
-    setBusy(true); setErr(null);
+    setBusy(true); setErr(null); setMgrErr(undefined);
     try { await setManager(picked.id, mgr || null); onDone(`${picked.displayName} now reports to ${activeUsers.find((u) => u.id === mgr)?.displayName ?? 'nobody'}.`); }
-    catch (e) { setErr((e as { message?: string })?.message || 'Could not save.'); } finally { setBusy(false); }
+    catch (e) {
+      const f = serverFormErrors(e);
+      const onMgr = fieldError(f, 'managerId');
+      if (onMgr) { setMgrErr(onMgr); setErr(bannerError(f, ['managerId'])); }
+      else setErr(f.message || 'Could not save.');
+    } finally { setBusy(false); }
   };
   return (
     <DrawerV2 open onClose={onClose} kicker="Reporting tree" title="Who reports to whom"
@@ -221,7 +232,7 @@ function TreeDrawer({ users, focus, onClose, onDone }: { users: AdminUser[]; foc
       {picked ? (
         <div className="rf2-admin__edit">
           <p className="rf2-jtable__name">Edit reporting line — {picked.displayName}</p>
-          <SelectV2 label={`${picked.displayName} reports to`} value={mgr} onChange={(e) => setMgr(e.target.value)}>
+          <SelectV2 label={`${picked.displayName} reports to`} value={mgr} onChange={(e) => { setMgr(e.target.value); setMgrErr(undefined); }} error={mgrErr}>
             <option value="">Nobody (top of the tree)</option>
             {options.map((u) => <option key={u.id} value={u.id}>{u.displayName} · {SEAT_LABEL[seatOf(u)]}</option>)}
           </SelectV2>
@@ -246,7 +257,14 @@ function InviteDrawer({ onClose, onDone }: { onClose: () => void; onDone: (m: st
     setErrs(e); if (Object.keys(e).length) return;
     setBusy(true);
     try { await inviteUser({ displayName: f.displayName.trim(), email: f.email.trim(), ...(f.roleId ? { roleIds: [f.roleId] } : {}) }); onDone(`Invitation sent to ${f.email.trim()}.`); }
-    catch (x) { setErrs({ form: (x as { message?: string })?.message || 'Could not invite.' }); } finally { setBusy(false); }
+    catch (x) {
+      const sf = serverFormErrors(x);
+      if (Object.keys(sf.byField).length) {
+        const inline = { displayName: fieldError(sf, 'displayName'), email: fieldError(sf, 'email'), role: fieldError(sf, 'roleIds') };
+        const banner = bannerError(sf, ['displayName', 'email', 'roleIds']);
+        setErrs(Object.fromEntries(Object.entries({ ...inline, ...(banner ? { form: banner } : {}) }).filter(([, v]) => v)) as Record<string, string>);
+      } else setErrs({ form: (x as { message?: string })?.message || 'Could not invite.' });
+    } finally { setBusy(false); }
   };
   return (
     <DrawerV2 open onClose={onClose} kicker="Users" title="Invite user"
@@ -254,7 +272,7 @@ function InviteDrawer({ onClose, onDone }: { onClose: () => void; onDone: (m: st
       secondaryAction={<ButtonV2 kind="secondary" onClick={onClose}>Cancel</ButtonV2>}>
       <InputV2 label="Name" required value={f.displayName} onChange={(e) => setF({ ...f, displayName: e.target.value })} error={errs.displayName} />
       <InputV2 label="Email" required type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} error={errs.email} />
-      <SelectV2 label="Role" value={f.roleId} onChange={(e) => setF({ ...f, roleId: e.target.value })} disabled={!roles}>
+      <SelectV2 label="Role" value={f.roleId} onChange={(e) => setF({ ...f, roleId: e.target.value })} disabled={!roles} error={errs.role}>
         <option value="">Choose later</option>
         {(roles ?? []).map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
       </SelectV2>
