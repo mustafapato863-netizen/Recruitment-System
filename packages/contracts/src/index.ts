@@ -52,7 +52,7 @@ export const errorCodes = [
 function domainErrorCodes() {
   return [
     // B3 requisition / job lifecycle
-    'ADMIN_CANNOT_CHANGE_JOB_STATUS', 'ASSIGNEE_NOT_ELIGIBLE', 'ASSIGNEE_REQUIRED', 'DUE_DATE_REQUIRED',
+    'ADMIN_CANNOT_CHANGE_JOB_STATUS', 'ASSIGNEE_NOT_ELIGIBLE', 'ASSIGNEE_REQUIRED', 'DUE_DATE_REQUIRED', 'SEATS_BELOW_JOINED', 'REQUISITION_NOT_ACTIVE', 'DEPARTMENT_NOT_FOUND',
     'GRADE_NOT_FOUND', 'ILLEGAL_JOB_TRANSITION', 'JOB_NOT_ACCEPTING_APPLICATIONS', 'NOT_JOB_OWNER',
     'REASON_REQUIRED', 'REQUISITION_CANCELLED', 'REASON_NOT_IN_LIST', 'HOLD_UNTIL_NOT_FUTURE',
     // B5 gates
@@ -206,6 +206,17 @@ export interface VacancyRequest {
   dueDate?: string | null;
   /** B3: master-data grade (category 'grades'). */
   gradeId?: string | null;
+  /** M1: master-data department. */
+  departmentId?: string | null;
+  /** M1 (GET /vacancy-requests): display fields. */
+  title?: string;
+  site?: { id: string; name: string };
+  grade?: { id: string; name: string } | null;
+  department?: { id: string; name: string } | null;
+  requester?: { id: string; name: string };
+  requesterName?: string;
+  owner?: { id: string; name: string } | null;
+  ownerName?: string | null;
   /** B3: active, non-admin user who owns the job once activated. */
   assignedEmployeeId?: string | null;
   activatedAt?: string | null;
@@ -325,6 +336,8 @@ export interface CreateVacancyRequestInput {
   benefits?: string | null;
   dueDate?: string | null;
   gradeId?: string | null;
+  /** M1: master-data department. */
+  departmentId?: string | null;
   assignedEmployeeId?: string | null;
 }
 
@@ -364,6 +377,8 @@ export interface UpdateVacancyRequestInput {
   benefits?: string | null;
   dueDate?: string | null;
   gradeId?: string | null;
+  /** M1: master-data department. */
+  departmentId?: string | null;
   assignedEmployeeId?: string | null;
 }
 

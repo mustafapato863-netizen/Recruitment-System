@@ -290,6 +290,9 @@ model VacancyRequest {
   // The v2 "due date" is targetFillDate (exposed as dueDate in the API).
   gradeId            String?                  @db.Uuid
   grade              MasterDataValue?         @relation("VacancyRequestGrade", fields: [gradeId], references: [id], onDelete: Restrict)
+  /// M1: department from master data (category 'departments').
+  departmentId       String?                  @db.Uuid
+  department         MasterDataValue?         @relation("VacancyRequestDepartment", fields: [departmentId], references: [id], onDelete: Restrict)
   assignedEmployeeId String?                  @db.Uuid
   assignedEmployee   User?                    @relation("VacancyRequestAssignee", fields: [assignedEmployeeId], references: [id], onDelete: Restrict)
   activatedAt        DateTime?                @db.Timestamptz(6)
@@ -1127,6 +1130,7 @@ model MasterDataValue {
   updatedAt      DateTime     @default(now()) @updatedAt @db.Timestamptz(6)
 
   gradeRequests VacancyRequest[] @relation("VacancyRequestGrade")
+  departmentRequests VacancyRequest[] @relation("VacancyRequestDepartment")
 
   @@unique([organizationId, category, code])
   @@unique([organizationId, category, name])

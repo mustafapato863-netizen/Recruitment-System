@@ -46,6 +46,7 @@ import {
   REQUISITION_CANCELLED_REASON,
   assertEligibleAssignee,
   assertGrade,
+  assertDepartment,
   assertJobOwnerOrManager,
   requireReason,
   seatStatus,
@@ -161,8 +162,98 @@ export class VacancyCoreService {
     return users.map((u) => u.id);
   }
 
-  listRequests(organizationId: string): Promise<VacancyRequest[]> {
-    return this.repository.listRequests(organizationId);
+  /**
+   * M1: requisitions with display names, scoped server-side: a Manager sees their own requests plus their
+   * direct reports' (users.managerId); Administrators see all. Called without a user (internal), no scope.
+   */
+  async listRequests(organizationId: string, user?: AuthUser): Promise<VacancyRequest[]> {
+    const all = await this.repository.listRequests(organizationId);
+    const scope = user && !user.roleCodes.includes('ADMINISTRATOR')
+      ? { OR: [{ requesterId: user.userId }, { requester: { managerId: user.userId } }] }
+      : {};
+    const rows = await this.prisma.vacancyRequest.findMany({
+      where: { organizationId, ...scope },
+      select: {
+        id: true,
+        position: { select: { title: true } },
+        branch: { select: { id: true, name: true } },
+        grade: { select: { id: true, name: true } },
+        department: { select: { id: true, name: true } },
+        requester: { select: { id: true, displayName: true } },
+        assignedEmployee: { select: { id: true, displayName: true } },
+      },
+    });
+    const extra = new Map(rows.map((r) => [r.id, {
+      title: r.position.title,
+      site: { id: r.branch.id, name: r.branch.name },
+      grade: r.grade,
+      department: r.department,
+      requester: { id: r.requester.id, name: r.requester.displayName },
+      requesterName: r.requester.displayName,
+      owner: r.assignedEmployee ? { id: r.assignedEmployee.id, name: r.assignedEmployee.displayName } : null,
+      ownerName: r.assignedEmployee?.displayName ?? null,
+    }]));
+    return all.filter((r) => extra.has(r.id)).map((r) => ({ ...r, ...extra.get(r.id)! }));
+  }
+
+  /** M1: the requester or the requester's direct manager (users.managerId). */
+  private async isRequesterOrManager(requesterId: string, actorUserId: string | null): Promise<boolean> {
+    if (!actorUserId) return false;
+    if (requesterId === actorUserId) return true;
+    const requester = await this.prisma.user.findUnique({ where: { id: requesterId }, select: { managerId: true } });
+    return requester?.managerId === actorUserId;
+  }
+
+  /**
+   * M1: PATCH /vacancy-requests/:id/target — after activation the Manager (requester or their manager) may change
+   * seats and/or the due date with a reason. Seats never drop below the number already joined (409). Each change
+   * is written to the job's history (vacancy_status_histories, status unchanged) and the audit log.
+   */
+  async updateRequisitionTarget(
+    id: string,
+    organizationId: string,
+    actorUserId: string,
+    input: { seats?: number; dueDate?: string; reason?: string },
+  ): Promise<VacancyRequestActionResult> {
+    const request = await this.requireRequest(id, organizationId);
+    const reason = input.reason?.trim();
+    if (!reason) throw new BadRequestException({ code: 'REASON_REQUIRED', message: 'A reason is required to change the target.' });
+    if (input.seats === undefined && input.dueDate === undefined) throw new BadRequestException({ code: 'VALIDATION_FAILED', message: 'Give seats and/or dueDate.' });
+    if (!(await this.isRequesterOrManager(request.requesterId, actorUserId))) {
+      throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Only the requesting Manager (or their manager) can change the target.' });
+    }
+    const vacancy = await this.prisma.vacancy.findFirst({ where: { vacancyRequestId: id, organizationId } });
+    if (request.status !== 'Converted to Vacancy' || !vacancy) {
+      throw new ConflictException({ code: 'REQUISITION_NOT_ACTIVE', message: `Request ${request.requestCode} is not active yet; edit it instead.` });
+    }
+    if (input.seats !== undefined && input.seats < vacancy.joinedHeadcount) {
+      throw new ConflictException({ code: 'SEATS_BELOW_JOINED', message: `Seats cannot drop below the ${vacancy.joinedHeadcount} already joined.`, joined: vacancy.joinedHeadcount });
+    }
+    if (input.dueDate !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(input.dueDate)) {
+      throw new BadRequestException({ code: 'VALIDATION_FAILED', message: 'dueDate must be YYYY-MM-DD.' });
+    }
+    const changes: string[] = [];
+    const before = { seats: vacancy.approvedHeadcount, dueDate: request.targetFillDate ? String(request.targetFillDate).slice(0, 10) : null };
+    if (input.seats !== undefined && input.seats !== before.seats) changes.push(`seats ${before.seats} -> ${input.seats}`);
+    if (input.dueDate !== undefined && input.dueDate !== before.dueDate) changes.push(`due date ${before.dueDate ?? 'none'} -> ${input.dueDate}`);
+    if (changes.length) {
+      await this.prisma.$transaction(async (tx) => {
+        if (input.seats !== undefined) {
+          await tx.vacancy.update({ where: { id: vacancy.id }, data: { approvedHeadcount: input.seats } });
+          await tx.vacancyRequest.update({ where: { id }, data: { requestedHeadcount: input.seats } });
+        }
+        if (input.dueDate !== undefined) await tx.vacancyRequest.update({ where: { id }, data: { targetFillDate: new Date(`${input.dueDate}T00:00:00Z`) } });
+        await tx.vacancyStatusHistory.create({
+          data: { vacancyId: vacancy.id, fromStatus: vacancy.status, toStatus: vacancy.status, reason: `Target changed: ${changes.join('; ')}. Reason: ${reason}`, changedById: actorUserId },
+        });
+        await tx.auditLog.create({
+          data: { organizationId, actorUserId, action: 'REQUISITION_TARGET_UPDATE', entityType: 'VacancyRequest', entityId: id, result: 'Success', reason, beforeData: before, afterData: { seats: input.seats ?? before.seats, dueDate: input.dueDate ?? before.dueDate, reason } },
+        });
+      });
+    }
+    const saved = await this.requireRequest(id, organizationId);
+    const job = await this.repository.getVacancy(organizationId, vacancy.id);
+    return { request: saved, ...(job ? { vacancy: job } : {}), idempotent: changes.length === 0 };
   }
 
   async getRequest(organizationId: string, id: string): Promise<VacancyRequest> {
@@ -340,6 +431,7 @@ export class VacancyCoreService {
       qualifications: input.qualifications ?? null,
       benefits: input.benefits ?? null,
       gradeId: input.gradeId ?? null,
+      departmentId: input.departmentId ?? null,
       assignedEmployeeId: input.assignedEmployeeId ?? null,
     };
     // v2 §7: "due date" is the requisition's targetFillDate; accept either name.
@@ -353,9 +445,10 @@ export class VacancyCoreService {
   /** B3: grade from master data; assigned employee active and non-admin. */
   private async assertRequisitionRefs(
     organizationId: string,
-    request: { gradeId?: string | null; assignedEmployeeId?: string | null },
+    request: { gradeId?: string | null; departmentId?: string | null; assignedEmployeeId?: string | null },
   ): Promise<void> {
     if (request.gradeId) await assertGrade(this.prisma, organizationId, request.gradeId);
+    if (request.departmentId) await assertDepartment(this.prisma, organizationId, request.departmentId);
     if (request.assignedEmployeeId) await assertEligibleAssignee(this.prisma, organizationId, request.assignedEmployeeId);
   }
 
@@ -415,6 +508,7 @@ export class VacancyCoreService {
     if (input.benefits !== undefined) request.benefits = input.benefits;
     if (input.dueDate !== undefined) request.targetFillDate = input.dueDate;
     if (input.gradeId !== undefined) request.gradeId = input.gradeId;
+    if (input.departmentId !== undefined) request.departmentId = input.departmentId;
     if (input.assignedEmployeeId !== undefined) request.assignedEmployeeId = input.assignedEmployeeId;
     this.validateRequestPlan(request, false);
     await this.assertRequisitionRefs(organizationId, request);
@@ -610,8 +704,14 @@ export class VacancyCoreService {
     if (request.status === 'Converted to Vacancy' && existingVacancy) {
       return { request, vacancy: existingVacancy, idempotent: true };
     }
-    if (request.status !== 'Approved') {
-      throw new ConflictException(`Request ${request.requestCode} must be approved before activation.`);
+    // M1: activation needs no sign-off. The requesting Manager (or their manager) activates straight from Draft;
+    // the approval path still works for Approved requisitions.
+    const fromDraft = request.status === 'Draft';
+    if (fromDraft && !(await this.isRequesterOrManager(request.requesterId, actorUserId))) {
+      throw new ForbiddenException({ code: 'FORBIDDEN', message: 'Only the requesting Manager (or their manager) can activate a Draft requisition.' });
+    }
+    if (request.status !== 'Approved' && !fromDraft) {
+      throw new ConflictException(`Request ${request.requestCode} must be a Draft or Approved to activate.`);
     }
     if (!request.targetFillDate) {
       throw new BadRequestException({ code: 'DUE_DATE_REQUIRED', message: `Request ${request.requestCode} needs a due date before activation.` });

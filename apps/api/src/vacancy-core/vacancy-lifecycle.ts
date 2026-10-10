@@ -165,6 +165,12 @@ export async function assertGrade(tx: Tx, organizationId: string, gradeId: strin
   if (!grade) throw new BadRequestException({ code: 'GRADE_NOT_FOUND', message: 'Grade must be an active value from master data (Grades).' });
 }
 
+/** M1: department must be an active master-data value in category 'departments'. */
+export async function assertDepartment(tx: Tx, organizationId: string, departmentId: string): Promise<void> {
+  const d = await tx.masterDataValue.findFirst({ where: { id: departmentId, organizationId, category: 'departments', status: 'Active' }, select: { id: true } });
+  if (!d) throw new BadRequestException({ code: 'DEPARTMENT_NOT_FOUND', message: 'Department must be an active value from master data (Departments).' });
+}
+
 /** B3: categories of job status reasons (master data, deactivate-only). */
 export const JOB_REASON_CATEGORIES = ['hold-reasons', 'close-reasons'] as const;
 export const OTHER_REASON = 'Other';
