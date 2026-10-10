@@ -70,7 +70,7 @@ describe.skipIf(!url)('B7 grade bands, offer pay, manager decision, reassign (sc
     await mkUser('other', 'RECRUITER');
     await mkUser('admin', 'ADMINISTRATOR', { managerId: null });
     await prisma.user.update({ where: { id: u.owner! }, data: { managerId: u.mgr! } });
-    await mkUser('target', 'RECRUITER');
+    await mkUser('target', 'RECRUITER', { managerId: u.mgr! }); // B2R-5: reassign targets are in the manager's tree
     await mkUser('inactive', 'RECRUITER', { status: 'Inactive' });
     await mkUser('salaryOnly', null);
     const salaryRole = await prisma.role.create({ data: { code: `B7_SAL_${tag}`.toUpperCase(), name: `B7 salary ${tag}`, organizationId: ORG, permissions: { create: [{ permission: { connect: { code: 'VIEW_CURRENT_SALARY' } } }, { permission: { connect: { code: 'APPLICATION_VIEW' } } }] } } as never });
@@ -213,6 +213,9 @@ describe.skipIf(!url)('B7 grade bands, offer pay, manager decision, reassign (sc
     expect((await err(reassign.reassign(user('other'), body))).body.code).toBe('REASSIGN_NOT_MANAGER');
     expect((await err(reassign.reassign(user('mgrNoPay'), body))).body.code).toBe('REASSIGN_NOT_MANAGER');
     expect((await err(reassign.reassign(user('mgr'), { ...body, applicationIds: [open.id, closed.id] }))).body.code).toBe('REASSIGN_FILE_CLOSED');
+    // B2R-5: another team's employee is refused (400, field toUserId)
+    const outside = await err(reassign.reassign(user('mgr'), { ...body, toUserId: u.other! }));
+    expect(outside).toMatchObject({ status: 400, body: { code: 'REASSIGN_TARGET_NOT_IN_TEAM', field: 'toUserId' } });
     expect((await prisma.application.findUniqueOrThrow({ where: { id: open.id } })).primaryRecruiterId).toBe(u.owner); // atomic: nothing moved
   });
 
@@ -274,7 +277,8 @@ describe.skipIf(!url)('B7 grade bands, offer pay, manager decision, reassign (sc
     const o = await pendingOffer(app.id, 12000);
     expect((await err(decisions.decide(user('midMgr'), o.offerId, o.versionId, { decision: 'Approve' }))).body.code).toBe('OFFER_DECISION_NOT_MANAGER');
     expect((await decisions.decide(user('top'), o.offerId, o.versionId, { decision: 'Approve' })).toStatus).toBe('Approved');
-    const body = { applicationIds: [app.id], toUserId: u.target!, reason: 'Workload balancing' };
+    await mkUser('rep2', 'RECRUITER', { managerId: u.midMgr }); // B2R-5: target two levels below top
+    const body = { applicationIds: [app.id], toUserId: u.rep2!, reason: 'Workload balancing' };
     expect((await err(reassign.reassign(user('midMgr'), body))).body.code).toBe('REASSIGN_NOT_MANAGER');
     expect((await reassign.reassign(user('top'), body)).moved).toHaveLength(1);
     // Without co-ownership the direct manager decides, and the grand-manager does not.

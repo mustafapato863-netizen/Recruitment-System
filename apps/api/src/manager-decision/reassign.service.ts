@@ -72,6 +72,16 @@ export class ReassignService {
       if (owners.includes(user.userId) || !(await escalatedManagers(this.prisma, [f.primaryRecruiterId], owners)).has(user.userId)) notMine.push(f);
     }
     if (notMine.length) throw new ForbiddenException({ code: 'REASSIGN_NOT_MANAGER', message: 'You can only reassign files owned by your direct reports.', applicationIds: notMine.map((f) => f.id) });
+    // B2R-5 (B2-10): a manager reassigns only to someone in his own reporting tree (4 levels). The admin override is exempt.
+    if (!override && target.id !== user.userId) {
+      let current: string | null = target.id; let inTree = false;
+      for (let hop = 0; hop < 4 && current && !inTree; hop += 1) {
+        const row: { managerId: string | null } | null = await this.prisma.user.findUnique({ where: { id: current }, select: { managerId: true } });
+        current = row?.managerId ?? null;
+        inTree = current === user.userId;
+      }
+      if (!inTree) throw new BadRequestException({ code: 'REASSIGN_TARGET_NOT_IN_TEAM', field: 'toUserId', message: 'Pick someone from your own team (your reports and their reports).' });
+    }
     const moving = files.filter((f) => f.primaryRecruiterId !== target.id);
 
     const batchId = randomUUID();
