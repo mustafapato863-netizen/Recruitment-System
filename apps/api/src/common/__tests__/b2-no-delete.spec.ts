@@ -81,7 +81,7 @@ describe('B2: owner block on user deactivation', () => {
     const [p, t, j, r] = counts;
     const prisma = {
       application: { count: vi.fn().mockResolvedValueOnce(p).mockResolvedValueOnce(t) },
-      vacancyAssignment: { count: vi.fn().mockResolvedValue(j) },
+      vacancy: { count: vi.fn().mockResolvedValue(j) },
       vacancyRequest: { count: vi.fn().mockResolvedValue(r) },
       user: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
     };

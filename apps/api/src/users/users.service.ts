@@ -125,8 +125,8 @@ export class UsersService {
   /**
    * B2: a user who still owns open work cannot be deactivated; reassign first
    * (reassignment itself is B7). 409 with counts.
-   * TODO(B1): once Vacancy.primaryRecruiterId (PR #4) lands, also count
-   * vacancies where primaryRecruiterId = user and status is open.
+   * Open jobs count when the user is the job owner (Vacancy.primaryRecruiterId,
+   * B1) or still holds an active PRIMARY assignment.
    */
   async assertNoOpenOwnership(organizationId: string, userId: string): Promise<void> {
     const counts = await countOpenOwnership(this.prisma, organizationId, userId);
@@ -241,7 +241,7 @@ export const OPEN_REQUISITION_STATUSES = ['Draft', 'Pending Approval', 'Changes 
 export const CLOSED_APPLICATION_STAGES = ['Joined', 'Rejected', 'Withdrawn'];
 
 export async function countOpenOwnership(
-  prisma: Pick<PrismaService, 'application' | 'vacancyAssignment' | 'vacancyRequest'>,
+  prisma: Pick<PrismaService, 'application' | 'vacancy' | 'vacancyRequest'>,
   organizationId: string,
   userId: string,
 ): Promise<{ openApplicationsPrimary: number; openApplicationsTaskOwner: number; openJobsPrimary: number; openRequisitions: number }> {
@@ -249,8 +249,16 @@ export async function countOpenOwnership(
   const [openApplicationsPrimary, openApplicationsTaskOwner, openJobsPrimary, openRequisitions] = await Promise.all([
     prisma.application.count({ where: { ...openApplication, primaryRecruiterId: userId } }),
     prisma.application.count({ where: { ...openApplication, taskOwnerId: userId } }),
-    prisma.vacancyAssignment.count({
-      where: { userId, isActive: true, assignmentKind: 'PRIMARY', vacancy: { organizationId, status: { in: OPEN_JOB_STATUSES } } },
+    // Distinct open jobs the user owns (B1 column) or is still PRIMARY on.
+    prisma.vacancy.count({
+      where: {
+        organizationId,
+        status: { in: OPEN_JOB_STATUSES },
+        OR: [
+          { primaryRecruiterId: userId },
+          { assignments: { some: { userId, isActive: true, assignmentKind: 'PRIMARY' } } },
+        ],
+      },
     }),
     prisma.vacancyRequest.count({ where: { organizationId, requesterId: userId, status: { in: OPEN_REQUISITION_STATUSES } } }),
   ]);

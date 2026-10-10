@@ -91,6 +91,28 @@ describe.skipIf(!url)('B2 no delete, deactivate, anonymize (scratch Postgres)', 
     expect((await prisma.user.findUniqueOrThrow({ where: { id: ids.owner } })).status).toBe('Inactive');
   });
 
+  it('owner block also counts Vacancy.primaryRecruiterId (B1 column) without any assignment', async () => {
+    // Uses its own DB (B2_TEST_DATABASE_URL); a job owner with no PRIMARY
+    // assignment would trip the B1 backfill invariant test if both suites
+    // shared one database at the same time.
+    const users = new UsersService(prisma, {} as never, new UserPermissionsService(prisma));
+    const recruiterRole = await prisma.role.findFirstOrThrow({ where: { code: 'RECRUITER' } });
+    const jobOwner = randomUUID();
+    await prisma.user.create({ data: { id: jobOwner, organizationId: ORG, email: `jobowner-${tag}@b2.test`, emailNormalized: `jobowner-${tag}@b2.test`, displayName: 'B2 Job Owner', passwordHash: 'x', userRoles: { create: { roleId: recruiterRole.id } } } });
+    const job = await prisma.vacancy.findFirstOrThrow({ where: { organizationId: ORG, primaryRecruiterId: null, status: { in: ['Open', 'On Hold', 'Pending Activation', 'Partially Filled'] } } });
+    await prisma.vacancy.update({ where: { id: job.id }, data: { primaryRecruiterId: jobOwner } });
+    try {
+      expect(await prisma.vacancyAssignment.count({ where: { userId: jobOwner } })).toBe(0);
+      const error = await users.update(ORG, jobOwner, { status: 'Inactive' } as never).catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(ConflictException);
+      expect((error as ConflictException).getResponse()).toMatchObject({ code: 'USER_OWNS_OPEN_WORK', counts: { openJobsPrimary: 1 } });
+    } finally {
+      await prisma.vacancy.update({ where: { id: job.id }, data: { primaryRecruiterId: null } });
+    }
+    await users.update(ORG, jobOwner, { status: 'Inactive' } as never);
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: jobOwner } })).status).toBe('Inactive');
+  });
+
   it('soft-unlinks talent pool membership and can restore it', async () => {
     const pools = new TalentPoolService(prisma);
     const pool = await prisma.talentPool.findFirstOrThrow({ where: { organizationId: ORG } });
