@@ -96,6 +96,8 @@ export interface ErrorEnvelope {
   /** B7: on GRADE_BAND_MISSING / OFFER_PAY_OUTSIDE_BAND. Pay figures only for OFFER_PAY_VIEW holders. */
   band?: Record<string, string | number | null>;
   offeredMonthlyBase?: number;
+  /** B2-15: on 400s, the first offending input (dotted path, e.g. "basePay", "allowances.0.amount", "pay"). */
+  field?: string;
   requestId: string;
   retryable: boolean;
   retryAfterSeconds: number | null;
