@@ -1543,7 +1543,7 @@ export interface BulkImportRowItem {
 // --- Phase 8: Reports, Pipeline & Integrations ---
 
 export interface ReportKpis {
-  timeToFill: { value: number; change: number; sampleCount?: number };
+  timeToFill: { value: number; sampleCount?: number };
   timeToOffer: { value: number; target: number };
   offerAcceptanceRate: { value: number; accepted: number; total: number };
   interviewNoShowRate: { value: number; noShows: number; total: number };
@@ -1570,15 +1570,6 @@ export interface RecruiterWorkload {
   vacancies: number;
   applications: number;
   overdueTasks: number;
-  /** Successful, audit-recorded recruiter actions in the selected report period. */
-  activity?: {
-    total: number;
-    applications: number;
-    screening: number;
-    interviews: number;
-    offers: number;
-    hiring: number;
-  };
 }
 
 export interface ReportRange {
@@ -1631,14 +1622,7 @@ export interface RecruitmentKpiItem {
 
 export interface ReportOverview {
   range: ReportRange;
-  comparisonRange: ReportRange;
   kpis: ReportKpis;
-  comparison: {
-    applications: number;
-    offers: number;
-    interviews: number;
-    joined: number;
-  };
   trend: ReportTrendPoint[];
   sourceBreakdown: ReportSourceBreakdown[];
   funnel: FunnelStage[];
