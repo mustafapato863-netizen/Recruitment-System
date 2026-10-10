@@ -240,3 +240,15 @@ describe('A10 Integrations', () => {
     expect(await screen.findByText('v1 integrations')).toBeInTheDocument();
   });
 });
+
+describe('#21/#23 override errors', () => {
+  it('400 fields map to the override inputs; REASON_REQUIRED goes on the "Other" note', async () => {
+    const { overrideError } = await import('../opsApi');
+    const { ApiError } = await import('../../../api/client');
+    const fields = { holdUntil: ['holdUntil must be a valid ISO 8601 date string'] };
+    expect(overrideError(new ApiError(400, 'x', { statusCode: 400, code: 'VALIDATION_ERROR', message: 'Please correct the highlighted fields.', field: 'holdUntil', fields }, { code: 'VALIDATION_ERROR', fields })))
+      .toEqual({ field: 'holdUntil', text: 'holdUntil must be a valid ISO 8601 date string' });
+    expect(overrideError(new ApiError(400, '"Other" needs a short note.', { statusCode: 400, code: 'REASON_REQUIRED', message: '"Other" needs a short note.' }, { code: 'REASON_REQUIRED' })))
+      .toEqual({ field: 'statusNote', text: '"Other" needs a short note.' });
+  });
+});

@@ -12,6 +12,7 @@
  *   CoS: also sends the B3 list reason (statusReason, + statusNote for "Other") and holdUntil when the B3 lists exist.
  *   400 OVERRIDE_REASON_REQUIRED / OVERRIDE_NOT_ALLOWED, 409 wrong state (OVERRIDE_NOT_ALLOWED), 403 non-admin.
  */
+import { serverFormErrors } from '../forms/serverErrors';
 import { getApi, postApi } from '../../api/client';
 import { fetchAllPages } from '../api/paged';
 import { stripPay } from '../api/paySafety';
@@ -152,8 +153,16 @@ export const postOverride = (action: OverrideAction, entityId: string, reason: s
   if (action === 'job.hold' && extras.holdUntil) body.holdUntil = extras.holdUntil;
   return postApi<{ action: string; entityId: string; from: string; to: string; reason: string }>('/admin/overrides', body);
 };
-export function overrideError(e: unknown): { field?: 'reason' | 'statusReason' | 'holdUntil'; text: string } {
+type OverrideField = 'reason' | 'statusReason' | 'holdUntil' | 'statusNote' | 'action';
+const OVERRIDE_FIELD: Record<string, OverrideField> = { reason: 'reason', statusReason: 'statusReason', statusNote: 'statusNote', note: 'statusNote', holdUntil: 'holdUntil', action: 'action' };
+export function overrideError(e: unknown): { field?: OverrideField; text: string } {
+  // #23: a 400's field/fields name the body path; show it on that input.
+  const f = serverFormErrors(e);
+  const hit = Object.keys(f.byField).find((k) => OVERRIDE_FIELD[k]);
+  if (hit) return { field: OVERRIDE_FIELD[hit], text: f.byField[hit] };
   const d = domainError(e); const s = (e as { statusCode?: number })?.statusCode;
+  // #21: "Other" from a reason list needs a short note (400 REASON_REQUIRED).
+  if (d?.code === 'REASON_REQUIRED') return { field: 'statusNote', text: d.message || '"Other" needs a short note.' };
   if (d?.code === 'OVERRIDE_REASON_REQUIRED') return { field: 'reason', text: `An override needs a reason (at least ${OVERRIDE_MIN_REASON} characters).` };
   if (d?.code === 'OVERRIDE_NOT_ALLOWED') return { text: d.message || 'That override is not allowed for this job now.' };
   if (d?.code === 'REASON_NOT_IN_LIST') return { field: 'statusReason', text: 'Pick a reason from the list.' };
