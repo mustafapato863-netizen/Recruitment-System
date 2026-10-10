@@ -11,7 +11,6 @@ const api = vi.hoisted(() => ({ getApi: vi.fn(), patchApi: vi.fn(), postApi: vi.
 vi.mock('../../../api/client', async () => ({ ...(await vi.importActual<object>('../../../api/client')), ...api }));
 const shell = vi.hoisted(() => ({ value: { seat: 'admin' } as null | { seat: string } }));
 vi.mock('../../../components/v2/shell/AppShellV2', () => ({ useV2Shell: () => shell.value }));
-vi.mock('../../../pages/UsersRolesPage', () => ({ UsersRolesPage: () => <p>v1 users</p> }));
 import { RolesRoute, UsersRoute } from '../AdminRoutes';
 import { buildTree, flatten, isDescendant, ownedWork } from '../usersApi';
 
@@ -46,11 +45,6 @@ describe('A02 Users', () => {
     expect(screen.getByText(/Interviewer is not a role/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /delete/i })).toBeNull();
     expect(await axeViolations(container)).toEqual([]);
-  });
-  it('non-admin seats keep v1', async () => {
-    shell.value = { seat: 'manager' };
-    renderAt();
-    expect(await screen.findByText('v1 users')).toBeInTheDocument();
   });
   it('deactivate is PATCH {status:Inactive} (never DELETE), two-step confirm', async () => {
     const u = userEvent.setup();
@@ -232,11 +226,6 @@ describe('A04 Roles', () => {
     expect(await screen.findByText(/INTERVIEW_PARTICIPATE is not on this server yet\. Today this is the “Interviewer” role/)).toBeInTheDocument();
     expect(screen.getByText(/LICENSE_CHECK is not on this server yet\. Today this is the “License Specialist” role/)).toBeInTheDocument();
     expect(screen.queryByRole('checkbox')).toBeNull();
-  });
-  it('non-admin /roles goes back to /users (v1)', async () => {
-    shell.value = null;
-    renderAt('/roles');
-    expect(await screen.findByText('v1 users')).toBeInTheDocument();
   });
 });
 

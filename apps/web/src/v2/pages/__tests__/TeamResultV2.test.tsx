@@ -10,7 +10,6 @@ const api = vi.hoisted(() => ({ getApi: vi.fn() }));
 vi.mock('../../../api/client', async () => ({ ...(await vi.importActual<object>('../../../api/client')), ...api }));
 const shell = vi.hoisted(() => ({ value: { seat: 'manager' } as null | { seat: string } }));
 vi.mock('../../../components/v2/shell/AppShellV2', () => ({ useV2Shell: () => shell.value }));
-vi.mock('../../../pages/ReportsPage', () => ({ ReportsPage: () => <p>v1 reports</p> }));
 import { ReportsRoute } from '../ReportsRoute';
 import { cairoMonth } from '../../api/myResult';
 
@@ -91,10 +90,5 @@ describe('M4 Team result (B8 /results/team)', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Down');
     await u.click(screen.getByRole('button', { name: 'Try again' }));
     expect(await screen.findByRole('table')).toBeInTheDocument();
-  });
-  it('route: v1 Reports outside the Manager and Admin seats', async () => {
-    shell.value = { seat: 'employee' };
-    renderAt();
-    expect(await screen.findByText('v1 reports')).toBeInTheDocument();
   });
 });

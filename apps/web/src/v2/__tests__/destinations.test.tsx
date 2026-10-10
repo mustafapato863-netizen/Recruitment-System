@@ -28,7 +28,7 @@ describe('B2-18: v1 pages are not destinations for v2 seats', () => {
 
   it.each([
     ['employee', '/my-work'], ['employee', '/vacancies/v1'], ['employee', '/candidates/compare'], ['employee', '/applications/a1'], ['employee', '/my-result'],
-    ['manager', '/vacancy-requests'], ['manager', '/reports'], ['manager', '/applications/a1'], ['manager', '/interviews/i1'],
+    ['manager', '/vacancy-requests'], ['manager', '/reports'], ['manager', '/applications/a1'], ['manager', '/my-interviews'],
     ['admin', '/audit-log'], ['admin', '/whatsapp-templates'], ['admin', '/roles'], ['employee', '/profile'], ['admin', '/notifications'],
   ] as const)('%s keeps %s', (seat, path) => expect(v2Redirect(seat, path)).toBeNull());
 });
@@ -40,5 +40,40 @@ describe('shell redirects in place', () => {
   it.each([['employee', '/', '/my-work'], ['manager', '/offers', '/my-work'], ['admin', '/', '/users']] as const)('%s at %s lands on %s', async (seat, from, to) => {
     render(<MemoryRouter initialEntries={[from]}><Routes><Route element={<AppShellV2 user={user} seat={seat as Seat} onSignOut={() => {}} />}><Route path="*" element={<Where />} /></Route></Routes></MemoryRouter>);
     expect(await screen.findByLabelText('where')).toHaveTextContent(to);
+  });
+});
+
+describe('v2 default: every v1 URL redirects to its v2 equivalent', () => {
+  it.each([
+    // Employee
+    ['employee', '/', '/my-work'], ['employee', '/dashboard', '/my-work'], ['employee', '/tasks', '/my-work'],
+    ['employee', '/interviews/i1', '/my-interviews?interview=i1&scorecard=1'], ['employee', '/interviews/calendar', '/my-work'],
+    ['employee', '/vacancies/v1/analytics', '/vacancies/v1'], ['employee', '/applications/a1/transition', '/applications/a1'],
+    ['employee', '/candidates/c1', '/candidates?tab=bank'], ['employee', '/candidates/c1/documents', '/candidates?tab=bank'],
+    ['employee', '/cv-intake/j1', '/candidates'], ['employee', '/import', '/candidates'], ['employee', '/sourcing-match', '/candidates'],
+    ['employee', '/offers/create', '/my-work'], ['employee', '/licenses', '/my-work'], ['employee', '/joinings', '/my-work'],
+    ['employee', '/portal', '/my-work'], ['employee', '/reports', '/my-work'], ['employee', '/settings/targets', '/my-work'],
+    // Manager
+    ['manager', '/interviews/i 1', '/my-interviews?interview=i%201&scorecard=1'],
+    ['manager', '/vacancy-requests/create', '/vacancy-requests?req=new'], ['manager', '/vacancy-requests/r1', '/vacancy-requests?req=r1'],
+    ['manager', '/applications/a1/transition', '/applications/a1'], ['manager', '/offers/approvals/inbox', '/my-work'],
+    ['manager', '/hires/approvals/inbox', '/my-work'], ['manager', '/team-result', '/reports'], ['manager', '/vacancies/v1', '/my-work'],
+    ['manager', '/candidates/c1', '/my-work'], ['manager', '/users', '/my-work'],
+    // Admin
+    ['admin', '/', '/users'], ['admin', '/reporting-tree', '/users'], ['admin', '/settings/targets', '/master-data'], ['admin', '/access-control', '/roles'],
+    ['admin', '/interviews/i1', '/users'], ['admin', '/vacancy-requests/r1', '/users'], ['admin', '/candidates', '/users'],
+  ] as const)('%s %s → %s', (seat, path, to) => expect(v2Redirect(seat, path, { requisitions: true, interviews: true })).toBe(to));
+
+  it('the manager may open /my-interviews (own scorecards) even without the interviewer permission; employees may not', () => {
+    expect(v2Redirect('manager', '/my-interviews', { interviews: false })).toBeNull();
+    expect(v2Redirect('employee', '/my-interviews', { interviews: false })).toBe('/my-work');
+  });
+  it('requisition detail/create without requisitions rights go home', () => {
+    expect(v2Redirect('manager', '/vacancy-requests/create', { requisitions: false })).toBe('/my-work');
+  });
+  it('interviewer-only: /interviews/:id keeps the id; other v1 URLs → /my-interviews', () => {
+    const o = { interviews: true, interviewerOnly: true };
+    expect(v2Redirect('employee', '/interviews/i1', o)).toBe('/my-interviews?interview=i1&scorecard=1');
+    expect(v2Redirect('employee', '/offers/o1', o)).toBe('/my-interviews');
   });
 });

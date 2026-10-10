@@ -13,11 +13,26 @@ const COMMON = ['/profile', '/notifications', '/search'];
 
 /** Path prefixes per seat ("/x" allows "/x" and "/x/…"). Keep in step with navConfig + the v2 pages. */
 export const SEAT_DESTINATIONS: Record<Seat, string[]> = {
-  employee: ['/my-work', '/my-result', '/vacancies', '/candidates', '/applications/:id'],
+  employee: ['/my-work', '/my-result', '/vacancies', '/vacancies/:id', '/candidates', '/candidates/compare', '/applications/:id'],
   // '/interviews/:id' stays for the Manager's own scorecard (Team work → Waiting on you → Submit scorecard).
-  manager: ['/my-work', '/vacancy-requests', '/reports', '/applications/:id', '/interviews/:id'],
+  // v2 default: '/vacancy-requests' is the list only (the drawers carry ?req= / ?req=new); detail and create URLs redirect.
+  manager: ['/my-work', '/vacancy-requests', '/reports', '/applications/:id'],
   admin: ['/users', '/roles', '/pipeline-settings', '/master-data', '/email-templates', '/whatsapp-templates', '/reports', '/audit-log', '/integrations'],
 };
+
+/**
+ * v2 default (no v1 UI): v1 URLs that carry an id keep it on the v2 page. Checked before the seat's destinations,
+ * so e.g. /vacancies/:id/analytics never reaches a v1 page. `$1` is the id.
+ */
+const PARAM_EQUIVALENT: Array<{ from: RegExp; to: Partial<Record<Seat, string>> }> = [
+  // The v1 interview page → the v2 My interviews card + scorecard (Team work "Submit scorecard", My Work links).
+  { from: /^\/interviews\/(?!calendar\/?$)([^/]+)\/?$/, to: { employee: '/my-interviews?interview=$1&scorecard=1', manager: '/my-interviews?interview=$1&scorecard=1' } },
+  { from: /^\/vacancy-requests\/create\/?$/, to: { manager: '/vacancy-requests?req=new' } },
+  { from: /^\/vacancy-requests\/([^/]+)\/?$/, to: { manager: '/vacancy-requests?req=$1' } },
+  { from: /^\/vacancies\/([^/]+)\/.+$/, to: { employee: '/vacancies/$1' } },
+  { from: /^\/applications\/([^/]+)\/.+$/, to: { employee: '/applications/$1', manager: '/applications/$1' } },
+  { from: /^\/candidates\/(?!compare\/?$)[^/]+(\/.*)?$/, to: { employee: '/candidates?tab=bank' } },
+];
 
 /** v1 page → v2 equivalent, per seat; anything else unknown goes home. */
 const EQUIVALENT: Array<{ from: RegExp; to: Partial<Record<Seat, string>> }> = [
@@ -27,6 +42,8 @@ const EQUIVALENT: Array<{ from: RegExp; to: Partial<Record<Seat, string>> }> = [
   { from: /^\/(team-result|performance)/, to: { manager: '/reports' } },
   { from: /^\/(access-control|role)/, to: { admin: '/roles' } },
   { from: /^\/settings\/?/, to: { admin: '/master-data' } },
+  { from: /^\/reporting-tree\/?$/, to: { admin: '/users' } },
+  { from: /^\/(vacancies|candidates)(\/|$)/, to: { manager: '/my-work' } },
 ];
 
 function matches(pattern: string, pathname: string): boolean {
@@ -54,7 +71,7 @@ export function canUseRequisitions(user: { roles?: ReadonlyArray<{ code: string 
   if (!user || isRecruiterOnly(user.roles)) return false;
   return (user.roles ?? []).some((r) => r.code === 'ADMINISTRATOR') || (user.permissions ?? []).includes('VACANCY_REQUEST_VIEW');
 }
-const REQUISITIONS = /^\/vacancy-requests(\/|$)/;
+const REQUISITIONS = /^\/vacancy-requests([/?]|$)/;
 const MY_INTERVIEWS = /^\/my-interviews\/?$/;
 
 /** null = stay; otherwise where to go instead. `opts.requisitions === false` drops /vacancy-requests (Recruiter role). */
@@ -69,9 +86,18 @@ export function isInterviewerOnly(user: { permissions?: readonly string[] } | nu
 }
 export function v2Redirect(seat: Seat, pathname: string, opts: { requisitions?: boolean; interviews?: boolean; interviewerOnly?: boolean } = {}): string | null {
   if (pathname === '/' || pathname === '') return SEAT_HOME[seat];
+  for (const rule of PARAM_EQUIVALENT) {
+    const m = rule.from.exec(pathname);
+    const to = m ? rule.to[seat] : undefined;
+    if (to) {
+      if (opts.requisitions === false && REQUISITIONS.test(to)) return SEAT_HOME[seat];
+      return to.replace('$1', encodeURIComponent(decodeURIComponent(m![1] ?? '')));
+    }
+  }
   if (opts.interviewerOnly && seat !== 'admin') return INTERVIEWER_ONLY_OK.some((p) => matches(p, pathname)) ? null : '/my-interviews';
   // B2F-3: an interviewer (any non-admin seat) reads the CV and submits their scorecard on /my-interviews, inside the v2 shell.
-  if (MY_INTERVIEWS.test(pathname) && seat !== 'admin') return opts.interviews === false ? SEAT_HOME[seat] : null;
+  // The Manager seat always may: its own scorecards (Team work → Waiting on you) open there.
+  if (MY_INTERVIEWS.test(pathname) && seat !== 'admin') return opts.interviews === false && seat !== 'manager' ? SEAT_HOME[seat] : null;
   if (opts.requisitions === false && REQUISITIONS.test(pathname)) return SEAT_HOME[seat];
   if (isV2Destination(seat, pathname)) return null;
   for (const rule of EQUIVALENT) if (rule.from.test(pathname) && rule.to[seat]) return rule.to[seat]!;

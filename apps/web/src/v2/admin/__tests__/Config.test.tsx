@@ -12,7 +12,6 @@ const shell = vi.hoisted(() => ({ value: { seat: 'admin' } as null | { seat: str
 vi.mock('../../../components/v2/shell/AppShellV2', () => ({ useV2Shell: () => shell.value }));
 const auth = vi.hoisted(() => ({ perms: ['MASTER_DATA_VIEW'] as string[] }));
 vi.mock('../../../auth/AuthContext', () => ({ useAuth: () => ({ user: { id: 'u-admin', displayName: 'Omar Khalil', permissions: auth.perms, roles: [] } }) }));
-vi.mock('../../../pages/MasterDataPage', () => ({ MasterDataPage: () => <p>v1 master data</p> }));
 import { MasterDataRoute, PipelineRoute, TemplatesRoute } from '../AdminRoutes';
 
 const st = (id: string, name: string, stageType: string, sortOrder: number) => ({ id, name, stageType, sortOrder, status: 'Active' });
@@ -43,9 +42,9 @@ const serve = (extra: Record<string, unknown> = {}) => {
 const renderAt = (path: string) => {
   document.documentElement.setAttribute('data-ui', 'v2');
   return render(<MemoryRouter initialEntries={[path]}><Suspense fallback="…"><Routes>
-    <Route path="/pipeline-settings" element={<PipelineRoute v1={<p>v1 pipeline</p>} />} />
-    <Route path="/email-templates" element={<TemplatesRoute v1={<p>v1 email</p>} />} />
-    <Route path="/whatsapp-templates" element={<TemplatesRoute channel="whatsapp" v1={<p>v1 wa</p>} />} />
+    <Route path="/pipeline-settings" element={<PipelineRoute />} />
+    <Route path="/email-templates" element={<TemplatesRoute />} />
+    <Route path="/whatsapp-templates" element={<TemplatesRoute channel="whatsapp" />} />
     <Route path="/master-data" element={<MasterDataRoute />} />
   </Routes></Suspense></MemoryRouter>);
 };
@@ -83,11 +82,6 @@ describe('A05 Pipeline template (single)', () => {
     await u.click(await screen.findByRole('button', { name: 'Create the template' }));
     expect(api.postApi).toHaveBeenCalledWith('/pipeline-templates', { name: 'Default pipeline', isDefault: true });
     expect(await screen.findByRole('status')).toHaveTextContent('There is already one pipeline template — showing it.');
-  });
-  it('non-admin keeps v1', async () => {
-    shell.value = { seat: 'manager' };
-    renderAt('/pipeline-settings');
-    expect(await screen.findByText('v1 pipeline')).toBeInTheDocument();
   });
 });
 
@@ -138,11 +132,6 @@ describe('A07 Templates (admin-only)', () => {
     await waitFor(() => expect(api.getApi.mock.calls.length).toBeGreaterThan(before));
     await u.click(within(screen.getByRole('navigation', { name: 'Email templates' })).getByRole('button', { name: 'New' }));
     expect(screen.queryByRole('button', { name: 'Archive' })).toBeNull();
-  });
-  it('non-admin seats keep v1 templates', async () => {
-    shell.value = { seat: 'employee' };
-    renderAt('/email-templates');
-    expect(await screen.findByText('v1 email')).toBeInTheDocument();
   });
 });
 
@@ -249,10 +238,5 @@ describe('A06 Master data', () => {
     await u.click(within(card).getByRole('button', { name: /Edit Grade 8 Offshore Cairo/ }));
     await u.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Deactivate' }));
     await waitFor(() => expect(api.patchApi).toHaveBeenCalledWith('/master-data/grade-bands/gb1', { status: 'Inactive' }));
-  });
-  it('non-admin keeps v1 master data', async () => {
-    shell.value = null;
-    renderAt('/master-data');
-    expect(await screen.findByText('v1 master data')).toBeInTheDocument();
   });
 });
