@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { resolveSeat } from '../seat';
-import { parseSeats, resolveV2Seats, serverV2Seats, shouldUseV2Shell, V2_SEATS_STORAGE_KEY } from '../seatSwitch';
+import { parseSeats, resolveV2Seats, serverV2Enabled, serverV2Seats, shouldUseV2Shell, V2_SEATS_STORAGE_KEY } from '../seatSwitch';
 
 const me = (codes: string[], permissions: string[] = [], extra: Record<string, unknown> = {}) => ({
   roles: codes.map((code, i) => ({ id: `r${i}`, code, name: code })), permissions, ...extra,
@@ -98,10 +98,11 @@ describe('seat-by-seat switch', () => {
 });
 
 describe('server-side seats from /auth/me', () => {
-  it('reads me.v2Seats (array or string), else null; flags.v2Seats is ignored', () => {
+  it('reads me.v2Seats (array or string), else flags.v2Seats, else null', () => {
     expect(serverV2Seats({ v2Seats: ['EMPLOYEE', 'manager'] })).toEqual(['employee', 'manager']);
     expect(serverV2Seats({ v2Seats: 'admin' })).toEqual(['admin']);
-    expect(serverV2Seats({ flags: { v2Seats: 'admin' } })).toBeNull();
+    expect(serverV2Seats({ flags: { v2Seats: ['admin'] } })).toEqual(['admin']);
+    expect(serverV2Seats({ v2Seats: ['employee'], flags: { v2Seats: ['admin'] } })).toEqual(['employee']);
     expect(serverV2Seats({ v2Seats: [] })).toEqual([]);
     expect(serverV2Seats({})).toBeNull();
     expect(serverV2Seats(null)).toBeNull();
@@ -113,6 +114,16 @@ describe('server-side seats from /auth/me', () => {
     expect(shouldUseV2Shell('employee', { envFlag: true, envSeats: 'employee', me: { v2Seats: [] } })).toBe(false);
   });
 
+  it('v2Enabled decides outright when present (B10), even against the UI flag and seat lists', () => {
+    const me = { seat: 'manager', v2Seats: ['employee'], v2Enabled: true };
+    expect(serverV2Enabled(me)).toBe(true);
+    expect(shouldUseV2Shell('manager', { envFlag: false, me })).toBe(true);
+    expect(shouldUseV2Shell('employee', { envFlag: true, search: '?ui=v2&v2seats=employee', me: { v2Seats: ['employee'], v2Enabled: false } })).toBe(false);
+    expect(serverV2Enabled({ v2Enabled: 'yes' })).toBeNull();
+  });
+  it('B10 seat wins over the provisional role table', () => {
+    expect(resolveSeat(me(['ROLE_001'], [], { seat: 'manager' }))).toBe('manager');
+  });
   it('falls back to client sources when absent', () => {
     expect([...resolveV2Seats({ me: { id: 'x' }, envSeats: 'admin' })]).toEqual(['admin']);
   });
