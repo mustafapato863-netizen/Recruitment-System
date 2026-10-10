@@ -115,6 +115,15 @@ describe('E10 Suggest from bank', () => {
     await u.click(within(d).getByRole('button', { name: 'Add Youssef Nabil to this job' }));
     expect(await within(d).findByRole('alert')).toHaveTextContent('has already applied');
   });
+  it('#23 409 APPLICATION_EXISTS links to the existing file', async () => {
+    const u = userEvent.setup();
+    serve({ '/applications@v1': { data: [{ id: 'app-heba', candidateId: 'c-heba', vacancyId: 'v1' }], total: 1 } });
+    api.postApi.mockRejectedValueOnce(new ApiError(409, 'Candidate Heba Mansour has already applied to vacancy VAC-1.', { statusCode: 409, code: 'APPLICATION_EXISTS', message: 'x' }, { code: 'APPLICATION_EXISTS' }));
+    renderAt('/vacancies/v1?drawer=suggest');
+    const d = await screen.findByRole('dialog');
+    await u.click(await within(d).findByRole('button', { name: 'Add Heba Mansour to this job' }));
+    expect(await within(d).findByTestId('application-exists')).toHaveAttribute('href', '/applications/app-heba');
+  });
   it('select 2–4 → Compare link to E24; held job disables Add', async () => {
     const u = userEvent.setup();
     serve({ '/vacancies/v1': jfx.jobDetail('On Hold') });
