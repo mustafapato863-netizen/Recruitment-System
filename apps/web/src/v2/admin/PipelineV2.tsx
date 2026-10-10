@@ -1,3 +1,4 @@
+import { toFormErrs } from './formErrors';
 import { useEffect, useState } from 'react';
 import { CircleCheck, Info, LogOut, PencilLine, Plus, RotateCw, ShieldCheck } from 'lucide-react';
 import { ButtonV2, DrawerV2, EmptyStateV2, InputV2, SkeletonV2 } from '../../components/v2';
@@ -84,7 +85,7 @@ function StageDrawer({ stage, templateId, onClose, onDone }: { stage: PipelineSt
     if (!name.trim()) return setErr('Enter a name.');
     setBusy(true);
     try { await renameStage(templateId, stage.id, name.trim()); onDone(`Stage renamed to “${name.trim()}”.`); }
-    catch (e) { setErr((e as { message?: string })?.message || 'Could not save.'); } finally { setBusy(false); }
+    catch (e) { const fe = toFormErrs(e, { name: 'name' }, 'Could not save.'); setErr(fe.name ?? fe.form ?? 'Could not save.'); } finally { setBusy(false); }
   };
   return (
     <DrawerV2 open onClose={onClose} kicker="Pipeline template" title={`Edit ${stage.name}`}

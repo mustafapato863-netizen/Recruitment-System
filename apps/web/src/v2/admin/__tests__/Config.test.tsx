@@ -29,7 +29,7 @@ let paths: Record<string, unknown> = {};
 const serve = (extra: Record<string, unknown> = {}) => {
   paths = {
     '/pipeline-templates': [tpl], '/pipeline-templates/t1': { ...tpl, stages }, '/email-templates': email, '/whatsapp-templates': wa,
-    '/master-data/catalog/skills': [v('k1', 'SQL'), v('k2', 'Laravel'), v('k3', 'COBOL', 'Inactive')],
+    '/master-data/catalog/skills': [v('k1', 'SQL'), v('k2', 'Laravel'), v('k3', 'COBOL', 'Archived')],
     '/master-data/catalog/departments': [v('d1', 'IT — HR Systems')],
     '/master-data/catalog/rejection-reasons': [v('r1', 'Skills gap (write the evidence)'), v('r2', 'Terms not aligned')],
     '/master-data/catalog/hold-reasons': [v('h1', 'Hiring manager on leave')], '/master-data/catalog/close-reasons': [v('c1', 'Filled')],
@@ -158,6 +158,39 @@ describe('A06 Master data', () => {
     await u.click(screen.getByRole('button', { name: 'Deactivate Terms not aligned' }));
     await waitFor(() => expect(api.patchApi).toHaveBeenCalledWith('/master-data/catalog/rejection-reasons/r2', { status: 'Inactive' }));
     expect(api.deleteApi).not.toHaveBeenCalled();
+  });
+  it('#21 B2-21: a skill deactivates as Archived (DELETE archives it); an archived skill reactivates with PATCH Active', async () => {
+    const u = userEvent.setup();
+    api.deleteApi.mockResolvedValue({ id: 'k1', deactivated: true, status: 'Archived' });
+    renderAt('/master-data');
+    const skills = await screen.findByRole('list', { name: 'Skills' });
+    await u.click(within(skills).getByRole('button', { name: 'Deactivate SQL' }));
+    await waitFor(() => expect(api.deleteApi).toHaveBeenCalledWith('/master-data/catalog/skills/k1'));
+    expect(api.patchApi).not.toHaveBeenCalledWith('/master-data/catalog/skills/k1', expect.anything());
+    expect(await screen.findByText('“SQL” deactivated (archived).')).toBeInTheDocument();
+    await u.click(screen.getByRole('button', { name: 'Show 1 inactive' }));
+    expect(within(skills).getByText('Archived')).toBeInTheDocument();
+    await u.click(within(skills).getByRole('button', { name: 'Reactivate COBOL' }));
+    await waitFor(() => expect(api.patchApi).toHaveBeenCalledWith('/master-data/catalog/skills/k3', { status: 'Active' }));
+  });
+  it('#23: a 400 on the grade band lands on Min/Max inline', async () => {
+    const u = userEvent.setup();
+    auth.perms = ['MASTER_DATA_VIEW', 'MASTER_DATA_MANAGE'];
+    const fields = { minMonthlyBase: ['minMonthlyBase must be a positive number'] };
+    api.postApi.mockRejectedValue(new ApiError(400, 'x', { statusCode: 400, code: 'VALIDATION_ERROR', message: 'Please correct the highlighted fields.', field: 'minMonthlyBase', fields }, { code: 'VALIDATION_ERROR', fields }));
+    renderAt('/master-data');
+    const card = await screen.findByRole('region', { name: 'Grade bands' });
+    await u.click(await within(card).findByRole('button', { name: 'Add band' }));
+    const d = await screen.findByRole('dialog');
+    await waitFor(() => expect(within(d).getAllByRole('option').length).toBeGreaterThan(2));
+    const grade = within(d).getByLabelText(/^Grade/); const site = within(d).getByLabelText(/^Site/);
+    await u.selectOptions(grade, within(grade).getAllByRole('option')[1]);
+    await u.selectOptions(site, within(site).getAllByRole('option')[1]);
+    await u.type(within(d).getByLabelText(/^Min monthly/), '100');
+    await u.type(within(d).getByLabelText(/^Max monthly/), '200');
+    await u.click(within(d).getByRole('button', { name: 'Add band' }));
+    expect(await within(d).findByText('minMonthlyBase must be a positive number')).toBeInTheDocument();
+    expect(within(d).queryByText('Please correct the highlighted fields.')).toBeNull();
   });
   it('grade bands: an Admin with MASTER_DATA_MANAGE is told amounts come once the server returns them', async () => {
     auth.perms = ['MASTER_DATA_VIEW', 'MASTER_DATA_MANAGE'];

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { CircleCheck, CircleMinus, Info, Plus, RotateCw, Undo2 } from 'lucide-react';
 import { ButtonV2, DrawerV2, InputV2, SelectV2, SkeletonV2, StatusChip } from '../../components/v2';
+import { toFormErrs } from './formErrors';
 import {
-  CATALOGS, addValue, canSeeBandAmounts, createBand, fetchBands, fetchCatalog, fetchOptions, setValueStatus, updateBand,
+  CATALOGS, addValue, canSeeBandAmounts, deactivatedStatus, createBand, fetchBands, fetchCatalog, fetchOptions, setValueStatus, updateBand,
   type Band, type CatalogDef, type CatalogValue,
 } from './configApi';
 import { useAuth } from '../../auth/AuthContext';
@@ -33,6 +34,7 @@ function CatalogCard({ def }: { def: CatalogDef }) {
   const [attempt, setAttempt] = useState(0);
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState('');
+  const [nameErr, setNameErr] = useState<string | undefined>();
   const [msg, setMsg] = useState<{ tone: 'error' | 'success'; text: string } | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
@@ -47,12 +49,16 @@ function CatalogCard({ def }: { def: CatalogDef }) {
     if (rows?.some((r) => r.name.toLowerCase() === n.toLowerCase())) return setMsg({ tone: 'error', text: `“${n}” is already on the list${rows.find((r) => r.name.toLowerCase() === n.toLowerCase())?.status !== 'Active' ? ' (inactive — reactivate it)' : ''}.` });
     setBusy('add');
     try { await addValue(def.category, n); setName(''); setAdding(false); setMsg({ tone: 'success', text: `“${n}” added.` }); setAttempt((x) => x + 1); }
-    catch (e) { setMsg({ tone: 'error', text: (e as { message?: string })?.message || 'Could not add.' }); } finally { setBusy(null); }
+    catch (e) {
+      const fe = toFormErrs(e, { rows: 'name', name: 'name' }, 'Could not add.');
+      setNameErr(fe.name);
+      if (fe.form) setMsg({ tone: 'error', text: fe.form });
+    } finally { setBusy(null); }
   };
   const flip = async (v: CatalogValue) => {
     const to = v.status === 'Active' ? 'Inactive' : 'Active';
     setBusy(v.id); setMsg(null);
-    try { await setValueStatus(def.category, v, to); setMsg({ tone: 'success', text: `“${v.name}” ${to === 'Inactive' ? 'deactivated' : 'reactivated'}.` }); setAttempt((x) => x + 1); }
+    try { await setValueStatus(def.category, v, to); setMsg({ tone: 'success', text: `“${v.name}” ${to === 'Inactive' ? (deactivatedStatus(def.category) === 'Archived' ? 'deactivated (archived)' : 'deactivated') : 'reactivated'}.` }); setAttempt((x) => x + 1); }
     catch (e) { setMsg({ tone: 'error', text: (e as { message?: string })?.message || 'Could not save.' }); } finally { setBusy(null); }
   };
   const inactive = rows?.filter((r) => r.status !== 'Active').length ?? 0;
@@ -70,7 +76,7 @@ function CatalogCard({ def }: { def: CatalogDef }) {
       {msg ? <p className={msg.tone === 'error' ? 'rf2-form-error rf2-admin__pad' : 'rf2-inline-note rf2-admin__pad'} role={msg.tone === 'error' ? 'alert' : 'status'} data-tone={msg.tone}>{msg.text}</p> : null}
       {adding ? (
         <div className="rf2-admin__add">
-          <InputV2 label={`New ${def.title.toLowerCase().replace(/s$/, '')}`} value={name} autoFocus onChange={(e) => { setName(e.target.value); setMsg(null); }} onKeyDown={(e) => { if (e.key === 'Enter') void add(); }} />
+          <InputV2 label={`New ${def.title.toLowerCase().replace(/s$/, '')}`} value={name} autoFocus onChange={(e) => { setName(e.target.value); setMsg(null); setNameErr(undefined); }} onKeyDown={(e) => { if (e.key === 'Enter') void add(); }} error={nameErr} />
           <ButtonV2 size="sm" loading={busy === 'add'} onClick={() => void add()}>Save</ButtonV2>
           <ButtonV2 kind="tertiary" size="sm" onClick={() => { setAdding(false); setName(''); }}>Cancel</ButtonV2>
         </div>
@@ -80,7 +86,7 @@ function CatalogCard({ def }: { def: CatalogDef }) {
           {shown.map((v) => (
             <li key={v.id} data-inactive={v.status !== 'Active' || undefined}>
               <span>{v.name}</span>
-              <StatusChip tone={v.status === 'Active' ? 'success' : 'neutral'} label={v.status === 'Active' ? 'Active' : 'Inactive'} />
+              <StatusChip tone={v.status === 'Active' ? 'success' : 'neutral'} label={v.status === 'Active' ? 'Active' : v.status === 'Archived' ? 'Archived' : 'Inactive'} />
               <ButtonV2 kind="tertiary" size="sm" icon={v.status === 'Active' ? <CircleMinus /> : <Undo2 />} loading={busy === v.id} disabled={busy !== null}
                 onClick={() => void flip(v)} aria-label={`${v.status === 'Active' ? 'Deactivate' : 'Reactivate'} ${v.name}`} />
             </li>
@@ -159,7 +165,7 @@ function BandDrawer({ band, amountsHidden, onClose, onDone }: { band: Band | nul
       if (band) await updateBand(band.id, { currency: f.currency, ...(amountsTouched ? { minMonthlyBase: min, maxMonthlyBase: max } : {}) });
       else await createBand({ gradeId: f.gradeId, branchId: f.branchId, currency: f.currency, minMonthlyBase: min, maxMonthlyBase: max });
       onDone(band ? 'Band updated.' : 'Band added.');
-    } catch (x) { setErrs({ form: (x as { message?: string })?.message || 'Could not save.' }); } finally { setBusy(null); }
+    } catch (x) { setErrs(toFormErrs(x, { gradeId: 'gradeId', branchId: 'branchId', siteId: 'branchId', currency: 'currency', minMonthlyBase: 'min', maxMonthlyBase: 'max' }, 'Could not save.')); } finally { setBusy(null); }
   };
   const flip = async () => {
     if (!band) return;
@@ -181,7 +187,7 @@ function BandDrawer({ band, amountsHidden, onClose, onDone }: { band: Band | nul
           </SelectV2>
         </div>
       ) : null}
-      <SelectV2 label="Currency" value={f.currency} onChange={(e) => setF({ ...f, currency: e.target.value })}>
+      <SelectV2 label="Currency" value={f.currency} onChange={(e) => setF({ ...f, currency: e.target.value })} error={errs.currency}>
         {[...new Set([f.currency, 'EGP', 'AED', 'SAR'])].map((c) => <option key={c} value={c}>{c}</option>)}
       </SelectV2>
       <div className="rf2-req__row">
