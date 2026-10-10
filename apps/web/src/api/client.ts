@@ -81,6 +81,9 @@ function normalizeFieldErrors(value: unknown): ErrorFieldErrors | undefined {
   return Object.keys(result).length > 0 ? result : undefined;
 }
 
+
+// #4 passes every B1 code through its error normalizer, so the client reads `code` and never matches message text.
+
 let refreshPromise: Promise<boolean> | null = null;
 
 function shouldRefreshSession(path: string): boolean {
@@ -141,7 +144,7 @@ async function handleResponseError(response: Response, path: string): Promise<ne
         : ' Please try again later.';
     } else if (code && code !== 'FORBIDDEN' && typeof problem?.message === 'string' && problem.message.trim()) {
       // Domain 403s (FILE_NOT_OWNED, NOT_JOB_OWNER, FOLLOW_UP_NOT_OWNER, …) reach the client with a specific message.
-      message = problem.message;
+      message = problem.message.trim();
     } else {
       message = 'Access denied: you do not have permission to perform this action.';
     }
@@ -218,6 +221,26 @@ export function postFormDataApi<T>(path: string, formData: FormData): Promise<T>
     method: 'POST',
     body: formData,
   });
+}
+
+/** Blob download that also returns the filename from Content-Disposition. */
+export async function downloadFileApi(path: string, fallbackName = 'download', allowRefresh = true): Promise<{ blob: Blob; filename: string }> {
+  const response = await fetch(`${API_BASE_URL}${path}`, { method: 'GET', credentials: 'include' });
+  if (response.status === 401 && allowRefresh && shouldRefreshSession(path)) {
+    if (await refreshAccessToken()) return downloadFileApi(path, fallbackName, false);
+  }
+  if (!response.ok) return handleResponseError(response, path);
+  return { blob: await response.blob(), filename: filenameFromDisposition(response.headers.get('Content-Disposition')) ?? fallbackName };
+}
+
+export function filenameFromDisposition(header: string | null): string | null {
+  if (!header) return null;
+  const star = /filename\*\s*=\s*(?:UTF-8'')?([^;]+)/i.exec(header);
+  if (star) {
+    try { return decodeURIComponent(star[1].trim().replace(/^"|"$/g, '')); } catch { /* fall through */ }
+  }
+  const plain = /filename\s*=\s*"?([^";]+)"?/i.exec(header);
+  return plain ? plain[1].trim() : null;
 }
 
 export async function downloadApi(path: string, allowRefresh = true): Promise<Blob> {
