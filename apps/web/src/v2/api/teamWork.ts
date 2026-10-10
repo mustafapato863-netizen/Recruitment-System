@@ -18,7 +18,8 @@ import { getApi, postApi } from '../../api/client';
 import { stripPay } from './paySafety';
 import { domainError } from './gates';
 import { serverFormErrors } from '../forms/serverErrors';
-import { blockingGate, cairoToday, type CardInterview, type FileGate } from './jobs';
+import { blockingGate, cairoToday, isRedactedJob, type CardInterview, type FileGate, type JobDetail, type JobStatus, type JobWorkQueueItem, type RedactedJob } from './jobs';
+import { fetchAllPages } from './paged';
 import { fetchPeople, type Person } from './requisitions';
 import { fetchMyWorkApi, type WorkItem } from './myWork';
 
@@ -188,3 +189,25 @@ export function reassignError(e: unknown): { field?: 'to' | 'reason' | 'what'; t
 }
 
 export const fileHref = (id: string) => `/applications/${enc(id)}`;
+
+/**
+ * B2F-6: the jobs your reports own, so the owner's manager can hold or close them from Team work
+ * (#23 B2R-1: owner or owner's manager; hold/close reasons from master data; "Other" needs a note).
+ * Source: GET /vacancies/work-queue (paged ≤ 100), which shows an HM their reports' jobs unredacted.
+ */
+export interface TeamJob { id: string; code: string; title: string; site: string | null; status: JobStatus; ownerId: string; ownerName: string | null; holdUntil: string | null; filled: number; target: number }
+const OPEN_JOB: ReadonlySet<string> = new Set(['Open', 'Partially Filled', 'On Hold']);
+export async function fetchTeamJobs(reportIds: ReadonlySet<string>): Promise<TeamJob[]> {
+  const rows = stripPay(await fetchAllPages<JobWorkQueueItem | RedactedJob>('/vacancies/work-queue'));
+  const out: TeamJob[] = [];
+  for (const r of rows) {
+    if (isRedactedJob(r) || !r.owner?.id || !reportIds.has(r.owner.id) || !OPEN_JOB.has(r.status)) continue;
+    out.push({ id: r.id, code: r.code, title: r.title, site: r.branch?.name ?? null, status: r.status, ownerId: r.owner.id, ownerName: r.owner.displayName ?? null, holdUntil: r.holdUntil ?? null, filled: r.headcount?.joined ?? 0, target: r.headcount?.approved ?? 0 });
+  }
+  return out.sort((a, b) => a.title.localeCompare(b.title));
+}
+/** The JobDetail subset JobStatusDrawer reads. */
+export const teamJobDetail = (j: TeamJob): JobDetail => ({
+  id: j.id, vacancyCode: j.code, status: j.status, title: j.title, branch: j.site ? { id: '', name: j.site } : null,
+  approvedHeadcount: j.target, joinedHeadcount: j.filled, targetStartDate: null, holdUntil: j.holdUntil,
+});

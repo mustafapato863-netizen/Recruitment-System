@@ -39,3 +39,17 @@ describe('#23 B2-15/B2-7: 400 field + fields land inline', () => {
     expect(bannerError(serverFormErrors(new Error('offline')), ['x'])).toBe('offline');
   });
 });
+
+describe('B2F-3 /my-interviews in the v2 shell', () => {
+  it('stays for interviewers on Employee/Manager seats, goes home otherwise; nav shows it only to interviewers', async () => {
+    const { v2Redirect } = await import('../destinations');
+    const { permittedNavItems } = await import('../../components/v2/shell/navConfig');
+    expect(v2Redirect('employee', '/my-interviews', { interviews: true })).toBeNull();
+    expect(v2Redirect('manager', '/my-interviews', { interviews: true })).toBeNull();
+    expect(v2Redirect('employee', '/my-interviews', { interviews: false })).toBe('/my-work');
+    expect(v2Redirect('admin', '/my-interviews', { interviews: true })).toBe('/users');
+    const keys = (i: boolean) => permittedNavItems('employee', ['VACANCY_VIEW', 'CANDIDATE_VIEW'], false, false, i).map((x) => x.key);
+    expect(keys(true)).toContain('my-interviews');
+    expect(keys(false)).not.toContain('my-interviews');
+  });
+});

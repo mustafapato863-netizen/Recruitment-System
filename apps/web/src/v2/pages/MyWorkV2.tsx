@@ -9,7 +9,8 @@ import { EmptyStateV2, ForbiddenStateV2, SkeletonV2 } from '../../components/v2/
 import { TaskRow, TaskSection } from '../../components/v2/Task';
 import '../../components/v2/v2-primitives.css';
 import './my-work.css';
-import { fileActionHref, getMyWork, waitingOnName, type MyWorkAction, type MyWorkDay, type MyWorkResult, type MyWorkTarget, type WorkItem, type WorkItemType } from '../api/myWork';
+import { canUseMyInterviews } from '../../auth/interviewer';
+import { fileActionHref, type HrefContext, getMyWork, waitingOnName, type MyWorkAction, type MyWorkDay, type MyWorkResult, type MyWorkTarget, type WorkItem, type WorkItemType } from '../api/myWork';
 
 type LoadState =
   | { kind: 'loading' }
@@ -77,14 +78,14 @@ function DisabledAction({ action }: { action: MyWorkAction }) {
 }
 
 /** #9 actions[]: enabled → link to the page; disabled → disabled button with the reason as tooltip + aria-describedby. */
-function ItemActions({ item, bucket, primary }: { item: WorkItem; bucket: Bucket; primary: boolean }) {
+function ItemActions({ item, bucket, primary, ctx }: { item: WorkItem; bucket: Bucket; primary: boolean; ctx: HrefContext }) {
   const actions = item.actions.length ? item.actions : [{ key: item.nextAction.code, label: item.nextAction.label, disabled: false }];
   let usedPrimary = false;
   return (
     <span className="rf2-mywork__actions">
       {actions.map((action) => {
         if (action.disabled) return <DisabledAction key={action.key} action={action} />;
-        const href = fileActionHref(item, action);
+        const href = fileActionHref(item, action, ctx);
         if (!href) return null; // no page for this entity: no dead link
         // One primary per page (VI): the first enabled action of the first Today item.
         const kind = primary && !usedPrimary ? 'primary' : bucket === 'waitingOnOthers' ? 'tertiary' : 'secondary';
@@ -150,6 +151,7 @@ function greeting(): string {
 
 export function MyWorkV2({ load = getMyWork }: { load?: typeof getMyWork } = {}) {
   const { user } = useAuth();
+  const hrefCtx: HrefContext = { meId: user?.id, canOpenFile: (user?.permissions ?? []).includes('APPLICATION_VIEW'), interviewer: canUseMyInterviews(user) };
   const [params, setParams] = useSearchParams();
   const day: MyWorkDay = params.get('day') === 'tomorrow' ? 'tomorrow' : 'today';
   const setDay = (next: MyWorkDay) => setParams((prev) => {
@@ -272,7 +274,7 @@ export function MyWorkV2({ load = getMyWork }: { load?: typeof getMyWork } = {})
                         dueTone={key === 'overdue' ? 'danger' : 'default'}
                         action={key === 'waitingOnOthers' && readOnly(item)
                           ? <span className="rf2-mywork__readonly">Read-only</span>
-                          : <ItemActions item={item} bucket={key} primary={key === 'dueToday' && index === 0} />}
+                          : <ItemActions item={item} bucket={key} primary={key === 'dueToday' && index === 0} ctx={hrefCtx} />}
                       />
                     );
                   })}

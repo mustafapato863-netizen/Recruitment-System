@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react';
-import { Briefcase, CircleCheck, Clock, Info, Play, Save, Send, Target } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Briefcase, CircleCheck, Clock, Info, Play, Save, Target } from 'lucide-react';
 import { ButtonV2, DangerConfirmButton, DrawerV2, InputV2, SelectV2, StatusChip, TextareaV2 } from '../../components/v2';
+import { jobReasons, OTHER_REASON } from '../api/jobs';
 import {
   activateRequisition, canActivateDraft, cancelRequisition, createRequisition, deptOf, draftActivateRefused, dueOf, formatDue, isEditable, reqError, STATUS_LABEL, STATUS_TONE,
-  submitRequisition, TARGET_UPDATE_LIVE, titleOf, updateRequisition, updateTarget, type Grade, type Person, type ReqContext, type ReqFields, type Requisition,
+  TARGET_UPDATE_LIVE, titleOf, updateRequisition, updateTarget, type Grade, type Person, type ReqContext, type ReqFields, type Requisition,
 } from '../api/requisitions';
 
 type Errs = Partial<Record<'positionId' | 'branchId' | 'seats' | 'dueDate' | 'assignee' | 'grade' | 'reason' | 'notes' | 'departmentId' | 'form', string>>;
@@ -40,7 +41,7 @@ function PersonSelect({ people, value, onChange, error, disabled, label = 'Prima
   );
 }
 
-/** M03 Requisition: create / edit a draft, submit, activate, cancel. One primary per state. */
+/** M03 Requisition: create / edit a draft, activate (needs a due date), cancel with a close reason. No approval step (B2F-5, Figma M03). */
 export function RequisitionDrawer({ req, ctx, people, grades, canActivate, meId, onClose, onDone }: ReqDrawerProps) {
   const editable = !req || isEditable(req.status);
   const [f, setF] = useState({
@@ -51,6 +52,11 @@ export function RequisitionDrawer({ req, ctx, people, grades, canActivate, meId,
   const [busy, setBusy] = useState<null | 'save' | 'submit' | 'activate' | 'cancel'>(null);
   const [errs, setErrs] = useState<Errs>({});
   const [reason, setReason] = useState('');
+  const [cancelNote, setCancelNote] = useState('');
+  // B2F-6: cancelling uses the close-reasons list ("Other" + note), like closing a job.
+  const [closeReasons, setCloseReasons] = useState<string[] | null>(null);
+  useEffect(() => { let live = true; jobReasons('close').then((r) => live && setCloseReasons(r.length ? r : null)).catch(() => live && setCloseReasons(null)); return () => { live = false; }; }, []);
+  const cancelOther = !!closeReasons && reason === OTHER_REASON;
   const set = (k: keyof typeof f) => (v: string) => { setF((x) => ({ ...x, [k]: v })); setErrs((e) => ({ ...e, [k === 'seats' ? 'seats' : k === 'assignee' ? 'assignee' : k === 'gradeId' ? 'grade' : k]: undefined, form: undefined })); };
   const title = req ? titleOf(req, ctx) : ctx?.positions.find((p) => p.id === f.positionId)?.title ?? 'New requisition';
   const departments = ctx?.departments;
@@ -68,13 +74,12 @@ export function RequisitionDrawer({ req, ctx, people, grades, canActivate, meId,
     return { ...(departments ? { departmentId: f.departmentId || null } : {}), positionId: f.positionId, branchId: f.branchId, requestedHeadcount: seats, dueDate: f.dueDate, gradeId: f.gradeId || null, assignedEmployeeId: f.assignee || null, justification: f.notes.trim() || null };
   };
   const fail = (e: unknown) => setErrs(toErrs(reqError(e)));
-  const save = async (then?: 'submit') => {
+  const save = async () => {
     const body = fields(); if (!body) return;
-    setBusy(then ?? 'save');
+    setBusy('save');
     try {
-      const saved = req ? await updateRequisition(req.id, body) : await createRequisition(body);
-      if (then === 'submit') { await submitRequisition(saved?.id ?? req!.id); onDone(`${title} sent for approval. Activate it once it is approved.`); }
-      else onDone(`${title} saved as a draft.`);
+      if (req) await updateRequisition(req.id, body); else await createRequisition(body);
+      onDone(`${title} saved as a draft.`);
     } catch (e) { fail(e); } finally { setBusy(null); }
   };
   const activate = async () => {
@@ -90,7 +95,7 @@ export function RequisitionDrawer({ req, ctx, people, grades, canActivate, meId,
         const who = people?.find((p) => p.id === f.assignee)?.name ?? 'the owner';
         onDone(`Job active — ${title} is now in ${who}’s Open jobs.`);
       } catch (e) {
-        if (draftActivateRefused(e)) setErrs({ form: `Activating a draft directly is not live yet${id ? ' — your changes are saved' : ''}. Submit it for approval for now, then activate once it is approved.` });
+        if (draftActivateRefused(e)) setErrs({ form: `This requisition could not be activated${id ? ' — your changes are saved as a draft' : ''}. ${(e as { message?: string })?.message ?? ''}`.trim() });
         else fail(e);
       } finally { setBusy(null); }
       return;
@@ -106,10 +111,13 @@ export function RequisitionDrawer({ req, ctx, people, grades, canActivate, meId,
   };
   const cancel = async () => {
     if (!req) return;
-    if (reason.trim().length < 3) { setErrs({ reason: 'A reason is required (at least 3 characters).' }); return; }
+    if (closeReasons && !reason) { setErrs({ reason: 'Pick a close reason.' }); return; }
+    if (cancelOther && cancelNote.trim().length < 3) { setErrs({ reason: '"Other" needs a short note (at least 3 characters).' }); return; }
+    if (!closeReasons && reason.trim().length < 3) { setErrs({ reason: 'A reason is required (at least 3 characters).' }); return; }
     setBusy('cancel');
     try {
-      const r = await cancelRequisition(req.id, reason.trim());
+      // The cancel endpoint stores free text; a list value goes as is, "Other" as "Other: <note>" (the server's own format).
+      const r = await cancelRequisition(req.id, cancelOther ? `${OTHER_REASON}: ${cancelNote.trim()}` : reason.trim());
       onDone(`${req.requestCode} cancelled.${r?.closedJob ? ` Its job was closed${r.rejectedApplications ? ` and ${r.rejectedApplications} open file${r.rejectedApplications === 1 ? '' : 's'} rejected` : ''}.` : ''}`);
     } catch (e) { fail(e); } finally { setBusy(null); }
   };
@@ -119,12 +127,10 @@ export function RequisitionDrawer({ req, ctx, people, grades, canActivate, meId,
   const ro = !editable;
   const canCancel = !!req && status !== 'Cancelled' && status !== 'Rejected';
   // CoS: a Manager's own Draft activates directly once it has a due date (Backend adding it; refusal handled above).
-  const draftActivate = canActivateDraft(req, meId, f.dueDate || null);
-  const ownDraft = status === 'Draft' && (!req || req.requesterId === meId);
-  const primary = ownDraft && f.dueDate
-    ? <ButtonV2 icon={<Play />} loading={busy === 'activate'} disabled={!!busy} onClick={() => void activate()}>Activate job</ButtonV2>
-    : editable
-    ? <ButtonV2 icon={<Send />} loading={busy === 'submit'} disabled={!!busy || !f.dueDate} onClick={() => void save('submit')}>Submit for approval</ButtonV2>
+  // B2F-5 (Figma M03): Draft → Activate job (needs a due date). There is no approval or pending state.
+  const draftActivate = editable && canActivateDraft(req, meId, f.dueDate || null);
+  const primary = editable
+    ? <ButtonV2 icon={<Play />} loading={busy === 'activate'} disabled={!!busy || !f.dueDate} onClick={() => void activate()} aria-describedby={!f.dueDate ? 'req-due-why' : undefined}>Activate job</ButtonV2>
     : approved && canActivate
       ? <ButtonV2 icon={<Play />} loading={busy === 'activate'} disabled={!!busy} onClick={() => void activate()}>Activate job</ButtonV2>
       : <ButtonV2 onClick={onClose}>Close</ButtonV2>;
@@ -174,19 +180,26 @@ export function RequisitionDrawer({ req, ctx, people, grades, canActivate, meId,
         <section className="rf2-req__status" aria-labelledby="req-status-h">
           <div className="rf2-row-between"><h3 id="req-status-h" className="rf2-field__label">Status</h3><StatusChip tone={STATUS_TONE[status]} label={STATUS_LABEL[status]} /></div>
           <p className="rf2-jtable__sub">{
-            ownDraft ? (f.dueDate ? 'Activate job creates the job, assigns the owner and shows it in their Open jobs — one step. Or submit it for approval first.' : 'Add a due date to activate it directly, or submit it for approval.')
-            : editable ? 'Submit sends it for approval. Once approved, Activate job creates the job, assigns the owner and shows it in their Open jobs — one step, no pending state.'
+            editable ? (f.dueDate ? 'Activate job creates the job, assigns the owner and shows it in their Open jobs — one step, no pending state.' : 'Add a due date to activate it.')
             : status === 'Pending Approval' ? 'Waiting on approval. Activate job is available once it is approved.'
             : approved ? (canActivate ? 'Approved. Activate job creates the job and assigns the owner in one step.' : 'Approved. Activating needs job management access.')
             : status === 'Converted to Vacancy' ? `Job active${req?.activatedAt ? ` since ${formatDue(req.activatedAt)}` : ''}.`
             : status === 'Cancelled' ? `Cancelled${req?.cancelReason ? `: ${req.cancelReason}` : ''}. Nothing is deleted.`
             : 'Rejected by the approver.'
           }</p>
-          {ownDraft && f.dueDate ? <ButtonV2 kind="secondary" size="sm" icon={<Send />} loading={busy === 'submit'} disabled={!!busy} onClick={() => void save('submit')}>Submit for approval</ButtonV2> : null}
           {canCancel ? (
             <div className="rf2-req__cancel">
-              <TextareaV2 label="Reason to cancel" rows={2} value={reason} onChange={(e) => { setReason(e.target.value); setErrs((x) => ({ ...x, reason: undefined })); }} error={errs.reason}
-                hint={status === 'Converted to Vacancy' ? 'Cancelling closes the live job and rejects its open files ("Requisition cancelled").' : 'Status becomes Cancelled. Nothing is deleted.'} />
+              {closeReasons ? (
+                <SelectV2 label="Reason to cancel" value={reason} onChange={(e) => { setReason(e.target.value); setErrs((x) => ({ ...x, reason: undefined })); }} error={cancelOther ? undefined : errs.reason}
+                  hint={status === 'Converted to Vacancy' ? 'From the Close reasons list. Cancelling closes the live job and rejects its open files ("Requisition cancelled").' : 'From the Close reasons list. Status becomes Cancelled. Nothing is deleted.'}>
+                  <option value="">Choose a reason</option>
+                  {closeReasons.map((r) => <option key={r} value={r}>{r}</option>)}
+                </SelectV2>
+              ) : (
+                <TextareaV2 label="Reason to cancel" rows={2} value={reason} onChange={(e) => { setReason(e.target.value); setErrs((x) => ({ ...x, reason: undefined })); }} error={errs.reason}
+                  hint={status === 'Converted to Vacancy' ? 'Cancelling closes the live job and rejects its open files ("Requisition cancelled").' : 'Status becomes Cancelled. Nothing is deleted.'} />
+              )}
+              {cancelOther ? <TextareaV2 label="Say why" rows={2} value={cancelNote} onChange={(e) => { setCancelNote(e.target.value); setErrs((x) => ({ ...x, reason: undefined })); }} error={errs.reason} /> : null}
               <DangerConfirmButton size="sm" confirmLabel="Confirm cancel — final" loading={busy === 'cancel'} disabled={!!busy} onConfirm={() => void cancel()}>Cancel requisition</DangerConfirmButton>
             </div>
           ) : null}
