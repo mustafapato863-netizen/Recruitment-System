@@ -6,10 +6,11 @@
  * TenantScopedGuard, AccessControlService and services can all share it
  * without extra Nest providers.
  *
- * - Oversight users (ADMINISTRATOR or VACANCY_MANAGE holders) keep their
- *   existing scope-based visibility; B0b will narrow this once seats exist.
- * - Everyone else sees a file only when they own it, work it, own its job,
- *   requested its job, or manage (directly) its owner.
+ * - Oversight = ADMINISTRATOR only (B2-8): admins keep scope-based visibility.
+ *   VACANCY_MANAGE no longer grants every team's files, jobs or pay.
+ * - Everyone else (Managers included) sees a file only when they own it, work it,
+ *   own its job, requested its job, or the owner is in their reporting tree
+ *   (direct reports, and their reports, up to MANAGER_TREE_DEPTH levels).
  * - Interviewers on a specific interview get only that candidate's CV and
  *   their own scorecard, plus RSVP and the .ics file (@AllowInterviewAttendee).
  * - Offer / final-hire approvers read only the files they are currently
@@ -20,8 +21,18 @@ import type { Prisma } from '@recruitflow/database';
 import type { PrismaService } from '../../database/prisma.service';
 
 export const ADMIN_ROLE_CODE = 'ADMINISTRATOR';
-/** Permissions that grant oversight (full, scope-based) access to files and jobs. */
-export const OVERSIGHT_PERMISSIONS = ['VACANCY_MANAGE'];
+/** B2-8: no permission grants oversight any more (was VACANCY_MANAGE); only the Administrator role does. */
+export const OVERSIGHT_PERMISSIONS: string[] = [];
+/** How deep a manager's reporting tree reaches (direct reports = 1). */
+export const MANAGER_TREE_DEPTH = 4;
+
+/** Users whose manager chain (up to MANAGER_TREE_DEPTH hops) reaches `managerId`. */
+export function inReportingTreeOf(managerId: string): Prisma.UserWhereInput {
+  const levels: Prisma.UserWhereInput[] = [];
+  let cond: Prisma.UserWhereInput = { managerId };
+  for (let i = 0; i < MANAGER_TREE_DEPTH; i += 1) { levels.push(cond); cond = { manager: cond }; }
+  return { OR: levels };
+}
 
 export interface AccessProfile {
   userId: string;
@@ -68,7 +79,7 @@ export function vacancyFullAccessWhere(userId: string): Prisma.VacancyWhereInput
       { primaryRecruiterId: userId },
       { assignments: { some: { userId, isActive: true } } },
       { vacancyRequest: { requesterId: userId } },
-      { primaryRecruiter: { managerId: userId } },
+      { primaryRecruiter: inReportingTreeOf(userId) },
     ],
   };
 }
@@ -79,8 +90,8 @@ export function applicationOwnershipWhere(userId: string): Prisma.ApplicationWhe
     OR: [
       { primaryRecruiterId: userId },
       { taskOwnerId: userId },
-      { primaryRecruiter: { managerId: userId } },
-      { taskOwner: { managerId: userId } },
+      { primaryRecruiter: inReportingTreeOf(userId) },
+      { taskOwner: inReportingTreeOf(userId) },
       { vacancy: vacancyFullAccessWhere(userId) },
     ],
   };
