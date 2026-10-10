@@ -76,7 +76,11 @@ describe.skipIf(!url)('B7 grade bands, offer pay, manager decision, reassign (sc
     const salaryRole = await prisma.role.create({ data: { code: `B7_SAL_${tag}`.toUpperCase(), name: `B7 salary ${tag}`, organizationId: ORG, permissions: { create: [{ permission: { connect: { code: 'VIEW_CURRENT_SALARY' } } }, { permission: { connect: { code: 'APPLICATION_VIEW' } } }] } } as never });
     await prisma.userRole.create({ data: { userId: u.salaryOnly!, roleId: salaryRole.id } });
     gradeId = (await prisma.masterDataValue.create({ data: { organizationId: ORG, category: 'grades', name: `B7 Grade ${tag}`, status: 'Active' } })).id;
-    const jobs = await prisma.vacancy.findMany({ where: { organizationId: ORG }, orderBy: { createdAt: 'asc' }, take: 2, include: { vacancyRequest: true } });
+    // Isolated (#15 flaky band test): private job + requisition copies, so no parallel suite re-grades or re-owns them.
+    const { privateVacancy } = await import('../../common/testing/private-vacancy');
+    const privIds = [await privateVacancy(prisma, ORG, 'B7A'), await privateVacancy(prisma, ORG, 'B7B')];
+    const jobs = await prisma.vacancy.findMany({ where: { id: { in: privIds } }, include: { vacancyRequest: true } });
+    jobs.sort((a, b) => privIds.indexOf(a.id) - privIds.indexOf(b.id));
     jobId = jobs[0]!.id; ungradedJobId = jobs[1]!.id; branchId = jobs[0]!.branchId;
     await prisma.vacancyRequest.update({ where: { id: jobs[0]!.vacancyRequestId }, data: { gradeId } });
     await prisma.vacancyRequest.update({ where: { id: jobs[1]!.vacancyRequestId }, data: { gradeId: null } });

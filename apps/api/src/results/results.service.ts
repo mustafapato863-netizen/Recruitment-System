@@ -53,11 +53,14 @@ export class ResultsService {
     // Jobs in the caller's scope. With B1 (#4) under this branch, other owners' jobs are in scope (just redacted),
     // so use B1's scope predicate; without B1, the visibility predicate is the scope. Files keep their own visibility.
     const access = this.access as AccessControlService & { getVacancyScopeWhere?: (u: AuthUser) => Promise<Prisma.VacancyWhereInput> };
-    const jobScope = access.getVacancyScopeWhere ? await access.getVacancyScopeWhere(user) : await this.access.getVacancyVisibilityWhere(user);
+    // B2-11: for non-admins the job scope is ownership + reporting tree (getVacancyVisibilityWhere, B2-8), not the
+    // role's data scope, which hid a Manager's reports' jobs and zeroed Team results.
+    const jobScope = isAdmin && access.getVacancyScopeWhere ? await access.getVacancyScopeWhere(user) : await this.access.getVacancyVisibilityWhere(user);
     const jobFilter: Prisma.VacancyWhereInput[] = [jobScope, { organizationId: org }];
     if (query.vacancyId) jobFilter.push({ id: query.vacancyId });
     const fileWhere = (extra: Prisma.ApplicationWhereInput): Prisma.ApplicationWhereInput => ({
-      AND: [appScope, { organizationId: org }, ...(query.vacancyId ? [{ vacancyId: query.vacancyId }] : []), { vacancy: { AND: jobFilter } }, extra],
+      // B2-11: non-admin file scope is appScope (ownership + tree); a file the person owns on another owner's job still counts.
+      AND: [appScope, { organizationId: org }, ...(query.vacancyId ? [{ vacancyId: query.vacancyId }] : []), ...(isAdmin ? [{ vacancy: { AND: jobFilter } }] : []), extra],
     });
 
     const { from, to } = range;

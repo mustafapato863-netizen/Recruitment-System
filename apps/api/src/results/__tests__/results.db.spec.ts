@@ -114,4 +114,26 @@ describe.skipIf(!url)('B8 /results (scratch Postgres)', () => {
     await expect(run(auth(u.r1, ['RECRUITER']), 'me', { managerId: u.mgr })).rejects.toMatchObject({ status: 400 });
     await expect(svc.results(auth(u.r1, ['RECRUITER']), 'me', { month: '2026-9' }, NOW)).rejects.toMatchObject({ status: 400 });
   });
+
+  it('B2-11: a Hiring Manager (narrow role scope) gets the sum of his reports, not zeros', async () => {
+    const { privateVacancy } = await import('../../common/testing/private-vacancy');
+    const hmRole = await prisma.role.findFirstOrThrow({ where: { code: 'HIRING_MANAGER' } });
+    const rec = await prisma.role.findFirstOrThrow({ where: { code: 'RECRUITER' } });
+    const hm = randomUUID(); const rep = randomUUID();
+    await prisma.user.create({ data: { id: hm, organizationId: ORG, email: `r8-hm-${tag}@t.test`, emailNormalized: `r8-hm-${tag}@t.test`, displayName: 'R8 hm', passwordHash: 'x', userRoles: { create: { roleId: hmRole.id } } } });
+    await prisma.user.create({ data: { id: rep, organizationId: ORG, email: `r8-rep-${tag}@t.test`, emailNormalized: `r8-rep-${tag}@t.test`, displayName: 'R8 rep', passwordHash: 'x', managerId: hm, userRoles: { create: { roleId: rec.id } } } });
+    const vac = await privateVacancy(prisma, ORG, 'R8HM');
+    await prisma.$transaction([
+      prisma.vacancy.update({ where: { id: vac }, data: { approvedHeadcount: 2, status: 'Open', openedAt: null, ...(HAS_VACANCY_OWNER ? { primaryRecruiterId: rep } : {}) } as never }),
+      prisma.vacancyAssignment.create({ data: { vacancyId: vac, userId: rep, roleCode: 'RECRUITER', assignmentKind: 'PRIMARY', isActive: true } }),
+    ]);
+    const cand = (await prisma.candidate.create({ data: { organizationId: ORG, candidateCode: `R8-${tag}-hm`, firstName: 'R8', lastName: 'HM' } })).id;
+    const app = await prisma.application.create({ data: { organizationId: ORG, applicationCode: `R8-${tag}-hm`, vacancyId: vac, candidateId: cand, stage: 'Joined', primaryRecruiterId: rep } as never });
+    await prisma.applicationStatusHistory.create({ data: { applicationId: app.id, fromStage: 'Pre-Hire', toStage: 'Joined', createdAt: SEPT(25) } as never });
+    const me = await run(auth(rep, ['RECRUITER']), 'me');
+    const team = await run(auth(hm, ['HIRING_MANAGER']), 'team');
+    expect(me.tiles.seats).toMatchObject({ value: 1, of: 2 });
+    expect(team.tiles.seats).toMatchObject({ value: 1, of: 2 });
+    expect(team.rows![0]!.tiles).toEqual(me.tiles);
+  });
 });

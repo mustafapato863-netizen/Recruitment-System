@@ -318,7 +318,8 @@ export class CandidatesService {
     const existing = await this.findExistingByContact(organizationId, email, phone);
 
     if (existing) {
-      throw new ConflictException('A candidate with the same email or phone already exists in your organization.');
+      // B2-12: say who it is (id + code only, no contact details) so the client can link that person instead.
+      throw new ConflictException({ code: 'CANDIDATE_EXISTS', message: 'A candidate with the same email or phone already exists in your organization. Link that person instead.', details: { candidateId: existing.id, candidateCode: existing.candidateCode } });
     }
 
     const candidateCode = await this.nextCandidateCode();

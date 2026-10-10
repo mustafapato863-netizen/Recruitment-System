@@ -47,18 +47,17 @@ export class OfferDecisionService {
   async decide(user: AuthUser, offerId: string, versionId: string, input: { decision: ManagerDecision; reason?: string | null; basePay?: number; allowances?: Array<{ name: string; amount: number; frequency?: string }>; currency?: string }) {
     const sendsPay = input.basePay !== undefined || (input.allowances?.length ?? 0) > 0 || input.currency !== undefined;
     if (sendsPay) {
-      if (input.decision !== 'Approve') throw new BadRequestException({ code: 'VALIDATION_FAILED', message: 'Pay can only be sent with Approve.' });
+      if (input.decision !== 'Approve') throw new BadRequestException({ code: 'VALIDATION_ERROR', field: 'basePay', fields: { basePay: ['Pay can only be sent with Approve.'] }, message: 'Pay can only be sent with Approve.' });
       if (!(await this.permissions.hasPermission(user.userId, user.organizationId, 'OFFER_PAY_VIEW'))) {
         throw new ForbiddenException({ code: 'OFFER_PAY_VIEW_REQUIRED', message: 'Sending offer pay needs the OFFER_PAY_VIEW permission.' });
       }
-      if (input.basePay === undefined || !input.currency || !/^[A-Za-z]{3}$/.test(input.currency)) {
-        throw new BadRequestException({ code: 'VALIDATION_FAILED', message: 'basePay and a 3-letter currency are required when sending pay.' });
-      }
+      if (input.basePay === undefined) throw new BadRequestException({ code: 'VALIDATION_ERROR', field: 'basePay', fields: { basePay: ['basePay is required when sending pay.'] }, message: 'basePay is required when sending pay.' });
+      if (!input.currency || !/^[A-Za-z]{3}$/.test(input.currency)) throw new BadRequestException({ code: 'VALIDATION_ERROR', field: 'currency', fields: { currency: ['A 3-letter currency is required when sending pay.'] }, message: 'A 3-letter currency is required when sending pay.' });
     }
-    if (!(input.decision in DECISION_OUTCOME)) throw new BadRequestException({ code: 'DECISION_INVALID', message: 'decision must be Approve, Reject or RequestChanges.' });
+    if (!(input.decision in DECISION_OUTCOME)) throw new BadRequestException({ code: 'DECISION_INVALID', field: 'decision', message: 'decision must be Approve, Reject or RequestChanges.' });
     const reason = input.reason?.trim() || null;
     if (input.decision !== 'Approve' && !reason) {
-      throw new BadRequestException({ code: 'DECISION_REASON_REQUIRED', message: 'A reason is required to reject or request changes.' });
+      throw new BadRequestException({ code: 'DECISION_REASON_REQUIRED', field: 'reason', message: 'A reason is required to reject or request changes.' });
     }
     const version = await this.prisma.offerVersion.findFirst({
       where: { id: versionId, offerId, offer: { organizationId: user.organizationId } },

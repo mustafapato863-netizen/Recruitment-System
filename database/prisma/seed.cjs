@@ -44,7 +44,7 @@ async function resyncCodeSequences() {
 const REASON_LISTS = {
   'hold-reasons': [['BUDGET_REVIEW', 'Budget review'], ['HIRING_FREEZE', 'Hiring freeze'], ['ROLE_UNDER_REVIEW', 'Role under review'], ['AWAITING_INTERNAL_CANDIDATE', 'Awaiting internal candidate'], ['OTHER', 'Other']],
   'close-reasons': [['POSITION_NO_LONGER_NEEDED', 'Position no longer needed'], ['BUDGET_WITHDRAWN', 'Budget withdrawn'], ['FILLED_INTERNALLY', 'Filled internally'], ['OTHER', 'Other']],
-  'rejection-reasons': [['REQ_CANCELLED', 'Requisition cancelled'], ['DECLINED_OFFER', 'Declined offer'], ['WITHDRAWN_BY_CANDIDATE', 'Withdrawn by candidate'], ['NOT_QUALIFIED', 'Not qualified'], ['FAILED_SCREENING', 'Did not pass screening'], ['FAILED_INTERVIEW', 'Did not pass interview'], ['NO_RESPONSE', 'No response from candidate'], ['POSITION_FILLED', 'Position filled']],
+  'rejection-reasons': [['REQ_CANCELLED', 'Requisition cancelled'], ['DECLINED_OFFER', 'Declined offer'], ['WITHDRAWN_BY_CANDIDATE', 'Withdrawn by candidate'], ['NOT_QUALIFIED', 'Not qualified'], ['FAILED_SCREENING', 'Did not pass screening'], ['FAILED_INTERVIEW', 'Did not pass interview'], ['NO_RESPONSE', 'No response from candidate'], ['POSITION_FILLED', 'Position filled'], ['OTHER', 'Other']],
   'reassign-reasons': [['WORKLOAD_BALANCING', 'Workload balancing'], ['OWNER_ON_LEAVE', 'Owner on leave'], ['OWNER_LEAVING', 'Owner leaving'], ['SPECIALIST_NEEDED', 'Specialist needed'], ['OTHER', 'Other']],
 };
 /** B5 seeding path (inside the org transaction); same single list as seedReasonLists. */
@@ -430,7 +430,7 @@ async function main() {
         'NOTIFICATION_VIEW', 'TASK_VIEW', 'TASK_UPDATE_STATUS',
       ],
       RECRUITER: [
-        'VACANCY_REQUEST_VIEW', 'VACANCY_REQUEST_CREATE',
+        // B2-3: Employees (RECRUITER) do not create or list requisitions (v2 §5).
         'VACANCY_VIEW',
         'MASTER_DATA_VIEW',
         'CANDIDATE_VIEW', 'CANDIDATE_CREATE', 'CANDIDATE_EDIT',

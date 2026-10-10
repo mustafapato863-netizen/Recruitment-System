@@ -88,9 +88,9 @@ describe.skipIf(!url)('B11 rules pack — Postgres', () => {
     const roles = Object.fromEntries((await prisma.role.findMany({ where: { code: { in: ['RECRUITER', 'ADMINISTRATOR', 'INTERVIEWER'] } } })).map((r) => [r.code, r.id]));
     const mk = (id: string, n: string, role: string, status = 'Active') => prisma.user.create({ data: { id, organizationId: ORG, email: `rp-${n}-${tag}@t.test`, emailNormalized: `rp-${n}-${tag}@t.test`, displayName: `RP ${n}`, passwordHash: 'x', status, emailNotifications: false, userRoles: { create: { roleId: (roles[role] ?? roles.RECRUITER)! } } } });
     await mk(u.owner, 'owner', 'RECRUITER'); await mk(u.other, 'other', 'RECRUITER'); await mk(u.interviewer, 'iv', 'INTERVIEWER'); await mk(u.admin, 'admin', 'ADMINISTRATOR'); await mk(u.inactive, 'inactive', 'RECRUITER', 'Inactive');
-    // Pick from the end of the list so parallel suites on the same DB (which pick from the start) don't collide.
-    const jobs = await prisma.vacancy.findMany({ where: { organizationId: ORG, status: 'Open' }, skip: 2, take: 2, orderBy: { vacancyCode: 'desc' } });
-    jobA = jobs[0]!.id; jobB = jobs[1]!.id;
+    // Private job copies: picking "the last Open jobs" re-owned jobs other suites (b3-lifecycle) had just activated.
+    const { privateVacancy } = await import('../../common/testing/private-vacancy');
+    jobA = await privateVacancy(prisma, ORG, 'RPA'); jobB = await privateVacancy(prisma, ORG, 'RPB');
     for (const [job, owner] of [[jobA, u.owner], [jobB, u.other]] as const) {
       // Same shape the API writes: one active PRIMARY assignment mirrored in Vacancy.primaryRecruiterId.
       await prisma.$transaction([ // atomic: other suites check the single-PRIMARY invariant concurrently

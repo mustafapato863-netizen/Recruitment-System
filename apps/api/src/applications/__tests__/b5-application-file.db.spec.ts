@@ -212,6 +212,12 @@ describe.skipIf(!url)('B5 application file: gates, scorecards, offers, interview
     expect(await resolveRejectionReason(prisma, ORG, 'Requisition cancelled')).toBe('Requisition cancelled');
     expect(await resolveRejectionReason(prisma, ORG, 'NOT_QUALIFIED')).toBe('Not qualified');
     const seeded = await prisma.masterDataValue.findMany({ where: { organizationId: ORG, category: 'rejection-reasons' } });
-    expect(seeded.map((v) => v.name)).toEqual(expect.arrayContaining(['Requisition cancelled', 'Declined offer']));
+    expect(seeded.map((v) => v.name)).toEqual(expect.arrayContaining(['Requisition cancelled', 'Declined offer', 'Other']));
+  });
+
+  it('gate 5: "Other" needs a note (400 REASON_REQUIRED, field note) and is stored as "Other: <note>"', async () => {
+    await expect(resolveRejectionReason(prisma, ORG, 'Other')).rejects.toMatchObject({ status: 400, response: { code: 'REASON_REQUIRED', field: 'note' } });
+    await expect(resolveRejectionReason(prisma, ORG, 'Other', '  ')).rejects.toMatchObject({ status: 400 });
+    expect(await resolveRejectionReason(prisma, ORG, 'other', 'Relocated abroad')).toBe('Other: Relocated abroad');
   });
 });

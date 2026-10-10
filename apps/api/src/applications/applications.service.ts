@@ -133,6 +133,9 @@ function gateActionTab(code: string): string {
   return 'Applied';
 }
 
+/** B2-4: terminal file stages nothing moves. Rejected is not here: B5's audited reopen moves it back. */
+export const CLOSED_STAGES = ['Joined'];
+
 @Injectable()
 export class ApplicationsService {
   private readonly logger = new Logger(ApplicationsService.name);
@@ -480,18 +483,10 @@ export class ApplicationsService {
     const vacancyVisibility = user
       ? await this.accessControl.getVacancyVisibilityWhere(user)
       : { organizationId };
-    const applicationVisibility = user
-      ? await this.accessControl.getApplicationVisibilityWhere(user)
-      : { organizationId };
-    const candidateVisibility: Prisma.CandidateWhereInput = user
-      ? {
-          organizationId,
-          OR: [
-            { createdById: user.userId },
-            { applications: { some: applicationVisibility } },
-          ],
-        }
-      : { organizationId };
+    // B2-12 (v2 §7 "Import links a person already in the bank"): linking a bank person to a job the caller
+    // fully sees (vacancyVisibility below) is allowed for any candidate in the organization. Nothing about the
+    // person is returned beyond the new file, which the caller owns.
+    const candidateVisibility: Prisma.CandidateWhereInput = { organizationId };
 
     const [vacancy, candidate] = await Promise.all([
       this.prisma.vacancy.findFirst({
@@ -611,6 +606,10 @@ export class ApplicationsService {
     if (application.stage !== dto.expectedStage || application.version !== dto.expectedVersion) {
       this.throwTransitionConflict(application);
     }
+    // B2-4 (v2 §7 "Closed files do not move"): Joined is terminal; nothing moves it (not even to Rejected).
+    if (CLOSED_STAGES.includes(application.stage)) {
+      throw new ConflictException({ code: 'FILE_CLOSED', message: `This file is ${application.stage} (closed); it cannot move to ${dto.stage}.` });
+    }
 
     // Applications created before a pipeline template was configured (or
     // using a custom stage name) do not have a canonical transition map
@@ -645,7 +644,7 @@ export class ApplicationsService {
       ? await assertReopenAllowed(this.prisma, application, actorUserId, dto.reason)
       : null;
     const rejectionReason = dto.stage === 'Rejected'
-      ? await resolveRejectionReason(this.prisma, organizationId, dto.reason)
+      ? await resolveRejectionReason(this.prisma, organizationId, dto.reason, dto.note)
       : null;
     await assertStageGate(this.prisma, application, dto.stage);
 

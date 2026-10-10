@@ -251,7 +251,9 @@ export class AccessControlService {
     // B1 (v2 §5): non-oversight users only see files they own or work.
     const profile = await loadAccessProfile(this.prisma, user);
     if (profile.isOversight) return scoped;
-    return { AND: [scoped, applicationOwnershipWhere(user.userId)] };
+    // B2-8: ownership (incl. the reporting tree) decides, not the role's data scope; a Manager's
+    // narrow scope must not hide his reports' files.
+    return { AND: [{ organizationId: user.organizationId }, applicationOwnershipWhere(user.userId)] };
   }
 
   /**
@@ -265,7 +267,7 @@ export class AccessControlService {
     const scoped = await this.getApplicationScopeWhere(user);
     if (profile.isOversight) return scoped;
     const approval = applicationApprovalWhere(profile);
-    const owned: Prisma.ApplicationWhereInput = { AND: [scoped, applicationOwnershipWhere(user.userId)] };
+    const owned: Prisma.ApplicationWhereInput = { AND: [{ organizationId: user.organizationId }, applicationOwnershipWhere(user.userId)] }; // B2-8
     if (!approval) return owned;
     return { OR: [owned, { AND: [{ organizationId: user.organizationId }, approval] }] };
   }
@@ -345,7 +347,7 @@ export class AccessControlService {
     // B1 (v2 §5): non-oversight users see other owners' jobs only in redacted form.
     const profile = await loadAccessProfile(this.prisma, user);
     if (profile.isOversight) return scoped;
-    return { AND: [scoped, vacancyFullAccessWhere(user.userId)] };
+    return { AND: [{ organizationId: user.organizationId }, vacancyFullAccessWhere(user.userId)] }; // B2-8: ownership + reporting tree
   }
 
   async getVacancyScopeWhere(user: AuthUser): Promise<Prisma.VacancyWhereInput> {

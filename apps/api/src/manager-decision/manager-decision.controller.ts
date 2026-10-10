@@ -26,6 +26,10 @@ export class DecisionAllowanceDto {
   @IsNumber() @Min(0) amount!: number;
   @IsOptional() @IsIn(['Monthly', 'Annual', 'Once']) frequency?: 'Monthly' | 'Annual' | 'Once';
 }
+/**
+ * B2-15: FLAT body only: {decision, reason?, basePay?, allowances?[{name, amount, frequency?}], currency?}.
+ * A nested {pay:{...}} is rejected: 400 VALIDATION_ERROR, field "pay".
+ */
 export class ManagerDecisionDto {
   @IsIn(['Approve', 'Reject', 'RequestChanges']) decision!: 'Approve' | 'Reject' | 'RequestChanges';
   @IsOptional() @IsString() @MaxLength(1000) reason?: string;
