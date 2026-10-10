@@ -12,6 +12,9 @@ export class ApiError extends Error {
   readonly requestId?: string;
   readonly retryable?: boolean;
   readonly retryAfterSeconds?: number | null;
+  /** B5: present on GATE_* 409s (which gate blocked, what is missing). */
+  readonly gate?: string;
+  readonly missing?: string[];
 
   constructor(
     statusCode: number,
@@ -34,6 +37,9 @@ export class ApiError extends Error {
     this.requestId = meta?.requestId;
     this.retryable = meta?.retryable;
     this.retryAfterSeconds = meta?.retryAfterSeconds;
+    const body = (details && typeof details === 'object' ? details : {}) as { gate?: unknown; missing?: unknown };
+    if (typeof body.gate === 'string') this.gate = body.gate;
+    if (Array.isArray(body.missing) && body.missing.every((m) => typeof m === 'string')) this.missing = body.missing as string[];
   }
 
   get isUnauthorized(): boolean {
@@ -133,6 +139,9 @@ async function handleResponseError(response: Response, path: string): Promise<ne
       message += minutes !== null
         ? ` Try again in ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}.`
         : ' Please try again later.';
+    } else if (code && code !== 'FORBIDDEN' && typeof problem?.message === 'string' && problem.message.trim()) {
+      // Domain 403s (FILE_NOT_OWNED, NOT_JOB_OWNER, FOLLOW_UP_NOT_OWNER, …) reach the client with a specific message.
+      message = problem.message;
     } else {
       message = 'Access denied: you do not have permission to perform this action.';
     }

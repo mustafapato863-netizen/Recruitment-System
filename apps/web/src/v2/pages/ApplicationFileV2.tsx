@@ -1,16 +1,16 @@
 import type React from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, CalendarDays, Check, CircleCheck, Clock, Minus, RotateCw, Send, Star, XCircle } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CalendarDays, Check, CircleCheck, Clock, FileText, Minus, RotateCw, Send, Star, XCircle } from 'lucide-react';
 import { ApiError } from '../../api/client';
 import { ButtonV2 } from '../../components/v2/Button';
 import { StatusChip } from '../../components/v2/StatusChip';
 import { EmptyStateV2, ForbiddenStateV2, SkeletonV2 } from '../../components/v2/PageStates';
-import { TextareaV2 } from '../../components/v2/Field';
+import { InputV2, TextareaV2 } from '../../components/v2/Field';
 import '../../components/v2/v2-primitives.css';
 import './application-file.css';
-import { FILE_STAGES, addNote, candidateName, gateState, loadApplicationFile, type ApplicationFile } from '../api/applicationFile';
-import { DRAWERS, DRAWER_KEYS, errorText, type DrawerKey } from '../drawers/FileDrawers';
+import { FILE_STAGES, addNote, candidateName, gateState, loadApplicationFile, setFollowUp, type ApplicationFile } from '../api/applicationFile';
+import { DRAWERS, DRAWER_KEYS, errorText, sentBack, type DrawerKey } from '../drawers/FileDrawers';
 
 type Load = { kind: 'loading' } | { kind: 'ready'; file: ApplicationFile } | { kind: 'forbidden'; message: string } | { kind: 'missing' } | { kind: 'error'; message: string };
 
@@ -36,7 +36,9 @@ export function primaryFor(file: ApplicationFile): { key: DrawerKey; label: stri
     case 'Offer': {
       const st = file.offer?.status;
       if (!file.offer) return { key: 'offer', label: 'Draft offer', icon: <Send /> };
-      if (st === 'Pending Approval' || st === 'Draft') return { key: 'waiting', label: 'View approval', icon: <Clock /> };
+      if (sentBack(file.offer)) return { key: 'offer', label: 'Revise and resubmit', icon: <Send /> };
+      if (st === 'Draft') return { key: 'waiting', label: 'Submit for approval', icon: <Send /> };
+      if (st === 'Pending Approval') return { key: 'waiting', label: 'View approval', icon: <Clock /> };
       if (st === 'Approved') return { key: 'send', label: 'Send offer', icon: <Send /> };
       if (st === 'Sent') return { key: 'answer', label: 'Record answer', icon: <Check /> };
       if (st === 'Accepted') return { key: 'prehire', label: 'Move to Pre-hire', icon: <ArrowRight /> };
@@ -130,7 +132,7 @@ export function ApplicationFileV2({ load = loadApplicationFile }: { load?: typeo
         </ol>
         {app.stage === 'Rejected' ? <p className="rf2-file__closed" role="note">Closed as Rejected{app.rejectionReason ? ` — ${app.rejectionReason}` : ''}.</p> : null}
         <div className="rf2-file__strip">
-          <p className="rf2-file__follow"><CalendarDays aria-hidden="true" /> <strong>Follow-up date</strong> <span>{app.nextFollowUpAt ? fmt(app.nextFollowUpAt) : 'Not set'}</span></p>
+          <FollowUp id={app.id} value={app.followUpDate ?? null} closed={closed} onSaved={() => setAttempt((n) => n + 1)} />
           {gateRows(file).length ? (
             <ul className="rf2-gates rf2-gates--inline" aria-label={`Gate to ${gateRows(file)[0].to}`}>
               <li className="rf2-gates__title">To move to {gateRows(file)[0].to}:</li>
@@ -158,6 +160,16 @@ export function ApplicationFileV2({ load = loadApplicationFile }: { load?: typeo
               <dt>File</dt><dd>{app.applicationCode}</dd>
             </dl>
           </section>
+          <section className="rf2-card" aria-labelledby="docs-h">
+            <h3 id="docs-h" className="rf2-card__title">Documents</h3>
+            {file.documents.length === 0 ? <p className="rf2-file__muted">No documents yet.</p> : (
+              <ul className="rf2-docs">
+                {file.documents.map((d) => (
+                  <li key={d.id}><FileText aria-hidden="true" /><div><p>{d.name}</p><p className="rf2-timeline__sub">{[d.type, fmt(d.uploadedAt), d.uploadedBy ? `by ${d.uploadedBy.name}` : null].filter(Boolean).join(' · ')}</p></div></li>
+                ))}
+              </ul>
+            )}
+          </section>
           {file.offer ? (
             <section className="rf2-card" aria-labelledby="offer-h">
               <h3 id="offer-h" className="rf2-card__title">Offer</h3>
@@ -169,6 +181,32 @@ export function ApplicationFileV2({ load = loadApplicationFile }: { load?: typeo
       </div>
 
       {Drawer ? <Drawer file={file} onClose={closeDrawer} onDone={done} params={params} /> : null}
+    </div>
+  );
+}
+
+/** Follow-up date (B5 PATCH /applications/:id/follow-up; owner only → 403 FOLLOW_UP_NOT_OWNER). */
+function FollowUp({ id, value, closed, onSaved }: { id: string; value: string | null; closed: boolean; onSaved: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const [date, setDate] = useState(value ?? '');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | undefined>();
+  const save = async (v: string | null) => {
+    setBusy(true); setErr(undefined);
+    try { await setFollowUp(id, v); setEditing(false); onSaved(); } catch (e) { setErr(errorText(e)); } finally { setBusy(false); }
+  };
+  if (!editing) {
+    return (
+      <p className="rf2-file__follow"><CalendarDays aria-hidden="true" /> <strong>Follow-up date</strong> <span>{value ? fmt(`${value}T12:00:00Z`) : 'Not set'}</span>
+        {!closed ? <button type="button" className="rf2-link" onClick={() => { setDate(value ?? ''); setEditing(true); }}>{value ? 'Change' : 'Set'}</button> : null}</p>
+    );
+  }
+  return (
+    <div className="rf2-follow">
+      <InputV2 label="Follow-up date" type="date" value={date} onChange={(e) => setDate(e.target.value)} error={err} />
+      <ButtonV2 kind="secondary" size="sm" loading={busy} disabled={!date} onClick={() => void save(date)}>Save</ButtonV2>
+      {value ? <ButtonV2 kind="tertiary" size="sm" disabled={busy} onClick={() => void save(null)}>Clear</ButtonV2> : null}
+      <ButtonV2 kind="tertiary" size="sm" disabled={busy} onClick={() => setEditing(false)}>Cancel</ButtonV2>
     </div>
   );
 }
@@ -187,7 +225,7 @@ function Timeline({ file, onScorecard }: { file: ApplicationFile; onScorecard: (
       action: i.status !== 'Cancelled' ? <button type="button" className="rf2-link" onClick={() => onScorecard(i.id)}>Scorecards</button> : undefined,
     });
   }
-  for (const v of file.offer?.versions ?? []) rows.push({ at: v.createdAt, title: `Offer v${v.versionNumber} — ${v.status ?? v.approvalStatus}`, sub: v.proposedJoiningDate ? `Start ${fmt(v.proposedJoiningDate)}` : undefined });
+  for (const v of file.offer?.versions ?? []) rows.push({ at: v.createdAt, title: `Offer v${v.versionNumber} — ${v.status === 'Changes Requested' ? 'sent back by the manager (offer back in Draft)' : v.status ?? v.approvalStatus}`, sub: v.proposedJoiningDate ? `Start ${fmt(v.proposedJoiningDate)}` : undefined });
   rows.sort((a, b) => b.at.localeCompare(a.at));
   return (
     <section className="rf2-card" aria-labelledby="timeline-h">

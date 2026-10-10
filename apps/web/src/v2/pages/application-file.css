@@ -65,3 +65,10 @@
 [data-ui='v2'] .rf2-checklist__item[data-done='true'] svg { color: var(--rf2-success); }
 [data-ui='v2'] .rf2-checklist__missing { color: var(--rf2-muted); font-size: var(--rf2-text-caption); }
 [data-ui='v2'] .rf2-approvals { margin: 0; padding-left: var(--rf2-space-2); font-size: var(--rf2-text-label); }
+[data-ui='v2'] .rf2-drawer-form__actions { display: flex; flex-wrap: wrap; gap: var(--rf2-space-1); }
+[data-ui='v2'] .rf2-drawer-form__actions a { text-decoration: none; }
+[data-ui='v2'] .rf2-checklist__by { color: var(--rf2-ink-2); font-size: var(--rf2-text-caption); }
+[data-ui='v2'] .rf2-follow { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--rf2-space-1); }
+[data-ui='v2'] .rf2-docs { display: flex; flex-direction: column; gap: var(--rf2-space-1); margin: 0; padding: 0; list-style: none; }
+[data-ui='v2'] .rf2-docs li { display: flex; gap: var(--rf2-space-1); }
+[data-ui='v2'] .rf2-docs svg { width: 16px; height: 16px; flex: none; margin-top: 2px; color: var(--rf2-ink-2); }
