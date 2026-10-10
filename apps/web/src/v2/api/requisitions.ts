@@ -135,6 +135,8 @@ const CODE_TEXT: Record<string, { field?: 'dueDate' | 'assignee' | 'reason' | 'g
   DUE_DATE_REQUIRED: { field: 'dueDate', text: 'A due date is required.' },
   ASSIGNEE_REQUIRED: { field: 'assignee', text: 'Pick the primary recruiter who will own the job.' },
   ASSIGNEE_NOT_ELIGIBLE: { field: 'assignee', text: 'That person cannot own a job (inactive or an administrator).' },
+  /** #23 603d44d: 400 {field:'assignedEmployeeId'}; the assignee must be in the requester's tree (reports and their reports). */
+  ASSIGNEE_NOT_IN_TEAM: { field: 'assignee', text: 'Pick someone from your own team (your reports and their reports).' },
   OWNER_NOT_ELIGIBLE: { field: 'assignee', text: 'That person cannot own a job (inactive or an administrator).' },
   GRADE_NOT_FOUND: { field: 'grade', text: 'Pick a grade from the Grades list.' },
   REQUISITION_CANCELLED: { text: 'This requisition is cancelled and cannot be activated.' },
