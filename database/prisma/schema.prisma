@@ -123,6 +123,7 @@ model User {
   vacancyRequests         VacancyRequest[]           @relation("Requesters")
   approvals               VacancyRequestApproval[]   @relation("ApprovalAssignee")
   assignments             VacancyAssignment[]
+  ownedVacancies          Vacancy[]                  @relation("VacancyPrimaryRecruiter")
   primaryApplications     Application[]              @relation("ApplicationPrimaryRecruiter")
   taskApplications        Application[]              @relation("ApplicationTaskOwner")
   applicationStageChanges ApplicationStatusHistory[]
@@ -322,6 +323,10 @@ model Vacancy {
   vacancyRequest     VacancyRequest      @relation(fields: [vacancyRequestId], references: [id], onDelete: Restrict)
   vacancyCode        String              @unique @db.VarChar(50)
   status             String              @default("Pending Activation") @db.VarChar(40)
+  // B1: the single job owner. Never an ADMINISTRATOR or inactive user
+  // (enforced in the API). Nullable: unowned jobs stay null until assigned.
+  primaryRecruiterId String?             @db.Uuid
+  primaryRecruiter   User?               @relation("VacancyPrimaryRecruiter", fields: [primaryRecruiterId], references: [id], onDelete: Restrict)
   approvedHeadcount  Int
   joinedHeadcount    Int                 @default(0)
   openedAt           DateTime?           @db.Timestamptz(6)
@@ -342,6 +347,7 @@ model Vacancy {
 
   @@index([organizationId, status])
   @@index([branchId, positionId, openedAt])
+  @@index([primaryRecruiterId])
   @@map("vacancies")
 }
 
