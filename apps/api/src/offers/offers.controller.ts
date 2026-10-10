@@ -21,9 +21,9 @@ import { UserPermissionsService } from '../common/user-permissions.service';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { TenantScopedGuard } from '../common/guards/tenant-scoped.guard';
-import { TenantResource } from '../common/decorators/tenant-resource.decorator';
+import { AllowFileApprover, TenantResource } from '../common/decorators/tenant-resource.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { RequirePermissions } from '../common/decorators/require-permissions.decorator';
+import { RequireAnyPermissions, RequirePermissions } from '../common/decorators/require-permissions.decorator';
 import { AuditAction } from '../common/decorators/audit-action.decorator';
 import type { AuthUser } from '@recruitflow/contracts';
 
@@ -92,7 +92,8 @@ export class OffersController {
   }
 
   @Get(':id')
-  @RequirePermissions('APPLICATION_VIEW')
+  @RequireAnyPermissions('APPLICATION_VIEW', 'APPROVE_OFFERS', 'FINAL_HIRING_APPROVAL')
+  @AllowFileApprover()
   @UseGuards(TenantScopedGuard)
   @TenantResource({ resource: 'offer', param: 'id' })
   async getOfferById(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {

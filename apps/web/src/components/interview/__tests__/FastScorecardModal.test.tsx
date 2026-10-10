@@ -47,7 +47,7 @@ describe('FastScorecardModal', () => {
       id: 'sc-1',
       overallRating: 5,
       recommendation: 'Strong Hire',
-      isLocked: true,
+      status: 'Submitted',
     });
 
     const onSuccess = vi.fn();

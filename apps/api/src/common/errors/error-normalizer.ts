@@ -624,6 +624,13 @@ function isStableCode(value: string): boolean {
     'ASYNC_JOB_FAILED',
     'INTEGRATION_UNAVAILABLE',
     'INTERNAL_ERROR',
+    // B1 ownership/scope codes (PR #4); clients branch on these.
+    'FILE_NOT_OWNED',
+    'JOB_NOT_OWNED',
+    'ADMIN_CANNOT_REASSIGN',
+    'OWNER_NOT_ELIGIBLE',
+    'ADMIN_ONLY',
+    'DOCUMENT_DOWNLOAD_DENIED',
   ];
   return stableCodes.includes(value);
 }
