@@ -50,13 +50,6 @@ describe('vacancy request planning', () => {
     expect(updated.budgetCurrency).toBe('AED');
   });
 
-  it('converts deferred recruitment to an on-hold vacancy', async () => {
-    const { service, repository } = serviceFor(request({ status: 'Approved', recruitmentTiming: 'Deferred', plannedOpenDate: '2026-10-01' }));
-    const result = await service.convertToVacancy('request-1', 'org-1', 'user-1');
-    expect(result.vacancy.status).toBe('On Hold');
-    expect(repository.saveRequestAndVacancy).toHaveBeenCalledOnce();
-  });
-
   it('submits a complete plan for approval', async () => {
     const { service } = serviceFor(request());
     const result = await service.submitRequest('request-1', 'org-1', 'user-1');

@@ -144,6 +144,41 @@ describe('ApplicationsService unified workspace', () => {
     ).rejects.toThrow(/Cannot transition application from Applied to Joined/);
   });
 
+  it('B5: Withdrawn is not a manual exit (409 WITHDRAWN_NOT_AN_EXIT)', async () => {
+    const { service } = createService();
+    await expect(
+      service.updateStage('org-1', 'app-1', 'user-1', { stage: 'Withdrawn', expectedStage: 'Applied', expectedVersion: 4 }, user),
+    ).rejects.toMatchObject({ response: expect.objectContaining({ code: 'WITHDRAWN_NOT_AN_EXIT' }) });
+  });
+
+  it('B5: reopen from Rejected writes who/when/reason/from/to and clears rejectionReason', async () => {
+    const { service, prisma } = createService();
+    const rejected = { ...application, stage: 'Rejected', version: 4, primaryRecruiterId: 'user-1' };
+    vi.spyOn(service, 'getApplication').mockResolvedValue(rejected as never);
+    vi.spyOn(service, 'getWorkspace').mockResolvedValue({ application: rejected, templateId: 'p', templateName: 'p', stages: [], nextStage: null, nextStageRequirements: [], canAdvance: true } as never);
+    (prisma as Record<string, unknown>).vacancyAssignment = { findMany: vi.fn().mockResolvedValue([]) };
+    const calls: Array<{ kind: string; data: unknown }> = [];
+    (prisma as { $transaction: unknown }).$transaction = vi.fn(async (fn: (tx: unknown) => unknown) => fn({
+      application: { updateMany: vi.fn(async (a: { data: unknown }) => { calls.push({ kind: 'app', data: a.data }); return { count: 1 }; }), findUnique: vi.fn().mockResolvedValue(null) },
+      applicationStatusHistory: { create: vi.fn(async (a: { data: unknown }) => { calls.push({ kind: 'history', data: a.data }); }) },
+      vacancy: { findUnique: vi.fn() },
+    }));
+    await service.updateStage('org-1', 'app-1', 'user-1', { stage: 'Screening', expectedStage: 'Rejected', expectedVersion: 4, reason: 'Re-applied with licence' }, user).catch(() => undefined);
+    expect(calls.find((c) => c.kind === 'app')?.data).toMatchObject({ stage: 'Screening', rejectionReason: null });
+    expect(calls.find((c) => c.kind === 'history')?.data).toMatchObject({ fromStage: 'Rejected', toStage: 'Screening', changedById: 'user-1', reason: 'Re-applied with licence' });
+  });
+
+  it('B5: Rejected without a reason is blocked (409 GATE_REJECT_REASON_REQUIRED)', async () => {
+    const { service } = createService();
+    vi.spyOn(service, 'getWorkspace').mockResolvedValue({
+      application, templateId: 'pipeline-1', templateName: 'Default hiring track', stages: [],
+      nextStage: 'Screening', nextStageRequirements: [], canAdvance: true,
+    });
+    await expect(
+      service.updateStage('org-1', 'app-1', 'user-1', { stage: 'Rejected', expectedStage: 'Applied', expectedVersion: 4, reason: '  ' }, user),
+    ).rejects.toMatchObject({ status: 409, response: expect.objectContaining({ code: 'GATE_REJECT_REASON_REQUIRED' }) });
+  });
+
   it('returns a conflict when the expected stage or version is stale', async () => {
     const { service } = createService();
 
