@@ -48,3 +48,8 @@
 [data-ui='v2'] .rf2-scheduled__facts dd { margin: 0; }
 [data-ui='v2'] .rf2-scheduled__facts a { color: var(--rf2-action); }
 [data-ui='v2'] .rf2-scheduled__action { align-self: end; }
+[data-ui='v2'] .rf2-mywork__today { margin: 0; color: var(--rf2-ink-2); font-size: var(--rf2-text-label); line-height: var(--rf2-leading-label); font-variant-numeric: tabular-nums; }
+[data-ui='v2'] .rf2-mywork__targets { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--rf2-space-1); }
+[data-ui='v2'] .rf2-jobstrip__title a { color: inherit; text-decoration: none; }
+[data-ui='v2'] .rf2-jobstrip__title a:hover { text-decoration: underline; }
+[data-ui='v2'] .rf2-jobstrip__title a:focus-visible { outline: var(--rf2-focus-width) solid var(--rf2-focus-color); outline-offset: var(--rf2-focus-offset); }
