@@ -1591,6 +1591,8 @@ export interface GlobalSearchItem {
   title: string;
   subtitle?: string;
   status?: string;
+  /** B1: another owner's job, shown as title/site/seats only. */
+  redacted?: boolean;
 }
 
 export interface GlobalSearchGroup {
