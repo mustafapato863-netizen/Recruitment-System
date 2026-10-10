@@ -106,9 +106,13 @@ describe.skipIf(!url)('B6 suggest, compare, evidence, duplicates (scratch Postgr
     expect(c.matchedSkills.every((m) => !m.hasEvidence && m.evidence.length === 0)).toBe(true);
   });
 
-  it('excludes candidates already on the job, archived ones and ones holding no required skill', async () => {
-    const got = (await matching.suggestions(user(ids.owner!), ids.vac!)).suggestions.map((s) => s.candidate.id);
-    expect(got).not.toContain(ids.onJob);
+  it('people already on the job come back flagged alreadyOnJob with their stage and not addable; archived / no-skill excluded', async () => {
+    const res = await matching.suggestions(user(ids.owner!), ids.vac!);
+    const got = res.suggestions.map((s) => s.candidate.id);
+    const on = res.suggestions.find((s) => s.candidate.id === ids.onJob)!;
+    expect(on).toMatchObject({ alreadyOnJob: true, addable: false });
+    expect(on.stage).toBe((await prisma.application.findFirstOrThrow({ where: { candidateId: ids.onJob!, vacancyId: ids.vac! } })).stage);
+    expect(res.suggestions.find((s) => s.candidate.id === ids.A)).toMatchObject({ alreadyOnJob: false, addable: true, stage: null });
     expect(got).not.toContain(ids.archived);
     expect(got).not.toContain(ids.nomatch);
   });
@@ -128,7 +132,8 @@ describe.skipIf(!url)('B6 suggest, compare, evidence, duplicates (scratch Postgr
     const triage = res.rows.find((r) => r.skill.id === skill.Triage)!;
     expect(triage.cells.map((c) => c.status)).toEqual(['missing', 'no-evidence', 'missing']);
     expect(icu.cells[0]!.evidence[0]!.snippet).toBe('Five years ICU');
-    expect(numbersDeep(res)).toEqual([]);
+    expect(numbersDeep({ ...res, infoRows: [] })).toEqual([]); // the only numbers are notice-period days
+    expect(res.infoRows.map((r) => r.key)).toEqual(['notice-period', 'fit-note']);
     expect(await statusOf(matching.compare(user(ids.owner!), ids.vac!, [ids.A!]))).toBe('400 COMPARE_COUNT');
     expect(await statusOf(matching.compare(user(ids.owner!), ids.vac!, [ids.A!, ids.B!, ids.C!, ids.D!, ids.nomatch!]))).toBe('400 COMPARE_COUNT');
     expect(await statusOf(matching.compare(user(ids.owner!), ids.vac!, [ids.A!, ids.archived!]))).toBe('404 COMPARE_CANDIDATE_NOT_FOUND');
@@ -269,5 +274,17 @@ describe.skipIf(!url)('B6 suggest, compare, evidence, duplicates (scratch Postgr
     ]);
     const after = await prisma.candidate.findUniqueOrThrow({ where: { id } });
     expect(after).toMatchObject({ currentTitle: 'ICU Nurse', currentCompany: 'Old Co', summary: 'Ten years ICU.', certifications: ['BLS', 'ACLS'], languages: ['Arabic'], experienceYears: 10 });
+  });
+
+  it('compare: notice-period and fit-note rows come from this job\'s screening (fallback: profile availability)', async () => {
+    const onJobApp = await prisma.application.findFirstOrThrow({ where: { candidateId: ids.onJob!, vacancyId: ids.vac! } });
+    await prisma.screeningLog.create({ data: { organizationId: ORG, applicationId: onJobApp.id, screenerId: ids.owner!, outcome: 'Passed', notes: 'Strong ICU fit, wants nights', noticePeriodDays: 30 } });
+    await prisma.candidate.update({ where: { id: ids.A! }, data: { availability: '2 months' } });
+    await prisma.candidate.update({ where: { id: ids.B! }, data: { availability: null } });
+    const res = await matching.compare(user(ids.owner!), ids.vac!, [ids.onJob!, ids.A!, ids.B!]);
+    const [notice, fit] = res.infoRows;
+    expect(notice!.cells.map((c) => [c.value, c.source])).toEqual([[30, 'screening'], ['2 months', 'profile'], [null, null]]);
+    expect(fit!.cells[0]).toMatchObject({ value: 'Strong ICU fit, wants nights', source: 'screening', by: { id: ids.owner } });
+    expect(fit!.cells.slice(1).map((c) => c.value)).toEqual([null, null]);
   });
 });

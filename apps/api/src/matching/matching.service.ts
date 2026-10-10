@@ -22,6 +22,10 @@ export interface Suggestion {
   candidate: { id: string; code: string; name: string; currentTitle: string | null; location: string | null };
   matchedSkills: MatchedSkill[];
   missingSkills: SkillRef[];
+  /** Already has a file on this job (any stage): shown with its stage, cannot be added again. */
+  alreadyOnJob?: boolean;
+  stage?: string | null;
+  addable?: boolean;
 }
 export interface SuggestionsResponse {
   vacancyId: string;
@@ -36,6 +40,16 @@ export interface CompareResponse {
   vacancyId: string;
   candidates: Suggestion['candidate'][];
   rows: Array<{ skill: SkillRef; cells: CompareCell[] }>;
+  /** Non-skill rows: notice period and the fit note from this job's screening. No score. */
+  infoRows: Array<{ key: 'notice-period' | 'fit-note'; label: string; cells: CompareInfoCell[] }>;
+}
+export interface CompareInfoCell {
+  candidateId: string;
+  /** notice-period: days (number) or the profile availability text; fit-note: the screening note. null = not recorded. */
+  value: number | string | null;
+  source: 'screening' | 'profile' | null;
+  by?: { id: string; name: string } | null;
+  at?: string | null;
 }
 
 /** Documented ordering (no score is computed or returned). */
@@ -152,16 +166,18 @@ export class MatchingService {
         organizationId: user.organizationId,
         // Excludes Archived / Blacklisted. TODO(B2): also exclude anonymizedAt IS NOT NULL once #6 merges.
         status: ACTIVE_CANDIDATE,
-        applications: { none: { vacancyId } },
         skillLinks: { some: { skillId: { in: skillIds } } },
       },
-      select: this.candidateSelect(skillIds),
+      select: { ...this.candidateSelect(skillIds), applications: { where: { vacancyId }, select: { stage: true }, take: 1 } },
       take: 1000,
     });
-    const shaped = candidates.map((c) => ({ ...this.shape(c, required), updatedAt: c.updatedAt.getTime() }));
+    const shaped = candidates.map((c) => {
+      const onJob = c.applications[0];
+      return { ...this.shape(c, required), updatedAt: c.updatedAt.getTime(), alreadyOnJob: Boolean(onJob), stage: onJob?.stage ?? null, addable: !onJob };
+    });
     shaped.sort((a, b) =>
       b._evidenced - a._evidenced || b._held - a._held || b._latest - a._latest || b.updatedAt - a.updatedAt || a.candidate.code.localeCompare(b.candidate.code));
-    return { ...base, suggestions: shaped.slice(0, SUGGESTION_LIMIT).map(({ candidate, matchedSkills, missingSkills }) => ({ candidate, matchedSkills, missingSkills })) };
+    return { ...base, suggestions: shaped.slice(0, SUGGESTION_LIMIT).map(({ candidate, matchedSkills, missingSkills, alreadyOnJob, stage, addable }) => ({ candidate, matchedSkills, missingSkills, alreadyOnJob, stage, addable })) };
   }
 
   async compare(user: AuthUser, vacancyId: string, candidateIds: string[]): Promise<CompareResponse> {
@@ -175,6 +191,26 @@ export class MatchingService {
     });
     if (found.length !== ids.length) throw new NotFoundException({ code: 'COMPARE_CANDIDATE_NOT_FOUND', message: 'One or more candidates were not found or are not active.' });
     const shaped = ids.map((id) => this.shape(found.find((c) => c.id === id)!, required));
+    // Info rows come from this job's files only (the caller has access to this job); never from other files.
+    // TODO(B1): also use files on other jobs the caller owns once #4 merges.
+    const logs = await this.prisma.screeningLog.findMany({
+      where: { organizationId: user.organizationId, application: { vacancyId, candidateId: { in: ids } } },
+      orderBy: { screenedAt: 'desc' },
+      select: { notes: true, noticePeriodDays: true, screenedAt: true, application: { select: { candidateId: true } }, screener: { select: { id: true, displayName: true } } },
+    });
+    const profiles = await this.prisma.candidate.findMany({ where: { id: { in: ids } }, select: { id: true, availability: true } });
+    const notice = (id: string): CompareInfoCell => {
+      const log = logs.find((l) => l.application.candidateId === id && l.noticePeriodDays !== null);
+      if (log) return { candidateId: id, value: log.noticePeriodDays, source: 'screening', at: log.screenedAt.toISOString() };
+      const avail = profiles.find((p) => p.id === id)?.availability?.trim();
+      return { candidateId: id, value: avail || null, source: avail ? 'profile' : null };
+    };
+    const fit = (id: string): CompareInfoCell => {
+      const log = logs.find((l) => l.application.candidateId === id && l.notes?.trim());
+      return log
+        ? { candidateId: id, value: log.notes!.trim().slice(0, 500), source: 'screening', by: { id: log.screener.id, name: log.screener.displayName }, at: log.screenedAt.toISOString() }
+        : { candidateId: id, value: null, source: null, by: null, at: null };
+    };
     return {
       vacancyId,
       candidates: shaped.map((s) => s.candidate),
@@ -185,6 +221,10 @@ export class MatchingService {
           return { candidateId: s.candidate.id, status: !m ? 'missing' : m.hasEvidence ? 'evidence' : 'no-evidence', evidence: m?.evidence ?? [] } as CompareCell;
         }),
       })),
+      infoRows: [
+        { key: 'notice-period', label: 'Notice period', cells: ids.map(notice) },
+        { key: 'fit-note', label: 'Fit note', cells: ids.map(fit) },
+      ],
     };
   }
 
