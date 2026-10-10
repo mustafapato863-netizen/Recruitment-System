@@ -30,11 +30,9 @@ async function resyncCodeSequences() {
     }, 0);
 
     if (maxSeq > 0) {
-      await prisma.codeSequence.upsert({
-        where: { key },
-        create: { key, lastIssued: maxSeq },
-        update: { lastIssued: maxSeq },
-      });
+      // Never rewind: a code may have been issued (sequence bumped) but its row not written yet.
+      await prisma.codeSequence.upsert({ where: { key }, create: { key, lastIssued: maxSeq }, update: {} });
+      await prisma.codeSequence.updateMany({ where: { key, lastIssued: { lt: maxSeq } }, data: { lastIssued: maxSeq } });
     }
   }
 }
