@@ -37,6 +37,8 @@ type ApplicationKanbanCardProps = {
   showStage?: boolean;
   signal?: CardStatusSignal;
   claiming?: boolean;
+  /** R4-1: false for administrators: admins never claim or assign file owners. */
+  canClaim?: boolean;
   onOpen: () => void;
   onAddNote: () => void;
   onMoveStage: () => void;
@@ -77,6 +79,7 @@ export function ApplicationKanbanCard({
   showStage = false,
   signal = 'in_progress',
   claiming = false,
+  canClaim = true,
   onOpen,
   onAddNote,
   onMoveStage,
@@ -228,7 +231,9 @@ export function ApplicationKanbanCard({
             <span className="truncate font-medium">{card.nextAction}</span>
           )}
         </div>
-        {unassigned ? (
+        {unassigned && !canClaim ? (
+          <span className="shrink-0 text-[10.5px] font-semibold text-slate-500 dark:text-slate-400">Unassigned</span>
+        ) : unassigned ? (
           <button
             type="button"
             disabled={claiming}
