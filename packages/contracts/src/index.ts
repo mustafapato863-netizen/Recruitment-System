@@ -1928,4 +1928,6 @@ export interface ResultsResponse {
   filters: { vacancyId: string | null; managerId: string | null };
   people: Array<{ id: string; name: string }>;
   tiles: { seats: ResultTile; overdueFollowUps: ResultTile; screensReachedInterview: ResultTile; offersAccepted: ResultTile };
+  /** M2-M4: /results/team only — one row per direct report (after the manager filter). */
+  rows?: Array<{ person: { id: string; name: string }; tiles: ResultsResponse['tiles'] }>;
 }

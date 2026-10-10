@@ -64,44 +64,57 @@ export class ResultsService {
     const today = cairoToday(now);
     const monthName = new Date(`${range.month}-15T12:00:00Z`).toLocaleString('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 
-    // Seats: joins this month on jobs the people own, against those jobs' targets. Owner = Vacancy.primaryRecruiterId when B1 is present (HAS_VACANCY_OWNER), else the active PRIMARY assignee.
-    const jobs = await this.prisma.vacancy.findMany({
-      where: { AND: [...jobFilter, (HAS_VACANCY_OWNER ? { primaryRecruiterId: { in: subjects } } as Prisma.VacancyWhereInput : { assignments: { some: { userId: { in: subjects }, isActive: true, assignmentKind: 'PRIMARY' } } }), { OR: [{ openedAt: null }, { openedAt: { lt: to } }] }, { OR: [{ status: { not: 'Closed' } }, { updatedAt: { gte: from } }] }] },
-      select: { id: true, approvedHeadcount: true },
-    });
-    const joined = jobs.length ? await this.prisma.applicationStatusHistory.count({
-      where: { toStage: 'Joined', createdAt: { gte: from, lt: to }, application: fileWhere({ vacancyId: { in: jobs.map((j) => j.id) } }) },
-    }) : 0;
-    const target = jobs.reduce((t, j) => t + Math.max(0, j.approvedHeadcount), 0);
+    // Tiles for a set of people (the scope's people, or one direct report for team rows).
+    const tilesFor = async (subjects: string[]): Promise<ResultsResponse['tiles']> => {
+      // Seats: joins this month on jobs the people own, against those jobs' targets. Owner = Vacancy.primaryRecruiterId when B1 is present (HAS_VACANCY_OWNER), else the active PRIMARY assignee.
+      const jobs = await this.prisma.vacancy.findMany({
+        where: { AND: [...jobFilter, (HAS_VACANCY_OWNER ? { primaryRecruiterId: { in: subjects } } as Prisma.VacancyWhereInput : { assignments: { some: { userId: { in: subjects }, isActive: true, assignmentKind: 'PRIMARY' } } }), { OR: [{ openedAt: null }, { openedAt: { lt: to } }] }, { OR: [{ status: { not: 'Closed' } }, { updatedAt: { gte: from } }] }] },
+        select: { id: true, approvedHeadcount: true },
+      });
+      const joined = jobs.length ? await this.prisma.applicationStatusHistory.count({
+        where: { toStage: 'Joined', createdAt: { gte: from, lt: to }, application: fileWhere({ vacancyId: { in: jobs.map((j) => j.id) } }) },
+      }) : 0;
+      const target = jobs.reduce((t, j) => t + Math.max(0, j.approvedHeadcount), 0);
 
-    // Overdue follow-ups: files the people own whose follow-up date fell in this month (up to yesterday),
-    // still open, and with no note or stage change since that date.
-    const lastDay = today < range.nextMonthFirstDay ? today : range.nextMonthFirstDay;
-    const due = await this.prisma.application.findMany({
-      where: fileWhere({ primaryRecruiterId: { in: subjects }, followUpDate: { gte: new Date(`${range.firstDay}T00:00:00Z`), lt: new Date(`${lastDay}T00:00:00Z`) } }),
-      select: { id: true, stage: true, followUpDate: true, notes: { select: { createdAt: true }, orderBy: { createdAt: 'desc' }, take: 1 }, statusHistory: { select: { createdAt: true }, orderBy: { createdAt: 'desc' }, take: 1 } },
-    });
-    const overdue = due.filter((a) => {
-      if (CLOSED_STAGES.includes(a.stage)) return false;
-      const since = a.followUpDate!.getTime();
-      const touched = [a.notes[0]?.createdAt, a.statusHistory[0]?.createdAt].some((d) => d && d.getTime() >= since);
-      return !touched;
-    }).length;
+      // Overdue follow-ups: files the people own whose follow-up date fell in this month (up to yesterday),
+      // still open, and with no note or stage change since that date.
+      const lastDay = today < range.nextMonthFirstDay ? today : range.nextMonthFirstDay;
+      const due = await this.prisma.application.findMany({
+        where: fileWhere({ primaryRecruiterId: { in: subjects }, followUpDate: { gte: new Date(`${range.firstDay}T00:00:00Z`), lt: new Date(`${lastDay}T00:00:00Z`) } }),
+        select: { id: true, stage: true, followUpDate: true, notes: { select: { createdAt: true }, orderBy: { createdAt: 'desc' }, take: 1 }, statusHistory: { select: { createdAt: true }, orderBy: { createdAt: 'desc' }, take: 1 } },
+      });
+      const overdue = due.filter((a) => {
+        if (CLOSED_STAGES.includes(a.stage)) return false;
+        const since = a.followUpDate!.getTime();
+        const touched = [a.notes[0]?.createdAt, a.statusHistory[0]?.createdAt].some((d) => d && d.getTime() >= since);
+        return !touched;
+      }).length;
 
-    // Screens with a note (by the people) this month, and how many of those files reached Interview.
-    const screens = await this.prisma.screeningLog.findMany({
-      where: { screenerId: { in: subjects }, screenedAt: { gte: from, lt: to }, notes: { not: null }, application: fileWhere({}) },
-      select: { notes: true, application: { select: { stage: true, statusHistory: { where: { toStage: { in: REACHED_INTERVIEW } }, select: { id: true }, take: 1 } } } },
-    });
-    const noted = screens.filter((s) => s.notes?.trim());
-    const reached = noted.filter((s) => REACHED_INTERVIEW.includes(s.application.stage) || s.application.statusHistory.length > 0).length;
+      // Screens with a note (by the people) this month, and how many of those files reached Interview.
+      const screens = await this.prisma.screeningLog.findMany({
+        where: { screenerId: { in: subjects }, screenedAt: { gte: from, lt: to }, notes: { not: null }, application: fileWhere({}) },
+        select: { notes: true, application: { select: { stage: true, statusHistory: { where: { toStage: { in: REACHED_INTERVIEW } }, select: { id: true }, take: 1 } } } },
+      });
+      const noted = screens.filter((s) => s.notes?.trim());
+      const reached = noted.filter((s) => REACHED_INTERVIEW.includes(s.application.stage) || s.application.statusHistory.length > 0).length;
 
-    // Offers sent this month on files the people own, and how many were accepted.
-    const sent = await this.prisma.offerVersion.findMany({
-      where: { sentAt: { gte: from, lt: to }, offer: { application: fileWhere({ primaryRecruiterId: { in: subjects } }) } },
-      select: { status: true },
-    });
-    const accepted = sent.filter((v) => v.status === 'Accepted').length;
+      // Offers sent this month on files the people own, and how many were accepted.
+      const sent = await this.prisma.offerVersion.findMany({
+        where: { sentAt: { gte: from, lt: to }, offer: { application: fileWhere({ primaryRecruiterId: { in: subjects } }) } },
+        select: { status: true },
+      });
+      const accepted = sent.filter((v) => v.status === 'Accepted').length;
+
+        return {
+          seats: tile(joined, target, jobs.length, `${joined} joined in ${monthName} against ${target} seats on ${jobs.length} job${jobs.length === 1 ? '' : 's'}.`, true),
+          overdueFollowUps: tile(overdue, due.length, due.length, `${overdue} of ${due.length} follow-ups due in ${monthName} were not acted on by their date.`),
+          screensReachedInterview: tile(reached, noted.length, noted.length, `${reached} of ${noted.length} screens with a note in ${monthName} reached Interview.`),
+          offersAccepted: tile(accepted, sent.length, sent.length, `${accepted} of ${sent.length} offers sent in ${monthName} were accepted.`),
+        };
+    };
+    const tiles = await tilesFor(subjects);
+    // M2-M4: team results also break down per direct report (same tiles, same access scope).
+    const rows = scope === 'team' ? await Promise.all(people.map(async (p) => ({ person: { id: p.id, name: p.displayName }, tiles: await tilesFor([p.id]) }))) : undefined;
 
     return {
       scope,
@@ -109,12 +122,8 @@ export class ResultsService {
       range: { from: from.toISOString(), to: to.toISOString() },
       filters: { vacancyId: query.vacancyId ?? null, managerId: query.managerId ?? null },
       people: people.map((p) => ({ id: p.id, name: p.displayName })),
-      tiles: {
-        seats: tile(joined, target, jobs.length, `${joined} joined in ${monthName} against ${target} seats on ${jobs.length} job${jobs.length === 1 ? '' : 's'}.`, true),
-        overdueFollowUps: tile(overdue, due.length, due.length, `${overdue} of ${due.length} follow-ups due in ${monthName} were not acted on by their date.`),
-        screensReachedInterview: tile(reached, noted.length, noted.length, `${reached} of ${noted.length} screens with a note in ${monthName} reached Interview.`),
-        offersAccepted: tile(accepted, sent.length, sent.length, `${accepted} of ${sent.length} offers sent in ${monthName} were accepted.`),
-      },
+      tiles,
+      ...(rows ? { rows } : {}),
     };
   }
 }
