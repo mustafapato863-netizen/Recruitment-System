@@ -95,6 +95,14 @@ describe.skipIf(!url)('B3 requisition and job lifecycle (scratch Postgres)', () 
     await expect(service.activateRequest(id, ORG, ids.manager, {})).rejects.toThrow(ConflictException);
   });
 
+  it('NEW-3: only the owner or the owner\'s manager closes a job; the requester alone gets 403 JOB_NOT_OWNED', async () => {
+    const id = await makeRequest('Approved', { assignedEmployeeId: ids.owner, requesterId: ids.other });
+    const job = (await service.activateRequest(id, ORG, null, {})).vacancy!;
+    const as2 = (userId: string) => ({ userId, organizationId: ORG, tokenVersion: 0, roleCodes: ['RECRUITER'] });
+    await expect(service.closeVacancy(job.id, ORG, 'Position no longer needed', as2(ids.other!))).rejects.toMatchObject({ status: 403, response: { code: 'JOB_NOT_OWNED' } });
+    expect((await service.closeVacancy(job.id, ORG, 'Position no longer needed', as2(ids.manager!))).status).toBe('Closed');
+  });
+
   it('an administrator can never hold, reopen or close a job (even as requester)', async () => {
     const id = await makeRequest('Approved', { assignedEmployeeId: ids.owner, requesterId: ids.admin });
     const job = (await service.activateRequest(id, ORG, null, {})).vacancy!;
