@@ -224,8 +224,9 @@ export class UpdateVacancyRequestDto {
 }
 
 export class UpdateVacancyStatusDto {
-  @IsEnum(['Open', 'On Hold', 'Cancelled'])
-  status!: 'Open' | 'On Hold' | 'Cancelled';
+  // B2: a job is Closed, never Cancelled (Cancelled is requisition-only, v2 §3).
+  @IsEnum(['Open', 'On Hold', 'Closed'])
+  status!: 'Open' | 'On Hold' | 'Closed';
 
   @IsOptional()
   @IsString()
@@ -316,7 +317,7 @@ export class AssignTeamMemberDto {
 
 export class VacancyWorkQueueQueryDto {
   @IsOptional()
-  @IsEnum(['Pending Activation', 'Open', 'On Hold', 'Partially Filled', 'Filled', 'Cancelled'])
+  @IsEnum(['Pending Activation', 'Open', 'On Hold', 'Partially Filled', 'Filled', 'Closed', 'Cancelled'])
   status?: string;
 
   @IsOptional()
