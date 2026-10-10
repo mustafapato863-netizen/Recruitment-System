@@ -1,12 +1,12 @@
 /**
  * E2 application file adapters. Types mirror the API DTOs on backend B5 (#11,
- * feat/b5-application-file @7f0c7c2). Every read goes through stripPay(): the
+ * feat/b5-application-file @e2f1296) and B7 (#15 @d65e0b0) for offers. Every read goes through stripPay(): the
  * Employee seat never holds pay in state. Writes never carry pay (offer drafts
  * send components: []; screening never sends salary fields).
  */
-import { getApi, patchApi, postApi } from '../../api/client';
+import { getApi, patchApi, postApi, putApi } from '../../api/client';
 import { stripPay } from './paySafety';
-import { JOINING_CHECKS } from './gates';
+import { JOINING_CHECK_TYPES, type JoiningCheckType } from './gates';
 
 export const FILE_STAGES = ['Applied', 'Screening', 'Interview', 'Offer', 'Pre-Hire', 'Joined'] as const;
 export type FileStage = (typeof FILE_STAGES)[number] | 'Rejected' | 'Withdrawn';
@@ -30,6 +30,8 @@ export interface FileApplication {
   positionTitle?: string;
   rejectionReason?: string | null;
   nextFollowUpAt?: string | null;
+  /** B5: the owner's follow-up date (YYYY-MM-DD, Cairo day) on list + detail. */
+  followUpDate?: string | null;
   appliedAt: string;
   updatedAt: string;
 }
@@ -66,6 +68,10 @@ export interface OfferVersion {
   approvals?: Array<{ id: string; status: string; approverName?: string | null; roleCode?: string; decidedAt?: string | null; comment?: string | null }>;
 }
 export interface OfferItem { id: string; applicationId: string; offerCode: string; status: OfferStatus; currentVersion?: OfferVersion | null; versions?: OfferVersion[]; createdAt: string; updatedAt: string }
+/** GET /applications/:id/joining-checks (B5). */
+export interface JoiningCheck { type: JoiningCheckType; label: string; verified: boolean; verifiedBy: { id: string; name: string } | null; verifiedAt: string | null; documentId: string | null }
+/** GET /applications/:id/documents (B5): metadata only. */
+export interface FileDocument { id: string; type: string; name: string; uploadedAt: string; uploadedBy: { id: string; name: string } | null }
 export interface ComplianceItem { id: string; type: string; name: string; status: 'Pending' | 'Submitted' | 'Verified' | 'Rejected' | 'Not Required'; isRequired: boolean; verifiedAt?: string | null }
 export interface HiringItem { id: string; applicationId: string; offerId: string; status: string; complianceRequirements?: ComplianceItem[] }
 
@@ -78,6 +84,8 @@ export interface ApplicationFile {
   scorecards: Record<string, ScorecardItem[]>;
   offer: OfferItem | null;
   hiring: HiringItem | null;
+  joiningChecks: JoiningCheck[];
+  documents: FileDocument[];
 }
 
 const list = <T,>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : Array.isArray((v as { data?: unknown })?.data) ? ((v as { data: T[] }).data) : []);
@@ -87,26 +95,27 @@ const enc = encodeURIComponent;
 export async function loadApplicationFile(id: string): Promise<ApplicationFile> {
   // The workspace call decides access: 403 (FILE_NOT_OWNED) / 404 propagate to the page.
   const workspace = stripPay(await getApi<Workspace>(`/applications/${enc(id)}/workspace`));
-  const app = workspace.application;
-  const [history, notes, screening, interviews, offers, hiring] = await Promise.all([
+  const [history, notes, screening, interviews, offers, hiring, joiningChecks, documents] = await Promise.all([
     safe<HistoryItem[]>(getApi(`/applications/${enc(id)}/history`).then(list), []),
     safe<NoteItem[]>(getApi(`/applications/${enc(id)}/notes`).then(list), []),
     safe<ScreeningItem[]>(getApi(`/screening/application/${enc(id)}`).then(list), []),
     safe<InterviewItem[]>(getApi(`/interviews?applicationId=${enc(id)}`).then(list), []),
-    // GET /offers has no applicationId filter: filter by candidate, then by application.
-    safe<OfferItem[]>(getApi(`/offers?candidateId=${enc(app.candidateId)}`).then(list), []),
-    safe<HiringItem[]>(getApi('/hiring').then(list), []),
+    // B5: ?applicationId= is ANDed with the access scope server-side; no client filtering.
+    safe<OfferItem[]>(getApi(`/offers?applicationId=${enc(id)}`).then(list), []),
+    safe<HiringItem[]>(getApi(`/hiring?applicationId=${enc(id)}`).then(list), []),
+    safe<JoiningCheck[]>(getApi(`/applications/${enc(id)}/joining-checks`).then(list), []),
+    safe<FileDocument[]>(getApi(`/applications/${enc(id)}/documents`).then(list), []),
   ]);
-  const mine = interviews.filter((i) => i.applicationId === id || !i.applicationId);
-  const scorecardLists = await Promise.all(mine.filter((i) => i.status !== 'Cancelled').map((i) =>
+  const scorecardLists = await Promise.all(interviews.filter((i) => i.status !== 'Cancelled').map((i) =>
     safe<ScorecardItem[]>(getApi(`/interviews/${enc(i.id)}/scorecard`).then(list), []).then((s) => [i.id, s] as const)));
-  const offerSummary = offers.filter((o) => o.applicationId === id).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] ?? null;
+  const offerSummary = [...offers].sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0] ?? null;
   const offer = offerSummary ? await safe<OfferItem>(getApi(`/offers/${enc(offerSummary.id)}`), offerSummary) : null;
   return {
-    workspace, history, notes, screening, interviews: mine,
+    workspace, history, notes, screening, interviews,
     scorecards: Object.fromEntries(scorecardLists),
     offer,
-    hiring: hiring.find((h) => h.applicationId === id) ?? null,
+    hiring: hiring[0] ?? null,
+    joiningChecks, documents,
   };
 }
 
@@ -127,33 +136,46 @@ export interface ScorecardBody { overallRating: number; recommendation: Recommen
 export const submitScorecard = (interviewId: string, body: ScorecardBody) => postApi<ScorecardItem>(`/interviews/${enc(interviewId)}/scorecard`, body);
 /** = ReviseScorecardDto. */
 export const reviseScorecard = (interviewId: string, body: Omit<ScorecardBody, 'status'> & { reason: string }) => postApi<ScorecardItem>(`/interviews/${enc(interviewId)}/scorecard/revisions`, body);
-/** Non-pay offer terms (CreateOfferDto minus components). */
+/** Non-pay offer terms (CreateOfferDto minus components). CreateOfferDto has no grade / approver note field. */
 export interface OfferTerms { contractType?: string; probationPeriod?: string; offerExpiry?: string; proposedJoiningDate?: string; workLocation?: string; workingSchedule?: string }
-/** = CreateOfferDto with components: [] — the Manager adds pay at the offer decision (M3). */
+/** = CreateOfferDto with components: [] → the offer id. Offers start as Draft; the Manager adds pay at M3. */
 export const createOfferDraft = (applicationId: string, terms: OfferTerms) => postApi<string>('/offers', { applicationId, ...terms, components: [] });
-/** = CreateOfferRevisionDto with components: [] — new version after Expired (#11 allows it); Manager re-enters pay at M3. */
+/** = CreateOfferRevisionDto with components: [] → the version id. Allowed from Draft / Changes Requested / Expired (OFFER_CLOSED otherwise). */
 export const createOfferRevision = (offerId: string, terms: OfferTerms) => postApi<string>(`/offers/${enc(offerId)}/revisions`, { ...terms, components: [] });
-/** = UpdateOfferStatusDto. #11: Declined also rejects the file with reason "Declined offer"; Expired keeps it in Offer. */
-export const setOfferStatus = (offerId: string, status: 'Sent' | 'Accepted' | 'Declined' | 'Withdrawn' | 'Expired') => patchApi(`/offers/${enc(offerId)}/status`, { status });
-/** = CreateHiringCaseDto. */
+/** POST /offers/:id/submit: Draft or Changes Requested → Pending Approval (409 OFFER_NOT_DRAFT otherwise). */
+export const submitOffer = (offerId: string) => postApi<{ id: string; status: 'Pending Approval'; versionId: string }>(`/offers/${enc(offerId)}/submit`, {});
+export type SendChannel = 'email' | 'whatsapp';
+/** = SendOfferDto. Response: email → { queued }, whatsapp → { message, waLink } (manual send; already recorded as Sent). */
+export interface SendOfferResult { id: string; status: 'Sent'; channel: SendChannel; templateId: string; queued?: boolean; message?: string; waLink?: string }
+export const sendOffer = (offerId: string, body: { channel: SendChannel; templateId: string }) => postApi<SendOfferResult>(`/offers/${enc(offerId)}/send`, body);
+/** Active templates per channel: GET /email-templates (EmailTemplateItem) and GET /whatsapp-templates/for-send (WhatsAppTemplateItem). Bodies are not shown. */
+export interface OfferTemplate { id: string; name: string; category: string; isDefault: boolean }
+export async function offerTemplates(channel: SendChannel): Promise<OfferTemplate[]> {
+  const rows = list<{ id: string; name: string; category: string; isDefault?: boolean; status: string }>(
+    await getApi(channel === 'email' ? '/email-templates' : '/whatsapp-templates/for-send'));
+  return rows.filter((t) => t.status === 'Active')
+    .map((t) => ({ id: t.id, name: t.name, category: t.category, isDefault: Boolean(t.isDefault) }))
+    .sort((a, b) => Number(/offer/i.test(b.category)) - Number(/offer/i.test(a.category)) || Number(b.isDefault) - Number(a.isDefault) || a.name.localeCompare(b.name));
+}
+/** = UpdateOfferStatusDto. 'Sent' is no longer set here (send only via /send). Declined also rejects the file ("Declined offer"); Expired keeps it in Offer. */
+export const setOfferStatus = (offerId: string, status: 'Accepted' | 'Declined' | 'Withdrawn' | 'Expired') => patchApi(`/offers/${enc(offerId)}/status`, { status });
+/** PATCH /applications/:id/follow-up (owner only; 403 FOLLOW_UP_NOT_OWNER). YYYY-MM-DD or null. */
+export const setFollowUp = (id: string, followUpDate: string | null) => patchApi<{ id: string; followUpDate: string | null }>(`/applications/${enc(id)}/follow-up`, { followUpDate });
+/** PUT /applications/:id/joining-checks/:type → the full list. */
+export const setJoiningCheck = (id: string, type: JoiningCheckType, verified: boolean) => putApi<JoiningCheck[]>(`/applications/${enc(id)}/joining-checks/${type}`, { verified });
+/** = CreateHiringCaseDto (kept: the hiring case still opens at Pre-hire for the downstream steps). */
 export const createHiringCase = (offerId: string) => postApi<HiringItem>('/hiring', { offerId });
-/** = UpdateComplianceDto. */
-export const checkCompliance = (hiringId: string, reqId: string) => patchApi(`/hiring/${enc(hiringId)}/compliance/${enc(reqId)}`, { status: 'Verified' });
 export const rejectionReasons = () => getApi<Array<{ name: string; status?: string }>>('/master-data/catalog/rejection-reasons')
   .then((rows) => list<{ name: string; status?: string }>(rows).filter((r) => r.name?.trim() && r.status !== 'Inactive' && r.status !== 'Archived').map((r) => r.name.trim()));
 
 // ── client pre-checks (mirror #11's gates; the API stays the authority) ──
-export interface GateState { screenNote: boolean; scorecard: boolean; offerAccepted: boolean; joining: { key: string; label: string; done: boolean; reqId: string | null }[] }
+export interface GateState { screenNote: boolean; scorecard: boolean; offerAccepted: boolean; joining: { type: JoiningCheckType; label: string; done: boolean }[] }
 export function gateState(f: ApplicationFile): GateState {
   const screenNote = f.screening.some((s) => Boolean(s.notes?.trim()));
   const live = new Set(f.interviews.filter((i) => i.status !== 'Cancelled').map((i) => i.id));
   const scorecard = Object.entries(f.scorecards).some(([iid, list]) => live.has(iid) && list.some((s) => (s.status ?? (s.isLocked ? 'Submitted' : 'Draft')) === 'Submitted'));
   const offerAccepted = f.offer?.status === 'Accepted' || Boolean(f.offer?.versions?.some((v) => v.status === 'Accepted'));
-  const reqs = f.hiring?.complianceRequirements ?? [];
-  const joining = JOINING_CHECKS.map((c) => {
-    const req = reqs.find((r) => c.match.test(r.name));
-    return { key: c.key, label: c.label, done: Boolean(req && req.status === 'Verified'), reqId: req?.id ?? null };
-  });
+  const joining = JOINING_CHECK_TYPES.map((c) => ({ type: c.type, label: c.label, done: Boolean(f.joiningChecks.find((j) => j.type === c.type)?.verified) }));
   return { screenNote, scorecard, offerAccepted, joining };
 }
 
