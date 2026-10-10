@@ -93,9 +93,11 @@ describe.skipIf(!url)('B11 rules pack — Postgres', () => {
     jobA = jobs[0]!.id; jobB = jobs[1]!.id;
     for (const [job, owner] of [[jobA, u.owner], [jobB, u.other]] as const) {
       // Same shape the API writes: one active PRIMARY assignment mirrored in Vacancy.primaryRecruiterId.
-      await prisma.vacancyAssignment.updateMany({ where: { vacancyId: job, assignmentKind: 'PRIMARY', isActive: true }, data: { isActive: false } });
-      await prisma.vacancyAssignment.create({ data: { vacancyId: job, userId: owner, roleCode: 'RECRUITER', assignmentKind: 'PRIMARY', isActive: true } });
-      await prisma.vacancy.update({ where: { id: job }, data: { primaryRecruiterId: owner } });
+      await prisma.$transaction([ // atomic: other suites check the single-PRIMARY invariant concurrently
+        prisma.vacancyAssignment.updateMany({ where: { vacancyId: job, assignmentKind: 'PRIMARY', isActive: true }, data: { isActive: false } }),
+        prisma.vacancyAssignment.create({ data: { vacancyId: job, userId: owner, roleCode: 'RECRUITER', assignmentKind: 'PRIMARY', isActive: true } }),
+        prisma.vacancy.update({ where: { id: job }, data: { primaryRecruiterId: owner } }),
+      ]);
     }
     const cand = await prisma.candidate.create({ data: { organizationId: ORG, candidateCode: `RP-${tag}`, firstName: `Rp${tag}`, lastName: 'Cand', email: `rp-c-${tag}@t.test` } });
     appId = (await prisma.application.create({ data: { organizationId: ORG, applicationCode: `RP-${tag}`, vacancyId: jobA, candidateId: cand.id, stage: 'Screening', primaryRecruiterId: u.owner } })).id;

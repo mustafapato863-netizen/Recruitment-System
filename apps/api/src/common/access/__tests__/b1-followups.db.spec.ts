@@ -102,8 +102,10 @@ describe.skipIf(!url)('B1 follow-ups (scratch Postgres)', () => {
     vacancyId = v!.id; otherVacancyId = w!.id;
     for (const vid of [vacancyId, otherVacancyId]) {
       // Same shape as a PRIMARY assignment so the B1 backfill invariant holds.
-      await prisma.vacancyAssignment.create({ data: { vacancyId: vid, userId: ids.owner, roleCode: 'RECRUITER', assignmentKind: 'PRIMARY', isActive: true } });
-      await prisma.vacancy.update({ where: { id: vid }, data: { primaryRecruiterId: ids.owner } });
+      await prisma.$transaction([ // atomic for concurrent invariant checks
+        prisma.vacancyAssignment.create({ data: { vacancyId: vid, userId: ids.owner, roleCode: 'RECRUITER', assignmentKind: 'PRIMARY', isActive: true } }),
+        prisma.vacancy.update({ where: { id: vid }, data: { primaryRecruiterId: ids.owner } }),
+      ]);
     }
 
     for (const [cid, code] of [[ids.candidate, 'A'], [ids.otherCandidate, 'B']] as const) {

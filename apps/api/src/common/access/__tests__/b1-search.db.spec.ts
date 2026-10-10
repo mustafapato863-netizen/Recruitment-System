@@ -32,9 +32,12 @@ describe.skipIf(!url)('B1 search scope (scratch Postgres)', () => {
     jobA = jobs[0]!.id; jobB = jobs[1]!.id;
     for (const [job, owner] of [[jobA, ids.owner], [jobB, ids.other]] as const) {
       // Same shape the API writes (one active PRIMARY mirrored in primaryRecruiterId) so the B1 backfill invariant holds.
-      await prisma.vacancyAssignment.updateMany({ where: { vacancyId: job, assignmentKind: 'PRIMARY', isActive: true }, data: { isActive: false } });
-      await prisma.vacancyAssignment.create({ data: { vacancyId: job, userId: owner, roleCode: 'RECRUITER', assignmentKind: 'PRIMARY', isActive: true } });
-      await prisma.vacancy.update({ where: { id: job }, data: { primaryRecruiterId: owner } });
+      // One transaction: other suites check the "single active PRIMARY = primaryRecruiterId" invariant concurrently.
+      await prisma.$transaction([
+        prisma.vacancyAssignment.updateMany({ where: { vacancyId: job, assignmentKind: 'PRIMARY', isActive: true }, data: { isActive: false } }),
+        prisma.vacancyAssignment.create({ data: { vacancyId: job, userId: owner, roleCode: 'RECRUITER', assignmentKind: 'PRIMARY', isActive: true } }),
+        prisma.vacancy.update({ where: { id: job }, data: { primaryRecruiterId: owner } }),
+      ]);
     }
     await prisma.candidate.create({ data: { id: ids.candA, organizationId: ORG, candidateCode: `SA-${tag}`, firstName: `Srch${tag}`, lastName: 'Alpha', email: `alpha-${tag}@b1.test` } });
     await prisma.candidate.create({ data: { id: ids.candB, organizationId: ORG, candidateCode: `SB-${tag}`, firstName: `Srch${tag}`, lastName: 'Beta', email: `beta-${tag}@b1.test` } });
