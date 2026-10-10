@@ -31,7 +31,9 @@ function formatChip(label: string, value: string | number, detail?: string) {
   );
 }
 
-function formatPeriodChange(current: number, previous: number): string {
+/** B8 (#20) removed `comparison`, `comparisonRange` and `kpis.*.change` from /reports: without a previous figure we say "Selected period". */
+function formatPeriodChange(current: number, previous: number | undefined): string {
+  if (typeof previous !== 'number') return 'Selected period';
   if (previous === 0) return current === 0 ? 'No activity in either period' : 'New activity vs previous period';
   const change = Math.round(((current - previous) / previous) * 100);
   return `${change > 0 ? '+' : ''}${change}% vs previous period`;
@@ -131,13 +133,14 @@ export function ReportsPage() {
         ? ttf > 0
         : reportOverview.kpis.timeToFill.sampleCount > 0;
 
+      const cmp = (reportOverview as { comparison?: Partial<Record<'applications' | 'interviews' | 'offers', number>> }).comparison;
       return {
         applications: appCount,
-        appTrend: formatPeriodChange(appCount, reportOverview.comparison.applications),
+        appTrend: formatPeriodChange(appCount, cmp?.applications),
         interviews: intCount,
-        intTrend: formatPeriodChange(intCount, reportOverview.comparison.interviews),
+        intTrend: formatPeriodChange(intCount, cmp?.interviews),
         offers: offCount,
-        offTrend: formatPeriodChange(offCount, reportOverview.comparison.offers),
+        offTrend: formatPeriodChange(offCount, cmp?.offers),
         hires: hireCount,
         hireTrend: hireCount > 0 ? `${hireCount} joined in period` : 'No hires in period',
         timeToFill: ttf,
@@ -824,7 +827,7 @@ export function ReportsPage() {
           </div>
 
           <div className="flex items-center justify-between text-[11px] text-slate-600 dark:text-slate-400 border-t border-slate-100 dark:border-slate-800 pt-2">
-            <span>vs comparison period</span>
+            <span>Selected period</span>
             <span className="font-bold text-emerald-700 dark:text-emerald-400">{reportOverview?.kpis?.offerAcceptanceRate ? `${reportOverview.kpis.offerAcceptanceRate.value}% acceptance` : 'No data'}</span>
           </div>
         </div>

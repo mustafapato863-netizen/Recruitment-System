@@ -59,7 +59,7 @@ const TalentPoolPage = lazy(() => import('./pages/TalentPoolPage').then((m) => (
 const ImportPreviewPage = lazy(() => import('./pages/ImportPreviewPage').then((m) => ({ default: m.ImportPreviewPage })));
 const BulkImportPage = lazy(() => import('./pages/BulkImportPage').then((m) => ({ default: m.BulkImportPage })));
 const CVIntakePage = lazy(() => import('./pages/CVIntakePage').then((m) => ({ default: m.CVIntakePage })));
-const ReportsPage = lazy(() => import('./pages/ReportsPage').then((m) => ({ default: m.ReportsPage })));
+const ReportsRoute = lazy(() => import('./v2/pages/ReportsRoute').then((m) => ({ default: m.ReportsRoute })));
 const PipelineSettingsPage = lazy(() => import('./pages/PipelineSettingsPage').then((m) => ({ default: m.PipelineSettingsPage })));
 const EmailTemplatesPage = lazy(() => import('./pages/EmailTemplatesPage').then((m) => ({ default: m.EmailTemplatesPage })));
 const WhatsAppTemplatesPage = lazy(() => import('./pages/WhatsAppTemplatesPage').then((m) => ({ default: m.WhatsAppTemplatesPage })));
@@ -193,7 +193,7 @@ function App() {
                     path="/reports"
                     element={
                       <PermissionGate requiredPermission="APPLICATION_VIEW">
-                        <ReportsPage />
+                        <ReportsRoute />
                       </PermissionGate>
                     }
                   />
