@@ -47,7 +47,8 @@ describe('E08 Open jobs', () => {
     expect(screen.getAllByRole('link', { name: /^Open pipeline/ })[0]).toHaveAttribute('href', '/vacancies/v1');
     const others = screen.getByRole('region', { name: 'Other recruiters’ jobs in your team' });
     expect(within(others).getAllByRole('row')).toHaveLength(4);
-    expect(within(others).queryAllByRole('link')).toHaveLength(0);
+    // #23 603d44d: an unredacted row (a report's job the manager may see) links to its board; redacted ones stay read-only.
+    expect(within(others).getAllByRole('link').map((a) => a.getAttribute('href'))).toEqual(['/vacancies/v9']);
     expect(within(others).queryAllByRole('button')).toHaveLength(0);
     expect(within(others).getByText('Pharmacist')).toBeInTheDocument();
     expect(container.textContent).not.toMatch(PAY);
