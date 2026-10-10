@@ -13,6 +13,10 @@ import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { Textarea } from '../components/ui/Textarea';
 import { PageState } from '../components/ui/PageState';
+import { ForbiddenState } from '../components/access/ForbiddenState';
+import { RedactedJobDetail } from '../components/access/RedactedJobDetail';
+import { isForbiddenError, isRedactedVacancy } from '../utils/vacancyAccess';
+import type { MaybeRedacted, RedactedVacancy } from '../types/redactedVacancy';
 import { useSetBreadcrumbTitle } from '../context/BreadcrumbContext';
 import { getVacancyBlockingReasons } from '../utils/vacancyActivation';
 
@@ -37,6 +41,8 @@ export function VacancyOverviewPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { user } = useAuth();
   const [vacancy, setVacancy] = useState<VacancyDetailView | null>(null);
+  const [redactedJob, setRedactedJob] = useState<RedactedVacancy | null>(null);
+  const [isForbidden, setIsForbidden] = useState(false);
   const [applications, setApplications] = useState<Application[]>([]);
   const [interviews, setInterviews] = useState<Interview[]>([]);
   const [offers, setOffers] = useState<Offer[]>([]);
@@ -197,14 +203,26 @@ export function VacancyOverviewPage() {
     setIsLoading(true);
     try {
       const [vRes, appsRes, intsRes, offsRes, usersRes] = await Promise.allSettled([
-        fetchApi<VacancyDetailView>(`/vacancies/${id}`),
+        fetchApi<MaybeRedacted<VacancyDetailView>>(`/vacancies/${id}`),
         getApi<PaginatedResult<Application>>(`/applications?vacancyId=${id}&pageSize=100`),
         getApi<Interview[]>('/interviews'),
         getApi<Offer[]>('/offers'),
         getApi<InterviewerUser[]>('/users/interviewers'),
       ]);
+      // B1: another owner's job comes back redacted (200) or 403 for actions.
+      setRedactedJob(null);
+      setIsForbidden(false);
       if (vRes.status === 'fulfilled' && vRes.value) {
+        if (isRedactedVacancy(vRes.value)) {
+          setRedactedJob(vRes.value);
+          setVacancy(null);
+          return;
+        }
         setVacancy(vRes.value);
+      } else if (vRes.status === 'rejected' && isForbiddenError(vRes.reason)) {
+        setIsForbidden(true);
+        setVacancy(null);
+        return;
       }
       if (appsRes.status === 'fulfilled' && appsRes.value?.data) {
         setApplications(appsRes.value.data);
@@ -419,6 +437,20 @@ export function VacancyOverviewPage() {
       <div className="flex w-full flex-col p-3 sm:p-4 max-w-[1720px] mx-auto">
         <PageState kind="loading" title="Loading job position..." description="Fetching vacancy details and pipeline metrics." />
       </div>
+    );
+  }
+
+  if (!isLoading && redactedJob) {
+    return <RedactedJobDetail job={redactedJob} onBack={() => navigate('/vacancies')} />;
+  }
+
+  if (!isLoading && isForbidden) {
+    return (
+      <ForbiddenState
+        title="You do not have access to this job"
+        backLabel="Back to Job Positions"
+        onBack={() => navigate('/vacancies')}
+      />
     );
   }
 
