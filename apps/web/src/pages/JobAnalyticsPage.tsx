@@ -1,4 +1,8 @@
 import { useEffect, useState } from 'react';
+import { ForbiddenState } from '../components/access/ForbiddenState';
+import { RedactedJobDetail } from '../components/access/RedactedJobDetail';
+import { isForbiddenError, isRedactedVacancy } from '../utils/vacancyAccess';
+import type { MaybeRedacted, RedactedVacancy } from '../types/redactedVacancy';
 import { useNavigate, useParams } from 'react-router-dom';
 import type { VacancyDetailView, Application, PaginatedResult, Interview } from '@recruitflow/contracts';
 import { fetchApi, getApi } from '../api/client';
@@ -23,6 +27,8 @@ export function JobAnalyticsPage() {
   const [interviews, setInterviews] = useState<Interview[]>([]);
   const [interviewers, setInterviewers] = useState<InterviewerUser[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [redactedJob, setRedactedJob] = useState<RedactedVacancy | null>(null);
+  const [isForbidden, setIsForbidden] = useState(false);
   const [dateRange, setDateRange] = useState('All Time');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
@@ -35,14 +41,17 @@ export function JobAnalyticsPage() {
     if (!id) return;
     setIsLoading(true);
     Promise.allSettled([
-      fetchApi<VacancyDetailView>(`/vacancies/${id}`),
+      fetchApi<MaybeRedacted<VacancyDetailView>>(`/vacancies/${id}`),
       getApi<PaginatedResult<Application>>(`/applications?vacancyId=${id}&pageSize=100`),
       getApi<Interview[]>('/interviews'),
       getApi<InterviewerUser[]>('/users/interviewers'),
     ])
       .then(([vRes, appsRes, intsRes, usersRes]) => {
         if (vRes.status === 'fulfilled' && vRes.value) {
-          setVacancy(vRes.value);
+          if (isRedactedVacancy(vRes.value)) setRedactedJob(vRes.value);
+          else setVacancy(vRes.value);
+        } else if (vRes.status === 'rejected' && isForbiddenError(vRes.reason)) {
+          setIsForbidden(true);
         }
         if (appsRes.status === 'fulfilled' && appsRes.value?.data) {
           setApplications(appsRes.value.data);
@@ -133,6 +142,13 @@ export function JobAnalyticsPage() {
         />
       </div>
     );
+  }
+
+  if (!isLoading && redactedJob) {
+    return <RedactedJobDetail job={redactedJob} onBack={() => navigate('/vacancies')} />;
+  }
+  if (!isLoading && isForbidden) {
+    return <ForbiddenState title="You do not have access to this job" backLabel="Back to Job Positions" onBack={() => navigate('/vacancies')} />;
   }
 
   return (

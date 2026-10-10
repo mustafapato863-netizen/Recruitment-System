@@ -132,8 +132,10 @@ export class VacanciesController {
     return this.vacancyCoreService.updateVacancy(id, user.organizationId, body, user);
   }
 
+  /** B2: DELETE deactivates (status Cancelled); nothing is removed. */
   @Delete(':id')
-  @AuditAction('VACANCY_DELETE')
+  @RequirePermissions('VACANCY_MANAGE')
+  @AuditAction('VACANCY_DEACTIVATE')
   @UseGuards(TenantScopedGuard)
   @TenantResource({ resource: 'vacancy', param: 'id' })
   deleteVacancy(

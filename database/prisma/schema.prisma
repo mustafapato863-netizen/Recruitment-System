@@ -93,60 +93,61 @@ model Position {
 }
 
 model User {
-  id                       String                     @id @default(uuid()) @db.Uuid
-  organizationId           String                     @db.Uuid
-  organization             Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  email                    String                     @db.VarChar(320)
-  emailNormalized          String                     @db.VarChar(320)
-  passwordHash             String?                    @db.VarChar(128)
-  displayName              String                     @db.VarChar(200)
-  jobTitle                 String?                    @db.VarChar(120)
-  status                   String                     @default("Active") @db.VarChar(30)
-  managerId                String?                    @db.Uuid
-  manager                  User?                      @relation("UserReports", fields: [managerId], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  directReports            User[]                     @relation("UserReports")
-  emailVerifiedAt          DateTime?                  @db.Timestamptz(6)
-  invitationAcceptedAt     DateTime?                  @db.Timestamptz(6)
-  tokenVersion             Int                        @default(0)
-  lastLoginAt              DateTime?                  @db.Timestamptz(6)
-  theme                    String                     @default("light") @db.VarChar(10)
-  timezone                 String                     @default("UTC") @db.VarChar(80)
-  dateFormat               String                     @default("MMM d, yyyy") @db.VarChar(40)
-  timeFormat               String                     @default("12h") @db.VarChar(10)
-  reducedMotion            Boolean                    @default(false)
-  inAppNotifications       Boolean                    @default(true)
-  emailNotifications       Boolean                    @default(false)
-  interviewReminders       Boolean                    @default(true)
-  approvalReminders        Boolean                    @default(true)
-  taskReminders            Boolean                    @default(true)
-  userRoles                UserRole[]
-  vacancyRequests          VacancyRequest[]           @relation("Requesters")
-  assignedVacancyRequests  VacancyRequest[]           @relation("VacancyRequestAssignee")
-  vacancyStatusChanges     VacancyStatusHistory[]     @relation("VacancyStatusChanges")
-  approvals                VacancyRequestApproval[]   @relation("ApprovalAssignee")
-  assignments              VacancyAssignment[]
-  primaryApplications      Application[]              @relation("ApplicationPrimaryRecruiter")
-  taskApplications         Application[]              @relation("ApplicationTaskOwner")
-  applicationStageChanges  ApplicationStatusHistory[]
-  uploadedDocuments        CandidateDocument[]
-  deletedDocuments         CandidateDocument[]        @relation("DocumentDeleter")
-  screeningLogs            ScreeningLog[]
-  applicationNotes         ApplicationNote[]
-  interviewAttendeeLinks   InterviewAttendee[]
-  submittedScorecards      InterviewScorecard[]
-  offerApprovals           OfferApproval[]
-  createdAt                DateTime                   @default(now()) @db.Timestamptz(6)
-  updatedAt                DateTime                   @updatedAt @db.Timestamptz(6)
-  hiringCasesOwned         HiringCase[]               @relation("HiringCaseOwner")
-  complianceVerified       ComplianceRequirement[]    @relation("ComplianceVerifier")
-  hiringCaseApprovals      HiringCaseApproval[]       @relation("HiringCaseApprover")
-  importJobs               CandidateImportJob[]       @relation("ImportUploader")
-  notifications            Notification[]
-  authTokens               AuthToken[]
-  assignedTasks            Task[]                     @relation("TaskAssignee")
-  createdTasks             Task[]                     @relation("TaskCreator")
-  completedTasks           Task[]                     @relation("TaskCompleter")
-  createdCandidates        Candidate[]                @relation("CandidateCreator")
+  id                      String                     @id @default(uuid()) @db.Uuid
+  organizationId          String                     @db.Uuid
+  organization            Organization               @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  email                   String                     @db.VarChar(320)
+  emailNormalized         String                     @db.VarChar(320)
+  passwordHash            String?                    @db.VarChar(128)
+  displayName             String                     @db.VarChar(200)
+  jobTitle                String?                    @db.VarChar(120)
+  status                  String                     @default("Active") @db.VarChar(30)
+  managerId               String?                    @db.Uuid
+  manager                 User?                      @relation("UserReports", fields: [managerId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  directReports           User[]                     @relation("UserReports")
+  emailVerifiedAt         DateTime?                  @db.Timestamptz(6)
+  invitationAcceptedAt    DateTime?                  @db.Timestamptz(6)
+  tokenVersion            Int                        @default(0)
+  lastLoginAt             DateTime?                  @db.Timestamptz(6)
+  theme                   String                     @default("light") @db.VarChar(10)
+  timezone                String                     @default("UTC") @db.VarChar(80)
+  dateFormat              String                     @default("MMM d, yyyy") @db.VarChar(40)
+  timeFormat              String                     @default("12h") @db.VarChar(10)
+  reducedMotion           Boolean                    @default(false)
+  inAppNotifications      Boolean                    @default(true)
+  emailNotifications      Boolean                    @default(false)
+  interviewReminders      Boolean                    @default(true)
+  approvalReminders       Boolean                    @default(true)
+  taskReminders           Boolean                    @default(true)
+  userRoles               UserRole[]
+  vacancyRequests         VacancyRequest[]           @relation("Requesters")
+  assignedVacancyRequests VacancyRequest[]           @relation("VacancyRequestAssignee")
+  vacancyStatusChanges    VacancyStatusHistory[]     @relation("VacancyStatusChanges")
+  approvals               VacancyRequestApproval[]   @relation("ApprovalAssignee")
+  assignments             VacancyAssignment[]
+  ownedVacancies          Vacancy[]                  @relation("VacancyPrimaryRecruiter")
+  primaryApplications     Application[]              @relation("ApplicationPrimaryRecruiter")
+  taskApplications        Application[]              @relation("ApplicationTaskOwner")
+  applicationStageChanges ApplicationStatusHistory[]
+  uploadedDocuments       CandidateDocument[]
+  deletedDocuments        CandidateDocument[]        @relation("DocumentDeleter")
+  screeningLogs           ScreeningLog[]
+  applicationNotes        ApplicationNote[]
+  interviewAttendeeLinks  InterviewAttendee[]
+  submittedScorecards     InterviewScorecard[]
+  offerApprovals          OfferApproval[]
+  createdAt               DateTime                   @default(now()) @db.Timestamptz(6)
+  updatedAt               DateTime                   @updatedAt @db.Timestamptz(6)
+  hiringCasesOwned        HiringCase[]               @relation("HiringCaseOwner")
+  complianceVerified      ComplianceRequirement[]    @relation("ComplianceVerifier")
+  hiringCaseApprovals     HiringCaseApproval[]       @relation("HiringCaseApprover")
+  importJobs              CandidateImportJob[]       @relation("ImportUploader")
+  notifications           Notification[]
+  authTokens              AuthToken[]
+  assignedTasks           Task[]                     @relation("TaskAssignee")
+  createdTasks            Task[]                     @relation("TaskCreator")
+  completedTasks          Task[]                     @relation("TaskCompleter")
+  createdCandidates       Candidate[]                @relation("CandidateCreator")
   recruiterTargetsReceived RecruiterTarget[]          @relation("RecruiterTargetAssignee")
   recruiterTargetsSet      RecruiterTarget[]          @relation("RecruiterTargetSetter")
 
@@ -222,6 +223,8 @@ model Permission {
   description    String?
   organizationId String?          @db.Uuid
   organization   Organization?    @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  /// B2: Active | Inactive | Retired. Only Active permissions are effective.
+  status         String           @default("Active") @db.VarChar(30)
   roleLinks      RolePermission[]
   createdAt      DateTime         @default(now()) @db.Timestamptz(6)
   updatedAt      DateTime         @updatedAt @db.Timestamptz(6)
@@ -326,18 +329,22 @@ model VacancyRequestApproval {
 }
 
 model Vacancy {
-  id                 String                 @id @default(uuid()) @db.Uuid
-  organizationId     String                 @db.Uuid
-  organization       Organization           @relation(fields: [organizationId], references: [id], onDelete: Restrict)
-  branchId           String                 @db.Uuid
-  branch             Branch                 @relation(fields: [branchId], references: [id], onDelete: Restrict)
-  positionId         String                 @db.Uuid
-  position           Position               @relation(fields: [positionId], references: [id], onDelete: Restrict)
-  vacancyRequestId   String                 @unique @db.Uuid
-  vacancyRequest     VacancyRequest         @relation(fields: [vacancyRequestId], references: [id], onDelete: Restrict)
-  vacancyCode        String                 @unique @db.VarChar(50)
+  id                 String              @id @default(uuid()) @db.Uuid
+  organizationId     String              @db.Uuid
+  organization       Organization        @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  branchId           String              @db.Uuid
+  branch             Branch              @relation(fields: [branchId], references: [id], onDelete: Restrict)
+  positionId         String              @db.Uuid
+  position           Position            @relation(fields: [positionId], references: [id], onDelete: Restrict)
+  vacancyRequestId   String              @unique @db.Uuid
+  vacancyRequest     VacancyRequest      @relation(fields: [vacancyRequestId], references: [id], onDelete: Restrict)
+  vacancyCode        String              @unique @db.VarChar(50)
   // B3: Open | On Hold | Partially Filled | Filled | Closed (see vacancy-lifecycle.ts)
-  status             String                 @default("Open") @db.VarChar(40)
+  status             String              @default("Open") @db.VarChar(40)
+  // B1: the single job owner. Never an ADMINISTRATOR or inactive user
+  // (enforced in the API). Nullable: unowned jobs stay null until assigned.
+  primaryRecruiterId String?             @db.Uuid
+  primaryRecruiter   User?               @relation("VacancyPrimaryRecruiter", fields: [primaryRecruiterId], references: [id], onDelete: Restrict)
   approvedHeadcount  Int
   joinedHeadcount    Int                    @default(0)
   openedAt           DateTime?              @db.Timestamptz(6)
@@ -359,6 +366,7 @@ model Vacancy {
 
   @@index([organizationId, status])
   @@index([branchId, positionId, openedAt])
+  @@index([primaryRecruiterId])
   @@map("vacancies")
   holdUntil          DateTime?              @db.Date /// B3: optional hold-until date (data only; no auto-reopen)
 }
@@ -447,6 +455,8 @@ model Candidate {
   languages             String[]              @default([]) @db.VarChar(50)
   availability          String?               @db.VarChar(60)
   metadata              Json?
+  /// B2: set once by the admin-only legal-erasure anonymize action (irreversible).
+  anonymizedAt          DateTime?             @db.Timestamptz(6)
   applications          Application[]
   createdById           String?               @db.Uuid
   createdBy             User?                 @relation("CandidateCreator", fields: [createdById], references: [id], onDelete: SetNull)
@@ -591,6 +601,8 @@ model CandidateDocument {
   deletedById            String?                 @db.Uuid
   deletedBy              User?                   @relation("DocumentDeleter", fields: [deletedById], references: [id], onDelete: Restrict)
   deletionReason         String?                 @db.Text
+  /// B2: file bytes removed and metadata scrubbed by candidate anonymize.
+  anonymizedAt           DateTime?               @db.Timestamptz(6)
   uploadedById           String?                 @db.Uuid
   uploadedBy             User?                   @relation(fields: [uploadedById], references: [id], onDelete: Restrict)
   complianceRequirements ComplianceRequirement[]
@@ -862,6 +874,8 @@ model TalentPoolCandidate {
   consentExpiry   DateTime?  @db.Timestamptz(6)
   source          String?    @db.VarChar(100)
   addedAt         DateTime   @default(now()) @db.Timestamptz(6)
+  /// B2: soft unlink. Removing a candidate from a pool sets this; re-adding clears it.
+  removedAt       DateTime?  @db.Timestamptz(6)
 
   @@unique([talentPoolId, candidateId])
   @@index([candidateId])

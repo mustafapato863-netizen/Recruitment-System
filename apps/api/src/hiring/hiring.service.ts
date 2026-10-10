@@ -35,7 +35,16 @@ export class HiringService {
       : undefined;
   }
 
+  /** Read-only: owners plus the current final-hire/offer approver of the file (B1 follow-up). */
+  private async applicationReadVisibility(user?: AuthUser) {
+    return user && this.accessControl
+      ? this.accessControl.getApplicationReadVisibilityWhere(user)
+      : undefined;
+  }
+
   async createHiringCase(organizationId: string, dto: CreateHiringCaseDto, user: AuthUser) {
+    const offerFile = await this.prisma.offer.findFirst({ where: { id: dto.offerId, organizationId }, select: { applicationId: true } });
+    if (offerFile && this.accessControl) await this.accessControl.assertApplicationAccess(user, offerFile.applicationId);
     const visibility = await this.applicationVisibility(user);
     const offer = await this.prisma.offer.findFirst({
       where: { id: dto.offerId, organizationId, ...(visibility ? { application: visibility } : {}) },
@@ -172,7 +181,7 @@ export class HiringService {
   }
 
   async getHiringCase(organizationId: string, id: string, user?: AuthUser) {
-    const visibility = await this.applicationVisibility(user);
+    const visibility = await this.applicationReadVisibility(user);
     const hiringCase = await this.prisma.hiringCase.findFirst({
       where: { id, organizationId, ...(visibility ? { application: visibility } : {}) },
       include: {
@@ -284,7 +293,7 @@ export class HiringService {
   }
 
   async getFinalApprovalInbox(organizationId: string, user?: AuthUser) {
-    const visibility = await this.applicationVisibility(user);
+    const visibility = await this.applicationReadVisibility(user);
     const cases = await this.prisma.hiringCase.findMany({
       where: { organizationId, status: 'Pending Final Approval', ...(visibility ? { application: visibility } : {}) },
       include: {
@@ -302,7 +311,7 @@ export class HiringService {
   }
 
   async decideFinalApproval(organizationId: string, caseId: string, dto: FinalApprovalDto, user: AuthUser) {
-    const visibility = await this.applicationVisibility(user);
+    const visibility = await this.applicationReadVisibility(user);
     const hiringCase = await this.prisma.hiringCase.findFirst({
       where: { id: caseId, organizationId, ...(visibility ? { application: visibility } : {}) },
       include: { approvals: true }
