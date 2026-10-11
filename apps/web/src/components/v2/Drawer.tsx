@@ -117,7 +117,7 @@ export function DrawerV2({
         aria-busy={status === 'loading' || undefined}
         onKeyDown={onKeyDown}
       >
-        <header className="rf2-drawer__header">
+        <header className="rf2-drawer__header" role="presentation">
           <div className="rf2-drawer__heading">
             {kicker ? <p className="rf2-drawer__kicker">{kicker}</p> : null}
             <h2 id={titleId} className="rf2-drawer__title">{title}</h2>

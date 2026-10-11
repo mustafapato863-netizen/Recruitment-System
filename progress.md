@@ -1,5 +1,19 @@
 # Progress
 
+## 2026-10-11 — workspace simplification and release
+- TeamWork isolated rerun passed all 13 tests. The three other focused files passed all 126 tests in the preceding run; final CI will verify the full suite on the final head.
+- Browser review passed recruiter/admin navigation, template search, light/dark switch, Escape and return focus, and a 375px phone layout. Temporary fixture files were removed; review screenshots remain under artifacts.
+- Full frontend run: 820/821 passed, with a timeout in the existing reassignment workflow test. A focused run exposed its immediate drawer assertion racing router completion; changed that assertion to wait for the actual close and gave this multi-step workflow plus axe check a 10-second limit. Subsequent focused run passed reassignment but hit a different existing 5-second TeamWork test under local load; rerunning TeamWork alone without simultaneous build checks.
+- Latest frontend TypeScript build passed; lint passed with 12 existing hook warnings and no errors. No business data, permissions or API changes.
+- Read selected skills and inspected navigation, route permissions and specialist homes.
+- Confirmed explicit user authorization to improve, merge and deploy.
+- Started tracking this task while preserving prior planning notes.
+- Shared dialog discovery: neither `components/ui/Modal.tsx` nor `components/v2/Modal.tsx` exists. Located existing `components/v2/Drawer.tsx` and `components/Modal.tsx`; use the verified shared dialog rather than inventing paths.
+- Implemented grouped tools discovery and plain task names; removed the always-expanded classic section.
+- Added verification for search/no-results, admin grouping, routing, focus restoration, specialist queues and interviewer-only navigation. Local checks are running.
+- Broader checks caught routing test fixtures that mount the real shell without the ThemeProvider required by the restored switch. Original PR CI also failed on those fixtures; fixing them before release and running the full frontend suite.
+- New drawer accessibility check found the shared drawer header was exposed as a second page banner. Explicit presentation semantics remove that duplicate landmark. Corrected invalid Testing Library `exact` role options found by the type checker.
+
 ## 2026-09-23
 - Started diagnosis of Administrator access to Reports and requested recruiter/overall performance reporting.
 - Read `planning-with-files`, `senior-fullstack`, and `code-reviewer` skill guidance.

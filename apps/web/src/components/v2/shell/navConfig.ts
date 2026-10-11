@@ -77,16 +77,16 @@ export const CLASSIC_NAV: SeatNavItem[] = [
   C('interviews', 'All interviews', '/interviews', { requires: ['VACANCY_VIEW'] }),
   C('calendar', 'Interview calendar', '/interviews/calendar', { requires: ['VACANCY_VIEW'] }),
   C('offers', 'All offers', '/offers', { requires: ['APPLICATION_VIEW'] }),
-  C('candidates', 'Candidates (export, duplicates, metrics)', '/classic/candidates', { requires: ['CANDIDATE_VIEW'] }),
+  C('candidates', 'Candidate data & exports', '/classic/candidates', { requires: ['CANDIDATE_VIEW'] }),
   C('cv-bank', 'CV Bank', '/cv-bank', { requires: ['CANDIDATE_VIEW'] }),
   C('talent-pools', 'Talent pools', '/sourcing-match', { requires: ['CANDIDATE_VIEW'] }),
-  C('vacancies', 'Jobs (export)', '/classic/vacancies', { requires: ['VACANCY_VIEW'] }),
+  C('vacancies', 'Job exports', '/classic/vacancies', { requires: ['VACANCY_VIEW'] }),
   C('import', 'Bulk import', '/import', { requiresAny: ['CANDIDATE_CREATE', 'VACANCY_REQUEST_CREATE', 'MASTER_DATA_MANAGE'] }),
   C('targets', 'Targets', '/settings/targets', { requiresAny: ['VACANCY_REQUEST_APPROVE', 'USERS_MANAGE', 'VACANCY_MANAGE', 'VACANCY_ASSIGN', 'VACANCY_REASSIGN', 'MASTER_DATA_VIEW'] }),
-  C('access', 'Roles and access tools', '/access-control', { requires: ['USERS_VIEW'] }),
+  C('access', 'Access permissions', '/access-control', { requires: ['USERS_VIEW'] }),
   C('master-data', 'Branches and positions', '/classic/master-data', { requires: ['MASTER_DATA_VIEW'] }),
-  C('settings', 'Settings (pipeline stages)', '/settings', { requiresAny: ['USERS_VIEW', 'MASTER_DATA_VIEW', 'OVERRIDE_WORKFLOW', 'AUDIT_VIEW'] }),
-  C('pipeline', 'Pipeline templates', '/classic/pipeline-settings', { requires: ['OVERRIDE_WORKFLOW'] }),
+  C('settings', 'Workflow settings', '/settings', { requiresAny: ['USERS_VIEW', 'MASTER_DATA_VIEW', 'OVERRIDE_WORKFLOW', 'AUDIT_VIEW'] }),
+  C('pipeline', 'Advanced pipeline templates', '/classic/pipeline-settings', { requires: ['OVERRIDE_WORKFLOW'] }),
 ];
 
 /** The classic items this user may open (ADMINISTRATOR passes every v1 PermissionGate). Interviewer-only users get none. */

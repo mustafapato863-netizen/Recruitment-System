@@ -9,6 +9,7 @@ vi.mock('../../quickguide', () => ({
   QuickGuideProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>, QuickGuideModal: () => null, useQuickGuide: () => ({ openGuide: vi.fn() }),
 }));
 import { AppShellV2 } from '../../components/v2/shell/AppShellV2';
+import { ThemeProvider } from '../../theme/ThemeContext';
 import type { Seat } from '../seat';
 
 describe('B2-17: v2 home per seat', () => {
@@ -38,7 +39,7 @@ const user = { id: 'u', email: 'e@x', displayName: 'E', organizationId: 'o', org
 
 describe('shell redirects in place', () => {
   it.each([['employee', '/', '/my-work'], ['manager', '/approval-inbox', '/my-work'], ['admin', '/', '/users']] as const)('%s at %s lands on %s', async (seat, from, to) => {
-    render(<MemoryRouter initialEntries={[from]}><Routes><Route element={<AppShellV2 user={user} seat={seat as Seat} onSignOut={() => {}} />}><Route path="*" element={<Where />} /></Route></Routes></MemoryRouter>);
+    render(<ThemeProvider><MemoryRouter initialEntries={[from]}><Routes><Route element={<AppShellV2 user={user} seat={seat as Seat} onSignOut={() => {}} />}><Route path="*" element={<Where />} /></Route></Routes></MemoryRouter></ThemeProvider>);
     expect(await screen.findByLabelText('where')).toHaveTextContent(to);
   });
 });

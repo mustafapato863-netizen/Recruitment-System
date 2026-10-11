@@ -9,13 +9,14 @@ import { getApi } from '../../../api/client';
 import { BreadcrumbProvider, useBreadcrumb } from '../../../context/BreadcrumbContext';
 import { QuickGuideModal, QuickGuideProvider, useQuickGuide } from '../../../quickguide';
 import { SEAT_LABEL, type Seat } from '../../../v2/seat';
-import { canUseRequisitions, isInterviewerOnly, specialHome, isRecruiterOnly, v2Redirect } from '../../../v2/destinations';
+import { canOpenRoute, canUseRequisitions, isInterviewerOnly, specialHome, isRecruiterOnly, v2Redirect } from '../../../v2/destinations';
 import { NavItem } from '../NavItem';
 import { canUseMyInterviews } from '../../../auth/interviewer';
 import { SEAT_NAV, activeNavKey, permittedClassicItems, permittedNavItems, type NavIconName } from './navConfig';
 import { workspaceOptions, type WorkspaceOption } from './workspace';
 import { useTheme } from '../../../theme/ThemeContext';
 import { SghHeartIcon } from '../../../design-system/brand/sgh-logo';
+import { WorkspaceTools } from './WorkspaceTools';
 import '../v2-primitives.css';
 import './v2-shell.css';
 import { HeaderSearch } from '../../../v2/search/HeaderSearch';
@@ -226,14 +227,23 @@ function ShellFrame({ user, seat, onSignOut, children }: AppShellV2Props) {
   const redirectTo = v2Redirect(seat, location.pathname, { requisitions: canUseRequisitions(user), interviews: canUseMyInterviews(user), interviewerOnly: isInterviewerOnly(user, canUseMyInterviews(user)), home: specialHome(user), permissions: user.permissions ?? [], isAdministrator: (user.roles ?? []).some((r) => r.code === 'ADMINISTRATOR') });
   const { customLabels } = useBreadcrumb();
   const isAdministrator = (user.roles ?? []).some((r) => r.code === 'ADMINISTRATOR');
-  const items = permittedNavItems(seat, user.permissions, isAdministrator, isRecruiterOnly(user.roles), canUseMyInterviews(user));
-  const classic = permittedClassicItems(user.permissions, isAdministrator, isInterviewerOnly(user, canUseMyInterviews(user)));
-  const activeKey = activeNavKey(items, location.pathname, location.hash);
-  const classicKey = activeKey ? undefined : activeNavKey(classic, location.pathname, location.hash);
+  const interviewerOnly = isInterviewerOnly(user, canUseMyInterviews(user));
+  const allItems = permittedNavItems(seat, user.permissions, isAdministrator, isRecruiterOnly(user.roles), canUseMyInterviews(user));
+  const classic = permittedClassicItems(user.permissions, isAdministrator, interviewerOnly);
+  const home = specialHome(user);
+  const pinned = home ? classic.filter((item) => item.to === home).map((item) => ({ ...item, icon: home === '/licenses' ? 'roles' as const : 'my-work' as const })) : [];
+  const daily = seat === 'admin' ? allItems.filter((item) => item.key === 'users' || item.key === 'reports')
+    : interviewerOnly ? allItems.filter((item) => item.key === 'my-work' || item.key === 'my-interviews')
+    : home ? allItems.filter((item) => item.key !== 'my-work') : allItems;
+  const items = [...pinned, ...daily];
+  const tools = [...(seat === 'admin' ? allItems : []), ...classic].filter((item) => !items.some((primary) => primary.to === item.to)
+    && canOpenRoute(item.to, user.permissions, isAdministrator));
+  const allNavigation = [...items, ...tools];
+  const activeKey = activeNavKey(allNavigation, location.pathname, location.hash);
   const canSeeNotifications = isAdministrator || (user.permissions ?? []).includes('NOTIFICATION_VIEW');
   const unread = useUnreadCount(true);
   const config = SEAT_NAV[seat];
-  const title = items.find((i) => i.key === activeKey)?.label ?? customLabels[location.pathname] ?? humanize(location.pathname);
+  const title = allNavigation.find((i) => i.key === activeKey)?.label ?? customLabels[location.pathname] ?? humanize(location.pathname);
   const headingId = useId();
   const sidebarId = useId();
   const [storedCollapsed, toggleCollapsed] = useSidebarCollapsed();
@@ -268,22 +278,9 @@ function ShellFrame({ user, seat, onSignOut, children }: AppShellV2Props) {
                 </NavItem>
               </li>
             ))}
+            {tools.length ? <li><WorkspaceTools items={tools} activeKey={activeKey} collapsed={collapsed} admin={seat === 'admin'} /></li> : null}
           </ul>
         </nav>
-        {classic.length ? (
-          <nav aria-labelledby={`${headingId}-classic`} className="rf2-shell__nav">
-            <p className="rf2-shell__heading" id={`${headingId}-classic`}>More (classic)</p>
-            <ul className="rf2-nav-list">
-              {classic.map((item) => (
-                <li key={item.key}>
-                  <NavItem asChild label={item.label} icon={ICONS.classic} active={item.key === classicKey} title={collapsed ? item.label : undefined}>
-                    <Link to={item.to} />
-                  </NavItem>
-                </li>
-              ))}
-            </ul>
-          </nav>
-        ) : null}
         <div className="rf2-shell__account" aria-label="Signed in as">
           <span className="rf2-avatar rf2-avatar--sm" aria-hidden="true">{initials(user.displayName)}</span>
           <span className="rf2-shell__account-text">

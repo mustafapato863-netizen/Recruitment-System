@@ -96,8 +96,8 @@ describe('M06 Reassign (B7 POST /files/reassign)', () => {
     await u.click(within(d).getByRole('button', { name: 'Reassign' }));
     await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/files/reassign', { applicationIds: ['a1'], toUserId: 'u-youssef', reason: 'Balance load' }));
     expect(await screen.findByRole('status')).toHaveTextContent('1 file moved from Mariam Farag to Youssef Ibrahim.');
-    expect(screen.queryByRole('dialog')).toBeNull();
-  });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  }, 10000);
   it('whole job → that report’s open files on the job; all their files → fromUserId', async () => {
     const u = userEvent.setup();
     api.postApi.mockResolvedValue({ batchId: 'b', toUserId: 'u-mariam', moved: [{ applicationId: 'n1' }, { applicationId: 'n2' }, { applicationId: 'n3' }], unchanged: [] });
