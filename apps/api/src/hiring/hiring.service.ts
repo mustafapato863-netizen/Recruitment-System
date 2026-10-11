@@ -1,4 +1,4 @@
-import { assertJoiningChecks } from '../applications/application-gates';
+import { assertJoiningChecks, JOINING_CHECK_LABELS, JOINING_CHECK_TYPES } from '../applications/application-gates';
 import { recordJoin } from '../vacancy-core/vacancy-lifecycle';
 import {
   BadRequestException,
@@ -64,6 +64,14 @@ export class HiringService {
     return license ? { OR: [visibility, license] } : visibility;
   }
 
+  /** True when LICENSE_CHECK is the caller's only hiring access (no APPLICATION_VIEW / approval permissions, not oversight). */
+  private async isLicenseOnly(user?: AuthUser): Promise<boolean> {
+    if (!user) return false;
+    const profile = await loadAccessProfile(this.prisma, user);
+    if (profile.isOversight || !profile.permissions.includes('LICENSE_CHECK')) return false;
+    return !['APPLICATION_VIEW', 'APPROVE_OFFERS', 'FINAL_HIRING_APPROVAL'].some((c) => profile.permissions.includes(c));
+  }
+
   async createHiringCase(organizationId: string, dto: CreateHiringCaseDto, user: AuthUser) {
     const offerFile = await this.prisma.offer.findFirst({ where: { id: dto.offerId, organizationId }, select: { applicationId: true } });
     if (offerFile && this.accessControl) await this.accessControl.assertApplicationAccess(user, offerFile.applicationId);
@@ -108,6 +116,7 @@ export class HiringService {
           },
         },
       });
+      await ensureLicenseRequirement(tx, created.id);
 
       await tx.application.update({
         where: { id: offer.applicationId },
@@ -168,6 +177,7 @@ export class HiringService {
       orderBy: { createdAt: 'desc' }
     });
 
+    if (await this.isLicenseOnly(user)) return cases.map(licenseView);
     return cases.map(c => {
       const totalItems = c.complianceRequirements.length;
       const completedItems = c.complianceRequirements.filter(
@@ -216,6 +226,7 @@ export class HiringService {
     if (!hiringCase) {
       throw new NotFoundException('Hiring case not found');
     }
+    if (await this.isLicenseOnly(user)) return licenseView(hiringCase);
 
     return {
       ...hiringCase,
@@ -469,4 +480,36 @@ export class HiringService {
 
     return { success: true };
   }
+}
+
+/** FINAL-2: what a LICENSE_CHECK-only caller sees of a hiring case. */
+type CaseForLicense = {
+  id: string;
+  status: string;
+  application: { candidate: { firstName: string; lastName: string }; vacancy: { position: { title: string }; branch: { name: string } } };
+  complianceRequirements: Array<{ id: string; type: string; name: string; status: string; isRequired: boolean; expiryDate: Date | string | null; verifiedAt: Date | string | null; documentId: string | null }>;
+};
+export function licenseView(c: CaseForLicense) {
+  const iso = (d: Date | string | null) => (d instanceof Date ? d.toISOString() : d);
+  return {
+    id: c.id,
+    status: c.status,
+    candidateName: `${c.application.candidate.firstName} ${c.application.candidate.lastName}`,
+    positionTitle: c.application.vacancy.position.title,
+    branchName: c.application.vacancy.branch.name,
+    complianceRequirements: c.complianceRequirements
+      .filter((r) => r.type === 'License')
+      .map((r) => ({ id: r.id, type: r.type, name: r.name, status: r.status, isRequired: r.isRequired, documentId: r.documentId, expiryDate: iso(r.expiryDate), verifiedAt: iso(r.verifiedAt) })),
+  };
+}
+
+/**
+ * Every hire needs a verified SCFHS licence (typed joining check SCFHS_LICENCE, gate 4), so each
+ * hiring case carries one "License" compliance item. Idempotent: no-op when the case has one.
+ */
+export async function ensureLicenseRequirement(tx: Pick<Prisma.TransactionClient, 'complianceRequirement'>, hiringCaseId: string): Promise<void> {
+  if (!(JOINING_CHECK_TYPES as readonly string[]).includes('SCFHS_LICENCE')) return;
+  const existing = await tx.complianceRequirement.findFirst({ where: { hiringCaseId, type: 'License' }, select: { id: true } });
+  if (existing) return;
+  await tx.complianceRequirement.create({ data: { hiringCaseId, type: 'License', name: JOINING_CHECK_LABELS.SCFHS_LICENCE, isRequired: true, status: 'Pending' } });
 }

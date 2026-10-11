@@ -21,7 +21,7 @@ import { ApplicationsController } from '../../applications/applications.controll
 import { DocumentsController } from '../../documents/documents.controller';
 import { OffersService } from '../../offers/offers.service';
 import { OffersController } from '../../offers/offers.controller';
-import { HiringService } from '../hiring.service';
+import { HiringService, ensureLicenseRequirement } from '../hiring.service';
 import { HiringController } from '../hiring.controller';
 import type { NotificationsService } from '../../notifications/notifications.service';
 import type { AuditService } from '../../audit/audit.service';
@@ -153,6 +153,48 @@ describe.skipIf(!url)('LICENSE_CHECK on hiring + final-hire approver read (scrat
       await expect(call(lic(), HiringController, 'submitForFinalApproval', { id: ids.hiringCase })).rejects.toBeInstanceOf(ForbiddenException);
       await expect(call(lic(), ApplicationsController, 'getApplication', { id: ids.application })).rejects.toBeInstanceOf(ForbiddenException);
       await expect(call(lic(), OffersController, 'getOfferById', { id: ids.offer })).rejects.toBeInstanceOf(ForbiddenException);
+    });
+  });
+
+  describe('FINAL-2: LICENSE_CHECK-only payload', () => {
+    const keys = ['branchName', 'candidateName', 'complianceRequirements', 'id', 'positionTitle', 'status'];
+    it('list and detail return only id, status, candidate name, job, site and the licence items', async () => {
+      const [listed] = await hiring.listHiringCases(ORG, undefined, lic(), ids.application);
+      const detail = await hiring.getHiringCase(ORG, ids.hiringCase, lic());
+      for (const c of [listed, detail] as Record<string, unknown>[]) {
+        expect(Object.keys(c).sort()).toEqual(keys);
+        expect(c).toMatchObject({ id: ids.hiringCase, candidateName: 'LC Cand' });
+        const reqs = c.complianceRequirements as Array<{ id: string; type: string }>;
+        expect(reqs.map((r) => r.id)).toEqual([ids.licenseReq]);
+        expect(JSON.stringify(c)).not.toMatch(/@lc\.test|"application"|"vacancy"|"approvals"|Passport/);
+      }
+    });
+    it('others keep the full payload', async () => {
+      const full = await hiring.getHiringCase(ORG, ids.hiringCase, ap()) as Record<string, unknown>;
+      expect(full).toHaveProperty('application');
+      expect((full.complianceRequirements as unknown[]).length).toBe(2);
+    });
+  });
+
+  describe('License item on new hiring cases', () => {
+    it('createHiringCase adds one SCFHS licence item; ensureLicenseRequirement is idempotent', async () => {
+      const [app2, offer2, cand2] = [randomUUID(), randomUUID(), randomUUID()];
+      await prisma.candidate.create({ data: { id: cand2, organizationId: ORG, candidateCode: `LC2-${tag}`, firstName: 'LC', lastName: 'Two', email: `cand2-${tag}@lc.test` } });
+      await prisma.application.create({ data: { id: app2, organizationId: ORG, applicationCode: `LC2-${tag}`, vacancyId, candidateId: cand2, stage: 'Offer', primaryRecruiterId: ids.owner } });
+      await prisma.offer.create({ data: { id: offer2, organizationId: ORG, applicationId: app2, offerCode: `LC2-${tag}`, status: 'Accepted' } });
+      try {
+        const created = await hiring.createHiringCase(ORG, { offerId: offer2 } as never, auth(ids.owner, ['RECRUITER'])) as { id: string };
+        await ensureLicenseRequirement(prisma, created.id);
+        const items = await prisma.complianceRequirement.findMany({ where: { hiringCaseId: created.id }, orderBy: { name: 'asc' } });
+        expect(items.filter((i) => i.type === 'License').map((i) => i.name)).toEqual(['SCFHS licence']);
+        expect(items).toHaveLength(3);
+      } finally {
+        await prisma.hiringCase.deleteMany({ where: { applicationId: app2 } });
+        await prisma.offer.deleteMany({ where: { id: offer2 } });
+        await prisma.applicationStatusHistory.deleteMany({ where: { applicationId: app2 } });
+        await prisma.application.deleteMany({ where: { id: app2 } });
+        await prisma.candidate.deleteMany({ where: { id: cand2 } });
+      }
     });
   });
 
