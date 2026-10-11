@@ -198,6 +198,7 @@ describe('Error Normalizer', () => {
     [400, 'OWNER_NOT_ELIGIBLE', 'An inactive user cannot own a job or file.'],
     [403, 'ADMIN_ONLY', 'Access denied: only administrators can manage templates.'],
     [403, 'DOCUMENT_DOWNLOAD_DENIED', 'Access denied: downloading this document requires DOWNLOAD_DOCUMENTS.'],
+    [403, 'LICENSE_CHECK_SCOPE', 'LICENSE_CHECK only covers license requirements.'],
   ])('keeps the B1 code %s/%s and its message', (status, code, message) => {
     const result = normalizeError(new HttpException({ code, message }, status));
     expect(result.statusCode).toBe(status);

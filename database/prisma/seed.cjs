@@ -469,6 +469,7 @@ async function main() {
       ],
       LICENSE_SPECIALIST: [
         'VACANCY_VIEW',
+        'LICENSE_CHECK',
         'DOWNLOAD_DOCUMENTS',
         'NOTIFICATION_VIEW', 'TASK_VIEW', 'TASK_UPDATE_STATUS',
       ],

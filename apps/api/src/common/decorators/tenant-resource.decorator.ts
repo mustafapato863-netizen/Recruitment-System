@@ -40,3 +40,12 @@ export const AllowFileApprover = () => SetMetadata(ALLOW_FILE_APPROVER, true);
  */
 export const ALLOW_APPROVER_CV_DOWNLOAD = 'ALLOW_APPROVER_CV_DOWNLOAD';
 export const AllowApproverCvDownload = () => SetMetadata(ALLOW_APPROVER_CV_DOWNLOAD, true);
+
+/**
+ * Hiring compliance (license checks): on GET /hiring, GET /hiring/:id and
+ * PATCH /hiring/:id/compliance/:reqId, a LICENSE_CHECK holder passes the
+ * file-ownership check. The service still limits them to their role's data
+ * scope, and on the PATCH to "License" requirements unless they hold CANDIDATE_EDIT.
+ */
+export const ALLOW_LICENSE_CHECK = 'ALLOW_LICENSE_CHECK';
+export const AllowLicenseCheck = () => SetMetadata(ALLOW_LICENSE_CHECK, true);

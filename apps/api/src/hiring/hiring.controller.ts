@@ -20,7 +20,7 @@ import {
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { TenantScopedGuard } from '../common/guards/tenant-scoped.guard';
-import { AllowFileApprover, TenantResource } from '../common/decorators/tenant-resource.decorator';
+import { AllowFileApprover, AllowLicenseCheck, TenantResource } from '../common/decorators/tenant-resource.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import type { AuthUser } from '@recruitflow/contracts';
 import { RequireAnyPermissions, RequirePermissions } from '../common/decorators/require-permissions.decorator';
@@ -54,7 +54,7 @@ export class HiringController {
   }
 
   @Get()
-  @RequirePermissions('APPLICATION_VIEW')
+  @RequireAnyPermissions('APPLICATION_VIEW', 'LICENSE_CHECK')
   listHiringCases(
     @CurrentUser() user: AuthUser,
     @Query('status') status?: string,
@@ -66,8 +66,9 @@ export class HiringController {
   }
 
   @Get(':id')
-  @RequireAnyPermissions('APPLICATION_VIEW', 'APPROVE_OFFERS', 'FINAL_HIRING_APPROVAL')
+  @RequireAnyPermissions('APPLICATION_VIEW', 'APPROVE_OFFERS', 'FINAL_HIRING_APPROVAL', 'LICENSE_CHECK')
   @AllowFileApprover()
+  @AllowLicenseCheck()
   @UseGuards(TenantScopedGuard)
   @TenantResource({ resource: 'hiringCase', param: 'id' })
   getHiringCase(
@@ -78,7 +79,8 @@ export class HiringController {
   }
 
   @Patch(':id/compliance/:reqId')
-  @RequirePermissions('CANDIDATE_EDIT')
+  @RequireAnyPermissions('CANDIDATE_EDIT', 'LICENSE_CHECK')
+  @AllowLicenseCheck()
   @AuditAction('HIRING_COMPLIANCE_UPDATE')
   @UseGuards(TenantScopedGuard)
   @TenantResource({ resource: 'hiringCase', param: 'id' })

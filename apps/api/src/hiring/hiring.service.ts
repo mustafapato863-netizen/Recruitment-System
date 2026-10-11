@@ -1,4 +1,4 @@
-import { assertJoiningChecks } from '../applications/application-gates';
+import { assertJoiningChecks, JOINING_CHECK_LABELS, JOINING_CHECK_TYPES } from '../applications/application-gates';
 import { recordJoin } from '../vacancy-core/vacancy-lifecycle';
 import {
   BadRequestException,
@@ -21,6 +21,7 @@ import type {
   UpdateComplianceDto,
 } from './hiring.dto';
 import { AccessControlService } from '../access-control/access-control.service';
+import { loadAccessProfile } from '../common/access/file-access';
 
 @Injectable()
 export class HiringService {
@@ -41,6 +42,34 @@ export class HiringService {
     return user && this.accessControl
       ? this.accessControl.getApplicationReadVisibilityWhere(user)
       : undefined;
+  }
+
+  /**
+   * LICENSE_CHECK: the hiring cases in the caller's role data scope (ownership not required).
+   * Null when the caller doesn't hold LICENSE_CHECK.
+   */
+  private async licenseScope(user?: AuthUser): Promise<Prisma.ApplicationWhereInput | null> {
+    if (!user || !this.accessControl) return null;
+    if (!(await this.userHas(user, 'LICENSE_CHECK'))) return null;
+    return this.accessControl.getApplicationScopeWhere(user);
+  }
+
+  private async userHas(user: AuthUser, code: string): Promise<boolean> {
+    return (await loadAccessProfile(this.prisma, user)).permissions.includes(code);
+  }
+
+  /** Normal visibility OR, for LICENSE_CHECK holders, their data scope. */
+  private withLicense(visibility: Prisma.ApplicationWhereInput | undefined, license: Prisma.ApplicationWhereInput | null) {
+    if (!visibility) return undefined;
+    return license ? { OR: [visibility, license] } : visibility;
+  }
+
+  /** True when LICENSE_CHECK is the caller's only hiring access (no APPLICATION_VIEW / approval permissions, not oversight). */
+  private async isLicenseOnly(user?: AuthUser): Promise<boolean> {
+    if (!user) return false;
+    const profile = await loadAccessProfile(this.prisma, user);
+    if (profile.isOversight || !profile.permissions.includes('LICENSE_CHECK')) return false;
+    return !['APPLICATION_VIEW', 'APPROVE_OFFERS', 'FINAL_HIRING_APPROVAL'].some((c) => profile.permissions.includes(c));
   }
 
   async createHiringCase(organizationId: string, dto: CreateHiringCaseDto, user: AuthUser) {
@@ -87,6 +116,7 @@ export class HiringService {
           },
         },
       });
+      await ensureLicenseRequirement(tx, created.id);
 
       await tx.application.update({
         where: { id: offer.applicationId },
@@ -133,7 +163,7 @@ export class HiringService {
   }
 
   async listHiringCases(organizationId: string, status?: string, user?: AuthUser, applicationId?: string) {
-    const visibility = await this.applicationVisibility(user);
+    const visibility = this.withLicense(await this.applicationVisibility(user), await this.licenseScope(user));
     const cases = await this.prisma.hiringCase.findMany({
       where: { organizationId, ...(status ? { status } : {}), ...(applicationId ? { applicationId } : {}), ...(visibility ? { application: visibility } : {}) },
       include: {
@@ -147,6 +177,7 @@ export class HiringService {
       orderBy: { createdAt: 'desc' }
     });
 
+    if (await this.isLicenseOnly(user)) return cases.map(licenseView);
     return cases.map(c => {
       const totalItems = c.complianceRequirements.length;
       const completedItems = c.complianceRequirements.filter(
@@ -182,7 +213,7 @@ export class HiringService {
   }
 
   async getHiringCase(organizationId: string, id: string, user?: AuthUser) {
-    const visibility = await this.applicationReadVisibility(user);
+    const visibility = this.withLicense(await this.applicationReadVisibility(user), await this.licenseScope(user));
     const hiringCase = await this.prisma.hiringCase.findFirst({
       where: { id, organizationId, ...(visibility ? { application: visibility } : {}) },
       include: {
@@ -195,6 +226,7 @@ export class HiringService {
     if (!hiringCase) {
       throw new NotFoundException('Hiring case not found');
     }
+    if (await this.isLicenseOnly(user)) return licenseView(hiringCase);
 
     return {
       ...hiringCase,
@@ -219,13 +251,18 @@ export class HiringService {
   }
 
   async updateCompliance(organizationId: string, caseId: string, reqId: string, dto: UpdateComplianceDto, user: AuthUser) {
-    const visibility = await this.applicationVisibility(user);
+    const license = await this.licenseScope(user);
+    const visibility = this.withLicense(await this.applicationVisibility(user), license);
     const requirement = await this.prisma.complianceRequirement.findFirst({
       where: { id: reqId, hiringCaseId: caseId, hiringCase: { organizationId, ...(visibility ? { application: visibility } : {}) } }
     });
 
     if (!requirement) {
       throw new NotFoundException('Compliance requirement not found');
+    }
+    // LICENSE_CHECK alone only verifies license requirements; other items stay with CANDIDATE_EDIT.
+    if (license && requirement.type !== 'License' && !(await this.userHas(user, 'CANDIDATE_EDIT'))) {
+      throw new ForbiddenException({ code: 'LICENSE_CHECK_SCOPE', message: 'LICENSE_CHECK only covers license requirements.' });
     }
 
     const data: Prisma.ComplianceRequirementUpdateInput = {
@@ -443,4 +480,36 @@ export class HiringService {
 
     return { success: true };
   }
+}
+
+/** FINAL-2: what a LICENSE_CHECK-only caller sees of a hiring case. */
+type CaseForLicense = {
+  id: string;
+  status: string;
+  application: { candidate: { firstName: string; lastName: string }; vacancy: { position: { title: string }; branch: { name: string } } };
+  complianceRequirements: Array<{ id: string; type: string; name: string; status: string; isRequired: boolean; expiryDate: Date | string | null; verifiedAt: Date | string | null; documentId: string | null }>;
+};
+export function licenseView(c: CaseForLicense) {
+  const iso = (d: Date | string | null) => (d instanceof Date ? d.toISOString() : d);
+  return {
+    id: c.id,
+    status: c.status,
+    candidateName: `${c.application.candidate.firstName} ${c.application.candidate.lastName}`,
+    positionTitle: c.application.vacancy.position.title,
+    branchName: c.application.vacancy.branch.name,
+    complianceRequirements: c.complianceRequirements
+      .filter((r) => r.type === 'License')
+      .map((r) => ({ id: r.id, type: r.type, name: r.name, status: r.status, isRequired: r.isRequired, documentId: r.documentId, expiryDate: iso(r.expiryDate), verifiedAt: iso(r.verifiedAt) })),
+  };
+}
+
+/**
+ * Every hire needs a verified SCFHS licence (typed joining check SCFHS_LICENCE, gate 4), so each
+ * hiring case carries one "License" compliance item. Idempotent: no-op when the case has one.
+ */
+export async function ensureLicenseRequirement(tx: Pick<Prisma.TransactionClient, 'complianceRequirement'>, hiringCaseId: string): Promise<void> {
+  if (!(JOINING_CHECK_TYPES as readonly string[]).includes('SCFHS_LICENCE')) return;
+  const existing = await tx.complianceRequirement.findFirst({ where: { hiringCaseId, type: 'License' }, select: { id: true } });
+  if (existing) return;
+  await tx.complianceRequirement.create({ data: { hiringCaseId, type: 'License', name: JOINING_CHECK_LABELS.SCFHS_LICENCE, isRequired: true, status: 'Pending' } });
 }

@@ -7,7 +7,7 @@ import { PrismaService } from '../../database/prisma.service';
 import type { Request } from 'express';
 import { isUuid } from '../validation/is-uuid';
 import { TENANT_RESOURCE_POLICIES } from './tenant-resource-policies';
-import { ALLOW_APPROVER_CV_DOWNLOAD, ALLOW_FILE_APPROVER, ALLOW_INTERVIEW_ATTENDEE } from '../decorators/tenant-resource.decorator';
+import { ALLOW_APPROVER_CV_DOWNLOAD, ALLOW_FILE_APPROVER, ALLOW_INTERVIEW_ATTENDEE, ALLOW_LICENSE_CHECK } from '../decorators/tenant-resource.decorator';
 import {
   canAccessApplication,
   canReadAsApprover,
@@ -117,7 +117,11 @@ export class TenantScopedGuard implements CanActivate {
     if (isFileResource(resource)) {
       if (!user?.userId) throw new ForbiddenException('Access denied: unauthenticated request');
       const profile = await loadAccessProfile(this.prisma, user);
-      if (!profile.isOversight) {
+      const licenseAllowed =
+        resource === 'hiringCase' &&
+        this.reflector.get<boolean>(ALLOW_LICENSE_CHECK, context.getHandler()) === true &&
+        profile.permissions.includes('LICENSE_CHECK');
+      if (!profile.isOversight && !licenseAllowed) {
         const applicationId = await resolveFileApplicationId(this.prisma, resource, id);
         // On approver-readable routes, a user without APPLICATION_VIEW got past
         // PermissionsGuard only through an approval permission, so they must be

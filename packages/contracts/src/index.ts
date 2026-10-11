@@ -45,6 +45,7 @@ export const errorCodes = [
   // B1 ownership/scope codes (PR #4); clients branch on these.
   'FILE_NOT_OWNED',
   'JOB_NOT_OWNED',
+  'LICENSE_CHECK_SCOPE',
   'ADMIN_CANNOT_REASSIGN',
   'OWNER_NOT_ELIGIBLE',
   'ADMIN_ONLY',
