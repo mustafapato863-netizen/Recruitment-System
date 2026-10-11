@@ -75,10 +75,10 @@
 }
 @media (pointer: coarse) { [data-ui='v2'] .rf2-nav-item { min-height: 44px; } }
 [data-ui='v2'] .rf2-nav-item svg { width: 16px; height: 16px; flex: none; }
-[data-ui='v2'] .rf2-nav-item:hover { background: rgba(255, 255, 255, 0.08); color: var(--rf2-on-action); }
+[data-ui='v2'] .rf2-nav-item:hover { background: rgba(255, 255, 255, 0.08); color: var(--rf2-on-nav); }
 [data-ui='v2'] .rf2-nav-item:active { background: rgba(255, 255, 255, 0.14); }
 [data-ui='v2'] .rf2-nav-item[aria-current='page'] { background: var(--rf2-action); color: var(--rf2-on-action); font-weight: 600; }
-[data-ui='v2'] .rf2-nav-item:focus-visible { outline: var(--rf2-focus-width) solid var(--rf2-on-action); outline-offset: var(--rf2-focus-offset); }
+[data-ui='v2'] .rf2-nav-item:focus-visible { outline: var(--rf2-focus-width) solid var(--rf2-on-nav); outline-offset: var(--rf2-focus-offset); }
 [data-ui='v2'] .rf2-nav-item__label { flex: 1; }
 [data-ui='v2'] .rf2-nav-item__badge {
   min-width: 20px; padding: 0 6px; border-radius: var(--rf2-radius-pill); background: var(--rf2-warning-tint);

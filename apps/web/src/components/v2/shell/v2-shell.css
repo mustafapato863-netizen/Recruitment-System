@@ -1,19 +1,19 @@
-/* F4 v2 shell. Scoped under [data-ui='v2']; tokens only. Light only. */
+/* F4 v2 shell. Scoped under [data-ui='v2']; tokens only. SGH light and dark themes. */
 [data-ui='v2'] .rf2-shell { display: grid; grid-template-columns: 240px minmax(0, 1fr); min-height: 100vh; background: var(--rf2-canvas); font-family: var(--rf2-font); color: var(--rf2-ink); }
 [data-ui='v2'] .rf2-skip-link { position: absolute; left: var(--rf2-space-1); top: -48px; z-index: 50; padding: var(--rf2-space-1) var(--rf2-space-2); background: var(--rf2-card); color: var(--rf2-action); border-radius: var(--rf2-radius-control); font-weight: 600; }
 [data-ui='v2'] .rf2-skip-link:focus { top: var(--rf2-space-1); outline: var(--rf2-focus-width) solid var(--rf2-focus-color); outline-offset: var(--rf2-focus-offset); }
 
 [data-ui='v2'] .rf2-shell__sidebar { position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; gap: var(--rf2-space-0-5); padding: var(--rf2-space-3) var(--rf2-space-1-5) var(--rf2-space-1-5); background: var(--rf2-nav); color: var(--rf2-nav-text); }
 [data-ui='v2'] .rf2-brand { display: flex; align-items: center; gap: var(--rf2-space-1); padding: 0 0 var(--rf2-space-2) var(--rf2-space-1); }
-[data-ui='v2'] .rf2-brand__mark { display: grid; place-items: center; width: 32px; height: 32px; border-radius: var(--rf2-radius-control); background: var(--rf2-action); color: var(--rf2-on-action); font-weight: 700; font-size: var(--rf2-text-card); }
+[data-ui='v2'] .rf2-brand__mark { display: grid; place-items: center; width: 32px; height: 32px; border-radius: var(--rf2-radius-control); background: transparent; color: var(--rf2-on-nav); font-weight: 700; font-size: var(--rf2-text-card); }
 [data-ui='v2'] .rf2-brand__text { display: flex; flex-direction: column; min-width: 0; white-space: nowrap; }
-[data-ui='v2'] .rf2-brand__name { color: var(--rf2-on-action); font-weight: 700; font-size: var(--rf2-text-card); line-height: var(--rf2-leading-label); }
+[data-ui='v2'] .rf2-brand__name { color: var(--rf2-on-nav); font-weight: 700; font-size: var(--rf2-text-card); line-height: var(--rf2-leading-label); }
 [data-ui='v2'] .rf2-brand__sub { font-size: var(--rf2-text-caption); line-height: var(--rf2-leading-caption); }
 [data-ui='v2'] .rf2-shell__heading { margin: var(--rf2-space-1) 0 var(--rf2-space-0-5); padding: 0 var(--rf2-space-1-5); font-size: var(--rf2-text-caption); line-height: var(--rf2-leading-caption); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
-[data-ui='v2'] .rf2-shell__nav { flex: 1; overflow-y: auto; }
+[data-ui='v2'] .rf2-shell__nav { flex: 1; overflow-y: auto; overflow-x: hidden; }
 [data-ui='v2'] .rf2-shell__account { display: flex; align-items: center; gap: var(--rf2-space-1-5); padding: var(--rf2-space-1-5); border-radius: var(--rf2-radius-card); background: rgba(255, 255, 255, 0.06); }
 [data-ui='v2'] .rf2-shell__account-text { display: flex; flex-direction: column; min-width: 0; }
-[data-ui='v2'] .rf2-shell__account-name { color: var(--rf2-on-action); font-size: var(--rf2-text-label); line-height: var(--rf2-leading-label); font-weight: 600; }
+[data-ui='v2'] .rf2-shell__account-name { color: var(--rf2-on-nav); font-size: var(--rf2-text-label); line-height: var(--rf2-leading-label); font-weight: 600; }
 [data-ui='v2'] .rf2-shell__account-seat { font-size: var(--rf2-text-caption); line-height: var(--rf2-leading-caption); }
 
 [data-ui='v2'] .rf2-avatar { display: grid; place-items: center; flex: none; width: 32px; height: 32px; border-radius: var(--rf2-radius-pill); background: var(--rf2-success); color: var(--rf2-on-action); font-size: var(--rf2-text-caption); font-weight: 700; }
@@ -45,12 +45,12 @@
 [data-ui='v2'] .rf2-brand { position: relative; }
 [data-ui='v2'] .rf2-collapse { margin-left: auto; display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: var(--rf2-radius-control); background: transparent; color: var(--rf2-nav-text); cursor: pointer; }
 [data-ui='v2'] .rf2-collapse:hover { background: rgba(255, 255, 255, 0.08); }
-[data-ui='v2'] .rf2-collapse:focus-visible, [data-ui='v2'] .rf2-workspace--button:focus-visible { outline: var(--rf2-focus-width) solid var(--rf2-on-action); outline-offset: var(--rf2-focus-offset); }
+[data-ui='v2'] .rf2-collapse:focus-visible, [data-ui='v2'] .rf2-workspace--button:focus-visible { outline: var(--rf2-focus-width) solid var(--rf2-on-nav); outline-offset: var(--rf2-focus-offset); }
 [data-ui='v2'] .rf2-collapse svg, [data-ui='v2'] .rf2-workspace svg { width: 16px; height: 16px; flex: none; }
 [data-ui='v2'] .rf2-workspace { display: flex; align-items: center; gap: var(--rf2-space-1-5); width: 100%; margin-bottom: var(--rf2-space-1); padding: var(--rf2-space-1) var(--rf2-space-1-5); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: var(--rf2-radius-card); background: transparent; color: var(--rf2-nav-text); font: inherit; text-align: left; }
 [data-ui='v2'] .rf2-workspace--button { cursor: pointer; }
 [data-ui='v2'] .rf2-workspace__text { display: flex; flex-direction: column; flex: 1; min-width: 0; }
-[data-ui='v2'] .rf2-workspace__name { color: var(--rf2-on-action); font-size: var(--rf2-text-label); line-height: var(--rf2-leading-label); font-weight: 600; }
+[data-ui='v2'] .rf2-workspace__name { color: var(--rf2-on-nav); font-size: var(--rf2-text-label); line-height: var(--rf2-leading-label); font-weight: 600; }
 [data-ui='v2'] .rf2-workspace__detail { font-size: var(--rf2-text-caption); line-height: var(--rf2-leading-caption); }
 [data-ui='v2'] .rf2-workspace-switcher { position: relative; }
 [data-ui='v2'] .rf2-workspace__list { position: absolute; z-index: 30; left: 0; right: 0; top: 100%; margin: 0; padding: var(--rf2-space-0-5); list-style: none; border-radius: var(--rf2-radius-card); background: var(--rf2-card); color: var(--rf2-ink); box-shadow: var(--rf2-shadow-menu); }
@@ -93,3 +93,21 @@
 }
 /* Screen-reader-only header labels (absolute) must stay inside their clipped table panel, or they widen the page. */
 [data-ui='v2'] .rf2-jtable th { position: relative; }
+
+/* Daily destinations stay visible; occasional work opens in one searchable panel. */
+[data-ui='v2'] .rf2-tools-trigger { width: 100%; border: 0; background: transparent; text-align: left; cursor: pointer; }
+[data-ui='v2'] .rf2-tools-trigger[data-active] { background: var(--rf2-action); color: var(--rf2-on-action); }
+[data-ui='v2'] .rf2-tools-search { display: flex; align-items: center; gap: var(--rf2-space-1); padding: var(--rf2-space-1-5); border: 1px solid var(--rf2-border); border-radius: var(--rf2-radius-control); background: var(--rf2-card); }
+[data-ui='v2'] .rf2-tools-search:focus-within { outline: var(--rf2-focus-width) solid var(--rf2-focus-color); outline-offset: var(--rf2-focus-offset); }
+[data-ui='v2'] .rf2-tools-search svg, [data-ui='v2'] .rf2-tools-link svg { width: 16px; height: 16px; flex: none; color: var(--rf2-muted); }
+[data-ui='v2'] .rf2-tools-search input { width: 100%; min-width: 0; border: 0; background: transparent; color: var(--rf2-ink); font: inherit; font-size: var(--rf2-text-body); outline: none; }
+[data-ui='v2'] .rf2-tools-search input:focus-visible { outline: none; }
+[data-ui='v2'] .rf2-tools-groups { display: grid; gap: var(--rf2-space-3); }
+[data-ui='v2'] .rf2-tools-group h3 { margin: 0 0 var(--rf2-space-1); font-size: var(--rf2-text-label); color: var(--rf2-ink-2); }
+[data-ui='v2'] .rf2-tools-group ul { list-style: none; margin: 0; padding: 0; border: 1px solid var(--rf2-divider); border-radius: var(--rf2-radius-card); overflow: hidden; }
+[data-ui='v2'] .rf2-tools-group li + li { border-top: 1px solid var(--rf2-divider); }
+[data-ui='v2'] .rf2-tools-link { display: flex; justify-content: space-between; align-items: center; gap: var(--rf2-space-1); min-height: 44px; padding: var(--rf2-space-1-5) var(--rf2-space-2); color: var(--rf2-ink); text-decoration: none; font-size: var(--rf2-text-body); }
+[data-ui='v2'] .rf2-tools-link:hover { background: var(--rf2-neutral-tint); }
+[data-ui='v2'] .rf2-tools-link[aria-current='page'] { background: var(--rf2-info-tint); color: var(--rf2-action); font-weight: 600; }
+[data-ui='v2'] .rf2-tools-link:focus-visible { outline-offset: -2px; }
+[data-ui='v2'] .rf2-tools-empty { color: var(--rf2-muted); font-size: var(--rf2-text-body); }

@@ -15,6 +15,7 @@ vi.mock('../../../../quickguide', () => ({
 }));
 
 import { AppShellV2 } from '../AppShellV2';
+import { ThemeProvider } from '../../../../theme/ThemeContext';
 import { activeNavKey, permittedNavItems, SEAT_NAV, CLASSIC_NAV, permittedClassicItems } from '../navConfig';
 import type { Seat } from '../../../../v2/seat';
 
@@ -28,13 +29,13 @@ const user = (permissions = ALL, codes = ['RECRUITER']): UserProfile => ({
 function renderShell(seat: Seat, u = user(), path = '/my-work', onSignOut = vi.fn()) {
   document.documentElement.setAttribute('data-ui', 'v2');
   return render(
-    <MemoryRouter initialEntries={[path]}>
+    <ThemeProvider><MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route element={<AppShellV2 user={u} seat={seat} onSignOut={onSignOut} />}>
           <Route path="*" element={<p>page content</p>} />
         </Route>
       </Routes>
-    </MemoryRouter>,
+    </MemoryRouter></ThemeProvider>,
   );
 }
 
@@ -51,21 +52,87 @@ describe('nav per seat', () => {
   it.each([
     ['employee', ['My Work', 'Open jobs', 'Candidates']],
     ['manager', ['Team work', 'Requisitions', 'Team result']],
-    ['admin', ['Users', 'Roles', 'Pipeline template', 'Master data', 'Templates', 'Reports', 'Audit', 'Integrations']],
-  ] as const)('%s shows the Figma items', (seat, labels) => {
+    ['admin', ['Users', 'Reports']],
+  ] as const)('%s shows only daily destinations in the main menu', (seat, labels) => {
     renderShell(seat, user(ALL, [seat === 'manager' ? 'HIRING_MANAGER' : seat === 'admin' ? 'ADMINISTRATOR' : 'RECRUITER']));
     const nav = screen.getByRole('navigation', { name: SEAT_NAV[seat].heading });
     expect(within(nav).getAllByRole('link').map((a) => a.textContent)).toEqual(labels);
   });
 
-  it('hides items the user cannot open (no locked rows)', () => {
+  it('hides unavailable items and keeps occasional work in a permission-filtered panel', async () => {
+    const u = userEvent.setup();
     renderShell('employee', user(['VACANCY_VIEW']));
     const nav = screen.getByRole('navigation', { name: SEAT_NAV.employee.heading });
     expect(within(nav).getAllByRole('link').map((a) => a.textContent)).toEqual(['My Work', 'Open jobs']);
-    // More (classic): only the VACANCY_VIEW items.
-    const classic = screen.getByRole('navigation', { name: 'More (classic)' });
-    expect(within(classic).getAllByRole('link').map((a) => a.getAttribute('href'))).toEqual(['/interviews', '/interviews/calendar', '/classic/vacancies']);
+    expect(screen.queryByRole('link', { name: 'All interviews' })).not.toBeInTheDocument();
+    await u.click(screen.getByRole('button', { name: 'Workspace tools' }));
+    const tools = screen.getByRole('dialog', { name: 'Workspace tools' });
+    expect(within(tools).getAllByRole('link').map((a) => a.getAttribute('href'))).toEqual(['/interviews', '/interviews/calendar', '/classic/vacancies']);
     expect(screen.queryByText(/locked/i)).not.toBeInTheDocument();
+  });
+
+  it('searches tools, handles no matches, and returns focus on Escape', async () => {
+    const u = userEvent.setup();
+    renderShell('employee');
+    const trigger = screen.getByRole('button', { name: 'Workspace tools' });
+    await u.click(trigger);
+    const search = screen.getByRole('searchbox', { name: 'Find a tool' });
+    expect(search).toHaveFocus();
+    await u.type(search, 'licence');
+    expect(screen.getByRole('link', { name: 'Licences' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'All offers' })).not.toBeInTheDocument();
+    await u.clear(search);
+    await u.type(search, 'no matching destination');
+    expect(screen.getByRole('status')).toHaveTextContent('No tools match');
+    await u.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+    await u.click(trigger);
+    expect(screen.getByRole('searchbox', { name: 'Find a tool' })).toHaveValue('');
+  });
+
+  it('groups admin configuration into Settings & tools, preserving links and keyboard focus', async () => {
+    const u = userEvent.setup();
+    renderShell('admin', user([], ['ADMINISTRATOR']), '/roles');
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Roles');
+    const trigger = screen.getByRole('button', { name: 'Settings & tools' });
+    expect(trigger).toHaveAttribute('data-active', 'true');
+    await u.click(trigger);
+    const dialog = screen.getByRole('dialog', { name: 'Settings & tools' });
+    expect(within(dialog).getByRole('link', { name: 'Roles' })).toHaveAttribute('aria-current', 'page');
+    expect(within(dialog).getByRole('link', { name: 'Templates' })).toHaveAttribute('href', '/email-templates');
+    expect(await runAxe(dialog)).toEqual([]);
+    await u.click(within(dialog).getByRole('link', { name: 'Master data' }));
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Master data');
+  });
+
+  it.each([
+    ['LICENSE_SPECIALIST', 'LICENSE_CHECK', 'Licences', '/licenses'],
+    ['FINAL_HIRING_APPROVER', 'FINAL_HIRING_APPROVAL', 'Final approvals', '/hires/approvals/inbox'],
+  ])('pins the essential queue for %s without unrelated tools', (role, permission, label, path) => {
+    renderShell('employee', user([permission], [role]), path);
+    const nav = screen.getByRole('navigation', { name: SEAT_NAV.employee.heading });
+    expect(within(nav).getAllByRole('link')).toHaveLength(1);
+    expect(within(nav).getByRole('link', { name: label })).toHaveAttribute('aria-current', 'page');
+    expect(screen.queryByRole('button', { name: 'Workspace tools' })).not.toBeInTheDocument();
+  });
+
+  it('interviewer-only users never see jobs or hiring tools that redirect away from their work', () => {
+    renderShell('employee', user(['VACANCY_VIEW', 'INTERVIEW_PARTICIPATE'], ['INTERVIEWER']), '/my-interviews');
+    expect(screen.getByRole('link', { name: 'My interviews' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.queryByRole('link', { name: 'Open jobs' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Workspace tools' })).not.toBeInTheDocument();
+  });
+
+  it('does not offer an admin tool when its route requires a stronger permission', async () => {
+    const u = userEvent.setup();
+    renderShell('admin', user(['APPLICATION_VIEW'], ['CUSTOM_ADMIN']), '/reports');
+    await u.click(screen.getByRole('button', { name: 'Settings & tools' }));
+    const panel = screen.getByRole('dialog');
+    expect(within(panel).queryByRole('link', { name: 'Templates' })).not.toBeInTheDocument();
+    expect(within(panel).queryByRole('link', { name: 'Roles' })).not.toBeInTheDocument();
+    expect(within(panel).getByRole('link', { name: 'Hiring cases' })).toHaveAttribute('href', '/hires');
   });
 
   it('manager has no Approvals item (v2: not a destination)', () => {
@@ -155,6 +222,24 @@ describe('header', () => {
     await u.click(trigger);
     await u.click(screen.getByRole('menuitem', { name: 'Sign out' }));
     expect(onSignOut).toHaveBeenCalledTimes(1);
+  });
+
+  it('switches and persists the theme from the account menu without leaving the workflow', async () => {
+    document.documentElement.dataset.theme = 'light';
+    const u = userEvent.setup();
+    renderShell('employee');
+    const trigger = screen.getByRole('button', { name: /Mariam Farag/ });
+    await u.click(trigger);
+    await u.click(screen.getByRole('menuitem', { name: 'Switch to dark mode' }));
+    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(document.documentElement.style.colorScheme).toBe('dark');
+    expect(localStorage.getItem('recruitflow.theme')).toBe('dark');
+    expect(trigger).toHaveFocus();
+    expect(screen.getByText('page content')).toBeInTheDocument();
+    await u.click(trigger);
+    await u.click(screen.getByRole('menuitem', { name: 'Switch to light mode' }));
+    expect(document.documentElement.dataset.theme).toBe('light');
+    expect(localStorage.getItem('recruitflow.theme')).toBe('light');
   });
 
   it('never renders pay data', () => {

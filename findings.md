@@ -1,5 +1,25 @@
 # Findings
 
+## Current task — simpler workspace and release (2026-10-11)
+- Admin tool search for "templates" returns Templates and Advanced pipeline templates; configuration groups are first. Browser snapshots and screenshots confirm the revised navigation in light and dark layouts.
+- Existing TeamWork tests combine multiple form interactions and axe. Reassignment success toast can render before router navigation commits drawer removal; waiting for dialog absence verifies the complete result without dropping the assertion.
+- PR #36 contains the SGH brand/theme restoration. The user now explicitly authorized improvements, merging and deployment.
+- The employee primary menu is already three work areas, but an always-expanded classic list adds up to 17 destinations and duplicates Jobs, Candidates, Pipeline and access settings.
+- The administrator primary menu displays eight configuration screens, followed by all classic links. Configuration can be grouped without removing routes or permissions.
+- Licence specialists and final approvers land on dedicated classic queues; their queues must stay directly reachable rather than hidden in optional tools.
+- Existing plan files contain completed September work; preserve that history and append this task.
+- PR #36 rules-pack and Vercel preview passed; the full CI run was still in progress at initial inspection.
+- Plan: employee daily navigation remains My Work, Jobs and Candidates; manager remains Team work, Requisitions and Results. Admin retains Users and Reports with configuration collected into a searchable Settings dialog. Optional hiring/data/configuration tools open in a searchable dialog instead of an always-expanded sidebar.
+- Essential specialist queues will be pinned directly; the tools directory will continue to use existing permission-filtered items and route guards.
+- An attempted read of `components/ui/Modal.tsx` found no file; discover the shared v2 dialog before implementation.
+- Implemented a tools drawer using the existing focus-trapping DrawerV2. Search, role-filtered grouping, active-page labels, empty search feedback, Escape and return-focus use existing controls.
+- Main admin menu now has Users and Reports plus Settings & tools. Daily employee/manager menus remain small. Licences and Final approvals are pinned for specialist-only roles; interviewer-only users no longer see an Open jobs link that redirects away from their permitted area.
+- Tools are filtered against both the navigation catalog and route permission rules. Existing URLs and backend authorization remain unchanged.
+- Local browser review shows three recruiter destinations and one Workspace tools trigger; the former long classic sidebar is gone. Opening the tools drawer focuses its search field and groups the existing links under Hiring operations and Candidates & imports.
+- Browser tool search for "licence" leaves only Licences, and Escape returns focus to Workspace tools while preserving the current workflow. Theme switching remains available in the account menu.
+- Dark tools panel fits the 375px viewport without document overflow; the search field retains initial focus and all groups remain scrollable. Saved a mobile dark-tools screenshot.
+- Admin review confirmed only Users, Reports and Settings & tools are visible in the sidebar. Prioritized People & access and Workspace settings at the top of the admin drawer so configuration is immediately visible.
+
 ## Initial repository state
 - Existing local edits from prior work are present in `CandidateFitScorecard.tsx`, `ComparisonMatrixCard.tsx`, and `CandidateComparisonPage.tsx`; keep them intact.
 - Reports page exists at `apps/web/src/pages/ReportsPage.tsx` with a corresponding test file.
