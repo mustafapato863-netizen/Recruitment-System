@@ -52,11 +52,47 @@ export const isClassicPath = (pathname: string) => CLASSIC_PATHS.some((r) => r.t
  * PR33-3: roles whose work only has a classic page get it as their home (they are seated Employee by /auth/me).
  * Final hiring approvers → the final approval inbox; licence specialists → the licences desk.
  */
-export function specialHome(user: { roles?: ReadonlyArray<{ code: string }> } | null | undefined): string | null {
+export function specialHome(user: { roles?: ReadonlyArray<{ code: string }>; permissions?: readonly string[] } | null | undefined): string | null {
   const codes = new Set((user?.roles ?? []).map((r) => r.code.trim().toUpperCase()));
-  if (codes.has('FINAL_HIRING_APPROVER')) return '/hires/approvals/inbox';
-  if (codes.has('LICENSE_SPECIALIST')) return '/licenses';
+  const perms = new Set(user?.permissions ?? []);
+  if (codes.has('FINAL_HIRING_APPROVER') && perms.has('FINAL_HIRING_APPROVAL')) return '/hires/approvals/inbox';
+  // /licenses reads GET /hiring (APPLICATION_VIEW). Without it the page could only fail, so no licences home (Backend gap).
+  if (codes.has('LICENSE_SPECIALIST') && perms.has('APPLICATION_VIEW')) return '/licenses';
   return null;
+}
+
+/**
+ * PR33-3: each signed-in route's PermissionGate (App.tsx, v1 gates for classic pages). The shell sends a URL the
+ * user can't open to their home instead of showing the v1 "Access Restricted" page. ADMINISTRATOR passes, as in v1.
+ * Most specific first.
+ */
+type Gate = { all?: string[]; any?: string[] };
+const ROUTE_GATES: Array<[RegExp, Gate]> = [
+  [/^\/hires\/approvals\/inbox\/?$/, { all: ['FINAL_HIRING_APPROVAL'] }],
+  // GET /hiring/:id allows any of these (the final approver opens the case she approves).
+  [/^\/hires\/[^/]+\/?$/, { any: ['APPLICATION_VIEW', 'APPROVE_OFFERS', 'FINAL_HIRING_APPROVAL'] }],
+  [/^\/(hires|licenses|joinings|offers|reports)\/?$/, { all: ['APPLICATION_VIEW'] }],
+  [/^\/applications\/[^/]+\/?$/, { all: ['APPLICATION_VIEW'] }],
+  [/^\/(candidates|cv-bank|sourcing-match|classic\/candidates)(\/|$)/, { all: ['CANDIDATE_VIEW'] }],
+  [/^\/import\/[^/]+\/[^/]+\/?$/, { any: ['CANDIDATE_VIEW', 'VACANCY_REQUEST_VIEW', 'MASTER_DATA_VIEW'] }],
+  [/^\/import\/?$/, { any: ['CANDIDATE_CREATE', 'VACANCY_REQUEST_CREATE', 'MASTER_DATA_MANAGE'] }],
+  [/^\/(my-interviews|vacancies|interviews|classic\/vacancies)(\/|$)/, { all: ['VACANCY_VIEW'] }],
+  [/^\/notifications\/?$/, { all: ['NOTIFICATION_VIEW'] }],
+  [/^\/vacancy-requests(\/|$)/, { all: ['VACANCY_REQUEST_VIEW'] }],
+  [/^\/(users|roles|access-control)\/?$/, { all: ['USERS_VIEW'] }],
+  [/^\/(master-data|integrations|classic\/master-data)\/?$/, { all: ['MASTER_DATA_VIEW'] }],
+  [/^\/audit-log\/?$/, { all: ['AUDIT_VIEW'] }],
+  [/^\/(pipeline-settings|classic\/pipeline-settings)\/?$/, { all: ['OVERRIDE_WORKFLOW'] }],
+  [/^\/(email|whatsapp)-templates\/?$/, { any: ['MASTER_DATA_MANAGE', 'MASTER_DATA_VIEW'] }],
+  [/^\/settings\/targets\/?$/, { any: ['VACANCY_REQUEST_APPROVE', 'USERS_MANAGE', 'VACANCY_MANAGE', 'VACANCY_ASSIGN', 'VACANCY_REASSIGN', 'MASTER_DATA_VIEW'] }],
+  [/^\/settings\/?$/, { any: ['USERS_VIEW', 'MASTER_DATA_VIEW', 'OVERRIDE_WORKFLOW', 'AUDIT_VIEW'] }],
+];
+export function canOpenRoute(pathname: string, permissions: readonly string[] | undefined, isAdministrator = false): boolean {
+  if (isAdministrator) return true;
+  const gate = ROUTE_GATES.find(([re]) => re.test(pathname))?.[1];
+  if (!gate) return true;
+  const held = new Set(permissions ?? []);
+  return (!gate.all || gate.all.every((p) => held.has(p))) && (!gate.any || gate.any.some((p) => held.has(p)));
 }
 
 /** v1 page → v2 equivalent, per seat; anything else unknown goes home. */
@@ -109,7 +145,14 @@ const INTERVIEWER_ONLY_OK = ['/my-work', '/my-interviews', ...COMMON];
 export function isInterviewerOnly(user: { permissions?: readonly string[] } | null | undefined, interviewer: boolean): boolean {
   return interviewer && !(user?.permissions ?? []).includes('APPLICATION_VIEW');
 }
-export function v2Redirect(seat: Seat, pathname: string, opts: { requisitions?: boolean; interviews?: boolean; interviewerOnly?: boolean; home?: string | null } = {}): string | null {
+export function v2Redirect(seat: Seat, pathname: string, opts: { requisitions?: boolean; interviews?: boolean; interviewerOnly?: boolean; home?: string | null; permissions?: readonly string[]; isAdministrator?: boolean } = {}): string | null {
+  const to = v2RedirectByPath(seat, pathname, opts);
+  // PR33-3: a URL the user can't open (route gate) goes home, not to the v1 Access Restricted page.
+  const home = opts.home ?? SEAT_HOME[seat];
+  if (to === null && opts.permissions && pathname !== home && !canOpenRoute(pathname, opts.permissions, opts.isAdministrator)) return home;
+  return to;
+}
+function v2RedirectByPath(seat: Seat, pathname: string, opts: { requisitions?: boolean; interviews?: boolean; interviewerOnly?: boolean; home?: string | null } = {}): string | null {
   if (pathname === '/' || pathname === '') return opts.home ?? SEAT_HOME[seat];
   if (!opts.interviewerOnly && isClassicPath(pathname)) return null;
   for (const rule of PARAM_EQUIVALENT) {

@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import type { UserProfile } from '@recruitflow/contracts';
-import { v2Redirect, SEAT_HOME } from '../destinations';
+import { canOpenRoute, v2Redirect, SEAT_HOME } from '../destinations';
 
 vi.mock('../../api/client', () => ({ getApi: vi.fn().mockResolvedValue({ unreadCount: 0 }) }));
 vi.mock('../../quickguide', () => ({
@@ -108,12 +108,45 @@ describe('v2 default decision: classic (v1) pages stay reachable, not redirected
 describe('PR33-3 seat homes', () => {
   it('final approvers land on the final approval inbox, licence specialists on licences', async () => {
     const { specialHome } = await import('../destinations');
-    const r = (code: string) => ({ roles: [{ code }] });
+    const r = (code: string) => ({ roles: [{ code }], permissions: ['FINAL_HIRING_APPROVAL', 'APPLICATION_VIEW'] });
     expect(specialHome(r('FINAL_HIRING_APPROVER'))).toBe('/hires/approvals/inbox');
     expect(specialHome(r('LICENSE_SPECIALIST'))).toBe('/licenses');
     expect(specialHome(r('RECRUITER'))).toBeNull();
     expect(v2Redirect('employee', '/', { home: '/hires/approvals/inbox' })).toBe('/hires/approvals/inbox');
     expect(v2Redirect('employee', '/', { home: '/licenses' })).toBe('/licenses');
     expect(v2Redirect('employee', '/licenses', { home: '/licenses' })).toBeNull();
+  });
+});
+
+describe('PR33-3: seeded licence specialist (Omar) and final approver (Aya)', () => {
+  const OMAR = { roles: [{ code: 'LICENSE_SPECIALIST' }], permissions: ['VACANCY_VIEW', 'DOWNLOAD_DOCUMENTS', 'NOTIFICATION_VIEW', 'TASK_VIEW', 'TASK_UPDATE_STATUS'] };
+  const AYA = { roles: [{ code: 'FINAL_HIRING_APPROVER' }], permissions: ['VACANCY_VIEW', 'FINAL_HIRING_APPROVAL', 'VIEW_CANDIDATE_PII', 'DOWNLOAD_DOCUMENTS', 'NOTIFICATION_VIEW', 'TASK_VIEW', 'TASK_UPDATE_STATUS'] };
+  const go = async (u: typeof OMAR, path: string) => {
+    const { specialHome } = await import('../destinations');
+    return v2Redirect('employee', path, { requisitions: false, interviews: false, home: specialHome(u), permissions: u.permissions });
+  };
+
+  it('Aya: home is the final approval inbox; she opens the hiring case (GET /hiring/:id allows FINAL_HIRING_APPROVAL)', async () => {
+    expect(await go(AYA, '/')).toBe('/hires/approvals/inbox');
+    expect(await go(AYA, '/hires/approvals/inbox')).toBeNull();
+    expect(await go(AYA, '/hires/h1')).toBeNull();
+    expect(canOpenRoute('/hires/h1', AYA.permissions)).toBe(true);
+  });
+  it('Aya: candidates, CV Bank, the file and the hiring list need permissions she lacks (as in v1) → her home, not Access Restricted', async () => {
+    for (const p of ['/candidates', '/cv-bank', '/applications/a1', '/candidates/c1', '/hires', '/licenses']) expect(await go(AYA, p)).toBe('/hires/approvals/inbox');
+  });
+  it('Omar: no licences home without APPLICATION_VIEW (GET /hiring refuses him); /licenses → My Work, not Access Restricted', async () => {
+    expect(await go(OMAR, '/')).toBe('/my-work');
+    expect(await go(OMAR, '/licenses')).toBe('/my-work');
+    expect(await go(OMAR, '/my-work')).toBeNull();
+    expect(await go(OMAR, '/interviews/calendar')).toBeNull(); // VACANCY_VIEW, as in v1
+    const { specialHome } = await import('../destinations');
+    expect(specialHome({ ...OMAR, permissions: [...OMAR.permissions, 'APPLICATION_VIEW'] })).toBe('/licenses');
+  });
+  it('admins keep every classic page exactly as in v1', () => {
+    for (const p of ['/hires', '/hires/h1', '/licenses', '/cv-bank', '/access-control', '/settings']) {
+      expect(canOpenRoute(p, [], true)).toBe(true);
+      expect(v2Redirect('admin', p, { permissions: [], isAdministrator: true })).toBeNull();
+    }
   });
 });

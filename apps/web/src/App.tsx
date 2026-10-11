@@ -131,7 +131,7 @@ function App() {
                   {/* More (classic): v1 pages, same PermissionGate as in v1 (a1682ad). */}
                   <Route path="/hires/approvals/inbox" element={<PermissionGate requiredPermission="FINAL_HIRING_APPROVAL"><FinalApprovalInboxPage /></PermissionGate>} />
                   <Route path="/hires" element={<PermissionGate requiredPermission="APPLICATION_VIEW"><HireManagementPage /></PermissionGate>} />
-                  <Route path="/hires/:id" element={<PermissionGate requiredPermission="APPLICATION_VIEW"><HiringCasePage /></PermissionGate>} />
+                  <Route path="/hires/:id" element={<PermissionGate requiredAnyPermission={['APPLICATION_VIEW', 'APPROVE_OFFERS', 'FINAL_HIRING_APPROVAL']}><HiringCasePage /></PermissionGate>} />
                   <Route path="/licenses" element={<PermissionGate requiredPermission="APPLICATION_VIEW"><LicenseManagementPage /></PermissionGate>} />
                   <Route path="/joinings" element={<PermissionGate requiredPermission="APPLICATION_VIEW"><JoiningManagementPage /></PermissionGate>} />
                   <Route path="/interviews" element={<PermissionGate requiredPermission="VACANCY_VIEW"><InterviewsPage /></PermissionGate>} />
