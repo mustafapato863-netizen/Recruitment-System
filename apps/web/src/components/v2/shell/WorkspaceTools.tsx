@@ -31,7 +31,7 @@ export function WorkspaceTools({ items, activeKey, collapsed, admin }: {
     <button type="button" className="rf2-nav-item rf2-tools-trigger" aria-haspopup="dialog" aria-expanded={open}
       aria-label={label} title={collapsed ? label : undefined} data-active={active || undefined}
       onClick={() => { setQuery(''); setOpen(true); }}>
-      <Settings2 aria-hidden="true" /><span className="rf2-nav-item__label">{label}</span>
+      <span className="rf2-nav-item__icon" aria-hidden="true"><Settings2 /></span><span className="rf2-nav-item__label">{label}</span>
     </button>
     <DrawerV2 open={open} onClose={() => setOpen(false)} title={label}
       subtitle="Find an occasional task here. Your daily work stays in the main menu." initialFocusRef={searchRef}>
