@@ -110,7 +110,7 @@ function App() {
                   <Route path="/candidates" element={<PermissionGate requiredPermission="CANDIDATE_VIEW"><CandidatesListRoute /></PermissionGate>} />
                   <Route path="/candidates/compare" element={<PermissionGate requiredPermission="CANDIDATE_VIEW"><CandidatesCompareRoute /></PermissionGate>} />
                   <Route path="/offers/:id" element={<EntityLinkRoute kind="offer" />} />
-                  <Route path="/applications/:id" element={<PermissionGate requiredPermission="APPLICATION_VIEW"><ApplicationRoute /></PermissionGate>} />
+                  <Route path="/applications/:id" element={<PermissionGate requiredAnyPermission={['APPLICATION_VIEW', 'FINAL_HIRING_APPROVAL']}><ApplicationRoute /></PermissionGate>} />
 
                   {/* Manager */}
                   <Route path="/vacancy-requests" element={<RequisitionsGate><PermissionGate requiredPermission="VACANCY_REQUEST_VIEW"><RequisitionsRoute /></PermissionGate></RequisitionsGate>} />
@@ -131,8 +131,8 @@ function App() {
                   {/* More (classic): v1 pages, same PermissionGate as in v1 (a1682ad). */}
                   <Route path="/hires/approvals/inbox" element={<PermissionGate requiredPermission="FINAL_HIRING_APPROVAL"><FinalApprovalInboxPage /></PermissionGate>} />
                   <Route path="/hires" element={<PermissionGate requiredPermission="APPLICATION_VIEW"><HireManagementPage /></PermissionGate>} />
-                  <Route path="/hires/:id" element={<PermissionGate requiredAnyPermission={['APPLICATION_VIEW', 'APPROVE_OFFERS', 'FINAL_HIRING_APPROVAL']}><HiringCasePage /></PermissionGate>} />
-                  <Route path="/licenses" element={<PermissionGate requiredPermission="APPLICATION_VIEW"><LicenseManagementPage /></PermissionGate>} />
+                  <Route path="/hires/:id" element={<PermissionGate requiredAnyPermission={['APPLICATION_VIEW', 'APPROVE_OFFERS', 'FINAL_HIRING_APPROVAL', 'LICENSE_CHECK']}><HiringCasePage /></PermissionGate>} />
+                  <Route path="/licenses" element={<PermissionGate requiredAnyPermission={['APPLICATION_VIEW', 'LICENSE_CHECK']}><LicenseManagementPage /></PermissionGate>} />
                   <Route path="/joinings" element={<PermissionGate requiredPermission="APPLICATION_VIEW"><JoiningManagementPage /></PermissionGate>} />
                   <Route path="/interviews" element={<PermissionGate requiredPermission="VACANCY_VIEW"><InterviewsPage /></PermissionGate>} />
                   <Route path="/interviews/calendar" element={<PermissionGate requiredPermission="VACANCY_VIEW"><InterviewCalendarPage /></PermissionGate>} />

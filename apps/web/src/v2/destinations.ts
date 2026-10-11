@@ -56,8 +56,8 @@ export function specialHome(user: { roles?: ReadonlyArray<{ code: string }>; per
   const codes = new Set((user?.roles ?? []).map((r) => r.code.trim().toUpperCase()));
   const perms = new Set(user?.permissions ?? []);
   if (codes.has('FINAL_HIRING_APPROVER') && perms.has('FINAL_HIRING_APPROVAL')) return '/hires/approvals/inbox';
-  // /licenses reads GET /hiring (APPLICATION_VIEW). Without it the page could only fail, so no licences home (Backend gap).
-  if (codes.has('LICENSE_SPECIALIST') && perms.has('APPLICATION_VIEW')) return '/licenses';
+  // #34: GET /hiring accepts APPLICATION_VIEW or LICENSE_CHECK.
+  if (codes.has('LICENSE_SPECIALIST') && (perms.has('LICENSE_CHECK') || perms.has('APPLICATION_VIEW'))) return '/licenses';
   return null;
 }
 
@@ -70,9 +70,11 @@ type Gate = { all?: string[]; any?: string[] };
 const ROUTE_GATES: Array<[RegExp, Gate]> = [
   [/^\/hires\/approvals\/inbox\/?$/, { all: ['FINAL_HIRING_APPROVAL'] }],
   // GET /hiring/:id allows any of these (the final approver opens the case she approves).
-  [/^\/hires\/[^/]+\/?$/, { any: ['APPLICATION_VIEW', 'APPROVE_OFFERS', 'FINAL_HIRING_APPROVAL'] }],
-  [/^\/(hires|licenses|joinings|offers|reports)\/?$/, { all: ['APPLICATION_VIEW'] }],
-  [/^\/applications\/[^/]+\/?$/, { all: ['APPLICATION_VIEW'] }],
+  [/^\/hires\/[^/]+\/?$/, { any: ['APPLICATION_VIEW', 'APPROVE_OFFERS', 'FINAL_HIRING_APPROVAL', 'LICENSE_CHECK'] }],
+  [/^\/licenses\/?$/, { any: ['APPLICATION_VIEW', 'LICENSE_CHECK'] }],
+  [/^\/(hires|joinings|offers|reports)\/?$/, { all: ['APPLICATION_VIEW'] }],
+  // #34: final-hire approvers read the file (read-only approver view).
+  [/^\/applications\/[^/]+\/?$/, { any: ['APPLICATION_VIEW', 'FINAL_HIRING_APPROVAL'] }],
   [/^\/(candidates|cv-bank|sourcing-match|classic\/candidates)(\/|$)/, { all: ['CANDIDATE_VIEW'] }],
   [/^\/import\/[^/]+\/[^/]+\/?$/, { any: ['CANDIDATE_VIEW', 'VACANCY_REQUEST_VIEW', 'MASTER_DATA_VIEW'] }],
   [/^\/import\/?$/, { any: ['CANDIDATE_CREATE', 'VACANCY_REQUEST_CREATE', 'MASTER_DATA_MANAGE'] }],

@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useAuth } from '../auth/AuthContext';
+import { isLicenseCheckOnly } from '../utils/licenseCheck';
 import type { HiringCase } from '@recruitflow/contracts';
 import { getApi } from '../api/client';
 import { Icon } from '../components/Icon';
@@ -76,6 +78,8 @@ const licenseColumns: ResponsiveDataColumn<LicenseRow>[] = [
 ];
 
 export function LicenseManagementPage() {
+  const { user } = useAuth();
+  const licenseOnly = isLicenseCheckOnly(user?.permissions, (user?.roles ?? []).some((r) => r.code === 'ADMINISTRATOR'));
   const [licenses, setLicenses] = useState<LicenseRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -89,7 +93,8 @@ export function LicenseManagementPage() {
       const cases = await getApi<HiringCase[]>('/hiring');
       const rows: LicenseRow[] = [];
       cases.forEach((hiringCase) => {
-        (hiringCase.complianceRequirements || []).forEach((requirement) => {
+        // #34: LICENSE_CHECK-only users get licence items only (others would answer 403 LICENSE_CHECK_SCOPE).
+        (hiringCase.complianceRequirements || []).filter((requirement) => !licenseOnly || requirement.type === 'License').forEach((requirement) => {
           rows.push({
             id: requirement.id.slice(0, 8).toUpperCase(),
             caseId: hiringCase.id,

@@ -119,7 +119,7 @@ describe('PR33-3 seat homes', () => {
 });
 
 describe('PR33-3: seeded licence specialist (Omar) and final approver (Aya)', () => {
-  const OMAR = { roles: [{ code: 'LICENSE_SPECIALIST' }], permissions: ['VACANCY_VIEW', 'DOWNLOAD_DOCUMENTS', 'NOTIFICATION_VIEW', 'TASK_VIEW', 'TASK_UPDATE_STATUS'] };
+  const OMAR = { roles: [{ code: 'LICENSE_SPECIALIST' }], permissions: ['VACANCY_VIEW', 'LICENSE_CHECK', 'DOWNLOAD_DOCUMENTS', 'NOTIFICATION_VIEW', 'TASK_VIEW', 'TASK_UPDATE_STATUS'] };
   const AYA = { roles: [{ code: 'FINAL_HIRING_APPROVER' }], permissions: ['VACANCY_VIEW', 'FINAL_HIRING_APPROVAL', 'VIEW_CANDIDATE_PII', 'DOWNLOAD_DOCUMENTS', 'NOTIFICATION_VIEW', 'TASK_VIEW', 'TASK_UPDATE_STATUS'] };
   const go = async (u: typeof OMAR, path: string) => {
     const { specialHome } = await import('../destinations');
@@ -132,16 +132,19 @@ describe('PR33-3: seeded licence specialist (Omar) and final approver (Aya)', ()
     expect(await go(AYA, '/hires/h1')).toBeNull();
     expect(canOpenRoute('/hires/h1', AYA.permissions)).toBe(true);
   });
-  it('Aya: candidates, CV Bank, the file and the hiring list need permissions she lacks (as in v1) → her home, not Access Restricted', async () => {
-    for (const p of ['/candidates', '/cv-bank', '/applications/a1', '/candidates/c1', '/hires', '/licenses']) expect(await go(AYA, p)).toBe('/hires/approvals/inbox');
+  it('Aya opens the file read-only (#34); candidates, CV Bank, the hiring list and licences stay closed → her home', async () => {
+    expect(await go(AYA, '/applications/a1')).toBeNull();
+    for (const p of ['/candidates', '/cv-bank', '/candidates/c1', '/hires', '/licenses']) expect(await go(AYA, p)).toBe('/hires/approvals/inbox');
   });
-  it('Omar: no licences home without APPLICATION_VIEW (GET /hiring refuses him); /licenses → My Work, not Access Restricted', async () => {
-    expect(await go(OMAR, '/')).toBe('/my-work');
-    expect(await go(OMAR, '/licenses')).toBe('/my-work');
-    expect(await go(OMAR, '/my-work')).toBeNull();
-    expect(await go(OMAR, '/interviews/calendar')).toBeNull(); // VACANCY_VIEW, as in v1
+  it('Omar (LICENSE_CHECK, #34): home and nav item are /licenses; he opens hiring cases; the file, candidates and the hiring list stay closed', async () => {
+    expect(await go(OMAR, '/')).toBe('/licenses');
+    expect(await go(OMAR, '/licenses')).toBeNull();
+    expect(await go(OMAR, '/hires/h1')).toBeNull();
+    for (const p of ['/applications/a1', '/candidates', '/cv-bank', '/hires']) expect(await go(OMAR, p)).toBe('/licenses');
     const { specialHome } = await import('../destinations');
-    expect(specialHome({ ...OMAR, permissions: [...OMAR.permissions, 'APPLICATION_VIEW'] })).toBe('/licenses');
+    expect(specialHome({ ...OMAR, permissions: OMAR.permissions.filter((x) => x !== 'LICENSE_CHECK') })).toBeNull();
+    const { permittedClassicItems } = await import('../../components/v2/shell/navConfig');
+    expect(permittedClassicItems(OMAR.permissions).map((i) => i.to)).toEqual(['/licenses', '/interviews', '/interviews/calendar', '/classic/vacancies']);
   });
   it('admins keep every classic page exactly as in v1', () => {
     for (const p of ['/hires', '/hires/h1', '/licenses', '/cv-bank', '/access-control', '/settings']) {

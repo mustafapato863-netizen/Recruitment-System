@@ -4,7 +4,7 @@
  * Employee seat never holds pay in state. Writes never carry pay (offer drafts
  * send components: []; screening never sends salary fields).
  */
-import { getApi, patchApi, postApi, putApi } from '../../api/client';
+import { downloadFileApi, getApi, patchApi, postApi, putApi } from '../../api/client';
 import { isScorecardSubmitted } from '../../utils/scorecardStatus';
 import { stripPay } from './paySafety';
 import { JOINING_CHECK_TYPES, type JoiningCheckType } from './gates';
@@ -123,6 +123,32 @@ export async function loadApplicationFile(id: string, opts: { keepScreeningPay?:
     hiring: hiring[0] ?? null,
     joiningChecks, documents,
   };
+}
+
+/**
+ * #34: a final-hire approver (FINAL_HIRING_APPROVAL, no APPLICATION_VIEW) reads the file read-only while their
+ * approval is pending: GET /applications/:id and the candidate's documents (GET /documents/candidate/:id). Every
+ * other file call needs APPLICATION_VIEW, so it is skipped rather than sent to fail.
+ */
+export async function loadApproverFile(id: string): Promise<ApplicationFile> {
+  const application = stripPay(await getApi<FileApplication>(`/applications/${enc(id)}`));
+  type RawDoc = { id: string; documentType?: string; type?: string; fileName?: string; name?: string; createdAt?: string; uploadedAt?: string };
+  const docs = application.candidateId
+    ? await safe<RawDoc[]>(getApi(`/documents/candidate/${enc(application.candidateId)}`).then(list), [])
+    : [];
+  return {
+    workspace: { application, stages: [], nextStage: null, nextStageRequirements: [], canAdvance: false },
+    history: [], notes: [], screening: [], interviews: [], scorecards: {}, offer: null, hiring: null, joiningChecks: [],
+    documents: docs.map((d) => ({ id: d.id, type: d.documentType ?? d.type ?? '', name: d.fileName ?? d.name ?? 'Document', uploadedAt: d.uploadedAt ?? d.createdAt ?? '', uploadedBy: null })),
+  };
+}
+export const isCvDoc = (d: Pick<FileDocument, 'type'>) => /^(cv|resume)$/i.test(d.type);
+/** GET /documents/:id/download (approvers may download the CV/Resume). */
+export async function downloadDocument(d: Pick<FileDocument, 'id' | 'name'>): Promise<void> {
+  const { blob, filename } = await downloadFileApi(`/documents/${enc(d.id)}/download`, d.name);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
 }
 
 // ── writes ────────────────────────────────────────────────────────────────

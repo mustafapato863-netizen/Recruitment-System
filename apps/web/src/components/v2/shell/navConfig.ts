@@ -72,7 +72,7 @@ const C = (key: string, label: string, to: string, gate: Pick<SeatNavItem, 'requ
 export const CLASSIC_NAV: SeatNavItem[] = [
   C('final-approvals', 'Final approvals', '/hires/approvals/inbox', { requires: ['FINAL_HIRING_APPROVAL'] }),
   C('hires', 'Hiring cases', '/hires', { requires: ['APPLICATION_VIEW'] }),
-  C('licenses', 'Licences', '/licenses', { requires: ['APPLICATION_VIEW'] }),
+  C('licenses', 'Licences', '/licenses', { requiresAny: ['APPLICATION_VIEW', 'LICENSE_CHECK'] }),
   C('joinings', 'Joinings', '/joinings', { requires: ['APPLICATION_VIEW'] }),
   C('interviews', 'All interviews', '/interviews', { requires: ['VACANCY_VIEW'] }),
   C('calendar', 'Interview calendar', '/interviews/calendar', { requires: ['VACANCY_VIEW'] }),
