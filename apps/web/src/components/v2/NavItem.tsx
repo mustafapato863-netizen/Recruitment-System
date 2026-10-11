@@ -23,7 +23,7 @@ export const NavItem = React.forwardRef<HTMLAnchorElement, NavItemProps>(functio
   const Comp = asChild ? Slot : 'a';
   const content = (
     <>
-      <span aria-hidden="true" style={{ display: 'contents' }}>{icon}</span>
+      <span aria-hidden="true" className="rf2-nav-item__icon">{icon}</span>
       <span className="rf2-nav-item__label">{label}</span>
       {badge !== undefined && badge > 0 ? (
         <span className="rf2-nav-item__badge" aria-label={badgeLabel ?? `${badge} pending`}>{badge}</span>

@@ -1,7 +1,7 @@
 /* RecruitFlow v2 geometry uses the canonical SGH light/dark palette from tokens.css.
  * Keep brand and theme values centralized; v2 must never overwrite them. */
 [data-ui='v2'] {
-  /* Theme-aware semantic colours. Navigation stays navy in both modes. */
+  /* Navigation follows the selected theme, just like the original SGH shell. */
   --rf2-ink: var(--color-ink-950);
   --rf2-ink-2: var(--color-ink-700);
   --rf2-muted: var(--color-ink-500);
@@ -12,9 +12,14 @@
   --rf2-card: var(--color-surface);
   --rf2-border: var(--color-border-strong);
   --rf2-divider: var(--color-border);
-  --rf2-nav: var(--sgh-navy-dark);
-  --rf2-nav-text: #cbd5e1;
-  --rf2-on-nav: #ffffff;
+  --rf2-nav: var(--color-surface);
+  --rf2-nav-text: var(--color-ink-700);
+  --rf2-on-nav: var(--color-ink-950);
+  --rf2-nav-hover: var(--color-action-soft);
+  --rf2-nav-selected: var(--gradient-selection);
+  --rf2-brand-action: linear-gradient(135deg, var(--color-action), var(--color-action-secondary));
+  /* The fixed SGH emblem keeps its original colours on a white logo plate in either mode. */
+  --rf2-brand-plate: #ffffff;
   --rf2-success: var(--color-success);
   --rf2-warning: var(--color-warning);
   --rf2-danger: var(--color-danger);
