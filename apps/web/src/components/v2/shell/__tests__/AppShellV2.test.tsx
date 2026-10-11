@@ -218,3 +218,15 @@ describe('F4 follow-ups', () => {
     expect(within(list).getByRole('option', { name: 'Nursing' })).toHaveAttribute('aria-disabled', 'true');
   });
 });
+
+describe('matrix fix: narrow viewports', () => {
+  const realMatchMedia = window.matchMedia;
+  afterEach(() => { window.matchMedia = realMatchMedia; });
+  it('below 1024px the sidebar is the icon rail (no toggle) and the header title is rendered as the h1', () => {
+    window.matchMedia = ((q: string) => ({ matches: q.includes('1023px'), media: q, addEventListener: () => {}, removeEventListener: () => {} })) as unknown as typeof window.matchMedia;
+    const { container } = renderShell('employee');
+    expect(container.querySelector('.rf2-shell')).toHaveClass('rf2-shell--collapsed');
+    expect(screen.queryByRole('button', { name: /sidebar/i })).toBeNull();
+    expect(screen.getByRole('heading', { level: 1 })).toHaveClass('rf2-shell__title');
+  });
+});

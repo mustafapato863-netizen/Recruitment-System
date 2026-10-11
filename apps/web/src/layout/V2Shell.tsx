@@ -12,6 +12,13 @@ import { AppShellV2 } from '../components/v2/shell/AppShellV2';
 export function V2Shell() {
   const { user, logout } = useAuth();
   useLayoutEffect(() => { applyUiVersion('v2'); }, []);
+  // v2 is light-only: render light whatever prefers-color-scheme says (native controls, scrollbars, UA colours).
+  useLayoutEffect(() => {
+    const root = document.documentElement;
+    const prev = root.style.colorScheme;
+    root.style.colorScheme = 'light';
+    return () => { root.style.colorScheme = prev; };
+  }, []);
   if (!user) return <Outlet />;
   return <AppShellV2 user={user} seat={resolveSeat(user)} onSignOut={() => void logout()} />;
 }

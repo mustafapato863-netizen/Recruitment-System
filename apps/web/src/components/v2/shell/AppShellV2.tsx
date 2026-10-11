@@ -125,6 +125,22 @@ function UserMenu({ user, seat, onSignOut }: { user: UserProfile; seat: Seat; on
 const V2ShellContext = createContext<{ seat: Seat } | null>(null);
 export function useV2Shell() { return useContext(V2ShellContext); }
 
+/** Below 1024px the sidebar is always the icon rail, so the page keeps its width and the header title stays visible. */
+export const NARROW_QUERY = '(max-width: 1023px)';
+export function useNarrowViewport(): boolean {
+  const query = () => (typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? window.matchMedia(NARROW_QUERY) : null);
+  const [narrow, setNarrow] = useState<boolean>(() => query()?.matches ?? false);
+  useEffect(() => {
+    const mq = query();
+    if (!mq) return;
+    const on = () => setNarrow(mq.matches);
+    on();
+    mq.addEventListener?.('change', on);
+    return () => mq.removeEventListener?.('change', on);
+  }, []);
+  return narrow;
+}
+
 export const SIDEBAR_STORAGE_KEY = 'recruitflow.ui.v2.sidebar';
 
 /** Collapsed icon rail, persisted in localStorage. */
@@ -214,7 +230,9 @@ function ShellFrame({ user, seat, onSignOut, children }: AppShellV2Props) {
   const title = items.find((i) => i.key === activeKey)?.label ?? customLabels[location.pathname] ?? humanize(location.pathname);
   const headingId = useId();
   const sidebarId = useId();
-  const [collapsed, toggleCollapsed] = useSidebarCollapsed();
+  const [storedCollapsed, toggleCollapsed] = useSidebarCollapsed();
+  const narrow = useNarrowViewport();
+  const collapsed = storedCollapsed || narrow;
   const workspaces = workspaceOptions(user);
 
   return (
@@ -227,7 +245,7 @@ function ShellFrame({ user, seat, onSignOut, children }: AppShellV2Props) {
             <span className="rf2-brand__name">RecruitFlow</span>
             <span className="rf2-brand__sub">Recruiting Operations</span>
           </span>
-          <button type="button" className="rf2-collapse" aria-controls={sidebarId} aria-expanded={!collapsed}
+          <button type="button" className="rf2-collapse" hidden={narrow} aria-controls={sidebarId} aria-expanded={!collapsed}
             aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} onClick={toggleCollapsed}>
             {collapsed ? <PanelLeftOpen aria-hidden="true" /> : <PanelLeftClose aria-hidden="true" />}
           </button>

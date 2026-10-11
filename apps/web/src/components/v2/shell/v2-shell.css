@@ -70,3 +70,26 @@
 [data-ui='v2'] .rf2-shell--collapsed .rf2-workspace,
 [data-ui='v2'] .rf2-shell--collapsed .rf2-nav-item,
 [data-ui='v2'] .rf2-shell--collapsed .rf2-shell__account { justify-content: center; padding-left: 0; padding-right: 0; }
+
+/* Matrix fix: the header title must never shrink to 0 (overflow:hidden made its min-width 0 next to the 360px search). */
+[data-ui='v2'] .rf2-shell__title { min-width: 6rem; }
+[data-ui='v2'] .rf2-collapse[hidden] { display: none; }
+/* Below 1024px the sidebar is the 64px icon rail (AppShellV2 forces collapsed). */
+@media (max-width: 1023px) {
+  [data-ui='v2'] .rf2-shell__header { gap: var(--rf2-space-1); padding: 0 var(--rf2-space-2); }
+}
+@media (max-width: 767px) {
+  [data-ui='v2'] .rf2-shell__header { padding: 0 var(--rf2-space-1); }
+  [data-ui='v2'] .rf2-user-menu__text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  [data-ui='v2'] .rf2-hsearch { flex: 1 1 0; min-width: 36px; }
+  [data-ui='v2'] .rf2-shell__header .rf2-hsearch__box { width: 100%; min-width: 0; }
+  [data-ui='v2'] .rf2-hsearch__pop { min-width: 0; width: calc(100vw - 2 * var(--rf2-space-2)); }
+}
+/* Phone widths: page content inside the shell never widens the document (wide tables scroll inside their panel). */
+@media (max-width: 767px) {
+  [data-ui='v2'] .rf2-shell__content .rf2-jobs { padding: var(--rf2-space-2); }
+  [data-ui='v2'] .rf2-shell__content .rf2-row-between { flex-wrap: wrap; }
+  [data-ui='v2'] .rf2-shell__content .rf2-admin__grid { grid-template-columns: minmax(0, 1fr); }
+}
+/* Screen-reader-only header labels (absolute) must stay inside their clipped table panel, or they widen the page. */
+[data-ui='v2'] .rf2-jtable th { position: relative; }
