@@ -2,7 +2,7 @@ import type React from 'react';
 import { isScorecardSubmitted } from '../../utils/scorecardStatus';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, CalendarDays, Check, CircleCheck, Clock, FileText, Minus, RotateCw, Send, Star, XCircle } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CalendarDays, Check, CircleCheck, Clock, Download, FileText, Minus, RotateCw, Send, Star, XCircle } from 'lucide-react';
 import { ApiError } from '../../api/client';
 import { ButtonV2 } from '../../components/v2/Button';
 import { StatusChip } from '../../components/v2/StatusChip';
@@ -10,7 +10,7 @@ import { EmptyStateV2, ForbiddenStateV2, SkeletonV2 } from '../../components/v2/
 import { InputV2, TextareaV2 } from '../../components/v2/Field';
 import '../../components/v2/v2-primitives.css';
 import './application-file.css';
-import { FILE_STAGES, addNote, isClosedStage, candidateName, gateState, loadApplicationFile, setFollowUp, type ApplicationFile } from '../api/applicationFile';
+import { FILE_STAGES, addNote, downloadDocument, isClosedStage, isCvDoc, candidateName, gateState, loadApplicationFile, setFollowUp, type ApplicationFile } from '../api/applicationFile';
 import { DRAWERS, DRAWER_KEYS, errorText, sentBack, type DrawerKey } from '../drawers/FileDrawers';
 import { OfferDecisionDrawer } from '../drawers/OfferDecisionDrawer';
 import { canSeePay, money } from '../api/offerDecision';
@@ -69,12 +69,15 @@ function gateRows(file: ApplicationFile): Array<{ to: string; label: string; ok:
   return [];
 }
 
-export function ApplicationFileV2({ load = loadApplicationFile, mode = 'owner' }: { load?: typeof loadApplicationFile; mode?: 'owner' | 'manager' } = {}) {
+export function ApplicationFileV2({ load = loadApplicationFile, mode = 'owner' }: { load?: typeof loadApplicationFile; mode?: 'owner' | 'manager' | 'approver' } = {}) {
   const { id = '' } = useParams();
   const { user } = useAuth();
-  const manager = mode === 'manager';
+  // #34: 'approver' = a final-hire approver without APPLICATION_VIEW: read-only like the Manager view (no drawers,
+  // notes or follow-up), no offer decision, no pay, CV download allowed.
+  const approver = mode === 'approver';
+  const manager = mode === 'manager' || approver;
   // Pay (salary, band) only for the Manager seat holding OFFER_PAY_VIEW.
-  const showPay = manager && canSeePay('manager', user?.permissions);
+  const showPay = mode === 'manager' && canSeePay('manager', user?.permissions);
   const [toast, setToast] = useState<string | null>(null);
   const [params, setParams] = useSearchParams();
   const [state, setState] = useState<Load>({ kind: 'loading' });
@@ -117,13 +120,15 @@ export function ApplicationFileV2({ load = loadApplicationFile, mode = 'owner' }
   const Drawer = !manager && drawer && DRAWER_KEYS.includes(drawer) && !(closed && MOVING_DRAWERS.includes(drawer)) ? DRAWERS[drawer] : null;
   // Manager: the offer decision opens here, over the file (Figma 09). ?decide=<offerId> deep-links from Team work.
   const pendingOffer = file.offer && file.offer.status === 'Pending Approval' ? file.offer : null;
-  const decideId = manager ? params.get('decide') : null;
+  const decideId = mode === 'manager' ? params.get('decide') : null;
   const latestScreen = [...file.screening].sort((a, b) => b.screenedAt.localeCompare(a.screenedAt))[0] ?? null;
   const initials = name.split(/\s+/).map((p) => p[0]).slice(0, 2).join('').toUpperCase();
 
   return (
     <div className="rf2-file">
-      {manager
+      {approver
+        ? <Link className="rf2-file__back" to="/hires/approvals/inbox"><ArrowLeft aria-hidden="true" /> Final approvals</Link>
+        : manager
         ? <Link className="rf2-file__back" to="/my-work"><ArrowLeft aria-hidden="true" /> Team work</Link>
         : <Link className="rf2-file__back" to={`/vacancies/${encodeURIComponent(app.vacancyId)}`}><ArrowLeft aria-hidden="true" /> {app.positionTitle ?? 'Job'} pipeline</Link>}
       {toast ? <p className="rf2-inline-note" role="status">{toast}</p> : null}
@@ -136,7 +141,7 @@ export function ApplicationFileV2({ load = loadApplicationFile, mode = 'owner' }
           </div>
           <div className="rf2-file__actions">
             {manager ? (
-              pendingOffer ? <ButtonV2 icon={<CircleCheck />} onClick={() => setParams((p) => { const n = new URLSearchParams(p); n.set('decide', pendingOffer.id); return n; })}>Review offer</ButtonV2> : null
+              pendingOffer && !approver ? <ButtonV2 icon={<CircleCheck />} onClick={() => setParams((p) => { const n = new URLSearchParams(p); n.set('decide', pendingOffer.id); return n; })}>Review offer</ButtonV2> : null
             ) : (
               <>
                 {!closed ? <ButtonV2 kind="danger-outline" icon={<XCircle />} onClick={() => openDrawer('reject')}>Reject</ButtonV2> : null}
@@ -203,7 +208,8 @@ export function ApplicationFileV2({ load = loadApplicationFile, mode = 'owner' }
             {file.documents.length === 0 ? <p className="rf2-file__muted">No documents yet.</p> : (
               <ul className="rf2-docs">
                 {file.documents.map((d) => (
-                  <li key={d.id}><FileText aria-hidden="true" /><div><p>{d.name}</p><p className="rf2-timeline__sub">{[d.type, fmt(d.uploadedAt), d.uploadedBy ? `by ${d.uploadedBy.name}` : null].filter(Boolean).join(' · ')}</p></div></li>
+                  <li key={d.id}><FileText aria-hidden="true" /><div><p>{d.name}</p><p className="rf2-timeline__sub">{[d.type, fmt(d.uploadedAt), d.uploadedBy ? `by ${d.uploadedBy.name}` : null].filter(Boolean).join(' · ')}</p></div>
+                    {approver && isCvDoc(d) ? <ButtonV2 kind="secondary" size="sm" icon={<Download />} onClick={() => void downloadDocument(d).catch((e: unknown) => setToast(e instanceof Error ? e.message : 'Could not download the CV.'))}>Download CV</ButtonV2> : null}</li>
                 ))}
               </ul>
             )}

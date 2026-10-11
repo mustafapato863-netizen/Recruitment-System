@@ -227,6 +227,22 @@ describe('who sees My interviews', () => {
   });
 });
 
+describe('PR33-2 submitted scorecards stay findable', () => {
+  it('an ended interview with my submitted card is listed read-only and the /interviews/:id deep link opens it', async () => {
+    api.getApi.mockImplementation(async (p: string) => {
+      if (p === '/me/interviews?scope=upcoming') return { data: [] };
+      if (p === '/me/interviews?scope=past') return { data: [row({ id: 'p9', candidateName: 'Done Person', scorecardStatus: 'submitted' })] };
+      if (p.endsWith('/scorecard')) return [{ id: 's1', interviewId: 'p9', interviewerId: 'me', overallRating: 4, recommendation: 'Hire', notes: 'Solid', submittedAt: '2026-10-10T10:00:00Z', status: 'submitted' }];
+      return [];
+    });
+    render(<MemoryRouter initialEntries={['/my-interviews?interview=p9&scorecard=1']}><MyInterviewsPage /></MemoryRouter>);
+    const done = await screen.findByRole('list', { name: 'Ended interviews with my submitted scorecard' });
+    expect(within(done).getByRole('button', { name: 'View my scorecard' })).toBeInTheDocument();
+    expect(await screen.findByTestId('my-scorecard')).toHaveTextContent('Solid');
+    expect(screen.queryByRole('button', { name: 'Submit scorecard' })).toBeNull();
+  });
+});
+
 describe('B2V-1 ended interviews that still need my scorecard', () => {
   it('lists past interviews with a missing/draft scorecard (not submitted or cancelled); the deep link opens one', async () => {
     api.getApi.mockImplementation(async (p: string) => {
@@ -242,7 +258,8 @@ describe('B2V-1 ended interviews that still need my scorecard', () => {
     render(<MemoryRouter initialEntries={['/my-interviews?interview=p1&scorecard=1']}><MyInterviewsPage /></MemoryRouter>);
     const due = await screen.findByRole('list', { name: 'Ended interviews needing my scorecard' });
     expect(within(due).getAllByTestId('my-interview').map((c) => c.textContent)).toEqual([expect.stringContaining('Nourhan Sami'), expect.stringContaining('Draft Person')]);
-    expect(screen.queryByText(/Done Person|Cancelled Person/)).toBeNull();
+    expect(screen.queryByText(/Cancelled Person/)).toBeNull();
+    expect(within(screen.getByRole('list', { name: 'Ended interviews with my submitted scorecard' })).getByText(/Done Person/)).toBeInTheDocument();
     expect(screen.getByText(/Future Person/)).toBeInTheDocument();
     expect(await screen.findByRole('dialog', { name: /Scorecard — Nourhan Sami/ })).toBeInTheDocument();
   });

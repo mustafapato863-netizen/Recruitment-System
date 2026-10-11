@@ -11,8 +11,6 @@ const api = vi.hoisted(() => ({ getApi: vi.fn(), patchApi: vi.fn(), postApi: vi.
 vi.mock('../../../api/client', async () => ({ ...(await vi.importActual<object>('../../../api/client')), ...api }));
 const shell = vi.hoisted(() => ({ value: { seat: 'admin' } as null | { seat: string } }));
 vi.mock('../../../components/v2/shell/AppShellV2', () => ({ useV2Shell: () => shell.value }));
-vi.mock('../../../pages/ReportsPage', () => ({ ReportsPage: () => <p>v1 reports</p> }));
-vi.mock('../../../pages/AuditLogPage', () => ({ AuditLogPage: () => <p>v1 audit</p> }));
 import { ReportsRoute } from '../../pages/ReportsRoute';
 import { AuditRoute, IntegrationsRoute } from '../AdminRoutes';
 import { AuditV2 } from '../AuditV2';
@@ -54,7 +52,7 @@ const serve = (extra: Record<string, unknown> = {}) => {
 const renderAt = (path: string) => {
   document.documentElement.setAttribute('data-ui', 'v2');
   return render(<MemoryRouter initialEntries={[path]}><Suspense fallback="…"><Routes>
-    <Route path="/reports" element={<ReportsRoute />} /><Route path="/audit-log" element={<AuditRoute />} /><Route path="/integrations" element={<IntegrationsRoute v1={<p>v1 integrations</p>} />} />
+    <Route path="/reports" element={<ReportsRoute />} /><Route path="/audit-log" element={<AuditRoute />} /><Route path="/integrations" element={<IntegrationsRoute />} />
   </Routes></Suspense></MemoryRouter>);
 };
 beforeEach(() => { vi.clearAllMocks(); shell.value = { seat: 'admin' }; serve(); });
@@ -218,11 +216,6 @@ describe('A09 Audit', () => {
     expect(auditArea({ entityType: 'MasterDataValue', action: 'MASTER_DATA_BATCH_SAVE' })).toBe('Settings');
     expect(toCsv(['a', 'b'], [['x,y', '=SUM(1)'], ['he said "hi"', null]])).toBe('a,b\r\n"x,y","\'=SUM(1)"\r\n"he said ""hi""",');
   });
-  it('non-admin keeps v1 audit; error state retries', async () => {
-    shell.value = { seat: 'manager' };
-    renderAt('/audit-log');
-    expect(await screen.findByText('v1 audit')).toBeInTheDocument();
-  });
   it('error → Try again', async () => {
     const u = userEvent.setup();
     serve({ '/audit-logs?page=1&pageSize=100': new ApiError(500, 'Audit down') });
@@ -250,11 +243,6 @@ describe('A10 Integrations', () => {
     await u.click(within(careers).getByRole('button', { name: 'Test connection: Careers site' }));
     expect(await within(careers).findByRole('alert')).toHaveTextContent('Careers site did not answer.');
     expect(await axeViolations(container)).toEqual([]);
-  });
-  it('non-admin keeps v1', async () => {
-    shell.value = null;
-    renderAt('/integrations');
-    expect(await screen.findByText('v1 integrations')).toBeInTheDocument();
   });
 });
 

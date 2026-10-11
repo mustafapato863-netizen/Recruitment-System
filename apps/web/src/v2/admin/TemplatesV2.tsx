@@ -7,9 +7,9 @@ import { CATEGORIES, VARIABLES, archiveTemplate, fetchTemplates, render, saveTem
 import '../pages/jobs.css';
 import './admin.css';
 
-type Draft = { id: string | null; name: string; category: string; subject: string; bodyTemplate: string };
+type Draft = { id: string | null; name: string; category: string; subject: string; bodyTemplate: string; isDefault?: boolean };
 const blank = (ch: Channel): Draft => ({ id: null, name: '', category: ch === 'email' ? 'stage_auto' : 'interview_invite', subject: '', bodyTemplate: '' });
-const toDraft = (t: MessageTemplate): Draft => ({ id: t.id, name: t.name, category: t.category, subject: t.subject ?? '', bodyTemplate: t.bodyTemplate });
+const toDraft = (t: MessageTemplate): Draft => ({ id: t.id, name: t.name, category: t.category, subject: t.subject ?? '', bodyTemplate: t.bodyTemplate, isDefault: t.isDefault });
 
 /** A07 Templates (Admin seat only): email + WhatsApp messages the drawers use. Edit/new; no delete. */
 export function TemplatesV2({ initial = 'email' }: { initial?: Channel } = {}) {
@@ -110,7 +110,7 @@ export function TemplatesV2({ initial = 'email' }: { initial?: Channel } = {}) {
             {errs.form ? <p className="rf2-form-error" role="alert">{errs.form}</p> : null}
             <div className="rf2-admin__actions">
               <ButtonV2 icon={<Save />} loading={busy} onClick={() => void save()}>{draft.id ? 'Save template' : 'Create template'}</ButtonV2>
-              {draft.id ? <DangerConfirmButton icon={<Archive />} confirmLabel="Confirm archive" disabled={busy} onConfirm={() => void archive()}>Archive</DangerConfirmButton> : null}
+              {draft.id && draft.isDefault ? <p className="rf2-jtable__sub" data-testid="default-no-archive">Default templates can’t be archived.</p> : draft.id ? <DangerConfirmButton icon={<Archive />} confirmLabel="Confirm archive" disabled={busy} onConfirm={() => void archive()}>Archive</DangerConfirmButton> : null}
             </div>
           </section>
         </div>

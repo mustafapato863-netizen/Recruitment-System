@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ApiError} from './client';
 import { filenameFromDisposition, getApi, patchApi, postApi } from './client';
-import { isOwnershipDenied } from '../utils/vacancyAccess';
 
 /** Exact bodies the #4 backend sends after the global error normalizer (http-exception.filter.ts + error-normalizer.ts). */
 const envelope = (statusCode: number, code: string, message: string) => ({ statusCode, code, message, retryable: false, retryAfterSeconds: null, requestId: 'req-1' });
@@ -38,11 +37,6 @@ describe('B1 error codes on the #4 envelope (codes, not messages)', () => {
     expect(((await getApi('/a').catch((e: unknown) => e)) as ApiError).code).toBe('FORBIDDEN');
     fetchSpy.mockResolvedValueOnce(res(400, envelope(400, 'VALIDATION_ERROR', 'An inactive user cannot own a job or file.')));
     expect(((await patchApi('/a', {}).catch((e: unknown) => e)) as ApiError).code).toBe('VALIDATION_ERROR');
-  });
-
-  it('FILE_NOT_OWNED/JOB_NOT_OWNED count as ownership denials (Forbidden pages trigger)', async () => {
-    fetchSpy.mockResolvedValueOnce(res(403, envelope(403, 'FILE_NOT_OWNED', 'Access denied: this file belongs to another owner.')));
-    expect(isOwnershipDenied(await getApi('/applications/a1').catch((e: unknown) => e))).toBe(true);
   });
 
   it('the generic #4 FORBIDDEN body keeps the generic copy and code', async () => {

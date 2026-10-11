@@ -12,9 +12,7 @@ const shell = vi.hoisted(() => ({ value: { seat: 'manager' } as null | { seat: s
 vi.mock('../../../components/v2/shell/AppShellV2', () => ({ useV2Shell: () => shell.value }));
 const auth = vi.hoisted(() => ({ perms: ['VACANCY_REQUEST_VIEW', 'VACANCY_REQUEST_CREATE', 'VACANCY_MANAGE'] }));
 vi.mock('../../../auth/AuthContext', () => ({ useAuth: () => ({ user: { id: 'u-karim', displayName: 'Karim Hassan', permissions: auth.perms, roles: [{ code: 'HIRING_MANAGER' }] } }) }));
-vi.mock('../../../pages/VacancyRequestsPage', () => ({ VacancyRequestsPage: () => <p>v1 requisitions</p> }));
 import { RequisitionsV2 } from '../RequisitionsV2';
-import { RequisitionsRoute } from '../RequisitionsRoute';
 import { draftActivateRefused, mineOrTeam, ownerOf, reqError, TARGET_UPDATE_LIVE } from '../../api/requisitions';
 import { TargetDrawer } from '../../drawers/RequisitionDrawers';
 
@@ -197,12 +195,6 @@ describe('M04 add target', () => {
 });
 
 describe('/vacancy-requests route', () => {
-  it('v1 outside the Manager v2 seat', async () => {
-    shell.value = { seat: 'employee' };
-    render(<MemoryRouter><RequisitionsRoute /></MemoryRouter>);
-    expect(await screen.findByText('v1 requisitions')).toBeInTheDocument();
-    shell.value = null;
-  });
   it('reqError: codes, 403, message fallback', () => {
     expect(reqError(new ApiError(400, 'm', { code: 'ASSIGNEE_REQUIRED', message: 'needs owner' }, { code: 'ASSIGNEE_REQUIRED' }))).toEqual({ field: 'assignee', text: 'needs owner' });
     expect(reqError(new ApiError(403, 'x', undefined, { code: 'FORBIDDEN' })).text).toMatch(/permission/);

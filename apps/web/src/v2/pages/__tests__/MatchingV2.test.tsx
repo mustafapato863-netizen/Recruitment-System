@@ -13,12 +13,10 @@ vi.mock('../../../api/client', async () => ({ ...(await vi.importActual<object>(
 vi.mock('../../../auth/AuthContext', () => ({ useAuth: () => ({ user: { id: jfx.ME, displayName: 'Mariam Farag' } }) }));
 const shell = vi.hoisted(() => ({ value: null as null | { seat: string } }));
 vi.mock('../../../components/v2/shell/AppShellV2', () => ({ useV2Shell: () => shell.value }));
-vi.mock('../../../pages/CandidatesPage', () => ({ CandidatesPage: () => <p>v1 candidates</p> }));
-vi.mock('../../../pages/CandidateComparisonPage', () => ({ CandidateComparisonPage: () => <p>v1 compare</p> }));
 import { JobPipelineV2 } from '../JobPipelineV2';
 import { CandidatesV2 } from '../CandidatesV2';
 import { CompareV2 } from '../CompareV2';
-import { CandidatesCompareRoute, CandidatesListRoute } from '../CandidatesRoute';
+import { CandidatesListRoute } from '../CandidatesRoute';
 import { fetchCompare, fetchSuggestions, matchErrorFromError, stripScores } from '../../api/matching';
 
 let responses: Record<string, unknown> = {};
@@ -218,11 +216,6 @@ describe('E24 Compare on skills', () => {
 
 describe('/candidates routes', () => {
   const r = (el: React.ReactElement) => render(<MemoryRouter><Suspense fallback="…">{el}</Suspense></MemoryRouter>);
-  it('v1 outside the Employee v2 seat', async () => {
-    shell.value = null; r(<><CandidatesListRoute /><CandidatesCompareRoute /></>);
-    expect(await screen.findByText('v1 candidates')).toBeInTheDocument();
-    expect(await screen.findByText('v1 compare')).toBeInTheDocument();
-  });
   it('E23/E24 for the Employee seat', async () => {
     shell.value = { seat: 'employee' }; r(<CandidatesListRoute />);
     expect(await screen.findByRole('heading', { name: 'Candidates' })).toBeInTheDocument();
