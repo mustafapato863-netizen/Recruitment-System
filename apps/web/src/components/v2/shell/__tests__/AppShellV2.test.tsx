@@ -15,6 +15,7 @@ vi.mock('../../../../quickguide', () => ({
 }));
 
 import { AppShellV2 } from '../AppShellV2';
+import { ThemeProvider } from '../../../../theme/ThemeContext';
 import { activeNavKey, permittedNavItems, SEAT_NAV, CLASSIC_NAV, permittedClassicItems } from '../navConfig';
 import type { Seat } from '../../../../v2/seat';
 
@@ -28,13 +29,13 @@ const user = (permissions = ALL, codes = ['RECRUITER']): UserProfile => ({
 function renderShell(seat: Seat, u = user(), path = '/my-work', onSignOut = vi.fn()) {
   document.documentElement.setAttribute('data-ui', 'v2');
   return render(
-    <MemoryRouter initialEntries={[path]}>
+    <ThemeProvider><MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route element={<AppShellV2 user={u} seat={seat} onSignOut={onSignOut} />}>
           <Route path="*" element={<p>page content</p>} />
         </Route>
       </Routes>
-    </MemoryRouter>,
+    </MemoryRouter></ThemeProvider>,
   );
 }
 
@@ -155,6 +156,24 @@ describe('header', () => {
     await u.click(trigger);
     await u.click(screen.getByRole('menuitem', { name: 'Sign out' }));
     expect(onSignOut).toHaveBeenCalledTimes(1);
+  });
+
+  it('switches and persists the theme from the account menu without leaving the workflow', async () => {
+    document.documentElement.dataset.theme = 'light';
+    const u = userEvent.setup();
+    renderShell('employee');
+    const trigger = screen.getByRole('button', { name: /Mariam Farag/ });
+    await u.click(trigger);
+    await u.click(screen.getByRole('menuitem', { name: 'Switch to dark mode' }));
+    expect(document.documentElement.dataset.theme).toBe('dark');
+    expect(document.documentElement.style.colorScheme).toBe('dark');
+    expect(localStorage.getItem('recruitflow.theme')).toBe('dark');
+    expect(trigger).toHaveFocus();
+    expect(screen.getByText('page content')).toBeInTheDocument();
+    await u.click(trigger);
+    await u.click(screen.getByRole('menuitem', { name: 'Switch to light mode' }));
+    expect(document.documentElement.dataset.theme).toBe('light');
+    expect(localStorage.getItem('recruitflow.theme')).toBe('light');
   });
 
   it('never renders pay data', () => {

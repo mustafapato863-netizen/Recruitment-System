@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useId, useRef, useState, type Rea
 import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   BarChart3, BriefcaseBusiness, Building2, ChevronsUpDown, CircleHelp, ClipboardList, Columns3, Database, FileText, History,
-  ListChecks, LogOut, PanelLeftClose, PanelLeftOpen, Plug, Shield, Target, User, UserRound, Users,
+  ListChecks, LogOut, Moon, Sun, PanelLeftClose, PanelLeftOpen, Plug, Shield, Target, User, UserRound, Users,
   CalendarCheck, Archive } from 'lucide-react';
 import type { UserProfile } from '@recruitflow/contracts';
 import { getApi } from '../../../api/client';
@@ -14,6 +14,8 @@ import { NavItem } from '../NavItem';
 import { canUseMyInterviews } from '../../../auth/interviewer';
 import { SEAT_NAV, activeNavKey, permittedClassicItems, permittedNavItems, type NavIconName } from './navConfig';
 import { workspaceOptions, type WorkspaceOption } from './workspace';
+import { useTheme } from '../../../theme/ThemeContext';
+import { SghHeartIcon } from '../../../design-system/brand/sgh-logo';
 import '../v2-primitives.css';
 import './v2-shell.css';
 import { HeaderSearch } from '../../../v2/search/HeaderSearch';
@@ -59,6 +61,7 @@ export function useUnreadCount(enabled: boolean): number {
 }
 
 function UserMenu({ user, seat, onSignOut }: { user: UserProfile; seat: Seat; onSignOut: () => void }) {
+  const { theme, toggleTheme } = useTheme();
   const [open, setOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -113,6 +116,9 @@ function UserMenu({ user, seat, onSignOut }: { user: UserProfile; seat: Seat; on
           </button>
           <button type="button" role="menuitem" className="rf2-user-menu__item" onClick={() => { close(false); onSignOut(); }}>
             <LogOut aria-hidden="true" /> Sign out
+          </button>
+          <button type="button" role="menuitem" className="rf2-user-menu__item" onClick={() => { toggleTheme(); close(); }}>
+            {theme === 'light' ? <Moon aria-hidden="true" /> : <Sun aria-hidden="true" />} Switch to {theme === 'light' ? 'dark' : 'light'} mode
           </button>
         </div>
       )}
@@ -240,10 +246,10 @@ function ShellFrame({ user, seat, onSignOut, children }: AppShellV2Props) {
       <a className="rf2-skip-link" href="#rf2-main">Skip to main content</a>
       <aside className="rf2-shell__sidebar" id={sidebarId}>
         <div className="rf2-brand">
-          <span className="rf2-brand__mark" aria-hidden="true">R</span>
+          <span className="rf2-brand__mark" aria-hidden="true"><SghHeartIcon size={30} /></span>
           <span className="rf2-brand__text">
             <span className="rf2-brand__name">RecruitFlow</span>
-            <span className="rf2-brand__sub">Recruiting Operations</span>
+            <span className="rf2-brand__sub">Saudi German Health</span>
           </span>
           <button type="button" className="rf2-collapse" hidden={narrow} aria-controls={sidebarId} aria-expanded={!collapsed}
             aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} onClick={toggleCollapsed}>
