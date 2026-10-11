@@ -20,10 +20,10 @@ describe('B2-17: v2 home per seat', () => {
 
 describe('B2-18: v1 pages are not destinations for v2 seats', () => {
   it.each([
-    ['employee', '/offers', '/my-work'], ['employee', '/interviews', '/my-work'], ['employee', '/cv-bank', '/candidates'],
+    
     ['employee', '/users', '/my-work'], ['employee', '/vacancy-requests', '/my-work'], ['employee', '/applications', '/my-work'],
     ['manager', '/approval-inbox', '/my-work'], ['manager', '/vacancies', '/my-work'], ['manager', '/tasks', '/my-work'],
-    ['admin', '/offers', '/users'], ['admin', '/my-work', '/users'], ['admin', '/settings', '/master-data'],
+    ['admin', '/my-work', '/users'], 
   ] as const)('%s %s → %s', (seat, path, to) => expect(v2Redirect(seat, path)).toBe(to));
 
   it.each([
@@ -37,7 +37,7 @@ function Where() { return <output aria-label="where">{useLocation().pathname}</o
 const user = { id: 'u', email: 'e@x', displayName: 'E', organizationId: 'o', organizationName: 'O', roles: [{ id: 'r', code: 'ADMINISTRATOR', name: 'Admin' }], permissions: [], lastLoginAt: null } as UserProfile;
 
 describe('shell redirects in place', () => {
-  it.each([['employee', '/', '/my-work'], ['manager', '/offers', '/my-work'], ['admin', '/', '/users']] as const)('%s at %s lands on %s', async (seat, from, to) => {
+  it.each([['employee', '/', '/my-work'], ['manager', '/approval-inbox', '/my-work'], ['admin', '/', '/users']] as const)('%s at %s lands on %s', async (seat, from, to) => {
     render(<MemoryRouter initialEntries={[from]}><Routes><Route element={<AppShellV2 user={user} seat={seat as Seat} onSignOut={() => {}} />}><Route path="*" element={<Where />} /></Route></Routes></MemoryRouter>);
     expect(await screen.findByLabelText('where')).toHaveTextContent(to);
   });
@@ -47,20 +47,20 @@ describe('v2 default: every v1 URL redirects to its v2 equivalent', () => {
   it.each([
     // Employee
     ['employee', '/', '/my-work'], ['employee', '/dashboard', '/my-work'], ['employee', '/tasks', '/my-work'],
-    ['employee', '/interviews/i1', '/my-interviews?interview=i1&scorecard=1'], ['employee', '/interviews/calendar', '/my-work'],
-    ['employee', '/vacancies/v1/analytics', '/vacancies/v1'], ['employee', '/applications/a1/transition', '/applications/a1'],
-    ['employee', '/candidates/c1', '/candidates?tab=bank'], ['employee', '/candidates/c1/documents', '/candidates?tab=bank'],
-    ['employee', '/cv-intake/j1', '/candidates'], ['employee', '/import', '/candidates'], ['employee', '/sourcing-match', '/candidates'],
-    ['employee', '/offers/create', '/my-work'], ['employee', '/licenses', '/my-work'], ['employee', '/joinings', '/my-work'],
-    ['employee', '/reports', '/my-work'], ['employee', '/settings/targets', '/my-work'],
+    ['employee', '/interviews/i1', '/my-interviews?interview=i1&scorecard=1'], 
+    ['employee', '/applications/a1/transition', '/applications/a1'],
+    
+    ['employee', '/cv-intake/j1', '/candidates'], 
+    ['employee', '/offers/create', '/my-work'], 
+    ['employee', '/reports', '/my-work'], 
     // Manager
     ['manager', '/interviews/i 1', '/my-interviews?interview=i%201&scorecard=1'],
     ['manager', '/vacancy-requests/create', '/vacancy-requests?req=new'], ['manager', '/vacancy-requests/r1', '/vacancy-requests?req=r1'],
     ['manager', '/applications/a1/transition', '/applications/a1'], ['manager', '/offers/approvals/inbox', '/my-work'],
-    ['manager', '/hires/approvals/inbox', '/my-work'], ['manager', '/team-result', '/reports'], ['manager', '/vacancies/v1', '/my-work'],
-    ['manager', '/candidates/c1', '/my-work'], ['manager', '/users', '/my-work'],
+    ['manager', '/team-result', '/reports'], ['manager', '/vacancies/v1', '/my-work'],
+    ['manager', '/users', '/my-work'],
     // Admin
-    ['admin', '/', '/users'], ['admin', '/reporting-tree', '/users'], ['admin', '/settings/targets', '/master-data'], ['admin', '/access-control', '/roles'],
+    ['admin', '/', '/users'], ['admin', '/reporting-tree', '/users'], 
     ['admin', '/interviews/i1', '/users'], ['admin', '/vacancy-requests/r1', '/users'], ['admin', '/candidates', '/users'],
   ] as const)('%s %s → %s', (seat, path, to) => expect(v2Redirect(seat, path, { requisitions: true, interviews: true })).toBe(to));
 
@@ -83,5 +83,37 @@ describe('PR33-5: no applicant portal in the staff app', () => {
     expect(v2Redirect('employee', path)).toBe('/my-work');
     expect(v2Redirect('manager', path)).toBe('/my-work');
     expect(v2Redirect('admin', path)).toBe('/users');
+  });
+});
+
+describe('v2 default decision: classic (v1) pages stay reachable, not redirected', () => {
+  const CLASSIC = ['/hires/approvals/inbox', '/hires', '/hires/h1', '/licenses', '/joinings', '/joining', '/interviews', '/interviews/calendar', '/offers',
+    '/vacancies/v1/analytics', '/candidates/c1', '/candidates/c1/documents', '/cv-bank', '/sourcing-match', '/talent-pools', '/import', '/import/candidates/j1',
+    '/classic/candidates', '/classic/vacancies', '/settings/targets', '/access-control', '/classic/master-data', '/settings', '/classic/pipeline-settings'];
+  it.each(CLASSIC)('%s is never redirected (any seat); its v1 PermissionGate decides', (path) => {
+    for (const seat of ['employee', 'manager', 'admin'] as const) expect(v2Redirect(seat, path, { requisitions: true, interviews: true })).toBeNull();
+  });
+  it('the other redirects stay: portal, requisition approval inbox, offer approvals, /interviews/:id', () => {
+    for (const p of ['/portal', '/my-applications', '/approval-inbox', '/inbox']) expect(v2Redirect('manager', p)).toBe('/my-work');
+    expect(v2Redirect('admin', '/approval-inbox')).toBe('/users');
+    expect(v2Redirect('employee', '/interviews/i1')).toBe('/my-interviews?interview=i1&scorecard=1');
+    expect(v2Redirect('manager', '/offers/approvals/inbox')).toBe('/my-work');
+    expect(v2Redirect('employee', '/candidates/compare')).toBeNull();
+  });
+  it('interviewer-only users still go to /my-interviews (B2V-2)', () => {
+    expect(v2Redirect('employee', '/cv-bank', { interviews: true, interviewerOnly: true })).toBe('/my-interviews');
+  });
+});
+
+describe('PR33-3 seat homes', () => {
+  it('final approvers land on the final approval inbox, licence specialists on licences', async () => {
+    const { specialHome } = await import('../destinations');
+    const r = (code: string) => ({ roles: [{ code }] });
+    expect(specialHome(r('FINAL_HIRING_APPROVER'))).toBe('/hires/approvals/inbox');
+    expect(specialHome(r('LICENSE_SPECIALIST'))).toBe('/licenses');
+    expect(specialHome(r('RECRUITER'))).toBeNull();
+    expect(v2Redirect('employee', '/', { home: '/hires/approvals/inbox' })).toBe('/hires/approvals/inbox');
+    expect(v2Redirect('employee', '/', { home: '/licenses' })).toBe('/licenses');
+    expect(v2Redirect('employee', '/licenses', { home: '/licenses' })).toBeNull();
   });
 });

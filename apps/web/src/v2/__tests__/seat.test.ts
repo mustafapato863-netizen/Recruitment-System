@@ -19,7 +19,7 @@ describe('resolveSeat (provisional role → seat)', () => {
     [['HR_MANAGER'], 'manager'],
     [['TEAM_LEADER'], 'manager'],
     [['OFFER_APPROVER'], 'manager'],
-    [['FINAL_HIRING_APPROVER'], 'manager'],
+    [['FINAL_HIRING_APPROVER'], 'employee'], // PR33-3: matches /auth/me
     [['RECRUITER', 'TEAM_LEAD'], 'manager'],
     [['ADMINISTRATOR'], 'admin'],
     [['SYSADMINISTRATOR'], 'admin'],

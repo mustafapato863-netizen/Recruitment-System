@@ -3,17 +3,16 @@ import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router-d
 import {
   BarChart3, BriefcaseBusiness, Building2, ChevronsUpDown, CircleHelp, ClipboardList, Columns3, Database, FileText, History,
   ListChecks, LogOut, PanelLeftClose, PanelLeftOpen, Plug, Shield, Target, User, UserRound, Users,
-  CalendarCheck,
-} from 'lucide-react';
+  CalendarCheck, Archive } from 'lucide-react';
 import type { UserProfile } from '@recruitflow/contracts';
 import { getApi } from '../../../api/client';
 import { BreadcrumbProvider, useBreadcrumb } from '../../../context/BreadcrumbContext';
 import { QuickGuideModal, QuickGuideProvider, useQuickGuide } from '../../../quickguide';
 import { SEAT_LABEL, type Seat } from '../../../v2/seat';
-import { canUseRequisitions, isInterviewerOnly, isRecruiterOnly, v2Redirect } from '../../../v2/destinations';
+import { canUseRequisitions, isInterviewerOnly, specialHome, isRecruiterOnly, v2Redirect } from '../../../v2/destinations';
 import { NavItem } from '../NavItem';
 import { canUseMyInterviews } from '../../../auth/interviewer';
-import { SEAT_NAV, activeNavKey, permittedNavItems, type NavIconName } from './navConfig';
+import { SEAT_NAV, activeNavKey, permittedClassicItems, permittedNavItems, type NavIconName } from './navConfig';
 import { workspaceOptions, type WorkspaceOption } from './workspace';
 import '../v2-primitives.css';
 import './v2-shell.css';
@@ -25,7 +24,7 @@ const ICONS: Record<NavIconName, ReactNode> = {
   'my-work': <ListChecks />, interviews: <CalendarCheck />, jobs: <BriefcaseBusiness />, candidates: <Users />,
   team: <Users />, requisitions: <ClipboardList />, result: <Target />,
   users: <UserRound />, roles: <Shield />, pipeline: <Columns3 />, 'master-data': <Database />,
-  templates: <FileText />, reports: <BarChart3 />, audit: <History />, integrations: <Plug />,
+  templates: <FileText />, reports: <BarChart3 />, audit: <History />, integrations: <Plug />, classic: <Archive />,
 };
 
 export function initials(name: string | undefined | null): string {
@@ -202,11 +201,13 @@ export interface AppShellV2Props {
 function ShellFrame({ user, seat, onSignOut, children }: AppShellV2Props) {
   const location = useLocation();
   // B2-17/18: "/" goes to the seat's home; v1 pages the seat can't use redirect to their v2 equivalent.
-  const redirectTo = v2Redirect(seat, location.pathname, { requisitions: canUseRequisitions(user), interviews: canUseMyInterviews(user), interviewerOnly: isInterviewerOnly(user, canUseMyInterviews(user)) });
+  const redirectTo = v2Redirect(seat, location.pathname, { requisitions: canUseRequisitions(user), interviews: canUseMyInterviews(user), interviewerOnly: isInterviewerOnly(user, canUseMyInterviews(user)), home: specialHome(user) });
   const { customLabels } = useBreadcrumb();
   const isAdministrator = (user.roles ?? []).some((r) => r.code === 'ADMINISTRATOR');
   const items = permittedNavItems(seat, user.permissions, isAdministrator, isRecruiterOnly(user.roles), canUseMyInterviews(user));
+  const classic = permittedClassicItems(user.permissions, isAdministrator, isInterviewerOnly(user, canUseMyInterviews(user)));
   const activeKey = activeNavKey(items, location.pathname, location.hash);
+  const classicKey = activeKey ? undefined : activeNavKey(classic, location.pathname, location.hash);
   const canSeeNotifications = isAdministrator || (user.permissions ?? []).includes('NOTIFICATION_VIEW');
   const unread = useUnreadCount(true);
   const config = SEAT_NAV[seat];
@@ -245,6 +246,20 @@ function ShellFrame({ user, seat, onSignOut, children }: AppShellV2Props) {
             ))}
           </ul>
         </nav>
+        {classic.length ? (
+          <nav aria-labelledby={`${headingId}-classic`} className="rf2-shell__nav">
+            <p className="rf2-shell__heading" id={`${headingId}-classic`}>More (classic)</p>
+            <ul className="rf2-nav-list">
+              {classic.map((item) => (
+                <li key={item.key}>
+                  <NavItem asChild label={item.label} icon={ICONS.classic} active={item.key === classicKey} title={collapsed ? item.label : undefined}>
+                    <Link to={item.to} />
+                  </NavItem>
+                </li>
+              ))}
+            </ul>
+          </nav>
+        ) : null}
         <div className="rf2-shell__account" aria-label="Signed in as">
           <span className="rf2-avatar rf2-avatar--sm" aria-hidden="true">{initials(user.displayName)}</span>
           <span className="rf2-shell__account-text">

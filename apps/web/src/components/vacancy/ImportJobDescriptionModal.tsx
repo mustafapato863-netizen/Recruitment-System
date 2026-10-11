@@ -1,0 +1,769 @@
+import { useState, useRef, type ChangeEvent } from 'react';
+import { Modal } from '../Modal';
+import { Button } from '../ui/Button';
+import { Select } from '../ui/Select';
+import { Icon } from '../Icon';
+import { parseJobDescriptionFile, type ParsedJobDescription } from '../../utils/jdParser';
+import { patchApi, postApi, getApi } from '../../api/client';
+import type { VacancyCoreContext, VacancyRequest } from '@recruitflow/contracts';
+
+export interface ImportJobDescriptionModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  targetVacancy?: {
+    id: string;
+    title: string;
+    department?: string;
+    location?: string;
+    status?: string;
+  } | null;
+  availableVacancies?: Array<{
+    id: string;
+    title: string;
+    department?: string;
+    status?: string;
+  }>;
+  onSuccess: (result: {
+    vacancyId?: string;
+    vacancyRequestId?: string;
+    updatedTitle: string;
+    skillsCount: number;
+    isNewRequisition: boolean;
+  }) => void;
+}
+
+export function ImportJobDescriptionModal({
+  isOpen,
+  onClose,
+  targetVacancy,
+  availableVacancies = [],
+  onSuccess,
+}: ImportJobDescriptionModalProps) {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isParsing, setIsParsing] = useState(false);
+  const [parseError, setParseError] = useState<string | null>(null);
+
+  // Parsed Form State (Enhanced based on SGH Specification Template)
+  const [parsedData, setParsedData] = useState<ParsedJobDescription | null>(null);
+  const [title, setTitle] = useState('');
+  const [department, setDepartment] = useState('');
+  const [minExp, setMinExp] = useState(3);
+  const [approvedHeadcount, setApprovedHeadcount] = useState(1);
+  const [jobSummary, setJobSummary] = useState('');
+  const [qualifications, setQualifications] = useState('');
+  const [responsibilities, setResponsibilities] = useState('');
+  const [skills, setSkills] = useState<string[]>([]);
+  const [skillInput, setSkillInput] = useState('');
+  const [languages, setLanguages] = useState<string[]>(['English', 'Arabic']);
+  const [languageInput, setLanguageInput] = useState('');
+
+  // Target Mode
+  const [targetMode, setTargetMode] = useState<'existing' | 'new'>(
+    targetVacancy ? 'existing' : 'new',
+  );
+  const [selectedVacancyId, setSelectedVacancyId] = useState(targetVacancy?.id || '');
+
+  // Master Data Toggles
+  const [syncSkillsToMasterData, setSyncSkillsToMasterData] = useState(true);
+  const [syncDepartmentToMasterData, setSyncDepartmentToMasterData] = useState(true);
+  const [syncPositionToMasterData, setSyncPositionToMasterData] = useState(true);
+
+  // Commit State
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const resetState = () => {
+    setSelectedFile(null);
+    setIsParsing(false);
+    setParseError(null);
+    setParsedData(null);
+    setTitle('');
+    setDepartment('');
+    setMinExp(3);
+    setApprovedHeadcount(1);
+    setJobSummary('');
+    setQualifications('');
+    setResponsibilities('');
+    setSkills([]);
+    setSkillInput('');
+    setLanguages(['English', 'Arabic']);
+    setLanguageInput('');
+    setSubmitError(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleClose = () => {
+    resetState();
+    onClose();
+  };
+
+  const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    await processFile(file);
+  };
+
+  const processFile = async (file: File) => {
+    setSelectedFile(file);
+    setIsParsing(true);
+    setParseError(null);
+
+    try {
+      const parsed = await parseJobDescriptionFile(file);
+      setParsedData(parsed);
+      setTitle(parsed.title.slice(0, 120));
+      setDepartment(parsed.department.slice(0, 120));
+      setMinExp(parsed.minExperienceYears || 3);
+      setJobSummary(parsed.jobSummary.slice(0, 500));
+      setSkills(parsed.requiredSkills);
+      setQualifications(parsed.qualifications.slice(0, 4000));
+      setResponsibilities(parsed.responsibilities.slice(0, 4000));
+      if (parsed.languages && parsed.languages.length > 0) {
+        setLanguages(parsed.languages);
+      } else {
+        setLanguages(['English', 'Arabic']);
+      }
+    } catch (err: unknown) {
+      setParseError(err instanceof Error ? err.message : 'Failed to parse document. Please check file format.');
+    } finally {
+      setIsParsing(false);
+    }
+  };
+
+  const handleAddSkill = () => {
+    const s = skillInput.trim();
+    if (!s) return;
+    if (!skills.some((existing) => existing.toLowerCase() === s.toLowerCase())) {
+      setSkills((prev) => [...prev, s]);
+    }
+    setSkillInput('');
+  };
+
+  const handleRemoveSkill = (skillToRemove: string) => {
+    setSkills((prev) => prev.filter((s) => s !== skillToRemove));
+  };
+
+  const handleAddLanguage = () => {
+    const lang = languageInput.trim();
+    if (!lang) return;
+    if (!languages.some((existing) => existing.toLowerCase() === lang.toLowerCase())) {
+      setLanguages((prev) => [...prev, lang]);
+    }
+    setLanguageInput('');
+  };
+
+  const handleRemoveLanguage = (langToRemove: string) => {
+    setLanguages((prev) => prev.filter((l) => l !== langToRemove));
+  };
+
+  const handleCommit = async () => {
+    if (!title.trim()) {
+      setSubmitError('Please enter a position title.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setSubmitError(null);
+
+    try {
+      let resolvedPositionId: string | undefined;
+
+      // 1. Sync Skills to Master Data Catalog (if enabled)
+      if (syncSkillsToMasterData && skills.length > 0) {
+        try {
+          const existingSkillsRes = await getApi<Array<{ name: string }>>('/master-data/catalog/skills');
+          const existingNames = new Set(
+            Array.isArray(existingSkillsRes)
+              ? existingSkillsRes.map((item) => item.name.toLowerCase())
+              : [],
+          );
+          const newSkillsToBatch = skills.filter((s) => !existingNames.has(s.toLowerCase()));
+
+          if (newSkillsToBatch.length > 0) {
+            await postApi('/master-data/catalog/skills/batch', {
+              rows: newSkillsToBatch.map((name) => ({ name, status: 'Active' })),
+            });
+          }
+        } catch {
+          // Non-blocking: continue with vacancy update even if master data catalog batch warns
+        }
+      }
+
+      // 2. Sync Department to Master Data Catalog (if enabled)
+      if (syncDepartmentToMasterData && department.trim()) {
+        try {
+          const departmentName = department.trim().slice(0, 120);
+          const existingDepartments = await getApi<Array<{ name?: string }>>('/master-data/catalog/departments');
+          const normalizedName = departmentName.toLowerCase().replace(/\s+/g, ' ');
+          const alreadyExists = Array.isArray(existingDepartments) && existingDepartments.some(
+            (item) => item.name?.trim().toLowerCase().replace(/\s+/g, ' ') === normalizedName,
+          );
+          if (!alreadyExists) {
+            await postApi('/master-data/catalog/departments/batch', {
+              rows: [{ name: departmentName, status: 'Active' }],
+            });
+          }
+        } catch {
+          // Master Data sync is best-effort; the requisition can still be saved.
+        }
+      }
+
+      // 3. Sync Position to Master Data Positions (if enabled)
+      if (syncPositionToMasterData) {
+        try {
+          const existingPositions = await getApi<Array<{ id: string; title?: string }>>('/positions');
+          const normalizedTitle = title.trim().toLowerCase().replace(/\s+/g, ' ');
+          resolvedPositionId = (Array.isArray(existingPositions) ? existingPositions : []).find(
+            (position) => position.title?.trim().toLowerCase().replace(/\s+/g, ' ') === normalizedTitle,
+          )?.id;
+        } catch {
+          // Continue with creation when the catalog lookup is unavailable.
+        }
+        if (!resolvedPositionId) {
+          try {
+            const position = await postApi<{ id?: string }>('/positions', {
+              title: title.trim().slice(0, 120),
+              description: jobSummary.trim().slice(0, 500),
+              metadata: {
+                department: department.trim().slice(0, 120),
+                minExperienceYears: minExp,
+                requiredSkills: skills,
+                qualifications: qualifications.trim().slice(0, 4000),
+                responsibilities: responsibilities.trim().slice(0, 4000),
+                languages,
+              },
+            });
+            resolvedPositionId = position?.id;
+          } catch {
+            // A concurrent import may have created it; resolve it once more.
+            try {
+              const positions = await getApi<Array<{ id: string; title?: string }>>('/positions');
+              const normalizedTitle = title.trim().toLowerCase().replace(/\s+/g, ' ');
+              resolvedPositionId = (Array.isArray(positions) ? positions : []).find(
+                (position) => position.title?.trim().toLowerCase().replace(/\s+/g, ' ') === normalizedTitle,
+              )?.id;
+            } catch {
+              // The create request below will provide the actionable error.
+            }
+          }
+        }
+      }
+
+      // 4. Apply to Vacancy (Note: Location parameter is intentionally omitted as it is configured via database droplist)
+      const targetId = targetVacancy?.id || (targetMode === 'existing' ? selectedVacancyId : null);
+
+      if (targetId) {
+        // Update existing vacancy
+        await patchApi(`/vacancies/${targetId}`, {
+          title: title.trim().slice(0, 120),
+          jobSummary: jobSummary.trim().slice(0, 500),
+          department: department.trim().slice(0, 120),
+          minExperienceYears: minExp,
+          approvedHeadcount: Math.max(1, approvedHeadcount || 1),
+          requiredSkills: skills,
+          qualifications: qualifications.trim().slice(0, 4000),
+          responsibilities: responsibilities.trim().slice(0, 4000),
+        });
+
+        onSuccess({
+          vacancyId: targetId,
+          updatedTitle: title.trim(),
+          skillsCount: skills.length,
+          isNewRequisition: false,
+        });
+      } else {
+        // Create a draft requisition through the vacancy-request workflow.
+        // `/vacancies` only exposes read/update operations; a new vacancy is
+        // created after its request is approved and converted.
+        const context = await getApi<VacancyCoreContext>('/vacancy-requests/context');
+        const branchId = context.branch?.id || context.branches?.[0]?.id;
+        if (!branchId) {
+          throw new Error('Create an active branch in Master Data before importing a new Job Description.');
+        }
+        if (!resolvedPositionId) {
+          resolvedPositionId = context.positions?.find(
+            (position) => position.title.trim().toLowerCase().replace(/\s+/g, ' ') === title.trim().toLowerCase().replace(/\s+/g, ' '),
+          )?.id;
+        }
+        if (!resolvedPositionId) {
+          throw new Error('The position could not be created. Check Position permissions and try again.');
+        }
+        const request = await postApi<VacancyRequest>('/vacancy-requests', {
+          branchId,
+          positionId: resolvedPositionId,
+          requestedHeadcount: Math.max(1, approvedHeadcount || 1),
+          employmentType: 'Full-time',
+          reason: 'New position',
+          budgetStatus: 'Budgeted',
+          criticality: 'Normal',
+          jobSummary: jobSummary.trim().slice(0, 500),
+          description: jobSummary.trim().slice(0, 500),
+          qualifications: qualifications.trim().slice(0, 4000),
+          responsibilities: responsibilities.trim().slice(0, 4000),
+        });
+
+        onSuccess({
+          vacancyRequestId: request?.id,
+          updatedTitle: title.trim(),
+          skillsCount: skills.length,
+          isNewRequisition: true,
+        });
+      }
+
+      handleClose();
+    } catch (err: unknown) {
+      setSubmitError(err instanceof Error ? err.message : 'Failed to synchronize Job Description.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <Modal
+      isOpen={isOpen}
+      onClose={handleClose}
+      title="Upload Job Description & Sync Master Data"
+      maxWidthClass="max-w-3xl"
+    >
+      <div className="space-y-4 py-1">
+        {/* Upload Zone */}
+        {!parsedData && (
+          <div
+            onClick={() => fileInputRef.current?.click()}
+            className="border-2 border-dashed border-cyan-500/40 hover:border-cyan-500 bg-cyan-50/20 dark:bg-cyan-950/20 rounded-2xl p-8 text-center cursor-pointer transition-all hover:shadow-md group space-y-3"
+          >
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".docx,.pdf,.txt"
+              className="hidden"
+              onChange={handleFileChange}
+            />
+            <div className="w-14 h-14 mx-auto rounded-2xl bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 flex items-center justify-center group-hover:scale-110 transition-transform">
+              <Icon name="file-text" size={28} />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                Drop your Job Description (.docx, .pdf) here
+              </h4>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Compatible with standard SGH Job Specifications (e.g. HRIS Specialist, Charge Nurse)
+              </p>
+            </div>
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 shadow-2xs">
+              <Icon name="upload" size={13} />
+              <span>Browse file from computer</span>
+            </div>
+          </div>
+        )}
+
+        {/* Loading Spinner during document parsing */}
+        {isParsing && (
+          <div className="p-8 text-center space-y-3">
+            <div className="w-8 h-8 mx-auto border-3 border-cyan-500 border-t-transparent rounded-full animate-spin" />
+            <p className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+              Extracting clinical &amp; technical competencies from document...
+            </p>
+          </div>
+        )}
+
+        {/* Parsing Error Banner */}
+        {parseError && (
+          <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs space-y-2">
+            <div className="flex items-center gap-2 font-bold">
+              <Icon name="alert-circle" size={16} className="text-rose-500" />
+              <span>Document Processing Error</span>
+            </div>
+            <p>{parseError}</p>
+            <button
+              type="button"
+              onClick={() => resetState()}
+              className="text-xs font-bold text-rose-600 dark:text-rose-400 underline cursor-pointer"
+            >
+              Try another file
+            </button>
+          </div>
+        )}
+
+        {/* Parsed Review Form */}
+        {parsedData && !isParsing && (
+          <div className="space-y-4 text-xs">
+            {/* Source Document pill */}
+            <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80">
+              <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
+                <Icon name="check-circle" size={15} className="text-emerald-500" />
+                <span className="font-bold">Extracted from:</span>
+                <span className="font-mono text-[11px] text-slate-500">{selectedFile?.name}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => resetState()}
+                className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+              >
+                Change document
+              </button>
+            </div>
+
+            {submitError && (
+              <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-rose-700 dark:text-rose-300 text-xs font-medium">
+                {submitError}
+              </div>
+            )}
+
+            {/* Target Requisition Selector */}
+            <div className="p-3.5 rounded-xl bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900/60 space-y-2">
+              <label className="block text-xs font-bold text-blue-950 dark:text-blue-200">
+                Target Requisition
+              </label>
+
+              {targetVacancy ? (
+                <div className="flex items-center justify-between text-xs font-medium text-slate-700 dark:text-slate-300">
+                  <span>
+                    Apply directly to current vacancy: <b>{targetVacancy.title}</b>
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-900/60 dark:text-amber-300">
+                    {targetVacancy.status}
+                  </span>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-4">
+                    <label className="flex items-center gap-1.5 cursor-pointer font-semibold text-slate-700 dark:text-slate-300">
+                      <input
+                        type="radio"
+                        name="targetMode"
+                        value="existing"
+                        checked={targetMode === 'existing'}
+                        onChange={() => setTargetMode('existing')}
+                        className="text-blue-600"
+                      />
+                      <span>Apply to existing vacancy</span>
+                    </label>
+                    <label className="flex items-center gap-1.5 cursor-pointer font-semibold text-slate-700 dark:text-slate-300">
+                      <input
+                        type="radio"
+                        name="targetMode"
+                        value="new"
+                        checked={targetMode === 'new'}
+                        onChange={() => setTargetMode('new')}
+                        className="text-blue-600"
+                      />
+                      <span>Create new requisition</span>
+                    </label>
+                  </div>
+
+                  {targetMode === 'existing' && (
+                    <Select
+                      aria-label="Select target vacancy"
+                      value={selectedVacancyId}
+                      onChange={(e) => setSelectedVacancyId(e.target.value)}
+                      className="text-xs"
+                    >
+                      <option value="">Select target vacancy requisition...</option>
+                      {availableVacancies.map((v) => (
+                        <option key={v.id} value={v.id}>
+                          {v.title} ({v.department || 'No dept'}) &bull; {v.status}
+                        </option>
+                      ))}
+                    </Select>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Position Title & Department Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Position Title
+                </label>
+                <input
+                  type="text"
+                  maxLength={120}
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value.slice(0, 120))}
+                  placeholder="e.g. HRIS Performance Specialist"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Department
+                </label>
+                <input
+                  type="text"
+                  maxLength={120}
+                  value={department}
+                  onChange={(e) => setDepartment(e.target.value.slice(0, 120))}
+                  placeholder="e.g. Human Resources"
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+              </div>
+            </div>
+
+            {/* Min Experience & Approved Headcount Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Min Experience (Years)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  max="30"
+                  value={minExp}
+                  onChange={(e) => setMinExp(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 dark:text-slate-300 mb-1">
+                  Approved Headcount
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="100"
+                  value={approvedHeadcount}
+                  onChange={(e) => setApprovedHeadcount(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 font-bold text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+              </div>
+            </div>
+
+            {/* Job Summary / Core Purpose */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="font-bold text-slate-700 dark:text-slate-300">
+                  Job Summary &bull; Core Purpose
+                </label>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-slate-400 font-mono">
+                    {jobSummary.length}/500 chars
+                  </span>
+                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                    ✓ Clears activation blocker
+                  </span>
+                </div>
+              </div>
+              <textarea
+                rows={3}
+                maxLength={500}
+                value={jobSummary}
+                onChange={(e) => setJobSummary(e.target.value.slice(0, 500))}
+                placeholder="Core role purpose, main contributions, and mission..."
+                className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+              />
+            </div>
+
+            {/* Key Duties & Responsibilities */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="font-bold text-slate-700 dark:text-slate-300">
+                  Key Duties &amp; Responsibilities
+                </label>
+                <span className="text-[10px] text-slate-400 font-mono">
+                  {responsibilities.length}/4000 chars
+                </span>
+              </div>
+              <textarea
+                rows={3}
+                maxLength={4000}
+                value={responsibilities}
+                onChange={(e) => setResponsibilities(e.target.value.slice(0, 4000))}
+                placeholder="Core operational duties, portal maintenance, automated workflows..."
+                className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+              />
+            </div>
+
+            {/* Education & Qualifications */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="font-bold text-slate-700 dark:text-slate-300">
+                  Education &amp; Qualifications
+                </label>
+                <span className="text-[10px] text-slate-400 font-mono">
+                  {qualifications.length}/4000 chars
+                </span>
+              </div>
+              <textarea
+                rows={2}
+                maxLength={4000}
+                value={qualifications}
+                onChange={(e) => setQualifications(e.target.value.slice(0, 4000))}
+                placeholder="e.g. Bachelor's degree in Computer Science, Software Engineering, or related field"
+                className="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+              />
+            </div>
+
+            {/* Skills & Knowledge Tag Chips */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="font-bold text-slate-700 dark:text-slate-300">
+                  Required Clinical &amp; Technical Skills ({skills.length})
+                </label>
+                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">
+                  ✓ Enables % Match scoring
+                </span>
+              </div>
+
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={skillInput}
+                  onChange={(e) => setSkillInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddSkill();
+                    }
+                  }}
+                  placeholder="Add another skill and press Enter..."
+                  className="flex-1 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500 text-xs"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddSkill}
+                  disabled={!skillInput.trim()}
+                  className="px-3 py-1.5 rounded-lg font-bold bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs hover:opacity-90 disabled:opacity-40 cursor-pointer"
+                >
+                  Add
+                </button>
+              </div>
+
+              <div className="flex flex-wrap gap-1.5 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 min-h-[44px] items-center">
+                {skills.length === 0 ? (
+                  <span className="text-slate-400 italic">No skills extracted. Add skills above.</span>
+                ) : (
+                  skills.map((skill) => (
+                    <span
+                      key={skill}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 shadow-2xs"
+                    >
+                      <span>{skill}</span>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveSkill(skill)}
+                        className="text-slate-400 hover:text-rose-500 transition cursor-pointer"
+                        title={`Remove ${skill}`}
+                      >
+                        <Icon name="close" size={12} />
+                      </button>
+                    </span>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Languages Tag Chips */}
+            <div className="space-y-2">
+              <label className="font-bold text-slate-700 dark:text-slate-300 block">
+                Required Languages ({languages.length})
+              </label>
+
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={languageInput}
+                  onChange={(e) => setLanguageInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddLanguage();
+                    }
+                  }}
+                  placeholder="e.g. English, Arabic..."
+                  className="flex-1 px-3 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500 text-xs"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddLanguage}
+                  disabled={!languageInput.trim()}
+                  className="px-3 py-1.5 rounded-lg font-bold bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs hover:opacity-90 disabled:opacity-40 cursor-pointer"
+                >
+                  Add
+                </button>
+              </div>
+
+              <div className="flex flex-wrap gap-1.5 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 min-h-[36px] items-center">
+                {languages.map((lang) => (
+                  <span
+                    key={lang}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold bg-teal-50 dark:bg-teal-950/40 text-teal-800 dark:text-teal-300 border border-teal-200 dark:border-teal-800 shadow-2xs"
+                  >
+                    <span>{lang}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveLanguage(lang)}
+                      className="text-teal-500 hover:text-rose-500 transition cursor-pointer"
+                      title={`Remove ${lang}`}
+                    >
+                      <Icon name="close" size={12} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            {/* Master Data Auto-Sync Options */}
+            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-700/80 space-y-1.5">
+              <span className="font-bold text-slate-800 dark:text-slate-200 block">
+                Master Data Automation
+              </span>
+              <div className="space-y-1 text-slate-600 dark:text-slate-400">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={syncSkillsToMasterData}
+                    onChange={(e) => setSyncSkillsToMasterData(e.target.checked)}
+                    className="rounded text-blue-600"
+                  />
+                  <span>Sync extracted skills to Master Data Skills catalog for reuse</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={syncDepartmentToMasterData}
+                    onChange={(e) => setSyncDepartmentToMasterData(e.target.checked)}
+                    className="rounded text-blue-600"
+                  />
+                  <span>Register department in Master Data if not already present</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={syncPositionToMasterData}
+                    onChange={(e) => setSyncPositionToMasterData(e.target.checked)}
+                    className="rounded text-blue-600"
+                  />
+                  <span>Update/Create standardized Position in Master Data Catalog</span>
+                </label>
+              </div>
+            </div>
+
+            {/* Footer Buttons */}
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-200 dark:border-slate-800">
+              <Button variant="ghost" onClick={handleClose} disabled={isSubmitting}>
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handleCommit}
+                disabled={isSubmitting || !title.trim() || (targetMode === 'existing' && !selectedVacancyId && !targetVacancy)}
+                loading={isSubmitting}
+                loadingLabel="Synchronizing..."
+              >
+                {targetVacancy || targetMode === 'existing'
+                  ? 'Apply to Requisition & Sync Master Data'
+                  : 'Create Requisition & Sync Master Data'}
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+    </Modal>
+  );
+}

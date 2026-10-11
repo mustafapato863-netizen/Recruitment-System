@@ -13,10 +13,10 @@ const COMMON = ['/profile', '/notifications', '/search'];
 
 /** Path prefixes per seat ("/x" allows "/x" and "/x/…"). Keep in step with navConfig + the v2 pages. */
 export const SEAT_DESTINATIONS: Record<Seat, string[]> = {
-  employee: ['/offers/:id', '/hires/:id', '/my-work', '/my-result', '/vacancies', '/vacancies/:id', '/candidates', '/candidates/compare', '/applications/:id'],
+  employee: ['/offers/:id', '/my-work', '/my-result', '/vacancies', '/vacancies/:id', '/candidates', '/candidates/compare', '/applications/:id'],
   // '/interviews/:id' stays for the Manager's own scorecard (Team work → Waiting on you → Submit scorecard).
   // v2 default: '/vacancy-requests' is the list only (the drawers carry ?req= / ?req=new); detail and create URLs redirect.
-  manager: ['/offers/:id', '/hires/:id', '/my-work', '/vacancy-requests', '/reports', '/applications/:id'],
+  manager: ['/offers/:id', '/my-work', '/vacancy-requests', '/reports', '/applications/:id'],
   admin: ['/users', '/roles', '/pipeline-settings', '/master-data', '/email-templates', '/whatsapp-templates', '/reports', '/audit-log', '/integrations'],
 };
 
@@ -34,6 +34,30 @@ const PARAM_EQUIVALENT: Array<{ from: RegExp; to: Partial<Record<Seat, string>> 
   { from: /^\/applications\/([^/]+)\/.+$/, to: { employee: '/applications/$1', manager: '/applications/$1' } },
   { from: /^\/candidates\/(?!compare\/?$)[^/]+(\/.*)?$/, to: { employee: '/candidates?tab=bank' } },
 ];
+
+/**
+ * v1 pages kept reachable (nav "More (classic)") until v2 versions exist. They are never redirected; their
+ * PermissionGate (as in v1) decides access. Keep in step with CLASSIC_NAV and App.tsx.
+ */
+export const CLASSIC_PATHS: RegExp[] = [
+  /^\/hires(\/approvals\/inbox|\/[^/]+)?\/?$/, /^\/licenses\/?$/, /^\/joinings?\/?$/,
+  /^\/interviews(\/calendar)?\/?$/, /^\/offers\/?$/, /^\/vacancies\/[^/]+\/analytics\/?$/,
+  /^\/candidates\/(?!compare\/?$)[^/]+(\/documents)?\/?$/, /^\/cv-bank\/?$/, /^\/(sourcing-match|talent-pools?)\/?$/,
+  /^\/import(\/[^/]+\/[^/]+)?\/?$/, /^\/classic\/(candidates|vacancies|master-data|pipeline-settings)\/?$/,
+  /^\/settings(\/targets)?\/?$/, /^\/access-control\/?$/,
+];
+export const isClassicPath = (pathname: string) => CLASSIC_PATHS.some((r) => r.test(pathname));
+
+/**
+ * PR33-3: roles whose work only has a classic page get it as their home (they are seated Employee by /auth/me).
+ * Final hiring approvers → the final approval inbox; licence specialists → the licences desk.
+ */
+export function specialHome(user: { roles?: ReadonlyArray<{ code: string }> } | null | undefined): string | null {
+  const codes = new Set((user?.roles ?? []).map((r) => r.code.trim().toUpperCase()));
+  if (codes.has('FINAL_HIRING_APPROVER')) return '/hires/approvals/inbox';
+  if (codes.has('LICENSE_SPECIALIST')) return '/licenses';
+  return null;
+}
 
 /** v1 page → v2 equivalent, per seat; anything else unknown goes home. */
 const EQUIVALENT: Array<{ from: RegExp; to: Partial<Record<Seat, string>> }> = [
@@ -85,8 +109,9 @@ const INTERVIEWER_ONLY_OK = ['/my-work', '/my-interviews', ...COMMON];
 export function isInterviewerOnly(user: { permissions?: readonly string[] } | null | undefined, interviewer: boolean): boolean {
   return interviewer && !(user?.permissions ?? []).includes('APPLICATION_VIEW');
 }
-export function v2Redirect(seat: Seat, pathname: string, opts: { requisitions?: boolean; interviews?: boolean; interviewerOnly?: boolean } = {}): string | null {
-  if (pathname === '/' || pathname === '') return SEAT_HOME[seat];
+export function v2Redirect(seat: Seat, pathname: string, opts: { requisitions?: boolean; interviews?: boolean; interviewerOnly?: boolean; home?: string | null } = {}): string | null {
+  if (pathname === '/' || pathname === '') return opts.home ?? SEAT_HOME[seat];
+  if (!opts.interviewerOnly && isClassicPath(pathname)) return null;
   for (const rule of PARAM_EQUIVALENT) {
     const m = rule.from.exec(pathname);
     const to = m ? rule.to[seat] : undefined;

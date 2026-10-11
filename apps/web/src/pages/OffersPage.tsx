@@ -1,0 +1,648 @@
+import { useState, useMemo, useEffect } from 'react';
+import { fetchVacancyContext } from '../utils/vacancyAccess';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { getApi } from '../api/client';
+import type { Offer as BaseOffer, VacancyDetailView } from '@recruitflow/contracts';
+import { Icon } from '../components/Icon';
+import { formatOfferAmount, getOfferCurrency } from '../utils/offerCurrency';
+import { Modal } from '../components/Modal';
+import { PageState } from '../components/ui/PageState';
+import { QuickGuideTrigger } from '../quickguide';
+import './PageEnhancementsV2.css';
+
+interface Offer extends BaseOffer {
+  createdByName?: string;
+  approverName?: string;
+  approverRole?: string;
+  department?: string;
+  location?: string;
+  application?: {
+    vacancyId?: string;
+    candidate?: { firstName: string; lastName: string };
+    vacancy?: { id?: string; position?: { title: string }; department?: { name: string } };
+  };
+}
+
+interface OfferRow {
+  id: string;
+  vacancyId?: string;
+  offerCode: string;
+  candidateName: string;
+  candidateType: string;
+  candidateAvatar: string;
+  positionTitle: string;
+  department: string;
+  location: string;
+  ownerName: string;
+  ownerAvatar: string;
+  ownerRole: string;
+  monthlySalary: string;
+  bonus: string;
+  approverName: string;
+  approverRole: string;
+  approverAvatar: string;
+  expiryDate: string;
+  daysLeft: string;
+  daysLeftTone: 'red' | 'amber' | 'green' | 'gray';
+  lastActivity: string;
+  lastActivityTime: string;
+  nextAction: string;
+  nextActionSub: string;
+  status: string;
+}
+
+export function OffersPage() {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const vacancyId = searchParams.get('vacancyId');
+  const [currentVacancy, setCurrentVacancy] = useState<VacancyDetailView | null>(null);
+
+  const [apiOffers, setApiOffers] = useState<OfferRow[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [activePill, setActivePill] = useState('ALL');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isCreateOfferModalOpen, setIsCreateOfferModalOpen] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  useEffect(() => {
+    setIsLoading(true);
+    const offersPromise = getApi<Offer[] | { data: Offer[] }>('/offers');
+    const vacancyPromise = vacancyId ? fetchVacancyContext(vacancyId) : Promise.resolve(null);
+
+    Promise.allSettled([offersPromise, vacancyPromise])
+      .then(([offersRes, vacRes]) => {
+        if (vacRes.status === 'fulfilled' && vacRes.value) {
+          setCurrentVacancy(vacRes.value);
+        } else {
+          setCurrentVacancy(null);
+        }
+
+        const res = offersRes.status === 'fulfilled' ? offersRes.value : [];
+        const list = Array.isArray(res) ? res : res?.data || [];
+        const filteredList = list.filter((o) => {
+          if (!vacancyId) return true;
+          const appVacId = o.vacancyId || o.application?.vacancyId || o.application?.vacancy?.id;
+          return appVacId === vacancyId;
+        });
+
+        const mapped: OfferRow[] = filteredList.map((o) => {
+          const candidateName =
+            o.candidateName ||
+            (o.application?.candidate
+              ? `${o.application.candidate.firstName} ${o.application.candidate.lastName}`.trim()
+              : null) ||
+            'Unknown candidate';
+
+          const initials =
+            candidateName
+              .split(' ')
+              .map((n: string) => n[0])
+              .filter(Boolean)
+              .join('')
+              .substring(0, 2)
+              .toUpperCase() || 'UC';
+
+          const ownerName = o.createdByName || 'Unassigned';
+          const ownerInitials =
+            ownerName === 'Unassigned'
+              ? 'UN'
+              : ownerName
+                  .split(' ')
+                  .map((n: string) => n[0])
+                  .filter(Boolean)
+                  .join('')
+                  .substring(0, 2)
+                  .toUpperCase() || 'OA';
+
+          const currentVer = o.currentVersion;
+          let monthlySalary = '—';
+          let bonus = '';
+
+          if (currentVer) {
+            const currency = getOfferCurrency(currentVer.components);
+            if (typeof currentVer.monthlyPackage === 'number' && currentVer.monthlyPackage > 0) {
+              monthlySalary = `${formatOfferAmount(currentVer.monthlyPackage, currency)} / month`;
+            } else if (Array.isArray(currentVer.components) && currentVer.components.length > 0) {
+              const sum = currentVer.components.reduce(
+                (acc: number, c) => acc + (Number(c.amount) || 0),
+                0
+              );
+              if (sum > 0) {
+                monthlySalary = `${formatOfferAmount(sum, currency)} / month`;
+              }
+            }
+
+            if (Array.isArray(currentVer.components)) {
+              const bonusComp = currentVer.components.find((c) =>
+                c.name?.toLowerCase().includes('bonus')
+              );
+              if (bonusComp && bonusComp.amount) {
+                bonus = `+ ${formatOfferAmount(Number(bonusComp.amount), bonusComp.currency)} bonus`;
+              }
+            }
+          }
+
+          let approverName = '—';
+          let approverRole = '—';
+          let approverAvatar = 'AP';
+          if (currentVer?.approvals && currentVer.approvals.length > 0) {
+            const firstApp = currentVer.approvals[0];
+            approverName = firstApp.approverName || firstApp.roleCode?.replace(/_/g, ' ') || 'Approver';
+            approverRole = firstApp.roleCode ? firstApp.roleCode.replace(/_/g, ' ') : 'Offer Approver';
+            approverAvatar =
+              approverName
+                .split(' ')
+                .map((n: string) => n[0])
+                .filter(Boolean)
+                .join('')
+                .substring(0, 2)
+                .toUpperCase() || 'AP';
+          } else if (o.approverName) {
+            approverName = o.approverName;
+            approverRole = o.approverRole || 'Approver';
+            approverAvatar =
+              approverName
+                .split(' ')
+                .map((n: string) => n[0])
+                .filter(Boolean)
+                .join('')
+                .substring(0, 2)
+                .toUpperCase() || 'AP';
+          }
+
+          let expiryDate = '—';
+          let daysLeft = '—';
+          let daysLeftTone: 'red' | 'amber' | 'green' | 'gray' = 'gray';
+
+          if (currentVer?.offerExpiry) {
+            const exp = new Date(currentVer.offerExpiry);
+            if (!isNaN(exp.getTime())) {
+              expiryDate = exp.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+              const diffDays = Math.ceil((exp.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+              if (diffDays < 0) {
+                daysLeft = 'Expired';
+                daysLeftTone = 'red';
+              } else if (diffDays <= 3) {
+                daysLeft = `${diffDays} day${diffDays === 1 ? '' : 's'} left`;
+                daysLeftTone = 'amber';
+              } else {
+                daysLeft = `${diffDays} days left`;
+                daysLeftTone = 'green';
+              }
+            }
+          }
+
+          let nextAction = 'View Details';
+          let nextActionSub = '';
+          const st = o.status || 'Draft';
+          if (st === 'Draft') {
+            nextAction = 'Submit approval';
+          } else if (st === 'Pending Approval') {
+            nextAction = 'Approve offer';
+            nextActionSub = 'Waiting for a decision';
+          } else if (st === 'Approved') {
+            nextAction = 'Send offer';
+          } else if (st === 'Sent') {
+            nextAction = 'Record reply';
+            if (daysLeftTone === 'amber') nextActionSub = 'Expiring soon';
+          } else if (st === 'Accepted') {
+            nextAction = 'Start joining';
+            nextActionSub = 'Candidate accepted';
+          } else if (st === 'Declined') {
+            nextAction = 'Review decline';
+          } else if (st === 'Expired') {
+            nextAction = 'Revise offer';
+          }
+
+          const updatedAtTime = o.updatedAt
+            ? new Date(o.updatedAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+            : o.createdAt
+            ? new Date(o.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+            : '—';
+
+          return {
+            id: o.id,
+            vacancyId: o.vacancyId || o.application?.vacancyId || o.application?.vacancy?.id,
+            offerCode: o.offerCode || '—',
+            candidateName,
+            candidateType: 'External Candidate',
+            candidateAvatar: initials,
+            positionTitle: o.positionTitle || o.application?.vacancy?.position?.title || 'No position',
+            department: o.department || o.application?.vacancy?.department?.name || '—',
+            location: currentVer?.workLocation || o.location || '—',
+            ownerName,
+            ownerAvatar: ownerInitials,
+            ownerRole: o.createdByName ? 'Recruiter' : '—',
+            monthlySalary,
+            bonus,
+            approverName,
+            approverRole,
+            approverAvatar,
+            expiryDate,
+            daysLeft,
+            daysLeftTone,
+            lastActivity: `Status: ${st}`,
+            lastActivityTime: updatedAtTime,
+            nextAction,
+            nextActionSub,
+            status: st,
+          };
+        });
+        setApiOffers(mapped);
+      })
+      .catch(() => {
+        setApiOffers([]);
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
+  }, [vacancyId]);
+
+  const statusCounts = useMemo(() => {
+    return {
+      ALL: apiOffers.length,
+      Draft: apiOffers.filter((o) => o.status === 'Draft').length,
+      'Pending Approval': apiOffers.filter(
+        (o) => o.status === 'Pending Approval' || o.status === 'Approval'
+      ).length,
+      Approved: apiOffers.filter((o) => o.status === 'Approved').length,
+      Sent: apiOffers.filter((o) => o.status === 'Sent').length,
+      Accepted: apiOffers.filter((o) => o.status === 'Accepted').length,
+      Declined: apiOffers.filter((o) => o.status === 'Declined').length,
+      Expired: apiOffers.filter((o) => o.status === 'Expired').length,
+    };
+  }, [apiOffers]);
+
+  const filteredOffers = useMemo(() => {
+    return apiOffers.filter((offer) => {
+      if (activePill !== 'ALL') {
+        if (activePill === 'Pending Approval') {
+          if (offer.status !== 'Pending Approval' && offer.status !== 'Approval') return false;
+        } else if (offer.status !== activePill) {
+          return false;
+        }
+      }
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        return (
+          offer.candidateName.toLowerCase().includes(q) ||
+          offer.positionTitle.toLowerCase().includes(q) ||
+          offer.ownerName.toLowerCase().includes(q) ||
+          offer.offerCode.toLowerCase().includes(q)
+        );
+      }
+      return true;
+    }).sort((a, b) => {
+      const rank = (status: string) => ({
+        Draft: 0,
+        'Pending Approval': 1,
+        Approval: 1,
+        Approved: 2,
+        Sent: 3,
+        Accepted: 4,
+        Declined: 5,
+        Expired: 6,
+      }[status] ?? 7);
+      return rank(a.status) - rank(b.status);
+    });
+  }, [apiOffers, activePill, searchQuery]);
+
+  const totalOffers = filteredOffers.length;
+  const totalPages = Math.max(1, Math.ceil(totalOffers / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const paginatedOffers = useMemo(() => {
+    const start = (safePage - 1) * pageSize;
+    return filteredOffers.slice(start, start + pageSize);
+  }, [filteredOffers, safePage, pageSize]);
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'Accepted':
+        return 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800';
+      case 'Approved':
+        return 'bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800';
+      case 'Approval':
+      case 'Pending Approval':
+        return 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800';
+      case 'Sent':
+        return 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800';
+      case 'Declined':
+      case 'Rejected':
+        return 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800';
+      case 'Expired':
+      case 'Withdrawn':
+        return 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700';
+      case 'Draft':
+      default:
+        return 'bg-slate-50 dark:bg-slate-800/60 text-slate-500 border border-slate-200 dark:border-slate-700';
+    }
+  };
+
+  return (
+    <div className="offers-page flex w-full flex-col p-3 sm:p-4 lg:p-5 max-w-[1720px] mx-auto space-y-5">
+      {/* ── Page Header ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <h1 className="rf-page-title">
+              Offers
+            </h1>
+            <QuickGuideTrigger />
+          </div>
+          <p className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">
+            Track approvals, sent offers, and acceptances.
+          </p>
+        </div>
+
+        <div className="flex w-full flex-col sm:w-auto sm:flex-row sm:flex-wrap sm:items-center gap-2 sm:gap-2.5">
+          <button
+            type="button"
+            onClick={() => navigate('/offers/create')}
+            className="inline-flex min-h-10 items-center justify-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+          >
+            <Icon name="plus" size={14} />
+            <span>Create</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Position Context Banner (E7.2) */}
+      {currentVacancy && (
+        <div className="bg-gradient-to-r from-blue-50 via-indigo-50/40 to-slate-50 dark:from-blue-950/40 dark:via-indigo-950/20 dark:to-slate-900 rounded-2xl border border-blue-200/80 dark:border-blue-900/60 p-4 sm:p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-blue-600 text-white shadow-2xs">
+                <Icon name="lock" size={10} />
+                This job
+              </span>
+              <span className="text-xs font-mono font-bold text-slate-500 dark:text-slate-400">
+                {currentVacancy.vacancyCode}
+              </span>
+              <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                {currentVacancy.status}
+              </span>
+            </div>
+            <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white tracking-tight">
+              {currentVacancy.position?.title || currentVacancy.title || 'Job Position'}
+            </h2>
+            <p className="text-xs text-slate-600 dark:text-slate-400 font-medium">
+              {(currentVacancy as unknown as { department?: string })?.department || currentVacancy.branch?.name || 'Department'} &bull;{' '}
+              <span className="font-bold text-blue-600 dark:text-blue-400">
+                {apiOffers.length} offer{apiOffers.length === 1 ? '' : 's'} recorded
+              </span>
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => navigate(`/vacancies/${currentVacancy.id}`)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 transition shadow-xs cursor-pointer"
+            >
+              <Icon name="arrow-left" size={13} />
+              <span>Back</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate('/offers')}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-500 hover:text-slate-900 dark:hover:text-white transition cursor-pointer"
+              title="View all offers across all vacancies"
+            >
+              <span>All offers</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Filter Pills & Search Bar ── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-2">
+        <div className="flex items-center gap-2 overflow-x-auto text-xs font-semibold pb-1">
+          {[
+            { key: 'ALL', label: 'All', count: statusCounts.ALL },
+            { key: 'Draft', label: 'Draft', count: statusCounts.Draft },
+            { key: 'Pending Approval', label: 'Approval', count: statusCounts['Pending Approval'] },
+            { key: 'Approved', label: 'Approved', count: statusCounts.Approved },
+            { key: 'Sent', label: 'Sent', count: statusCounts.Sent },
+            { key: 'Accepted', label: 'Accepted', count: statusCounts.Accepted },
+            { key: 'Declined', label: 'Declined', count: statusCounts.Declined },
+            { key: 'Expired', label: 'Expired', count: statusCounts.Expired },
+          ].map((pill) => (
+            <button
+              key={pill.key}
+              type="button"
+              onClick={() => {
+                setActivePill(pill.key);
+                setPage(1);
+              }}
+              className={`px-3 py-1.5 rounded-full whitespace-nowrap transition cursor-pointer ${
+                activePill === pill.key
+                  ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-400 font-bold border border-blue-200 dark:border-blue-800'
+                  : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'
+              }`}
+            >
+              <span>{pill.label}</span>
+              <span className="ml-1.5">&bull; {pill.count}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="relative w-full sm:w-64 shrink-0">
+          <Icon name="search" size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => {
+              setSearchQuery(e.target.value);
+              setPage(1);
+            }}
+            placeholder="Search candidate or offer"
+            className="w-full pl-8 pr-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-2xs"
+          />
+        </div>
+      </div>
+
+      {/* ── Table Container ── */}
+      <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs overflow-hidden">
+        {isLoading ? (
+          <div className="p-8">
+            <PageState
+              kind="loading"
+              title="Loading offers"
+              description="Fetching offer records from server."
+            />
+          </div>
+        ) : filteredOffers.length === 0 ? (
+          <div className="p-8">
+            <PageState
+              kind="empty"
+              title={apiOffers.length === 0 ? 'No offers found' : 'No matching offers'}
+              description={
+                apiOffers.length === 0
+                  ? 'No job offers have been created yet. Create a new offer to get started.'
+                  : 'No offers match your current filter and search criteria.'
+              }
+              actionLabel={apiOffers.length === 0 ? 'Create' : 'Reset'}
+              onAction={() => {
+                if (apiOffers.length === 0) {
+                  navigate('/offers/create');
+                } else {
+                  setActivePill('ALL');
+                  setSearchQuery('');
+                  setPage(1);
+                }
+              }}
+            />
+          </div>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-slate-200 dark:border-slate-800 text-[11px] font-semibold text-slate-500 bg-slate-50/50 dark:bg-slate-800/30 text-left">
+                    <th className="py-3 px-4">Candidate</th>
+                    <th className="py-3 px-3">Role</th>
+                    <th className="py-3 px-3">Status</th>
+                    <th className="py-3 pr-4 text-right">Next</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {paginatedOffers.map((offer) => (
+                    <tr
+                      key={offer.id}
+                      onClick={() => navigate(`/offers/${offer.id}`)}
+                      className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition cursor-pointer group"
+                    >
+                      <td className="py-3 px-4">
+                        <p className="font-semibold text-slate-900 dark:text-white">{offer.candidateName}</p>
+                        <p className="text-[11px] text-slate-500">{offer.offerCode} · {offer.monthlySalary}</p>
+                      </td>
+                      <td className="py-3 px-3">
+                        <p className="font-medium text-slate-800 dark:text-slate-200">{offer.positionTitle}</p>
+                        <p className="text-[11px] text-slate-500">{offer.expiryDate}{offer.daysLeft !== '—' ? ` · ${offer.daysLeft}` : ''}</p>
+                      </td>
+                      <td className="py-3 px-3">
+                        <span className={`px-2 py-0.5 rounded-md text-[11px] font-semibold ${getStatusBadge(offer.status)}`}>
+                          {offer.status}
+                        </span>
+                      </td>
+                      <td className="py-3 pr-4 text-right" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/offers/${offer.id}`)}
+                          className="inline-flex min-h-7 items-center rounded-lg bg-blue-600 px-2.5 text-[11px] font-semibold text-white hover:bg-blue-700"
+                        >
+                          {offer.nextAction}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Footer with Pagination */}
+            <div className="p-3.5 px-4 flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-400">
+              <span>
+                Showing {(safePage - 1) * pageSize + 1} to {Math.min(safePage * pageSize, totalOffers)} of {totalOffers} offer{totalOffers === 1 ? '' : 's'}
+              </span>
+
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={safePage === 1}
+                    className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 disabled:opacity-40 cursor-pointer"
+                  >
+                    &lt;
+                  </button>
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((num) => (
+                    <button
+                      key={num}
+                      type="button"
+                      onClick={() => setPage(num)}
+                      className={`w-7 h-7 flex items-center justify-center rounded-lg text-xs font-bold transition cursor-pointer ${
+                        safePage === num
+                          ? 'bg-blue-600 text-white shadow-2xs'
+                          : 'border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50'
+                      }`}
+                    >
+                      {num}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={safePage === totalPages}
+                    className="w-7 h-7 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 text-slate-500 hover:bg-slate-50 disabled:opacity-40 cursor-pointer"
+                  >
+                    &gt;
+                  </button>
+                </div>
+
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setPage(1);
+                  }}
+                  className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-2 py-1 text-xs text-slate-700 dark:text-slate-200 font-semibold cursor-pointer"
+                >
+                  <option value={10}>10 per page</option>
+                  <option value={25}>25 per page</option>
+                  <option value={50}>50 per page</option>
+                </select>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Create Offer Modal */}
+      <Modal
+        isOpen={isCreateOfferModalOpen}
+        onClose={() => setIsCreateOfferModalOpen(false)}
+        title="Create New Offer Package"
+        maxWidthClass="max-w-md"
+      >
+        <div className="space-y-3 text-xs">
+          <div>
+            <label className="font-bold block mb-1">Candidate</label>
+            <input
+              type="text"
+              placeholder="Enter candidate name or ID"
+              className="w-full p-2 border rounded-lg bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+            />
+          </div>
+          <div>
+            <label className="font-bold block mb-1">Basic Monthly Salary (AED or EGP)</label>
+            <input
+              type="number"
+              placeholder="e.g. 20000"
+              className="w-full p-2 border rounded-lg bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
+            />
+          </div>
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+            <button
+              type="button"
+              onClick={() => setIsCreateOfferModalOpen(false)}
+              className="px-3 py-1.5 text-slate-500 cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsCreateOfferModalOpen(false)}
+              className="px-4 py-1.5 bg-blue-600 text-white rounded-xl font-bold cursor-pointer"
+            >
+              Save Offer
+            </button>
+          </div>
+        </div>
+      </Modal>
+    </div>
+  );
+}
+
+export default OffersPage;

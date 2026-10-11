@@ -15,7 +15,7 @@ vi.mock('../../../../quickguide', () => ({
 }));
 
 import { AppShellV2 } from '../AppShellV2';
-import { activeNavKey, permittedNavItems, SEAT_NAV } from '../navConfig';
+import { activeNavKey, permittedNavItems, SEAT_NAV, CLASSIC_NAV, permittedClassicItems } from '../navConfig';
 import type { Seat } from '../../../../v2/seat';
 
 const ALL = ['VACANCY_VIEW', 'CANDIDATE_VIEW', 'VACANCY_REQUEST_VIEW', 'VACANCY_REQUEST_APPROVE', 'APPLICATION_VIEW', 'USERS_VIEW',
@@ -60,14 +60,33 @@ describe('nav per seat', () => {
 
   it('hides items the user cannot open (no locked rows)', () => {
     renderShell('employee', user(['VACANCY_VIEW']));
-    const nav = screen.getByRole('navigation');
+    const nav = screen.getByRole('navigation', { name: SEAT_NAV.employee.heading });
     expect(within(nav).getAllByRole('link').map((a) => a.textContent)).toEqual(['My Work', 'Open jobs']);
+    // More (classic): only the VACANCY_VIEW items.
+    const classic = screen.getByRole('navigation', { name: 'More (classic)' });
+    expect(within(classic).getAllByRole('link').map((a) => a.getAttribute('href'))).toEqual(['/interviews', '/interviews/calendar', '/classic/vacancies']);
     expect(screen.queryByText(/locked/i)).not.toBeInTheDocument();
   });
 
   it('manager has no Approvals item (v2: not a destination)', () => {
     expect(permittedNavItems('manager', ['VACANCY_REQUEST_VIEW', 'APPLICATION_VIEW', 'APPROVE_OFFERS', 'VACANCY_REQUEST_APPROVE']).map((i) => i.key)).toEqual(['team-work', 'requisitions', 'team-result']);
     expect(SEAT_NAV.manager.items.some((i) => /approval/i.test(i.label))).toBe(false);
+  });
+
+  it('More (classic) mirrors each v1 PermissionGate; admins see all; interviewer-only users none', () => {
+    const keys = (perms: string[], admin = false, io = false) => permittedClassicItems(perms, admin, io).map((i) => i.to);
+    expect(keys(['FINAL_HIRING_APPROVAL'])).toEqual(['/hires/approvals/inbox']);
+    expect(keys(['APPLICATION_VIEW'])).toEqual(['/hires', '/licenses', '/joinings', '/offers']);
+    expect(keys(['CANDIDATE_VIEW'])).toEqual(['/classic/candidates', '/cv-bank', '/sourcing-match']);
+    expect(keys(['MASTER_DATA_MANAGE'])).toEqual(['/import']);
+    expect(keys(['MASTER_DATA_VIEW'])).toEqual(['/settings/targets', '/classic/master-data', '/settings']);
+    expect(keys(['USERS_VIEW'])).toEqual(['/access-control', '/settings']);
+    expect(keys(['OVERRIDE_WORKFLOW'])).toEqual(['/settings', '/classic/pipeline-settings']);
+    expect(keys([])).toEqual([]);
+    expect(keys([], true)).toHaveLength(CLASSIC_NAV.length);
+    expect(keys(['VACANCY_VIEW', 'APPLICATION_VIEW'], false, true)).toEqual([]);
+    expect(CLASSIC_NAV.map((i) => i.to)).not.toContain('/portal');
+    expect(CLASSIC_NAV.map((i) => i.to)).not.toContain('/approval-inbox');
   });
 
   it('administrators pass every gate like PermissionGate', () => {
@@ -149,7 +168,7 @@ describe('a11y', () => {
     const { container } = renderShell('employee');
     expect(screen.getByRole('banner')).toBeInTheDocument();
     expect(screen.getByRole('main')).toHaveAttribute('id', 'rf2-main');
-    expect(screen.getByRole('navigation')).toBeInTheDocument();
+    expect(screen.getAllByRole('navigation').length).toBeGreaterThan(0);
     expect(screen.getByRole('link', { name: 'Skip to main content' })).toHaveAttribute('href', '#rf2-main');
     await waitFor(() => expect(getApi).toHaveBeenCalled());
     expect(await runAxe(container)).toEqual([]);

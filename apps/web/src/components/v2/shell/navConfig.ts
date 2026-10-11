@@ -3,7 +3,7 @@ import type { Seat } from '../../../v2/seat';
 export type NavIconName =
   | 'my-work' | 'jobs' | 'candidates' | 'interviews'
   | 'team' | 'requisitions' | 'result'
-  | 'users' | 'roles' | 'pipeline' | 'master-data' | 'templates' | 'reports' | 'audit' | 'integrations';
+  | 'users' | 'roles' | 'pipeline' | 'master-data' | 'templates' | 'reports' | 'audit' | 'integrations' | 'classic';
 
 export interface SeatNavItem {
   key: string;
@@ -63,6 +63,39 @@ export const SEAT_NAV: Record<Seat, { heading: string; searchPlaceholder: string
     ],
   },
 };
+
+/**
+ * "More (classic)": v1 pages kept until v2 versions exist (v2 default decision). Same for every seat; each item
+ * mirrors its route's v1 PermissionGate in App.tsx, so an item the user can't open is absent.
+ */
+const C = (key: string, label: string, to: string, gate: Pick<SeatNavItem, 'requires' | 'requiresAny'>): SeatNavItem => ({ key: `classic-${key}`, label, to, icon: 'classic', ...gate });
+export const CLASSIC_NAV: SeatNavItem[] = [
+  C('final-approvals', 'Final approvals', '/hires/approvals/inbox', { requires: ['FINAL_HIRING_APPROVAL'] }),
+  C('hires', 'Hiring cases', '/hires', { requires: ['APPLICATION_VIEW'] }),
+  C('licenses', 'Licences', '/licenses', { requires: ['APPLICATION_VIEW'] }),
+  C('joinings', 'Joinings', '/joinings', { requires: ['APPLICATION_VIEW'] }),
+  C('interviews', 'All interviews', '/interviews', { requires: ['VACANCY_VIEW'] }),
+  C('calendar', 'Interview calendar', '/interviews/calendar', { requires: ['VACANCY_VIEW'] }),
+  C('offers', 'All offers', '/offers', { requires: ['APPLICATION_VIEW'] }),
+  C('candidates', 'Candidates (export, duplicates, metrics)', '/classic/candidates', { requires: ['CANDIDATE_VIEW'] }),
+  C('cv-bank', 'CV Bank', '/cv-bank', { requires: ['CANDIDATE_VIEW'] }),
+  C('talent-pools', 'Talent pools', '/sourcing-match', { requires: ['CANDIDATE_VIEW'] }),
+  C('vacancies', 'Jobs (export)', '/classic/vacancies', { requires: ['VACANCY_VIEW'] }),
+  C('import', 'Bulk import', '/import', { requiresAny: ['CANDIDATE_CREATE', 'VACANCY_REQUEST_CREATE', 'MASTER_DATA_MANAGE'] }),
+  C('targets', 'Targets', '/settings/targets', { requiresAny: ['VACANCY_REQUEST_APPROVE', 'USERS_MANAGE', 'VACANCY_MANAGE', 'VACANCY_ASSIGN', 'VACANCY_REASSIGN', 'MASTER_DATA_VIEW'] }),
+  C('access', 'Roles and access tools', '/access-control', { requires: ['USERS_VIEW'] }),
+  C('master-data', 'Branches and positions', '/classic/master-data', { requires: ['MASTER_DATA_VIEW'] }),
+  C('settings', 'Settings (pipeline stages)', '/settings', { requiresAny: ['USERS_VIEW', 'MASTER_DATA_VIEW', 'OVERRIDE_WORKFLOW', 'AUDIT_VIEW'] }),
+  C('pipeline', 'Pipeline templates', '/classic/pipeline-settings', { requires: ['OVERRIDE_WORKFLOW'] }),
+];
+
+/** The classic items this user may open (ADMINISTRATOR passes every v1 PermissionGate). Interviewer-only users get none. */
+export function permittedClassicItems(permissions: readonly string[] | undefined, isAdministrator = false, interviewerOnly = false): SeatNavItem[] {
+  if (interviewerOnly) return [];
+  const held = new Set(permissions ?? []);
+  return CLASSIC_NAV.filter((i) => isAdministrator
+    || ((!i.requires || i.requires.every((p) => held.has(p))) && (!i.requiresAny || i.requiresAny.some((p) => held.has(p)))));
+}
 
 export function permittedNavItems(seat: Seat, permissions: readonly string[] | undefined, isAdministrator = false, recruiterOnly = false, interviewer = false): SeatNavItem[] {
   const held = new Set(permissions ?? []);
