@@ -24,6 +24,7 @@ import { AllowFileApprover, TenantResource } from '../common/decorators/tenant-r
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { RequireAnyPermissions, RequirePermissions } from '../common/decorators/require-permissions.decorator';
 import { AuditAction } from '../common/decorators/audit-action.decorator';
+import { canSeePay } from '../common/access/pay-visibility';
 import type { AuthUser } from '@recruitflow/contracts';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -45,8 +46,8 @@ export class OffersController {
 
   private async compensationDisclosure(user: AuthUser) {
     return {
-      // B7: offer pay has its own permission; VIEW_CURRENT_SALARY no longer reveals it.
-      viewOfferPay: await this.userPermissions.hasPermission(user.userId, user.organizationId, 'OFFER_PAY_VIEW'),
+      // Offer pay rule (common/access/pay-visibility canSeePay): OFFER_PAY_VIEW; VIEW_CURRENT_SALARY does not reveal it.
+      viewOfferPay: await canSeePay(this.userPermissions, user),
     };
   }
 

@@ -4,6 +4,7 @@ import type { AuthUser } from '@recruitflow/contracts';
 import { PrismaService } from '../database/prisma.service';
 import { UserPermissionsService } from '../common/user-permissions.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { canSeePay } from '../common/access/pay-visibility';
 import { fileOwnerIds, isAdmin, isManagerOfFile } from './file-ownership';
 
 export type ManagerDecision = 'Approve' | 'Reject' | 'RequestChanges';
@@ -48,7 +49,7 @@ export class OfferDecisionService {
     const sendsPay = input.basePay !== undefined || (input.allowances?.length ?? 0) > 0 || input.currency !== undefined;
     if (sendsPay) {
       if (input.decision !== 'Approve') throw new BadRequestException({ code: 'VALIDATION_ERROR', field: 'basePay', fields: { basePay: ['Pay can only be sent with Approve.'] }, message: 'Pay can only be sent with Approve.' });
-      if (!(await this.permissions.hasPermission(user.userId, user.organizationId, 'OFFER_PAY_VIEW'))) {
+      if (!(await canSeePay(this.permissions, user))) {
         throw new ForbiddenException({ code: 'OFFER_PAY_VIEW_REQUIRED', message: 'Sending offer pay needs the OFFER_PAY_VIEW permission.' });
       }
       if (input.basePay === undefined) throw new BadRequestException({ code: 'VALIDATION_ERROR', field: 'basePay', fields: { basePay: ['basePay is required when sending pay.'] }, message: 'basePay is required when sending pay.' });
@@ -87,7 +88,7 @@ export class OfferDecisionService {
     ] : null;
     const toDecimalish = (c: { type: string; amount: number; currency: string; frequency: string }) => ({ ...c, amount: c.amount as unknown as Prisma.Decimal | null, currency: c.currency as string | null, frequency: c.frequency as string | null });
     let bandId: string | null = null;
-    if (input.decision === 'Approve') bandId = await assertOfferInsideBand(this.prisma, user.organizationId, () => this.permissions.hasPermission(user.userId, user.organizationId, 'OFFER_PAY_VIEW'), newComponents ? newComponents.map(toDecimalish) : version.components, app.vacancy);
+    if (input.decision === 'Approve') bandId = await assertOfferInsideBand(this.prisma, user.organizationId, () => canSeePay(this.permissions, user), newComponents ? newComponents.map(toDecimalish) : version.components, app.vacancy);
 
     const outcome = DECISION_OUTCOME[input.decision];
     const now = new Date();

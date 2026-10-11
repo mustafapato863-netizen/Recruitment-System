@@ -6,7 +6,8 @@ export const isFileNotification = (type: string, entityType?: string | null) =>
   FILE_ENTITY_TYPES.has((entityType ?? '').toLowerCase()) || /offer|interview|scorecard/i.test(type);
 
 /** The only permission that shows offer pay (B7). On stacks without it, nobody gets pay in notification text. */
-export const OFFER_PAY_PERMISSION = 'OFFER_PAY_VIEW';
+import { PAY_VIEW_PERMISSION } from '../common/access/pay-visibility';
+export const OFFER_PAY_PERMISSION = PAY_VIEW_PERMISSION;
 
 const CUR = '(?:AED|SAR|EGP|USD|EUR|GBP|QAR|KWD|OMR|BHD)';
 const PAY_PATTERNS: RegExp[] = [

@@ -2,6 +2,7 @@ import { BadRequestException, ConflictException, Inject, Injectable, NotFoundExc
 import type { Prisma } from '@recruitflow/database';
 import type { AuthUser } from '@recruitflow/contracts';
 import { PrismaService } from '../database/prisma.service';
+import { PAY_VIEW_PERMISSION } from '../common/access/pay-visibility';
 import { UserPermissionsService } from '../common/user-permissions.service';
 
 export interface GradeBandInput { gradeId?: string; branchId?: string; currency?: string; minMonthlyBase?: number; maxMonthlyBase?: number; status?: 'Active' | 'Inactive' }
@@ -21,7 +22,7 @@ export class GradeBandsService {
 
   async canSeeBandPay(user: AuthUser): Promise<boolean> {
     const codes = await this.permissions.getPermissionSet(user.userId, user.organizationId);
-    return codes.has('OFFER_PAY_VIEW') || codes.has('MASTER_DATA_MANAGE');
+    return codes.has(PAY_VIEW_PERMISSION) || codes.has('MASTER_DATA_MANAGE');
   }
 
   private view(b: { id: string; currency: string; status: string; version: number; minMonthlyBase: Prisma.Decimal; maxMonthlyBase: Prisma.Decimal; grade: { id: string; name: string }; branch: { id: string; name: string } }, pay: boolean): GradeBandView {
