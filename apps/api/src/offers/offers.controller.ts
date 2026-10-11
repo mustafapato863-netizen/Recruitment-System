@@ -10,6 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 /* eslint-disable @typescript-eslint/consistent-type-imports */
+import { canSeePay } from '../common/access/pay-visibility';
 import { OffersService } from './offers.service';
 import {
   CreateOfferDto,
@@ -46,7 +47,7 @@ export class OffersController {
   private async compensationDisclosure(user: AuthUser) {
     return {
       // B7: offer pay has its own permission; VIEW_CURRENT_SALARY no longer reveals it.
-      viewOfferPay: await this.userPermissions.hasPermission(user.userId, user.organizationId, 'OFFER_PAY_VIEW'),
+      viewOfferPay: await canSeePay(this.userPermissions, user),
     };
   }
 

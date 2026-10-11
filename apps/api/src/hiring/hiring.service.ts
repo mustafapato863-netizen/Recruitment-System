@@ -21,6 +21,7 @@ import type {
   UpdateComplianceDto,
 } from './hiring.dto';
 import { AccessControlService } from '../access-control/access-control.service';
+import { loadAccessProfile } from '../common/access/file-access';
 
 @Injectable()
 export class HiringService {
@@ -41,6 +42,26 @@ export class HiringService {
     return user && this.accessControl
       ? this.accessControl.getApplicationReadVisibilityWhere(user)
       : undefined;
+  }
+
+  /**
+   * LICENSE_CHECK: the hiring cases in the caller's role data scope (ownership not required).
+   * Null when the caller doesn't hold LICENSE_CHECK.
+   */
+  private async licenseScope(user?: AuthUser): Promise<Prisma.ApplicationWhereInput | null> {
+    if (!user || !this.accessControl) return null;
+    if (!(await this.userHas(user, 'LICENSE_CHECK'))) return null;
+    return this.accessControl.getApplicationScopeWhere(user);
+  }
+
+  private async userHas(user: AuthUser, code: string): Promise<boolean> {
+    return (await loadAccessProfile(this.prisma, user)).permissions.includes(code);
+  }
+
+  /** Normal visibility OR, for LICENSE_CHECK holders, their data scope. */
+  private withLicense(visibility: Prisma.ApplicationWhereInput | undefined, license: Prisma.ApplicationWhereInput | null) {
+    if (!visibility) return undefined;
+    return license ? { OR: [visibility, license] } : visibility;
   }
 
   async createHiringCase(organizationId: string, dto: CreateHiringCaseDto, user: AuthUser) {
@@ -133,7 +154,7 @@ export class HiringService {
   }
 
   async listHiringCases(organizationId: string, status?: string, user?: AuthUser, applicationId?: string) {
-    const visibility = await this.applicationVisibility(user);
+    const visibility = this.withLicense(await this.applicationVisibility(user), await this.licenseScope(user));
     const cases = await this.prisma.hiringCase.findMany({
       where: { organizationId, ...(status ? { status } : {}), ...(applicationId ? { applicationId } : {}), ...(visibility ? { application: visibility } : {}) },
       include: {
@@ -182,7 +203,7 @@ export class HiringService {
   }
 
   async getHiringCase(organizationId: string, id: string, user?: AuthUser) {
-    const visibility = await this.applicationReadVisibility(user);
+    const visibility = this.withLicense(await this.applicationReadVisibility(user), await this.licenseScope(user));
     const hiringCase = await this.prisma.hiringCase.findFirst({
       where: { id, organizationId, ...(visibility ? { application: visibility } : {}) },
       include: {
@@ -219,13 +240,18 @@ export class HiringService {
   }
 
   async updateCompliance(organizationId: string, caseId: string, reqId: string, dto: UpdateComplianceDto, user: AuthUser) {
-    const visibility = await this.applicationVisibility(user);
+    const license = await this.licenseScope(user);
+    const visibility = this.withLicense(await this.applicationVisibility(user), license);
     const requirement = await this.prisma.complianceRequirement.findFirst({
       where: { id: reqId, hiringCaseId: caseId, hiringCase: { organizationId, ...(visibility ? { application: visibility } : {}) } }
     });
 
     if (!requirement) {
       throw new NotFoundException('Compliance requirement not found');
+    }
+    // LICENSE_CHECK alone only verifies license requirements; other items stay with CANDIDATE_EDIT.
+    if (license && requirement.type !== 'License' && !(await this.userHas(user, 'CANDIDATE_EDIT'))) {
+      throw new ForbiddenException({ code: 'LICENSE_CHECK_SCOPE', message: 'LICENSE_CHECK only covers license requirements.' });
     }
 
     const data: Prisma.ComplianceRequirementUpdateInput = {

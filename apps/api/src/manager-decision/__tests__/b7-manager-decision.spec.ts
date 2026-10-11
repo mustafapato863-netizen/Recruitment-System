@@ -22,7 +22,9 @@ describe('B7 base pay for the band check', () => {
   it('offers use OFFER_PAY_VIEW; current/expected salary (screening) still uses VIEW_CURRENT_SALARY', () => {
     const offers = readFileSync(join(__dirname, '../../offers/offers.controller.ts'), 'utf8');
     const screening = readFileSync(join(__dirname, '../../screening/screening.controller.ts'), 'utf8');
-    expect(offers).toContain("'OFFER_PAY_VIEW'");
+    const rule = readFileSync(join(__dirname, '../../common/access/pay-visibility.ts'), 'utf8');
+    expect(rule).toContain("PAY_VIEW_PERMISSION = 'OFFER_PAY_VIEW'");
+    expect(offers).toContain('canSeePay(');
     expect(offers).not.toContain("'VIEW_CURRENT_SALARY'");
     expect(screening).toContain("'VIEW_CURRENT_SALARY'");
   });
