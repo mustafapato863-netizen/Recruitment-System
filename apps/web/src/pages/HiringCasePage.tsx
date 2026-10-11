@@ -18,8 +18,10 @@ import { JoiningChecklist, type ComplianceItem } from '../components/candidate/J
 import { useAuth } from '../auth/AuthContext';
 import { useSetBreadcrumbTitle } from '../context/BreadcrumbContext';
 import './PageEnhancementsV2.css';
+import { isLicenseCheckOnly, LICENSE_SCOPE_TEXT } from '../utils/licenseCheck';
 
 function getErrorMessage(error: unknown): string {
+  if ((error as { code?: string } | null)?.code === 'LICENSE_CHECK_SCOPE') return LICENSE_SCOPE_TEXT;
   return error instanceof Error ? error.message : 'An unexpected error occurred.';
 }
 
@@ -48,6 +50,7 @@ export function HiringCasePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const licenseOnly = isLicenseCheckOnly(user?.permissions, (user?.roles ?? []).some((r) => r.code === 'ADMINISTRATOR'));
   const [hiringCase, setHiringCase] = useState<HiringCase | null>(null);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -110,7 +113,12 @@ export function HiringCasePage() {
   const handleItemToggle = async (itemId: string, isCompleted: boolean) => {
     if (!id) return;
     const status: ComplianceStatus = isCompleted ? 'Verified' : 'Pending';
-    await patchApi(`/hiring/${id}/compliance/${itemId}`, { status });
+    try {
+      await patchApi(`/hiring/${id}/compliance/${itemId}`, { status });
+    } catch (reason: unknown) {
+      setError(getErrorMessage(reason));
+      return;
+    }
     await loadCase();
   };
 
@@ -225,7 +233,8 @@ export function HiringCasePage() {
     );
   }
 
-  const requirements = hiringCase.complianceRequirements ?? [];
+  // LICENSE_CHECK-only users see (and verify) licence items only.
+  const requirements = (hiringCase.complianceRequirements ?? []).filter((r) => !licenseOnly || r.type === 'License');
   const requiredCount = requirements.filter((item) => item.isRequired).length;
   const verifiedCount = requirements.filter((item) => item.isRequired && ['Verified', 'Not Required'].includes(item.status)).length;
   const isReady = requiredCount > 0 ? requiredCount === verifiedCount : true;
@@ -345,7 +354,7 @@ export function HiringCasePage() {
               Back
             </Link>
           </Button>
-          {hiringCase.status === 'Pending Compliance' && (
+          {!licenseOnly && hiringCase.status === 'Pending Compliance' && (
             <Button
               variant="primary"
               size="sm"
@@ -357,7 +366,7 @@ export function HiringCasePage() {
               Submit approval
             </Button>
           )}
-          {hiringCase.status === 'Pending Final Approval' && (
+          {!licenseOnly && hiringCase.status === 'Pending Final Approval' && (
             <>
               <Button
                 variant="danger"
@@ -379,7 +388,7 @@ export function HiringCasePage() {
               </Button>
             </>
           )}
-          {hiringCase.status === 'Awaiting Joining' && (
+          {!licenseOnly && hiringCase.status === 'Awaiting Joining' && (
             <Button
               variant="success"
               size="sm"
@@ -446,7 +455,7 @@ export function HiringCasePage() {
                     : `Status: ${hiringCase.status}`}
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        {licenseOnly ? null : <div className="flex shrink-0 items-center gap-2">
           {hiringCase.status === 'Pending Compliance' && (
             <Button variant="primary" size="sm" loading={busyAction === 'submit'} disabled={!isReady} onClick={() => void submitForApproval()}>
               Submit approval
@@ -467,7 +476,7 @@ export function HiringCasePage() {
               <Link to={`/applications/${hiringCase.applicationId}`}>Application</Link>
             </Button>
           )}
-        </div>
+        </div>}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -488,7 +497,7 @@ export function HiringCasePage() {
               candidateName={hiringCase.candidateName ?? 'Candidate'}
               items={checklistItems}
               hiringCaseStatus={hiringCase.status}
-              canConfirmJoining={canConfirmJoining}
+              canConfirmJoining={!licenseOnly && canConfirmJoining}
               onItemToggle={handleItemToggle}
               onConfirmJoining={handleConfirmJoining}
               onItemNoteSave={handleItemNoteSave}

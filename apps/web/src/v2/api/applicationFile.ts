@@ -4,7 +4,7 @@
  * Employee seat never holds pay in state. Writes never carry pay (offer drafts
  * send components: []; screening never sends salary fields).
  */
-import { getApi, patchApi, postApi, putApi } from '../../api/client';
+import { downloadFileApi, getApi, patchApi, postApi, putApi } from '../../api/client';
 import { isScorecardSubmitted } from '../../utils/scorecardStatus';
 import { stripPay } from './paySafety';
 import { JOINING_CHECK_TYPES, type JoiningCheckType } from './gates';
@@ -125,6 +125,32 @@ export async function loadApplicationFile(id: string, opts: { keepScreeningPay?:
   };
 }
 
+/**
+ * #34: a final-hire approver (FINAL_HIRING_APPROVAL, no APPLICATION_VIEW) reads the file read-only while their
+ * approval is pending: GET /applications/:id and the candidate's documents (GET /documents/candidate/:id). Every
+ * other file call needs APPLICATION_VIEW, so it is skipped rather than sent to fail.
+ */
+export async function loadApproverFile(id: string): Promise<ApplicationFile> {
+  const application = stripPay(await getApi<FileApplication>(`/applications/${enc(id)}`));
+  type RawDoc = { id: string; documentType?: string; type?: string; fileName?: string; name?: string; createdAt?: string; uploadedAt?: string };
+  const docs = application.candidateId
+    ? await safe<RawDoc[]>(getApi(`/documents/candidate/${enc(application.candidateId)}`).then(list), [])
+    : [];
+  return {
+    workspace: { application, stages: [], nextStage: null, nextStageRequirements: [], canAdvance: false },
+    history: [], notes: [], screening: [], interviews: [], scorecards: {}, offer: null, hiring: null, joiningChecks: [],
+    documents: docs.map((d) => ({ id: d.id, type: d.documentType ?? d.type ?? '', name: d.fileName ?? d.name ?? 'Document', uploadedAt: d.uploadedAt ?? d.createdAt ?? '', uploadedBy: null })),
+  };
+}
+export const isCvDoc = (d: Pick<FileDocument, 'type'>) => /^(cv|resume)$/i.test(d.type);
+/** GET /documents/:id/download (approvers may download the CV/Resume). */
+export async function downloadDocument(d: Pick<FileDocument, 'id' | 'name'>): Promise<void> {
+  const { blob, filename } = await downloadFileApi(`/documents/${enc(d.id)}/download`, d.name);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
 // ── writes ────────────────────────────────────────────────────────────────
 /** Backend #21 (B2-4): Joined, Rejected and Withdrawn are closed; nothing moves them (409 FILE_CLOSED). */
 export const CLOSED_STAGES: readonly string[] = ['Joined', 'Rejected', 'Withdrawn'];
@@ -152,9 +178,12 @@ export const reviseScorecard = (interviewId: string, body: Omit<ScorecardBody, '
 /** Non-pay offer terms (CreateOfferDto minus components). CreateOfferDto has no grade / approver note field. */
 export interface OfferTerms { contractType?: string; probationPeriod?: string; offerExpiry?: string; proposedJoiningDate?: string; workLocation?: string; workingSchedule?: string }
 /** = CreateOfferDto with components: [] → the offer id. Offers start as Draft; the Manager adds pay at M3. */
-export const createOfferDraft = (applicationId: string, terms: OfferTerms) => postApi<string>('/offers', { applicationId, ...terms, components: [] });
+/** PRE-1: <input type=date> gives YYYY-MM-DD; the API (Prisma DateTime) needs a full ISO timestamp (UTC midnight). */
+export const isoDate = (d?: string) => (d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? `${d}T00:00:00.000Z` : d);
+const wireTerms = (t: OfferTerms): OfferTerms => ({ ...t, proposedJoiningDate: isoDate(t.proposedJoiningDate), offerExpiry: isoDate(t.offerExpiry) });
+export const createOfferDraft = (applicationId: string, terms: OfferTerms) => postApi<string>('/offers', { applicationId, ...wireTerms(terms), components: [] });
 /** = CreateOfferRevisionDto with components: [] → the version id. Allowed from Draft / Changes Requested / Expired (OFFER_CLOSED otherwise). */
-export const createOfferRevision = (offerId: string, terms: OfferTerms) => postApi<string>(`/offers/${enc(offerId)}/revisions`, { ...terms, components: [] });
+export const createOfferRevision = (offerId: string, terms: OfferTerms) => postApi<string>(`/offers/${enc(offerId)}/revisions`, { ...wireTerms(terms), components: [] });
 /** POST /offers/:id/submit: Draft or Changes Requested → Pending Approval (409 OFFER_NOT_DRAFT otherwise). */
 export const submitOffer = (offerId: string) => postApi<{ id: string; status: 'Pending Approval'; versionId: string }>(`/offers/${enc(offerId)}/submit`, {});
 export type SendChannel = 'email' | 'whatsapp';

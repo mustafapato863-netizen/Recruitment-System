@@ -20,6 +20,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 // Runtime service import must remain a value import for Nest DI metadata reflection.
 /* eslint-disable @typescript-eslint/consistent-type-imports */
+import { PAY_VIEW_PERMISSION } from '../common/access/pay-visibility';
 import { AccessControlService } from '../access-control/access-control.service';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 
@@ -34,8 +35,8 @@ function cleanUuidParam(value?: string | null): string | null | undefined {
 
 /**
  * B7: offer pay (base, package, component amounts) needs OFFER_PAY_VIEW. Fields are
- * OMITTED (absent), never null, without it. Current/expected salary is a different
- * permission (VIEW_CURRENT_SALARY) and is not part of offer payloads.
+ * OMITTED (absent), never null, without it. Current/expected salary is a separate rule
+ * (VIEW_CURRENT_SALARY, canSeeCurrentSalary in common/access/pay-visibility.ts).
  */
 type CompensationDisclosure = { viewOfferPay: boolean };
 
@@ -597,7 +598,7 @@ export class OffersService {
       });
       await assertOfferInsideBand(
         this.prisma, user.organizationId,
-        async () => Boolean(await this.userPermissions?.hasPermission(user.userId, user.organizationId, 'OFFER_PAY_VIEW')),
+        async () => Boolean(await this.userPermissions?.hasPermission(user.userId, user.organizationId, PAY_VIEW_PERMISSION)),
         v.components, v.offer.application.vacancy,
       );
     }

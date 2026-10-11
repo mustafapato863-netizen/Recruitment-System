@@ -1,3 +1,5 @@
+/// <reference types="node" />
+// Node types for this test only (they used to arrive via a deleted v1 test).
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';

@@ -57,7 +57,7 @@ describe('pay safety', () => {
     const d = await screen.findByRole('dialog');
     await u.type(within(d).getByLabelText(/Start date/), '2026-11-01');
     await u.click(within(d).getByRole('button', { name: 'Submit for approval' }));
-    await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/offers', expect.objectContaining({ applicationId: 'a1', components: [], proposedJoiningDate: '2026-11-01' })));
+    await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/offers', expect.objectContaining({ applicationId: 'a1', components: [], proposedJoiningDate: '2026-11-01T00:00:00.000Z' })));
     const body = api.postApi.mock.calls.find(([p]) => p === '/offers')![1];
     expect(JSON.stringify(body)).not.toMatch(/salary|amount|currency|package|grade/i);
     await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/offers/o1/submit', {}));
@@ -305,7 +305,7 @@ describe('E17–E20 offer', () => {
     await u.type(within(d).getByLabelText(/Start date/), '2026-11-15');
     await u.click(within(d).getByRole('button', { name: 'Submit for approval' }));
     await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/offers/o1/submit', {}));
-    expect(api.postApi).toHaveBeenCalledWith('/offers/o1/revisions', expect.objectContaining({ components: [], proposedJoiningDate: '2026-11-15' }));
+    expect(api.postApi).toHaveBeenCalledWith('/offers/o1/revisions', expect.objectContaining({ components: [], proposedJoiningDate: '2026-11-15T00:00:00.000Z' }));
     expect(api.patchApi).not.toHaveBeenCalled();
   });
   it('E18 sent-back view explains Draft + Offer and links to revise', async () => {
@@ -421,7 +421,7 @@ describe('E17–E20 offer', () => {
     await u.clear(within(d).getByLabelText(/Start date/));
     await u.type(within(d).getByLabelText(/Start date/), '2026-11-15');
     await u.click(within(d).getByRole('button', { name: 'Submit for approval' }));
-    await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/offers/o1/revisions', expect.objectContaining({ components: [], proposedJoiningDate: '2026-11-15' })));
+    await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/offers/o1/revisions', expect.objectContaining({ components: [], proposedJoiningDate: '2026-11-15T00:00:00.000Z' })));
     await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/offers/o1/submit', {}));
     expect(api.postApi).not.toHaveBeenCalledWith('/offers', expect.anything());
   });

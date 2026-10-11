@@ -32,7 +32,6 @@ export const PROVISIONAL_ROLE_SEATS: Readonly<Record<string, Seat>> = {
   RECRUITMENT_LEAD: 'manager',
   LEAD_RECRUITER: 'manager',
   OFFER_APPROVER: 'manager',
-  FINAL_HIRING_APPROVER: 'manager',
   // Employee
   ROLE_001: 'employee', // Recruiter-offshore (confirmed, Roadmap §3)
   RECRUITER: 'employee',
@@ -42,6 +41,8 @@ export const PROVISIONAL_ROLE_SEATS: Readonly<Record<string, Seat>> = {
   // Permissions-not-seats: on their own these fall to Employee.
   INTERVIEWER: 'employee',
   LICENSE_SPECIALIST: 'employee',
+  // PR33-3: /auth/me seats final approvers as Employee; the label must agree (home: the final approval inbox).
+  FINAL_HIRING_APPROVER: 'employee',
 };
 
 /** Permission fallback for role codes not in the map (custom roles). */

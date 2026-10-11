@@ -402,6 +402,14 @@ export class AccessControlService {
     };
   }
 
+  /** Data scopes for an arbitrary user, resolved exactly like request-time enforcement. */
+  async resolveDataScopesForUser(organizationId: string, userId: string, roleCodes: string[]): Promise<{
+    scopes: DataVisibilityScope[];
+    responsibility: { branches?: string[]; departments?: string[] } | undefined;
+  }> {
+    return this.resolveScopes({ organizationId, userId, roleCodes } as AuthUser);
+  }
+
   private async resolveScopes(user: AuthUser): Promise<{
     scopes: DataVisibilityScope[];
     responsibility: { branches?: string[]; departments?: string[] } | undefined;
