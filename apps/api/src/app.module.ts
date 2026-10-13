@@ -34,6 +34,7 @@ import { EmailTemplatesModule } from './email-templates/email-templates.module';
 import { WhatsAppTemplatesModule } from './whatsapp-templates/whatsapp-templates.module';
 import { AccessControlModule } from './access-control/access-control.module';
 import { RecruiterTargetsModule } from './recruiter-targets/recruiter-targets.module';
+import { PositionLevelTargetsModule } from './position-level-targets/position-level-targets.module';
 import { ResumeModule } from './resume/resume.module';
 import { AdminOverrideModule } from './admin-override/admin-override.module';
 import { MatchingModule } from './matching/matching.module';
@@ -78,6 +79,7 @@ import { CorrelationIdMiddleware, TenantContextMiddleware } from './common/middl
     EmailTemplatesModule,
     WhatsAppTemplatesModule,
     RecruiterTargetsModule,
+    PositionLevelTargetsModule,
     MatchingModule,
     AdminOverrideModule,
   ],

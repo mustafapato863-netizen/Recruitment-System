@@ -31,7 +31,7 @@ export const isActive = (u: AdminUser) => u.status === 'Active';
 export const statusTone = (s: string) => (s === 'Active' ? 'success' : s === 'Invited' || s === 'Pending' ? 'info' : 'neutral') as 'success' | 'info' | 'neutral';
 
 export async function fetchUsers(): Promise<AdminUser[]> {
-  return (await fetchAllPages<AdminUser>('/users')).map((u) => ({ ...u, roles: u.roles ?? [], managerId: u.managerId ?? null }));
+  return (await fetchAllPages<AdminUser>('/users?directory=1')).map((u) => ({ ...u, roles: u.roles ?? [], managerId: u.managerId ?? null }));
 }
 export const setStatus = (id: string, status: 'Active' | 'Inactive') => patchApi<AdminUser>(`/users/${encodeURIComponent(id)}`, { status });
 export const setManager = (id: string, managerId: string | null) => patchApi<AdminUser>(`/users/${encodeURIComponent(id)}`, { managerId });

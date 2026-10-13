@@ -36,8 +36,8 @@ const PARAM_EQUIVALENT: Array<{ from: RegExp; to: Partial<Record<Seat, string>> 
 ];
 
 /**
- * v1 pages kept reachable (nav "More (classic)") until v2 versions exist. They are never redirected; their
- * PermissionGate (as in v1) decides access. Keep in step with CLASSIC_NAV and App.tsx.
+ * v1 pages stay on their own URL. They are never redirected; their PermissionGate (as in v1) decides access.
+ * Keep in step with CLASSIC_NAV and App.tsx.
  */
 export const CLASSIC_PATHS: RegExp[] = [
   /^\/hires(\/approvals\/inbox|\/[^/]+)?\/?$/, /^\/licenses\/?$/, /^\/joinings?\/?$/,
@@ -154,8 +154,12 @@ export function v2Redirect(seat: Seat, pathname: string, opts: { requisitions?: 
   if (to === null && opts.permissions && pathname !== home && !canOpenRoute(pathname, opts.permissions, opts.isAdministrator)) return home;
   return to;
 }
+/** Candidate entry paths. They are public routes, never the staff seat home. */
+const CANDIDATE_ENTRY = /^\/(?:portal(?:\/.*)?|my-applications)\/?$/;
+
 function v2RedirectByPath(seat: Seat, pathname: string, opts: { requisitions?: boolean; interviews?: boolean; interviewerOnly?: boolean; home?: string | null } = {}): string | null {
   if (pathname === '/' || pathname === '') return opts.home ?? SEAT_HOME[seat];
+  if (CANDIDATE_ENTRY.test(pathname)) return null;
   if (!opts.interviewerOnly && isClassicPath(pathname)) return null;
   for (const rule of PARAM_EQUIVALENT) {
     const m = rule.from.exec(pathname);

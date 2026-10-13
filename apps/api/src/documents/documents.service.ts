@@ -253,6 +253,16 @@ export class DocumentsService {
     }
     const absolutePath = this.storage.absolutePath(document.storageKey);
     await stat(absolutePath).catch(() => { throw new NotFoundException('Document file was not found.'); });
+    if (user) {
+      void this.auditService.log({
+        action: 'DOCUMENT_DOWNLOAD',
+        actorUserId: user.userId,
+        organizationId,
+        entityType: 'CandidateDocument',
+        entityId: document.id,
+        result: 'SUCCESS',
+      }).catch(() => undefined);
+    }
     return { path: absolutePath, fileName: document.fileName, mimeType: document.mimeType };
   }
 

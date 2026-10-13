@@ -95,10 +95,14 @@ export const markAllRead = () => postApi<{ count: number }>('/notifications/read
 export function notificationHref(n: NotificationRecord): string | null {
   if (n.applicationId) return `/applications/${enc(n.applicationId)}`;
   if (!n.entityId) return null;
-  const t = (n.entityType ?? '').toLowerCase();
+  const t = (n.entityType ?? '').toLowerCase().replace(/[^a-z]/g, '');
   if (t === 'application') return `/applications/${enc(n.entityId)}`;
   if (t === 'vacancy' || t === 'job') return `/vacancies/${enc(n.entityId)}`;
   if (t === 'task') return '/my-work';
+  if (t === 'vacancyrequest' || t === 'requisition') return `/vacancy-requests?req=${enc(n.entityId)}`;
+  if (t === 'interview') return `/my-interviews?interview=${enc(n.entityId)}`;
+  if (t === 'hiringcase') return `/hires/${enc(n.entityId)}`;
+  if (t === 'candidate') return `/candidates/${enc(n.entityId)}`;
   return null;
 }
 /** Hide pay text even inside messages (e.g. a v1 template that quotes a salary). */

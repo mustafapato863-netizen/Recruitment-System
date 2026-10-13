@@ -32,8 +32,8 @@ describe('My Work adapter: #9 contract typing', () => {
   it('maps the #9 entity enum to v1 routes; tasks have no page', () => {
     expect(entityHref({ type: 'application', id: 'a 1' })).toBe('/applications/a%201');
     expect(entityHref({ type: 'job', id: 'j1' })).toBe('/vacancies/j1');
-    expect(entityHref({ type: 'requisition', id: 'r1' })).toBe('/vacancy-requests/r1');
-    expect(entityHref({ type: 'interview', id: 'i1' })).toBe('/interviews/i1');
+    expect(entityHref({ type: 'requisition', id: 'r1' })).toBe('/vacancy-requests?req=r1');
+    expect(entityHref({ type: 'interview', id: 'i1' })).toBe('/my-interviews?interview=i1');
     expect(entityHref({ type: 'offer', id: 'o1' })).toBe('/offers/o1');
     expect(entityHref({ type: 'task', id: 't1' })).toBeNull();
     const item = myWorkFixture().waitingOnOthers[1];

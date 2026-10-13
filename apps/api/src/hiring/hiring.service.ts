@@ -1,7 +1,19 @@
-import { assertJoiningChecks, JOINING_CHECK_LABELS, JOINING_CHECK_TYPES } from '../applications/application-gates';
-import { recordJoin } from '../vacancy-core/vacancy-lifecycle';
+import { JOINING_CHECK_LABELS } from '../applications/application-gates';
+import { claimApplicationJoin, recordJoin } from '../vacancy-core/vacancy-lifecycle';
+import {
+  RECORD_ACTUAL_JOINING,
+  assertCanMarkJoined,
+  compliancePlan,
+  currentCaseFingerprint,
+  invalidateStaleApproval,
+  isResponsibleRecruiter,
+  joiningTypeForRequirement,
+  parseSnapshot,
+  snapshotForNewCase,
+} from './joining-policy';
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -50,8 +62,12 @@ export class HiringService {
    */
   private async licenseScope(user?: AuthUser): Promise<Prisma.ApplicationWhereInput | null> {
     if (!user || !this.accessControl) return null;
-    if (!(await this.userHas(user, 'LICENSE_CHECK'))) return null;
-    return this.accessControl.getApplicationScopeWhere(user);
+    const profile = await loadAccessProfile(this.prisma, user);
+    if (!profile.permissions.includes('LICENSE_CHECK')) return null;
+    if (profile.isOversight || profile.permissions.includes('APPLICATION_VIEW')) {
+      return this.accessControl.getApplicationScopeWhere(user);
+    }
+    return licenseAssignmentWhere(user.userId, user.organizationId);
   }
 
   private async userHas(user: AuthUser, code: string): Promise<boolean> {
@@ -72,13 +88,21 @@ export class HiringService {
     return !['APPLICATION_VIEW', 'APPROVE_OFFERS', 'FINAL_HIRING_APPROVAL'].some((c) => profile.permissions.includes(c));
   }
 
+  /** Final approval does not open the rest of the file. Oversight and file owners are unchanged. */
+  private async isFinalApproverOnly(user?: AuthUser): Promise<boolean> {
+    if (!user) return false;
+    const profile = await loadAccessProfile(this.prisma, user);
+    if (profile.isOversight || !profile.permissions.includes('FINAL_HIRING_APPROVAL')) return false;
+    return !['APPLICATION_VIEW', 'CANDIDATE_VIEW', 'LICENSE_CHECK', 'APPROVE_OFFERS'].some((c) => profile.permissions.includes(c));
+  }
+
   async createHiringCase(organizationId: string, dto: CreateHiringCaseDto, user: AuthUser) {
     const offerFile = await this.prisma.offer.findFirst({ where: { id: dto.offerId, organizationId }, select: { applicationId: true } });
     if (offerFile && this.accessControl) await this.accessControl.assertApplicationAccess(user, offerFile.applicationId);
     const visibility = await this.applicationVisibility(user);
     const offer = await this.prisma.offer.findFirst({
       where: { id: dto.offerId, organizationId, ...(visibility ? { application: visibility } : {}) },
-      include: { application: true },
+      include: { application: { include: { vacancy: { include: { position: { select: { metadata: true } } } } } } },
     });
 
     if (!offer) {
@@ -97,7 +121,9 @@ export class HiringService {
       throw new BadRequestException('Hiring case already exists for this application');
     }
 
+    const snapshot = snapshotForNewCase(offer.application.vacancy.position?.metadata);
     const hiringCase = await this.prisma.$transaction(async (tx) => {
+      const verified = await tx.joiningCheck.findMany({ where: { applicationId: offer.applicationId, verified: true } });
       const created = await tx.hiringCase.create({
         data: {
           organizationId,
@@ -105,18 +131,26 @@ export class HiringService {
           offerId: offer.id,
           status: 'Pending Compliance',
           ownerUserId: user.userId,
+          requirementSnapshot: snapshot as unknown as Prisma.InputJsonValue,
           complianceRequirements: {
-            create: [
-              { type: 'Document', name: 'Identity Document', isRequired: true, status: 'Pending' },
-              { type: 'Check', name: 'Background Check', isRequired: true, status: 'Pending' },
-            ],
+            create: compliancePlan(snapshot).map((item) => {
+              const checkType = joiningTypeForRequirement(item);
+              const row = checkType ? verified.find((check) => check.type === checkType) : undefined;
+              return {
+                ...item,
+                status: row ? 'Verified' : 'Pending',
+                ...(row?.verifiedAt ? { verifiedAt: row.verifiedAt } : {}),
+                ...(row?.verifiedById ? { verifiedById: row.verifiedById } : {}),
+                ...(row?.expiryDate ? { expiryDate: row.expiryDate } : {}),
+                ...(row?.documentId ? { documentId: row.documentId } : {}),
+              };
+            }),
           },
           approvals: {
             create: [{ roleCode: 'FINAL_HIRING_APPROVER', status: 'Pending' }],
           },
         },
       });
-      await ensureLicenseRequirement(tx, created.id);
 
       await tx.application.update({
         where: { id: offer.applicationId },
@@ -178,6 +212,7 @@ export class HiringService {
     });
 
     if (await this.isLicenseOnly(user)) return cases.map(licenseView);
+    if (await this.isFinalApproverOnly(user)) return cases.map(finalApproverView);
     return cases.map(c => {
       const totalItems = c.complianceRequirements.length;
       const completedItems = c.complianceRequirements.filter(
@@ -227,6 +262,8 @@ export class HiringService {
       throw new NotFoundException('Hiring case not found');
     }
     if (await this.isLicenseOnly(user)) return licenseView(hiringCase);
+    if (await this.isFinalApproverOnly(user)) return finalApproverView(hiringCase);
+    const seeSalary = user ? await this.userHas(user, 'VIEW_CURRENT_SALARY') : false;
 
     return {
       ...hiringCase,
@@ -246,7 +283,8 @@ export class HiringService {
         ...app,
         decidedAt: app.decidedAt?.toISOString() ?? null,
         approverName: app.approver ? app.approver.displayName : null,
-      }))
+      })),
+      application: seeSalary ? hiringCase.application : omitCandidateSalary(hiringCase.application),
     };
   }
 
@@ -254,7 +292,8 @@ export class HiringService {
     const license = await this.licenseScope(user);
     const visibility = this.withLicense(await this.applicationVisibility(user), license);
     const requirement = await this.prisma.complianceRequirement.findFirst({
-      where: { id: reqId, hiringCaseId: caseId, hiringCase: { organizationId, ...(visibility ? { application: visibility } : {}) } }
+      where: { id: reqId, hiringCaseId: caseId, hiringCase: { organizationId, ...(visibility ? { application: visibility } : {}) } },
+      include: { hiringCase: { select: { applicationId: true } } },
     });
 
     if (!requirement) {
@@ -275,10 +314,26 @@ export class HiringService {
       data.verifier = { connect: { id: user.userId } };
     }
 
-    const updated = await this.prisma.complianceRequirement.update({
-      where: { id: reqId },
-      data
+    const applicationId = requirement.hiringCase.applicationId;
+    let invalidated = false;
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const row = await tx.complianceRequirement.update({ where: { id: reqId }, data });
+      const checkType = joiningTypeForRequirement(requirement);
+      if (checkType) {
+        const verified = dto.status === 'Verified';
+        const expiryDate = dto.expiryDate ? new Date(dto.expiryDate) : null;
+        await tx.joiningCheck.upsert({
+          where: { applicationId_type: { applicationId, type: checkType } },
+          create: { applicationId, type: checkType, verified, verifiedById: verified ? user.userId : null, verifiedAt: verified ? new Date() : null, expiryDate },
+          update: { verified, verifiedById: verified ? user.userId : null, verifiedAt: verified ? new Date() : null, expiryDate },
+        });
+      }
+      invalidated = await invalidateStaleApproval(tx, applicationId);
+      return row;
     });
+    if (invalidated) {
+      this.auditService.log({ organizationId, actorUserId: user.userId, action: 'HIRING_APPROVAL_INVALIDATED', entityType: 'HiringCase', entityId: caseId, result: 'Success', reason: 'Compliance changed after final approval.' });
+    }
 
     this.auditService.log({
       organizationId,
@@ -375,6 +430,9 @@ export class HiringService {
 
     const status = dto.decision === 'Approve' ? 'Approved' : 'Rejected';
 
+    const fingerprint = dto.decision === 'Approve'
+      ? await currentCaseFingerprint(this.prisma, hiringCase.applicationId, organizationId)
+      : null;
     await this.prisma.$transaction(async (tx) => {
       await tx.hiringCaseApproval.update({
         where: { id: approval.id },
@@ -383,12 +441,17 @@ export class HiringService {
           comment: dto.comment,
           approverUserId: user.userId,
           decidedAt: new Date(),
+          decisionFingerprint: fingerprint,
+          invalidatedAt: null,
         },
       });
 
       await tx.hiringCase.update({
         where: { id: caseId },
-        data: { status: dto.decision === 'Approve' ? 'Awaiting Joining' : 'Withdrawn' },
+        data: {
+          status: dto.decision === 'Approve' ? 'Awaiting Joining' : 'Withdrawn',
+          approvalFingerprint: fingerprint,
+        },
       });
     });
 
@@ -417,57 +480,60 @@ export class HiringService {
       include: { application: { include: { vacancy: true } } }
     });
 
-    if (!hiringCase) throw new NotFoundException('Hiring case not found');
+    if (!hiringCase) throw new NotFoundException({ code: 'WRONG_ORGANIZATION', message: 'Hiring case not found.' });
 
+    const profile = await loadAccessProfile(this.prisma, user);
+    const actor = { userId: profile.userId, organizationId: profile.organizationId, permissions: profile.permissions };
+    if (!profile.permissions.includes(RECORD_ACTUAL_JOINING)) {
+      throw new ForbiddenException({ code: 'JOINING_PERMISSION_REQUIRED', message: 'Recording actual joining needs the RECORD_ACTUAL_JOINING permission. Final hiring approval does not include it.' });
+    }
+    if (profile.organizationId !== organizationId) {
+      throw new NotFoundException({ code: 'WRONG_ORGANIZATION', message: 'Hiring case not found.' });
+    }
+    if (!isResponsibleRecruiter(user.userId, {
+      caseOwnerId: hiringCase.ownerUserId,
+      primaryRecruiterId: hiringCase.application.primaryRecruiterId,
+      vacancyPrimaryRecruiterId: hiringCase.application.vacancy.primaryRecruiterId,
+    })) {
+      throw new ForbiddenException({ code: 'JOINING_NOT_OWNER', message: 'Only the responsible recruiter can record actual joining.' });
+    }
+    if (hiringCase.status === 'Joined' || hiringCase.application.stage === 'Joined') {
+      return { success: true, alreadyJoined: true };
+    }
     if (hiringCase.status !== 'Awaiting Joining') {
-      throw new BadRequestException('Hiring case is not awaiting joining');
+      throw new ConflictException({ code: 'FINAL_APPROVAL_REQUIRED', message: 'Joined needs a current final hiring approval. Offer approval does not replace it.', missing: ['final hiring approval'], gate: 'final-approval' });
     }
 
-    if (dto.status === 'Joined' && hiringCase.application.vacancy.joinedHeadcount >= hiringCase.application.vacancy.approvedHeadcount) {
-      throw new BadRequestException('Vacancy headcount is already full');
+    const joiningDate = dto.actualJoiningDate ? new Date(dto.actualJoiningDate) : null;
+    if (dto.status === 'Joined') {
+      await assertCanMarkJoined(this.prisma, { applicationId: hiringCase.applicationId, actor, actualJoiningDate: joiningDate, enforceActor: true, enforceRecord: true });
     }
 
-    // B5 gate 4: Joined needs ID, contract and SCFHS licence checked.
-    if (dto.status === 'Joined') await assertJoiningChecks(this.prisma, hiringCase.applicationId);
-
-    const updateData: Prisma.HiringCaseUpdateInput = { status: dto.status };
-    if (dto.actualJoiningDate) {
-      updateData.actualJoiningDate = new Date(dto.actualJoiningDate);
-    }
-
-    await this.prisma.$transaction(async (tx) => {
-      await tx.hiringCase.update({
-        where: { id: caseId },
-        data: updateData,
-      });
-
-      if (dto.status === 'Joined') {
-        const vacancy = await tx.vacancy.findUnique({
-          where: { id: hiringCase.application.vacancyId },
+    const outcome = await this.prisma.$transaction(async (tx) => {
+      if (dto.status !== 'Joined') {
+        await tx.hiringCase.update({
+          where: { id: caseId },
+          data: { status: dto.status, ...(joiningDate ? { actualJoiningDate: joiningDate } : {}) },
         });
-        if (!vacancy || vacancy.joinedHeadcount >= vacancy.approvedHeadcount) {
-          throw new BadRequestException('Vacancy headcount is already full');
-        }
-
-        // B3: Joined fills one seat -> Partially Filled / Filled, with history.
-        await recordJoin(tx, vacancy, user.userId);
-
-        await tx.application.update({
-          where: { id: hiringCase.applicationId },
-          data: { stage: 'Joined' },
-        });
-
-        await tx.applicationStatusHistory.create({
-          data: {
-            applicationId: hiringCase.applicationId,
-            fromStage: hiringCase.application.stage,
-            toStage: 'Joined',
-            changedById: user.userId,
-            reason: 'Candidate joined',
-          },
-        });
+        return 'updated' as const;
       }
+      await assertCanMarkJoined(tx, { applicationId: hiringCase.applicationId, actor, actualJoiningDate: joiningDate, enforceActor: true, enforceRecord: true });
+      const claimed = await claimApplicationJoin(tx, hiringCase.applicationId);
+      if (!claimed) return 'already' as const;
+      const vacancy = await tx.vacancy.findUnique({ where: { id: hiringCase.application.vacancyId } });
+      if (!vacancy) throw new NotFoundException('Hiring case not found');
+      await recordJoin(tx, vacancy, user.userId);
+      await tx.hiringCase.updateMany({
+        where: { id: caseId, status: { not: 'Joined' } },
+        data: { status: 'Joined', ...(joiningDate ? { actualJoiningDate: joiningDate } : {}) },
+      });
+      await tx.applicationStatusHistory.create({
+        data: { applicationId: hiringCase.applicationId, fromStage: hiringCase.application.stage, toStage: 'Joined', changedById: user.userId, reason: 'Candidate joined' },
+      });
+      return 'joined' as const;
     });
+
+    if (outcome === 'already') return { success: true, alreadyJoined: true };
 
     await this.auditService.log({
       organizationId,
@@ -478,7 +544,7 @@ export class HiringService {
       result: 'Success',
     });
 
-    return { success: true };
+    return { success: true, alreadyJoined: false };
   }
 }
 
@@ -504,12 +570,65 @@ export function licenseView(c: CaseForLicense) {
 }
 
 /**
- * Every hire needs a verified SCFHS licence (typed joining check SCFHS_LICENCE, gate 4), so each
- * hiring case carries one "License" compliance item. Idempotent: no-op when the case has one.
+ * Adds the SCFHS licence item when the accepted-case snapshot requires it.
+ * A null snapshot keeps the historical licence. An explicit technical snapshot does not.
+ * Idempotent: no-op when the case already has a licence item.
  */
-export async function ensureLicenseRequirement(tx: Pick<Prisma.TransactionClient, 'complianceRequirement'>, hiringCaseId: string): Promise<void> {
-  if (!(JOINING_CHECK_TYPES as readonly string[]).includes('SCFHS_LICENCE')) return;
+export async function ensureLicenseRequirement(
+  tx: Pick<Prisma.TransactionClient, 'complianceRequirement'> & {
+    hiringCase?: { findFirst(args: unknown): Promise<{ requirementSnapshot: unknown } | null> };
+  },
+  hiringCaseId: string,
+): Promise<void> {
+  if (typeof tx.hiringCase?.findFirst === 'function') {
+    const hiringCase = await tx.hiringCase.findFirst({ where: { id: hiringCaseId }, select: { requirementSnapshot: true } });
+    const snapshot = parseSnapshot(hiringCase?.requirementSnapshot);
+    if (snapshot && !snapshot.checks.includes('SCFHS_LICENCE')) return;
+  }
   const existing = await tx.complianceRequirement.findFirst({ where: { hiringCaseId, type: 'License' }, select: { id: true } });
   if (existing) return;
   await tx.complianceRequirement.create({ data: { hiringCaseId, type: 'License', name: JOINING_CHECK_LABELS.SCFHS_LICENCE, isRequired: true, status: 'Pending' } });
+}
+
+/** Licence specialists without file access see only assigned licence work. */
+export function licenseAssignmentWhere(userId: string, organizationId: string): Prisma.ApplicationWhereInput {
+  return {
+    organizationId,
+    OR: [
+      { vacancy: { assignments: { some: { userId, isActive: true, roleCode: { in: ['LICENSE_SPECIALIST', 'LICENSE_CHECK'] } } } } },
+      { hiringCase: { is: { complianceRequirements: { some: { type: 'License', verifiedById: userId } } } } },
+    ],
+  };
+}
+
+type ApproverCase = {
+  id: string;
+  status: string;
+  application: { candidate: { firstName: string; lastName: string }; vacancy: { position: { title: string }; branch: { name: string } } };
+  approvals?: Array<{ id: string; roleCode: string; status: string; comment?: string | null; decidedAt?: Date | string | null; invalidatedAt?: Date | string | null }>;
+};
+
+export function finalApproverView(c: ApproverCase) {
+  const iso = (d: Date | string | null | undefined) => (d instanceof Date ? d.toISOString() : d ?? null);
+  return {
+    id: c.id,
+    status: c.status,
+    candidateName: `${c.application.candidate.firstName} ${c.application.candidate.lastName}`,
+    positionTitle: c.application.vacancy.position.title,
+    branchName: c.application.vacancy.branch.name,
+    approvals: (c.approvals ?? []).map((approval) => ({
+      id: approval.id,
+      roleCode: approval.roleCode,
+      status: approval.status,
+      comment: approval.comment ?? null,
+      decidedAt: iso(approval.decidedAt),
+      invalidatedAt: iso(approval.invalidatedAt),
+    })),
+  };
+}
+
+function omitCandidateSalary<T extends { candidate?: Record<string, unknown> | null }>(application: T): T {
+  if (!application.candidate) return application;
+  const { currentSalary: _current, expectedSalary: _expected, salaryCurrency: _currency, ...candidate } = application.candidate;
+  return { ...application, candidate };
 }

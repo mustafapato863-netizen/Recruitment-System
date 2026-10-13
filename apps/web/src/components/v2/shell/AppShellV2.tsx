@@ -16,7 +16,6 @@ import { SEAT_NAV, activeNavKey, permittedClassicItems, permittedNavItems, type 
 import { workspaceOptions, type WorkspaceOption } from './workspace';
 import { useTheme } from '../../../theme/ThemeContext';
 import { SghHeartIcon } from '../../../design-system/brand/sgh-logo';
-import { WorkspaceTools } from './WorkspaceTools';
 import '../v2-primitives.css';
 import './v2-shell.css';
 import { HeaderSearch } from '../../../v2/search/HeaderSearch';
@@ -205,6 +204,16 @@ function WorkspaceBlock({ options, collapsed }: { options: WorkspaceOption[]; co
   );
 }
 
+/** Classic pages this person can open. Not a menu named More. */
+function RetainedHomes({ items }: { items: { key: string; label: string; to: string }[] }) {
+  if (!items.length) return null;
+  return (
+    <nav className="rf2-retained" aria-label="Retained work">
+      {items.map((item) => <Link key={item.key} to={item.to}>{item.label}</Link>)}
+    </nav>
+  );
+}
+
 function HelpButton() {
   const { openGuide } = useQuickGuide();
   return (
@@ -232,11 +241,10 @@ function ShellFrame({ user, seat, onSignOut, children }: AppShellV2Props) {
   const classic = permittedClassicItems(user.permissions, isAdministrator, interviewerOnly);
   const home = specialHome(user);
   const pinned = home ? classic.filter((item) => item.to === home).map((item) => ({ ...item, icon: home === '/licenses' ? 'roles' as const : 'my-work' as const })) : [];
-  const daily = seat === 'admin' ? allItems.filter((item) => item.key === 'users' || item.key === 'reports')
-    : interviewerOnly ? allItems.filter((item) => item.key === 'my-work' || item.key === 'my-interviews')
+  const daily = interviewerOnly ? allItems.filter((item) => item.key === 'my-work' || item.key === 'my-interviews')
     : home ? allItems.filter((item) => item.key !== 'my-work') : allItems;
   const items = [...pinned, ...daily];
-  const tools = [...(seat === 'admin' ? allItems : []), ...classic].filter((item) => !items.some((primary) => primary.to === item.to)
+  const tools = classic.filter((item) => !items.some((primary) => primary.to === item.to)
     && canOpenRoute(item.to, user.permissions, isAdministrator));
   const allNavigation = [...items, ...tools];
   const activeKey = activeNavKey(allNavigation, location.pathname, location.hash);
@@ -278,7 +286,6 @@ function ShellFrame({ user, seat, onSignOut, children }: AppShellV2Props) {
                 </NavItem>
               </li>
             ))}
-            {tools.length ? <li><WorkspaceTools items={tools} activeKey={activeKey} collapsed={collapsed} admin={seat === 'admin'} /></li> : null}
           </ul>
         </nav>
         <div className="rf2-shell__account" aria-label="Signed in as">
@@ -300,6 +307,7 @@ function ShellFrame({ user, seat, onSignOut, children }: AppShellV2Props) {
           <UserMenu user={user} seat={seat} onSignOut={onSignOut} />
         </header>
         <main id="rf2-main" className="rf2-shell__content" tabIndex={-1}>
+          <RetainedHomes items={classic} />
           {children ?? (redirectTo ? <Navigate to={redirectTo} replace /> : <Outlet />)}
         </main>
       </div>

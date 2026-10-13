@@ -7,7 +7,7 @@
 import { downloadFileApi, getApi, patchApi, postApi, putApi } from '../../api/client';
 import { isScorecardSubmitted } from '../../utils/scorecardStatus';
 import { stripPay } from './paySafety';
-import { JOINING_CHECK_TYPES, type JoiningCheckType } from './gates';
+import type { JoiningCheckType } from './gates';
 
 export const FILE_STAGES = ['Applied', 'Screening', 'Interview', 'Offer', 'Pre-Hire', 'Joined'] as const;
 export type FileStage = (typeof FILE_STAGES)[number] | 'Rejected' | 'Withdrawn';
@@ -54,7 +54,7 @@ export interface ScreeningItem {
 export interface InterviewItem {
   id: string; interviewCode: string; applicationId: string; title: string; interviewType: string;
   scheduledStart: string; scheduledEnd: string; timezone: string; locationUrl?: string | null; roomName?: string | null;
-  interviewerName?: string | null; status: 'Scheduled' | 'Completed' | 'Cancelled' | 'Rescheduled';
+  interviewerName?: string | null; status: 'Scheduled' | 'Completed' | 'Cancelled' | 'Rescheduled' | 'No-show';
   attendees?: Array<{ userId?: string | null; displayName?: string | null; name?: string | null }>;
 }
 export interface ScorecardItem {
@@ -74,7 +74,7 @@ export interface OfferVersion {
 }
 export interface OfferItem { id: string; applicationId: string; offerCode: string; status: OfferStatus; currentVersion?: OfferVersion | null; versions?: OfferVersion[]; createdAt: string; updatedAt: string }
 /** GET /applications/:id/joining-checks (B5). */
-export interface JoiningCheck { type: JoiningCheckType; label: string; verified: boolean; verifiedBy: { id: string; name: string } | null; verifiedAt: string | null; documentId: string | null }
+export interface JoiningCheck { type: JoiningCheckType; label: string; verified: boolean; verifiedBy: { id: string; name: string } | null; verifiedAt: string | null; documentId: string | null; expiryDate?: string | null }
 /** GET /applications/:id/documents (B5): metadata only. */
 export interface FileDocument { id: string; type: string; name: string; uploadedAt: string; uploadedBy: { id: string; name: string } | null }
 export interface ComplianceItem { id: string; type: string; name: string; status: 'Pending' | 'Submitted' | 'Verified' | 'Rejected' | 'Not Required'; isRequired: boolean; verifiedAt?: string | null }
@@ -203,8 +203,17 @@ export async function offerTemplates(channel: SendChannel): Promise<OfferTemplat
 export const setOfferStatus = (offerId: string, status: 'Accepted' | 'Declined' | 'Withdrawn' | 'Expired') => patchApi(`/offers/${enc(offerId)}/status`, { status });
 /** PATCH /applications/:id/follow-up (owner only; 403 FOLLOW_UP_NOT_OWNER). YYYY-MM-DD or null. */
 export const setFollowUp = (id: string, followUpDate: string | null) => patchApi<{ id: string; followUpDate: string | null }>(`/applications/${enc(id)}/follow-up`, { followUpDate });
-/** PUT /applications/:id/joining-checks/:type → the full list. */
-export const setJoiningCheck = (id: string, type: JoiningCheckType, verified: boolean) => putApi<JoiningCheck[]>(`/applications/${enc(id)}/joining-checks/${type}`, { verified });
+/** PUT /applications/:id/joining-checks/:type → the full list. A licence expiry is stored with the check. */
+export const setJoiningCheck = (id: string, type: JoiningCheckType, body: { verified: boolean; expiryDate?: string | null }) => putApi<JoiningCheck[]>(`/applications/${enc(id)}/joining-checks/${type}`, {
+  verified: body.verified,
+  ...(body.expiryDate !== undefined ? { expiryDate: body.expiryDate ? isoDate(body.expiryDate) : null } : {}),
+});
+/** PATCH /interviews/:id. A date change reschedules; status No-show closes the slot. */
+export const updateInterview = (id: string, body: { status?: 'No-show' | 'Rescheduled' | 'Cancelled' | 'Completed'; scheduledStart?: string; scheduledEnd?: string; rescheduleReason?: string; locationUrl?: string }) => patchApi(`/interviews/${enc(id)}`, body);
+/** POST /hiring/:id/submit. Final approval is requested here. It does not record a hire. */
+export const submitHiringCase = (id: string) => postApi<{ id: string; status: string }>(`/hiring/${enc(id)}/submit`, {});
+/** POST /hiring/:id/joining. The responsible recruiter records the hire once. */
+export const recordActualJoining = (id: string, actualJoiningDate: string) => postApi<{ success: boolean; alreadyJoined: boolean }>(`/hiring/${enc(id)}/joining`, { status: 'Joined', actualJoiningDate });
 /** = CreateHiringCaseDto (kept: the hiring case still opens at Pre-hire for the downstream steps). */
 export const createHiringCase = (offerId: string) => postApi<HiringItem>('/hiring', { offerId });
 export const rejectionReasons = () => getApi<Array<{ name: string; status?: string }>>('/master-data/catalog/rejection-reasons')
@@ -217,7 +226,7 @@ export function gateState(f: ApplicationFile): GateState {
   const live = new Set(f.interviews.filter((i) => i.status !== 'Cancelled').map((i) => i.id));
   const scorecard = Object.entries(f.scorecards).some(([iid, list]) => live.has(iid) && list.some(isScorecardSubmitted));
   const offerAccepted = f.offer?.status === 'Accepted' || Boolean(f.offer?.versions?.some((v) => v.status === 'Accepted'));
-  const joining = JOINING_CHECK_TYPES.map((c) => ({ type: c.type, label: c.label, done: Boolean(f.joiningChecks.find((j) => j.type === c.type)?.verified) }));
+  const joining = f.joiningChecks.map((c) => ({ type: c.type, label: c.label, done: c.verified }));
   return { screenNote, scorecard, offerAccepted, joining };
 }
 

@@ -79,11 +79,17 @@ describe('v2 default: every v1 URL redirects to its v2 equivalent', () => {
   });
 });
 
-describe('PR33-5: no applicant portal in the staff app', () => {
-  it.each(['/portal', '/portal/applications/a1', '/my-applications'])('%s goes to the seat home', (path) => {
-    expect(v2Redirect('employee', path)).toBe('/my-work');
-    expect(v2Redirect('manager', path)).toBe('/my-work');
-    expect(v2Redirect('admin', path)).toBe('/users');
+describe('candidate entry paths stay out of the staff home', () => {
+  it.each(['/portal', '/portal/applications/a1', '/my-applications'])('%s is a candidate route', (path) => {
+    expect(v2Redirect('employee', path)).toBeNull();
+    expect(v2Redirect('manager', path)).toBeNull();
+    expect(v2Redirect('admin', path)).toBeNull();
+    expect(v2Redirect('employee', path, { interviews: true, interviewerOnly: true })).toBeNull();
+  });
+  it('a staff session still opens the staff home', () => {
+    expect(v2Redirect('employee', '/')).toBe('/my-work');
+    expect(v2Redirect('manager', '/')).toBe('/my-work');
+    expect(v2Redirect('admin', '/')).toBe('/users');
   });
 });
 
@@ -94,8 +100,8 @@ describe('v2 default decision: classic (v1) pages stay reachable, not redirected
   it.each(CLASSIC)('%s is never redirected (any seat); its v1 PermissionGate decides', (path) => {
     for (const seat of ['employee', 'manager', 'admin'] as const) expect(v2Redirect(seat, path, { requisitions: true, interviews: true })).toBeNull();
   });
-  it('the other redirects stay: portal, requisition approval inbox, offer approvals, /interviews/:id', () => {
-    for (const p of ['/portal', '/my-applications', '/approval-inbox', '/inbox']) expect(v2Redirect('manager', p)).toBe('/my-work');
+  it('the other redirects stay: requisition approval inbox, offer approvals, /interviews/:id', () => {
+    for (const p of ['/approval-inbox', '/inbox']) expect(v2Redirect('manager', p)).toBe('/my-work');
     expect(v2Redirect('admin', '/approval-inbox')).toBe('/users');
     expect(v2Redirect('employee', '/interviews/i1')).toBe('/my-interviews?interview=i1&scorecard=1');
     expect(v2Redirect('manager', '/offers/approvals/inbox')).toBe('/my-work');

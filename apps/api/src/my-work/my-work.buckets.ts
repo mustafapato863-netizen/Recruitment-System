@@ -25,7 +25,9 @@ import {
  *   offers on the user's files Pending Approval (approver) or Sent (candidate).
  * - Approved (not yet activated) requisitions are the requester's AND the requester's
  *   manager's work: Today, or Overdue past the due date, with next action Activate.
- * - Held jobs (and their files) are off My Work (v2 §3). Filled/Closed jobs too.
+ * - Held jobs are not targets, and their plan due dates are not work items.
+ *   Interviews, offers, missing scorecards, and awaiting-joining cases on a held
+ *   job stay with the owner. Filled and Closed jobs stay off My Work.
  */
 export const MY_WORK_TIMEZONE = 'Africa/Cairo';
 
@@ -47,6 +49,8 @@ export interface MyWorkInput {
   myMissingScorecards: Array<{ interviewId: string; title: string; end: Date; app?: AppInfo }>;
   othersMissingScorecards: Array<{ interviewId: string; title: string; end: Date; missing: number; app?: AppInfo }>;
   offers: Array<{ id: string; code: string; status: string; applicationId: string; updatedAt: Date; app?: AppInfo; approvers?: Array<{ id: string | null; name: string }> }>;
+  /** Awaiting joining on a held job. Shown today, linked to the application. */
+  joining?: Array<{ id: string; applicationId: string; title: string; app?: AppInfo }>;
   reminderWorkerHealthy?: boolean;
 }
 
@@ -195,6 +199,18 @@ export function buildMyWork(input: MyWorkInput, now: Date, day: MyWorkDay = 'tod
         waitingOn === 'approver' ? act('send-offer', 'Send offer', 'Waiting for approval') : act('record-response', 'Record response'),
       ],
     });
+  }
+
+  if (day === 'today') {
+    for (const row of input.joining ?? []) {
+      dueToday.push({
+        id: row.applicationId, type: 'task', title: row.title, dueAt: today, reason: 'Awaiting joining',
+        nextAction: { code: 'record-joining', label: 'Record joining' },
+        entity: { type: 'application', id: row.applicationId },
+        applicationId: row.applicationId, ...appFields(row.app),
+        actions: [act('record-joining', 'Record joining')],
+      });
+    }
   }
 
   const byDue = (a: WorkItem, b: WorkItem) => (a.dueAt ?? '9999').localeCompare(b.dueAt ?? '9999') || a.title.localeCompare(b.title);

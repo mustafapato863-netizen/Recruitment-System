@@ -49,6 +49,8 @@ describe('#34 LICENSE_CHECK-only (Omar)', () => {
     expect((await screen.findAllByText('Nursing license')).length).toBeGreaterThan(0);
     expect(screen.queryByText('Passport copy')).toBeNull();
     expect(screen.queryByRole('button', { name: /Submit approval/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Confirm Joining/ })).toBeNull();
+    expect(screen.queryByText('Invalid Date')).toBeNull();
     expect(screen.queryByRole('link', { name: 'Application' })).toBeNull();
     const toggle = screen.getAllByRole('checkbox')[0] ?? screen.getAllByRole('button', { name: /Nursing license|verify|mark/i })[0];
     await userEvent.click(toggle);

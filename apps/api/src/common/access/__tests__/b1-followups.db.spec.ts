@@ -151,22 +151,26 @@ describe.skipIf(!url)('B1 follow-ups (scratch Postgres)', () => {
   });
 
   describe('#1 interviewer RSVP and .ics', () => {
-    it('attendee can RSVP and download the .ics; the detail stays 403 and the list does not include it', async () => {
+    it('attendee can RSVP, download the .ics, and open only their own evaluation', async () => {
       const iv = auth(ids.interviewer, ['INTERVIEWER']);
       await expect(call(iv, InterviewsController, 'getInterviewIcs', { id: ids.interview })).resolves.toBe(true);
       await expect(call(iv, InterviewsController, 'respondToInterview', { id: ids.interview })).resolves.toBe(true);
-      await expect(call(iv, InterviewsController, 'getInterview', { id: ids.interview })).rejects.toBeInstanceOf(ForbiddenException);
+      await expect(call(iv, InterviewsController, 'getInterview', { id: ids.interview })).resolves.toBe(true);
       await expect(call(iv, InterviewsController, 'updateInterview', { id: ids.interview })).rejects.toBeInstanceOf(ForbiddenException);
 
       const ics = await interviews.getInterviewIcs(ORG, ids.interview, iv);
       expect(ics).toContain('BEGIN:VCALENDAR');
+      expect(ics).not.toMatch(/ATTENDEE/);
       const receipt = await interviews.respondToInterview(ORG, ids.interview, ids.interviewer, { response: 'Confirmed' } as never, iv);
       expect(receipt).toEqual({ id: ids.interview, response: 'Confirmed', redacted: true });
       expect((await prisma.interviewAttendee.findFirstOrThrow({ where: { interviewId: ids.interview, userId: ids.interviewer } })).response).toBe('Confirmed');
 
       const list = await interviews.listInterviews(ORG, {} as never, iv);
-      expect(list.map((i) => i.id)).not.toContain(ids.interview);
-      await expect(interviews.getInterview(ORG, ids.interview, iv)).rejects.toThrow();
+      expect(list.map((i) => i.id)).toContain(ids.interview);
+      const detail = await interviews.getInterview(ORG, ids.interview, iv);
+      expect(detail.applicationCode).toBeUndefined();
+      expect(detail.attendees.every((attendee) => attendee.userId === ids.interviewer)).toBe(true);
+      expect(detail.scorecards.every((card) => card.interviewerId === ids.interviewer)).toBe(true);
     });
 
     it('GET /me/interviews: shape, scope filter and order, only my interviews, no extra fields, no locked (QA BUG-4)', async () => {

@@ -37,7 +37,7 @@ const audit = [
 let paths: Record<string, unknown> = {};
 const serve = (extra: Record<string, unknown> = {}) => {
   paths = {
-    '/vacancies/work-queue?page=1&pageSize=100': { data: jobs }, '/users?page=1&pageSize=100': ufx.users,
+    '/vacancies/work-queue?page=1&pageSize=100': { data: jobs }, '/users?directory=1&page=1&pageSize=100': ufx.users,
     '/offers?status=Pending+Approval&page=1&pageSize=100': { data: [{ id: 'o1', status: 'Pending Approval', candidateName: 'Lina Hassan', positionTitle: 'HRIS Developer', approvers: [{ id: null, name: 'OFFER_APPROVER' }, { id: 'u-karim', name: 'Karim Hassan' }], versions: [{ id: 'ov1', versionNumber: 1, createdAt: new Date(Date.now() - 86400000).toISOString(), baseSalary: 62000 }] }] },
     [`/results/org?month=${M}&managerId=u-hala`]: res(2, true), [`/results/org?month=${M}&managerId=u-karim`]: res(3, false),
     '/audit-logs?page=1&pageSize=100': { data: audit, total: 3 },

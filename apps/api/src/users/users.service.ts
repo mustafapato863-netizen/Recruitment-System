@@ -22,9 +22,9 @@ export class UsersService {
     private readonly userPermissions: UserPermissionsService,
   ) {}
 
-  async list(organizationId: string): Promise<UserRecord[]> {
+  async list(organizationId: string, directory = false): Promise<UserRecord[]> {
     const users = await this.prisma.user.findMany({
-      where: { organizationId, status: 'Active' },
+      where: directory ? { organizationId } : { organizationId, status: 'Active' },
       include: {
         userRoles: {
           include: { role: true },

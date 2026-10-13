@@ -65,9 +65,11 @@ export function RequisitionsV2() {
   const owner = (r: Requisition) => ownerOf(r, data?.people ?? null);
   const showDept = scoped.some((r) => deptOf(r, data?.ctx ?? null));
   const rows = scoped.filter((r) => FILTERS[filter].test(r) && (!q.trim() || `${title(r)} ${r.requestCode} ${site(r)}`.toLowerCase().includes(q.trim().toLowerCase())));
-  const current = open && open !== 'new' ? scoped.find((r) => r.id === open) ?? data?.rows.find((r) => r.id === open) ?? null : null;
+  const current = open && open !== 'new' ? scoped.find((r) => r.id === open) ?? null : null;
+  const outsideScope = Boolean(open && open !== 'new' && data && !current);
   const canCreate = can('VACANCY_REQUEST_CREATE') && !!data?.ctx;
   const canActivate = can('VACANCY_MANAGE');
+  const canDecide = can('VACANCY_REQUEST_APPROVE');
 
   return (
     <div className="rf2-jobs">
@@ -119,10 +121,11 @@ export function RequisitionsV2() {
               </table>
             )}
           </section>
-          <p className="rf2-inline-note"><Info aria-hidden="true" /> Statuses: Draft until a due date is set → Job active (via Activate job), or Cancelled with a reason. There is no pending state.</p>
-          {open === 'new' && canCreate ? <RequisitionDrawer req={null} ctx={data.ctx} people={data.people} grades={data.grades} canActivate={canActivate} meId={user?.id} onClose={() => go(null)} onDone={done} /> : null}
+          <p className="rf2-inline-note"><Info aria-hidden="true" /> A draft with a due date and an eligible owner activates directly. Submitted requisitions stay pending until they are approved, sent back for changes, or declined.</p>
+          {outsideScope ? <p className="rf2-inline-note" role="status">That requisition is not in your team or organization.</p> : null}
+          {open === 'new' && canCreate ? <RequisitionDrawer req={null} ctx={data.ctx} people={data.people} grades={data.grades} canActivate={canActivate} canDecide={canDecide} meId={user?.id} onClose={() => go(null)} onDone={done} /> : null}
           {current && drawer === 'target' ? <TargetDrawer req={current} people={data.people} canActivate={canActivate} meId={user?.id} onClose={() => go(null)} onDone={done} /> : null}
-          {current && drawer !== 'target' ? <RequisitionDrawer key={current.id} req={current} ctx={data.ctx} people={data.people} grades={data.grades} canActivate={canActivate} meId={user?.id} onClose={() => go(null)} onDone={done} /> : null}
+          {current && drawer !== 'target' ? <RequisitionDrawer key={current.id} req={current} ctx={data.ctx} people={data.people} grades={data.grades} canActivate={canActivate} canDecide={canDecide} meId={user?.id} onClose={() => go(null)} onDone={done} /> : null}
         </>
       ) : null}
     </div>

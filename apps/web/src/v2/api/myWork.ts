@@ -180,8 +180,8 @@ export function entityHref(entity: WorkItem['entity']): string | null {
   switch (entity.type) {
     case 'application': return `/applications/${id}`;
     case 'job': return `/vacancies/${id}`;
-    case 'requisition': return `/vacancy-requests/${id}`;
-    case 'interview': return `/interviews/${id}`;
+    case 'requisition': return `/vacancy-requests?req=${id}`;
+    case 'interview': return `/my-interviews?interview=${id}`;
     case 'offer': return `/offers/${id}`;
     default: return null;
   }

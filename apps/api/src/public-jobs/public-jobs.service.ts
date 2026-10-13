@@ -22,6 +22,7 @@ import { PrismaService } from '../database/prisma.service';
 import { RateLimiterService } from '../auth/rate-limiter.service';
 import { DocumentScannerService } from '../documents/document-scanner.service';
 import { DocumentStorageService } from '../documents/document-storage.service';
+import { CandidatePortalService } from './candidate-portal.service';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import type { PublicApplicationDto, PublicJobQueryDto } from './public-jobs.dto';
 import { fileInvalid, fileTooLarge, fileUnsafe } from '../common/errors/api-error';
@@ -48,6 +49,7 @@ export class PublicJobsService {
     private readonly rateLimiter: RateLimiterService,
     private readonly scanner: DocumentScannerService,
     private readonly storage: DocumentStorageService,
+    private readonly portal: CandidatePortalService,
   ) {}
 
   async listJobs(organizationCode: string, query: PublicJobQueryDto): Promise<PublicJobsResponse> {
@@ -344,11 +346,17 @@ export class PublicJobsService {
             entityId: created.id,
             result: 'SUCCESS',
             reason: `source=${source}; consent=accepted; cvAttached=${Boolean(cvFile)}`,
-            afterData: { source, consentAccepted: true, cvAttached: Boolean(cvFile) },
+            afterData: { source, consentAccepted: true, cvAttached: Boolean(cvFile), receipt: 'on-screen' },
           },
         });
 
-        return { applicationCode: created.applicationCode };
+        const issued = await this.portal.issueGrant(tx, {
+          organizationId: organization.id,
+          candidateId: candidate.id,
+          applicationId: created.id,
+          metadata: candidate.metadata,
+        });
+        return { applicationCode: created.applicationCode, portalPath: issued.portalPath };
       });
 
       return {
@@ -356,6 +364,8 @@ export class PublicJobsService {
         applicationCode: application.applicationCode,
         vacancyCode: normalizeIdentifier(vacancyCode, 'vacancy'),
         message: 'Your application has been received.',
+        portalPath: application.portalPath,
+        receipt: 'on-screen',
       };
     } catch (error) {
       if (isUniqueViolation(error)) {

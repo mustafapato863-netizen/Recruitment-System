@@ -1,8 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Info, RotateCw, Scale, Search } from 'lucide-react';
+import { ApiError, postApi } from '../../api/client';
 import { ButtonV2, EmptyStateV2, ForbiddenStateV2, InputV2, SelectV2, SkeletonV2, StatusChip } from '../../components/v2';
-import { fetchActiveApplications, fetchBank, type ActiveRow, type BankRow } from '../api/matching';
+import { findExistingFile, isApplicationExists } from '../api/applicationExists';
+import { existingPerson } from '../api/cvImport';
+import { ACCEPTING_JOB_STATUSES, fetchOpenJobs } from '../api/jobs';
+import { addToJob, fetchActiveApplications, fetchBank, type ActiveRow, type BankRow } from '../api/matching';
 import { formatDay } from './OpenJobsV2';
 import './jobs.css';
 
@@ -96,19 +100,121 @@ export function CandidatesV2() {
           )}
         </section>
       ) : null}
-      {tab === 'bank' && bank.kind === 'ready' ? (
-        <section className="rf2-panel" aria-label="Bank">
-          {bank.rows.length === 0 ? <EmptyStateV2 headingLevel={3} title="No one found" body="Try another name or title." /> : (
-            <table className="rf2-jtable">
-              <thead><tr><th scope="col">Name</th><th scope="col">Current title</th><th scope="col">Location</th><th scope="col">Experience</th></tr></thead>
-              <tbody>{bank.rows.map((r) => (
-                <tr key={r.candidateId}><td><p className="rf2-jtable__name">{r.name}</p><p className="rf2-jtable__sub">{r.code}</p></td><td>{r.title ?? '—'}</td><td>{r.location ?? '—'}</td><td className="rf2-num">{r.experienceYears != null ? `${r.experienceYears} yrs` : '—'}</td></tr>
-              ))}</tbody>
-            </table>
-          )}
-        </section>
-      ) : null}
+      {tab === 'bank' && bank.kind === 'ready' ? <BankPanel rows={bank.rows} onAdded={() => setAttempt((n) => n + 1)} /> : null}
       <p className="rf2-inline-note"><Info aria-hidden="true" /> Rejecting someone closes one application only. The person stays in the bank and can be suggested for other jobs.</p>
     </div>
+  );
+}
+
+type JobChoice = { id: string; label: string };
+
+/** One person in the bank, then one application on an open job. A repeat keeps the same person and the same file. */
+function BankPanel({ rows, onAdded }: { rows: BankRow[]; onAdded: () => void }) {
+  const [first, setFirst] = useState('');
+  const [last, setLast] = useState('');
+  const [email, setEmail] = useState('');
+  const [notice, setNotice] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [chosen, setChosen] = useState('');
+  const [jobId, setJobId] = useState('');
+  const [jobs, setJobs] = useState<JobChoice[] | null>(null);
+  const [jobNote, setJobNote] = useState<{ text: string; href?: string } | null>(null);
+  const [linking, setLinking] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    fetchOpenJobs()
+      .then((open) => {
+        if (!live) return;
+        setJobs(open.mine.filter((job) => ACCEPTING_JOB_STATUSES.includes(job.status)).map((job) => ({ id: job.id, label: `${job.code} · ${job.title}` })));
+      })
+      .catch(() => { if (live) setJobs([]); });
+    return () => { live = false; };
+  }, []);
+
+  const addPerson = async () => {
+    const firstName = first.trim();
+    const lastName = last.trim();
+    const mail = email.trim();
+    if (!firstName || !lastName || !mail) {
+      setNotice('First name, last name, and email are required. Phone is left blank.');
+      return;
+    }
+    setAdding(true);
+    try {
+      const created = await postApi<{ id: string; candidateCode?: string }>('/candidates', { firstName, lastName, email: mail, source: 'Bank' });
+      setNotice(`Added one person${created.candidateCode ? ` (${created.candidateCode})` : ''}. The same email stays this one person.`);
+      onAdded();
+    } catch (e) {
+      const hit = await existingPerson(e, { email: mail });
+      if (hit) {
+        setNotice(`Already one person in the bank${hit.candidateCode ? ` (${hit.candidateCode})` : ''}. No second person was created.`);
+        onAdded();
+        return;
+      }
+      setNotice(e instanceof ApiError || e instanceof Error ? e.message : 'Could not add this person.');
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const addJob = async () => {
+    if (!chosen || !jobId) return;
+    setLinking(true);
+    setJobNote(null);
+    try {
+      const created = await addToJob(jobId, chosen);
+      setJobNote({ text: 'Added to this job. A second application was not created.', href: `/applications/${encodeURIComponent(created.id)}` });
+    } catch (e) {
+      if (isApplicationExists(e)) {
+        const fileId = await findExistingFile(jobId, chosen);
+        setJobNote(fileId
+          ? { text: 'This person already has an application on this job.', href: `/applications/${encodeURIComponent(fileId)}` }
+          : { text: 'This person already has an application on this job. A second one was not created.' });
+        return;
+      }
+      setJobNote({ text: e instanceof ApiError || e instanceof Error ? e.message : 'Could not add this person to the job.' });
+    } finally {
+      setLinking(false);
+    }
+  };
+
+  return (
+    <section className="rf2-panel" aria-label="Bank">
+      <nav className="rf2-bank-links" aria-label="Bank tools">
+        <Link to="/import">Review a workbook</Link>
+        <Link to="/cv-bank">CV bank</Link>
+        <Link to="/sourcing-match">Search and match</Link>
+        <Link to="/talent-pools">Talent pools</Link>
+      </nav>
+      <p className="rf2-inline-note"><Info aria-hidden="true" /> PDF and Word CVs are added from a job. Workbooks are reviewed on the import page, and each duplicate needs a decision. A ZIP of CVs is not an intake format.</p>
+      <form className="rf2-bank-add" onSubmit={(e) => { e.preventDefault(); void addPerson(); }}>
+        <InputV2 label="First name" value={first} onChange={(e) => setFirst(e.target.value)} autoComplete="off" />
+        <InputV2 label="Last name" value={last} onChange={(e) => setLast(e.target.value)} autoComplete="off" />
+        <InputV2 label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="off" hint="Same email keeps one person." />
+        <ButtonV2 kind="secondary" type="submit" loading={adding}>Add to the bank</ButtonV2>
+      </form>
+      {notice ? <p role="status">{notice}</p> : null}
+      <form className="rf2-bank-add" onSubmit={(e) => { e.preventDefault(); void addJob(); }}>
+        <SelectV2 label="Open job" value={jobId} onChange={(e) => setJobId(e.target.value)} disabled={!jobs || jobs.length === 0}>
+          <option value="">{jobs && jobs.length === 0 ? 'No open job loaded' : 'Choose an open job'}</option>
+          {(jobs ?? []).map((job) => <option key={job.id} value={job.id}>{job.label}</option>)}
+        </SelectV2>
+        <ButtonV2 kind="secondary" type="submit" loading={linking} disabled={!chosen || !jobId}>Add the chosen person to this job</ButtonV2>
+      </form>
+      {jobNote ? <p role="status">{jobNote.text}{jobNote.href ? <> <Link to={jobNote.href}>Open the application</Link></> : null}</p> : null}
+      {rows.length === 0 ? <EmptyStateV2 headingLevel={3} title="No one found" body="Try another name or title." /> : (
+        <table className="rf2-jtable">
+          <thead><tr><th scope="col"><span className="rf2-sr-only">Choose</span></th><th scope="col">Name</th><th scope="col">Current title</th><th scope="col">Location</th><th scope="col">Experience</th></tr></thead>
+          <tbody>{rows.map((r) => (
+            <tr key={r.candidateId}>
+              <td><input type="radio" name="bank-person" value={r.candidateId} aria-label={`Choose ${r.name} for a job`} checked={chosen === r.candidateId} onChange={() => setChosen(r.candidateId)} /></td>
+              <td><p className="rf2-jtable__name">{r.name}</p><p className="rf2-jtable__sub">{r.code}</p></td>
+              <td>{r.title ?? '—'}</td><td>{r.location ?? '—'}</td><td className="rf2-num">{r.experienceYears != null ? `${r.experienceYears} yrs` : '—'}</td>
+            </tr>
+          ))}</tbody>
+        </table>
+      )}
+    </section>
   );
 }

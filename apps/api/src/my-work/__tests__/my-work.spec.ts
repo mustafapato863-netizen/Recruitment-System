@@ -83,6 +83,24 @@ describe('B4 My Work buckets (frozen clock, Africa/Cairo)', () => {
     expect(work.waitingOnOthers.map((i) => [i.id, i.waitingOn])).toEqual([['iv-done', 'interviewer'], ['o-sent', 'candidate']]);
   });
 
+  it('keeps a held job off targets and keeps an awaiting-joining case on today', () => {
+    const work = buildMyWork({
+      ...empty,
+      jobs: [{ id: 'j-held', code: 'V3', title: 'Held role', status: 'On Hold', joined: 1, target: 2, dueDate: '2026-10-10' }],
+      joining: [{
+        id: 'hc1', applicationId: 'a-join', title: 'Sample Candidate — awaiting joining (Held role)',
+        app: { applicationId: 'a-join', candidate: { id: 'c1', name: 'Sample Candidate' }, stage: 'Offer' },
+      }],
+    }, NOW);
+    expect(work.targets).toEqual([]);
+    expect(work.overdue.map((i) => i.id)).not.toContain('j-held');
+    expect(work.dueToday).toEqual([expect.objectContaining({
+      id: 'a-join', type: 'task', reason: 'Awaiting joining',
+      entity: { type: 'application', id: 'a-join' },
+      nextAction: { code: 'record-joining', label: 'Record joining' },
+    })]);
+  });
+
   it('empty state', () => {
     const work = buildMyWork(empty, NOW);
     expect(work).toMatchObject({ empty: true, emptyMessage: 'No open work assigned to you.', counts: { overdue: 0, today: 0, waitingOnOthers: 0 } });

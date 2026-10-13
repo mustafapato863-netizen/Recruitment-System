@@ -18,7 +18,7 @@ export function WorkspaceTools({ items, activeKey, collapsed, admin }: {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
-  const label = admin ? 'Settings & tools' : 'Workspace tools';
+  const label = 'More (classic)';
   const active = items.some((item) => item.key === activeKey);
   const term = query.trim().toLowerCase();
   const filtered = items.filter((item) => `${item.label} ${GROUPS.find((group) => group.keys.includes(item.key))?.label ?? ''}`.toLowerCase().includes(term));

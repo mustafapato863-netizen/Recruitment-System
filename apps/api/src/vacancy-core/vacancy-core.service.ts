@@ -42,6 +42,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import { exportFailed } from '../common/errors/api-error';
 import { AccessControlService } from '../access-control/access-control.service';
+import { buildCancellationImpact, capacityReductionImpact, type CancellationImpact } from './commitment-impact';
 import {
   CLOSED_APPLICATION_STAGES,
   REQUISITION_CANCELLED_REASON,
@@ -245,7 +246,9 @@ export class VacancyCoreService {
       throw new ConflictException({ code: 'REQUISITION_NOT_ACTIVE', message: `Request ${request.requestCode} is not active yet; edit it instead.` });
     }
     if (input.seats !== undefined && input.seats < vacancy.joinedHeadcount) {
-      throw new ConflictException({ code: 'SEATS_BELOW_JOINED', message: `Seats cannot drop below the ${vacancy.joinedHeadcount} already joined.`, joined: vacancy.joinedHeadcount });
+      const openApplications = await this.prisma.application.count({ where: { vacancyId: vacancy.id, stage: { notIn: [...CLOSED_APPLICATION_STAGES] } } });
+      const impact = capacityReductionImpact({ current: vacancy.approvedHeadcount, next: input.seats, joined: vacancy.joinedHeadcount, openApplications });
+      throw new ConflictException({ code: 'SEATS_BELOW_JOINED', message: impact.message, joined: vacancy.joinedHeadcount, counts: { joined: impact.joined, openApplications: impact.openApplications, requested: impact.next } });
     }
     if (input.dueDate !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(input.dueDate)) {
       throw new BadRequestException({ code: 'VALIDATION_FAILED', field: 'dueDate', message: 'dueDate must be YYYY-MM-DD.' });
@@ -532,18 +535,22 @@ export class VacancyCoreService {
   }
 
   private validateRequestPlan(
-    request: Partial<Pick<VacancyRequest, 'budgetMin' | 'budgetMax' | 'budgetCurrency' | 'recruitmentTiming' | 'plannedOpenDate' | 'targetFillDate'>>,
+    request: Partial<Pick<VacancyRequest, 'budgetMin' | 'budgetMax' | 'budgetCurrency' | 'budgetStatus' | 'recruitmentTiming' | 'plannedOpenDate' | 'targetFillDate'>>,
     required: boolean,
   ): void {
     const hasAnyBudgetValue = request.budgetMin != null || request.budgetMax != null || Boolean(request.budgetCurrency);
-    if ((required || hasAnyBudgetValue) &&
+    // A declared budget (status or any amount) must be a complete range. A hiring plan
+    // that never recorded pay can still be submitted for approval.
+    const budgetDeclared = Boolean(request.budgetStatus) || hasAnyBudgetValue;
+    if (((required && budgetDeclared) || hasAnyBudgetValue) &&
       (request.budgetMin == null || request.budgetMax == null || !request.budgetCurrency ||
         request.budgetMin <= 0 || request.budgetMax < request.budgetMin)) {
       throw new BadRequestException({ code: 'VALIDATION_ERROR', field: 'budgetMin', message: 'Enter a valid budget range from minimum to maximum and select AED or EGP.' });
     }
-    if (required && (!request.recruitmentTiming || !request.targetFillDate)) {
+    if (required && !request.targetFillDate) {
       throw new BadRequestException({ code: 'VALIDATION_ERROR', field: 'targetFillDate', message: 'Choose when recruitment starts and a target fill date before submitting.' });
     }
+    if (required && !request.recruitmentTiming) request.recruitmentTiming = 'After Approval';
     if (request.recruitmentTiming === 'Deferred' && !request.plannedOpenDate) {
       throw new BadRequestException({ code: 'VALIDATION_ERROR', field: 'plannedOpenDate', message: 'A deferred request needs a planned opening date.' });
     }
@@ -714,6 +721,20 @@ export class VacancyCoreService {
     // requisition's job is closed with that same reason; its live files are rejected 'Requisition cancelled'.
     if (!reason?.trim()) throw new BadRequestException({ code: 'REASON_REQUIRED', field: 'reason', message: 'A close reason is required to cancel a requisition.' });
     const cancelReason = await resolveJobStatusReason(this.prisma, organizationId, 'close-reasons', reason, note);
+    const jobPreview = await this.prisma.vacancy.findUnique({ where: { vacancyRequestId: id }, select: { id: true, status: true } });
+    if (jobPreview && jobPreview.status !== 'Closed') {
+      const impact = await this.cancellationImpact(organizationId, jobPreview.id);
+      if (!impact.canClose) {
+        const interviews = impact.commitments.filter((c) => c.kind === 'interview').length;
+        const offers = impact.commitments.filter((c) => c.kind === 'offer').length;
+        const joining = impact.commitments.filter((c) => c.kind === 'joining').length;
+        throw new ConflictException({
+          code: 'COMMITMENTS_UNRESOLVED',
+          message: impact.message,
+          counts: { interviews, offers, joining, activeApplications: impact.activeApplications, joinedApplications: impact.joinedApplications },
+        });
+      }
+    }
 
     const result = await this.prisma.$transaction(async (tx) => {
       // Re-read under the transaction so a concurrent cancel is a no-op.
@@ -757,6 +778,53 @@ export class VacancyCoreService {
       rejectedApplications: result.rejected,
       closedJob: result.closed,
     };
+  }
+
+  /**
+   * What cancellation would do. Commitments block the close. Joined applications
+   * and history are counted so the caller can see they are kept.
+   */
+  async getCancellationImpact(id: string, organizationId: string): Promise<CancellationImpact> {
+    await this.requireRequest(id, organizationId);
+    const job = await this.prisma.vacancy.findUnique({ where: { vacancyRequestId: id }, select: { id: true, status: true } });
+    if (!job || job.status === 'Closed') {
+      return buildCancellationImpact({ interviews: [], offers: [], joining: [], activeApplications: 0, joinedApplications: job ? await this.prisma.application.count({ where: { vacancyId: job.id, stage: 'Joined' } }) : 0 });
+    }
+    return this.cancellationImpact(organizationId, job.id);
+  }
+
+  private async cancellationImpact(organizationId: string, vacancyId: string): Promise<CancellationImpact> {
+    const [interviews, offers, joining, activeApplications, joinedApplications] = await Promise.all([
+      this.prisma.interview.findMany({
+        where: { organizationId, application: { vacancyId } },
+        select: { id: true, title: true, status: true, applicationId: true },
+      }),
+      this.prisma.offer.findMany({
+        where: { organizationId, application: { vacancyId, stage: { notIn: [...CLOSED_APPLICATION_STAGES] } } },
+        select: { id: true, offerCode: true, status: true, applicationId: true },
+      }),
+      this.prisma.hiringCase.findMany({
+        where: { organizationId, application: { vacancyId } },
+        select: {
+          id: true, status: true, applicationId: true,
+          application: { select: { candidate: { select: { firstName: true, lastName: true } } } },
+        },
+      }),
+      this.prisma.application.count({ where: { vacancyId, stage: { notIn: [...CLOSED_APPLICATION_STAGES] } } }),
+      this.prisma.application.count({ where: { vacancyId, stage: 'Joined' } }),
+    ]);
+    return buildCancellationImpact({
+      interviews,
+      offers: offers.map((offer) => ({ id: offer.id, code: offer.offerCode, status: offer.status, applicationId: offer.applicationId })),
+      joining: joining.map((row) => ({
+        id: row.id,
+        status: row.status,
+        applicationId: row.applicationId,
+        candidateName: `${row.application.candidate?.firstName ?? ''} ${row.application.candidate?.lastName ?? ''}`.trim(),
+      })),
+      activeApplications,
+      joinedApplications,
+    });
   }
 
   /** Back-compat alias for POST /vacancy-requests/:id/convert. Use activate. */
@@ -1327,9 +1395,9 @@ export class VacancyCoreService {
     }
 
     if (dto.approvedHeadcount !== undefined && dto.approvedHeadcount < vacancy.joinedHeadcount) {
-      throw new BadRequestException(
-        `Approved headcount cannot be less than already joined headcount (${vacancy.joinedHeadcount}).`,
-      );
+      const openApplications = await this.prisma.application.count({ where: { vacancyId: id, stage: { notIn: [...CLOSED_APPLICATION_STAGES] } } });
+      const impact = capacityReductionImpact({ current: vacancy.approvedHeadcount, next: dto.approvedHeadcount, joined: vacancy.joinedHeadcount, openApplications });
+      throw new BadRequestException({ code: 'SEATS_BELOW_JOINED', field: 'approvedHeadcount', message: impact.message, joined: vacancy.joinedHeadcount });
     }
 
     await this.prisma.$transaction(async (tx) => {

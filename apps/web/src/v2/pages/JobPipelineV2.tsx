@@ -150,7 +150,7 @@ export function JobPipelineV2() {
           <div><dt>Active files</dt><dd className="rf2-num">{apps.length}</dd></div>
           <div><dt>Gate blocked</dt><dd className="rf2-num" data-tone={blockedCount ? 'warning' : undefined}>{blockedCount}</dd></div>
         </dl>
-        {job.status === 'On Hold' ? <p className="rf2-jobhead__note"><Clock aria-hidden="true" /> On hold{job.holdUntil ? ` until ${formatDay(`${job.holdUntil.slice(0, 10)}T12:00:00Z`)}` : ''}: takes no new applications and is off My Work. Files stay in their stages.</p> : null}
+        {job.status === 'On Hold' ? <p className="rf2-jobhead__note"><Clock aria-hidden="true" /> On hold{job.holdUntil ? ` until ${formatDay(`${job.holdUntil.slice(0, 10)}T12:00:00Z`)}` : ''}: new applications are paused. Scheduled interviews, sent offers, and joining commitments stay on My Work. Files stay in their stages.</p> : null}
       </section>
 
       <DragDropProvider onDragEnd={(event: DragEndEvent) => {

@@ -173,6 +173,7 @@ export class SelfScheduleService {
     if (!app || app.organizationId !== payload.organizationId) {
       throw new NotFoundException('Application associated with this link is no longer available.');
     }
+    this.assertSchedulingOpen(app.vacancy?.status);
 
     // Check if an interview has already been scheduled from this or matching title
     const existing = await this.prisma.interview.findFirst({
@@ -231,6 +232,7 @@ export class SelfScheduleService {
     if (!app || app.organizationId !== payload.organizationId) {
       throw new NotFoundException('Application not found.');
     }
+    this.assertSchedulingOpen(app.vacancy?.status);
 
     const proposedStart = new Date(input.selectedSlot);
     if (isNaN(proposedStart.getTime())) {
@@ -332,25 +334,25 @@ export class SelfScheduleService {
       });
     }
 
-    // Enqueue confirmation email with .ics calendar attachment to candidate
-    if (app.candidate?.email && mailDeliveryEnabled()) {
+    // Receipt stays on the local test mailbox. Never the candidate's own address.
+    if (mailDeliveryEnabled()) {
       const icsData = generateIcsCalendar({
-        uid: `${created.interviewCode}@recruitflow.sghgroup.sa`,
+        uid: `${created.interviewCode}@recruitflow.local`,
         title: created.title,
-        description: `Saudi German Health Recruitment: ${created.title} with ${candidateName}.`,
+        description: `RecruitFlow: ${created.title} for ${candidateName}.`,
         location: created.locationUrl,
         start: created.scheduledStart,
         end: created.scheduledEnd,
-        organizerName: 'Saudi German Health Recruitment',
-        organizerEmail: 'careers@sghgroup.sa',
-        attendees: [{ name: candidateName, email: app.candidate.email }],
+        organizerName: 'RecruitFlow',
+        organizerEmail: 'local-test@recruitflow.local',
+        attendees: [{ name: candidateName, email: 'local-test@recruitflow.local' }],
       });
 
       await this.prisma.emailOutbox.create({
         data: {
           organizationId: payload.organizationId,
-          toEmail: app.candidate.email,
-          subject: `Interview Confirmed: ${created.title} - Saudi German Health`,
+          toEmail: 'local-test@recruitflow.local',
+          subject: `Interview Confirmed: ${created.title}`,
           template: 'interview-self-schedule-confirmation',
           payload: {
             candidateName,
@@ -360,6 +362,7 @@ export class SelfScheduleService {
             timezone: created.timezone,
             locationUrl: created.locationUrl,
             icsContent: icsData,
+            receipt: 'local-test',
           },
           status: 'Pending',
         },
@@ -373,8 +376,8 @@ export class SelfScheduleService {
       scheduledStart: created.scheduledStart.toISOString(),
       scheduledEnd: created.scheduledEnd.toISOString(),
       message: mailDeliveryEnabled()
-        ? 'Interview booked successfully! A calendar invitation has been sent to your email.'
-        : 'Interview booked successfully. Email delivery is currently paused.',
+        ? 'Interview booked successfully. The receipt stays on the local test mailbox.'
+        : 'Interview booked successfully. The confirmation stays on this screen.',
     };
   }
 
@@ -475,6 +478,14 @@ export class SelfScheduleService {
     }
 
     return slots;
+  }
+
+  private assertSchedulingOpen(status: string | null | undefined): void {
+    if (status === 'Open' || status === 'Partially Filled') return;
+    if (status === 'On Hold') {
+      throw new BadRequestException('This job is on hold and is not open for scheduling.');
+    }
+    throw new BadRequestException('This job is closed and is not open for scheduling.');
   }
 
   private async nextInterviewCode(): Promise<string> {

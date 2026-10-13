@@ -140,6 +140,17 @@ export class VacancyRequestsController {
     return this.vacancyCoreService.rejectRequest(id, user.organizationId, user.userId, user.roleCodes, body);
   }
 
+  @Get(':id/cancel-impact')
+  @RequirePermissions('VACANCY_REQUEST_VIEW')
+  @UseGuards(TenantScopedGuard)
+  @TenantResource({ resource: 'vacancyRequest', param: 'id' })
+  cancelImpact(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    return this.vacancyCoreService.getCancellationImpact(id, user.organizationId);
+  }
+
   @Post(':id/cancel')
   @HttpCode(HttpStatus.OK)
   @RequirePermissions('VACANCY_REQUEST_CREATE')

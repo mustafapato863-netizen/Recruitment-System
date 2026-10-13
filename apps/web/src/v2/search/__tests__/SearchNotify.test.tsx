@@ -61,6 +61,9 @@ describe('scopedSearch (client mitigation of an unscoped /search)', () => {
     const [a, i, v, o] = sfx.notifications().data;
     expect([a, i, v, o].map(notificationHref)).toEqual(['/applications/a10', '/applications/a7', '/vacancies/v1', '/applications/a10']);
     expect(notificationHref({ ...o, applicationId: null })).toBeNull();
+    expect(notificationHref({ ...o, applicationId: null, entityType: 'VacancyRequest', entityId: 'r1' })).toBe('/vacancy-requests?req=r1');
+    expect(notificationHref({ ...o, applicationId: null, entityType: 'Interview', entityId: 'i9' })).toBe('/my-interviews?interview=i9');
+    expect(notificationHref({ ...o, applicationId: null, entityType: 'HiringCase', entityId: 'h1' })).toBe('/hires/h1');
   });
 });
 

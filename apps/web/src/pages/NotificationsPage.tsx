@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { NotificationRecord, PaginatedResult } from '@recruitflow/contracts';
 import { getApi, patchApi, postApi } from '../api/client';
+import { notificationHref } from '../v2/api/searchNotify';
 import { Icon, type IconName } from '../components/Icon';
 import { Alert } from '../components/ui/Alert';
 import { Button } from '../components/ui/Button';
@@ -40,19 +41,7 @@ function getNotificationPresentation(notification: NotificationRecord): Notifica
 }
 
 function getNotificationHref(notification: NotificationRecord): string | null {
-  if (!notification.entityId) return null;
-
-  const routes: Record<string, string> = {
-    VacancyRequest: `/vacancy-requests/${notification.entityId}`,
-    Vacancy: `/vacancies/${notification.entityId}`,
-    Candidate: `/candidates/${notification.entityId}`,
-    Application: `/applications/${notification.entityId}`,
-    Interview: `/interviews/${notification.entityId}`,
-    Offer: `/offers/${notification.entityId}`,
-    HiringCase: `/hires/${notification.entityId}`,
-  };
-
-  return notification.entityType ? routes[notification.entityType] ?? null : null;
+  return notificationHref(notification);
 }
 
 function formatRelativeTime(value: string): string {

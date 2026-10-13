@@ -35,7 +35,7 @@ describe('M2 Team work', () => {
     const wait = screen.getByRole('heading', { name: 'Waiting on you' }).closest('section')!;
     expect(within(wait).getAllByRole('listitem')).toHaveLength(2);
     expect(wait).toHaveTextContent(/Your scorecard — Ahmed Embaby, HRIS Developer.*Late/);
-    expect(within(wait).getByRole('link', { name: 'Submit scorecard: Ahmed Embaby' })).toHaveAttribute('href', '/interviews/i1');
+    expect(within(wait).getByRole('link', { name: 'Submit scorecard: Ahmed Embaby' })).toHaveAttribute('href', '/applications/a1?drawer=scorecard&interview=i1');
     expect(wait).toHaveTextContent(/Offer approval — Lina Hassan, HRIS Developer.*Offer v1 submitted by Mariam Farag/);
     expect(within(wait).getByRole('button', { name: 'Review offer: Lina Hassan' })).toBeInTheDocument();
     expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent).slice(1)).toEqual(['Mariam Farag', 'Noura Al-Dosari', 'Youssef Ibrahim']);

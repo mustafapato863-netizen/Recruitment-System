@@ -57,7 +57,7 @@ describe('A05 Pipeline template (single)', () => {
     const names = within(sec).getAllByRole('listitem').map((li) => li.querySelector('.rf2-jtable__name')!.textContent);
     expect(names).toEqual(['Applied', 'Screening', 'Interview', 'Offer', 'Pre-hire', 'Joined']);
     expect(sec).toHaveTextContent('Gate: scorecard submitted before Offer');
-    expect(sec).toHaveTextContent('Gate: ID, contract and SCFHS licence checked');
+    expect(sec).toHaveTextContent('Gate: this job\'s required checks, then final approval');
     expect(within(screen.getByRole('region', { name: 'Exits' })).getAllByRole('listitem')).toHaveLength(2);
     expect(screen.queryByRole('button', { name: /new template|duplicate|delete/i })).toBeNull();
     expect(await axeViolations(container)).toEqual([]);

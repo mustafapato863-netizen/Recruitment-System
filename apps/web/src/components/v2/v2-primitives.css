@@ -182,6 +182,21 @@
   [data-ui='v2'] .rf2-btn, [data-ui='v2'] .rf2-nav-item, [data-ui='v2'] .rf2-field__box, [data-ui='v2'] .rf2-card { transition: none; }
 }
 
+/* ---------- Tabs ---------- */
+[data-ui='v2'] .rf2-tabs {
+  display: flex; gap: 4px; padding: 4px; width: fit-content; max-width: 100%; overflow-x: auto;
+  background: var(--rf2-neutral-tint); border: 1px solid var(--rf2-border); border-radius: var(--rf2-radius-control);
+}
+[data-ui='v2'] .rf2-tab {
+  min-height: 36px; padding: 0 14px; border: 0; border-radius: calc(var(--rf2-radius-control) - 2px);
+  background: transparent; color: var(--rf2-ink-2); font-family: var(--rf2-font); font-size: var(--rf2-text-body); font-weight: 600;
+  cursor: pointer; white-space: nowrap;
+}
+[data-ui='v2'] .rf2-tab[aria-selected='true'] { background: var(--rf2-card); color: var(--rf2-ink); box-shadow: var(--rf2-shadow-card, 0 1px 2px rgb(15 23 42 / 8%)); }
+[data-ui='v2'] .rf2-tab:focus-visible { outline: var(--rf2-focus-width) solid var(--rf2-focus-color); outline-offset: var(--rf2-focus-offset); }
+[data-ui='v2'] .rf2-tab:disabled { color: var(--rf2-muted); cursor: not-allowed; }
+[data-ui='v2'] .rf2-tabpanel { margin-top: 12px; color: var(--rf2-ink); }
+
 /* ---------- Drawer (F3) ---------- */
 [data-ui='v2'] .rf2-drawer-root { position: fixed; inset: 0; z-index: 1000; }
 [data-ui='v2'] .rf2-drawer__scrim { position: absolute; inset: 0; background: var(--rf2-scrim); animation: rf2-fade var(--rf2-motion-standard) var(--rf2-ease); }

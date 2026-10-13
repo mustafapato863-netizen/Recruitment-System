@@ -103,7 +103,7 @@ export function TeamWorkV2() {
                       <p className="rf2-jtable__sub">You interviewed them as interviewer · the gate blocks Offer until it is submitted</p>
                     </div>
                     {c.overdue ? <StatusChip tone="danger" label="Late" /> : c.dueAt ? <StatusChip tone="info" label="Due today" /> : null}
-                    <Link className="rf2-btn rf2-btn--secondary rf2-btn--sm" to={`/interviews/${encodeURIComponent(c.interviewId)}`} aria-label={`Submit scorecard: ${c.candidate}`}>Submit scorecard</Link>
+                    <Link className="rf2-btn rf2-btn--secondary rf2-btn--sm" to={c.applicationId ? `/applications/${encodeURIComponent(c.applicationId)}?drawer=scorecard&interview=${encodeURIComponent(c.interviewId)}` : `/my-interviews?interview=${encodeURIComponent(c.interviewId)}&scorecard=1`} aria-label={`Submit scorecard: ${c.candidate}`}>Submit scorecard</Link>
                   </li>
                 ))}
               </ul>

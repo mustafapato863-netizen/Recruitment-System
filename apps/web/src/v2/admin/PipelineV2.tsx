@@ -1,8 +1,8 @@
 import { toFormErrs } from './formErrors';
 import { useEffect, useState } from 'react';
 import { CircleCheck, Info, LogOut, PencilLine, Plus, RotateCw, ShieldCheck } from 'lucide-react';
-import { ButtonV2, DrawerV2, EmptyStateV2, InputV2, SkeletonV2 } from '../../components/v2';
-import { createPipeline, fetchPipeline, isExit, isSingleTemplate, renameStage, stageInfo, type PipelineStage, type PipelineTemplate } from './configApi';
+import { ButtonV2, DrawerV2, EmptyStateV2, InputV2, SelectV2, SkeletonV2 } from '../../components/v2';
+import { createPipeline, fetchPipeline, fetchWorkflowRules, isExit, isSingleTemplate, previewWorkflowRule, renameStage, stageInfo, type PipelineStage, type PipelineTemplate, type WorkflowImpact, type WorkflowPosition } from './configApi';
 import '../pages/jobs.css';
 import './admin.css';
 
@@ -72,8 +72,92 @@ export function PipelineV2() {
         </>
       ) : null}
       <p className="rf2-inline-note"><Info aria-hidden="true" /> Stages and exits can be renamed, never deleted, and there is no second template. Hold lives on the job; Cancelled lives on the requisition — neither is a stage.</p>
+      <WorkflowImpactCard />
       {editing && data ? <StageDrawer stage={editing} templateId={data.template.id} onClose={() => setEditing(null)} onDone={(m) => { setEditing(null); setNote({ tone: 'success', text: m }); setAttempt((n) => n + 1); }} /> : null}
     </div>
+  );
+}
+
+const PROTECTED = ['VAC-2026-009', 'VAC-2026-010', 'VAC-2026-011'];
+
+function WorkflowImpactCard() {
+  const [positions, setPositions] = useState<WorkflowPosition[] | null>(null);
+  const [positionId, setPositionId] = useState('');
+  const [profile, setProfile] = useState<'technical' | 'clinical'>('clinical');
+  const [impact, setImpact] = useState<WorkflowImpact | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    let live = true;
+    fetchWorkflowRules()
+      .then((doc) => {
+        if (!live) return;
+        const rows = doc.positions ?? [];
+        setPositions(rows);
+        const protectedRow = rows.find((row) => row.vacancies.some((vacancy) => PROTECTED.includes(vacancy.code)));
+        const first = protectedRow ?? rows[0];
+        if (first) {
+          setPositionId(first.id);
+          setProfile(first.profile === 'clinical' ? 'technical' : 'clinical');
+        }
+      })
+      .catch(() => { if (live) setPositions([]); });
+    return () => { live = false; };
+  }, []);
+  const preview = async () => {
+    if (!positionId) return;
+    setBusy(true); setError(null);
+    try { setImpact(await previewWorkflowRule(positionId, profile)); }
+    catch (e) { setImpact(null); setError((e as { message?: string })?.message || 'Could not preview this rule.'); }
+    finally { setBusy(false); }
+  };
+  return (
+    <section className="rf2-panel rf2-admin__card" aria-labelledby="rule-h">
+      <div className="rf2-row-between rf2-admin__head">
+        <div>
+          <h2 id="rule-h" className="rf2-jtable__name">Workflow rule impact</h2>
+          <p className="rf2-jtable__sub">Technical and clinical joining profiles. A preview is the result when a protected job would change.</p>
+        </div>
+      </div>
+      <div className="rf2-admin__pad">
+        {positions === null ? <SkeletonV2 lines={2} label="Loading positions…" /> : null}
+        {positions && positions.length === 0 ? <p className="rf2-jtable__sub">No positions are available for a rule preview.</p> : null}
+        {positions && positions.length > 0 ? (
+          <div className="rf2-req__row">
+            <SelectV2 label="Position" value={positionId} onChange={(e) => { setPositionId(e.target.value); setImpact(null); }}>
+              {positions.map((row) => <option key={row.id} value={row.id}>{row.title}</option>)}
+            </SelectV2>
+            <SelectV2 label="Proposed profile" value={profile} onChange={(e) => { setProfile(e.target.value as 'technical' | 'clinical'); setImpact(null); }}>
+              <option value="technical">Technical</option>
+              <option value="clinical">Clinical</option>
+            </SelectV2>
+            <ButtonV2 kind="secondary" icon={<ShieldCheck />} loading={busy} onClick={() => void preview()}>Preview impact</ButtonV2>
+          </div>
+        ) : null}
+        {error ? <p className="rf2-form-error" role="alert">{error}</p> : null}
+        {impact ? (
+          <div>
+            <p className="rf2-inline-note" data-tone={impact.applyAllowed ? 'info' : 'warning'} role="status"><Info aria-hidden="true" /> {impact.message}</p>
+            <p className="rf2-jtable__sub">{impact.preservedSnapshots} accepted {impact.preservedSnapshots === 1 ? 'case keeps' : 'cases keep'} the stored checklist. {impact.openCasesAdoptingProfile.length} open {impact.openCasesAdoptingProfile.length === 1 ? 'case' : 'cases'} would use the new profile later. Seat counts stay as shown.</p>
+            {impact.vacancies.length ? (
+              <table className="rf2-jtable" aria-label="Workflow rule impact">
+                <thead><tr><th scope="col">Job</th><th scope="col">Status</th><th scope="col">Seats</th><th scope="col">Result</th></tr></thead>
+                <tbody>
+                  {impact.vacancies.map((vacancy) => (
+                    <tr key={vacancy.code}>
+                      <th scope="row">{vacancy.code}</th>
+                      <td>{vacancy.status}</td>
+                      <td>{vacancy.joinedHeadcount}/{vacancy.approvedHeadcount}</td>
+                      <td>{vacancy.protected ? 'Preview only' : 'Unchanged'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : <p className="rf2-jtable__sub">This position has no jobs.</p>}
+          </div>
+        ) : null}
+      </div>
+    </section>
   );
 }
 

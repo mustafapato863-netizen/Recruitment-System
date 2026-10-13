@@ -129,7 +129,7 @@ export class HiringController {
   }
 
   @Post(':id/joining')
-  @RequirePermissions('FINAL_HIRING_APPROVAL')
+  @RequirePermissions('RECORD_ACTUAL_JOINING')
   @AuditAction('HIRING_JOINING_UPDATE')
   @UseGuards(TenantScopedGuard)
   @TenantResource({ resource: 'hiringCase', param: 'id' })

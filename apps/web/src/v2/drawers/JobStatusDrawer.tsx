@@ -9,7 +9,7 @@ import { bannerError, fieldError, serverFormErrors } from '../forms/serverErrors
 import { STATUS_LABEL, STATUS_TONE, formatDay } from '../pages/OpenJobsV2';
 
 const EFFECT: Record<JobAction, string> = {
-  hold: 'Hold lives on the job: files stay in their stages. A held job takes no new application and is off My Work. Nothing reopens it automatically.',
+  hold: 'Hold pauses new applications. Files stay in their stages. Scheduled interviews, sent offers, and joining commitments stay on My Work. Nothing reopens the job automatically.',
   reopen: 'Reopen returns the job to Open (or Partially filled if seats are already filled).',
   close: 'Close job is final: a closed job cannot be reopened. Click it, then confirm.',
 };

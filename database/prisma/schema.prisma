@@ -839,6 +839,10 @@ model HiringCase {
   status             String       @default("Pending Compliance") @db.VarChar(50) // Pending Compliance, Pending Final Approval, Awaiting Joining, Joined, Postponed, No-show, Withdrawn
   plannedJoiningDate DateTime?    @db.Timestamptz(6)
   actualJoiningDate  DateTime?    @db.Timestamptz(6)
+  /// Checks required for this accepted case. Null means the historical universal rule. Not rewritten when the job profile changes.
+  requirementSnapshot Json?
+  /// Fingerprint of the case facts the current approval authorized. Null when no approval can authorize joining.
+  approvalFingerprint String?     @db.VarChar(512)
   ownerUserId        String?      @db.Uuid
   owner              User?        @relation("HiringCaseOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
   createdAt          DateTime     @default(now()) @db.Timestamptz(6)
@@ -884,6 +888,9 @@ model HiringCaseApproval {
   approverUserId String?    @db.Uuid
   approver       User?      @relation("HiringCaseApprover", fields: [approverUserId], references: [id], onDelete: Restrict)
   decidedAt      DateTime?  @db.Timestamptz(6)
+  /// Facts authorized by this decision. A later material change sets invalidatedAt; the row itself stays.
+  decisionFingerprint String? @db.VarChar(512)
+  invalidatedAt       DateTime? @db.Timestamptz(6)
   createdAt      DateTime   @default(now()) @db.Timestamptz(6)
   updatedAt      DateTime   @updatedAt @db.Timestamptz(6)
 
@@ -1271,6 +1278,8 @@ model JoiningCheck {
   verifiedById  String?            @db.Uuid
   verifiedBy    User?              @relation("JoiningCheckVerifier", fields: [verifiedById], references: [id], onDelete: SetNull)
   verifiedAt    DateTime?          @db.Timestamptz(6)
+  /// Required for an explicit clinical SCFHS check. A past date blocks joining; clearing verification keeps the row.
+  expiryDate    DateTime?          @db.Timestamptz(6)
   documentId    String?            @db.Uuid
   document      CandidateDocument? @relation(fields: [documentId], references: [id], onDelete: SetNull)
   createdAt     DateTime           @default(now()) @db.Timestamptz(6)

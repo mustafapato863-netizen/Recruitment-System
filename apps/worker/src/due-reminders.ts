@@ -15,7 +15,8 @@ import type { PrismaClient } from '@recruitflow/database';
  * Who is reminded:
  * - requisition not yet activated (Draft, Changes Requested, Pending Approval, Approved): the requester
  * - activated requisition: the job's active PRIMARY owner(s), else the assigned employee,
- *   only while the job is Open or Partially Filled (On Hold is off My Work; Filled/Closed are done)
+ *   only while the job is Open or Partially Filled (a held job pauses plan-due reminders;
+ *   scorecard reminders still cover interviews on that job; Filled/Closed are done)
  * - Cancelled / Rejected requisitions: never
  */
 export const REMINDER_TIMEZONE = 'Africa/Cairo';

@@ -6,7 +6,9 @@
  * - GET  /vacancy-requests/context        → { branches[{id,name}], positions[{id,title}], … }   (VACANCY_REQUEST_CREATE)
  * - POST /vacancy-requests                → CreateVacancyRequestDto {branchId, positionId, requestedHeadcount, dueDate?, gradeId?, assignedEmployeeId?, justification?}
  * - PATCH /vacancy-requests/:id           → same fields; only from Draft / Changes Requested (409 otherwise)
- * - (no submit: B2F-5 / Figma M03 — Draft → Activate job; the approval path needs budget fields the v2 form does not have)
+ * - POST /vacancy-requests/:id/submit | /approve | /request-changes | /reject
+ *   A draft with a due date and an eligible owner still activates directly.
+ *   Changes Requested must be resubmitted. Pending Approval is decided by VACANCY_REQUEST_APPROVE.
  * - POST /vacancy-requests/:id/activate {assignedEmployeeId?} (VACANCY_MANAGE) → {request, vacancy}; only from Approved;
  *        409 REQUISITION_CANCELLED, 400 DUE_DATE_REQUIRED / ASSIGNEE_REQUIRED; idempotent once activated.
  * - POST /vacancy-requests/:id/cancel {reason}  (reason required once approved) → closes the live job and rejects its open files.
@@ -19,7 +21,8 @@
  * - Department is optional: `departmentId`/`department`/`departmentName` on the row and `departments[]` on /context. Shown only when present.
  * - Names (positionTitle, branchName, assignedEmployeeName) and team scope come from the server; the client fill and
  *   mineOrTeam() stay as the fallback.
- * - Target update (seats + due date + reason) on a live job: typed adapter below, hidden while TARGET_UPDATE_LIVE is false.
+ * - Target update (seats + due date + reason) on a live job. Seats cannot drop below joined headcount.
+ * - GET /vacancy-requests/:id/cancel-impact names commitments that block cancellation.
  */
 import { getApi, patchApi, postApi } from '../../api/client';
 import { stripPay } from './paySafety';
@@ -91,6 +94,23 @@ export const activateRequisition = (id: string, assignedEmployeeId: string | nul
 /** = CancelVacancyRequestDto (#23 2d76bdd): { reason: close-reasons value, note? (required when reason is "Other") }. */
 export const cancelRequisition = (id: string, reason: string, note?: string) =>
   postApi<{ request: Requisition; rejectedApplications?: number; closedJob?: boolean }>(`/vacancy-requests/${enc(id)}/cancel`, { reason, ...(note?.trim() ? { note: note.trim() } : {}) });
+export const submitRequisition = (id: string, comment?: string) =>
+  postApi<Requisition>(`/vacancy-requests/${enc(id)}/submit`, comment ? { comment } : {});
+export const approveRequisition = (id: string, comment?: string) =>
+  postApi<Requisition>(`/vacancy-requests/${enc(id)}/approve`, comment ? { comment } : {});
+export const requestRequisitionChanges = (id: string, comment: string) =>
+  postApi<Requisition>(`/vacancy-requests/${enc(id)}/request-changes`, { comment });
+export const declineRequisition = (id: string, comment: string) =>
+  postApi<Requisition>(`/vacancy-requests/${enc(id)}/reject`, { comment });
+
+export interface CancellationImpact {
+  canClose: boolean;
+  commitments: Array<{ kind: 'interview' | 'offer' | 'joining'; id: string; label: string; status: string; applicationId: string }>;
+  activeApplications: number;
+  joinedApplications: number;
+  message: string;
+}
+export const fetchCancelImpact = (id: string) => getApi<CancellationImpact>(`/vacancy-requests/${enc(id)}/cancel-impact`);
 
 /** Server names first, then the client fill from /context and /users/assignable. */
 export const titleOf = (r: Requisition, ctx: ReqContext | null) => r.positionTitle ?? r.position?.title ?? ctx?.positions.find((p) => p.id === r.positionId)?.title ?? r.requestCode;
@@ -109,9 +129,9 @@ export function deptOf(r: Requisition, ctx: ReqContext | null): string | null {
   return r.departmentId ? ctx?.departments?.find((d) => d.id === r.departmentId)?.name ?? null : null;
 }
 
-/** B2F-5 (Figma M03): a Draft (or Changes requested) activates once it has a due date; no approval step. */
+/** A new requisition or a Draft activates once it has a due date. Changes Requested must be resubmitted. */
 export const canActivateDraft = (r: Pick<Requisition, 'status' | 'requesterId'> | null, _meId: string | undefined, due: string | null) =>
-  (!r || isEditable(r.status)) && !!due;
+  (!r || r.status === 'Draft') && !!due;
 /** The current backend refusing a Draft activation (not yet live): 409 without a known code, or 403. */
 export function draftActivateRefused(e: unknown): boolean {
   const x = e as { statusCode?: number } | null;
@@ -120,9 +140,10 @@ export function draftActivateRefused(e: unknown): boolean {
   return x?.statusCode === 409 || x?.statusCode === 403;
 }
 
-/** Target update on a live job (seats + due date + reason). Endpoint announced by Backend, not live: hidden until TARGET_UPDATE_LIVE. */
-export const TARGET_UPDATE_LIVE = false;
-export interface TargetUpdate { requestedHeadcount: number; dueDate: string; reason: string }
+/** Live seats and due date on an active job (PATCH /vacancy-requests/:id/target). */
+export const TARGET_UPDATE_LIVE = true;
+/** PATCH body matches UpdateRequisitionTargetDto: `seats`, not requestedHeadcount. */
+export interface TargetUpdate { seats: number; dueDate: string; reason: string }
 export const updateTarget = (id: string, body: TargetUpdate) => patchApi<Requisition>(`/vacancy-requests/${enc(id)}/target`, body);
 
 /** Manager scope: requisitions I raised or that are assigned to one of my reports. Defence-in-depth over an org-wide list. */
@@ -132,7 +153,7 @@ export function mineOrTeam(rows: Requisition[], meId: string | undefined, people
   return rows.filter((r) => { const o = ownerIdOf(r); return r.requesterId === meId || (!!o && (team.has(o) || o === meId)); });
 }
 
-const CODE_TEXT: Record<string, { field?: 'dueDate' | 'assignee' | 'reason' | 'grade'; text: string }> = {
+const CODE_TEXT: Record<string, { field?: 'dueDate' | 'assignee' | 'reason' | 'grade' | 'seats'; text: string }> = {
   DUE_DATE_REQUIRED: { field: 'dueDate', text: 'A due date is required.' },
   ASSIGNEE_REQUIRED: { field: 'assignee', text: 'Pick the primary recruiter who will own the job.' },
   ASSIGNEE_NOT_ELIGIBLE: { field: 'assignee', text: 'That person cannot own a job (inactive or an administrator).' },
@@ -142,6 +163,8 @@ const CODE_TEXT: Record<string, { field?: 'dueDate' | 'assignee' | 'reason' | 'g
   GRADE_NOT_FOUND: { field: 'grade', text: 'Pick a grade from the Grades list.' },
   REQUISITION_CANCELLED: { text: 'This requisition is cancelled and cannot be activated.' },
   REASON_REQUIRED: { field: 'reason', text: 'A reason is required.' },
+  COMMITMENTS_UNRESOLVED: { text: 'Resolve interviews, sent offers, and joining commitments before this job can close. Joined hires and history stay.' },
+  SEATS_BELOW_JOINED: { field: 'seats', text: 'Approved capacity cannot drop below the number of people who have already joined.' },
 };
 export type ReqField = 'positionId' | 'branchId' | 'seats' | 'dueDate' | 'assignee' | 'grade' | 'reason' | 'notes' | 'departmentId';
 /** API body path → the drawer input that shows it (#23: 400 field/fields go inline). */
@@ -150,7 +173,7 @@ const API_FIELD: Record<string, ReqField> = {
   assignedEmployeeId: 'assignee', reason: 'reason', justification: 'notes', departmentId: 'departmentId',
 };
 /** Codes first; then 400 field/fields inline (`inline`, the banner keeps the rest); otherwise the server's message. */
-export function reqError(e: unknown): { field?: 'dueDate' | 'assignee' | 'reason' | 'grade'; text: string; inline?: Partial<Record<ReqField, string>> } {
+export function reqError(e: unknown): { field?: 'dueDate' | 'assignee' | 'reason' | 'grade' | 'seats'; text: string; inline?: Partial<Record<ReqField, string>> } {
   const f = serverFormErrors(e);
   const keys = Object.keys(f.byField);
   if (keys.length) {

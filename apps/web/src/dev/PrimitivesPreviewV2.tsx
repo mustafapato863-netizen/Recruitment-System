@@ -1,7 +1,8 @@
+import { useState } from 'react';
 import { Briefcase, Eye, ListChecks, Plus, Search, Send, Trash2, Users } from 'lucide-react';
 import {
   ButtonV2, CardV2, DangerConfirmButton, EmptyStateV2, ForbiddenStateV2, InputV2, NavItem, NavList, SelectV2,
-  SkeletonV2, StatusChip, TableCellV2, TableRowV2, TableV2,
+  SkeletonV2, StatusChip, TableCellV2, TableRowV2, TableV2, TabPanelV2, TabsV2,
 } from '../components/v2';
 import type { ButtonV2Kind } from '../components/v2';
 
@@ -16,6 +17,30 @@ const cap: React.CSSProperties = { fontSize: 12, color: 'var(--rf2-muted)', font
 
 function forceAttr(state: string) {
   return state === 'hover' ? 'hover' : state === 'pressed' ? 'active' : state === 'focus-visible' ? 'focus-visible' : undefined;
+}
+
+function FixtureTabs() {
+  const [active, setActive] = useState('checks');
+  return (
+    <section style={box} id="tabs">
+      <h2 style={h2}>Tabs · keyboard, disabled, and message states</h2>
+      <TabsV2 ariaLabel="Sample case sections" activeKey={active} onChange={setActive} items={[
+        { key: 'checks', label: 'Checks', controls: 'panel-checks' },
+        { key: 'approval', label: 'Approval', controls: 'panel-approval' },
+        { key: 'joining', label: 'Joining', controls: 'panel-joining' },
+        { key: 'locked', label: 'Locked', disabled: true },
+      ]} />
+      <TabPanelV2 id="panel-checks" labelledBy="rf2-tab-checks" hidden={active !== 'checks'}>Sample ID and contract checks for a technical profile.</TabPanelV2>
+      <TabPanelV2 id="panel-approval" labelledBy="rf2-tab-approval" hidden={active !== 'approval'}>Sample final hiring approval. Offer approval is a separate step.</TabPanelV2>
+      <TabPanelV2 id="panel-joining" labelledBy="rf2-tab-joining" hidden={active !== 'joining'}>Sample actual joining date, recorded by the responsible recruiter.</TabPanelV2>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginTop: 16 }}>
+        <SkeletonV2 />
+        <EmptyStateV2 title="Nothing to review" body="This fixture has no business records." />
+        <ForbiddenStateV2 title="Not available" body="This sample action is disabled for the current role." />
+        <p role="status" className="rf2-state__body">Sample error: the approval does not match the current checks.</p>
+      </div>
+    </section>
+  );
 }
 
 export function PrimitivesPreviewV2() {
@@ -80,6 +105,8 @@ export function PrimitivesPreviewV2() {
           </div>
         </section>
       </div>
+
+      <FixtureTabs />
 
       <section style={box} id="fields">
         <h2 style={h2}>Input / Select · states</h2>

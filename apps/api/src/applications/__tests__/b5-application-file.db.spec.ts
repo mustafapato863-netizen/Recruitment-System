@@ -202,7 +202,7 @@ describe.skipIf(!url)('B5 application file: gates, scorecards, offers, interview
     const err2 = await assertStageGate(prisma, app, 'Joined').catch((e: { getResponse: () => { missing: string[] } }) => e.getResponse());
     expect(err2).toMatchObject({ missing: ['SCFHS_LICENCE'] });
     await prisma.joiningCheck.updateMany({ where: { applicationId: app.id, type: 'SCFHS_LICENCE' }, data: { verified: true } });
-    expect(await codeOf(assertStageGate(prisma, app, 'Joined'))).toBe('ok');
+    expect(await codeOf(assertStageGate(prisma, app, 'Joined'))).toBe('FINAL_APPROVAL_REQUIRED');
   });
 
   it('gate 5: Rejected requires a reason from the list (system reasons always valid)', async () => {

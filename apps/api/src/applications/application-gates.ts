@@ -1,6 +1,9 @@
 import { findActiveReason } from '../master-data/reason-lists';
 import { BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
 import type { Prisma } from '@recruitflow/database';
+import { JOINING_CHECK_LABELS, JOINING_CHECK_TYPES, assertCanMarkJoined, resolveSnapshot, type JoiningCheckType } from '../hiring/joining-policy';
+
+export { JOINING_CHECK_LABELS, JOINING_CHECK_TYPES, type JoiningCheckType };
 
 /**
  * B5 (v2 §3 "Gates: five API checks", §8 table). Server-side, independent of
@@ -10,7 +13,7 @@ import type { Prisma } from '@recruitflow/database';
  *  1 | Applied or Screening | Interview | Screen note saved                         | GATE_SCREEN_NOTE_MISSING
  *  2 | Interview            | Offer     | Scorecard submitted                       | GATE_SCORECARD_NOT_SUBMITTED
  *  3 | Offer                | Pre-Hire  | (blank in v2) -> accepted offer version   | GATE_OFFER_NOT_ACCEPTED
- *  4 | Pre-Hire             | Joined    | typed joining checks ID, CONTRACT, SCFHS_LICENCE verified    | GATE_JOINING_CHECKS_INCOMPLETE
+ *  4 | Pre-Hire             | Joined    | the job snapshot's required joining checks                   | GATE_JOINING_CHECKS_INCOMPLETE
  *  5 | any open stage       | Rejected  | Reason (from rejection-reasons list)      | GATE_REJECT_REASON_REQUIRED
  */
 export const GATE_CODES = {
@@ -28,10 +31,7 @@ export const WITHDRAWN_BY_CANDIDATE_REASON = 'Withdrawn by candidate';
 /** Always valid even before an org's master data is seeded. */
 export const SYSTEM_REJECTION_REASONS = [REQUISITION_CANCELLED_REASON, DECLINED_OFFER_REASON, WITHDRAWN_BY_CANDIDATE_REASON];
 
-/** B5 follow-up: typed joining checks (no name matching). Gate 4 needs all three verified. */
-export const JOINING_CHECK_TYPES = ['ID', 'CONTRACT', 'SCFHS_LICENCE'] as const;
-export type JoiningCheckType = (typeof JOINING_CHECK_TYPES)[number];
-export const JOINING_CHECK_LABELS: Record<JoiningCheckType, string> = { ID: 'ID', CONTRACT: 'contract', SCFHS_LICENCE: 'SCFHS licence' };
+/** Typed checks. The Joined gate uses the case snapshot; this list is the historical universal set. */
 
 type Tx = Prisma.TransactionClient;
 
@@ -87,7 +87,9 @@ export async function assertStageGate(tx: Tx, application: { id: string; stage: 
     const accepted = await tx.offerVersion.count({ where: { status: 'Accepted', offer: { applicationId: application.id } } });
     if (accepted === 0) throw blocked(GATE_CODES.offer, 'offer-accepted', 'Pre-Hire needs an accepted offer.', ['accepted offer']);
   }
-  if (to === 'Joined') await assertJoiningChecks(tx, application.id);
+  if (to === 'Joined') {
+    await assertCanMarkJoined(tx, { applicationId: application.id, enforceActor: false, enforceRecord: false });
+  }
 }
 
 export const REOPEN_TARGETS = ['Applied', 'Screening', 'Interview'];
@@ -129,12 +131,24 @@ export interface GateState { gate: GateKey; code: string; met: boolean; missing:
  * missing ['reason'] because a reason must be given at the time of rejecting.
  */
 export async function gateStates(
-  tx: Pick<Tx, 'screeningLog' | 'interviewScorecard' | 'offerVersion' | 'joiningCheck'>,
+  tx: Pick<Tx, 'screeningLog' | 'interviewScorecard' | 'offerVersion' | 'joiningCheck'> & {
+    application?: {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      findMany(args: unknown): Promise<any>;
+    };
+  },
   apps: Array<{ id: string; stage: string; rejectionReason?: string | null }>,
 ): Promise<Map<string, GateState[]>> {
   const ids = apps.map((a) => a.id);
   const out = new Map<string, GateState[]>();
   if (!ids.length) return out;
+  const profiles: Array<{ id: string; hiringCase: { requirementSnapshot: unknown } | null; vacancy: { position: { metadata: unknown } | null } }> = typeof tx.application?.findMany === 'function'
+    ? await tx.application.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, hiringCase: { select: { requirementSnapshot: true } }, vacancy: { select: { position: { select: { metadata: true } } } } },
+    })
+    : [];
+  const required = new Map(profiles.map((row) => [row.id, resolveSnapshot(row.hiringCase?.requirementSnapshot, row.vacancy.position?.metadata).checks]));
   const [notes, cards, offers, checks] = await Promise.all([
     tx.screeningLog.findMany({ where: { applicationId: { in: ids }, notes: { not: null } }, select: { applicationId: true, notes: true } }),
     tx.interviewScorecard.findMany({ where: { status: 'Submitted', interview: { applicationId: { in: ids }, status: { not: 'Cancelled' } } }, select: { interview: { select: { applicationId: true } } } }),
@@ -146,7 +160,8 @@ export async function gateStates(
   const accepted = new Set(offers.map((o) => o.offer.applicationId));
   for (const a of apps) {
     const done = new Set(checks.filter((c) => c.applicationId === a.id).map((c) => c.type));
-    const missingChecks = JOINING_CHECK_TYPES.filter((t) => !done.has(t));
+    const needed = required.get(a.id) ?? [...JOINING_CHECK_TYPES];
+    const missingChecks = needed.filter((t) => !done.has(t));
     const rejectedWithReason = a.stage === 'Rejected' && Boolean(a.rejectionReason?.trim());
     out.set(a.id, [
       { gate: 'screen-note', code: GATE_CODES.screenNote, met: noted.has(a.id), missing: noted.has(a.id) ? [] : ['screen note'] },

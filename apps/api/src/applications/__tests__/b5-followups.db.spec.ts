@@ -157,7 +157,7 @@ describe.skipIf(!url)('B5 follow-ups: offer Draft/submit/send, approver note + g
     expect(await err(assertStageGate(prisma, app, 'Joined'))).toMatchObject({ status: 409, code: GATE_CODES.joining });
     await file.setJoiningCheck(user(ids.owner!), app.id, 'ID', { verified: true });
     await file.setJoiningCheck(user(ids.owner!), app.id, 'SCFHS_LICENCE', { verified: true });
-    expect((await err(assertStageGate(prisma, app, 'Joined'))).status).toBe('ok');
+    expect((await err(assertStageGate(prisma, app, 'Joined'))).code).toBe('GATE_OFFER_NOT_ACCEPTED');
     const un = await file.setJoiningCheck(user(ids.owner!), app.id, 'ID', { verified: false });
     expect(un.find((c) => c.type === 'ID')).toMatchObject({ verified: false, verifiedBy: null, verifiedAt: null });
     ids.docApp = app.id; ids.doc = doc.id;

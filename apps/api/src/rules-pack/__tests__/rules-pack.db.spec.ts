@@ -62,12 +62,12 @@ describe('B11 rules pack — static', () => {
     expect(JOB_STATUSES as readonly string[]).not.toContain('Pending Activation');
   });
 
-  it('R6 interviewer exception: only CV, own scorecard (read/submit/revise), plus RSVP/.ics of the interview itself', () => {
+  it('R6 interviewer exception: assigned interview detail, CV, own scorecard (read/submit/revise), plus RSVP/.ics', () => {
     const proto = InterviewsController.prototype as unknown as Record<string, unknown>;
     const allowed = Object.getOwnPropertyNames(proto)
       .filter((m) => typeof proto[m] === 'function' && Reflect.getMetadata(ALLOW_INTERVIEW_ATTENDEE, proto[m] as object) === true)
       .sort();
-    expect(allowed).toEqual(['getInterviewIcs', 'getCandidateCv', 'getScorecards', 'respondToInterview', 'reviseScorecard', 'submitScorecard'].sort());
+    expect(allowed).toEqual(['getInterview', 'getInterviewIcs', 'getCandidateCv', 'getScorecards', 'respondToInterview', 'reviseScorecard', 'submitScorecard'].sort());
   });
 
   it('R7 another owner\'s job is title / site / seats only', () => {
@@ -182,7 +182,7 @@ describe.skipIf(!url)('B11 rules pack — Postgres', () => {
     it('gate 4 joining checks (ID, contract, SCFHS licence) → Joined', async () => {
       await expectBlocked('Joined', GATE_CODES.joining);
       for (const type of ['ID', 'CONTRACT', 'SCFHS_LICENCE']) await prisma.joiningCheck.create({ data: { applicationId: appId, type, verified: true, verifiedAt: new Date() } });
-      await expect(assertStageGate(prisma as never, await app(), 'Joined')).resolves.toBeUndefined();
+      await expectBlocked('Joined', 'FINAL_APPROVAL_REQUIRED');
     });
     it('gate 5 Rejected needs a listed reason', async () => {
       for (const r of ['', 'because']) {

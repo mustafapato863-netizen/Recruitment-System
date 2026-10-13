@@ -44,7 +44,7 @@ const RolesRoute = lazy(() => import('./v2/admin/AdminRoutes').then((m) => ({ de
 const NotificationsPage = lazy(() => import('./pages/NotificationsPage').then((m) => ({ default: m.NotificationsPage })));
 const ProfilePage = lazy(() => import('./pages/ProfilePage').then((m) => ({ default: m.ProfilePage })));
 const EntityLinkRoute = lazy(() => import('./v2/pages/EntityLinkRoute').then((m) => ({ default: m.EntityLinkRoute })));
-// Classic (v1) pages kept reachable from 'More (classic)' until v2 versions exist.
+// Classic (v1) pages. Same PermissionGate as v1. A signed-out request never reaches these routes.
 const HireManagementPage = lazy(() => import('./pages/HireManagementPage').then((m) => ({ default: m.HireManagementPage })));
 const HiringCasePage = lazy(() => import('./pages/HiringCasePage').then((m) => ({ default: m.HiringCasePage })));
 const FinalApprovalInboxPage = lazy(() => import('./pages/FinalApprovalInboxPage').then((m) => ({ default: m.FinalApprovalInboxPage })));
@@ -76,6 +76,7 @@ const PublicJobsPage = lazy(() => import('./public/PublicJobsPage').then((m) => 
 const PublicJobDetailPage = lazy(() => import('./public/PublicJobDetailPage').then((m) => ({ default: m.PublicJobDetailPage })));
 const PublicApplyPage = lazy(() => import('./public/PublicApplyPage').then((m) => ({ default: m.PublicApplyPage })));
 const CandidateSelfSchedulePage = lazy(() => import('./pages/CandidateSelfSchedulePage').then((m) => ({ default: m.CandidateSelfSchedulePage })));
+const CandidatePortalPage = lazy(() => import('./public/CandidatePortalPage').then((m) => ({ default: m.CandidatePortalPage })));
 
 function App() {
   return (
@@ -92,6 +93,9 @@ function App() {
                 <Route path="/accept-invitation" element={<AcceptInvitationPage />} />
                 <Route path="/verify-email" element={<VerifyEmailPage />} />
                 <Route path="/schedule/:token" element={<CandidateSelfSchedulePage />} />
+                <Route path="/portal" element={<CandidatePortalPage />} />
+                <Route path="/portal/applications/:token" element={<CandidatePortalPage />} />
+                <Route path="/my-applications" element={<CandidatePortalPage />} />
                 <Route path="/careers/:organizationCode/jobs" element={<PublicJobsPage />} />
                 <Route path="/careers/:organizationCode/jobs/:vacancyCode/apply" element={<PublicApplyPage />} />
                 <Route path="/careers/:organizationCode/jobs/:vacancyCode" element={<PublicJobDetailPage />} />
@@ -128,7 +132,7 @@ function App() {
 
                   {/* 404 Catch All */}
 
-                  {/* More (classic): v1 pages, same PermissionGate as in v1 (a1682ad). */}
+                  {/* Classic pages, same PermissionGate as in v1 (a1682ad). */}
                   <Route path="/hires/approvals/inbox" element={<PermissionGate requiredPermission="FINAL_HIRING_APPROVAL"><FinalApprovalInboxPage /></PermissionGate>} />
                   <Route path="/hires" element={<PermissionGate requiredPermission="APPLICATION_VIEW"><HireManagementPage /></PermissionGate>} />
                   <Route path="/hires/:id" element={<PermissionGate requiredAnyPermission={['APPLICATION_VIEW', 'APPROVE_OFFERS', 'FINAL_HIRING_APPROVAL', 'LICENSE_CHECK']}><HiringCasePage /></PermissionGate>} />

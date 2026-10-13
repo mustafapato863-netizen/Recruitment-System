@@ -144,7 +144,13 @@ describe.skipIf(!url)('B3 requisition and job lifecycle (scratch Postgres)', () 
 
   it('public apply accepts Open and Partially Filled jobs, not held ones', async () => {
     const org = await prisma.organization.findUniqueOrThrow({ where: { id: ORG } });
-    const pub = new PublicJobsService(prisma, { enforcePublicRequestLimit: async () => undefined } as never, {} as never, {} as never);
+    const pub = new PublicJobsService(
+      prisma,
+      { enforcePublicRequestLimit: async () => undefined } as never,
+      {} as never,
+      {} as never,
+      { issueGrant: async () => ({ token: 'stub', portalPath: '/portal/applications/stub' }) } as never,
+    );
     const id = await makeRequest('Approved', { assignedEmployeeId: ids.owner });
     const job = (await service.activateRequest(id, ORG, ids.manager, {})).vacancy!;
     await prisma.vacancy.update({ where: { id: job.id }, data: { status: 'Partially Filled', joinedHeadcount: 1, openedAt: new Date(Date.now() - 60_000) } });

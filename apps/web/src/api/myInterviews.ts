@@ -31,7 +31,7 @@ export interface MyInterview {
   roomName: string | null;
   myResponse: MyRsvp;
   scorecardStatus: MyScorecardStatus;
-  status: 'Scheduled' | 'Completed' | 'Cancelled' | 'Rescheduled';
+  status: 'Scheduled' | 'Completed' | 'Cancelled' | 'Rescheduled' | 'No-show';
 }
 
 export type ListResult = { available: true; items: MyInterview[] } | { available: false };

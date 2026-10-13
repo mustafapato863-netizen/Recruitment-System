@@ -81,6 +81,7 @@ export class InterviewsController {
   @RequirePermissions('VACANCY_VIEW')
   @UseGuards(TenantScopedGuard)
   @TenantResource({ resource: 'interview', param: 'id' })
+  @AllowInterviewAttendee()
   getInterview(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.interviewsService.getInterview(user.organizationId, id, user);
   }

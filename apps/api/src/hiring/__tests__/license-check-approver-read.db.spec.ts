@@ -84,6 +84,7 @@ describe.skipIf(!url)('LICENSE_CHECK on hiring + final-hire approver read (scrat
     vacancyId = await privateVacancy(prisma, ORG, 'LC');
     await prisma.$transaction([
       prisma.vacancyAssignment.create({ data: { vacancyId, userId: ids.owner, roleCode: 'RECRUITER', assignmentKind: 'PRIMARY', isActive: true } }),
+      prisma.vacancyAssignment.create({ data: { vacancyId, userId: ids.license, roleCode: 'LICENSE_SPECIALIST', assignmentKind: 'SUPPORT', isActive: true } }),
       prisma.vacancy.update({ where: { id: vacancyId }, data: { primaryRecruiterId: ids.owner } }),
     ]);
     await prisma.candidate.create({ data: { id: ids.candidate, organizationId: ORG, candidateCode: `LC-${tag}`, firstName: 'LC', lastName: 'Cand', email: `cand-${tag}@lc.test` } });
@@ -169,10 +170,15 @@ describe.skipIf(!url)('LICENSE_CHECK on hiring + final-hire approver read (scrat
         expect(JSON.stringify(c)).not.toMatch(/@lc\.test|"application"|"vacancy"|"approvals"|Passport/);
       }
     });
-    it('others keep the full payload', async () => {
-      const full = await hiring.getHiringCase(ORG, ids.hiringCase, ap()) as Record<string, unknown>;
+    it('the file owner keeps the full payload; a final approver sees the approval journey only', async () => {
+      const full = await hiring.getHiringCase(ORG, ids.hiringCase, auth(ids.owner, ['RECRUITER'])) as Record<string, unknown>;
       expect(full).toHaveProperty('application');
       expect((full.complianceRequirements as unknown[]).length).toBe(2);
+      expect(JSON.stringify(full.application)).not.toMatch(/currentSalary|expectedSalary/);
+      const journey = await hiring.getHiringCase(ORG, ids.hiringCase, ap()) as Record<string, unknown>;
+      expect(journey).not.toHaveProperty('application');
+      expect(journey).toHaveProperty('approvals');
+      expect(JSON.stringify(journey)).not.toMatch(/currentSalary|expectedSalary|monthlyPackage/);
     });
   });
 

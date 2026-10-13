@@ -7,8 +7,9 @@ import { axeViolations } from '../../../components/v2/__tests__/axe';
 import { fileResponses, type Scenario } from '../../api/__fixtures__/applicationFile';
 
 const api = vi.hoisted(() => ({ getApi: vi.fn(), postApi: vi.fn(), patchApi: vi.fn(), putApi: vi.fn() }));
+const authState = vi.hoisted(() => ({ user: { id: 'u-mariam', displayName: 'Mariam Farag', permissions: [] as string[] } }));
 vi.mock('../../../api/client', async () => ({ ...(await vi.importActual<object>('../../../api/client')), ...api }));
-vi.mock('../../../auth/AuthContext', () => ({ useAuth: () => ({ user: { id: 'u-mariam', displayName: 'Mariam Farag' } }) }));
+vi.mock('../../../auth/AuthContext', () => ({ useAuth: () => ({ user: authState.user }) }));
 import { loadApplicationFile } from '../../api/applicationFile';
 import { ApplicationFileV2 } from '../ApplicationFileV2';
 import { cairoIso } from '../../drawers/FileDrawers';
@@ -29,7 +30,7 @@ function renderFile(path = '/applications/a1') {
 }
 const PAY = /42000|42,000|504000|504,000|30000|EGP|AED|salary|package|compensation/i;
 
-beforeEach(() => { Object.values(api).forEach((f) => f.mockReset()); api.postApi.mockImplementation(async (p: string) => (p === '/offers' ? 'o1' : {})); api.patchApi.mockImplementation(async () => ({ version: 8 })); });
+beforeEach(() => { authState.user.permissions = []; Object.values(api).forEach((f) => f.mockReset()); api.postApi.mockImplementation(async (p: string) => (p === '/offers' ? 'o1' : { id: 'h1', alreadyJoined: false })); api.patchApi.mockImplementation(async () => ({ version: 8 })); });
 afterEach(() => document.documentElement.removeAttribute('data-ui'));
 
 describe('pay safety', () => {
@@ -439,7 +440,7 @@ describe('E17–E20 offer', () => {
 });
 
 describe('E21 Pre-hire / E22 Reject', () => {
-  it('E21: typed joining checks only — PUT /applications/:id/joining-checks/:type; Joined disabled until all three', async () => {
+  it('E21: required checks only — PUT joining-checks; submit stays disabled until every required check is verified', async () => {
     const u = userEvent.setup();
     serve('prehire');
     const after = (fileResponses('prehire')['/applications/a1/joining-checks'] as Array<Record<string, unknown>>).map((c) => (c.type === 'CONTRACT' ? { ...c, verified: true, verifiedBy: { id: 'u-mariam', name: 'Mariam Farag' }, verifiedAt: '2026-10-10T08:00:00.000Z' } : c));
@@ -447,22 +448,69 @@ describe('E21 Pre-hire / E22 Reject', () => {
     renderFile('/applications/a1?drawer=prehire');
     const d = await screen.findByRole('dialog');
     expect(within(d).getByRole('list', { name: 'Joining checks' })).toHaveTextContent('ID · verified by Mariam Farag, 9 Oct');
-    expect(within(d).getByRole('button', { name: 'Move to Joined' })).toBeDisabled();
+    expect(within(d).getByRole('button', { name: 'Submit for final approval' })).toBeDisabled();
+    expect(within(d).queryByRole('button', { name: 'Move to Joined' })).toBeNull();
     await u.click(within(d).getByRole('button', { name: 'Mark Contract verified' }));
     await waitFor(() => expect(api.putApi).toHaveBeenCalledWith('/applications/a1/joining-checks/CONTRACT', { verified: true }));
     expect(await within(d).findByRole('button', { name: 'Undo Contract verified' })).toBeInTheDocument();
-    expect(within(d).getByRole('button', { name: 'Move to Joined' })).toBeDisabled();
+    expect(within(d).getByRole('button', { name: 'Submit for final approval' })).toBeDisabled();
     expect(api.patchApi).not.toHaveBeenCalledWith(expect.stringMatching(/compliance/), expect.anything());
   });
-  it('E21: all verified → Move to Joined; server gate 409 shows the missing checks from missing[]', async () => {
-    const u = userEvent.setup();
-    serve('prehire-done');
-    api.patchApi.mockRejectedValue(new ApiError(409, 'x', { statusCode: 409, code: 'GATE_JOINING_CHECKS_INCOMPLETE', gate: 'joining-checks', missing: ['SCFHS_LICENCE'], message: 'x' }, { code: 'GATE_JOINING_CHECKS_INCOMPLETE' }));
+  it('E21: a technical file lists only the checks it was given', async () => {
+    const checks = (fileResponses('prehire-done')['/applications/a1/joining-checks'] as Array<Record<string, unknown>>).filter((c) => c.type !== 'SCFHS_LICENCE');
+    serve('prehire-done', { '/applications/a1/joining-checks': checks });
     renderFile('/applications/a1?drawer=prehire');
     const d = await screen.findByRole('dialog');
-    await u.click(within(d).getByRole('button', { name: 'Move to Joined' }));
-    expect(api.patchApi).toHaveBeenCalledWith('/applications/a1/stage', { stage: 'Joined', expectedStage: 'Pre-Hire', expectedVersion: 7 });
+    const list = within(d).getByRole('list', { name: 'Joining checks' });
+    expect(list).toHaveTextContent('ID');
+    expect(list).toHaveTextContent('Contract');
+    expect(list).not.toHaveTextContent('SCFHS');
+    expect(within(d).getByRole('button', { name: 'Submit for final approval' })).toBeEnabled();
+  });
+  it('E21: all required checks verified submits for final approval and does not mark Joined', async () => {
+    const u = userEvent.setup();
+    serve('prehire-done');
+    renderFile('/applications/a1?drawer=prehire');
+    const d = await screen.findByRole('dialog');
+    await u.click(within(d).getByRole('button', { name: 'Submit for final approval' }));
+    await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/hiring/h1/submit', {}));
+    expect(api.patchApi).not.toHaveBeenCalledWith('/applications/a1/stage', expect.anything());
+    expect(api.postApi).not.toHaveBeenCalledWith('/hiring/h1/joining', expect.anything());
+  });
+  it('E21: the responsible recruiter records joining once; a 409 still names the missing check', async () => {
+    const u = userEvent.setup();
+    authState.user.permissions = ['RECORD_ACTUAL_JOINING'];
+    const hiring = (fileResponses('prehire-done')['/hiring'] as Array<Record<string, unknown>>).map((h) => ({ ...h, status: 'Awaiting Joining' }));
+    serve('prehire-done', { '/hiring': hiring });
+    api.postApi.mockRejectedValueOnce(new ApiError(409, 'x', { statusCode: 409, code: 'GATE_JOINING_CHECKS_INCOMPLETE', gate: 'joining-checks', missing: ['SCFHS_LICENCE'], message: 'x' }, { code: 'GATE_JOINING_CHECKS_INCOMPLETE' }));
+    renderFile('/applications/a1?drawer=prehire');
+    const d = await screen.findByRole('dialog');
+    await u.click(within(d).getByRole('button', { name: 'Record actual joining' }));
+    expect(api.postApi).toHaveBeenCalledWith('/hiring/h1/joining', expect.objectContaining({ status: 'Joined' }));
+    expect(api.patchApi).not.toHaveBeenCalledWith('/applications/a1/stage', expect.anything());
     expect(await within(d).findByTestId('drawer-error')).toHaveTextContent('Missing: SCFHS licence.');
+  });
+  it('E21: a second record does not claim another hire', async () => {
+    const u = userEvent.setup();
+    authState.user.permissions = ['RECORD_ACTUAL_JOINING'];
+    const hiring = (fileResponses('prehire-done')['/hiring'] as Array<Record<string, unknown>>).map((h) => ({ ...h, status: 'Awaiting Joining' }));
+    serve('prehire-done', { '/hiring': hiring });
+    api.postApi.mockResolvedValueOnce({ success: true, alreadyJoined: true });
+    renderFile('/applications/a1?drawer=prehire');
+    const d = await screen.findByRole('dialog');
+    await u.click(within(d).getByRole('button', { name: 'Record actual joining' }));
+    expect(await within(d).findByRole('status')).toHaveTextContent('The completed-hire count did not change.');
+  });
+  it('E21: a licence check sends its expiry date', async () => {
+    const u = userEvent.setup();
+    serve('prehire');
+    api.putApi.mockResolvedValue(fileResponses('prehire')['/applications/a1/joining-checks']);
+    renderFile('/applications/a1?drawer=prehire');
+    const d = await screen.findByRole('dialog');
+    expect(within(d).getByRole('button', { name: 'Mark SCFHS licence verified' })).toBeDisabled();
+    await u.type(within(d).getByLabelText(/SCFHS licence expiry/), '2027-06-01');
+    await u.click(within(d).getByRole('button', { name: 'Mark SCFHS licence verified' }));
+    await waitFor(() => expect(api.putApi).toHaveBeenCalledWith('/applications/a1/joining-checks/SCFHS_LICENCE', { verified: true, expiryDate: '2027-06-01T00:00:00.000Z' }));
   });
   it('E21 from Offer: gated on acceptance, then moves to Pre-hire and opens the hiring case', async () => {
     const u = userEvent.setup();

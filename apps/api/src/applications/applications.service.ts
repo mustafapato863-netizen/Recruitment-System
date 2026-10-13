@@ -29,7 +29,8 @@ import { EmailOutboxService } from '../email/email-outbox.service';
 import { AccessControlService } from '../access-control/access-control.service';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import { EmailTemplatesService } from '../email-templates/email-templates.service';
-import { assertEligibleOwner } from '../common/access/file-access';
+import { assertEligibleOwner, loadAccessProfile } from '../common/access/file-access';
+import { assertCanMarkJoined } from '../hiring/joining-policy';
 import type {
   ApplicationQueryDto,
   CreateApplicationDto,
@@ -691,13 +692,28 @@ export class ApplicationsService {
       if (changed.count !== 1) return null;
 
       if (dto.stage === 'Joined') {
+        const profile = user ? await loadAccessProfile(tx, user) : null;
+        const joiningDate = dto.actualJoiningDate ? new Date(dto.actualJoiningDate) : null;
+        await assertCanMarkJoined(tx, {
+          applicationId: id,
+          actor: profile,
+          actualJoiningDate: joiningDate,
+          enforceActor: true,
+          enforceRecord: true,
+        });
         const vacancy = await tx.vacancy.findUnique({
           where: { id: application.vacancyId },
         });
         if (vacancy) {
-          // B3: Joined fills one seat -> Partially Filled / Filled, with history.
           await recordJoin(tx, vacancy, actorUserId ?? null);
         }
+        await tx.hiringCase.updateMany({
+          where: { applicationId: id, organizationId },
+          data: {
+            status: 'Joined',
+            ...(joiningDate ? { actualJoiningDate: joiningDate } : {}),
+          },
+        });
       }
 
       await tx.applicationStatusHistory.create({
@@ -1000,6 +1016,7 @@ export class ApplicationsService {
       vacancyId: record.vacancyId,
       candidateId: record.candidateId,
       stage: record.stage as ApplicationStage,
+      rejectionReason: record.rejectionReason ?? null,
       allowedTransitions: ALLOWED_STAGE_TRANSITIONS[record.stage as ApplicationStage] ?? [],
       version: record.version ?? 1,
       source: record.source,

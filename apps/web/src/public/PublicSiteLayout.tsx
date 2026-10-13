@@ -7,7 +7,7 @@ export function PublicSiteLayout({
   organizationName,
   children,
 }: {
-  organizationCode: string;
+  organizationCode?: string;
   organizationName?: string;
   children: ReactNode;
 }) {
@@ -16,7 +16,7 @@ export function PublicSiteLayout({
       <header className="border-b border-rf-border-subtle bg-rf-surface/95 backdrop-blur">
         <div className="mx-auto flex w-full max-w-[1120px] items-center justify-between gap-4 px-4 py-4 sm:px-6">
           <Link
-            to={`/careers/${encodeURIComponent(organizationCode)}/jobs`}
+            to={organizationCode ? `/careers/${encodeURIComponent(organizationCode)}/jobs` : '/portal'}
             className="flex min-h-10 items-center gap-2.5 no-underline"
           >
             <span className="grid h-9 w-9 place-items-center rounded-xl bg-rf-action text-rf-on-action shadow-[var(--shadow-xs)]" aria-hidden="true">

@@ -384,6 +384,7 @@ async function main() {
       { code: 'OFFER_PAY_VIEW', name: 'View offer pay', description: 'See offer base pay, package and component amounts. Current/expected salary still needs VIEW_CURRENT_SALARY.' },
       { code: 'DOWNLOAD_DOCUMENTS', description: 'Download private candidate and hiring documents.' },
       { code: 'FINAL_HIRING_APPROVAL', description: 'Perform final hiring approval gate.' },
+      { code: 'RECORD_ACTUAL_JOINING', name: 'Record actual joining', description: 'Record that an approved candidate actually joined. Does not grant final hiring approval.' },
       { code: 'OVERRIDE_WORKFLOW', description: 'Override workflow rules and bypass validations.' },
       // Notifications & Tasks (Phase 10)
       { code: 'NOTIFICATION_VIEW', description: 'View own notifications and manage read status.' },
@@ -435,7 +436,7 @@ async function main() {
         'MASTER_DATA_VIEW',
         'CANDIDATE_VIEW', 'CANDIDATE_CREATE', 'CANDIDATE_EDIT',
         'APPLICATION_VIEW', 'APPLICATION_CREATE', 'APPLICATION_MOVE_STAGE',
-        'VIEW_CANDIDATE_PII', 'DOWNLOAD_DOCUMENTS',
+        'VIEW_CANDIDATE_PII', 'DOWNLOAD_DOCUMENTS', 'RECORD_ACTUAL_JOINING',
         'NOTIFICATION_VIEW', 'TASK_VIEW', 'TASK_UPDATE_STATUS',
       ],
       HR_MANAGER: [

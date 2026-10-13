@@ -57,7 +57,7 @@ export function IntegrationsV2() {
           {items.length === 0 ? <EmptyStateV2 title="No integrations set up" body="Careers publishing and mail appear here once the server has them." /> : null}
         </div>
       ) : null}
-      <p className="rf2-inline-note"><Info aria-hidden="true" /> Only the careers site and mail are connected in v2. WhatsApp messages are sent by hand from the drawers (wa.me link); calendar and Meet are not used.</p>
+      <p className="rf2-inline-note"><Info aria-hidden="true" /> A saved status is not a verified connection. Use Test connection. WhatsApp messages are sent by hand from the drawers (wa.me link); calendar and Meet are not used.</p>
     </div>
   );
 }

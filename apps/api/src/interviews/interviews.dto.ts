@@ -103,7 +103,7 @@ export class UpdateInterviewDto {
   roomName?: string | null;
 
   @IsOptional()
-  @IsEnum(['Scheduled', 'Completed', 'Cancelled', 'Rescheduled'])
+  @IsEnum(['Scheduled', 'Completed', 'Cancelled', 'Rescheduled', 'No-show'])
   status?: InterviewStatus;
 
   @IsOptional()

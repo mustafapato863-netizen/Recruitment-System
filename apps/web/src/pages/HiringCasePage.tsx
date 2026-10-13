@@ -66,10 +66,7 @@ export function HiringCasePage() {
       : 'Hiring Case'
   );
 
-  const canConfirmJoining = Boolean(
-    user?.permissions?.includes('FINAL_HIRING_APPROVAL') ||
-    user?.permissions?.includes('HIRING_CASE_APPROVE'),
-  );
+  const canConfirmJoining = Boolean(user?.permissions?.includes('RECORD_ACTUAL_JOINING'));
 
   const loadCase = async () => {
     if (!id) return;
@@ -128,14 +125,20 @@ export function HiringCasePage() {
     setActionMessage(`Saved verification details for ${label}: "${notes}"`);
   };
 
-  const handleConfirmJoining = async () => {
+  const recordJoining = async () => {
     if (!id) return;
-    await postApi(`/hiring/${id}/joining`, {
+    const result = await postApi<{ alreadyJoined?: boolean }>(`/hiring/${id}/joining`, {
       status: 'Joined',
       actualJoiningDate: new Date().toISOString(),
     });
-    setActionMessage('Candidate confirmed as Joined. Vacancy headcount has been atomically incremented.');
+    setActionMessage(result?.alreadyJoined
+      ? 'This hire was already recorded. The completed-hire count did not change.'
+      : 'Joining recorded once. The completed-hire count increased by one.');
     await loadCase();
+  };
+
+  const handleConfirmJoining = async () => {
+    await recordJoining();
   };
 
   const triggerFinalApproval = (decision: 'Approve' | 'Reject') => {
@@ -145,7 +148,7 @@ export function HiringCasePage() {
       isOpen: true,
       title: isApprove ? `Grant Final Hiring Approval — ${hiringCase.candidateName ?? '—'}` : `Reject Hiring Case — ${hiringCase.candidateName ?? '—'}`,
       description: isApprove
-        ? `Authorizing final hire for ${hiringCase.candidateName ?? '—'} for ${hiringCase.positionTitle ?? '—'}. This will move the case to Awaiting Joining status.`
+        ? `Approve ${hiringCase.candidateName ?? '—'} for ${hiringCase.positionTitle ?? '—'}. The case moves to Awaiting Joining. The completed-hire count stays the same until the responsible recruiter records joining.`
         : `Rejecting this hiring case will halt candidate onboarding.`,
       confirmLabel: isApprove ? 'Grant Approval' : 'Reject Case',
       tone: isApprove ? 'success' : 'danger',
@@ -175,7 +178,7 @@ export function HiringCasePage() {
     setConfirmDialog({
       isOpen: true,
       title: `Confirm Candidate Joining — ${hiringCase.candidateName ?? '—'}`,
-      description: `Confirm that ${hiringCase.candidateName ?? '—'} has reported for work. This will automatically update the vacancy filled headcount.`,
+      description: `Record that ${hiringCase.candidateName ?? '—'} has started. A repeated confirmation does not count a second hire.`,
       confirmLabel: 'Confirm Joining',
       tone: 'success',
       icon: 'check-circle',
@@ -184,12 +187,7 @@ export function HiringCasePage() {
         setError(null);
         setActionMessage(null);
         try {
-          await postApi(`/hiring/${id}/joining`, {
-            status: 'Joined',
-            actualJoiningDate: new Date().toISOString(),
-          });
-          setActionMessage('Candidate confirmed as Joined. Vacancy headcount has been atomically incremented.');
-          await loadCase();
+          await recordJoining();
         } catch (reason: unknown) {
           setError(getErrorMessage(reason));
         } finally {
@@ -259,12 +257,14 @@ export function HiringCasePage() {
         tone: (app.status === 'Approved' ? 'success' : app.status === 'Rejected' ? 'danger' : 'warning') as 'success' | 'danger' | 'warning',
         description: app.comment || undefined,
       }))
-    : [{
-        id: 'created',
-        title: 'Hiring Case Created',
-        timestamp: new Date(hiringCase.createdAt).toLocaleString(),
-        tone: 'success',
-      }];
+    : hiringCase.createdAt
+      ? [{
+          id: 'created',
+          title: 'Hiring Case Created',
+          timestamp: new Date(hiringCase.createdAt).toLocaleString(),
+          tone: 'success' as const,
+        }]
+      : [];
 
   // Plain derivation (not a hook) so it stays valid below the early returns.
   const hiringFeedEntries: FeedEntry[] = (() => {
@@ -320,12 +320,14 @@ export function HiringCasePage() {
     }
 
     // 3. Case creation system event
-    entries.push({
-      type: 'system',
-      id: `case-created-${hiringCase.id}`,
-      label: `Hiring case initiated with status: ${hiringCase.status}`,
-      createdAt: hiringCase.createdAt,
-    });
+    if (hiringCase.createdAt) {
+      entries.push({
+        type: 'system',
+        id: `case-created-${hiringCase.id}`,
+        label: `Hiring case initiated with status: ${hiringCase.status}`,
+        createdAt: hiringCase.createdAt,
+      });
+    }
 
     // 4. Joining event if recorded
     if (hiringCase.actualJoiningDate) {
@@ -388,17 +390,17 @@ export function HiringCasePage() {
               </Button>
             </>
           )}
-          {!licenseOnly && hiringCase.status === 'Awaiting Joining' && (
+          {!licenseOnly && canConfirmJoining && hiringCase.status === 'Awaiting Joining' && (
             <Button
               variant="success"
               size="sm"
               loading={busyAction === 'joining'}
-              loadingLabel="Confirming"
+              loadingLabel="Recording"
               disabled={!isReady}
-              title={!isReady ? 'Verify required checks before confirming joining' : undefined}
+              title={!isReady ? 'Verify required checks before recording joining' : undefined}
               onClick={triggerConfirmJoining}
             >
-              Confirm joined
+              Record actual joining
             </Button>
           )}
         </>
@@ -448,8 +450,10 @@ export function HiringCasePage() {
                 ? 'This hire is waiting for final approval.'
                 : hiringCase.status === 'Awaiting Joining'
                   ? isReady
-                    ? 'Confirm the candidate has joined.'
-                    : 'Finish required checks, then confirm joining.'
+                    ? canConfirmJoining
+                      ? 'Record actual joining. This counts the hire once.'
+                      : 'Waiting for the responsible recruiter to record joining.'
+                    : 'Finish required checks, then record joining.'
                   : hiringCase.status === 'Joined'
                     ? 'This candidate has joined.'
                     : `Status: ${hiringCase.status}`}
@@ -466,9 +470,9 @@ export function HiringCasePage() {
               Approve
             </Button>
           )}
-          {hiringCase.status === 'Awaiting Joining' && (
+          {canConfirmJoining && hiringCase.status === 'Awaiting Joining' && (
             <Button variant="primary" size="sm" loading={busyAction === 'joining'} disabled={!isReady} onClick={triggerConfirmJoining}>
-              Confirm joined
+              Record actual joining
             </Button>
           )}
           {hiringCase.applicationId && (
@@ -480,7 +484,7 @@ export function HiringCasePage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 flex flex-col gap-6">
+        <div className={licenseOnly ? 'flex flex-col gap-6 lg:col-span-3' : 'lg:col-span-2 flex flex-col gap-6'}>
           {/* Compliance Progress Bar */}
           <section className="rf-panel rounded-2xl border border-rf-border-subtle/90 bg-white p-5 shadow-xs">
             <div className="flex justify-between items-center mb-2">
@@ -540,7 +544,7 @@ export function HiringCasePage() {
           </details>
         </div>
 
-        <aside className="flex flex-col gap-6">
+        {licenseOnly ? null : <aside className="flex flex-col gap-6">
           <section className="rf-panel rf-detail-hero rounded-2xl border border-rf-border-subtle/90 bg-white p-5 shadow-xs">
             <div className="pb-3 border-b border-rf-border-subtle mb-4">
               <h3 className="text-xs font-bold text-rf-ink m-0">Approvals</h3>
@@ -563,11 +567,11 @@ export function HiringCasePage() {
               </div>
               <div>
                 <span className="text-[11px] text-rf-ink-muted font-medium block mb-0.5">Created</span>
-                <strong className="text-rf-ink font-bold">{new Date(hiringCase.createdAt).toLocaleDateString('en-GB')}</strong>
+                <strong className="text-rf-ink font-bold">{hiringCase.createdAt ? new Date(hiringCase.createdAt).toLocaleDateString('en-GB') : '—'}</strong>
               </div>
             </div>
           </section>
-        </aside>
+        </aside>}
       </div>
 
       <ConfirmDialog

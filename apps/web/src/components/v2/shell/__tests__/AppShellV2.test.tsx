@@ -52,59 +52,56 @@ describe('nav per seat', () => {
   it.each([
     ['employee', ['My Work', 'Open jobs', 'Candidates']],
     ['manager', ['Team work', 'Requisitions', 'Team result']],
-    ['admin', ['Users', 'Reports']],
+    ['admin', ['Users', 'Roles', 'Pipeline template', 'Master data', 'Templates', 'Reports', 'Audit', 'Integrations']],
   ] as const)('%s shows only daily destinations in the main menu', (seat, labels) => {
     renderShell(seat, user(ALL, [seat === 'manager' ? 'HIRING_MANAGER' : seat === 'admin' ? 'ADMINISTRATOR' : 'RECRUITER']));
     const nav = screen.getByRole('navigation', { name: SEAT_NAV[seat].heading });
     expect(within(nav).getAllByRole('link').map((a) => a.textContent)).toEqual(labels);
   });
 
-  it('hides unavailable items and keeps occasional work in a permission-filtered panel', async () => {
-    const u = userEvent.setup();
+  it('hides unavailable items and lists permitted classic work outside the daily menu', () => {
     renderShell('employee', user(['VACANCY_VIEW']));
     const nav = screen.getByRole('navigation', { name: SEAT_NAV.employee.heading });
     expect(within(nav).getAllByRole('link').map((a) => a.textContent)).toEqual(['My Work', 'Open jobs']);
-    expect(screen.queryByRole('link', { name: 'All interviews' })).not.toBeInTheDocument();
-    await u.click(screen.getByRole('button', { name: 'Workspace tools' }));
-    const tools = screen.getByRole('dialog', { name: 'Workspace tools' });
-    expect(within(tools).getAllByRole('link').map((a) => a.getAttribute('href'))).toEqual(['/interviews', '/interviews/calendar', '/classic/vacancies']);
+    expect(within(nav).queryByRole('link', { name: 'All interviews' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'More (classic)' })).not.toBeInTheDocument();
+    const retained = screen.getByRole('navigation', { name: 'Retained work' });
+    expect(within(retained).getAllByRole('link').map((a) => a.getAttribute('href'))).toEqual(['/interviews', '/interviews/calendar', '/classic/vacancies']);
     expect(screen.queryByText(/locked/i)).not.toBeInTheDocument();
   });
 
-  it('searches tools, handles no matches, and returns focus on Escape', async () => {
+  it('retained classic links are keyboard links and the More menu is absent', async () => {
     const u = userEvent.setup();
-    renderShell('employee');
-    const trigger = screen.getByRole('button', { name: 'Workspace tools' });
-    await u.click(trigger);
-    const search = screen.getByRole('searchbox', { name: 'Find a tool' });
-    expect(search).toHaveFocus();
-    await u.type(search, 'licence');
-    expect(screen.getByRole('link', { name: 'Licences' })).toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'All offers' })).not.toBeInTheDocument();
-    await u.clear(search);
-    await u.type(search, 'no matching destination');
-    expect(screen.getByRole('status')).toHaveTextContent('No tools match');
-    await u.keyboard('{Escape}');
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(trigger).toHaveFocus();
-    await u.click(trigger);
-    expect(screen.getByRole('searchbox', { name: 'Find a tool' })).toHaveValue('');
+    renderShell('employee', user(['APPLICATION_VIEW']));
+    expect(screen.queryByRole('button', { name: 'More (classic)' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('searchbox', { name: 'Find a tool' })).not.toBeInTheDocument();
+    const retained = screen.getByRole('navigation', { name: 'Retained work' });
+    const hiring = within(retained).getByRole('link', { name: 'Hiring cases' });
+    hiring.focus();
+    await u.keyboard('{Enter}');
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Hiring cases');
   });
 
-  it('groups admin configuration into Settings & tools, preserving links and keyboard focus', async () => {
-    const u = userEvent.setup();
-    renderShell('admin', user([], ['ADMINISTRATOR']), '/roles');
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Roles');
-    const trigger = screen.getByRole('button', { name: 'Settings & tools' });
-    expect(trigger).toHaveAttribute('data-active', 'true');
-    await u.click(trigger);
-    const dialog = screen.getByRole('dialog', { name: 'Settings & tools' });
-    expect(within(dialog).getByRole('link', { name: 'Roles' })).toHaveAttribute('aria-current', 'page');
-    expect(within(dialog).getByRole('link', { name: 'Templates' })).toHaveAttribute('href', '/email-templates');
-    expect(await runAxe(dialog)).toEqual([]);
-    await u.click(within(dialog).getByRole('link', { name: 'Master data' }));
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Master data');
+  it('keeps admin destinations in the menu and classic pages reachable without a More menu', async () => {
+    renderShell('admin', user([], ['ADMINISTRATOR']), '/hires');
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Hiring cases');
+    const nav = screen.getByRole('navigation', { name: SEAT_NAV.admin.heading });
+    expect(within(nav).getByRole('link', { name: 'Roles' })).toHaveAttribute('href', '/roles');
+    expect(within(nav).getByRole('link', { name: 'Templates' })).toHaveAttribute('href', '/email-templates');
+    expect(screen.queryByRole('button', { name: 'More (classic)' })).not.toBeInTheDocument();
+    const retained = screen.getByRole('navigation', { name: 'Retained work' });
+    expect(within(retained).queryByRole('link', { name: 'Roles' })).not.toBeInTheDocument();
+    expect(within(retained).queryByRole('link', { name: 'Templates' })).not.toBeInTheDocument();
+    expect(within(retained).getByRole('link', { name: 'Hiring cases' })).toHaveAttribute('href', '/hires');
+    expect(within(retained).getByRole('link', { name: 'Joinings' })).toHaveAttribute('href', '/joinings');
+    expect(await runAxe(retained)).toEqual([]);
+  });
+
+  it('an old classic URL still titles the authorized page', () => {
+    renderShell('admin', user([], ['ADMINISTRATOR']), '/joinings');
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Joinings');
+    expect(screen.queryByRole('button', { name: 'More (classic)' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Joinings' })).toHaveAttribute('href', '/joinings');
   });
 
   it.each([
@@ -115,24 +112,24 @@ describe('nav per seat', () => {
     const nav = screen.getByRole('navigation', { name: SEAT_NAV.employee.heading });
     expect(within(nav).getAllByRole('link')).toHaveLength(1);
     expect(within(nav).getByRole('link', { name: label })).toHaveAttribute('aria-current', 'page');
-    expect(screen.queryByRole('button', { name: 'Workspace tools' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'More (classic)' })).not.toBeInTheDocument();
   });
 
   it('interviewer-only users never see jobs or hiring tools that redirect away from their work', () => {
     renderShell('employee', user(['VACANCY_VIEW', 'INTERVIEW_PARTICIPATE'], ['INTERVIEWER']), '/my-interviews');
     expect(screen.getByRole('link', { name: 'My interviews' })).toHaveAttribute('aria-current', 'page');
     expect(screen.queryByRole('link', { name: 'Open jobs' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Workspace tools' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'More (classic)' })).not.toBeInTheDocument();
   });
 
-  it('does not offer an admin tool when its route requires a stronger permission', async () => {
-    const u = userEvent.setup();
+  it('does not offer an admin tool when its route requires a stronger permission', () => {
     renderShell('admin', user(['APPLICATION_VIEW'], ['CUSTOM_ADMIN']), '/reports');
-    await u.click(screen.getByRole('button', { name: 'Settings & tools' }));
-    const panel = screen.getByRole('dialog');
-    expect(within(panel).queryByRole('link', { name: 'Templates' })).not.toBeInTheDocument();
-    expect(within(panel).queryByRole('link', { name: 'Roles' })).not.toBeInTheDocument();
-    expect(within(panel).getByRole('link', { name: 'Hiring cases' })).toHaveAttribute('href', '/hires');
+    expect(screen.queryByRole('button', { name: 'More (classic)' })).not.toBeInTheDocument();
+    const retained = screen.getByRole('navigation', { name: 'Retained work' });
+    expect(within(retained).queryByRole('link', { name: 'Templates' })).not.toBeInTheDocument();
+    expect(within(retained).queryByRole('link', { name: 'Roles' })).not.toBeInTheDocument();
+    expect(within(retained).getByRole('link', { name: 'Hiring cases' })).toHaveAttribute('href', '/hires');
+    expect(screen.queryByRole('link', { name: 'Roles' })).not.toBeInTheDocument();
   });
 
   it('manager has no Approvals item (v2: not a destination)', () => {
@@ -140,7 +137,7 @@ describe('nav per seat', () => {
     expect(SEAT_NAV.manager.items.some((i) => /approval/i.test(i.label))).toBe(false);
   });
 
-  it('More (classic) mirrors each v1 PermissionGate; admins see all; interviewer-only users none', () => {
+  it('retained classic items mirror each v1 PermissionGate; admins see all; interviewer-only users none', () => {
     const keys = (perms: string[], admin = false, io = false) => permittedClassicItems(perms, admin, io).map((i) => i.to);
     expect(keys(['FINAL_HIRING_APPROVAL'])).toEqual(['/hires/approvals/inbox']);
     expect(keys(['APPLICATION_VIEW'])).toEqual(['/hires', '/licenses', '/joinings', '/offers']);

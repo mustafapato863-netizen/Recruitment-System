@@ -16,7 +16,7 @@ import { buildTree, flatten, isDescendant, ownedWork } from '../usersApi';
 
 let paths: Record<string, unknown> = {};
 const serve = (extra: Record<string, unknown> = {}) => {
-  paths = { '/users?page=1&pageSize=100': fx.users, '/roles': fx.roles, '/roles/permissions': fx.perms, ...extra };
+  paths = { '/users?directory=1&page=1&pageSize=100': fx.users, '/roles': fx.roles, '/roles/permissions': fx.perms, ...extra };
   api.getApi.mockImplementation(async (p: string) => { const v = paths[p]; if (v instanceof Error) throw v; if (v === undefined) throw new ApiError(404, `no ${p}`); return v; });
 };
 const Loc = () => <div data-testid="loc">{useLocation().search}</div>;

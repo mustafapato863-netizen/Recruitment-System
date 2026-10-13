@@ -2,10 +2,10 @@
  * Components consume semantic roles; light and dark values remain centralized here.
  * Brand: Saudi German Health (SGH) — Cyan #00A3E0 / Emerald #00A859 */
 :root {
-  /* Typography — SGH Official: Geist */
-  --font-sans: 'Geist', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-heading: 'Geist', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-rf-heading: 'Geist', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  /* Typography — approved SGH desktop: IBM Plex Sans */
+  --font-sans: 'IBM Plex Sans', 'Segoe UI', sans-serif;
+  --font-heading: 'IBM Plex Sans', 'Segoe UI', sans-serif;
+  --font-rf-heading: 'IBM Plex Sans', 'Segoe UI', sans-serif;
 
   /* Surfaces & Canvas */
   --color-canvas: #f8fafc;

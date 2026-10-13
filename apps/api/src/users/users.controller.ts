@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, ParseUUIDPipe, UseGuards, HttpException, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, ParseUUIDPipe, Query, UseGuards, HttpException, HttpStatus } from '@nestjs/common';
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { UsersService } from './users.service';
 import { CreateUserDto, UpdateUserDto, CreateInvitationDto } from './users.dto';
@@ -28,8 +28,8 @@ export class UsersController {
 
   @Get()
   @RequirePermissions('USERS_VIEW')
-  list(@CurrentUser() user: AuthUser) {
-    return this.usersService.list(user.organizationId);
+  list(@CurrentUser() user: AuthUser, @Query('directory') directory?: string) {
+    return this.usersService.list(user.organizationId, directory === '1');
   }
 
   /** B2-16: any signed-in user gets HIS OWN reports (the list is the caller's reporting tree only), so a Hiring Manager's Team work and requisition picker work. */

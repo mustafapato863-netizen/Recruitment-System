@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { getApi, putApi } from '../api/client';
 import { PageFrame } from '../components/ui/PageFrame';
 import { Card } from '../components/ui/Card';
 import { Button } from '../components/ui/Button';
@@ -87,22 +88,65 @@ const DEFAULT_LEVEL_TARGETS: PositionLevelTarget[] = [
 
 const STORAGE_KEY = 'recruitflow_position_level_targets';
 
+interface PositionLevelDocument {
+  persisted: boolean;
+  levels: PositionLevelTarget[];
+}
+
+function levelPayload(level: PositionLevelTarget) {
+  return {
+    levelCode: level.levelCode,
+    levelName: level.levelName,
+    category: level.category,
+    dailyCalls: level.dailyCalls,
+    dailyScreenings: level.dailyScreenings,
+    monthlyInterviews: level.monthlyInterviews,
+    monthlyOffers: level.monthlyOffers,
+    targetAcceptanceRate: level.targetAcceptanceRate,
+    slaScorecardHours: level.slaScorecardHours,
+  };
+}
+
 export function PositionLevelTargetSettingsPage() {
   const { user } = useAuth();
-  const [targets, setTargets] = useState<PositionLevelTarget[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      return saved ? JSON.parse(saved) : DEFAULT_LEVEL_TARGETS;
-    } catch {
-      return DEFAULT_LEVEL_TARGETS;
-    }
-  });
+  const [targets, setTargets] = useState<PositionLevelTarget[]>(DEFAULT_LEVEL_TARGETS);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
 
   const [selectedBranch, setSelectedBranch] = useState('ALL');
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
 
   const canEdit = user?.permissions.includes('VACANCY_REQUEST_APPROVE') || user?.permissions.includes('USERS_MANAGE') || user?.permissions.includes('VACANCY_MANAGE');
+
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      try {
+        const remote = await getApi<PositionLevelDocument>('/position-level-targets');
+        if (!live) return;
+        let levels = remote.levels?.length ? remote.levels : DEFAULT_LEVEL_TARGETS;
+        if (!remote.persisted) {
+          try {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            const parsed = saved ? JSON.parse(saved) as PositionLevelTarget[] : null;
+            if (Array.isArray(parsed) && parsed.length) levels = parsed;
+          } catch {
+            /* keep the server defaults */
+          }
+        } else {
+          localStorage.removeItem(STORAGE_KEY);
+        }
+        setTargets(levels);
+      } catch (err: unknown) {
+        if (live) setLoadError(err instanceof Error ? err.message : 'Could not load position level targets.');
+      } finally {
+        if (live) setLoading(false);
+      }
+    })();
+    return () => { live = false; };
+  }, []);
 
   const handleUpdate = (id: string, field: keyof PositionLevelTarget, value: number) => {
     setTargets((prev) =>
@@ -110,17 +154,21 @@ export function PositionLevelTargetSettingsPage() {
     );
   };
 
-  const handleSave = () => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(targets));
+  const persist = async (next: PositionLevelTarget[]) => {
+    setSaveError('');
+    const saved = await putApi<PositionLevelDocument>('/position-level-targets', { levels: next.map(levelPayload) });
+    setTargets(saved.levels?.length ? saved.levels : next);
+    localStorage.removeItem(STORAGE_KEY);
     setSavedSuccess(true);
     setTimeout(() => setSavedSuccess(false), 3000);
   };
 
+  const handleSave = () => {
+    void persist(targets).catch((err: unknown) => setSaveError(err instanceof Error ? err.message : 'Could not save position level targets.'));
+  };
+
   const handleResetDefaults = () => {
-    setTargets(DEFAULT_LEVEL_TARGETS);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_LEVEL_TARGETS));
-    setSavedSuccess(true);
-    setTimeout(() => setSavedSuccess(false), 3000);
+    void persist(DEFAULT_LEVEL_TARGETS).catch((err: unknown) => setSaveError(err instanceof Error ? err.message : 'Could not save position level targets.'));
   };
 
   const filteredTargets = targets.filter(
@@ -152,9 +200,24 @@ export function PositionLevelTargetSettingsPage() {
         </div>
       }
     >
+      {loading && (
+        <Alert tone="info" title="Loading targets" className="mb-6">
+          Reading the organization position level targets.
+        </Alert>
+      )}
+      {loadError && (
+        <Alert tone="danger" title="Targets unavailable" className="mb-6">
+          {loadError}
+        </Alert>
+      )}
+      {saveError && (
+        <Alert tone="danger" title="Targets not saved" className="mb-6">
+          {saveError}
+        </Alert>
+      )}
       {savedSuccess && (
         <Alert tone="success" title="Target Matrix Updated" className="mb-6">
-          Position level targets have been successfully saved and applied to live recruiter progress trackers.
+          Position level targets are saved for the organization. They stay separate from job seat counts.
         </Alert>
       )}
 

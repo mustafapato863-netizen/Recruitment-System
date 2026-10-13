@@ -361,17 +361,19 @@ export function JoiningChecklist({
             ? 'All compliance items verified. Ready to confirm joining.'
             : `${totalCount - completedCount} requirement${totalCount - completedCount === 1 ? '' : 's'} remaining`}
         </span>
-        <Button
-          variant="primary"
-          size="sm"
-          disabled={isConfirmDisabled || isConfirming}
-          loading={isConfirming}
-          loadingLabel="Confirming..."
-          onClick={() => setIsConfirmDialogOpen(true)}
-        >
-          <Icon name="check-circle" size={14} />
-          Confirm Joining
-        </Button>
+        {canConfirmJoining ? (
+          <Button
+            variant="primary"
+            size="sm"
+            disabled={isConfirmDisabled || isConfirming}
+            loading={isConfirming}
+            loadingLabel="Confirming..."
+            onClick={() => setIsConfirmDialogOpen(true)}
+          >
+            <Icon name="check-circle" size={14} />
+            Confirm Joining
+          </Button>
+        ) : null}
       </div>
 
       {/* Confirm Joining Dialog */}
@@ -384,7 +386,7 @@ export function JoiningChecklist({
         }}
         onConfirm={handleConfirm}
         title="Confirm joining and close headcount"
-        description={`Confirm that ${candidateName} has reported for work. This will automatically update the vacancy filled headcount.`}
+        description={`Record that ${candidateName} has started. A repeated confirmation does not count a second hire.`}
         confirmLabel="Confirm Joining"
         cancelLabel="Cancel"
         tone="success"

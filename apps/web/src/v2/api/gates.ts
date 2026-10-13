@@ -12,7 +12,7 @@ export const GATE_COPY: Record<GateCode, { gate: string; message: string; fix: s
   GATE_SCREEN_NOTE_MISSING: { gate: 'Screen note', message: 'Interview needs a saved screen note.', fix: 'Log the screen with a note first.' },
   GATE_SCORECARD_NOT_SUBMITTED: { gate: 'Scorecard', message: 'Offer needs a submitted interview scorecard.', fix: 'Submit or chase the scorecard first.' },
   GATE_OFFER_NOT_ACCEPTED: { gate: 'Offer accepted', message: 'Pre-hire needs an accepted offer.', fix: 'Record the candidate\'s acceptance first.' },
-  GATE_JOINING_CHECKS_INCOMPLETE: { gate: 'Joining checks', message: 'Joined needs ID, contract and SCFHS licence verified.', fix: 'Verify all three in the pre-hire checklist.' },
+  GATE_JOINING_CHECKS_INCOMPLETE: { gate: 'Joining checks', message: 'Joined needs this job\'s required checks verified.', fix: 'Verify each required check in the pre-hire checklist.' },
   GATE_REJECT_REASON_REQUIRED: { gate: 'Reject reason', message: 'Rejected needs a reason from the rejection reasons list.', fix: 'Pick a reason.' },
 };
 

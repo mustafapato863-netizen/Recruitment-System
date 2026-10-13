@@ -11,7 +11,7 @@ import { StatusChip } from '../../components/v2/StatusChip';
 import { UserPicker, interviewersAdapter, type UserOption } from '../../components/v2/UserPicker';
 import {
   RECOMMENDATIONS, addNote, candidateName, createHiringCase, createOfferDraft, createOfferRevision,
-  gateState, logScreening, moveStage, offerTemplates, rejectionReasons, reviseScorecard, scheduleInterview, sendOffer, setJoiningCheck, setOfferStatus, submitOffer, submitScorecard,
+  gateState, isoDate, logScreening, moveStage, offerTemplates, recordActualJoining, rejectionReasons, reviseScorecard, scheduleInterview, sendOffer, setJoiningCheck, setOfferStatus, submitHiringCase, submitOffer, submitScorecard, updateInterview,
   type ApplicationFile, type FileStage, type InterviewItem, type OfferTemplate, type OfferTerms, type Recommendation, type ScorecardItem, type SendChannel, type SendOfferResult,
   needsReasonNote, OTHER_NOTE_MIN,
 } from '../api/applicationFile';
@@ -139,37 +139,51 @@ function cairoIso(date: string, time: string): string {
 }
 export { cairoIso };
 
-export function ScheduleDrawer({ file, onClose, onDone }: DrawerProps) {
+export function ScheduleDrawer({ file, onClose, onDone, params }: DrawerProps) {
   const app = file.workspace.application;
+  const openInterview = file.interviews.find((i) => i.id === params?.get('interview') && (i.status === 'Scheduled' || i.status === 'Rescheduled'));
   const [type, setType] = useState('Technical');
   const [date, setDate] = useState('');
   const [time, setTime] = useState('10:00');
   const [duration, setDuration] = useState('60');
-  const [room, setRoom] = useState('');
+  const [room, setRoom] = useState(openInterview?.locationUrl ?? '');
+  const [reason, setReason] = useState('');
   const [people, setPeople] = useState<UserOption[]>([]);
   const [errs, setErrs] = useState<Record<string, string>>({});
   const adapter = useMemo(() => interviewersAdapter(), []);
-  const s = useSubmit(onDone, ['scheduledStart', 'scheduledEnd', 'locationUrl', 'attendeeUserIds', 'interviewType', 'title']);
+  const s = useSubmit(onDone, ['scheduledStart', 'scheduledEnd', 'locationUrl', 'attendeeUserIds', 'interviewType', 'title', 'rescheduleReason']);
   const gate = gateState(file);
   const needsMove = ['Applied', 'Screening'].includes(app.stage);
   const submit = () => {
     const next: Record<string, string> = {};
     if (!date) next.date = 'Pick a date.';
     if (!/^\d{2}:\d{2}$/.test(time)) next.time = 'Pick a start time.';
-    try { if (new URL(room).protocol !== 'https:') next.room = 'The room link must start with https://'; } catch { next.room = 'Paste the meeting room URL (https://…).'; }
-    if (!people.length) next.people = 'Add at least one interviewer.';
+    if (openInterview) {
+      if (reason.trim().length < 3) next.reason = 'Say why this time changed.';
+    } else {
+      try { if (new URL(room).protocol !== 'https:') next.room = 'The room link must start with https://'; } catch { next.room = 'Paste the meeting room URL (https://…).'; }
+      if (!people.length) next.people = 'Add at least one interviewer.';
+    }
     setErrs(next);
     if (Object.keys(next).length) return;
     const start = cairoIso(date, time);
     const end = new Date(new Date(start).getTime() + Number(duration) * 60_000).toISOString();
     void s.run(async () => {
+      if (openInterview) {
+        await updateInterview(openInterview.id, { scheduledStart: start, scheduledEnd: end, rescheduleReason: reason.trim(), ...(room.trim() ? { locationUrl: room.trim() } : {}) });
+        return;
+      }
       if (needsMove) await advanceTo(app, 'Interview');
       await scheduleInterview({ applicationId: app.id, title: `${type} interview: ${candidateName(app)}`, interviewType: type, scheduledStart: start, scheduledEnd: end, timezone: TZ, locationUrl: room.trim(), attendeeUserIds: people.map((p) => p.id) });
     });
   };
+  const markNoShow = () => {
+    if (!openInterview) return;
+    void s.run(() => updateInterview(openInterview.id, { status: 'No-show' }));
+  };
   return (
-    <DrawerV2 open onClose={onClose} kicker="Interview" title={`Schedule interview — ${candidateName(app)}`} subtitle={app.positionTitle}
-      primaryAction={<ButtonV2 onClick={submit} loading={s.busy} disabled={needsMove && !gate.screenNote}>Schedule interview</ButtonV2>}
+    <DrawerV2 open onClose={onClose} kicker="Interview" title={`${openInterview ? 'Reschedule interview' : 'Schedule interview'} — ${candidateName(app)}`} subtitle={app.positionTitle}
+      primaryAction={<ButtonV2 onClick={submit} loading={s.busy} disabled={!openInterview && needsMove && !gate.screenNote}>{openInterview ? 'Reschedule' : 'Schedule interview'}</ButtonV2>}
       secondaryAction={<ButtonV2 kind="secondary" onClick={onClose}>Cancel</ButtonV2>}>
       <div className="rf2-drawer-form">
         {needsMove ? (
@@ -177,9 +191,11 @@ export function ScheduleDrawer({ file, onClose, onDone }: DrawerProps) {
             <Gate ok={gate.screenNote} label="Screen note saved" hint="log the screen first" />
           </ul>
         ) : null}
-        <SelectV2 label="Interview type" value={type} onChange={(e) => setType(e.target.value)}>
-          {['Screening', 'Technical', 'Behavioral', 'Managerial'].map((t) => <option key={t}>{t}</option>)}
-        </SelectV2>
+        {openInterview ? null : (
+          <SelectV2 label="Interview type" value={type} onChange={(e) => setType(e.target.value)}>
+            {['Screening', 'Technical', 'Behavioral', 'Managerial'].map((t) => <option key={t}>{t}</option>)}
+          </SelectV2>
+        )}
         <div className="rf2-drawer-form__row">
           <InputV2 label="Date" type="date" required value={date} onChange={(e) => setDate(e.target.value)} error={errs.date ?? s.at('scheduledStart')} />
           <InputV2 label="Start (Cairo)" type="time" required value={time} onChange={(e) => setTime(e.target.value)} error={errs.time ?? s.at('scheduledEnd')} />
@@ -187,9 +203,16 @@ export function ScheduleDrawer({ file, onClose, onDone }: DrawerProps) {
             {['30', '45', '60', '90'].map((m) => <option key={m} value={m}>{m} min</option>)}
           </SelectV2>
         </div>
-        <InputV2 label="Room URL" required type="url" placeholder="https://" value={room} onChange={(e) => setRoom(e.target.value)} error={errs.room ?? s.at('locationUrl')}
+        <InputV2 label="Room URL" required={!openInterview} type="url" placeholder="https://" value={room} onChange={(e) => setRoom(e.target.value)} error={errs.room ?? s.at('locationUrl')}
           hint="The meeting room link. It must be on an approved meeting host." />
-        <UserPicker label="Interviewers" required multiple adapter={adapter} value={people} onChange={setPeople} error={errs.people ?? s.at('attendeeUserIds')} />
+        {openInterview ? (
+          <>
+            <TextareaV2 label="Why this time changed" required rows={2} value={reason} onChange={(e) => setReason(e.target.value)} error={errs.reason ?? s.at('rescheduleReason')} />
+            <ButtonV2 kind="tertiary" onClick={markNoShow} loading={s.busy}>Mark no-show</ButtonV2>
+          </>
+        ) : (
+          <UserPicker label="Interviewers" required multiple adapter={adapter} value={people} onChange={setPeople} error={errs.people ?? s.at('attendeeUserIds')} />
+        )}
         <FormError text={s.error} />
       </div>
     </DrawerV2>
@@ -521,45 +544,87 @@ export function AnswerDrawer({ file, onClose, onDone }: DrawerProps) {
 }
 
 /* ── E21 Pre-hire checklist ─────────────────────────────────────────────── */
-/** E21: gate 4 reads only the typed joining checks (GET/PUT /applications/:id/joining-checks/:type). */
+/** E21: the checklist is the job's required checks. Final approval and actual joining are separate. */
 export function PreHireDrawer({ file, onDone }: DrawerProps) {
+  const { user } = useAuth();
   const app = file.workspace.application;
   const gate = gateState(file);
   const s = useSubmit(onDone);
   const [checks, setChecks] = useState(file.joiningChecks);
+  const [expiry, setExpiry] = useState<Record<string, string>>({});
   const [busyType, setBusyType] = useState<string | null>(null);
+  const [recording, setRecording] = useState(false);
   const [checkErr, setCheckErr] = useState<string | null>(null);
-  const done = (t: string) => Boolean(checks.find((c) => c.type === t)?.verified);
-  const allDone = JOINING_CHECK_TYPES.every((c) => done(c.type));
+  const [notice, setNotice] = useState<string | null>(null);
+  const allDone = checks.length > 0 && checks.every((c) => c.verified);
   const inOffer = app.stage === 'Offer';
-  const toggle = async (type: (typeof JOINING_CHECK_TYPES)[number]['type'], verified: boolean) => {
+  const status = file.hiring?.status ?? '';
+  const canRecord = Boolean(user?.permissions?.includes('RECORD_ACTUAL_JOINING'));
+  const waitingApproval = status === 'Pending Final Approval';
+  const awaiting = status === 'Awaiting Joining';
+  const joined = app.stage === 'Joined' || status === 'Joined';
+  const toggle = async (type: (typeof checks)[number]['type'], verified: boolean, expiryDate?: string) => {
     setBusyType(type); setCheckErr(null);
-    try { setChecks(await setJoiningCheck(app.id, type, verified)); } catch (e) { setCheckErr(errorText(e)); } finally { setBusyType(null); }
+    try {
+      setChecks(await setJoiningCheck(app.id, type, { verified, ...(expiryDate ? { expiryDate: isoDate(expiryDate) } : {}) }));
+    } catch (e) { setCheckErr(errorText(e)); } finally { setBusyType(null); }
   };
+  const record = async () => {
+    if (!file.hiring) return;
+    setRecording(true); setCheckErr(null); setNotice(null);
+    try {
+      const result = await recordActualJoining(file.hiring.id, new Date().toISOString());
+      if (result.alreadyJoined) {
+        setNotice('This hire was already recorded. The completed-hire count did not change.');
+        return;
+      }
+      onDone();
+    } catch (e) { setCheckErr(errorText(e)); } finally { setRecording(false); }
+  };
+  const primary = inOffer
+    ? <ButtonV2 onClick={() => s.run(async () => { await advanceTo(app, 'Pre-Hire'); if (!file.hiring && file.offer) await createHiringCase(file.offer.id); })} loading={s.busy} disabled={!gate.offerAccepted}>Move to Pre-hire</ButtonV2>
+    : waitingApproval
+      ? <ButtonV2 disabled>Waiting for final approval</ButtonV2>
+      : awaiting && canRecord
+        ? <ButtonV2 onClick={() => void record()} loading={recording} disabled={!allDone}>Record actual joining</ButtonV2>
+        : awaiting
+          ? <ButtonV2 disabled>Waiting for the responsible recruiter</ButtonV2>
+          : joined
+            ? <ButtonV2 disabled>Joined</ButtonV2>
+            : <ButtonV2 onClick={() => s.run(async () => {
+                let caseId = file.hiring?.id;
+                if (!caseId) {
+                  if (!file.offer) throw new Error('An accepted offer is required before final approval.');
+                  caseId = (await createHiringCase(file.offer.id)).id;
+                }
+                await submitHiringCase(caseId);
+              })} loading={s.busy} disabled={!allDone || app.stage !== 'Pre-Hire'}>Submit for final approval</ButtonV2>;
   return (
     <DrawerV2 open onClose={onDone} kicker="Pre-hire" title={`Pre-hire checklist — ${candidateName(app)}`}
-      primaryAction={inOffer
-        ? <ButtonV2 onClick={() => s.run(async () => { await advanceTo(app, 'Pre-Hire'); if (!file.hiring && file.offer) await createHiringCase(file.offer.id); })} loading={s.busy} disabled={!gate.offerAccepted}>Move to Pre-hire</ButtonV2>
-        : <ButtonV2 onClick={() => s.run(() => moveStage(app, 'Joined'))} loading={s.busy} disabled={!allDone || app.stage !== 'Pre-Hire'}>Move to Joined</ButtonV2>}
+      primaryAction={primary}
       secondaryAction={<ButtonV2 kind="secondary" onClick={onDone}>Close</ButtonV2>}>
       <div className="rf2-drawer-form">
         {inOffer ? <ul className="rf2-gates" aria-label="Gate to Pre-hire"><Gate ok={gate.offerAccepted} label="The candidate accepted the offer" hint="record the answer first" /></ul> : null}
         <ul className="rf2-checklist" aria-label="Joining checks">
-          {JOINING_CHECK_TYPES.map((c) => {
-            const row = checks.find((x) => x.type === c.type);
-            const ok = Boolean(row?.verified);
+          {checks.map((row) => {
+            const ok = Boolean(row.verified);
+            const needsExpiry = row.type === 'SCFHS_LICENCE' && !ok;
             return (
-              <li key={c.type} className="rf2-checklist__item" data-done={ok}>
-                <span>{ok ? <CircleCheck aria-hidden="true" /> : <Clock aria-hidden="true" />} {c.label}
-                  {ok && row?.verifiedBy ? <span className="rf2-checklist__by"> · verified by {row.verifiedBy.name}{row.verifiedAt ? `, ${new Date(row.verifiedAt).toLocaleDateString('en-GB', { timeZone: TZ, day: 'numeric', month: 'short' })}` : ''}</span> : null}</span>
+              <li key={row.type} className="rf2-checklist__item" data-done={ok}>
+                <span>{ok ? <CircleCheck aria-hidden="true" /> : <Clock aria-hidden="true" />} {row.label}
+                  {ok && row.verifiedBy ? <span className="rf2-checklist__by"> · verified by {row.verifiedBy.name}{row.verifiedAt ? `, ${new Date(row.verifiedAt).toLocaleDateString('en-GB', { timeZone: TZ, day: 'numeric', month: 'short' })}` : ''}</span> : null}
+                  {ok && row.expiryDate ? <span className="rf2-checklist__by"> · expires {new Date(row.expiryDate).toLocaleDateString('en-GB', { timeZone: TZ, day: 'numeric', month: 'short', year: 'numeric' })}</span> : null}</span>
+                {needsExpiry ? <InputV2 label={`${row.label} expiry`} type="date" value={expiry[row.type] ?? ''} onChange={(e) => setExpiry((prev) => ({ ...prev, [row.type]: e.target.value }))} /> : null}
                 {ok
-                  ? <ButtonV2 kind="tertiary" size="sm" loading={busyType === c.type} onClick={() => void toggle(c.type, false)} aria-label={`Undo ${c.label} verified`}>Undo</ButtonV2>
-                  : <ButtonV2 kind="secondary" size="sm" loading={busyType === c.type} onClick={() => void toggle(c.type, true)} aria-label={`Mark ${c.label} verified`}>Mark verified</ButtonV2>}
+                  ? <ButtonV2 kind="tertiary" size="sm" loading={busyType === row.type} onClick={() => void toggle(row.type, false)} aria-label={`Undo ${row.label} verified`}>Undo</ButtonV2>
+                  : <ButtonV2 kind="secondary" size="sm" loading={busyType === row.type} disabled={needsExpiry && !expiry[row.type]} onClick={() => void toggle(row.type, true, expiry[row.type])} aria-label={`Mark ${row.label} verified`}>Mark verified</ButtonV2>}
               </li>
             );
           })}
         </ul>
-        <Note>All three verified = the file can move to Joined.</Note>
+        {checks.length === 0 ? <Note tone="warning">This job has no required checks on the file yet.</Note> : null}
+        <Note>Verified checks are recorded on the file. They are not joining. The responsible recruiter records joining once, after final approval.</Note>
+        {notice ? <p className="rf2-drawer-form__note" role="status">{notice}</p> : null}
         <FormError text={checkErr ?? s.error} />
       </div>
     </DrawerV2>

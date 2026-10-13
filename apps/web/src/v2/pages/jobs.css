@@ -112,6 +112,9 @@
 [data-ui='v2'] .rf2-evid li { display: flex; gap: var(--rf2-space-0-5); }
 [data-ui='v2'] .rf2-evid svg { width: 12px; height: 12px; flex: none; margin-top: 2px; }
 [data-ui='v2'] .rf2-tabs { display: inline-flex; padding: 2px; border-radius: var(--rf2-radius-control); background: var(--rf2-neutral-tint); }
+[data-ui='v2'] .rf2-bank-links { display: flex; flex-wrap: wrap; gap: var(--rf2-space-2); margin: 0 0 var(--rf2-space-1); }
+[data-ui='v2'] .rf2-bank-links a { color: var(--rf2-action); font-size: var(--rf2-text-label); }
+[data-ui='v2'] .rf2-bank-add { display: flex; flex-wrap: wrap; align-items: flex-end; gap: var(--rf2-space-1); margin: var(--rf2-space-1) 0; }
 [data-ui='v2'] .rf2-cmp { width: 100%; border-collapse: collapse; font-size: var(--rf2-text-body); }
 [data-ui='v2'] .rf2-cmp th, [data-ui='v2'] .rf2-cmp td { padding: var(--rf2-space-1-5); border-bottom: 1px solid var(--rf2-divider); text-align: left; vertical-align: top; }
 [data-ui='v2'] .rf2-cmp thead th { background: var(--rf2-card); }

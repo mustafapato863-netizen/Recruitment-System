@@ -34,7 +34,7 @@ export function TokenPreviewV2() {
       </section>
 
       <section style={section}>
-        <h2 style={h2}>Type · Plus Jakarta Sans</h2>
+        <h2 style={h2}>Type · IBM Plex Sans</h2>
         {type.map(([k, label]) => (
           <div key={k} style={{ fontSize: `var(--rf2-text-${k})`, lineHeight: `var(--rf2-leading-${k})`, fontWeight: `var(--rf2-weight-${k})` as unknown as number, marginBottom: 8 }}>{label}</div>
         ))}

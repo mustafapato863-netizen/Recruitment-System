@@ -10,7 +10,8 @@ import { EmptyStateV2, ForbiddenStateV2, SkeletonV2 } from '../../components/v2/
 import { InputV2, TextareaV2 } from '../../components/v2/Field';
 import '../../components/v2/v2-primitives.css';
 import './application-file.css';
-import { FILE_STAGES, addNote, downloadDocument, isClosedStage, isCvDoc, candidateName, gateState, loadApplicationFile, setFollowUp, type ApplicationFile } from '../api/applicationFile';
+import { FILE_STAGES, addNote, downloadDocument, isClosedStage, isCvDoc, candidateName, gateState, loadApplicationFile, setFollowUp, updateInterview, type ApplicationFile, type InterviewItem } from '../api/applicationFile';
+import { DocumentHistory, MessagesCard } from './FileHistory';
 import { DRAWERS, DRAWER_KEYS, errorText, sentBack, type DrawerKey } from '../drawers/FileDrawers';
 import { OfferDecisionDrawer } from '../drawers/OfferDecisionDrawer';
 import { canSeePay, money } from '../api/offerDecision';
@@ -37,9 +38,13 @@ export function primaryFor(file: ApplicationFile): { key: DrawerKey; label: stri
     case 'Applied':
     case 'Screening':
       return g.screenNote ? { key: 'schedule', label: 'Schedule interview', icon: <CalendarDays /> } : { key: 'screen', label: 'Log screen', icon: <Check /> };
-    case 'Interview':
-      if (!file.interviews.some((i) => i.status !== 'Cancelled')) return { key: 'schedule', label: 'Schedule interview', icon: <CalendarDays /> };
+    case 'Interview': {
+      const live = file.interviews.filter((i) => i.status !== 'Cancelled');
+      if (live.length === 0) return { key: 'schedule', label: 'Schedule interview', icon: <CalendarDays /> };
+      const waitingScore = live.some((i) => i.status === 'Completed' || i.status === 'Scheduled' || i.status === 'Rescheduled');
+      if (!g.scorecard && !waitingScore) return { key: 'schedule', label: 'Schedule interview', icon: <CalendarDays /> };
       return g.scorecard ? { key: 'offer', label: 'Draft offer', icon: <Send /> } : { key: 'scorecard', label: 'Open scorecard', icon: <Star /> };
+    }
     case 'Offer': {
       const st = file.offer?.status;
       if (!file.offer) return { key: 'offer', label: 'Draft offer', icon: <Send /> };
@@ -65,7 +70,10 @@ function gateRows(file: ApplicationFile): Array<{ to: string; label: string; ok:
   if (stage === 'Applied' || stage === 'Screening') return [{ to: 'Interview', label: 'Screen note saved', ok: g.screenNote }];
   if (stage === 'Interview') return [{ to: 'Offer', label: 'Scorecard submitted', ok: g.scorecard }];
   if (stage === 'Offer') return [{ to: 'Pre-hire', label: 'Offer accepted', ok: g.offerAccepted }];
-  if (stage === 'Pre-Hire') return g.joining.map((j) => ({ to: 'Joined', label: `${j.label} checked`, ok: j.done }));
+  if (stage === 'Pre-Hire') {
+    if (g.joining.length === 0) return [{ to: 'Joined', label: 'Required checks', ok: false }];
+    return g.joining.map((j) => ({ to: 'Joined', label: `${j.label} checked`, ok: j.done }));
+  }
   return [];
 }
 
@@ -178,7 +186,7 @@ export function ApplicationFileV2({ load = loadApplicationFile, mode = 'owner' }
 
       <div className="rf2-file__grid">
         <div className="rf2-file__col">
-          <Timeline file={file} onScorecard={manager ? undefined : (iid) => openDrawer('scorecard', { interview: iid })} />
+          <Timeline file={file} writable={!manager} onScorecard={manager ? undefined : (iid) => openDrawer('scorecard', { interview: iid })} onReschedule={manager ? undefined : (iid) => openDrawer('schedule', { interview: iid })} onChanged={() => setAttempt((n) => n + 1)} />
           {manager ? null : <Notes file={file} onAdded={() => setAttempt((n) => n + 1)} />}
         </div>
         <aside className="rf2-file__col rf2-file__side">
@@ -205,15 +213,18 @@ export function ApplicationFileV2({ load = loadApplicationFile, mode = 'owner' }
           ) : null}
           <section className="rf2-card" aria-labelledby="docs-h">
             <h3 id="docs-h" className="rf2-card__title">Documents</h3>
-            {file.documents.length === 0 ? <p className="rf2-file__muted">No documents yet.</p> : (
-              <ul className="rf2-docs">
-                {file.documents.map((d) => (
-                  <li key={d.id}><FileText aria-hidden="true" /><div><p>{d.name}</p><p className="rf2-timeline__sub">{[d.type, fmt(d.uploadedAt), d.uploadedBy ? `by ${d.uploadedBy.name}` : null].filter(Boolean).join(' · ')}</p></div>
-                    {approver && isCvDoc(d) ? <ButtonV2 kind="secondary" size="sm" icon={<Download />} onClick={() => void downloadDocument(d).catch((e: unknown) => setToast(e instanceof Error ? e.message : 'Could not download the CV.'))}>Download CV</ButtonV2> : null}</li>
-                ))}
-              </ul>
-            )}
+            {manager ? (
+              file.documents.length === 0 ? <p className="rf2-file__muted">No documents yet.</p> : (
+                <ul className="rf2-docs">
+                  {file.documents.map((d) => (
+                    <li key={d.id}><FileText aria-hidden="true" /><div><p>{d.name}</p><p className="rf2-timeline__sub">{[d.type, fmt(d.uploadedAt), d.uploadedBy ? `by ${d.uploadedBy.name}` : null].filter(Boolean).join(' · ')}</p></div>
+                      {approver && isCvDoc(d) ? <ButtonV2 kind="secondary" size="sm" icon={<Download />} onClick={() => void downloadDocument(d).catch((e: unknown) => setToast(e instanceof Error ? e.message : 'Could not download the CV.'))}>Download CV</ButtonV2> : null}</li>
+                  ))}
+                </ul>
+              )
+            ) : <DocumentHistory applicationId={app.id} fallback={file.documents} onToast={setToast} />}
           </section>
+          {manager ? null : <MessagesCard applicationId={app.id} followUpDate={app.followUpDate ?? null} />}
           {file.offer ? (
             <section className="rf2-card" aria-labelledby="offer-h">
               <h3 id="offer-h" className="rf2-card__title">Offer</h3>
@@ -285,18 +296,30 @@ function ScorecardFit({ file }: { file: ApplicationFile }) {
   );
 }
 
-function Timeline({ file, onScorecard }: { file: ApplicationFile; onScorecard?: (interviewId: string) => void }) {
+function Timeline({ file, writable, onScorecard, onReschedule, onChanged }: { file: ApplicationFile; writable?: boolean; onScorecard?: (interviewId: string) => void; onReschedule?: (interviewId: string) => void; onChanged: () => void }) {
+  const [err, setErr] = useState<string | null>(null);
+  const markNoShow = async (interview: InterviewItem) => {
+    setErr(null);
+    try { await updateInterview(interview.id, { status: 'No-show' }); onChanged(); } catch (e) { setErr(errorText(e)); }
+  };
   const rows: Array<{ at: string; title: string; sub?: string; action?: React.ReactElement }> = [];
   for (const h of file.history) rows.push({ at: h.createdAt, title: h.fromStage ? `Moved ${label(h.fromStage)} → ${label(h.toStage)}` : `Applied (${label(h.toStage)})`, sub: [h.changedByName && `by ${h.changedByName}`, h.reason].filter(Boolean).join(' · ') });
   for (const s of file.screening) rows.push({ at: s.screenedAt, title: `Screening logged${s.screenerName ? ` by ${s.screenerName}` : ''} — ${s.outcome}`, sub: s.notes ?? undefined });
   for (const i of file.interviews) {
     const cards = file.scorecards[i.id] ?? [];
     const submitted = cards.filter(isScorecardSubmitted).length;
+    const open = i.status === 'Scheduled' || i.status === 'Rescheduled';
     rows.push({
       at: i.scheduledStart,
       title: `${i.title} — ${fmt(i.scheduledStart, true)}${i.status !== 'Scheduled' ? ` (${i.status})` : ''}`,
       sub: [i.locationUrl ? 'Room link' : i.roomName, i.interviewerName, `${submitted} scorecard${submitted === 1 ? '' : 's'} submitted`].filter(Boolean).join(' · '),
-      action: i.status !== 'Cancelled' && onScorecard ? <button type="button" className="rf2-link" onClick={() => onScorecard(i.id)}>Scorecards</button> : undefined,
+      action: (
+        <span className="rf2-timeline__actions">
+          {writable && open ? <button type="button" className="rf2-link" onClick={() => void markNoShow(i)}>Mark no-show</button> : null}
+          {writable && open && onReschedule ? <button type="button" className="rf2-link" onClick={() => onReschedule(i.id)}>Reschedule</button> : null}
+          {i.status !== 'Cancelled' && i.status !== 'No-show' && onScorecard ? <button type="button" className="rf2-link" onClick={() => onScorecard(i.id)}>Scorecards</button> : null}
+        </span>
+      ),
     });
   }
   for (const v of file.offer?.versions ?? []) rows.push({ at: v.createdAt, title: `Offer v${v.versionNumber} — ${v.status === 'Changes Requested' ? 'sent back by the manager (offer back in Draft)' : v.status ?? v.approvalStatus}`, sub: v.proposedJoiningDate ? `Start ${fmt(v.proposedJoiningDate)}` : undefined });
@@ -304,6 +327,7 @@ function Timeline({ file, onScorecard }: { file: ApplicationFile; onScorecard?: 
   return (
     <section className="rf2-card" aria-labelledby="timeline-h">
       <h3 id="timeline-h" className="rf2-card__title">Timeline</h3>
+      {err ? <p className="rf2-inline-note" role="alert">{err}</p> : null}
       {rows.length === 0 ? <p className="rf2-file__muted">Nothing yet.</p> : (
         <ol className="rf2-timeline">
           {rows.map((r, i) => (

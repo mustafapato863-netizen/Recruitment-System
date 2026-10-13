@@ -10,6 +10,7 @@ import { FormField } from '../components/ui/FormField';
 import { Input } from '../components/ui/Input';
 import { PageState } from '../components/ui/PageState';
 import { PublicSiteLayout } from './PublicSiteLayout';
+import { applyDraftOwner, clearApplyDraft, readApplyDraft, writeApplyDraft } from './public-apply-draft';
 
 interface ApplicationForm {
   firstName: string;
@@ -47,6 +48,33 @@ export function PublicApplyPage() {
   const [error, setError] = useState('');
   const [fieldError, setFieldError] = useState('');
   const [confirmation, setConfirmation] = useState<PublicApplicationResponse | null>(null);
+  const [draftReady, setDraftReady] = useState(false);
+
+  useEffect(() => {
+    const owner = applyDraftOwner(window.sessionStorage);
+    const draft = readApplyDraft(window.sessionStorage, owner, organizationCode, vacancyCode);
+    if (draft) {
+      setForm((current) => ({
+        ...current,
+        firstName: draft.firstName,
+        lastName: draft.lastName,
+        email: draft.email,
+        phone: draft.phone,
+        currentTitle: draft.currentTitle,
+        currentCompany: draft.currentCompany,
+        location: draft.location,
+        skills: draft.skills,
+        consentAccepted: draft.consentAccepted,
+      }));
+    }
+    setDraftReady(true);
+  }, [organizationCode, vacancyCode]);
+
+  useEffect(() => {
+    if (!draftReady || status === 'success') return;
+    const owner = applyDraftOwner(window.sessionStorage);
+    writeApplyDraft(window.sessionStorage, organizationCode, vacancyCode, { owner, ...form, consentAccepted: form.consentAccepted });
+  }, [draftReady, form, organizationCode, status, vacancyCode]);
 
   const loadJob = useCallback(async () => {
     try {
@@ -102,6 +130,7 @@ export function PublicApplyPage() {
           skills: form.skills.split(',').map((skill) => skill.trim()).filter(Boolean),
         });
       }
+      clearApplyDraft(window.sessionStorage, applyDraftOwner(window.sessionStorage), organizationCode, vacancyCode);
       setConfirmation(response);
       setStatus('success');
     } catch (reason) {
@@ -121,7 +150,13 @@ export function PublicApplyPage() {
             <h1 className="mt-5 font-rf-heading text-2xl font-extrabold tracking-tight text-rf-ink">Application received</h1>
             <p className="mt-3 text-sm font-medium leading-6 text-rf-ink-muted">Thanks for applying for <strong className="text-rf-ink">{job.positionTitle}</strong>. The hiring team will review your profile.</p>
             <p className="mt-5 rounded-xl bg-rf-surface-subtle px-4 py-3 text-xs font-bold text-rf-ink">Reference: {confirmation.applicationCode}</p>
-            <Button className="mt-6 rounded-xl" variant="secondary" asChild><Link to={`/careers/${encodeURIComponent(organizationCode)}/jobs`}>Browse more roles</Link></Button>
+            <p className="mt-3 text-xs font-medium leading-5 text-rf-ink-muted">This receipt stays on this screen. Nothing was sent to an email address.</p>
+            {confirmation.portalPath ? (
+              <Button className="mt-6 rounded-xl" variant="primary" asChild>
+                <Link to={confirmation.portalPath}>Open your application</Link>
+              </Button>
+            ) : null}
+            <Button className="mt-3 rounded-xl" variant="secondary" asChild><Link to={`/careers/${encodeURIComponent(organizationCode)}/jobs`}>Browse more roles</Link></Button>
           </Card>
         )}
         {status !== 'loading' && status !== 'error' && status !== 'success' && job && (
@@ -191,10 +226,11 @@ export function PublicApplyPage() {
                     <span id="public-consent-message">I agree that {job.organizationName} may use the information above to assess my application for this role and contact me about the recruitment process. <span className="font-bold text-rf-danger" aria-hidden="true">*</span></span>
                   </label>
                   {fieldError && <p className="mt-2 text-xs font-bold text-rf-danger" role="alert">{fieldError}</p>}
+                  {!form.consentAccepted && <p id="public-consent-required" className="mt-2 text-xs font-medium text-rf-ink-muted">Accept the privacy consent before submitting. An application without it is not received.</p>}
                 </section>
                 <div className="flex flex-col-reverse gap-2.5 sm:flex-row sm:justify-end">
                   <Button variant="ghost" type="button" asChild><Link to={`/careers/${encodeURIComponent(organizationCode)}/jobs/${encodeURIComponent(vacancyCode)}`}>Cancel</Link></Button>
-                  <Button variant="primary" type="submit" loading={status === 'submitting'} loadingLabel="Submitting application" className="rounded-xl">Submit application <Icon name="send" size={14} /></Button>
+                  <Button variant="primary" type="submit" disabled={!form.consentAccepted} loading={status === 'submitting'} loadingLabel="Submitting application" className="rounded-xl" aria-describedby={form.consentAccepted ? undefined : 'public-consent-required'}>Submit application <Icon name="send" size={14} /></Button>
                 </div>
               </form>
             </Card>

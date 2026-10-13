@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '@recruitflow/database';
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { PrismaService } from '../database/prisma.service';
@@ -17,6 +17,12 @@ const DEFAULT_INTEGRATIONS = [
   { name: 'Email Provider', provider: 'smtp', category: 'Communication' },
 ];
 const allowedWhere = { provider: { in: [...ALLOWED_INTEGRATION_PROVIDERS] as string[] } };
+
+/** A stored Connected label is not a verified mail connection. */
+export function presentedIntegrationStatus(provider: string, status: string): string {
+  if (provider === 'smtp' && status === 'Connected') return 'Not verified';
+  return status;
+}
 
 @Injectable()
 export class IntegrationsService {
@@ -64,14 +70,7 @@ export class IntegrationsService {
       }
     }
 
-    return integrations.map((i) => ({
-      id: i.id,
-      name: i.name,
-      provider: i.provider,
-      category: i.category,
-      status: i.status,
-      lastSyncAt: i.lastSyncAt ? i.lastSyncAt.toISOString() : null,
-    }));
+    return integrations.map((i) => this.toItem(i));
   }
 
   async getIntegration(organizationId: string, id: string) {
@@ -83,14 +82,7 @@ export class IntegrationsService {
       throw new NotFoundException('Integration not found');
     }
 
-    return {
-      id: integration.id,
-      name: integration.name,
-      provider: integration.provider,
-      category: integration.category,
-      status: integration.status,
-      lastSyncAt: integration.lastSyncAt ? integration.lastSyncAt.toISOString() : null,
-    } satisfies IntegrationItem;
+    return this.toItem(integration);
   }
 
   async updateIntegration(organizationId: string, id: string, dto: UpdateIntegrationDto) {
@@ -103,7 +95,12 @@ export class IntegrationsService {
     }
 
     const data: Prisma.IntegrationUpdateInput = {};
-    if (dto.status) data.status = dto.status;
+    if (dto.status) {
+      if (dto.status === 'Connected') {
+        throw new BadRequestException({ code: 'PROVIDER_NOT_VERIFIED', message: 'Saving settings does not mark a provider as connected.' });
+      }
+      data.status = dto.status;
+    }
     if (dto.configJson !== undefined) {
       const configObj = { ...(dto.configJson as Record<string, unknown>) };
       // Encrypt sensitive secrets in configJson
@@ -121,14 +118,18 @@ export class IntegrationsService {
       where: { id },
       data,
     });
+    return this.toItem(updated);
+  }
+
+  private toItem(integration: { id: string; name: string; provider: string; category: string; status: string; lastSyncAt: Date | null }): IntegrationItem {
     return {
-      id: updated.id,
-      name: updated.name,
-      provider: updated.provider,
-      category: updated.category,
-      status: updated.status,
-      lastSyncAt: updated.lastSyncAt ? updated.lastSyncAt.toISOString() : null,
-    } satisfies IntegrationItem;
+      id: integration.id,
+      name: integration.name,
+      provider: integration.provider,
+      category: integration.category,
+      status: presentedIntegrationStatus(integration.provider, integration.status),
+      lastSyncAt: integration.lastSyncAt ? integration.lastSyncAt.toISOString() : null,
+    };
   }
 
   async testIntegration(organizationId: string, id: string) {
@@ -138,6 +139,14 @@ export class IntegrationsService {
 
     if (!integration) {
       throw new NotFoundException('Integration not found');
+    }
+
+    if (integration.provider === 'smtp') {
+      return {
+        success: false,
+        verified: false,
+        message: 'Mail delivery is not verified. A saved provider setting is not a connection, and this server does not send to candidates.',
+      };
     }
 
     if (integration.provider === 'google_calendar') {

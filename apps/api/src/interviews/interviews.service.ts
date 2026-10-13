@@ -38,6 +38,7 @@ import { AccessControlService } from '../access-control/access-control.service';
 import { DocumentsService } from '../documents/documents.service';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import type { AuthUser, MyInterviewScope, MyInterviewScorecardStatus, MyInterviewsResponse } from '@recruitflow/contracts';
+import { loadAccessProfile } from '../common/access/file-access';
 
 /** RSVP result for an attendee who does not own the file (no interview detail). */
 export interface InterviewRsvpReceipt {
@@ -56,17 +57,28 @@ export class InterviewsService {
     @Optional() @Inject(MatchingService) private readonly matching?: MatchingService,
   ) {}
 
+  private async isNarrowInterview(user: AuthUser): Promise<boolean> {
+    const profile = await loadAccessProfile(this.prisma, user);
+    return !profile.isOversight && !profile.permissions.includes('APPLICATION_VIEW');
+  }
+
   async listInterviews(
     organizationId: string,
     query: InterviewQueryDto,
     user?: AuthUser,
   ): Promise<Interview[]> {
     const where: Prisma.InterviewWhereInput = { organizationId };
+    const narrow = user ? await this.isNarrowInterview(user) : false;
     const applicationWhere: Prisma.ApplicationWhereInput = user
       ? await this.accessControl.getApplicationVisibilityWhere(user)
       : { organizationId };
     if (query.candidateId) applicationWhere.candidateId = query.candidateId;
-    where.application = applicationWhere;
+    if (narrow && user) {
+      where.attendees = { some: { userId: user.userId } };
+      where.application = { organizationId, ...(query.candidateId ? { candidateId: query.candidateId } : {}) };
+    } else {
+      where.application = applicationWhere;
+    }
 
     if (query.applicationId) where.applicationId = query.applicationId;
     if (query.status) where.status = query.status;
@@ -95,7 +107,7 @@ export class InterviewsService {
       orderBy: { scheduledStart: 'asc' },
     });
 
-    return items.map((item) => this.toInterview(item));
+    return items.map((item) => narrow && user ? assignedInterviewView(this.toInterview(item), user.userId) : this.toInterview(item));
   }
 
   /**
@@ -145,11 +157,16 @@ export class InterviewsService {
   }
 
   async getInterview(organizationId: string, id: string, user?: AuthUser): Promise<Interview> {
+    const narrow = user ? await this.isNarrowInterview(user) : false;
     const visibility = user
       ? await this.accessControl.getApplicationVisibilityWhere(user)
       : { organizationId };
     const interview = await this.prisma.interview.findFirst({
-      where: { id, organizationId, application: visibility },
+      where: {
+        id,
+        organizationId,
+        ...(narrow && user ? { attendees: { some: { userId: user.userId } } } : { application: visibility }),
+      },
       include: {
         application: {
           include: {
@@ -166,7 +183,8 @@ export class InterviewsService {
       throw new NotFoundException(`Interview ${id} was not found.`);
     }
 
-    return this.toInterview(interview);
+    const view = this.toInterview(interview);
+    return narrow && user ? assignedInterviewView(view, user.userId) : view;
   }
 
   async checkConflicts(
@@ -396,10 +414,11 @@ export class InterviewsService {
 
     const hasDateChange = dto.scheduledStart !== undefined || dto.scheduledEnd !== undefined;
     const hasScheduleChange = hasDateChange || dto.status === 'Rescheduled';
-    if ((existing.status === 'Completed' || existing.status === 'Cancelled') && hasScheduleChange) {
-      throw new BadRequestException('Completed or cancelled interviews cannot be rescheduled. Create a new interview instead.');
+    const closedInterview = existing.status === 'Completed' || existing.status === 'Cancelled' || existing.status === 'No-show';
+    if (closedInterview && hasScheduleChange) {
+      throw new BadRequestException('Completed, no-show, or cancelled interviews cannot be rescheduled. Create a new interview instead.');
     }
-    if ((existing.status === 'Completed' || existing.status === 'Cancelled') && dto.status && dto.status !== existing.status) {
+    if (closedInterview && dto.status && dto.status !== existing.status) {
       throw new BadRequestException(`A ${existing.status.toLowerCase()} interview cannot change status.`);
     }
 
@@ -533,6 +552,15 @@ export class InterviewsService {
           entityId: updated.id,
         });
       }
+    } else if (dto.status === 'No-show') {
+      await this.prisma.applicationNote.create({
+        data: {
+          organizationId,
+          applicationId: updated.applicationId,
+          authorId: null,
+          content: `No-show for interview "${updated.title}".`,
+        },
+      });
     }
 
     await this.notifyCalendarIntegration(organizationId);
@@ -567,16 +595,21 @@ export class InterviewsService {
       throw new NotFoundException(`Interview ${id} was not found.`);
     }
 
+    const narrow = user ? await this.isNarrowInterview(user) : false;
     const candidateName = interview.application?.candidate
       ? `${interview.application.candidate.firstName} ${interview.application.candidate.lastName}`
       : 'Candidate';
 
-    const attendees = interview.attendees.map((a) => ({
-      name: a.user?.displayName,
-      email: a.user?.email,
-    }));
+    const attendees: Array<{ name?: string; email?: string }> = interview.attendees
+      .filter((a) => !narrow || a.userId === user?.userId)
+      .flatMap((a) => {
+        const row: { name?: string; email?: string } = {};
+        if (a.user?.displayName) row.name = a.user.displayName;
+        if (!narrow && a.user?.email) row.email = a.user.email;
+        return [row];
+      });
 
-    if (interview.application?.candidate?.email) {
+    if (!narrow && interview.application?.candidate?.email) {
       attendees.push({
         name: candidateName,
         email: interview.application.candidate.email,
@@ -1012,4 +1045,16 @@ export class InterviewsService {
       updatedAt: record.updatedAt.toISOString(),
     };
   }
+}
+
+/** Interviewer-only callers see their own evaluation and schedule, not the rest of the file. */
+export function assignedInterviewView(interview: Interview, userId: string): Interview {
+  const mine = (interview.attendees ?? []).filter((attendee) => attendee.userId === userId);
+  return {
+    ...interview,
+    applicationCode: undefined,
+    interviewerName: mine[0]?.userName ?? null,
+    attendees: mine,
+    scorecards: (interview.scorecards ?? []).filter((card) => card.interviewerId === userId),
+  };
 }

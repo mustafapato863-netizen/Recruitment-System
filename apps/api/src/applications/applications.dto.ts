@@ -1,4 +1,5 @@
 import {
+  IsDateString,
   IsEnum,
   IsInt,
   IsNotEmpty,
@@ -59,6 +60,11 @@ export class UpdateApplicationStageDto {
   @IsString()
   @MaxLength(1000)
   note?: string;
+
+  /** Required when stage is Joined. Offer approval does not record this date. */
+  @IsOptional()
+  @IsDateString()
+  actualJoiningDate?: string;
 }
 
 export class ApplicationQueryDto {

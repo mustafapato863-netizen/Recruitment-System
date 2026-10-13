@@ -65,7 +65,7 @@ export const errorCodes = [
 function domainErrorCodes() {
   return [
     // B3 requisition / job lifecycle
-    'ADMIN_CANNOT_CHANGE_JOB_STATUS', 'ASSIGNEE_NOT_ELIGIBLE', 'ASSIGNEE_REQUIRED', 'DUE_DATE_REQUIRED', 'SEATS_BELOW_JOINED', 'REQUISITION_NOT_APPROVED', 'REQUISITION_NOT_ACTIVE', 'DEPARTMENT_NOT_FOUND', 'FILE_CLOSED', 'ASSIGNEE_NOT_IN_TEAM',
+    'ADMIN_CANNOT_CHANGE_JOB_STATUS', 'ASSIGNEE_NOT_ELIGIBLE', 'ASSIGNEE_REQUIRED', 'DUE_DATE_REQUIRED', 'SEATS_BELOW_JOINED', 'COMMITMENTS_UNRESOLVED', 'REQUISITION_NOT_APPROVED', 'REQUISITION_NOT_ACTIVE', 'DEPARTMENT_NOT_FOUND', 'FILE_CLOSED', 'ASSIGNEE_NOT_IN_TEAM',
     'GRADE_NOT_FOUND', 'ILLEGAL_JOB_TRANSITION', 'JOB_NOT_ACCEPTING_APPLICATIONS', 'NOT_JOB_OWNER',
     'REASON_REQUIRED', 'REQUISITION_CANCELLED', 'REASON_NOT_IN_LIST', 'HOLD_UNTIL_NOT_FUTURE',
     // B5 gates
@@ -79,6 +79,9 @@ function domainErrorCodes() {
     'OFFER_TEMPLATE_INVALID', 'OFFER_TEMPLATE_CHANNEL_MISMATCH', 'OFFER_CANDIDATE_NO_CONTACT',
     'REOPEN_NOT_OWNER', 'REOPEN_REASON_REQUIRED', 'WITHDRAWN_NOT_AN_EXIT',
     'FOLLOW_UP_NOT_OWNER', 'JOINING_CHECK_TYPE_INVALID',
+    'JOINING_PERMISSION_REQUIRED', 'JOINING_NOT_OWNER', 'WRONG_ORGANIZATION', 'FINAL_APPROVAL_REQUIRED',
+    'APPROVAL_STALE', 'LICENCE_EXPIRED', 'LICENCE_EXPIRY_REQUIRED', 'CAPACITY_FULL', 'JOINING_DATE_REQUIRED',
+    'JOINING_CHECK_NOT_REQUIRED',
     // B7 grade bands, manager decision, reassign
     'GRADE_BAND_MISSING', 'OFFER_PAY_VIEW_REQUIRED', 'OFFER_PAY_OUTSIDE_BAND', 'GRADE_BAND_AMOUNT_INVALID', 'GRADE_BAND_FIELDS_REQUIRED',
     'GRADE_BAND_IDENTITY_IMMUTABLE', 'GRADE_BAND_MIN_GT_MAX', 'GRADE_BAND_OVERLAP', 'GRADE_INVALID', 'SITE_INVALID', 'CURRENCY_INVALID',
@@ -882,6 +885,9 @@ export interface PublicApplicationResponse {
   applicationCode: string;
   vacancyCode: string;
   message: string;
+  /** On-screen receipt path. No message is sent to the candidate's own address. */
+  portalPath: string;
+  receipt: 'on-screen';
 }
 
 export type ApplicationStage =
@@ -917,6 +923,8 @@ export interface Application {
   candidate?: Candidate | undefined;
   vacancyCode?: string | undefined;
   positionTitle?: string | undefined;
+  /** Set when the file is Rejected. History keeps the same reason. */
+  rejectionReason?: string | null | undefined;
   /** Most recent persisted application event, used by pipeline summaries. */
   lastActivityAt?: string | null | undefined;
   lastActivityLabel?: string | null | undefined;
@@ -1065,7 +1073,7 @@ export interface CreateScreeningLogInput {
 }
 
 export type InterviewType = 'Screening' | 'Technical' | 'Behavioral' | 'Managerial' | 'Executive' | (string & {});
-export type InterviewStatus = 'Scheduled' | 'Completed' | 'Cancelled' | 'Rescheduled';
+export type InterviewStatus = 'Scheduled' | 'Completed' | 'Cancelled' | 'Rescheduled' | 'No-show';
 
 export interface InterviewAttendeeItem {
   id: string;
@@ -1905,6 +1913,7 @@ export interface ExtractedCandidate {
 }
 
 export * from './resume/index.ts';
+export * from './joining.ts';
 
 
 // ─── B4 / E1: GET /me/work ──────────────────────────────────────

@@ -20,7 +20,10 @@ export function reminderWorkerHealthy(beat: { observedAt: Date; metadata: unknow
 }
 
 const CLOSED_STAGES = ['Joined', 'Rejected', 'Withdrawn'];
+/** New sourcing and job targets. A held job is not a target. */
 const WORKING_JOB = ['Open', 'Partially Filled'];
+/** Interviews, offers, scorecards, and joining stay with the owner while the job is held. */
+const COMMITMENT_JOB = ['Open', 'Partially Filled', 'On Hold'];
 
 /**
  * B4: GET /me/work for the signed-in user.
@@ -66,15 +69,16 @@ export class MyWorkService {
     const org = user.organizationId;
     const me = user.userId;
     const ownedJobWhere = { organizationId: org, assignments: { some: { userId: me, isActive: true, assignmentKind: 'PRIMARY' } } };
-    const myFileWhere = {
+    const fileOn = (statuses: readonly string[]) => ({
       organizationId: org,
       stage: { notIn: CLOSED_STAGES },
-      vacancy: { status: { in: WORKING_JOB } },
+      vacancy: { status: { in: [...statuses] } },
       OR: [{ primaryRecruiterId: me }, { taskOwnerId: me }, { vacancy: ownedJobWhere }],
-    };
+    });
+    const commitmentFileWhere = fileOn(COMMITMENT_JOB);
 
     const appSelect = { id: true, stage: true, candidate: { select: { id: true, firstName: true, lastName: true } } } as const;
-    const [jobs, requisitions, tasks, interviews, offers, beat] = await Promise.all([
+    const [jobs, requisitions, tasks, interviews, offers, joiningCases, beat] = await Promise.all([
       this.prisma.vacancy.findMany({
         where: { ...ownedJobWhere, status: { in: WORKING_JOB } },
         select: {
@@ -114,7 +118,7 @@ export class MyWorkService {
           organizationId: org,
           status: { notIn: ['Cancelled'] },
           scheduledStart: { gte: new Date(now.getTime() - 14 * 86_400_000), lte: new Date(now.getTime() + 3 * 86_400_000) },
-          OR: [{ application: myFileWhere }, { attendees: { some: { userId: me } } }],
+          OR: [{ application: commitmentFileWhere }, { attendees: { some: { userId: me } } }],
         },
         select: {
           id: true, title: true, scheduledStart: true, scheduledEnd: true, applicationId: true, locationUrl: true, roomName: true, legacyInterviewerName: true,
@@ -125,13 +129,36 @@ export class MyWorkService {
         take: 200,
       }),
       this.prisma.offer.findMany({
-        where: { organizationId: org, status: { in: ['Pending Approval', 'Sent'] }, application: myFileWhere },
+        where: { organizationId: org, status: { in: ['Pending Approval', 'Sent'] }, application: commitmentFileWhere },
         select: {
           id: true, offerCode: true, status: true, applicationId: true, updatedAt: true, application: { select: appSelect },
           // C6: who the offer is waiting on (pending approvals of the latest version).
           versions: { orderBy: { versionNumber: 'desc' }, take: 1, select: { approvals: { where: { status: 'Pending' }, orderBy: { createdAt: 'asc' }, select: { approverUserId: true, roleCode: true, approver: { select: { displayName: true } } } } } },
         },
         take: 200,
+      }),
+      this.prisma.hiringCase.findMany({
+        where: {
+          organizationId: org,
+          status: 'Awaiting Joining',
+          application: { vacancy: { organizationId: org, status: 'On Hold' } },
+          OR: [
+            { ownerUserId: me },
+            { ownerUserId: null, application: { primaryRecruiterId: me } },
+            { ownerUserId: null, application: { primaryRecruiterId: null, vacancy: ownedJobWhere } },
+          ],
+        },
+        select: {
+          id: true, applicationId: true,
+          application: {
+            select: {
+              stage: true,
+              candidate: { select: { id: true, firstName: true, lastName: true } },
+              vacancy: { select: { vacancyCode: true, position: { select: { title: true } } } },
+            },
+          },
+        },
+        take: 100,
       }),
       this.prisma.serviceHeartbeat.findUnique({ where: { service: DUE_REMINDER_HEARTBEAT_SERVICE }, select: { observedAt: true, metadata: true } }),
     ]);
@@ -146,7 +173,7 @@ export class MyWorkService {
     };
 
     const ownsFile = (i: (typeof interviews)[number]) =>
-      WORKING_JOB.includes(i.application.vacancy.status) &&
+      COMMITMENT_JOB.includes(i.application.vacancy.status) &&
       (i.application.primaryRecruiterId === me || i.application.taskOwnerId === me || i.application.vacancy.assignments.length > 0);
     const submitted = (i: (typeof interviews)[number], userId: string) => i.scorecards.some((s) => s.interviewerId === userId && s.status === 'Submitted'); // B5: a Draft is still pending
 
@@ -194,6 +221,16 @@ export class MyWorkService {
         id: o.id, code: o.offerCode, status: o.status, applicationId: o.applicationId, updatedAt: o.updatedAt, app: appInfo(o.application),
         approvers: (o.versions[0]?.approvals ?? []).map((a) => ({ id: a.approverUserId, name: a.approver?.displayName ?? a.roleCode })),
       })),
+      joining: joiningCases.map((row) => {
+        const name = `${row.application.candidate.firstName} ${row.application.candidate.lastName}`.trim();
+        const jobTitle = row.application.vacancy.position?.title ?? row.application.vacancy.vacancyCode;
+        return {
+          id: row.id,
+          applicationId: row.applicationId,
+          title: `${name || 'Candidate'} — awaiting joining (${jobTitle})`,
+          app: appInfo({ id: row.applicationId, stage: row.application.stage, candidate: row.application.candidate }),
+        };
+      }),
       reminderWorkerHealthy: reminderWorkerHealthy(beat, now),
     }, now, day);
   }

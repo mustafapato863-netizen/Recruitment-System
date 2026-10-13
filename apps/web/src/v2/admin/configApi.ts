@@ -24,6 +24,29 @@ export async function fetchPipeline(): Promise<{ template: PipelineTemplate; sta
   return { template: t, stages: [...(full.stages ?? [])].filter((s) => s.status !== 'Archived').sort((a, b) => a.sortOrder - b.sortOrder) };
 }
 export const renameStage = (tid: string, sid: string, name: string) => patchApi(`/pipeline-templates/${enc(tid)}/stages/${enc(sid)}`, { name });
+
+export interface WorkflowPosition {
+  id: string;
+  code: string;
+  title: string;
+  profile: 'technical' | 'clinical' | null;
+  vacancies: Array<{ code: string; status: string }>;
+}
+export interface WorkflowImpact {
+  positionId: string;
+  positionTitle: string;
+  currentProfile: string | null;
+  proposedProfile: 'technical' | 'clinical';
+  applyAllowed: boolean;
+  protectedVacancyCodes: string[];
+  preservedSnapshots: number;
+  openCasesAdoptingProfile: Array<{ code: string; vacancyCode: string; stage: string }>;
+  vacancies: Array<{ code: string; status: string; approvedHeadcount: number; joinedHeadcount: number; protected: boolean }>;
+  message: string;
+}
+export const fetchWorkflowRules = () => getApi<{ positions: WorkflowPosition[] }>('/workflow-rules');
+export const previewWorkflowRule = (positionId: string, profile: 'technical' | 'clinical') =>
+  postApi<WorkflowImpact>('/workflow-rules/preview', { positionId, profile });
 export const createPipeline = () => postApi<PipelineTemplate>('/pipeline-templates', { name: 'Default pipeline', isDefault: true });
 export const isSingleTemplate = (e: unknown) => domainError(e)?.code === 'SINGLE_PIPELINE_TEMPLATE';
 const EXIT_TYPES = new Set(['rejected', 'withdrawn', 'declined', 'exit']);
@@ -35,7 +58,7 @@ export const STAGE_INFO: Record<string, { drawer: string; actions: string; gate?
   screening: { drawer: 'Log screening: outcome, notice period, written fit note', actions: 'Move to Interview · Reject', gate: 'Gate: screen note saved before Interview' },
   interview: { drawer: 'Schedule interview: user-picker interviewer, room link', actions: 'Scorecard by the interviewer · Move to Offer', gate: 'Gate: scorecard submitted before Offer' },
   offer: { drawer: 'Offer draft (no pay) → Manager decision → Send offer → Record answer', actions: 'Approve / Request changes (Manager) · Withdraw', gate: 'Gate: Manager approval before Send offer' },
-  'pre-hire': { drawer: 'Pre-hire checklist', actions: 'Mark as joined', gate: 'Gate: ID, contract and SCFHS licence checked' },
+  'pre-hire': { drawer: 'Pre-hire checklist', actions: 'Submit for final approval · Record actual joining', gate: 'Gate: this job\'s required checks, then final approval' },
   joined: { drawer: '—', actions: 'Counts toward the job target; closes the application' },
   rejected: { drawer: 'Reject drawer · reason required · the person stays in the Candidates bank', actions: '' },
   withdrawn: { drawer: 'Candidate pulled out or declined the offer · reason required · stays in the bank', actions: '' },

@@ -719,6 +719,8 @@ Table hiring_cases {
   status String [not null, default: 'Pending Compliance']
   plannedJoiningDate DateTime
   actualJoiningDate DateTime
+  requirementSnapshot Json [note: 'Checks required for this accepted case. Null means the historical universal rule. Not rewritten when the job profile changes.']
+  approvalFingerprint String [note: 'Fingerprint of the case facts the current approval authorized. Null when no approval can authorize joining.']
   ownerUserId String
   owner users
   createdAt DateTime [default: `now()`, not null]
@@ -755,6 +757,8 @@ Table hiring_case_approvals {
   approverUserId String
   approver users
   decidedAt DateTime
+  decisionFingerprint String [note: 'Facts authorized by this decision. A later material change sets invalidatedAt; the row itself stays.']
+  invalidatedAt DateTime
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [not null]
 }
@@ -1071,6 +1075,7 @@ Table joining_checks {
   verifiedById String
   verifiedBy users
   verifiedAt DateTime
+  expiryDate DateTime [note: 'Required for an explicit clinical SCFHS check. A past date blocks joining; clearing verification keeps the row.']
   documentId String
   document candidate_documents
   createdAt DateTime [default: `now()`, not null]

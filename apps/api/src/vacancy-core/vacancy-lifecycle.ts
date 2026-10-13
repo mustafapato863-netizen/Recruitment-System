@@ -100,18 +100,49 @@ export async function writeJobStatus(
 }
 
 /**
+ * One application can move to Joined once. A repeated or overlapping request
+ * sees the stage already set and must not fill another seat.
+ */
+export async function claimApplicationJoin(tx: Tx, applicationId: string): Promise<boolean> {
+  const moved = await tx.application.updateMany({
+    where: { id: applicationId, stage: { not: 'Joined' } },
+    data: { stage: 'Joined', version: { increment: 1 } },
+  });
+  return moved.count === 1;
+}
+
+/**
  * Joined fills one seat (v2 §4). Moves the job to Partially Filled / Filled.
  * A held job stays On Hold until its last seat fills.
+ * The increment is conditional, so two overlapping joins cannot both take the last seat.
  */
 export async function recordJoin(
   tx: Tx,
   vacancy: { id: string; status: string; joinedHeadcount: number; approvedHeadcount: number },
   actorUserId: string | null,
 ): Promise<void> {
-  const joined = vacancy.joinedHeadcount + 1;
-  const next = seatStatus(joined, vacancy.approvedHeadcount);
-  const target: JobStatus = vacancy.status === 'On Hold' && next !== 'Filled' ? 'On Hold' : next;
-  await writeJobStatus(tx, vacancy, target, 'Seat filled (Joined)', actorUserId, { joinedHeadcount: { increment: 1 } });
+  const claimed = await tx.vacancy.updateMany({
+    where: { id: vacancy.id, joinedHeadcount: { lt: vacancy.approvedHeadcount } },
+    data: { joinedHeadcount: { increment: 1 } },
+  });
+  if (claimed.count !== 1) {
+    throw new ConflictException({
+      code: 'CAPACITY_FULL',
+      message: 'Approved capacity is already filled.',
+      missing: ['available seat'],
+      gate: 'capacity',
+    });
+  }
+  const current = await tx.vacancy.findUnique({
+    where: { id: vacancy.id },
+    select: { id: true, status: true, joinedHeadcount: true, approvedHeadcount: true },
+  });
+  if (!current) return;
+  const next = seatStatus(current.joinedHeadcount, current.approvedHeadcount);
+  const target: JobStatus = current.status === 'On Hold' && next !== 'Filled' ? 'On Hold' : next;
+  if (current.status !== target) {
+    await writeJobStatus(tx, current, target, 'Seat filled (Joined)', actorUserId);
+  }
 }
 
 /** Owner = active PRIMARY assignee; manager = that owner's line manager or the requisition's requester. */

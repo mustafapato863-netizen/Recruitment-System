@@ -17,6 +17,7 @@ export const PERMISSION_LABELS: Record<string, string> = {
   APPLICATION_MOVE_STAGE: 'Move Application Stage',
   APPROVE_OFFERS: 'Approve Offers',
   FINAL_HIRING_APPROVAL: 'Final Hiring Approval',
+  RECORD_ACTUAL_JOINING: 'Record Actual Joining',
   VIEW_CURRENT_SALARY: 'View Current Salary',
   USERS_VIEW: 'View Users',
   USERS_MANAGE: 'Manage Users',

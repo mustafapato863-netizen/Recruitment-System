@@ -177,7 +177,8 @@ describe('E09 Job pipeline', () => {
     const imp = screen.getByRole('button', { name: 'Import CVs' });
     expect(imp).toBeDisabled();
     expect(imp).toHaveAccessibleDescription('A held job takes no new applications.');
-    expect(screen.getByText(/takes no new applications and is off My Work/)).toBeInTheDocument();
+    expect(screen.getByText(/new applications are paused/)).toBeInTheDocument();
+    expect(screen.getByText(/stay on My Work/)).toBeInTheDocument();
   });
 });
 

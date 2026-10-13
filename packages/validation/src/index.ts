@@ -197,6 +197,7 @@ export const interviewStatusEnum = z.enum([
   'Completed',
   'Cancelled',
   'Rescheduled',
+  'No-show',
 ]);
 
 export const createInterviewSchema = z.object({

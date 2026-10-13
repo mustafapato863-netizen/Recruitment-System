@@ -11,6 +11,7 @@ const root = join(__dirname, '../../../../../database/prisma');
 const statements = (file: string) => readFileSync(join(root, file), 'utf8').split(';').map((s) => s.replace(/--.*$/gm, '').trim()).filter((s) => s && !s.includes('_prisma_migrations'));
 
 describe.skipIf(!url)('B2R-6 rejection "Other" survives a rollback round trip', () => {
+  if (!url) return;
   const prisma = new PrismaService({ datasources: { db: { url } } });
   afterAll(async () => { await prisma.$disconnect(); });
   it('b3f down -> b3f up -> b3g up leaves Other Active', async () => {

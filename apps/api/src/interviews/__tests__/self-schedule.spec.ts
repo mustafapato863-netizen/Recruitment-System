@@ -107,4 +107,97 @@ describe('SelfScheduleService', () => {
       expect(() => service.verifyToken(token)).toThrow(/expired/i);
     });
   });
+
+  function futureToken() {
+    return service.signPayload({
+      applicationId: 'app-uuid-1',
+      organizationId: 'org-uuid-1',
+      title: 'Technical Assessment',
+      interviewType: 'Technical',
+      durationMinutes: 45,
+      attendeeUserIds: ['user-1'],
+      expiresAt: Date.now() + 3600_000,
+      nonce: 'live-nonce',
+    });
+  }
+
+  it('does not offer slots when the job is on hold', async () => {
+    mockPrisma.application.findUnique.mockResolvedValue({
+      organizationId: 'org-uuid-1',
+      candidate: { firstName: 'Phase', lastName: 'Eight', email: 'person@example.com' },
+      vacancy: { status: 'On Hold', position: { title: 'Sample' } },
+    });
+    await expect(service.getInvitationView(futureToken())).rejects.toThrow(/on hold/i);
+    expect(mockPrisma.interview.findFirst).not.toHaveBeenCalled();
+    expect(mockPrisma.interview.create).not.toHaveBeenCalled();
+  });
+
+  it('does not book a slot when the job is closed', async () => {
+    mockPrisma.application.findUnique.mockResolvedValue({
+      organizationId: 'org-uuid-1',
+      candidate: { firstName: 'Phase', lastName: 'Eight', email: 'person@example.com' },
+      vacancy: { status: 'Closed', position: { title: 'Sample' } },
+    });
+    await expect(service.bookSelfSchedule(futureToken(), {
+      selectedSlot: new Date(Date.now() + 86_400_000).toISOString(),
+      timezone: 'Asia/Riyadh',
+    })).rejects.toThrow(/closed/i);
+    expect(mockPrisma.interview.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects an occupied interviewer slot', async () => {
+    mockPrisma.application.findUnique.mockResolvedValue({
+      organizationId: 'org-uuid-1',
+      candidate: { firstName: 'Phase', lastName: 'Eight', email: 'person@example.com' },
+      vacancy: { status: 'Open', position: { title: 'Sample' } },
+    });
+    mockPrisma.interview.findMany.mockResolvedValue([{ id: 'busy' }]);
+    await expect(service.bookSelfSchedule(futureToken(), {
+      selectedSlot: new Date(Date.now() + 86_400_000).toISOString(),
+      timezone: 'Asia/Riyadh',
+    })).rejects.toThrow(/occupied/i);
+    expect(mockPrisma.interview.create).not.toHaveBeenCalled();
+  });
+
+  it('records a booking receipt on the local test mailbox only', async () => {
+    const previous = process.env.MAIL_DELIVERY_ENABLED;
+    process.env.MAIL_DELIVERY_ENABLED = 'true';
+    mockPrisma.application.findUnique.mockResolvedValue({
+      organizationId: 'org-uuid-1',
+      candidate: { firstName: 'Phase', lastName: 'Eight', email: 'person@example.com' },
+      vacancy: { status: 'Open', position: { title: 'Sample' } },
+    });
+    mockPrisma.interview.findMany.mockResolvedValue([]);
+    mockPrisma.interview.create.mockResolvedValue({
+      id: 'int-1',
+      interviewCode: 'INT-2026-008',
+      title: 'Technical Assessment',
+      scheduledStart: new Date('2026-11-02T06:00:00.000Z'),
+      scheduledEnd: new Date('2026-11-02T06:45:00.000Z'),
+      timezone: 'Asia/Riyadh',
+      locationUrl: null,
+    });
+    try {
+      await service.bookSelfSchedule(service.signPayload({
+        applicationId: 'app-uuid-1',
+        organizationId: 'org-uuid-1',
+        title: 'Technical Assessment',
+        interviewType: 'Technical',
+        durationMinutes: 45,
+        attendeeUserIds: [],
+        expiresAt: Date.now() + 3600_000,
+        nonce: 'mail-nonce',
+      }), {
+        selectedSlot: new Date(Date.now() + 86_400_000).toISOString(),
+        timezone: 'Asia/Riyadh',
+      });
+      expect(mockPrisma.emailOutbox.create).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ toEmail: 'local-test@recruitflow.local' }),
+      }));
+      expect(JSON.stringify(mockPrisma.emailOutbox.create.mock.calls)).not.toContain('person@example.com');
+    } finally {
+      if (previous === undefined) delete process.env.MAIL_DELIVERY_ENABLED;
+      else process.env.MAIL_DELIVERY_ENABLED = previous;
+    }
+  });
 });
