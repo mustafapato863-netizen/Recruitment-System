@@ -1,0 +1,90 @@
+/* Candidates list hierarchy. Tokens only; shared job chrome stays in jobs.css. */
+[data-ui='v2'] .rf2-cand__actions { display: flex; flex-wrap: wrap; gap: var(--rf2-space-1); }
+[data-ui='v2'] .rf2-cand__actions .rf2-btn { text-decoration: none; }
+[data-ui='v2'] .rf2-cand__who { width: 34%; }
+[data-ui='v2'] .rf2-cand__next { width: 28%; color: var(--rf2-ink); }
+[data-ui='v2'] .rf2-cand__quiet { color: var(--rf2-ink-2); font-size: var(--rf2-text-label); }
+[data-ui='v2'] .rf2-cand__label { display: none; }
+[data-ui='v2'] .rf2-cand__bound { margin: 0; padding: var(--rf2-space-1) var(--rf2-space-1-5); background: var(--rf2-warning-tint); color: var(--rf2-warning); font-size: var(--rf2-text-label); }
+
+@media (max-width: 767px) {
+  [data-ui='v2'] .rf2-cand { min-width: 0; max-width: 100%; }
+  [data-ui='v2'] .rf2-cand > .rf2-row-between { flex-wrap: wrap; align-items: flex-start; }
+  [data-ui='v2'] .rf2-cand__actions { max-width: 100%; }
+  [data-ui='v2'] .rf2-cand__actions .rf2-btn,
+  [data-ui='v2'] .rf2-cand .rf2-btn { flex: 1 1 10rem; max-width: 100%; white-space: normal; }
+  [data-ui='v2'] .rf2-cand .rf2-jobs__filters,
+  [data-ui='v2'] .rf2-cand .rf2-panel,
+  [data-ui='v2'] .rf2-cand .rf2-seg { min-width: 0; max-width: 100%; }
+  [data-ui='v2'] .rf2-cand .rf2-seg { flex-wrap: wrap; }
+  [data-ui='v2'] .rf2-cand .rf2-jobs__search,
+  [data-ui='v2'] .rf2-cand .rf2-jobs__filters > .rf2-field { flex: 1 1 100%; min-width: 0; max-width: 100%; }
+  [data-ui='v2'] .rf2-cand .rf2-bank-links,
+  [data-ui='v2'] .rf2-cand .rf2-bank-add { max-width: 100%; }
+  [data-ui='v2'] .rf2-cand .rf2-bank-links a { min-width: 0; overflow-wrap: break-word; }
+  [data-ui='v2'] .rf2-cand .rf2-bank-add > .rf2-field,
+  [data-ui='v2'] .rf2-cand .rf2-bank-add > .rf2-btn { flex: 1 1 100%; min-width: 0; max-width: 100%; }
+
+  [data-ui='v2'] .rf2-cand .rf2-jtable { display: block; width: 100%; min-width: 0; max-width: 100%; }
+  [data-ui='v2'] .rf2-cand .rf2-jtable thead { display: none; }
+  [data-ui='v2'] .rf2-cand .rf2-jtable tbody { display: block; min-width: 0; }
+  [data-ui='v2'] .rf2-cand .rf2-jtable td {
+    display: block; width: auto; min-width: 0; max-width: 100%;
+    padding: 0; border: 0; overflow-wrap: break-word; word-break: normal;
+  }
+  [data-ui='v2'] .rf2-cand .rf2-jtable tbody tr {
+    display: grid; width: 100%; min-width: 0; max-width: 100%; box-sizing: border-box;
+    padding: var(--rf2-space-1-5); border-bottom: 1px solid var(--rf2-divider);
+    column-gap: var(--rf2-space-1); row-gap: var(--rf2-space-0-5); align-items: start;
+  }
+  [data-ui='v2'] .rf2-cand .rf2-jtable tbody tr:last-child { border-bottom: 0; }
+
+  [data-ui='v2'] .rf2-cand [aria-label='Active applications'] .rf2-jtable tbody tr {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      "check who open"
+      ". source source"
+      ". owner owner"
+      "stage stage stage"
+      "next next next";
+  }
+  [data-ui='v2'] .rf2-cand [aria-label='Active applications'] td:nth-child(1) { grid-area: check; }
+  [data-ui='v2'] .rf2-cand [aria-label='Active applications'] td:nth-child(2) { grid-area: who; }
+  [data-ui='v2'] .rf2-cand [aria-label='Active applications'] td:nth-child(3) { grid-area: stage; }
+  [data-ui='v2'] .rf2-cand [aria-label='Active applications'] td:nth-child(4) { grid-area: source; }
+  [data-ui='v2'] .rf2-cand [aria-label='Active applications'] td:nth-child(5) { grid-area: owner; }
+  [data-ui='v2'] .rf2-cand [aria-label='Active applications'] td:nth-child(6) { grid-area: next; }
+  [data-ui='v2'] .rf2-cand [aria-label='Active applications'] td:nth-child(7) { grid-area: open; justify-self: end; }
+
+  [data-ui='v2'] .rf2-cand [aria-label='Bank'] .rf2-jtable tbody tr {
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-areas:
+      "choose name"
+      "title title"
+      "place place"
+      "years years";
+  }
+  [data-ui='v2'] .rf2-cand [aria-label='Bank'] td:nth-child(1) { grid-area: choose; }
+  [data-ui='v2'] .rf2-cand [aria-label='Bank'] td:nth-child(2) { grid-area: name; }
+  [data-ui='v2'] .rf2-cand [aria-label='Bank'] td:nth-child(3) { grid-area: title; }
+  [data-ui='v2'] .rf2-cand [aria-label='Bank'] td:nth-child(4) { grid-area: place; }
+  [data-ui='v2'] .rf2-cand [aria-label='Bank'] td:nth-child(5) { grid-area: years; }
+
+  [data-ui='v2'] .rf2-cand__who,
+  [data-ui='v2'] .rf2-cand__next { width: auto; max-width: 100%; }
+  [data-ui='v2'] .rf2-cand .rf2-kcard__top { align-items: flex-start; min-width: 0; max-width: 100%; }
+  [data-ui='v2'] .rf2-cand .rf2-kcard__top > div,
+  [data-ui='v2'] .rf2-cand .rf2-jtable__name,
+  [data-ui='v2'] .rf2-cand .rf2-jtable__sub { min-width: 0; max-width: 100%; }
+  [data-ui='v2'] .rf2-cand .rf2-kcard__name,
+  [data-ui='v2'] .rf2-cand .rf2-kcard__sub,
+  [data-ui='v2'] .rf2-cand .rf2-jtable__name,
+  [data-ui='v2'] .rf2-cand .rf2-jtable__sub {
+    white-space: normal; overflow-wrap: break-word; word-break: normal;
+  }
+  [data-ui='v2'] .rf2-cand .rf2-chip { white-space: normal; max-width: 100%; }
+  [data-ui='v2'] .rf2-cand__label {
+    display: block; margin: 0; color: var(--rf2-muted);
+    font-size: var(--rf2-text-caption); font-weight: 600; line-height: var(--rf2-leading-caption);
+  }
+}
