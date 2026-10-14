@@ -59,13 +59,15 @@ describe('nav per seat', () => {
     expect(within(nav).getAllByRole('link').map((a) => a.textContent)).toEqual(labels);
   });
 
-  it('hides unavailable items and lists permitted classic work outside the daily menu', () => {
+  it('hides unavailable items and lists permitted classic work outside the daily menu', async () => {
     renderShell('employee', user(['VACANCY_VIEW']));
     const nav = screen.getByRole('navigation', { name: SEAT_NAV.employee.heading });
     expect(within(nav).getAllByRole('link').map((a) => a.textContent)).toEqual(['My Work', 'Open jobs']);
     expect(within(nav).queryByRole('link', { name: 'All interviews' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'More (classic)' })).not.toBeInTheDocument();
     const retained = screen.getByRole('navigation', { name: 'Retained work' });
+    expect(within(retained).queryByRole('link')).not.toBeInTheDocument();
+    await userEvent.setup().click(within(retained).getByRole('button', { name: 'Other work' }));
     expect(within(retained).getAllByRole('link').map((a) => a.getAttribute('href'))).toEqual(['/interviews', '/interviews/calendar', '/classic/vacancies']);
     expect(screen.queryByText(/locked/i)).not.toBeInTheDocument();
   });
@@ -76,6 +78,7 @@ describe('nav per seat', () => {
     expect(screen.queryByRole('button', { name: 'More (classic)' })).not.toBeInTheDocument();
     expect(screen.queryByRole('searchbox', { name: 'Find a tool' })).not.toBeInTheDocument();
     const retained = screen.getByRole('navigation', { name: 'Retained work' });
+    await u.click(within(retained).getByRole('button', { name: 'Other work' }));
     const hiring = within(retained).getByRole('link', { name: 'Hiring cases' });
     hiring.focus();
     await u.keyboard('{Enter}');
@@ -90,6 +93,8 @@ describe('nav per seat', () => {
     expect(within(nav).getByRole('link', { name: 'Templates' })).toHaveAttribute('href', '/email-templates');
     expect(screen.queryByRole('button', { name: 'More (classic)' })).not.toBeInTheDocument();
     const retained = screen.getByRole('navigation', { name: 'Retained work' });
+    expect(within(retained).queryByRole('link', { name: 'Hiring cases' })).not.toBeInTheDocument();
+    await userEvent.setup().click(within(retained).getByRole('button', { name: 'Other work' }));
     expect(within(retained).queryByRole('link', { name: 'Roles' })).not.toBeInTheDocument();
     expect(within(retained).queryByRole('link', { name: 'Templates' })).not.toBeInTheDocument();
     expect(within(retained).getByRole('link', { name: 'Hiring cases' })).toHaveAttribute('href', '/hires');
@@ -97,10 +102,12 @@ describe('nav per seat', () => {
     expect(await runAxe(retained)).toEqual([]);
   });
 
-  it('an old classic URL still titles the authorized page', () => {
+  it('an old classic URL still titles the authorized page', async () => {
     renderShell('admin', user([], ['ADMINISTRATOR']), '/joinings');
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Joinings');
     expect(screen.queryByRole('button', { name: 'More (classic)' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Joinings' })).not.toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Other work' }));
     expect(screen.getByRole('link', { name: 'Joinings' })).toHaveAttribute('href', '/joinings');
   });
 
@@ -122,10 +129,11 @@ describe('nav per seat', () => {
     expect(screen.queryByRole('button', { name: 'More (classic)' })).not.toBeInTheDocument();
   });
 
-  it('does not offer an admin tool when its route requires a stronger permission', () => {
+  it('does not offer an admin tool when its route requires a stronger permission', async () => {
     renderShell('admin', user(['APPLICATION_VIEW'], ['CUSTOM_ADMIN']), '/reports');
     expect(screen.queryByRole('button', { name: 'More (classic)' })).not.toBeInTheDocument();
     const retained = screen.getByRole('navigation', { name: 'Retained work' });
+    await userEvent.setup().click(within(retained).getByRole('button', { name: 'Other work' }));
     expect(within(retained).queryByRole('link', { name: 'Templates' })).not.toBeInTheDocument();
     expect(within(retained).queryByRole('link', { name: 'Roles' })).not.toBeInTheDocument();
     expect(within(retained).getByRole('link', { name: 'Hiring cases' })).toHaveAttribute('href', '/hires');

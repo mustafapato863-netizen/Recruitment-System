@@ -35,6 +35,18 @@ const TEST_PERSONAS: Array<{
         role: 'Administrator / Full Access',
         email: 'admin@sgh.com',
       },
+      {
+        name: 'Sarah Ahmed',
+        initials: 'SA',
+        role: 'Recruiter',
+        email: 'sarah.ahmed@recruitflow.local',
+      },
+      {
+        name: 'Dr. Hassan Ali',
+        initials: 'HA',
+        role: 'Hiring Manager',
+        email: 'hassan.ali@recruitflow.local',
+      },
     ]
   : [];
 
@@ -452,7 +464,7 @@ export function LoginPage() {
                         Staff accounts
                       </span>
                       <span className="mt-0.5 block text-[10.5px] text-rf-ink-muted">
-                        Auto-fill credentials for verified staff
+                        Choose a local demo staff account to fill sign-in fields
                       </span>
                     </span>
 

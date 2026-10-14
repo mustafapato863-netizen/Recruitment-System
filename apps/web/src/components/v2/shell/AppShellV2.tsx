@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
-  BarChart3, BriefcaseBusiness, Building2, ChevronsUpDown, CircleHelp, ClipboardList, Columns3, Database, FileText, History,
+  BarChart3, BriefcaseBusiness, Building2, ChevronDown, ChevronsUpDown, CircleHelp, ClipboardList, Columns3, Database, FileText, History,
   ListChecks, LogOut, Moon, Sun, PanelLeftClose, PanelLeftOpen, Plug, Shield, Target, User, UserRound, Users,
   CalendarCheck, Archive } from 'lucide-react';
 import type { UserProfile } from '@recruitflow/contracts';
@@ -204,12 +204,28 @@ function WorkspaceBlock({ options, collapsed }: { options: WorkspaceOption[]; co
   );
 }
 
-/** Classic pages this person can open. Not a menu named More. */
-function RetainedHomes({ items }: { items: { key: string; label: string; to: string }[] }) {
+/** Classic pages this person can open. Closed until asked; not a menu named More. */
+function RetainedHomes({ items, currentPath }: { items: { key: string; label: string; to: string }[]; currentPath: string }) {
+  const [open, setOpen] = useState(false);
+  const panelId = useId();
   if (!items.length) return null;
   return (
     <nav className="rf2-retained" aria-label="Retained work">
-      {items.map((item) => <Link key={item.key} to={item.to}>{item.label}</Link>)}
+      <button type="button" className="rf2-retained__toggle" aria-expanded={open} aria-controls={panelId} onClick={() => setOpen((value) => !value)}>
+        <span>Other work</span>
+        <span className="rf2-retained__count" aria-hidden="true">{items.length}</span>
+        <ChevronDown aria-hidden="true" />
+      </button>
+      <div id={panelId} className="rf2-retained__list" hidden={!open}>
+        {items.map((item) => {
+          const isCurrent = currentPath === item.to || currentPath.startsWith(`${item.to}/`);
+          return (
+            <Link key={item.key} to={item.to} className={`rf2-retained__link${isCurrent ? ' rf2-retained__link--active' : ''}`} aria-current={isCurrent ? 'page' : undefined}>
+              {item.label}
+            </Link>
+          );
+        })}
+      </div>
     </nav>
   );
 }
@@ -258,6 +274,7 @@ function ShellFrame({ user, seat, onSignOut, children }: AppShellV2Props) {
   const narrow = useNarrowViewport();
   const collapsed = storedCollapsed || narrow;
   const workspaces = workspaceOptions(user);
+  const { theme, toggleTheme } = useTheme();
 
   return (
     <div className={`rf2-shell${collapsed ? ' rf2-shell--collapsed' : ''}`} data-seat={seat}>
@@ -300,6 +317,9 @@ function ShellFrame({ user, seat, onSignOut, children }: AppShellV2Props) {
         <header className="rf2-shell__header">
           <h1 className="rf2-shell__title">{title}</h1>
           <HeaderSearch placeholder={config.searchPlaceholder} meId={user.id} />
+          <button type="button" className="rf2-icon-button" aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'} title={theme === 'light' ? 'Dark mode' : 'Light mode'} onClick={toggleTheme}>
+            {theme === 'light' ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}
+          </button>
           <HelpButton />
           {canSeeNotifications ? (
             <NotificationsBell unread={unread} />
@@ -307,7 +327,7 @@ function ShellFrame({ user, seat, onSignOut, children }: AppShellV2Props) {
           <UserMenu user={user} seat={seat} onSignOut={onSignOut} />
         </header>
         <main id="rf2-main" className="rf2-shell__content" tabIndex={-1}>
-          <RetainedHomes items={classic} />
+          <RetainedHomes items={classic} currentPath={location.pathname} />
           {children ?? (redirectTo ? <Navigate to={redirectTo} replace /> : <Outlet />)}
         </main>
       </div>

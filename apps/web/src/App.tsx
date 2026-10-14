@@ -20,6 +20,8 @@ import './styles/polish.css';
 import './styles/source-integration.css';
 import './styles/v2-parity.css';
 import './styles/tokens-v2.css';
+import './styles/glass-neo.css';
+import './styles/classic-in-shell.css';
 
 // Lazy loaded page components for optimal bundle splitting. v2 is the only signed-in UI (v2 default):
 // v1 URLs are redirected to their v2 equivalents by the shell (v2/destinations.ts), so only v2 routes exist here.

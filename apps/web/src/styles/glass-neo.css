@@ -1,0 +1,43 @@
+/* Glass neo surfaces for pages that still paint a solid card inside the v2 shell.
+   Loaded after v2-parity so the approved desktop treatment wins on those cards. */
+[data-ui='v2'] .rf2-shell__content .bg-white,
+[data-ui='v2'] .rf2-shell__content .bg-rf-surface,
+[data-ui='v2'] .rf2-shell__content .bg-slate-50 {
+  background-color: var(--rf2-glass-card);
+  border-color: var(--rf2-glass-line);
+  box-shadow: var(--rf2-neo-raise);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+[data-ui='v2'] .rf2-shell .rf-page article.rf-vacancy-card,
+[data-ui='v2'] .rf2-shell article.rf-vacancy-card {
+  border: 1px solid var(--rf2-glass-line) !important;
+  border-radius: 20px !important;
+  background: var(--rf2-glass-card) !important;
+  box-shadow: var(--rf2-neo-raise) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+[data-ui='v2'] .rf2-shell .rf-page article.rf-vacancy-card:hover,
+[data-ui='v2'] .rf2-shell article.rf-vacancy-card:hover {
+  box-shadow: var(--rf2-neo-raise-sm) !important;
+}
+
+[data-ui='v2'] .rf2-shell__content .rf2-col {
+  background: color-mix(in srgb, var(--rf2-glass-card) 72%, transparent);
+  border-radius: 16px;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  [data-ui='v2'] .rf2-shell__sidebar,
+  [data-ui='v2'] .rf2-shell__header,
+  [data-ui='v2'] .rf2-card,
+  [data-ui='v2'] .rf2-panel,
+  [data-ui='v2'] .rf2-task-row,
+  [data-ui='v2'] .rf2-shell article.rf-vacancy-card {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}

@@ -12,23 +12,23 @@
 [data-ui='v2'] .rf2-daytoggle__btn[aria-pressed='true'] { border-color: var(--rf2-border); background: var(--rf2-card); color: var(--rf2-action); font-weight: 600; }
 [data-ui='v2'] .rf2-daytoggle__btn:focus-visible { outline: var(--rf2-focus-width) solid var(--rf2-focus-color); outline-offset: var(--rf2-focus-offset); }
 
-[data-ui='v2'] .rf2-jobstrip { display: grid; grid-template-columns: 40px minmax(0, 1fr) 160px 120px auto; align-items: center; gap: var(--rf2-space-2); padding: var(--rf2-space-2); border: 1px solid var(--rf2-divider); border-radius: var(--rf2-radius-card); background: var(--rf2-card); }
-[data-ui='v2'] .rf2-jobstrip__icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: var(--rf2-radius-card); background: var(--rf2-info-tint); color: var(--rf2-action); }
+[data-ui='v2'] .rf2-jobstrip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; padding: 16px 18px; border: 1px solid var(--rf2-glass-line); border-radius: 20px; background: var(--rf2-glass-card); box-shadow: var(--rf2-neo-raise); backdrop-filter: blur(12px); }
+[data-ui='v2'] .rf2-jobstrip__icon { display: none; }
 [data-ui='v2'] .rf2-jobstrip__icon svg { width: 18px; height: 18px; }
 [data-ui='v2'] .rf2-jobstrip__title { margin: 0; font-size: var(--rf2-text-card); line-height: var(--rf2-leading-card); font-weight: 600; }
 [data-ui='v2'] .rf2-jobstrip__meta { margin: 0; font-size: var(--rf2-text-label); line-height: var(--rf2-leading-label); color: var(--rf2-muted); }
 [data-ui='v2'] .rf2-jobstrip__seats { display: flex; flex-direction: column; gap: var(--rf2-space-0-5); }
 [data-ui='v2'] .rf2-jobstrip__seats-label { color: var(--rf2-success); font-size: var(--rf2-text-label); font-weight: 600; font-variant-numeric: tabular-nums; }
-[data-ui='v2'] .rf2-jobstrip__bar { display: block; height: 6px; border-radius: var(--rf2-radius-pill); background: var(--rf2-divider); overflow: hidden; }
+[data-ui='v2'] .rf2-jobstrip__bar { display: none; height: 6px; border-radius: var(--rf2-radius-pill); background: var(--rf2-divider); overflow: hidden; }
 [data-ui='v2'] .rf2-jobstrip__bar > span { display: block; height: 100%; background: var(--rf2-success); }
 [data-ui='v2'] .rf2-jobstrip__due { display: flex; flex-direction: column; }
 [data-ui='v2'] .rf2-jobstrip__due-label { font-size: var(--rf2-text-caption); color: var(--rf2-muted); }
 [data-ui='v2'] .rf2-jobstrip__due-value { font-size: var(--rf2-text-body); font-weight: 600; color: var(--rf2-warning); font-variant-numeric: tabular-nums; }
 
 [data-ui='v2'] .rf2-mywork__counts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--rf2-space-2); margin: 0; }
-[data-ui='v2'] .rf2-mywork__count { padding: var(--rf2-space-2); border: 1px solid var(--rf2-divider); border-radius: var(--rf2-radius-card); background: var(--rf2-card); }
-[data-ui='v2'] .rf2-mywork__count dt { font-size: var(--rf2-text-label); color: var(--rf2-ink-2); }
-[data-ui='v2'] .rf2-mywork__count dd[data-count-value] { margin: var(--rf2-space-0-5) 0 0; font-size: var(--rf2-text-page); line-height: var(--rf2-leading-page); font-weight: 600; font-variant-numeric: tabular-nums; }
+[data-ui='v2'] .rf2-mywork__count { display: flex; flex-direction: column; padding: 14px 18px; border: 1px solid var(--rf2-glass-line); border-radius: 20px; background: var(--rf2-glass-card); box-shadow: var(--rf2-neo-raise); backdrop-filter: blur(12px); }
+[data-ui='v2'] .rf2-mywork__count dt { order: 1; font-size: var(--rf2-text-label); color: var(--rf2-ink-2); }
+[data-ui='v2'] .rf2-mywork__count dd[data-count-value] { order: 0; margin: 0; font-size: 28px; line-height: 34px; font-weight: 600; font-variant-numeric: tabular-nums; }
 [data-ui='v2'] .rf2-mywork__count[data-key='Overdue'] dd[data-count-value] { color: var(--rf2-danger); }
 [data-ui='v2'] .rf2-mywork__count[data-key='Waiting on others'] dd[data-count-value] { color: var(--rf2-info); }
 [data-ui='v2'] .rf2-mywork__count-hint { margin: 0; font-size: var(--rf2-text-caption); color: var(--rf2-muted); }
@@ -69,3 +69,11 @@
 [data-ui='v2'] .rf2-mywork__head-actions { display: flex; gap: var(--rf2-space-1); align-items: center; justify-content: flex-end; }
 [data-ui='v2'] .rf2-mywork__readonly { color: var(--rf2-muted); font-size: var(--rf2-text-label); }
 [data-ui='v2'] .rf2-mywork__counts { margin-block: 0; }
+
+@media (max-width: 767px) {
+  [data-ui='v2'] .rf2-mywork { padding: var(--rf2-space-2); }
+  [data-ui='v2'] .rf2-mywork__top { flex-direction: column; align-items: stretch; }
+  [data-ui='v2'] .rf2-mywork__day { align-items: flex-start; width: 100%; }
+  [data-ui='v2'] .rf2-mywork__head-actions { flex-wrap: wrap; justify-content: flex-start; }
+  [data-ui='v2'] .rf2-mywork__counts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

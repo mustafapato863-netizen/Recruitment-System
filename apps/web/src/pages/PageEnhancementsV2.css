@@ -164,6 +164,68 @@
   contain-intrinsic-size: 700px;
 }
 
+/* Final approval queue: make the decision workflow easy to scan and act on. */
+.rf-final-approval-page .rf-page-header h1 {
+  font-size: clamp(22px, 2vw, 28px) !important;
+  line-height: 1.2 !important;
+}
+
+.rf-final-approval-page .rf-page-header p {
+  max-width: 62ch !important;
+  font-size: 14px !important;
+  line-height: 1.6 !important;
+}
+
+.rf-final-approval-page__queue {
+  border-radius: 1rem !important;
+}
+
+.rf-final-approval-page__queue .rf-section-header__title {
+  font-size: 16px;
+  line-height: 1.35;
+}
+
+.rf-final-approval-page__queue .rf-section-header__description {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.rf-final-approval-page__data .rf-responsive-data__cards {
+  gap: 14px;
+}
+
+.rf-final-approval-page__data .rf-responsive-data__cards article {
+  gap: 16px;
+  padding: 16px;
+  border-radius: 14px;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.rf-final-approval-page__data .rf-responsive-data__cards article:hover {
+  border-color: color-mix(in srgb, var(--color-action) 35%, var(--color-border));
+  box-shadow: var(--shadow-card);
+}
+
+.rf-final-approval-page__data .rf-responsive-data__cards dt {
+  font-size: 10.5px;
+}
+
+.rf-final-approval-page__data .rf-responsive-data__cards dd.text-sm {
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.rf-final-approval-page__data .rf-responsive-data__cards article > div:last-child [data-slot='button'] {
+  min-height: 40px;
+  padding-inline: 12px;
+  font-size: 12px;
+}
+
+.rf-final-approval-page__data .rf-responsive-data__table tbody td {
+  padding-block: 11px;
+  font-size: 12px;
+}
+
 @media (max-width: 1023px) {
   .rf-page-hero {
     padding: 1.25rem;
@@ -192,10 +254,17 @@
   }
 }
 
+@media (max-width: 767px) {
+  .rf-final-approval-page__data .rf-responsive-data__cards article > div:last-child [data-slot='button'] {
+    min-height: 44px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .rf-metric-card,
   .rf-elevated-card,
-  .rf-card-list > * {
+  .rf-card-list > *,
+  .rf-final-approval-page__data .rf-responsive-data__cards article {
     transition: none !important;
     transform: none !important;
   }

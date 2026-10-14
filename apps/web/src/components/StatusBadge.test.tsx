@@ -7,6 +7,7 @@ describe('StatusBadge', () => {
     expect(getStatusTone('Inactive')).toBe('neutral');
     expect(getStatusTone('Accepted')).toBe('success');
     expect(getStatusTone('Pending Approval')).toBe('warning');
+    expect(getStatusTone('Pending Final Approval')).toBe('warning');
     expect(getStatusTone('Scheduled')).toBe('info');
     expect(getStatusTone('High')).toBe('danger');
   });

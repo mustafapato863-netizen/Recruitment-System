@@ -68,8 +68,8 @@ export function getStatusTone(status: string): StatusTone {
   const exact = canonicalStatusTones[normalized];
   if (exact) return exact;
   if (/reject|declin|cancel|fail|block|withdraw|blacklist|expired/.test(normalized)) return 'danger';
-  if (/approv|accept|join|complet|success|verif/.test(normalized)) return 'success';
   if (/pending|await|review|hold|overdue|warning|requested/.test(normalized)) return 'warning';
+  if (/approv|accept|join|complet|success|verif/.test(normalized)) return 'success';
   if (/interview|scorecard|evaluation/.test(normalized)) return 'purple';
   if (/talent|benchmark/.test(normalized)) return 'cyan';
   if (/screen|offer|sent|progress|scheduled|applied/.test(normalized)) return 'info';

@@ -164,11 +164,12 @@ export function FinalApprovalInboxPage() {
 
   return (
     <PageFrame
+      className="rf-final-approval-page"
       eyebrow="Joining &amp; Compliance"
       title="Final Hiring Approval Inbox"
       description="Final governance gate before a candidate can transition to Awaiting Joining status."
       actions={
-        <Button variant="ghost" size="sm" onClick={() => void loadApprovals()}>
+        <Button variant="ghost" size="sm" disabled={isLoading} onClick={() => void loadApprovals()}>
           <Icon name="refresh-cw" size={13} className={isLoading ? 'animate-spin' : ''} />
           Refresh
         </Button>
@@ -189,13 +190,17 @@ export function FinalApprovalInboxPage() {
         </Alert>
       )}
 
-      <section className="rf-table-shell rf-long-content overflow-hidden rounded-2xl border border-rf-border/90 bg-white shadow-xs">
+      <section className="rf-table-shell rf-final-approval-page__queue rf-long-content overflow-hidden rounded-2xl border border-rf-border/90 bg-white shadow-xs">
         <SectionHeader
           title="Pending final approvals"
           description="Verify compliance checklist clearance before authorizing employment commencement."
           density="compact"
           className="border-b border-rf-border-subtle p-4 sm:p-5"
-          actions={<Badge variant={items.length > 0 ? 'warning' : 'neutral'}>{items.length} pending</Badge>}
+          actions={(
+            <span aria-live="polite" aria-atomic="true">
+              <Badge variant={items.length > 0 ? 'warning' : 'neutral'}>{items.length} pending</Badge>
+            </span>
+          )}
         />
 
         {isLoading ? (
@@ -208,7 +213,7 @@ export function FinalApprovalInboxPage() {
             columns={finalApprovalColumns}
             rowKey={(row) => row.id}
             label="Pending final approvals"
-            className="px-4 pb-4 sm:px-5 sm:pb-5"
+            className="rf-final-approval-page__data px-4 pb-4 sm:px-5 sm:pb-5"
             renderActions={(row) => (
               <>
                 <Button variant="secondary" size="sm" asChild>
