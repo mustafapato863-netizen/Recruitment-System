@@ -1,0 +1,211 @@
+/* Talent pools. Tokens only. Shared job chrome stays in jobs.css. */
+[data-ui='v2'] .rf2-pools {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: var(--rf2-space-2);
+  width: 100%;
+  max-width: 1136px;
+  min-width: 0;
+  padding: var(--rf2-space-4);
+  font-family: var(--rf2-font);
+  color: var(--rf2-ink);
+}
+[data-ui='v2'] .rf2-pools__title {
+  margin: 0;
+  font-size: var(--rf2-text-page);
+  line-height: var(--rf2-leading-page);
+  font-weight: var(--rf2-weight-page);
+  overflow-wrap: break-word;
+}
+[data-ui='v2'] .rf2-pools__sub,
+[data-ui='v2'] .rf2-pools__bound,
+[data-ui='v2'] .rf2-pools__note {
+  margin: var(--rf2-space-0-5) 0 0;
+  color: var(--rf2-ink-2);
+  font-size: var(--rf2-text-body);
+  line-height: var(--rf2-leading-body);
+}
+[data-ui='v2'] .rf2-pools__note { margin: 0; }
+[data-ui='v2'] .rf2-pools__back { margin: 0; font-size: var(--rf2-text-label); }
+[data-ui='v2'] .rf2-pools__back a { color: var(--rf2-action); text-decoration: none; }
+[data-ui='v2'] .rf2-pools__back a:focus-visible {
+  outline: var(--rf2-focus-width) solid var(--rf2-focus-color);
+  outline-offset: var(--rf2-focus-offset);
+}
+[data-ui='v2'] .rf2-pools__form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--rf2-space-1);
+  min-width: 0;
+  max-width: 100%;
+}
+/* Create form only: label stays on its control. Search and add keep one control beside the button. */
+[data-ui='v2'] .rf2-pools__form:has(textarea) {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
+}
+[data-ui='v2'] .rf2-pools__form:has(textarea) > .rf2-btn {
+  grid-column: 1 / -1;
+  justify-self: start;
+  max-width: 100%;
+}
+[data-ui='v2'] .rf2-pools__form > .rf2-field,
+[data-ui='v2'] .rf2-pools__form > .rf2-pools__people { flex: 1 1 14rem; min-width: 0; max-width: 100%; }
+[data-ui='v2'] .rf2-pools__form > .rf2-pools__people { flex-basis: 100%; }
+[data-ui='v2'] .rf2-pools__list,
+[data-ui='v2'] .rf2-pools__members {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+  max-width: 100%;
+  border: 1px solid var(--rf2-glass-line);
+  border-radius: var(--rf2-radius-card);
+  background: var(--rf2-glass-card);
+  box-shadow: var(--rf2-neo-raise);
+}
+[data-ui='v2'] .rf2-pools__row,
+[data-ui='v2'] .rf2-pools__head,
+[data-ui='v2'] .rf2-pools__member {
+  display: grid;
+  align-items: center;
+  gap: var(--rf2-space-2);
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: var(--rf2-space-1-5) var(--rf2-space-2);
+  border-bottom: 1px solid var(--rf2-divider);
+}
+[data-ui='v2'] .rf2-pools__row:last-child,
+[data-ui='v2'] .rf2-pools__member:last-child { border-bottom: 0; }
+[data-ui='v2'] .rf2-pools__row {
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1.3fr) minmax(0, 1fr) auto auto auto auto;
+}
+[data-ui='v2'] .rf2-pools__head {
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1.4fr) minmax(0, 1fr) auto auto auto;
+  border: 1px solid var(--rf2-glass-line);
+  border-radius: var(--rf2-radius-card);
+  background: var(--rf2-glass-card);
+  box-shadow: var(--rf2-neo-raise);
+}
+[data-ui='v2'] .rf2-pools__member {
+  grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) auto auto;
+}
+[data-ui='v2'] .rf2-pools__name,
+[data-ui='v2'] .rf2-pools__description,
+[data-ui='v2'] .rf2-pools__tags,
+[data-ui='v2'] .rf2-pools__status,
+[data-ui='v2'] .rf2-pools__when {
+  min-width: 0;
+  max-width: 100%;
+}
+[data-ui='v2'] .rf2-pools__name,
+[data-ui='v2'] .rf2-pools__description {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+[data-ui='v2'] .rf2-pools__name { font-weight: 600; }
+[data-ui='v2'] .rf2-pools__description,
+[data-ui='v2'] .rf2-pools__when,
+[data-ui='v2'] .rf2-pools__meta,
+[data-ui='v2'] .rf2-pools__source {
+  color: var(--rf2-ink-2);
+  font-size: var(--rf2-text-label);
+  line-height: var(--rf2-leading-label);
+}
+[data-ui='v2'] .rf2-pools__when { margin: 0; font-variant-numeric: tabular-nums; }
+[data-ui='v2'] .rf2-pools__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--rf2-space-0-5);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+[data-ui='v2'] .rf2-pools__tag {
+  padding: 2px var(--rf2-space-1);
+  border-radius: var(--rf2-radius-pill);
+  background: var(--rf2-neutral-tint);
+  color: var(--rf2-ink-2);
+  font-size: var(--rf2-text-caption);
+  line-height: var(--rf2-leading-caption);
+  overflow-wrap: anywhere;
+}
+[data-ui='v2'] .rf2-pools__count {
+  color: var(--rf2-ink);
+  font-size: var(--rf2-text-label);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+[data-ui='v2'] .rf2-pools__action { justify-self: end; }
+[data-ui='v2'] .rf2-pools__action .rf2-btn { text-decoration: none; }
+[data-ui='v2'] .rf2-pools__people {
+  display: flex;
+  flex-direction: column;
+  gap: var(--rf2-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+  max-width: 100%;
+}
+[data-ui='v2'] .rf2-pools__people label {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--rf2-space-1);
+  min-width: 0;
+  max-width: 100%;
+}
+[data-ui='v2'] .rf2-pools__people span { min-width: 0; overflow-wrap: anywhere; }
+
+@media (max-width: 767px) {
+  [data-ui='v2'] .rf2-pools { padding: var(--rf2-space-2); }
+  [data-ui='v2'] .rf2-pools__form > .rf2-field,
+  [data-ui='v2'] .rf2-pools__form > .rf2-btn { flex: 1 1 100%; max-width: 100%; }
+  [data-ui='v2'] .rf2-pools__form:has(textarea) { grid-template-columns: minmax(0, 1fr); }
+  [data-ui='v2'] .rf2-pools__form:has(textarea) > .rf2-btn { justify-self: stretch; }
+  [data-ui='v2'] .rf2-pools__row {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    grid-template-areas:
+      "name count action"
+      "description description description"
+      "tags tags tags"
+      "status when when";
+    column-gap: var(--rf2-space-1);
+    row-gap: var(--rf2-space-0-5);
+    align-items: center;
+  }
+  [data-ui='v2'] .rf2-pools__head {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "name count"
+      "description description"
+      "tags tags"
+      "status when";
+    column-gap: var(--rf2-space-1);
+    row-gap: var(--rf2-space-0-5);
+  }
+  [data-ui='v2'] .rf2-pools__member {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "name action"
+      "source when";
+    column-gap: var(--rf2-space-1);
+    row-gap: var(--rf2-space-0-5);
+  }
+  [data-ui='v2'] .rf2-pools__name { grid-area: name; }
+  [data-ui='v2'] .rf2-pools__count { grid-area: count; }
+  [data-ui='v2'] .rf2-pools__action { grid-area: action; }
+  [data-ui='v2'] .rf2-pools__description { grid-area: description; }
+  [data-ui='v2'] .rf2-pools__tags { grid-area: tags; }
+  [data-ui='v2'] .rf2-pools__status { grid-area: status; }
+  [data-ui='v2'] .rf2-pools__when { grid-area: when; }
+  [data-ui='v2'] .rf2-pools__source { grid-area: source; min-width: 0; overflow-wrap: anywhere; }
+  [data-ui='v2'] .rf2-pools .rf2-chip { white-space: normal; max-width: 100%; }
+}

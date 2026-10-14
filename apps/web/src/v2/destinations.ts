@@ -13,7 +13,7 @@ const COMMON = ['/profile', '/notifications', '/search'];
 
 /** Path prefixes per seat ("/x" allows "/x" and "/x/…"). Keep in step with navConfig + the v2 pages. */
 export const SEAT_DESTINATIONS: Record<Seat, string[]> = {
-  employee: ['/offers/:id', '/my-work', '/my-result', '/vacancies', '/vacancies/:id', '/candidates', '/candidates/compare', '/applications/:id'],
+  employee: ['/offers/:id', '/my-work', '/my-result', '/vacancies', '/vacancies/:id', '/candidates', '/candidates/compare', '/applications/:id', '/talent-pools'],
   // '/interviews/:id' stays for the Manager's own scorecard (Team work → Waiting on you → Submit scorecard).
   // v2 default: '/vacancy-requests' is the list only (the drawers carry ?req= / ?req=new); detail and create URLs redirect.
   manager: ['/offers/:id', '/my-work', '/vacancy-requests', '/reports', '/applications/:id'],
@@ -42,7 +42,7 @@ const PARAM_EQUIVALENT: Array<{ from: RegExp; to: Partial<Record<Seat, string>> 
 export const CLASSIC_PATHS: RegExp[] = [
   /^\/hires(\/approvals\/inbox|\/[^/]+)?\/?$/, /^\/licenses\/?$/, /^\/joinings?\/?$/,
   /^\/interviews(\/calendar)?\/?$/, /^\/offers\/?$/, /^\/vacancies\/[^/]+\/analytics\/?$/,
-  /^\/candidates\/(?!compare\/?$)[^/]+(\/documents)?\/?$/, /^\/cv-bank\/?$/, /^\/(sourcing-match|talent-pools?)\/?$/,
+  /^\/candidates\/(?!compare\/?$)[^/]+(\/documents)?\/?$/, /^\/cv-bank\/?$/, /^\/sourcing-match\/?$/, /^\/talent-pool\/?$/,
   /^\/import(\/[^/]+\/[^/]+)?\/?$/, /^\/classic\/(candidates|vacancies|master-data|pipeline-settings)\/?$/,
   /^\/settings(\/targets)?\/?$/, /^\/access-control\/?$/,
 ];
@@ -75,7 +75,7 @@ const ROUTE_GATES: Array<[RegExp, Gate]> = [
   [/^\/(hires|joinings|offers|reports)\/?$/, { all: ['APPLICATION_VIEW'] }],
   // #34: final-hire approvers read the file (read-only approver view).
   [/^\/applications\/[^/]+\/?$/, { any: ['APPLICATION_VIEW', 'FINAL_HIRING_APPROVAL'] }],
-  [/^\/(candidates|cv-bank|sourcing-match|classic\/candidates)(\/|$)/, { all: ['CANDIDATE_VIEW'] }],
+  [/^\/(candidates|cv-bank|sourcing-match|talent-pools|classic\/candidates)(\/|$)/, { all: ['CANDIDATE_VIEW'] }],
   [/^\/import\/[^/]+\/[^/]+\/?$/, { any: ['CANDIDATE_VIEW', 'VACANCY_REQUEST_VIEW', 'MASTER_DATA_VIEW'] }],
   [/^\/import\/?$/, { any: ['CANDIDATE_CREATE', 'VACANCY_REQUEST_CREATE', 'MASTER_DATA_MANAGE'] }],
   [/^\/(my-interviews|vacancies|interviews|classic\/vacancies)(\/|$)/, { all: ['VACANCY_VIEW'] }],
@@ -101,7 +101,7 @@ export function canOpenRoute(pathname: string, permissions: readonly string[] | 
 const EQUIVALENT: Array<{ from: RegExp; to: Partial<Record<Seat, string>> }> = [
   { from: /^\/tasks\/?$/, to: { employee: '/my-work', manager: '/my-work' } },
   { from: /^\/(interviews|offers|hires|approval-inbox|inbox|joinings?|licenses|applications\/?$)/, to: { employee: '/my-work', manager: '/my-work' } },
-  { from: /^\/(cv-bank|sourcing-match|talent-pools?|cv-intake|import)/, to: { employee: '/candidates' } },
+  { from: /^\/(cv-bank|sourcing-match|cv-intake|import)/, to: { employee: '/candidates' } },
   { from: /^\/(team-result|performance)/, to: { manager: '/reports' } },
   { from: /^\/(access-control|role)/, to: { admin: '/roles' } },
   { from: /^\/settings\/?/, to: { admin: '/master-data' } },

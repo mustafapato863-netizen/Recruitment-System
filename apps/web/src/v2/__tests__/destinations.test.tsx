@@ -95,7 +95,7 @@ describe('candidate entry paths stay out of the staff home', () => {
 
 describe('v2 default decision: classic (v1) pages stay reachable, not redirected', () => {
   const CLASSIC = ['/hires/approvals/inbox', '/hires', '/hires/h1', '/licenses', '/joinings', '/joining', '/interviews', '/interviews/calendar', '/offers',
-    '/vacancies/v1/analytics', '/candidates/c1', '/candidates/c1/documents', '/cv-bank', '/sourcing-match', '/talent-pools', '/import', '/import/candidates/j1',
+    '/vacancies/v1/analytics', '/candidates/c1', '/candidates/c1/documents', '/cv-bank', '/sourcing-match', '/import', '/import/candidates/j1',
     '/classic/candidates', '/classic/vacancies', '/settings/targets', '/access-control', '/classic/master-data', '/settings', '/classic/pipeline-settings'];
   it.each(CLASSIC)('%s is never redirected (any seat); its v1 PermissionGate decides', (path) => {
     for (const seat of ['employee', 'manager', 'admin'] as const) expect(v2Redirect(seat, path, { requisitions: true, interviews: true })).toBeNull();
@@ -109,6 +109,24 @@ describe('v2 default decision: classic (v1) pages stay reachable, not redirected
   });
   it('interviewer-only users still go to /my-interviews (B2V-2)', () => {
     expect(v2Redirect('employee', '/cv-bank', { interviews: true, interviewerOnly: true })).toBe('/my-interviews');
+  });
+});
+
+describe('talent pools are an employee page', () => {
+  it('keeps /talent-pools and /talent-pools/:id for an employee who can view candidates', () => {
+    const opts = { requisitions: true, interviews: true, permissions: ['CANDIDATE_VIEW'] };
+    expect(v2Redirect('employee', '/talent-pools', opts)).toBeNull();
+    expect(v2Redirect('employee', '/talent-pools/pool-1', opts)).toBeNull();
+    expect(v2Redirect('employee', '/talent-pools', { permissions: ['VACANCY_VIEW'] })).toBe('/my-work');
+  });
+  it('sends other seats home; sourcing-match, CV bank, and import stay classic', () => {
+    expect(v2Redirect('manager', '/talent-pools', { requisitions: true, interviews: true })).toBe('/my-work');
+    expect(v2Redirect('admin', '/talent-pools/pool-1', { requisitions: true, interviews: true })).toBe('/users');
+    for (const path of ['/sourcing-match', '/cv-bank', '/import', '/import/candidates/j1']) {
+      for (const seat of ['employee', 'manager', 'admin'] as const) {
+        expect(v2Redirect(seat, path, { requisitions: true, interviews: true })).toBeNull();
+      }
+    }
   });
 });
 
