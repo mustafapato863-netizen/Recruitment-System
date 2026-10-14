@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -163,6 +163,53 @@ describe('nav per seat', () => {
 
   it('administrators pass every gate like PermissionGate', () => {
     expect(permittedNavItems('admin', [], true)).toHaveLength(8);
+  });
+
+  it('Other work closes on Escape, restores the toggle, and keeps native tab order', async () => {
+    const u = userEvent.setup();
+    renderShell('employee', user(['VACANCY_VIEW']));
+    const retained = screen.getByRole('navigation', { name: 'Retained work' });
+    const toggle = within(retained).getByRole('button', { name: 'Other work' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(within(retained).queryByRole('link')).not.toBeInTheDocument();
+    await u.click(toggle);
+    const links = within(retained).getAllByRole('link');
+    expect(links.map((a) => a.getAttribute('href'))).toEqual(['/interviews', '/interviews/calendar', '/classic/vacancies']);
+    toggle.focus();
+    await u.tab();
+    expect(links[0]).toHaveFocus();
+    await u.tab();
+    expect(links[1]).toHaveFocus();
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    await u.keyboard('{Escape}');
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(within(retained).queryByRole('link')).not.toBeInTheDocument();
+    expect(toggle).toHaveFocus();
+    await u.keyboard('{Enter}');
+    expect(within(retained).getByRole('link', { name: 'All interviews' })).toBeInTheDocument();
+    await u.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('Other work closes when a link is chosen, stays open for a non-link click in the list, and closes on an outside click', async () => {
+    const u = userEvent.setup();
+    renderShell('employee', user(['VACANCY_VIEW']));
+    const retained = screen.getByRole('navigation', { name: 'Retained work' });
+    const toggle = within(retained).getByRole('button', { name: 'Other work' });
+    await u.click(toggle);
+    const list = retained.querySelector('.rf2-retained__list');
+    expect(list).not.toBeNull();
+    expect(within(retained).getByRole('link', { name: 'Interview calendar' })).toHaveAttribute('href', '/interviews/calendar');
+    fireEvent.click(list!);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    await u.click(within(retained).getByRole('link', { name: 'All interviews' }));
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('All interviews');
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(within(retained).queryByRole('link')).not.toBeInTheDocument();
+    await u.click(toggle);
+    await u.click(screen.getByText('page content'));
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(within(retained).queryByRole('link')).not.toBeInTheDocument();
   });
 
   it('marks the active item and titles the header', () => {

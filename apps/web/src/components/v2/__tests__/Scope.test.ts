@@ -32,10 +32,15 @@ describe('v2 primitives CSS scoping (flag-off parity)', () => {
 });
 
 describe('drawer title type token', () => {
-  it('uses the 18px section step of the type scale', () => {
+  it('uses the 16px semibold drawer title step', () => {
     const rule = css.match(/\.rf2-drawer__title\s*\{([^}]*)\}/)?.[1] ?? '';
-    expect(rule).toContain('font-size: var(--rf2-text-section)');
-    expect(rule).toContain('line-height: var(--rf2-leading-section)');
+    expect(rule).toContain('font-size: var(--rf2-text-drawer-title)');
+    expect(rule).toContain('line-height: var(--rf2-leading-drawer-title)');
+    expect(rule).toContain('font-weight: var(--rf2-weight-drawer-title)');
     expect(rule).not.toMatch(/\d+px/);
+    const tokens = readFileSync(resolve(__dirname, '../../../styles/tokens-v2.css'), 'utf8');
+    expect(tokens).toMatch(/--rf2-text-drawer-title:\s*16px/);
+    expect(tokens).toMatch(/--rf2-leading-drawer-title:\s*22px/);
+    expect(tokens).toMatch(/--rf2-weight-drawer-title:\s*600/);
   });
 });
