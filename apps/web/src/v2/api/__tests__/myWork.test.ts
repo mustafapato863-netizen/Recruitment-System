@@ -1,6 +1,6 @@
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { ApiError } from '../../../api/client';
-import { actionHref, entityHref, getMyWork, isEndpointMissing, normalizeMyWork, resolveSourceMode, type MyWorkResponse, type WorkItem } from '../myWork';
+import { actionHref, entityHref, getMyWork, isEndpointMissing, joiningCaseHref, normalizeMyWork, resolveSourceMode, upcomingInterviewHref, waitingOfferTitle, type MyWorkResponse, type WorkItem } from '../myWork';
 import { myWorkFixture } from '../myWork.fixtures';
 
 const apiErr = (status: number) => new ApiError(status, `status ${status}`);
@@ -13,7 +13,7 @@ describe('My Work adapter: #9 contract typing', () => {
     expectTypeOf<WorkItem['type']>().toEqualTypeOf<'job' | 'requisition' | 'task' | 'interview' | 'scorecard' | 'offer'>();
     expectTypeOf<NonNullable<WorkItem['waitingOn']>>().toEqualTypeOf<'approver' | 'interviewer' | 'candidate'>();
     expectTypeOf<WorkItem['entity']['type']>().toEqualTypeOf<'application' | 'interview' | 'offer' | 'requisition' | 'job' | 'task'>();
-    expect(Object.keys(fx).sort()).toEqual(['counts', 'date', 'day', 'dueToday', 'empty', 'emptyMessage', 'generatedAt', 'overdue', 'reminderWorkerHealthy', 'targets', 'timezone', 'today', 'waitingOnOthers']);
+    expect(Object.keys(fx).sort()).toEqual(['counts', 'date', 'day', 'dueToday', 'empty', 'emptyMessage', 'generatedAt', 'joiningSoon', 'overdue', 'reminderWorkerHealthy', 'targets', 'timezone', 'today', 'upcomingInterviews', 'waitingOnOthers']);
     expect(Object.keys(fx.counts).sort()).toEqual(['overdue', 'today', 'waitingOnOthers']);
     expect(Object.keys(fx.targets[0]).sort()).toEqual(['department', 'dueDate', 'filled', 'label', 'owner', 'site', 'target', 'title', 'vacancyCode', 'vacancyId']);
     const json = JSON.stringify(['mariam', 'empty', 'targets-only', 'multi-target', 'stale-worker'].flatMap((variant) => (['today', 'tomorrow'] as const).map((day) => myWorkFixture({ variant: variant as never, day }))));
@@ -27,6 +27,29 @@ describe('My Work adapter: #9 contract typing', () => {
     const legacy = normalizeMyWork({ dueToday: [{ id: 'x', type: 'job', title: 't', dueAt: null, reason: 'r', nextAction: { code: 'c', label: 'l' }, entity: { type: 'Application' as never, id: 'a' } } as never] });
     expect(legacy.dueToday[0].entity.type).toBe('application');
     expect(legacy.dueToday[0].actions).toEqual([]);
+    const partial = normalizeMyWork({ overdue: [], dueToday: [], waitingOnOthers: [] });
+    expect(partial.upcomingInterviews).toBeUndefined();
+    expect(partial.joiningSoon).toBeUndefined();
+    expect(normalizeMyWork({ upcomingInterviews: [], joiningSoon: [] }).upcomingInterviews).toEqual([]);
+    const stripped = normalizeMyWork({ upcomingInterviews: [{ id: 'iv', title: 'Rana', candidateName: 'Rana', jobTitle: 'Analyst', startAt: '2026-10-21T06:00:00.000Z', endAt: null, room: { name: null, url: null }, interviewers: [], access: 'evaluation', applicationId: 'secret-file', held: false, status: 'assigned', action: { key: 'open-interview', label: 'Open evaluation', disabled: false } }] });
+    expect(stripped.upcomingInterviews?.[0].applicationId).toBeUndefined();
+    expect(JSON.stringify(stripped.upcomingInterviews)).not.toContain('secret-file');
+    const base = { id: 'iv', title: 'Rana', candidateName: 'Rana', jobTitle: 'Analyst', startAt: '2026-10-21T06:00:00.000Z', endAt: null, room: { name: null, url: null }, interviewers: [], held: false, status: 'assigned' as const };
+    const malformed = normalizeMyWork({
+      upcomingInterviews: [
+        null,
+        { ...base, access: 'mystery', applicationId: 'secret-file', action: { key: 'open-interview', label: 'Manage interview', disabled: false } },
+        { ...base, id: 'no-action', access: 'file', applicationId: 'a1' },
+        { ...base, id: 'no-access', action: { key: 'open-interview', label: 'Manage interview', disabled: false } },
+        { ...base, id: 'bad-key', access: 'file', applicationId: 'a9', action: { key: 'invented', label: 'Manage interview', disabled: false } },
+        { ...base, id: 'kept', access: 'evaluation', applicationId: 'secret-file', action: { key: 'open-interview', label: 'Open evaluation', disabled: false } },
+      ] as never,
+      joiningSoon: [{ id: 'hc', applicationId: 'a1', candidateName: 'Lina', jobTitle: 'Role', checksComplete: 2, checksRequired: 2, readiness: 'not-a-state', detail: 'Ready to record joining', held: false }] as never,
+    });
+    expect(malformed.upcomingInterviews?.map((row) => row.id)).toEqual(['kept']);
+    expect(JSON.stringify(malformed.upcomingInterviews)).not.toMatch(/Manage interview|secret-file|a9/);
+    expect(malformed.joiningSoon?.[0]).toMatchObject({ readiness: 'review', detail: 'Review readiness', joined: false });
+    expect(normalizeMyWork({}).upcomingInterviews).toBeUndefined();
   });
 
   it('maps the #9 entity enum to v1 routes; tasks have no page', () => {
@@ -99,5 +122,39 @@ describe('E2: My Work actions open the v2 file', () => {
     expect(fileActionHref(fx.waitingOnOthers[1], { key: 'move-to-offer', label: 'Move to Offer', disabled: false })).toBe('/applications/a4?drawer=offer');
     const job = fx.dueToday[0];
     expect(fileActionHref(job, job.actions[0])).toBe('/vacancies/j1');
+  });
+
+  it('labels the waitingOn blocker and does not treat a sent offer as approval', () => {
+    const sent = { ...(myWorkFixture().waitingOnOthers[0]), waitingOn: 'candidate' as const, approver: undefined, approvers: undefined, candidate: { id: 'c9', name: 'Lina Hassan' }, reason: 'Offer waiting for approval' };
+    expect(waitingOfferTitle(sent)).toBe('Lina Hassan — offer waiting on the candidate');
+    expect(waitingOfferTitle(sent)).not.toMatch(/approval/i);
+    const approver = myWorkFixture().waitingOnOthers[0];
+    expect(waitingOfferTitle(approver)).toBe('Salma Farouk — offer waiting on Karim Hassan');
+  });
+
+  it('upcoming and joining links stay inside the caller access the payload already grants', () => {
+    const fx = myWorkFixture();
+    const file = { canOpenFile: true } as const;
+    const [fileRow, held, assigned] = fx.upcomingInterviews!;
+    expect(upcomingInterviewHref(fileRow!, file)).toBe('/applications/a2?drawer=schedule&interview=iv2');
+    expect(upcomingInterviewHref(held!, file)).toBe('/applications/a6?drawer=schedule&interview=iv-held');
+    expect(upcomingInterviewHref({ ...fileRow!, id: 'iv-score', action: { key: 'open-interview', label: 'View scorecard', disabled: false } }, file)).toBe('/applications/a2?drawer=scorecard&interview=iv-score');
+    expect(upcomingInterviewHref({ ...fileRow!, action: { key: 'submit-scorecard', label: 'Submit scorecard', disabled: false } }, file)).toBe('/applications/a2?drawer=scorecard&interview=iv2');
+    expect(upcomingInterviewHref(fileRow!)).toBeNull();
+    expect(upcomingInterviewHref(fileRow!, { canOpenFile: false })).toBeNull();
+    expect(upcomingInterviewHref(assigned!)).toBe('/my-interviews?interview=iv-assigned');
+    expect(upcomingInterviewHref(assigned!, { canOpenFile: false })).toBe('/my-interviews?interview=iv-assigned');
+    expect(upcomingInterviewHref(assigned!)).not.toContain('scorecard');
+    expect(upcomingInterviewHref(assigned!)).not.toContain('/applications/');
+    const assignedScore = upcomingInterviewHref({ ...assigned!, action: { key: 'submit-scorecard', label: 'Submit scorecard', disabled: false } }, { canOpenFile: false });
+    expect(assignedScore).toBe('/my-interviews?interview=iv-assigned&scorecard=1');
+    expect(assignedScore).not.toContain('/applications/');
+    const [approval, licence] = fx.joiningSoon!;
+    expect(joiningCaseHref(approval!, true)).toEqual({ href: '/applications/a3?drawer=prehire', label: 'Open checklist' });
+    expect(joiningCaseHref(licence!, true)).toEqual({ href: '/hires/hc2', label: 'View readiness' });
+    expect(joiningCaseHref({ ...licence!, readiness: 'blocked', detail: 'Approved capacity is already filled.' }, true)).toEqual({ href: '/hires/hc2', label: 'View readiness' });
+    expect(joiningCaseHref({ ...licence!, readiness: 'review', detail: 'Review readiness' }, true)).toEqual({ href: '/hires/hc2', label: 'View readiness' });
+    expect(joiningCaseHref(approval!, false).href).toBe('/hires/hc1');
+    expect(fx.joiningSoon!.every((row) => row.joined === false)).toBe(true);
   });
 });

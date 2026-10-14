@@ -5,9 +5,12 @@ import {
   type MyWorkEntityType,
   type MyWorkItem,
   type MyWorkItemType,
+  type MyWorkJoiningSoon,
   type MyWorkResponse,
+  type MyWorkUpcomingInterview,
   type MyWorkWaitingOn,
 } from '@recruitflow/contracts';
+import { decideJoining, type JoiningCheckFact, type JoiningFacts, type RequirementSnapshot } from '../hiring/joining-policy';
 
 /**
  * B4 (v2 §7 My Work): pure bucketing so it can be tested with a frozen clock.
@@ -30,6 +33,8 @@ import {
  *   job stay with the owner. Filled and Closed jobs stay off My Work.
  */
 export const MY_WORK_TIMEZONE = 'Africa/Cairo';
+/** Upcoming panel includes Cairo start dates from today through this many days. Overdue evaluations are not cut off by it. */
+export const UPCOMING_WINDOW_DAYS = 30;
 
 export type WorkItemType = MyWorkItemType;
 export type WaitingOn = MyWorkWaitingOn;
@@ -39,18 +44,54 @@ export type { MyWorkResponse };
 type Person = { id: string; name: string };
 type AppInfo = { applicationId: string; candidate: Person; stage: string };
 
+/**
+ * Seat counts, accepted-offer id, check expiry, and approval fingerprints.
+ * Null when that query could not load them. Never includes salary.
+ */
+export interface MyWorkJoiningDecisionFacts {
+  organizationId: string;
+  snapshot: RequirementSnapshot;
+  acceptedOfferVersionId: string | null;
+  hiringCaseStatus: string | null;
+  approvalFingerprint: string | null;
+  approvals: JoiningFacts['approvals'];
+  checks: JoiningCheckFact[];
+  joinedHeadcount: number;
+  approvedHeadcount: number;
+}
+
+/** Facts for one caller-owned accepted case. The builder never treats these as hires. */
+export interface MyWorkJoiningInput {
+  id: string;
+  applicationId: string;
+  candidateName: string;
+  jobTitle: string;
+  intendedDate: Date | null;
+  checksComplete: number;
+  checksRequired: number;
+  licenceRequired: boolean;
+  licenceVerified: boolean;
+  approvalPending: boolean;
+  postponed: boolean;
+  held: boolean;
+  /** Required so a missing query cannot fall through to ready. */
+  decisionFacts: MyWorkJoiningDecisionFacts | null;
+}
+
 export interface MyWorkInput {
   me?: string;
   jobs: Array<{ id: string; code: string; title: string; status: string; joined: number; target: number; dueDate: string | null; department?: string | null; site?: string | null; owner?: Person | null }>;
   /** activateBlocked: why Activate is unavailable for this caller (undefined = activatable). */
   requisitions: Array<{ id: string; code: string; title: string; status: string; dueDate: string | null; activateBlocked?: string | undefined }>;
   tasks: Array<{ id: string; title: string; dueAt: Date | null; entityType: string | null; entityId: string | null }>;
-  interviews: Array<{ id: string; title: string; start: Date; end: Date; applicationId: string; roomUrl?: string | null; roomName?: string | null; interviewers?: Array<{ id: string | null; name: string }>; app?: AppInfo; iAmInterviewer?: boolean }>;
+  interviews: Array<{ id: string; title: string; start: Date; end: Date; applicationId: string; status?: string | null; roomUrl?: string | null; roomName?: string | null; interviewers?: Array<{ id: string | null; name: string }>; app?: AppInfo; iAmInterviewer?: boolean; ownsFile?: boolean; jobTitle?: string | null; jobHeld?: boolean }>;
   myMissingScorecards: Array<{ interviewId: string; title: string; end: Date; app?: AppInfo }>;
   othersMissingScorecards: Array<{ interviewId: string; title: string; end: Date; missing: number; app?: AppInfo }>;
   offers: Array<{ id: string; code: string; status: string; applicationId: string; updatedAt: Date; app?: AppInfo; approvers?: Array<{ id: string | null; name: string }> }>;
   /** Awaiting joining on a held job. Shown today, linked to the application. */
   joining?: Array<{ id: string; applicationId: string; title: string; app?: AppInfo }>;
+  /** Accepted cases the caller owns. Not hires, and not added to target filled counts. */
+  joiningSoon?: MyWorkJoiningInput[];
   reminderWorkerHealthy?: boolean;
 }
 
@@ -83,6 +124,143 @@ function dayOf(value: Date | string): string {
 }
 
 const iso = (value: Date | string | null): string | null => (value == null ? null : typeof value === 'string' ? value : value.toISOString());
+
+function upcomingFrom(input: MyWorkInput, now: Date): MyWorkUpcomingInterview[] {
+  const today = cairoDate(now);
+  const horizon = addDays(today, UPCOMING_WINDOW_DAYS);
+  const mine = new Set(input.myMissingScorecards.map((row) => row.interviewId));
+  const others = new Map(input.othersMissingScorecards.map((row) => [row.interviewId, row.missing]));
+  const rows: MyWorkUpcomingInterview[] = [];
+  for (const interview of input.interviews) {
+    const interviewStatus = interview.status ?? null;
+    // A no-show is not a scheduled commitment. Cancelled interviews stay out of this panel.
+    if (interviewStatus === 'No-show' || interviewStatus === 'Cancelled') continue;
+    const ended = interview.end <= now;
+    const myMissing = ended && mine.has(interview.id);
+    const othersMissing = ended && (others.get(interview.id) ?? 0) > 0;
+    const evaluationPending = myMissing || othersMissing;
+    const startDay = dayOf(interview.start);
+    const openStatus = interviewStatus == null || interviewStatus === 'Scheduled' || interviewStatus === 'Rescheduled';
+    // Ended earlier today, or already completed, is not "scheduled" unless a scorecard is still missing.
+    const stillScheduled = !ended && openStatus && startDay >= today && startDay <= horizon;
+    if (!evaluationPending && !stillScheduled) continue;
+    const owns = interview.ownsFile === true;
+    const assigned = interview.iAmInterviewer === true && !owns;
+    // No relationship flag: do not invent a file or evaluation link.
+    if (!owns && !assigned) continue;
+    const people = (interview.interviewers ?? []).map((person) => ({ id: person.id, name: person.name }));
+    const candidateName = interview.app?.candidate.name || null;
+    const jobTitle = interview.jobTitle ?? null;
+    const scorecardOverdue = evaluationPending;
+    const access: MyWorkUpcomingInterview['access'] = owns ? 'file' : 'evaluation';
+    let status: MyWorkUpcomingInterview['status'] = 'scheduled';
+    if (scorecardOverdue) status = 'scorecard_overdue';
+    else if (access === 'evaluation') status = 'assigned';
+    let action: MyWorkAction;
+    if (access === 'evaluation') action = act(myMissing ? 'submit-scorecard' : 'open-interview', 'Open evaluation');
+    else if (myMissing) action = act('submit-scorecard', 'Submit scorecard');
+    else if (othersMissing) action = act('open-interview', 'View scorecard');
+    else action = act('open-interview', 'Manage interview');
+    const row: MyWorkUpcomingInterview = {
+      id: interview.id,
+      title: candidateName && jobTitle ? `${candidateName} · ${jobTitle}` : interview.title,
+      candidateName,
+      jobTitle,
+      startAt: interview.start.toISOString(),
+      endAt: interview.end.toISOString(),
+      room: { name: interview.roomName ?? null, url: interview.roomUrl ?? null },
+      interviewers: people,
+      access,
+      held: interview.jobHeld === true,
+      status,
+      action,
+    };
+    if (owns) row.applicationId = interview.applicationId;
+    rows.push(row);
+  }
+  rows.sort((a, b) => a.startAt.localeCompare(b.startAt) || a.title.localeCompare(b.title));
+  return rows;
+}
+
+function factsAreComplete(facts: MyWorkJoiningDecisionFacts | null): facts is MyWorkJoiningDecisionFacts {
+  if (!facts) return false;
+  if (typeof facts.organizationId !== 'string' || facts.organizationId.length === 0) return false;
+  const profile = facts.snapshot?.profile;
+  if (profile !== 'technical' && profile !== 'clinical' && profile !== 'legacy') return false;
+  if (!Array.isArray(facts.snapshot.checks) || facts.snapshot.checks.length === 0) return false;
+  if (!Number.isFinite(facts.joinedHeadcount) || !Number.isFinite(facts.approvedHeadcount)) return false;
+  if (!Array.isArray(facts.checks) || !Array.isArray(facts.approvals)) return false;
+  if (facts.acceptedOfferVersionId != null && typeof facts.acceptedOfferVersionId !== 'string') return false;
+  if (facts.approvalFingerprint != null && typeof facts.approvalFingerprint !== 'string') return false;
+  if (facts.hiringCaseStatus != null && typeof facts.hiringCaseStatus !== 'string') return false;
+  return true;
+}
+
+/** Ready only when decideJoining allows the intended date, or the builder clock when that date is unset. */
+function readinessFromPolicy(row: MyWorkJoiningInput, now: Date): { readiness: MyWorkJoiningSoon['readiness']; detail: string } {
+  if (!factsAreComplete(row.decisionFacts)) return { readiness: 'review', detail: 'Review readiness' };
+  const facts = row.decisionFacts;
+  const decision = decideJoining({
+    organizationId: facts.organizationId,
+    actor: null,
+    enforceActor: false,
+    enforceRecord: false,
+    actualJoiningDate: row.intendedDate ?? now,
+    caseOwnerId: null,
+    primaryRecruiterId: null,
+    vacancyPrimaryRecruiterId: null,
+    snapshot: facts.snapshot,
+    acceptedOfferVersionId: facts.acceptedOfferVersionId,
+    hiringCaseStatus: facts.hiringCaseStatus,
+    approvalFingerprint: facts.approvalFingerprint,
+    approvals: facts.approvals,
+    checks: facts.checks,
+    joinedHeadcount: facts.joinedHeadcount,
+    approvedHeadcount: facts.approvedHeadcount,
+  });
+  if (decision.ok) return { readiness: 'ready', detail: 'Ready to record joining' };
+  return { readiness: 'blocked', detail: decision.message };
+}
+
+function joiningSoonFrom(input: MyWorkInput, now: Date): MyWorkJoiningSoon[] {
+  const rows = (input.joiningSoon ?? []).map((row): MyWorkJoiningSoon => {
+    const checksOpen = row.checksComplete < row.checksRequired;
+    let readiness: MyWorkJoiningSoon['readiness'];
+    let detail: string;
+    if (row.postponed) {
+      readiness = 'postponed';
+      detail = 'Start postponed';
+    } else if (row.licenceRequired && !row.licenceVerified) {
+      readiness = 'licence_pending';
+      detail = 'Licence review assigned';
+    } else if (checksOpen) {
+      readiness = 'checks_pending';
+      detail = 'Checks still open';
+    } else if (row.approvalPending) {
+      readiness = 'approval_pending';
+      detail = 'Final approval pending';
+    } else {
+      const judged = readinessFromPolicy(row, now);
+      readiness = judged.readiness;
+      detail = judged.detail;
+    }
+    return {
+      id: row.id,
+      applicationId: row.applicationId,
+      candidateName: row.candidateName,
+      jobTitle: row.jobTitle,
+      intendedDate: row.intendedDate ? cairoDate(row.intendedDate) : null,
+      checksComplete: row.checksComplete,
+      checksRequired: row.checksRequired,
+      readiness,
+      detail,
+      joined: false,
+      held: row.held,
+    };
+  });
+  rows.sort((a, b) => (a.intendedDate ?? '9999').localeCompare(b.intendedDate ?? '9999') || a.candidateName.localeCompare(b.candidateName));
+  return rows;
+}
 
 export function buildMyWork(input: MyWorkInput, now: Date, day: MyWorkDay = 'today'): MyWorkResponse {
   const today = cairoDate(now);
@@ -148,6 +326,8 @@ export function buildMyWork(input: MyWorkInput, now: Date, day: MyWorkDay = 'tod
 
   for (const interview of input.interviews) {
     if (dayOf(interview.start) !== focus) continue;
+    // Explicitly neither file owner nor attendee. Older rows omit the flags and stay.
+    if (interview.ownsFile === false && interview.iAmInterviewer !== true) continue;
     const people = (interview.interviewers ?? []).map((p) => ({ id: p.id, name: p.name }));
     const ended = interview.end <= now;
     dueToday.push({
@@ -237,6 +417,8 @@ export function buildMyWork(input: MyWorkInput, now: Date, day: MyWorkDay = 'tod
     dueToday,
     waitingOnOthers: waiting,
     targets,
+    upcomingInterviews: upcomingFrom(input, now),
+    joiningSoon: joiningSoonFrom(input, now),
     empty,
     emptyMessage: empty ? 'No open work assigned to you.' : null,
     reminderWorkerHealthy: input.reminderWorkerHealthy ?? false,
