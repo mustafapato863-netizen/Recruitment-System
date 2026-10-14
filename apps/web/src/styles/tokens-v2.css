@@ -76,6 +76,16 @@
   --rf2-shadow-menu: var(--rf2-neo-raise);
   --rf2-shadow-overlay: var(--rf2-neo-raise);
   --rf2-scrim: var(--color-overlay);
+  /* Drawer only. Glass cards stay translucent; this panel must hide the page. */
+  --rf2-text-drawer-title: 16px;
+  --rf2-leading-drawer-title: 22px;
+  --rf2-weight-drawer-title: 600;
+  --rf2-drawer-width: 560px;
+  --rf2-drawer-surface: #ffffff;
+  --rf2-drawer-field: #e6eff5;
+  --rf2-drawer-line: var(--rf2-glass-line);
+  --rf2-drawer-shadow: var(--rf2-neo-raise);
+  --rf2-drawer-scrim: rgba(11, 19, 43, 0.4);
 
   --rf2-focus-width: 2px;
   --rf2-focus-offset: 2px;
@@ -111,6 +121,11 @@ html.dark[data-ui='v2'] {
   --rf2-neo-raise: -4px -4px 14px rgba(255, 255, 255, 0.04), 8px 10px 22px rgba(0, 0, 0, 0.45);
   --rf2-neo-raise-sm: -2px -2px 6px rgba(255, 255, 255, 0.05), 3px 4px 10px rgba(0, 0, 0, 0.4);
   --rf2-neo-inset: inset -2px -2px 4px rgba(255, 255, 255, 0.06), inset 3px 3px 6px rgba(0, 0, 0, 0.45);
+  --rf2-drawer-surface: #15283f;
+  --rf2-drawer-field: #11263b;
+  --rf2-drawer-line: rgba(155, 205, 230, 0.22);
+  --rf2-drawer-shadow: -4px -4px 14px rgba(100, 131, 163, 0.12), 6px 8px 18px rgba(2, 8, 20, 0.46);
+  --rf2-drawer-scrim: rgba(11, 19, 43, 0.58);
 }
 
 @media (prefers-reduced-transparency: reduce) {

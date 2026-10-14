@@ -208,10 +208,33 @@ function WorkspaceBlock({ options, collapsed }: { options: WorkspaceOption[]; co
 function RetainedHomes({ items, currentPath }: { items: { key: string; label: string; to: string }[]; currentPath: string }) {
   const [open, setOpen] = useState(false);
   const panelId = useId();
+  const rootRef = useRef<HTMLElement>(null);
+  const toggleRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      event.preventDefault();
+      setOpen(false);
+      toggleRef.current?.focus();
+    };
+    const onPointerDown = (event: MouseEvent) => {
+      if (rootRef.current?.contains(event.target as Node)) return;
+      setOpen(false);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    document.addEventListener('mousedown', onPointerDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      document.removeEventListener('mousedown', onPointerDown);
+    };
+  }, [open]);
+
   if (!items.length) return null;
   return (
-    <nav className="rf2-retained" aria-label="Retained work">
-      <button type="button" className="rf2-retained__toggle" aria-expanded={open} aria-controls={panelId} onClick={() => setOpen((value) => !value)}>
+    <nav ref={rootRef} className="rf2-retained" aria-label="Retained work">
+      <button ref={toggleRef} type="button" className="rf2-retained__toggle" aria-expanded={open} aria-controls={panelId} onClick={() => setOpen((value) => !value)}>
         <span>Other work</span>
         <span className="rf2-retained__count" aria-hidden="true">{items.length}</span>
         <ChevronDown aria-hidden="true" />
@@ -220,7 +243,7 @@ function RetainedHomes({ items, currentPath }: { items: { key: string; label: st
         {items.map((item) => {
           const isCurrent = currentPath === item.to || currentPath.startsWith(`${item.to}/`);
           return (
-            <Link key={item.key} to={item.to} className={`rf2-retained__link${isCurrent ? ' rf2-retained__link--active' : ''}`} aria-current={isCurrent ? 'page' : undefined}>
+            <Link key={item.key} to={item.to} className={`rf2-retained__link${isCurrent ? ' rf2-retained__link--active' : ''}`} aria-current={isCurrent ? 'page' : undefined} onClick={() => setOpen(false)}>
               {item.label}
             </Link>
           );
