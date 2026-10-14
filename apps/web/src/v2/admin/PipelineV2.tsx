@@ -1,8 +1,9 @@
 import { toFormErrs } from './formErrors';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CircleCheck, Info, LogOut, PencilLine, Plus, RotateCw, ShieldCheck } from 'lucide-react';
 import { ButtonV2, DrawerV2, EmptyStateV2, InputV2, SelectV2, SkeletonV2 } from '../../components/v2';
-import { createPipeline, fetchPipeline, fetchWorkflowRules, isExit, isSingleTemplate, previewWorkflowRule, renameStage, stageInfo, type PipelineStage, type PipelineTemplate, type WorkflowImpact, type WorkflowPosition } from './configApi';
+import { useAuth } from '../../auth/AuthContext';
+import { applyWorkflowRule, createPipeline, fetchPipeline, fetchWorkflowRules, isExit, isSingleTemplate, previewWorkflowRule, renameStage, stageInfo, WORKFLOW_RULE_REASON_MAX, type PipelineStage, type PipelineTemplate, type WorkflowImpact, type WorkflowPosition } from './configApi';
 import '../pages/jobs.css';
 import './admin.css';
 
@@ -72,75 +73,340 @@ export function PipelineV2() {
         </>
       ) : null}
       <p className="rf2-inline-note"><Info aria-hidden="true" /> Stages and exits can be renamed, never deleted, and there is no second template. Hold lives on the job; Cancelled lives on the requisition — neither is a stage.</p>
-      <WorkflowImpactCard />
+      <JoiningRules />
       {editing && data ? <StageDrawer stage={editing} templateId={data.template.id} onClose={() => setEditing(null)} onDone={(m) => { setEditing(null); setNote({ tone: 'success', text: m }); setAttempt((n) => n + 1); }} /> : null}
     </div>
   );
 }
 
-const PROTECTED = ['VAC-2026-009', 'VAC-2026-010', 'VAC-2026-011'];
+type RuleProfile = 'technical' | 'clinical';
+/** Empty until the user picks a proposal. Null metadata keeps the historical checks, so it is not Standard. */
+type ProposedProfile = RuleProfile | '';
 
-function WorkflowImpactCard() {
+function profileOf(row: WorkflowPosition | undefined): ProposedProfile {
+  return row?.profile === 'clinical' || row?.profile === 'technical' ? row.profile : '';
+}
+function profileLabel(profile: RuleProfile): string {
+  return profile === 'clinical' ? 'Licence-required' : 'Standard';
+}
+function checklistText(profile: RuleProfile): string {
+  return profile === 'clinical' ? 'ID · Signed contract · SCFHS licence' : 'ID · Signed contract';
+}
+function storedChecklist(profile: WorkflowPosition['profile']): string {
+  if (profile === 'clinical') return 'Stored checklist: Clinical — ID, signed contract and SCFHS licence.';
+  if (profile === 'technical') return 'Stored checklist: Standard — ID and signed contract.';
+  return 'Stored checklist: none yet. New cases keep the historical checks until a profile is saved.';
+}
+
+/** Configure a position checklist here, review the impact, then save. Protected jobs stay preview-only. */
+function JoiningRules() {
+  const { user } = useAuth();
+  const canSave = (user?.permissions ?? []).includes('MASTER_DATA_MANAGE');
   const [positions, setPositions] = useState<WorkflowPosition[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [positionId, setPositionId] = useState('');
-  const [profile, setProfile] = useState<'technical' | 'clinical'>('clinical');
+  const [profile, setProfile] = useState<ProposedProfile>('');
   const [impact, setImpact] = useState<WorkflowImpact | null>(null);
+  const [reviewed, setReviewed] = useState<{ positionId: string; profile: RuleProfile } | null>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [reason, setReason] = useState('');
+  const [reasonError, setReasonError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [applyError, setApplyError] = useState<string | null>(null);
+  const [saved, setSaved] = useState<string | null>(null);
+  const [previewing, setPreviewing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [unconfirmed, setUnconfirmed] = useState<{ positionId: string; profile: RuleProfile } | null>(null);
+  const [checking, setChecking] = useState(false);
+  const selectionRef = useRef<{ positionId: string; profile: ProposedProfile }>({ positionId: '', profile: '' });
+  const requestId = useRef(0);
+  const previewingRef = useRef(false);
+  const savingRef = useRef(false);
+  const checkingRef = useRef(false);
+  const unconfirmedRef = useRef<{ positionId: string; profile: RuleProfile } | null>(null);
+  const loadGen = useRef(0);
+  selectionRef.current = { positionId, profile };
+  unconfirmedRef.current = unconfirmed;
+
   useEffect(() => {
+    const gen = ++loadGen.current;
     let live = true;
+    setLoadError(null);
+    setPositions(null);
     fetchWorkflowRules()
       .then((doc) => {
-        if (!live) return;
+        if (!live || gen !== loadGen.current) return;
         const rows = doc.positions ?? [];
         setPositions(rows);
-        const protectedRow = rows.find((row) => row.vacancies.some((vacancy) => PROTECTED.includes(vacancy.code)));
-        const first = protectedRow ?? rows[0];
-        if (first) {
-          setPositionId(first.id);
-          setProfile(first.profile === 'clinical' ? 'technical' : 'clinical');
+        setLoadError(null);
+        const selectedId = selectionRef.current.positionId;
+        if (!rows.some((row) => row.id === selectedId)) {
+          const first = rows[0];
+          const nextProfile = profileOf(first);
+          selectionRef.current = { positionId: first?.id ?? '', profile: nextProfile };
+          setPositionId(first?.id ?? '');
+          setProfile(nextProfile);
         }
       })
-      .catch(() => { if (live) setPositions([]); });
+      .catch((e: { message?: string }) => {
+        if (!live || gen !== loadGen.current) return;
+        setPositions(null);
+        setLoadError(e?.message || 'Could not load joining rules.');
+      });
     return () => { live = false; };
-  }, []);
-  const preview = async () => {
-    if (!positionId) return;
-    setBusy(true); setError(null);
-    try { setImpact(await previewWorkflowRule(positionId, profile)); }
-    catch (e) { setImpact(null); setError((e as { message?: string })?.message || 'Could not preview this rule.'); }
-    finally { setBusy(false); }
+  }, [loadAttempt]);
+
+  const dropInFlight = () => {
+    requestId.current += 1;
+    previewingRef.current = false;
+    setPreviewing(false);
+    setImpact(null);
+    setReviewed(null);
+    setReviewOpen(false);
+    setReason('');
+    setReasonError(null);
+    setApplyError(null);
+    setSaved(null);
   };
+  const closeReview = () => {
+    setImpact(null);
+    setReviewed(null);
+    setReviewOpen(false);
+    setReason('');
+    setReasonError(null);
+    if (!unconfirmedRef.current) setApplyError(null);
+  };
+  const chooseJob = (id: string) => {
+    if (savingRef.current || unconfirmedRef.current) return;
+    const nextProfile = profileOf((positions ?? []).find((row) => row.id === id));
+    selectionRef.current = { positionId: id, profile: nextProfile };
+    dropInFlight();
+    setPositionId(id);
+    setProfile(nextProfile);
+    setError(null);
+  };
+  const chooseProfile = (next: RuleProfile) => {
+    if (savingRef.current || unconfirmedRef.current) return;
+    selectionRef.current = { positionId, profile: next };
+    dropInFlight();
+    setProfile(next);
+    setError(null);
+  };
+  const review = async () => {
+    if (!positionId || previewingRef.current || savingRef.current || checkingRef.current || unconfirmedRef.current) return;
+    if (profile !== 'technical' && profile !== 'clinical') {
+      setError('Choose a checklist profile before reviewing the impact.');
+      return;
+    }
+    const request = ++requestId.current;
+    const requested = { positionId, profile };
+    previewingRef.current = true;
+    setPreviewing(true);
+    setError(null);
+    setApplyError(null);
+    try {
+      const next = await previewWorkflowRule(requested.positionId, requested.profile);
+      if (request !== requestId.current) return;
+      if (selectionRef.current.positionId !== requested.positionId || selectionRef.current.profile !== requested.profile) return;
+      setImpact(next);
+      setReviewed(requested);
+      setReviewOpen(true);
+      setReason('');
+      setReasonError(null);
+      setSaved(null);
+    } catch (e) {
+      if (request !== requestId.current) return;
+      setImpact(null);
+      setReviewed(null);
+      setReviewOpen(false);
+      setError((e as { message?: string })?.message || 'Could not preview this rule.');
+    } finally {
+      if (request === requestId.current) {
+        previewingRef.current = false;
+        setPreviewing(false);
+      }
+    }
+  };
+  const noteUnconfirmed = (requested: { positionId: string; profile: RuleProfile }) => {
+    unconfirmedRef.current = requested;
+    setUnconfirmed(requested);
+    setApplyError('The joining rule could not be confirmed from the saved positions. It is not shown as saved.');
+  };
+  const checkSaved = async () => {
+    const requested = unconfirmedRef.current;
+    if (!requested || checkingRef.current || savingRef.current) return;
+    const gen = ++loadGen.current;
+    checkingRef.current = true;
+    setChecking(true);
+    setApplyError(null);
+    try {
+      const fresh = await fetchWorkflowRules();
+      if (gen !== loadGen.current) return;
+      const rows = fresh.positions ?? [];
+      setPositions(rows);
+      setLoadError(null);
+      const persisted = rows.find((row) => row.id === requested.positionId);
+      if (persisted?.profile === requested.profile) {
+        unconfirmedRef.current = null;
+        setUnconfirmed(null);
+        selectionRef.current = { positionId: requested.positionId, profile: requested.profile };
+        setPositionId(requested.positionId);
+        setProfile(requested.profile);
+        setSaved(`Joining rule saved for ${persisted.title}. Stored checklist is ${profileLabel(requested.profile)}.`);
+        closeReview();
+        return;
+      }
+      unconfirmedRef.current = null;
+      setUnconfirmed(null);
+      setApplyError('The joining rule was not saved. The position still shows its previous checklist.');
+    } catch {
+      if (gen !== loadGen.current) return;
+      noteUnconfirmed(requested);
+    } finally {
+      if (gen === loadGen.current) {
+        checkingRef.current = false;
+        setChecking(false);
+      }
+    }
+  };
+  const confirm = async () => {
+    if (savingRef.current || checkingRef.current || unconfirmedRef.current || !impact || !reviewed) return;
+    if (!canSave || !impact.applyAllowed) return;
+    if (reviewed.positionId !== positionId || reviewed.profile !== profile) {
+      setApplyError('Review the impact again before saving.');
+      return;
+    }
+    const trimmed = reason.trim();
+    if (!trimmed) {
+      setReasonError('Enter a reason.');
+      return;
+    }
+    if (trimmed.length > WORKFLOW_RULE_REASON_MAX) {
+      setReasonError('Use 500 characters or fewer.');
+      return;
+    }
+    const requested = reviewed;
+    const gen = ++loadGen.current;
+    savingRef.current = true;
+    setSaving(true);
+    setApplyError(null);
+    setReasonError(null);
+    setSaved(null);
+    let applied = false;
+    try {
+      await applyWorkflowRule(requested.positionId, requested.profile, trimmed);
+      applied = true;
+      const fresh = await fetchWorkflowRules();
+      if (gen !== loadGen.current) return;
+      const rows = fresh.positions ?? [];
+      setPositions(rows);
+      const persisted = rows.find((row) => row.id === requested.positionId);
+      if (persisted?.profile === requested.profile) {
+        setProfile(requested.profile);
+        setSaved(`Joining rule saved for ${persisted.title}. Stored checklist is ${profileLabel(requested.profile)}.`);
+        closeReview();
+        return;
+      }
+      setApplyError('The joining rule was not saved. The position still shows its previous checklist.');
+    } catch (e) {
+      if (gen !== loadGen.current) return;
+      if (applied) {
+        noteUnconfirmed(requested);
+        return;
+      }
+      const fe = toFormErrs(e, { reason: 'reason' }, 'Could not save this joining rule.');
+      setReasonError(fe.reason ?? null);
+      setApplyError(fe.form ?? null);
+    } finally {
+      if (gen === loadGen.current) {
+        savingRef.current = false;
+        setSaving(false);
+      }
+    }
+  };
+  const selected = positions?.find((row) => row.id === positionId) ?? null;
+  const awaitingResult = Boolean(unconfirmed);
+  const canConfirm = Boolean(canSave && impact?.applyAllowed && reviewed && !awaitingResult);
   return (
     <section className="rf2-panel rf2-admin__card" aria-labelledby="rule-h">
       <div className="rf2-row-between rf2-admin__head">
         <div>
-          <h2 id="rule-h" className="rf2-jtable__name">Workflow rule impact</h2>
-          <p className="rf2-jtable__sub">Technical and clinical joining profiles. A preview is the result when a protected job would change.</p>
+          <h2 id="rule-h" className="rf2-jtable__name">Joining checks by job</h2>
+          <p className="rf2-jtable__sub">The required checklist follows the job configuration.</p>
         </div>
       </div>
-      <div className="rf2-admin__pad">
-        {positions === null ? <SkeletonV2 lines={2} label="Loading positions…" /> : null}
-        {positions && positions.length === 0 ? <p className="rf2-jtable__sub">No positions are available for a rule preview.</p> : null}
-        {positions && positions.length > 0 ? (
-          <div className="rf2-req__row">
-            <SelectV2 label="Position" value={positionId} onChange={(e) => { setPositionId(e.target.value); setImpact(null); }}>
-              {positions.map((row) => <option key={row.id} value={row.id}>{row.title}</option>)}
-            </SelectV2>
-            <SelectV2 label="Proposed profile" value={profile} onChange={(e) => { setProfile(e.target.value as 'technical' | 'clinical'); setImpact(null); }}>
-              <option value="technical">Technical</option>
-              <option value="clinical">Clinical</option>
-            </SelectV2>
-            <ButtonV2 kind="secondary" icon={<ShieldCheck />} loading={busy} onClick={() => void preview()}>Preview impact</ButtonV2>
+      <div className="rf2-admin__pad rf2-admin__rules">
+        <p className="rf2-jtable__name">Standard profile · Technical / administration</p>
+        <p className="rf2-jtable__sub">ID and a signed contract. A professional licence is not required.</p>
+        <p className="rf2-jtable__name">Clinical profile · Licence-required</p>
+        <p className="rf2-jtable__sub">ID, a signed contract, and an SCFHS licence. Licence review stays limited to the assigned specialist.</p>
+        <p className="rf2-jtable__sub">Final hiring approval stays required for every hire. Accepted cases keep their recorded checklist and history. Changing a profile shows affected jobs before saving.</p>
+        <div className="rf2-admin__rule-lock">
+          <p className="rf2-field__label">Licence reviewer permission</p>
+          <p>Assigned licence checks only</p>
+        </div>
+        {positions === null && !loadError ? <SkeletonV2 lines={2} label="Loading positions…" /> : null}
+        {loadError ? (
+          <div role="alert">
+            <p className="rf2-form-error">{loadError}</p>
+            <div className="rf2-admin__rule-actions">
+              <ButtonV2 kind="secondary" icon={<RotateCw />} onClick={() => setLoadAttempt((n) => n + 1)}>Try again</ButtonV2>
+            </div>
           </div>
         ) : null}
+        {positions && positions.length === 0 ? <p className="rf2-jtable__sub">No positions are available for a joining rule.</p> : null}
+        {selected ? (
+          <>
+            <p className="rf2-jtable__sub">{storedChecklist(selected.profile)}</p>
+            <div className="rf2-admin__rule-fields">
+              <SelectV2 label="Job" value={positionId} disabled={saving || awaitingResult} onChange={(e) => chooseJob(e.target.value)}>
+                {positions?.map((row) => <option key={row.id} value={row.id}>{row.title}</option>)}
+              </SelectV2>
+              <SelectV2 label="Checklist profile" value={profile} disabled={saving || awaitingResult} placeholder={profile === '' ? 'Choose profile' : undefined} onChange={(e) => { const value = e.target.value; if (value === 'clinical' || value === 'technical') chooseProfile(value); }}>
+                <option value="technical">Standard</option>
+                <option value="clinical">Licence-required</option>
+              </SelectV2>
+            </div>
+            <div className="rf2-admin__rule-actions">
+              <ButtonV2 kind="secondary" icon={<ShieldCheck />} loading={previewing} disabled={saving || awaitingResult} onClick={() => { void review(); }}>Review impact</ButtonV2>
+            </div>
+          </>
+        ) : null}
+        {unconfirmed && !reviewOpen ? (
+          <div role="alert">
+            <p className="rf2-form-error">The joining rule could not be confirmed from the saved positions. It is not shown as saved.</p>
+            <div className="rf2-admin__rule-actions">
+              <ButtonV2 kind="secondary" icon={<RotateCw />} loading={checking} onClick={() => { void checkSaved(); }}>Check saved result</ButtonV2>
+            </div>
+          </div>
+        ) : null}
+        {applyError && !reviewOpen && !unconfirmed ? <p className="rf2-form-error" role="alert">{applyError}</p> : null}
         {error ? <p className="rf2-form-error" role="alert">{error}</p> : null}
-        {impact ? (
-          <div>
-            <p className="rf2-inline-note" data-tone={impact.applyAllowed ? 'info' : 'warning'} role="status"><Info aria-hidden="true" /> {impact.message}</p>
-            <p className="rf2-jtable__sub">{impact.preservedSnapshots} accepted {impact.preservedSnapshots === 1 ? 'case keeps' : 'cases keep'} the stored checklist. {impact.openCasesAdoptingProfile.length} open {impact.openCasesAdoptingProfile.length === 1 ? 'case' : 'cases'} would use the new profile later. Seat counts stay as shown.</p>
+        {saved ? <p className="rf2-inline-note" data-tone="success" role="status"><CircleCheck aria-hidden="true" /> {saved}</p> : null}
+      </div>
+      {reviewOpen && impact && reviewed ? (
+        <DrawerV2 open onClose={closeReview} confirmClose={() => !savingRef.current && !checkingRef.current} kicker="Joining rules" title="Review joining-rule changes" subtitle="Check affected jobs before confirming a new checklist profile."
+          primaryAction={awaitingResult
+            ? <ButtonV2 icon={<RotateCw />} loading={checking} onClick={() => { void checkSaved(); }}>Check saved result</ButtonV2>
+            : canConfirm ? <ButtonV2 icon={<CircleCheck />} loading={saving} onClick={() => { void confirm(); }}>Confirm rule change</ButtonV2> : undefined}
+          secondaryAction={<ButtonV2 kind="secondary" disabled={saving || checking} onClick={closeReview}>Cancel</ButtonV2>}>
+          <div className="rf2-admin__rules">
+            <dl className="rf2-admin__rule-facts">
+              <dt>Selected job</dt>
+              <dd>{impact.positionTitle}</dd>
+              <dt>Required profile</dt>
+              <dd>{checklistText(reviewed.profile)}</dd>
+              <dt>New cases</dt>
+              <dd>Use the new profile after save. {impact.openCasesAdoptingProfile.length} open {impact.openCasesAdoptingProfile.length === 1 ? 'case' : 'cases'}.</dd>
+              <dt>Accepted / existing cases</dt>
+              <dd>Keep their recorded checklist and verification history. {impact.preservedSnapshots} accepted {impact.preservedSnapshots === 1 ? 'case' : 'cases'}.</dd>
+              <dt>Final hiring approval</dt>
+              <dd>Required for every hire · unchanged</dd>
+            </dl>
+            <p className="rf2-inline-note" data-tone={impact.applyAllowed ? 'info' : 'warning'}><Info aria-hidden="true" /> {impact.message}</p>
             {impact.vacancies.length ? (
-              <table className="rf2-jtable" aria-label="Workflow rule impact">
+              <table className="rf2-jtable" aria-label="Jobs on this position">
                 <thead><tr><th scope="col">Job</th><th scope="col">Status</th><th scope="col">Seats</th><th scope="col">Result</th></tr></thead>
                 <tbody>
                   {impact.vacancies.map((vacancy) => (
@@ -148,15 +414,20 @@ function WorkflowImpactCard() {
                       <th scope="row">{vacancy.code}</th>
                       <td>{vacancy.status}</td>
                       <td>{vacancy.joinedHeadcount}/{vacancy.approvedHeadcount}</td>
-                      <td>{vacancy.protected ? 'Preview only' : 'Unchanged'}</td>
+                      <td>{vacancy.protected ? 'Preview only' : 'Status and seats unchanged'}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             ) : <p className="rf2-jtable__sub">This position has no jobs.</p>}
+            {canConfirm ? (
+              <InputV2 label="Reason" required maxLength={WORKFLOW_RULE_REASON_MAX} value={reason} disabled={saving} error={reasonError ?? undefined} hint="Required before this checklist is saved." onChange={(e) => { setReason(e.target.value); setReasonError(null); }} />
+            ) : null}
+            {!canSave ? <p className="rf2-jtable__sub">You can review this impact. Saving needs the master-data manage permission.</p> : null}
+            {applyError ? <p className="rf2-form-error" role="alert">{applyError}</p> : null}
           </div>
-        ) : null}
-      </div>
+        </DrawerV2>
+      ) : null}
     </section>
   );
 }

@@ -85,3 +85,16 @@
 [data-ui='v2'] .rf2-admin__matrix td svg { display: inline-block; margin-inline-end: 4px; }
 [data-ui='v2'] .rf2-admin__matrix td { white-space: nowrap; }
 [data-ui='v2'] .rf2-admin__card > .rf2-jtable__sub:last-child { margin: 0; padding: var(--rf2-space-1) var(--rf2-space-2); }
+[data-ui='v2'] .rf2-admin__rules { display: flex; flex-direction: column; gap: var(--rf2-space-1); }
+[data-ui='v2'] .rf2-admin__rules > p { margin: 0; }
+[data-ui='v2'] .rf2-admin__rule-fields { display: grid; grid-template-columns: 1fr 1fr; gap: var(--rf2-space-2); align-items: start; }
+[data-ui='v2'] .rf2-admin__rule-lock { display: flex; flex-direction: column; gap: var(--rf2-space-0-5); }
+[data-ui='v2'] .rf2-admin__rule-lock p { margin: 0; }
+[data-ui='v2'] .rf2-admin__rule-facts { display: grid; grid-template-columns: minmax(10rem, 16rem) minmax(0, 1fr); gap: var(--rf2-space-1) var(--rf2-space-2); margin: 0; }
+[data-ui='v2'] .rf2-admin__rule-facts dt { margin: 0; color: var(--rf2-ink-2); font-weight: 500; }
+[data-ui='v2'] .rf2-admin__rule-facts dd { margin: 0; }
+[data-ui='v2'] .rf2-admin__rule-actions { display: flex; flex-wrap: wrap; gap: var(--rf2-space-1); }
+@media (max-width: 767px) {
+  [data-ui='v2'] .rf2-admin__rule-fields,
+  [data-ui='v2'] .rf2-admin__rule-facts { grid-template-columns: 1fr; }
+}
