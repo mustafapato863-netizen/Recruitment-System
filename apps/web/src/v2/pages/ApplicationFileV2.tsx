@@ -2,15 +2,16 @@ import type React from 'react';
 import { isScorecardSubmitted } from '../../utils/scorecardStatus';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, CalendarDays, Check, CircleCheck, Clock, Download, FileText, Minus, RotateCw, Send, Star, XCircle } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CalendarDays, Check, CircleCheck, Clock, Download, FileText, RotateCw, Send, Star, XCircle } from 'lucide-react';
 import { ApiError } from '../../api/client';
 import { ButtonV2 } from '../../components/v2/Button';
 import { StatusChip } from '../../components/v2/StatusChip';
 import { EmptyStateV2, ForbiddenStateV2, SkeletonV2 } from '../../components/v2/PageStates';
 import { InputV2, TextareaV2 } from '../../components/v2/Field';
+import { TabPanelV2, TabsV2 } from '../../components/v2/Tabs';
 import '../../components/v2/v2-primitives.css';
 import './application-file.css';
-import { FILE_STAGES, addNote, downloadDocument, isClosedStage, isCvDoc, candidateName, gateState, loadApplicationFile, setFollowUp, updateInterview, type ApplicationFile, type InterviewItem } from '../api/applicationFile';
+import { addNote, downloadDocument, isClosedStage, isCvDoc, candidateName, gateState, loadApplicationFile, setFollowUp, updateInterview, type ApplicationFile, type InterviewItem } from '../api/applicationFile';
 import { DocumentHistory, MessagesCard } from './FileHistory';
 import { DRAWERS, DRAWER_KEYS, errorText, sentBack, type DrawerKey } from '../drawers/FileDrawers';
 import { OfferDecisionDrawer } from '../drawers/OfferDecisionDrawer';
@@ -77,6 +78,215 @@ function gateRows(file: ApplicationFile): Array<{ to: string; label: string; ok:
   return [];
 }
 
+type HubTab = 'overview' | 'activity' | 'documents';
+type FileMode = 'owner' | 'manager' | 'approver';
+const HUB_TABS: Array<{ key: HubTab; label: string }> = [
+  { key: 'overview', label: 'Overview' },
+  { key: 'activity', label: 'Activity' },
+  { key: 'documents', label: 'Documents' },
+];
+const hubTab = (raw: string | null): HubTab => (raw === 'activity' || raw === 'documents' ? raw : 'overview');
+
+type ReturnDest = { href: string; kind: 'candidates' | 'my-work' | 'vacancy'; vacancyId?: string };
+
+const hasControl = (value: string) => {
+  for (let i = 0; i < value.length; i += 1) {
+    const code = value.charCodeAt(i);
+    if (code <= 31 || code === 127) return true;
+  }
+  return false;
+};
+
+/** Same-origin relative return targets only: /candidates, /my-work, or /vacancies/:id, plus the original query. */
+export function fileReturnTo(raw: string | null): ReturnDest | null {
+  if (raw == null) return null;
+  const value = raw.trim();
+  if (value.length === 0 || value.length > 2000 || !value.startsWith('/') || value.startsWith('//')) return null;
+  if (hasControl(value) || value.includes('\\') || value.includes('#') || value.includes('://')) return null;
+  const qIndex = value.indexOf('?');
+  const rawPath = qIndex === -1 ? value : value.slice(0, qIndex);
+  const rawQuery = qIndex === -1 ? '' : value.slice(qIndex);
+  if (rawQuery.slice(1).includes('?')) return null;
+  let path: string;
+  try { path = decodeURIComponent(rawPath); } catch { return null; }
+  if (!path.startsWith('/') || path.startsWith('//') || path.includes('\\') || path.includes('://')) return null;
+  const segments = path.split('/');
+  if (segments[0] !== '' || segments.slice(1).some((seg) => seg === '' || seg === '.' || seg === '..')) return null;
+  if (path === '/candidates') return { href: `/candidates${rawQuery}`, kind: 'candidates' };
+  if (path === '/my-work') return { href: `/my-work${rawQuery}`, kind: 'my-work' };
+  if (segments.length === 3 && segments[1] === 'vacancies' && /^[A-Za-z0-9_-]+$/.test(segments[2] ?? '')) {
+    return { href: `/vacancies/${segments[2]}${rawQuery}`, kind: 'vacancy', vacancyId: segments[2] };
+  }
+  return null;
+}
+
+function destination(file: ApplicationFile, mode: FileMode, raw: string | null): { href: string; label: string; crumb: string } {
+  const app = file.workspace.application;
+  const title = app.positionTitle ?? 'Job';
+  const pipeline = `/vacancies/${encodeURIComponent(app.vacancyId)}`;
+  if (mode === 'approver') return { href: '/hires/approvals/inbox', label: 'Final approvals', crumb: 'Final approvals' };
+  if (mode === 'manager') return { href: '/my-work', label: 'Team work', crumb: 'Team work' };
+  const dest = fileReturnTo(raw);
+  if (dest?.kind === 'candidates') return { href: dest.href, label: 'Back to Candidates', crumb: 'Candidates' };
+  if (dest?.kind === 'my-work') return { href: dest.href, label: 'Back to My Work', crumb: 'My Work' };
+  if (dest?.kind === 'vacancy') {
+    const same = dest.vacancyId === app.vacancyId;
+    return { href: dest.href, label: same ? `${title} pipeline` : 'Job pipeline', crumb: same ? title : 'Job' };
+  }
+  return { href: pipeline, label: `${title} pipeline`, crumb: title };
+}
+
+function crumbTrail(back: { href: string; crumb: string }, jobLabel: string, jobHref: string | null, name: string): Array<{ label: string; to?: string }> {
+  const here = { label: name };
+  if (back.crumb === jobLabel) return [{ label: jobLabel, to: back.href }, here];
+  return [{ label: back.crumb, to: back.href }, jobHref ? { label: jobLabel, to: jobHref } : { label: jobLabel }, here];
+}
+
+const personLine = (name: string | null | undefined, role: string) => (name ? `${name} · ${role}` : `${role} not named on this file`);
+
+const JOINING_LIMIT = 'Verified checks are recorded on the file. They are not joining. Hiring policy and final approval still have to be reviewed before a hire is recorded.';
+
+function nextCopy(file: ApplicationFile): { title: string; detail: string; who: string; status: string } {
+  const app = file.workspace.application;
+  const primary = primaryFor(file);
+  const g = gateState(file);
+  const owner = personLine(app.primaryRecruiterName, 'Recruiter');
+  if (isClosedStage(app.stage)) {
+    const detail = app.stage === 'Rejected'
+      ? `Closed as Rejected${app.rejectionReason ? ` — ${app.rejectionReason}` : ''}.`
+      : `${app.stage}: this file is closed and does not move.`;
+    return { title: 'This file is closed', detail, who: owner, status: 'Closed' };
+  }
+  const live = file.interviews.filter((i) => i.status !== 'Cancelled' && i.status !== 'No-show');
+  const unscored = live.find((i) => !(file.scorecards[i.id] ?? []).some(isScorecardSubmitted));
+  switch (primary?.key) {
+    case 'screen':
+      return { title: 'Screening note still needed', detail: 'Interview stays locked until a screen note is saved.', who: owner, status: 'Screen note required' };
+    case 'schedule':
+      return {
+        title: 'Schedule the interview',
+        detail: g.screenNote ? 'The screen note is saved. An interview is the next step.' : 'A screen note is still required before the interview.',
+        who: owner,
+        status: 'Interview to schedule',
+      };
+    case 'scorecard':
+      return {
+        title: unscored?.interviewerName ? `Waiting on ${unscored.interviewerName}'s scorecard` : 'Scorecard still required',
+        detail: 'The offer stage stays locked until a submitted scorecard is on the file.',
+        who: unscored?.interviewerName ? `${unscored.interviewerName} · Interviewer` : owner,
+        status: 'Scorecard required',
+      };
+    case 'offer': {
+      if (file.offer && sentBack(file.offer)) {
+        const comment = file.offer.currentVersion?.approvals?.find((a) => a.status === 'Rejected')?.comment;
+        return {
+          title: 'Offer sent back',
+          detail: comment ? `The manager sent the offer back: ${comment}` : 'The manager sent the offer back. Revise the terms and resubmit.',
+          who: owner,
+          status: 'Sent back',
+        };
+      }
+      if (file.offer?.status === 'Expired') return { title: 'Offer expired', detail: 'A new offer version is required before the file can move.', who: owner, status: 'Offer expired' };
+      return {
+        title: file.offer ? 'Offer needs a new draft' : 'Draft the offer',
+        detail: g.scorecard ? 'A submitted scorecard is on the file. Drafting the offer is the next step.' : 'The offer is the next step from this stage.',
+        who: owner,
+        status: 'Offer to draft',
+      };
+    }
+    case 'waiting': {
+      if (file.offer?.status === 'Pending Approval') {
+        const approver = file.offer.currentVersion?.approvals?.find((a) => a.status === 'Pending')?.approverName
+          ?? file.offer.currentVersion?.approvals?.[0]?.approverName;
+        return {
+          title: approver ? `Waiting on ${approver}'s approval` : 'Waiting on approval',
+          detail: 'The offer stays with the approver until they decide.',
+          who: approver ? `${approver} · Approver` : owner,
+          status: 'Waiting on approval',
+        };
+      }
+      return { title: 'Offer is still a draft', detail: 'Submit it for approval when the terms are ready.', who: owner, status: 'Offer in draft' };
+    }
+    case 'send':
+      return { title: 'Send the approved offer', detail: 'The offer is approved. Sending it is the next step.', who: owner, status: 'Ready to send' };
+    case 'answer':
+      return { title: "Record the candidate's answer", detail: 'The offer has been sent. The file stays here until the answer is recorded.', who: owner, status: 'Answer to record' };
+    case 'prehire': {
+      if (app.stage === 'Offer') {
+        return { title: 'Move to pre-hire', detail: 'The offer is accepted. Moving to pre-hire opens the checklist. It does not record joining.', who: owner, status: 'Offer accepted' };
+      }
+      const pending = g.joining.filter((j) => !j.done);
+      if (g.joining.length === 0) return { title: 'Review the joining checklist', detail: `No required checks are on the file yet. ${JOINING_LIMIT}`, who: owner, status: 'Checklist to review' };
+      if (pending.length) return { title: 'Joining checklist still open', detail: `Still to review: ${pending.map((j) => j.label).join(', ')}. ${JOINING_LIMIT}`, who: owner, status: 'Checklist to review' };
+      return { title: 'Checklist recorded', detail: `Every check on this file is verified. ${JOINING_LIMIT}`, who: owner, status: 'Checklist recorded' };
+    }
+    default:
+      return { title: 'Review this file', detail: 'No stage action is available on this view.', who: owner, status: label(app.stage) };
+  }
+}
+
+type ActivityRow = { at: string; title: string; sub?: string };
+
+function recordedRows(file: ApplicationFile): ActivityRow[] {
+  const rows: ActivityRow[] = [];
+  for (const h of file.history) {
+    if (!h.createdAt) continue;
+    rows.push({
+      at: h.createdAt,
+      title: h.fromStage ? `Moved ${label(h.fromStage)} → ${label(h.toStage)}` : `Applied (${label(h.toStage)})`,
+      sub: [h.changedByName && `by ${h.changedByName}`, h.reason].filter(Boolean).join(' · ') || undefined,
+    });
+  }
+  for (const s of file.screening) {
+    if (!s.screenedAt) continue;
+    rows.push({ at: s.screenedAt, title: `Screening logged${s.screenerName ? ` by ${s.screenerName}` : ''} — ${s.outcome}`, sub: s.notes ?? undefined });
+  }
+  for (const i of file.interviews) {
+    if (!i.createdAt) continue;
+    rows.push({
+      at: i.createdAt,
+      title: `Interview recorded — ${i.title}`,
+      sub: [`Appointment ${fmt(i.scheduledStart, true)}`, i.status !== 'Scheduled' ? i.status : null].filter(Boolean).join(' · '),
+    });
+  }
+  for (const cards of Object.values(file.scorecards)) {
+    for (const c of cards) {
+      if (!isScorecardSubmitted(c) || !c.submittedAt) continue;
+      rows.push({ at: c.submittedAt, title: `Scorecard submitted${c.interviewerName ? ` by ${c.interviewerName}` : ''}`, sub: c.notes ?? undefined });
+    }
+  }
+  for (const v of file.offer?.versions ?? []) {
+    if (!v.createdAt) continue;
+    rows.push({
+      at: v.createdAt,
+      title: `Offer v${v.versionNumber} — ${v.status === 'Changes Requested' ? 'sent back by the manager (offer back in Draft)' : v.status ?? v.approvalStatus}`,
+      sub: v.proposedJoiningDate ? `Start ${fmt(v.proposedJoiningDate)}` : undefined,
+    });
+  }
+  return rows.sort((a, b) => b.at.localeCompare(a.at));
+}
+
+function evidenceOf(file: ApplicationFile): Array<{ text: string; by: string }> {
+  const items: Array<{ at: string; text: string; by: string }> = [];
+  for (const s of file.screening) {
+    const text = s.notes?.trim();
+    if (text) items.push({ at: s.screenedAt, text, by: s.screenerName ? `Screening notes · recorded by ${s.screenerName}` : 'Screening notes' });
+  }
+  for (const n of file.notes) {
+    const text = n.content?.trim();
+    if (text) items.push({ at: n.createdAt, text, by: n.authorName ? `Note · recorded by ${n.authorName}` : 'Note' });
+  }
+  const fit = (file.workspace.application as { fitSummary?: string | null }).fitSummary?.trim();
+  if (fit) items.push({ at: file.workspace.application.updatedAt, text: fit, by: 'Fit summary on the file' });
+  for (const cards of Object.values(file.scorecards)) {
+    for (const c of cards) {
+      const text = c.notes?.trim();
+      if (isScorecardSubmitted(c) && text) items.push({ at: c.submittedAt, text, by: c.interviewerName ? `Scorecard · recorded by ${c.interviewerName}` : 'Scorecard' });
+    }
+  }
+  return items.sort((a, b) => b.at.localeCompare(a.at));
+}
+
 export function ApplicationFileV2({ load = loadApplicationFile, mode = 'owner' }: { load?: typeof loadApplicationFile; mode?: 'owner' | 'manager' | 'approver' } = {}) {
   const { id = '' } = useParams();
   const { user } = useAuth();
@@ -124,29 +334,63 @@ export function ApplicationFileV2({ load = loadApplicationFile, mode = 'owner' }
   const primary = primaryFor(file);
   // #21 (B2-4): Joined/Rejected/Withdrawn files are closed (409 FILE_CLOSED): no move, no reject, and no drawer that moves the file.
   const closed = isClosedStage(app.stage);
-  const curIdx = FILE_STAGES.indexOf(app.stage as (typeof FILE_STAGES)[number]);
   const Drawer = !manager && drawer && DRAWER_KEYS.includes(drawer) && !(closed && MOVING_DRAWERS.includes(drawer)) ? DRAWERS[drawer] : null;
   // Manager: the offer decision opens here, over the file (Figma 09). ?decide=<offerId> deep-links from Team work.
   const pendingOffer = file.offer && file.offer.status === 'Pending Approval' ? file.offer : null;
   const decideId = mode === 'manager' ? params.get('decide') : null;
   const latestScreen = [...file.screening].sort((a, b) => b.screenedAt.localeCompare(a.screenedAt))[0] ?? null;
-  const initials = name.split(/\s+/).map((p) => p[0]).slice(0, 2).join('').toUpperCase();
+  const tab = hubTab(params.get('tab'));
+  const back = destination(file, mode, params.get('returnTo'));
+  const copy = nextCopy(file);
+  const gates = gateRows(file);
+  const jobLabel = app.positionTitle ?? 'Job';
+  const crumbs = crumbTrail(back, jobLabel, mode === 'owner' ? `/vacancies/${encodeURIComponent(app.vacancyId)}` : null, name);
+  const noticeDays = file.screening.find((s) => s.noticePeriodDays != null)?.noticePeriodDays;
+  const evidence = evidenceOf(file);
+  const latest = recordedRows(file)[0];
+  const stageTone = app.stage === 'Rejected' ? 'danger' : app.stage === 'Joined' ? 'success' : 'info';
+  const setTab = (key: string) => setParams((p) => {
+    const n = new URLSearchParams(p);
+    if (key === 'activity' || key === 'documents') n.set('tab', key);
+    else n.delete('tab');
+    return n;
+  });
 
   return (
     <div className="rf2-file">
-      {approver
-        ? <Link className="rf2-file__back" to="/hires/approvals/inbox"><ArrowLeft aria-hidden="true" /> Final approvals</Link>
-        : manager
-        ? <Link className="rf2-file__back" to="/my-work"><ArrowLeft aria-hidden="true" /> Team work</Link>
-        : <Link className="rf2-file__back" to={`/vacancies/${encodeURIComponent(app.vacancyId)}`}><ArrowLeft aria-hidden="true" /> {app.positionTitle ?? 'Job'} pipeline</Link>}
+      <Link className="rf2-file__back" to={back.href}><ArrowLeft aria-hidden="true" /> {back.label}</Link>
+      <nav className="rf2-file__crumbs" aria-label="Breadcrumb">
+        <ol>
+          {crumbs.map((item, index) => (
+            <li key={`${item.label}-${index}`}>
+              {index > 0 ? <span aria-hidden="true">/</span> : null}
+              {item.to && index < crumbs.length - 1 ? <Link to={item.to}>{item.label}</Link> : <span aria-current={index === crumbs.length - 1 ? 'page' : undefined}>{item.label}</span>}
+            </li>
+          ))}
+        </ol>
+      </nav>
       {toast ? <p className="rf2-inline-note" role="status">{toast}</p> : null}
-      <section className="rf2-file__header" aria-labelledby="file-name">
-        <div className="rf2-file__who">
-          <span className="rf2-file__avatar" aria-hidden="true">{initials}</span>
-          <div>
-            <h2 id="file-name" className="rf2-file__name">{name} <StatusChip tone={app.stage === 'Rejected' ? 'danger' : app.stage === 'Joined' ? 'success' : 'info'} label={label(app.stage)} /></h2>
-            <p className="rf2-file__meta">{[app.positionTitle, app.vacancyBranchName ?? app.vacancyLocation, app.primaryRecruiterName ? `Owner: ${app.primaryRecruiterName}` : null, app.source ? `Source: ${app.source}` : null].filter(Boolean).join(' · ')}</p>
-          </div>
+      <header className="rf2-file__intro">
+        <h2 id="file-name" className="rf2-file__name">{name}</h2>
+        <p className="rf2-file__meta">{[app.positionTitle, app.vacancyBranchName ?? app.vacancyLocation, app.primaryRecruiterName ? `Owner: ${app.primaryRecruiterName}` : null].filter(Boolean).join(' · ')}</p>
+      </header>
+      <div className="rf2-file__stage">
+        <StatusChip tone={stageTone} label={label(app.stage)} />
+        <p className="rf2-file__status">{copy.status}</p>
+      </div>
+      <section className="rf2-card" aria-labelledby="next-h">
+        <h3 id="next-h" className="rf2-card__title">{copy.title}</h3>
+        <p className={closed ? 'rf2-file__closed' : undefined} role={closed ? 'note' : undefined} data-testid={closed && app.stage !== 'Rejected' ? 'file-closed' : undefined}>{copy.detail}</p>
+        {gates.length ? (
+          <ul className="rf2-gates rf2-gates--inline" aria-label={`Gate to ${gates[0].to}`}>
+            <li className="rf2-gates__title">To move to {gates[0].to}:</li>
+            {gates.map((g) => (
+              <li key={g.label} className="rf2-gate" data-ok={g.ok}>{g.ok ? <CircleCheck aria-hidden="true" /> : <Clock aria-hidden="true" />}<span>{g.label}</span><span className="rf2-visually-hidden">{g.ok ? '(done)' : '(not done)'}</span></li>
+            ))}
+          </ul>
+        ) : null}
+        <div className="rf2-file__next-row">
+          <p className="rf2-file__muted">{copy.who}</p>
           <div className="rf2-file__actions">
             {manager ? (
               pendingOffer && !approver ? <ButtonV2 icon={<CircleCheck />} onClick={() => setParams((p) => { const n = new URLSearchParams(p); n.set('decide', pendingOffer.id); return n; })}>Review offer</ButtonV2> : null
@@ -158,59 +402,79 @@ export function ApplicationFileV2({ load = loadApplicationFile, mode = 'owner' }
             )}
           </div>
         </div>
-        <ol className="rf2-stepper" aria-label="Stages">
-          {FILE_STAGES.map((s, i) => {
-            const st = app.stage === 'Rejected' ? (i <= curIdx ? 'done' : 'todo') : i < curIdx ? 'done' : i === curIdx ? 'current' : 'todo';
-            return (
-              <li key={s} className="rf2-stepper__step" data-state={st} aria-current={st === 'current' ? 'step' : undefined}>
-                {st === 'done' ? <Check aria-hidden="true" /> : st === 'current' ? <ArrowRight aria-hidden="true" /> : <Minus aria-hidden="true" />}
-                <span>{label(s)}</span><span className="rf2-visually-hidden">{st === 'done' ? ' (done)' : st === 'current' ? ' (current)' : ''}</span>
-              </li>
-            );
-          })}
-        </ol>
-        {app.stage === 'Joined' || app.stage === 'Withdrawn' ? <p className="rf2-file__closed" role="note" data-testid="file-closed">{app.stage}: this file is closed and does not move.</p> : null}
-        {app.stage === 'Rejected' ? <p className="rf2-file__closed" role="note">Closed as Rejected{app.rejectionReason ? ` — ${app.rejectionReason}` : ''}.</p> : null}
-        <div className="rf2-file__strip">
-          {manager ? null : <FollowUp id={app.id} value={app.followUpDate ?? null} closed={closed} onSaved={() => setAttempt((n) => n + 1)} />}
-          {gateRows(file).length ? (
-            <ul className="rf2-gates rf2-gates--inline" aria-label={`Gate to ${gateRows(file)[0].to}`}>
-              <li className="rf2-gates__title">To move to {gateRows(file)[0].to}:</li>
-              {gateRows(file).map((g) => (
-                <li key={g.label} className="rf2-gate" data-ok={g.ok}>{g.ok ? <CircleCheck aria-hidden="true" /> : <Clock aria-hidden="true" />}<span>{g.label}</span><span className="rf2-visually-hidden">{g.ok ? '(done)' : '(not done)'}</span></li>
-              ))}
-            </ul>
-          ) : null}
-        </div>
       </section>
-
-      <div className="rf2-file__grid">
-        <div className="rf2-file__col">
-          <Timeline file={file} writable={!manager} onScorecard={manager ? undefined : (iid) => openDrawer('scorecard', { interview: iid })} onReschedule={manager ? undefined : (iid) => openDrawer('schedule', { interview: iid })} onChanged={() => setAttempt((n) => n + 1)} />
-          {manager ? null : <Notes file={file} onAdded={() => setAttempt((n) => n + 1)} />}
-        </div>
-        <aside className="rf2-file__col rf2-file__side">
-          <section className="rf2-card" aria-labelledby="details-h">
-            <h3 id="details-h" className="rf2-card__title">Details</h3>
-            <dl className="rf2-terms">
-              <dt>Email</dt><dd>{app.candidate?.email ?? '—'}</dd>
-              <dt>Phone</dt><dd>{app.candidate?.phone ?? '—'}</dd>
-              <dt>Notice period</dt><dd>{file.screening.find((s) => s.noticePeriodDays != null)?.noticePeriodDays != null ? `${file.screening.find((s) => s.noticePeriodDays != null)!.noticePeriodDays} days` : '—'}</dd>
-              <dt>Source</dt><dd>{app.source ?? '—'}</dd>
-              <dt>File</dt><dd>{app.applicationCode}</dd>
-            </dl>
-          </section>
-          {manager ? <ScorecardFit file={file} /> : null}
-          {showPay ? (
-            <section className="rf2-card" aria-labelledby="salary-h">
-              <h3 id="salary-h" className="rf2-card__title">Salary</h3>
-              <dl className="rf2-terms">
-                <dt>Current</dt><dd>{amountOf(latestScreen?.currentSalary, latestScreen?.salaryCurrency)}</dd>
-                <dt>Expected</dt><dd>{amountOf(latestScreen?.expectedSalary, latestScreen?.salaryCurrency)}</dd>
-              </dl>
-              <p className="rf2-file__muted">From the latest screening. The band range shows in the offer decision.</p>
+      <TabsV2
+        ariaLabel="Application file"
+        activeKey={tab}
+        onChange={setTab}
+        items={HUB_TABS.map((item) => ({ ...item, controls: item.key === tab ? `file-panel-${item.key}` : undefined }))}
+      />
+      <TabPanelV2 id={`file-panel-${tab}`} labelledBy={`rf2-tab-${tab}`}>
+        {tab === 'overview' ? (
+          <div className="rf2-file__stack">
+            <section className="rf2-card" aria-labelledby="glance-h">
+              <h3 id="glance-h" className="rf2-card__title">At a glance</h3>
+              <div className="rf2-file__glance">
+                <div>
+                  <p>{app.candidate?.email ?? 'Email not recorded'}</p>
+                  {app.candidate?.phone ? <p>{app.candidate.phone}</p> : null}
+                  <p>Source: {app.source ?? 'Not recorded'}</p>
+                </div>
+                <div>
+                  <p>Notice: {noticeDays != null ? `${noticeDays} days` : 'Not recorded'}</p>
+                  {manager
+                    ? <p>Follow-up: {app.followUpDate ? fmt(`${app.followUpDate}T12:00:00Z`) : 'Not set'}</p>
+                    : <FollowUp id={app.id} value={app.followUpDate ?? null} closed={closed} onSaved={() => setAttempt((n) => n + 1)} />}
+                  <p className="rf2-file__muted">File {app.applicationCode}</p>
+                </div>
+              </div>
             </section>
-          ) : null}
+            <section className="rf2-card" aria-labelledby="evidence-h">
+              <h3 id="evidence-h" className="rf2-card__title">Evidence and fit</h3>
+              {evidence.length === 0 ? <p className="rf2-file__muted">No screening note or fit evidence is recorded on this file yet.</p> : evidence.map((item) => (
+                <div key={`${item.by}-${item.text}`}>
+                  <p>{item.text}</p>
+                  <p className="rf2-timeline__sub">{item.by}</p>
+                </div>
+              ))}
+            </section>
+            <section className="rf2-card" aria-labelledby="latest-h">
+              <h3 id="latest-h" className="rf2-card__title">Latest activity</h3>
+              {latest ? (
+                <>
+                  <p>{latest.title}</p>
+                  <p className="rf2-file__muted">{[fmt(latest.at), latest.sub].filter(Boolean).join(' · ')}</p>
+                </>
+              ) : <p className="rf2-file__muted">Nothing recorded yet.</p>}
+            </section>
+            {manager ? <ScorecardFit file={file} /> : null}
+            {showPay ? (
+              <section className="rf2-card" aria-labelledby="salary-h">
+                <h3 id="salary-h" className="rf2-card__title">Salary</h3>
+                <dl className="rf2-terms">
+                  <dt>Current</dt><dd>{amountOf(latestScreen?.currentSalary, latestScreen?.salaryCurrency)}</dd>
+                  <dt>Expected</dt><dd>{amountOf(latestScreen?.expectedSalary, latestScreen?.salaryCurrency)}</dd>
+                </dl>
+                <p className="rf2-file__muted">From the latest screening. The band range shows in the offer decision.</p>
+              </section>
+            ) : null}
+            {file.offer ? (
+              <section className="rf2-card" aria-labelledby="offer-h">
+                <h3 id="offer-h" className="rf2-card__title">Offer</h3>
+                <p>{file.offer.offerCode} · v{(file.offer.currentVersion ?? file.offer.versions?.[0])?.versionNumber ?? 1} · <StatusChip tone={file.offer.status === 'Accepted' ? 'success' : 'neutral'} label={file.offer.status} /></p>
+                <p className="rf2-file__muted">{manager ? (pendingOffer ? 'Waiting on your decision. Review offer opens the pay and the band.' : 'Pay and the band show in the offer decision.') : 'Pay is set by the approving manager and not shown here.'}</p>
+              </section>
+            ) : null}
+          </div>
+        ) : null}
+        {tab === 'activity' ? (
+          <div className="rf2-file__stack">
+            <Timeline file={file} writable={!manager} onScorecard={manager ? undefined : (iid) => openDrawer('scorecard', { interview: iid })} onReschedule={manager ? undefined : (iid) => openDrawer('schedule', { interview: iid })} onChanged={() => setAttempt((n) => n + 1)} />
+            {manager ? null : <Notes file={file} onAdded={() => setAttempt((n) => n + 1)} />}
+            {manager ? null : <MessagesCard applicationId={app.id} followUpDate={app.followUpDate ?? null} />}
+          </div>
+        ) : null}
+        {tab === 'documents' ? (
           <section className="rf2-card" aria-labelledby="docs-h">
             <h3 id="docs-h" className="rf2-card__title">Documents</h3>
             {manager ? (
@@ -224,16 +488,8 @@ export function ApplicationFileV2({ load = loadApplicationFile, mode = 'owner' }
               )
             ) : <DocumentHistory applicationId={app.id} fallback={file.documents} onToast={setToast} />}
           </section>
-          {manager ? null : <MessagesCard applicationId={app.id} followUpDate={app.followUpDate ?? null} />}
-          {file.offer ? (
-            <section className="rf2-card" aria-labelledby="offer-h">
-              <h3 id="offer-h" className="rf2-card__title">Offer</h3>
-              <p>{file.offer.offerCode} · v{(file.offer.currentVersion ?? file.offer.versions?.[0])?.versionNumber ?? 1} · <StatusChip tone={file.offer.status === 'Accepted' ? 'success' : 'neutral'} label={file.offer.status} /></p>
-              <p className="rf2-file__muted">{manager ? (pendingOffer ? 'Waiting on your decision. Review offer opens the pay and the band.' : 'Pay and the band show in the offer decision.') : 'Pay is set by the approving manager and not shown here.'}</p>
-            </section>
-          ) : null}
-        </aside>
-      </div>
+        ) : null}
+      </TabPanelV2>
 
       {Drawer ? <Drawer file={file} onClose={closeDrawer} onDone={done} params={params} /> : null}
       {decideId ? (
@@ -302,41 +558,46 @@ function Timeline({ file, writable, onScorecard, onReschedule, onChanged }: { fi
     setErr(null);
     try { await updateInterview(interview.id, { status: 'No-show' }); onChanged(); } catch (e) { setErr(errorText(e)); }
   };
-  const rows: Array<{ at: string; title: string; sub?: string; action?: React.ReactElement }> = [];
-  for (const h of file.history) rows.push({ at: h.createdAt, title: h.fromStage ? `Moved ${label(h.fromStage)} → ${label(h.toStage)}` : `Applied (${label(h.toStage)})`, sub: [h.changedByName && `by ${h.changedByName}`, h.reason].filter(Boolean).join(' · ') });
-  for (const s of file.screening) rows.push({ at: s.screenedAt, title: `Screening logged${s.screenerName ? ` by ${s.screenerName}` : ''} — ${s.outcome}`, sub: s.notes ?? undefined });
-  for (const i of file.interviews) {
-    const cards = file.scorecards[i.id] ?? [];
-    const submitted = cards.filter(isScorecardSubmitted).length;
-    const open = i.status === 'Scheduled' || i.status === 'Rescheduled';
-    rows.push({
-      at: i.scheduledStart,
-      title: `${i.title} — ${fmt(i.scheduledStart, true)}${i.status !== 'Scheduled' ? ` (${i.status})` : ''}`,
-      sub: [i.locationUrl ? 'Room link' : i.roomName, i.interviewerName, `${submitted} scorecard${submitted === 1 ? '' : 's'} submitted`].filter(Boolean).join(' · '),
-      action: (
-        <span className="rf2-timeline__actions">
-          {writable && open ? <button type="button" className="rf2-link" onClick={() => void markNoShow(i)}>Mark no-show</button> : null}
-          {writable && open && onReschedule ? <button type="button" className="rf2-link" onClick={() => onReschedule(i.id)}>Reschedule</button> : null}
-          {i.status !== 'Cancelled' && i.status !== 'No-show' && onScorecard ? <button type="button" className="rf2-link" onClick={() => onScorecard(i.id)}>Scorecards</button> : null}
-        </span>
-      ),
-    });
-  }
-  for (const v of file.offer?.versions ?? []) rows.push({ at: v.createdAt, title: `Offer v${v.versionNumber} — ${v.status === 'Changes Requested' ? 'sent back by the manager (offer back in Draft)' : v.status ?? v.approvalStatus}`, sub: v.proposedJoiningDate ? `Start ${fmt(v.proposedJoiningDate)}` : undefined });
-  rows.sort((a, b) => b.at.localeCompare(a.at));
+  const recorded = recordedRows(file);
+  const interviews = [...file.interviews].sort((a, b) => b.scheduledStart.localeCompare(a.scheduledStart));
   return (
     <section className="rf2-card" aria-labelledby="timeline-h">
       <h3 id="timeline-h" className="rf2-card__title">Timeline</h3>
       {err ? <p className="rf2-inline-note" role="alert">{err}</p> : null}
-      {rows.length === 0 ? <p className="rf2-file__muted">Nothing yet.</p> : (
-        <ol className="rf2-timeline">
-          {rows.map((r, i) => (
-            <li key={i} className="rf2-timeline__row">
+      <h4 className="rf2-file__subhead">Recorded</h4>
+      {recorded.length === 0 ? <p className="rf2-file__muted">Nothing recorded yet.</p> : (
+        <ol className="rf2-timeline" aria-label="Recorded activity">
+          {recorded.map((r, index) => (
+            <li key={`${r.at}-${index}`} className="rf2-timeline__row">
               <time dateTime={r.at}>{fmt(r.at)}</time>
               <div><p className="rf2-timeline__title">{r.title}</p>{r.sub ? <p className="rf2-timeline__sub">{r.sub}</p> : null}</div>
-              {r.action ?? null}
             </li>
           ))}
+        </ol>
+      )}
+      <h4 className="rf2-file__subhead">Interviews</h4>
+      {interviews.length === 0 ? <p className="rf2-file__muted">No interviews on this file.</p> : (
+        <ol className="rf2-timeline" aria-label="Interviews">
+          {interviews.map((i) => {
+            const cards = file.scorecards[i.id] ?? [];
+            const submitted = cards.filter(isScorecardSubmitted).length;
+            const open = i.status === 'Scheduled' || i.status === 'Rescheduled';
+            const commitment = !i.createdAt && (open ? 'Scheduled commitment' : 'Appointment on the file');
+            return (
+              <li key={i.id} className="rf2-timeline__row">
+                {i.createdAt ? <time dateTime={i.createdAt}>{fmt(i.createdAt)}</time> : <time>On file</time>}
+                <div>
+                  <p className="rf2-timeline__title">{`${i.title} — ${fmt(i.scheduledStart, true)}${i.status !== 'Scheduled' ? ` (${i.status})` : ''}`}</p>
+                  <p className="rf2-timeline__sub">{[commitment, i.locationUrl ? 'Room link' : i.roomName, i.interviewerName, `${submitted} scorecard${submitted === 1 ? '' : 's'} submitted`].filter(Boolean).join(' · ')}</p>
+                </div>
+                <span className="rf2-timeline__actions">
+                  {writable && open ? <button type="button" className="rf2-link" onClick={() => void markNoShow(i)}>Mark no-show</button> : null}
+                  {writable && open && onReschedule ? <button type="button" className="rf2-link" onClick={() => onReschedule(i.id)}>Reschedule</button> : null}
+                  {i.status !== 'Cancelled' && i.status !== 'No-show' && onScorecard ? <button type="button" className="rf2-link" onClick={() => onScorecard(i.id)}>Scorecards</button> : null}
+                </span>
+              </li>
+            );
+          })}
         </ol>
       )}
     </section>

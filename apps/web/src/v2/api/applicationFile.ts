@@ -55,6 +55,8 @@ export interface InterviewItem {
   id: string; interviewCode: string; applicationId: string; title: string; interviewType: string;
   scheduledStart: string; scheduledEnd: string; timezone: string; locationUrl?: string | null; roomName?: string | null;
   interviewerName?: string | null; status: 'Scheduled' | 'Completed' | 'Cancelled' | 'Rescheduled' | 'No-show';
+  /** Already returned by the interview payload. Absent means the appointment has no recorded creation time. */
+  createdAt?: string;
   attendees?: Array<{ userId?: string | null; displayName?: string | null; name?: string | null }>;
 }
 export interface ScorecardItem {

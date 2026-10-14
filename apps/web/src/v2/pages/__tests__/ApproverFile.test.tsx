@@ -25,12 +25,18 @@ beforeEach(() => {
 describe('#34 final approver: read-only file', () => {
   it('reads only GET /applications/:id and the candidate documents; no actions or drawers; CV download only', async () => {
     const u = userEvent.setup();
-    render(<MemoryRouter initialEntries={['/applications/a1?drawer=reject']}><Routes><Route path="/applications/:id" element={<ApplicationFileV2 mode="approver" load={loadApproverFile} />} /></Routes></MemoryRouter>);
-    expect(await screen.findByText(/Rania Otaibi/)).toBeInTheDocument();
+    render(<MemoryRouter initialEntries={[`/applications/a1?drawer=reject&returnTo=${encodeURIComponent('/candidates?stage=Interview')}`]}><Routes><Route path="/applications/:id" element={<ApplicationFileV2 mode="approver" load={loadApproverFile} />} /></Routes></MemoryRouter>);
+    expect(await screen.findByRole('heading', { name: 'Rania Otaibi' })).toBeInTheDocument();
     expect(api.getApi.mock.calls.map(([p]) => p).sort()).toEqual(['/applications/a1', '/documents/candidate/c1']);
     expect(screen.queryByRole('dialog')).toBeNull();
     for (const name of [/Reject/, /Review offer/, /Add note/i, /Follow-up/i]) expect(screen.queryByRole('button', { name })).toBeNull();
-    expect(screen.getByRole('link', { name: /Final approvals/ })).toHaveAttribute('href', '/hires/approvals/inbox');
+    await u.click(screen.getByRole('tab', { name: 'Activity' }));
+    for (const name of [/Reject/, /Review offer/, /Add note/i, /Follow-up/i]) expect(screen.queryByRole('button', { name })).toBeNull();
+    const approvals = screen.getAllByRole('link', { name: /Final approvals/ });
+    expect(approvals.length).toBeGreaterThan(0);
+    for (const link of approvals) expect(link).toHaveAttribute('href', '/hires/approvals/inbox');
+    expect(screen.queryByRole('link', { name: 'Back to Candidates' })).not.toBeInTheDocument();
+    await u.click(screen.getByRole('tab', { name: 'Documents' }));
     const dl = screen.getAllByRole('button', { name: 'Download CV' });
     expect(dl).toHaveLength(1);
     await u.click(dl[0]);

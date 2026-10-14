@@ -1,6 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../../api/client';
 import { axeViolations } from '../../../components/v2/__tests__/axe';
@@ -24,6 +24,7 @@ function serve(scenario: Scenario, extra: Record<string, unknown> = {}) {
   });
 }
 function Loc() { const l = useLocation(); return <output data-testid="loc" hidden>{l.pathname + l.search}</output>; }
+function HistoryBack() { const nav = useNavigate(); return <button type="button" onClick={() => nav(-1)}>History back</button>; }
 function renderFile(path = '/applications/a1') {
   document.documentElement.setAttribute('data-ui', 'v2');
   return render(<MemoryRouter initialEntries={[path]}><Routes><Route path="/applications/:id" element={<><ApplicationFileV2 /><Loc /></>} /></Routes></MemoryRouter>);
@@ -66,19 +67,39 @@ describe('pay safety', () => {
 });
 
 describe('E13 application file', () => {
-  it('renders header, stepper, gate, timeline, notes, details', async () => {
+  it('renders the hub header, next action, gate, evidence and documents', async () => {
+    const u = userEvent.setup();
     serve('interview');
     renderFile();
-    expect(await screen.findByRole('heading', { name: /Ahmed Embaby/, level: 2 })).toBeInTheDocument();
-    expect(screen.getByText('HRIS Developer · Offshore Cairo · Owner: Mariam Farag · Source: LinkedIn')).toBeInTheDocument();
-    const steps = within(screen.getByRole('list', { name: 'Stages' })).getAllByRole('listitem');
-    expect(steps.map((s) => s.dataset.state)).toEqual(['done', 'done', 'current', 'todo', 'todo', 'todo']);
-    expect(steps[2]).toHaveAttribute('aria-current', 'step');
+    expect(await screen.findByRole('heading', { name: 'Ahmed Embaby', level: 2 })).toBeInTheDocument();
+    expect(screen.getByText('HRIS Developer · Offshore Cairo · Owner: Mariam Farag')).toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: 'Stages' })).not.toBeInTheDocument();
+    const stage = screen.getByText('Scorecard required').parentElement;
+    expect(stage).toHaveTextContent('Interview');
+    expect(stage).toHaveTextContent('Scorecard required');
+    expect(screen.getByRole('heading', { name: "Waiting on Karim Hassan's scorecard" })).toBeInTheDocument();
+    expect(screen.getByText('Karim Hassan · Interviewer')).toBeInTheDocument();
     expect(within(screen.getByRole('list', { name: 'Gate to Offer' })).getByText('Scorecard submitted').closest('li')).toHaveAttribute('data-ok', 'false');
-    expect(screen.getByText(/Technical interview: Ahmed Embaby — 6 Oct 2026, 10:00/)).toBeInTheDocument();
     expect(screen.getByText(/Fit note/)).toBeInTheDocument();
+    expect(screen.getByText('Screening notes · recorded by Mariam Farag')).toBeInTheDocument();
     expect(screen.getByText('ahmed.embaby@example.com')).toBeInTheDocument();
+    expect(screen.getByText('Source: LinkedIn')).toBeInTheDocument();
+    expect(screen.getByText('Notice: 30 days')).toBeInTheDocument();
     expect(screen.getByText('Follow-up date').parentElement).toHaveTextContent('12 Oct 2026');
+    expect(screen.getByRole('heading', { name: 'Latest activity' })).toBeInTheDocument();
+    expect(screen.getByText('Moved Screening → Interview')).toBeInTheDocument();
+    expect(screen.queryByText(/Technical interview: Ahmed Embaby/)).not.toBeInTheDocument();
+    const crumbs = screen.getByRole('navigation', { name: 'Breadcrumb' });
+    expect(within(crumbs).getByRole('link', { name: 'HRIS Developer' })).toHaveAttribute('href', '/vacancies/j1');
+    expect(within(crumbs).getByText('Ahmed Embaby')).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: 'HRIS Developer pipeline' })).toHaveAttribute('href', '/vacancies/j1');
+    await u.click(screen.getByRole('tab', { name: 'Activity' }));
+    const recorded = screen.getByRole('list', { name: 'Recorded activity' });
+    expect(recorded).not.toHaveTextContent('Technical interview: Ahmed Embaby — 6 Oct 2026, 10:00');
+    const interviews = screen.getByRole('list', { name: 'Interviews' });
+    expect(interviews).toHaveTextContent('Technical interview: Ahmed Embaby — 6 Oct 2026, 10:00');
+    expect(interviews).toHaveTextContent('Appointment on the file');
+    await u.click(screen.getByRole('tab', { name: 'Documents' }));
     const docs = screen.getByRole('region', { name: 'Documents' });
     expect(docs).toHaveTextContent('Ahmed_Embaby_CV.pdf');
     expect(docs).toHaveTextContent('CV · 1 Oct 2026 · by Mariam Farag');
@@ -158,9 +179,120 @@ describe('E13 application file', () => {
     const u = userEvent.setup();
     serve('applied');
     renderFile();
-    await u.type(await screen.findByLabelText('Add a note'), 'Called, interested.');
+    await screen.findByRole('heading', { name: 'Ahmed Embaby' });
+    await u.click(screen.getByRole('tab', { name: 'Activity' }));
+    await u.type(screen.getByLabelText('Add a note'), 'Called, interested.');
     await u.click(screen.getByRole('button', { name: 'Save note' }));
     expect(api.postApi).toHaveBeenCalledWith('/applications/a1/notes', { content: 'Called, interested.' });
+  });
+
+  it('keeps the selected tab through the drawer and a fresh open', async () => {
+    const u = userEvent.setup();
+    serve('interview');
+    const viewed = renderFile('/applications/a1?tab=activity');
+    expect(await screen.findByRole('tab', { name: 'Activity' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('region', { name: 'Timeline' })).toBeInTheDocument();
+    await u.click(screen.getByRole('button', { name: 'Open scorecard' }));
+    expect(screen.getByTestId('loc')).toHaveTextContent('tab=activity');
+    expect(screen.getByTestId('loc')).toHaveTextContent('drawer=scorecard');
+    await u.keyboard('{Escape}');
+    expect(screen.getByTestId('loc')).toHaveTextContent('tab=activity');
+    expect(screen.getByTestId('loc')).not.toHaveTextContent('drawer=');
+    viewed.unmount();
+    renderFile('/applications/a1?tab=documents');
+    expect(await screen.findByRole('tab', { name: 'Documents' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('region', { name: 'Documents' })).toBeInTheDocument();
+  });
+
+  it('accepts an internal candidates, my-work or job return and rejects anything else', async () => {
+    const u = userEvent.setup();
+    serve('interview');
+    const candidates = renderFile(`/applications/a1?returnTo=${encodeURIComponent('/candidates?stage=Interview&q=laravel')}`);
+    const back = await screen.findByRole('link', { name: 'Back to Candidates' });
+    expect(back).toHaveAttribute('href', '/candidates?stage=Interview&q=laravel');
+    expect(within(screen.getByRole('navigation', { name: 'Breadcrumb' })).getByRole('link', { name: 'Candidates' })).toHaveAttribute('href', '/candidates?stage=Interview&q=laravel');
+    await u.click(screen.getByRole('tab', { name: 'Activity' }));
+    expect(screen.getByTestId('loc')).toHaveTextContent('returnTo=');
+    expect(screen.getByTestId('loc')).toHaveTextContent('tab=activity');
+    candidates.unmount();
+
+    const myWork = renderFile(`/applications/a1?returnTo=${encodeURIComponent('/my-work?day=tomorrow&tab=joining')}`);
+    expect(await screen.findByRole('link', { name: 'Back to My Work' })).toHaveAttribute('href', '/my-work?day=tomorrow&tab=joining');
+    myWork.unmount();
+
+    const sameJob = renderFile(`/applications/a1?returnTo=${encodeURIComponent('/vacancies/j1?stage=Offer')}`);
+    expect(await screen.findByRole('link', { name: 'HRIS Developer pipeline' })).toHaveAttribute('href', '/vacancies/j1?stage=Offer');
+    sameJob.unmount();
+
+    const otherJob = renderFile(`/applications/a1?returnTo=${encodeURIComponent('/vacancies/other-job')}`);
+    expect(await screen.findByRole('link', { name: 'Job pipeline' })).toHaveAttribute('href', '/vacancies/other-job');
+    otherJob.unmount();
+
+    for (const raw of ['https://evil.example/candidates', '//evil.example/candidates', '/settings', '/candidates/extra', '/vacancies', '/vacancies/j1/edit', '/my-work/../settings']) {
+      const rejected = renderFile(`/applications/a1?returnTo=${encodeURIComponent(raw)}`);
+      expect(await screen.findByRole('link', { name: 'HRIS Developer pipeline' })).toHaveAttribute('href', '/vacancies/j1');
+      expect(screen.queryByRole('link', { name: 'Back to Candidates' })).not.toBeInTheDocument();
+      rejected.unmount();
+    }
+  });
+
+  it('keeps the hub tab when the reader comes back from the contextual link', async () => {
+    const u = userEvent.setup();
+    serve('interview');
+    render(
+      <MemoryRouter initialEntries={[`/applications/a1?tab=documents&returnTo=${encodeURIComponent('/candidates?q=hris')}`]}>
+        <Routes>
+          <Route path="/applications/:id" element={<><ApplicationFileV2 /><Loc /></>} />
+          <Route path="/candidates" element={<HistoryBack />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(await screen.findByRole('tab', { name: 'Documents' })).toHaveAttribute('aria-selected', 'true');
+    await u.click(screen.getByRole('link', { name: 'Back to Candidates' }));
+    await u.click(screen.getByRole('button', { name: 'History back' }));
+    expect(await screen.findByRole('tab', { name: 'Documents' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('loc')).toHaveTextContent('tab=documents');
+    expect(screen.getByTestId('loc')).toHaveTextContent('returnTo=');
+  });
+
+  it('shows an empty evidence state instead of a CV summary', async () => {
+    serve('applied', { '/applications/a1/notes': [] });
+    renderFile();
+    expect(await screen.findByText('No screening note or fit evidence is recorded on this file yet.')).toBeInTheDocument();
+    expect(screen.queryByText(/CV summary/i)).not.toBeInTheDocument();
+  });
+
+  it('records an interview at its creation time and keeps the appointment separate', async () => {
+    const interviews = fileResponses('interview')['/interviews'] as Array<Record<string, unknown>>;
+    serve('interview', { '/interviews': [{ ...interviews[0], createdAt: '2026-10-04T09:00:00.000Z', status: 'Scheduled', scheduledStart: '2026-10-20T07:00:00.000Z' }] });
+    const recordedView = renderFile('/applications/a1?tab=activity');
+    const recorded = await screen.findByRole('list', { name: 'Recorded activity' });
+    const row = within(recorded).getByText(/Interview recorded/).closest('li');
+    expect(row?.querySelector('time')).toHaveAttribute('dateTime', '2026-10-04T09:00:00.000Z');
+    expect(recorded).toHaveTextContent('4 Oct 2026');
+    const commitments = screen.getByRole('list', { name: 'Interviews' });
+    expect(commitments).toHaveTextContent('Technical interview: Ahmed Embaby — 20 Oct 2026, 10:00');
+    expect(commitments.querySelector('time')).toHaveAttribute('dateTime', '2026-10-04T09:00:00.000Z');
+    recordedView.unmount();
+    serve('interview', { '/interviews': [{ ...interviews[0], status: 'Scheduled', scheduledStart: '2026-10-20T07:00:00.000Z' }] });
+    renderFile('/applications/a1?tab=activity');
+    const planned = await screen.findByRole('list', { name: 'Interviews' });
+    expect(planned).toHaveTextContent('Scheduled commitment');
+    expect(screen.getByRole('list', { name: 'Recorded activity' })).not.toHaveTextContent('Interview recorded');
+  });
+
+  it('does not treat a verified checklist as permission to join', async () => {
+    serve('prehire-done');
+    const verified = renderFile();
+    expect(await screen.findByRole('button', { name: 'Pre-hire checklist' })).toBeInTheDocument();
+    expect(screen.getByText(/They are not joining/)).toBeInTheDocument();
+    expect(screen.getByText(/Every check on this file is verified/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Record actual joining|Move to Joined/ })).not.toBeInTheDocument();
+    verified.unmount();
+    serve('prehire', { '/applications/a1/joining-checks': [] });
+    renderFile();
+    expect(await screen.findByText(/No required checks are on the file yet/)).toBeInTheDocument();
+    expect(screen.getByText(/They are not joining/)).toBeInTheDocument();
   });
 });
 
@@ -297,7 +429,8 @@ describe('E17–E20 offer', () => {
     const u = userEvent.setup();
     serve('offer-sentback');
     renderFile();
-    expect(await screen.findByRole('heading', { level: 2 })).toHaveTextContent('Offer');
+    expect(await screen.findByRole('heading', { name: 'Ahmed Embaby', level: 2 })).toBeInTheDocument();
+    expect(screen.getByText('Sent back').parentElement).toHaveTextContent('Offer');
     await u.click(screen.getByRole('button', { name: 'Revise and resubmit' }));
     const d = await screen.findByRole('dialog', { name: /Revise and resubmit/ });
     expect(d).toHaveTextContent('The manager sent v1 back: “Start date clashes with Ramadan rota; move to 15 Nov.”');
