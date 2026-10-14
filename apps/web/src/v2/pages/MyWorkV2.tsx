@@ -1,16 +1,21 @@
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { BriefcaseBusiness, CalendarClock, Check, ClipboardCheck, ClipboardList, Clock, FileSignature, Info, ListChecks, RotateCw, TriangleAlert } from 'lucide-react';
+import { Bell, BriefcaseBusiness, CalendarClock, Check, CircleCheck, ClipboardCheck, ClipboardList, Clock, FileSignature, Info, ListChecks, RotateCw, TriangleAlert } from 'lucide-react';
 import { useAuth } from '../../auth/AuthContext';
 import { ApiError } from '../../api/client';
 import { ButtonV2 } from '../../components/v2/Button';
 import { StatusChip } from '../../components/v2/StatusChip';
 import { EmptyStateV2, ForbiddenStateV2, SkeletonV2 } from '../../components/v2/PageStates';
-import { TaskRow, TaskSection } from '../../components/v2/Task';
+import { TabsV2, type TabV2Item } from '../../components/v2/Tabs';
+import { TaskRow } from '../../components/v2/Task';
 import '../../components/v2/v2-primitives.css';
 import './my-work.css';
 import { canUseMyInterviews } from '../../auth/interviewer';
-import { fileActionHref, type HrefContext, getMyWork, waitingOnName, type MyWorkAction, type MyWorkDay, type MyWorkResult, type MyWorkTarget, type WorkItem, type WorkItemType } from '../api/myWork';
+import {
+  fileActionHref, getMyWork, joiningCaseHref, upcomingInterviewHref, waitingBlockerPhrase, waitingOfferTitle,
+  type HrefContext, type JoiningSoon, type MyWorkAction, type MyWorkDay, type MyWorkResponse, type MyWorkResult,
+  type MyWorkTarget, type UpcomingInterview, type WorkItem, type WorkItemType,
+} from '../api/myWork';
 
 type LoadState =
   | { kind: 'loading' }
@@ -19,16 +24,23 @@ type LoadState =
   | { kind: 'forbidden' };
 
 type Bucket = 'overdue' | 'dueToday' | 'waitingOnOthers';
-const BUCKETS: Array<{ key: Bucket; title: string; empty: string }> = [
-  { key: 'overdue', title: 'Overdue', empty: 'Nothing overdue.' },
-  { key: 'dueToday', title: 'Today', empty: 'Nothing due today.' }, // title replaced for tomorrow
-  { key: 'waitingOnOthers', title: 'Waiting on others', empty: 'Nothing waiting on others.' },
-];
+type WorkTab = 'actions' | 'interviews' | 'joining';
+type WorkFilter = 'overdue' | 'today' | 'waiting';
+
 const TYPE_LABEL: Record<WorkItemType, string> = { job: 'Job', requisition: 'Requisition', task: 'Task', interview: 'Interview', scorecard: 'Scorecard', offer: 'Offer' };
-const TYPE_ICON: Record<WorkItemType, React.ReactNode> = {
+const TYPE_ICON: Record<WorkItemType, ReactNode> = {
   job: <BriefcaseBusiness />, requisition: <ClipboardList />, task: <ListChecks />, interview: <CalendarClock />, scorecard: <ClipboardCheck />, offer: <FileSignature />,
 };
-const WAITING_LABEL = { approver: 'Waiting on approver', interviewer: 'Waiting on interviewer', candidate: 'Waiting on candidate' } as const;
+const WAITING_LABEL = { approver: 'Waiting on approval', interviewer: 'Waiting on interviewer', candidate: 'Waiting on candidate' } as const;
+const READINESS_LABEL = {
+  approval_pending: 'Approval pending',
+  licence_pending: 'Licence pending',
+  checks_pending: 'Checks pending',
+  ready: 'Ready to record',
+  postponed: 'Postponed',
+  blocked: 'Blocked',
+  review: 'Review readiness',
+} as const;
 
 /** Formats in the server's timezone (#9: Africa/Cairo). Date-only values are calendar dates, never shifted. */
 function makeFormat(timeZone: string) {
@@ -46,7 +58,32 @@ function makeFormat(timeZone: string) {
   };
 }
 
-function dueText(item: WorkItem, bucket: Bucket, day: MyWorkDay, f: ReturnType<typeof makeFormat>): string | null {
+type Format = ReturnType<typeof makeFormat>;
+
+function workTab(value: string | null): WorkTab {
+  if (value === 'interviews' || value === 'joining') return value;
+  return 'actions';
+}
+
+function workFilter(value: string | null): WorkFilter | null {
+  if (value === 'overdue' || value === 'today' || value === 'waiting') return value;
+  return null;
+}
+
+function panelId(tab: WorkTab): string {
+  if (tab === 'interviews') return 'my-work-interviews';
+  if (tab === 'joining') return 'my-work-joining';
+  return 'my-work-actions';
+}
+
+function subtitleFor(tab: WorkTab, noWork: boolean): string {
+  if (tab === 'interviews') return 'Upcoming interviews assigned to you or your candidates.';
+  if (tab === 'joining') return 'Upcoming start dates, readiness and remaining checks.';
+  if (noWork) return 'Open files on your jobs that need you appear here.';
+  return 'Your next actions, ordered by urgency.';
+}
+
+function dueText(item: WorkItem, bucket: Bucket, day: MyWorkDay, f: Format): string | null {
   if (item.startAt) return `${day === 'tomorrow' && bucket === 'dueToday' ? 'Tomorrow' : f.dayMonth(item.startAt)}, ${f.time(item.startAt)}${item.endAt ? `–${f.time(item.endAt)}` : ''}`;
   if (!item.dueAt) return null;
   if (bucket === 'dueToday') {
@@ -86,8 +123,7 @@ function ItemActions({ item, bucket, primary, ctx }: { item: WorkItem; bucket: B
       {actions.map((action) => {
         if (action.disabled) return <DisabledAction key={action.key} action={action} />;
         const href = fileActionHref(item, action, ctx);
-        if (!href) return null; // no page for this entity: no dead link
-        // One primary per page (VI): the first enabled action of the first Today item.
+        if (!href) return null;
         const kind = primary && !usedPrimary ? 'primary' : bucket === 'waitingOnOthers' ? 'tertiary' : 'secondary';
         if (kind === 'primary') usedPrimary = true;
         return (
@@ -100,12 +136,19 @@ function ItemActions({ item, bucket, primary, ctx }: { item: WorkItem; bucket: B
   );
 }
 
+/** Offer rows name the waitingOn blocker. A sent offer is not an approval. Scorecards keep their own reason. */
+function itemReason(item: WorkItem): string {
+  if (item.type === 'offer' && item.waitingOn) return waitingBlockerPhrase(item);
+  if (item.waitingOn && item.waitingOn !== 'approver' && /approval/i.test(item.reason)) return waitingBlockerPhrase(item);
+  return item.reason;
+}
+
 function ItemMeta({ item }: { item: WorkItem }) {
-  const join = (bits: React.ReactNode[]) => bits.map((b, i) => <span key={i}>{i > 0 ? ' · ' : ''}{b}</span>);
-  const first: React.ReactNode[] = [];
+  const join = (bits: ReactNode[]) => bits.map((b, i) => <span key={i}>{i > 0 ? ' · ' : ''}{b}</span>);
+  const first: ReactNode[] = [];
   if (item.candidate) first.push(<span data-testid="candidate">{item.candidate.name}{item.stage ? ` · ${item.stage}` : ''}</span>);
-  first.push(<span>{item.reason}</span>);
-  const second: React.ReactNode[] = [];
+  first.push(<span>{itemReason(item)}</span>);
+  const second: ReactNode[] = [];
   if (item.startAt) {
     const people = item.interviewers?.length ? item.interviewers : item.interviewer ? [item.interviewer] : [];
     second.push(item.room?.url
@@ -121,32 +164,218 @@ function ItemMeta({ item }: { item: WorkItem }) {
   );
 }
 
-const HINT_NOUN: Record<WorkItemType, string> = { job: 'job', requisition: 'requisition', task: 'task', interview: 'interview', scorecard: 'scorecard', offer: 'offer' };
-/** E02 tile detail: the first item, "Ahmed Embaby — scorecard" / "Lina Hassan — with Karim Hassan". */
-function countHint(items: WorkItem[], bucket: Bucket): string | null {
-  const first = items[0];
-  if (!first) return null;
-  const who = first.candidate?.name ?? first.title;
-  if (bucket === 'waitingOnOthers') {
-    const on = waitingOnName(first);
-    return on ? `${who} — with ${on}` : `${who} — ${HINT_NOUN[first.type] ?? first.type}`;
-  }
-  return `${who} — ${HINT_NOUN[first.type] ?? first.type}`;
-}
-
-/** E02: a waiting offer reads "Lina Hassan — offer waiting on Karim Hassan" (never a role code). */
 function rowTitle(item: WorkItem, bucket: Bucket): string {
-  if (bucket !== 'waitingOnOthers' || item.type !== 'offer' || !item.candidate) return item.title;
-  const on = waitingOnName(item);
-  return `${item.candidate.name} — offer waiting ${on ? `on ${on}` : 'for approval'}`;
+  if (bucket === 'waitingOnOthers' && item.type === 'offer') return waitingOfferTitle(item);
+  return item.title;
 }
 
-/** E02: a waiting row is read-only unless it has an enabled action beyond just opening the record (e.g. Record answer). */
+/** A waiting row is read-only unless it has an enabled action beyond opening the record. */
 const readOnly = (item: WorkItem) => !item.actions.some((a) => !a.disabled && !a.key.startsWith('open-'));
 
-function greeting(): string {
-  const h = new Date().getHours();
-  return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+function filterEmpty(filter: WorkFilter, day: MyWorkDay): string {
+  if (filter === 'overdue') return 'Nothing overdue.';
+  if (filter === 'waiting') return 'Nothing waiting on others.';
+  if (day === 'tomorrow') return 'Nothing booked for tomorrow.';
+  return 'Nothing due today.';
+}
+
+function NextActions({ data, day, filter, onFilter, f, ctx }: {
+  data: MyWorkResponse;
+  day: MyWorkDay;
+  filter: WorkFilter | null;
+  onFilter: (next: WorkFilter | null) => void;
+  f: Format;
+  ctx: HrefContext;
+}) {
+  const dayLabel = day === 'tomorrow' ? 'Tomorrow' : 'Today';
+  const filters: Array<{ key: WorkFilter; label: string; count: number }> = [
+    { key: 'overdue', label: 'Overdue', count: data.counts.overdue },
+    { key: 'today', label: dayLabel, count: data.counts.today },
+    { key: 'waiting', label: 'Waiting', count: data.counts.waitingOnOthers },
+  ];
+  const ordered: Array<{ item: WorkItem; bucket: Bucket; primary: boolean }> = [
+    ...data.overdue.map((item) => ({ item, bucket: 'overdue' as const, primary: false })),
+    ...data.dueToday.map((item, index) => ({ item, bucket: 'dueToday' as const, primary: index === 0 })),
+    ...data.waitingOnOthers.map((item) => ({ item, bucket: 'waitingOnOthers' as const, primary: false })),
+  ];
+  const visible = ordered.filter((row) => {
+    if (filter === 'overdue') return row.bucket === 'overdue';
+    if (filter === 'today') return row.bucket === 'dueToday';
+    if (filter === 'waiting') return row.bucket === 'waitingOnOthers';
+    return true;
+  });
+
+  return (
+    <>
+      <div className="rf2-mywork__filters" role="group" aria-label="Counts">
+        {filters.map((entry) => (
+          <button
+            key={entry.key}
+            type="button"
+            className="rf2-mywork__filter"
+            data-filter={entry.key}
+            aria-pressed={filter === entry.key}
+            aria-label={`${entry.count} ${entry.label}`}
+            onClick={() => onFilter(filter === entry.key ? null : entry.key)}
+          >
+            <span className="rf2-mywork__filter-value" data-count-value="">{entry.count}</span>
+            <span className="rf2-mywork__filter-label">{entry.label}</span>
+          </button>
+        ))}
+      </div>
+      <div className="rf2-mywork__list-head">
+        <h3 className="rf2-mywork__list-title">Next actions</h3>
+        <ButtonV2 kind="tertiary" size="sm" selected={filter === null} onClick={() => { if (filter) onFilter(null); }}>All tasks</ButtonV2>
+      </div>
+      {visible.length === 0 && filter ? <p className="rf2-mywork__filter-empty">{filterEmpty(filter, day)}</p> : null}
+      {visible.length > 0 ? (
+        <ul className="rf2-mywork__list" aria-label="Next actions">
+          {visible.map(({ item, bucket, primary }) => {
+            const due = dueText(item, bucket, day, f);
+            const sla = data.reminderWorkerHealthy ? slaChip(item, bucket, day) : null;
+            const waitingChip = item.waitingOn ? <StatusChip tone="neutral" label={WAITING_LABEL[item.waitingOn] ?? 'Waiting'} /> : null;
+            const typeChip = <StatusChip tone={bucket === 'overdue' ? 'warning' : 'info'} label={TYPE_LABEL[item.type] ?? item.type} />;
+            const locked = bucket === 'waitingOnOthers' && readOnly(item);
+            return (
+              <li key={`${bucket}-${item.type}-${item.id}`} data-testid="work-row" data-bucket={bucket}>
+                <TaskRow
+                  icon={bucket === 'overdue' ? <TriangleAlert /> : TYPE_ICON[item.type] ?? <Clock />}
+                  iconTone={bucket === 'overdue' ? 'warning' : bucket === 'waitingOnOthers' ? 'neutral' : 'info'}
+                  title={rowTitle(item, bucket)}
+                  meta={<ItemMeta item={item} />}
+                  chip={<span className="rf2-mywork__chips">{waitingChip ?? typeChip}{sla ? <span data-testid="sla">{sla}</span> : null}</span>}
+                  due={locked ? <span data-testid="due">No action for you</span> : due ? <span data-testid="due">{due}</span> : undefined}
+                  dueTone={bucket === 'overdue' ? 'danger' : 'default'}
+                  action={locked ? <span className="rf2-mywork__readonly">Read-only</span> : <ItemActions item={item} bucket={bucket} primary={primary} ctx={ctx} />}
+                />
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+    </>
+  );
+}
+
+function scheduleWhen(row: UpcomingInterview, f: Format): string {
+  const end = row.endAt ? `–${f.time(row.endAt)}` : '';
+  return `${f.dayMonth(row.startAt)} · ${f.time(row.startAt)}${end}`;
+}
+
+function ScheduleMeta({ row, f }: { row: UpcomingInterview; f: Format }) {
+  const people = row.interviewers.map((person) => person.name).filter(Boolean);
+  const bits: ReactNode[] = [];
+  if (row.access === 'evaluation') bits.push(<span>Assigned to you</span>);
+  bits.push(<span>{scheduleWhen(row, f)}</span>);
+  if (people.length) bits.push(<span>With {people.join(', ')}</span>);
+  if (row.access === 'evaluation') bits.push(<span>CV and evaluation only</span>);
+  else if (row.room.url) bits.push(<a href={row.room.url} target="_blank" rel="noreferrer">{row.room.name ?? 'Room link'}</a>);
+  else bits.push(<span>{row.room.name ?? 'No room yet'}</span>);
+  if (row.held) bits.push(<span>On hold</span>);
+  return <>{bits.map((bit, index) => <span key={index}>{index > 0 ? ' · ' : ''}{bit}</span>)}</>;
+}
+
+function scheduleChip(row: UpcomingInterview) {
+  if (row.status === 'scorecard_overdue') return <StatusChip tone="warning" label="Scorecard overdue" />;
+  if (row.status === 'assigned') return <StatusChip tone="info" label="Assigned" />;
+  return <StatusChip tone="info" label="Scheduled" />;
+}
+
+const FILE_VIEW_REASON = 'Opening the recruiting file needs application view.';
+
+function ScheduleAction({ row, ctx }: { row: UpcomingInterview; ctx: HrefContext }) {
+  if (row.action.disabled) return <DisabledAction action={row.action} />;
+  if (row.access === 'file' && ctx.canOpenFile !== true) {
+    return <DisabledAction action={{ ...row.action, disabled: true, reason: FILE_VIEW_REASON }} />;
+  }
+  const href = upcomingInterviewHref(row, ctx);
+  if (!href) return null;
+  return (
+    <Link className="rf2-btn rf2-btn--secondary rf2-btn--md" to={href} aria-label={`${row.action.label}: ${row.title}`}>
+      <span>{row.action.label}</span>
+    </Link>
+  );
+}
+
+function InterviewGroup({ title, rows, f, ctx }: { title: string; rows: UpcomingInterview[]; f: Format; ctx: HrefContext }) {
+  const id = useId();
+  if (!rows.length) return null;
+  return (
+    <section className="rf2-mywork__group" aria-labelledby={id}>
+      <h3 id={id} className="rf2-mywork__list-title">{title}</h3>
+      <ul className="rf2-mywork__list">
+        {rows.map((row) => (
+          <li key={row.id} data-testid="interview-row" data-access={row.access}>
+            <TaskRow
+              icon={<CalendarClock />}
+              iconTone={row.access === 'evaluation' ? 'neutral' : 'info'}
+              title={row.title}
+              meta={<span className="rf2-mywork__meta-line"><ScheduleMeta row={row} f={f} /></span>}
+              chip={scheduleChip(row)}
+              action={<ScheduleAction row={row} ctx={ctx} />}
+            />
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function InterviewPanel({ rows, f, ctx }: { rows: UpcomingInterview[] | undefined; f: Format; ctx: HrefContext }) {
+  if (rows === undefined) return <p className="rf2-mywork__note" role="status">Upcoming interviews are unavailable in this response.</p>;
+  if (rows.length === 0) return <p className="rf2-mywork__filter-empty">No upcoming interviews assigned to you.</p>;
+  const fileRows = rows.filter((row) => row.access === 'file');
+  const assigned = rows.filter((row) => row.access === 'evaluation');
+  return (
+    <>
+      <InterviewGroup title="Interview schedule" rows={fileRows} f={f} ctx={ctx} />
+      <InterviewGroup title="Your assigned interviews" rows={assigned} f={f} ctx={ctx} />
+    </>
+  );
+}
+
+function joiningMeta(row: JoiningSoon, f: Format): string {
+  const start = row.intendedDate ? `Starts ${f.dayMonth(row.intendedDate)}` : 'Date not set';
+  const held = row.held ? ' · On hold' : '';
+  return `${start} · ${row.checksComplete} of ${row.checksRequired} checks complete · ${row.detail}${held}`;
+}
+
+function joiningTone(row: JoiningSoon): 'warning' | 'info' | 'neutral' {
+  if (row.readiness === 'ready') return 'info';
+  if (row.readiness === 'postponed') return 'neutral';
+  return 'warning';
+}
+
+function JoiningPanel({ rows, canOpenFile, f }: { rows: JoiningSoon[] | undefined; canOpenFile: boolean; f: Format }) {
+  if (rows === undefined) return <p className="rf2-mywork__note" role="status">Joining cases are unavailable in this response.</p>;
+  return (
+    <section className="rf2-mywork__group" aria-label="Joining soon">
+      {rows.length === 0 ? <p className="rf2-mywork__filter-empty">No joining dates on your accepted cases.</p> : (
+        <ul className="rf2-mywork__list">
+          {rows.map((row) => {
+            const dest = joiningCaseHref(row, canOpenFile);
+            return (
+              <li key={row.id} data-testid="joining-row" data-readiness={row.readiness}>
+                <TaskRow
+                  icon={<CircleCheck />}
+                  iconTone="info"
+                  title={`${row.candidateName} · ${row.jobTitle}`}
+                  meta={<span className="rf2-mywork__meta-line">{joiningMeta(row, f)}</span>}
+                  chip={<StatusChip tone={joiningTone(row)} label={READINESS_LABEL[row.readiness]} />}
+                  action={(
+                    <Link className="rf2-btn rf2-btn--secondary rf2-btn--md" to={dest.href} aria-label={`${dest.label}: ${row.candidateName}`}>
+                      <span>{dest.label}</span>
+                    </Link>
+                  )}
+                />
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <p className="rf2-mywork__footnote" data-testid="joining-footnote">Counts update after joining is confirmed. A scheduled start is not a completed hire.</p>
+    </section>
+  );
 }
 
 export function MyWorkV2({ load = getMyWork }: { load?: typeof getMyWork } = {}) {
@@ -154,11 +383,27 @@ export function MyWorkV2({ load = getMyWork }: { load?: typeof getMyWork } = {})
   const hrefCtx: HrefContext = { meId: user?.id, canOpenFile: (user?.permissions ?? []).includes('APPLICATION_VIEW'), interviewer: canUseMyInterviews(user) };
   const [params, setParams] = useSearchParams();
   const day: MyWorkDay = params.get('day') === 'tomorrow' ? 'tomorrow' : 'today';
-  const setDay = (next: MyWorkDay) => setParams((prev) => {
-    const p = new URLSearchParams(prev);
-    if (next === 'tomorrow') p.set('day', 'tomorrow'); else p.delete('day');
-    return p;
-  }, { replace: false });
+  const tab = workTab(params.get('tab'));
+  const filter = workFilter(params.get('filter'));
+  const updateParams = (mutate: (next: URLSearchParams) => void) => {
+    setParams((prev) => {
+      const next = new URLSearchParams(prev);
+      mutate(next);
+      return next;
+    }, { replace: false });
+  };
+  const setDay = (next: MyWorkDay) => updateParams((p) => {
+    if (next === 'tomorrow') p.set('day', 'tomorrow');
+    else p.delete('day');
+  });
+  const setTab = (next: string) => updateParams((p) => {
+    if (next === 'interviews' || next === 'joining') p.set('tab', next);
+    else p.delete('tab');
+  });
+  const setFilter = (next: WorkFilter | null) => updateParams((p) => {
+    if (next) p.set('filter', next);
+    else p.delete('filter');
+  });
   const [state, setState] = useState<LoadState>({ kind: 'loading' });
   const [attempt, setAttempt] = useState(0);
 
@@ -177,33 +422,35 @@ export function MyWorkV2({ load = getMyWork }: { load?: typeof getMyWork } = {})
 
   const data = state.kind === 'ready' ? state.result.data : null;
   const f = makeFormat(data?.timezone || 'Africa/Cairo');
-  const total = data ? data.counts.overdue + data.counts.today + data.counts.waitingOnOthers : 0;
   const noWork = Boolean(data && (data.empty || data.overdue.length + data.dueToday.length + data.waitingOnOthers.length === 0));
-  const firstName = (user?.displayName ?? '').split(' ')[0];
-
-  let subtitle: string | null = null;
-  if (data) {
-    if (noWork) subtitle = 'Open files on your jobs that need you appear here.';
-    else {
-      const on = data.targets.length === 1 ? ` on your job ${data.targets[0].title}` : data.targets.length > 1 ? ` across ${data.targets.length} jobs` : '';
-      subtitle = `${greeting()}${firstName ? `, ${firstName}` : ''}. ${total} open ${total === 1 ? 'task' : 'tasks'}${on}.`;
-    }
-  }
+  const tabs: TabV2Item[] = [
+    { key: 'actions', label: 'Next actions', icon: <ListChecks />, controls: tab === 'actions' ? panelId('actions') : undefined },
+    { key: 'interviews', label: 'Upcoming interviews', icon: <CalendarClock />, controls: tab === 'interviews' ? panelId('interviews') : undefined },
+    { key: 'joining', label: 'Joining soon', icon: <CircleCheck />, controls: tab === 'joining' ? panelId('joining') : undefined },
+  ];
 
   return (
     <div className="rf2-mywork">
       <div className="rf2-mywork__top">
         <div>
           <h2 className="rf2-mywork__title">My Work</h2>
-          {subtitle ? <p className="rf2-mywork__subtitle">{subtitle}</p> : null}
+          {data ? <p className="rf2-mywork__subtitle">{subtitleFor(tab, noWork)}</p> : null}
         </div>
         <div className="rf2-mywork__day">
           <div className="rf2-mywork__head-actions">
-            {data && !noWork ? <Link className="rf2-btn rf2-btn--secondary rf2-btn--sm" to="/vacancies"><span>View open jobs</span></Link> : null}
-          <div className="rf2-segmented" role="group" aria-label="Day">
-            <ButtonV2 kind="secondary" size="sm" selected={day === 'today'} onClick={() => setDay('today')}>Today</ButtonV2>
-            <ButtonV2 kind="secondary" size="sm" selected={day === 'tomorrow'} onClick={() => setDay('tomorrow')}>Tomorrow</ButtonV2>
-          </div>
+            {data && !noWork && tab === 'actions' ? <Link className="rf2-btn rf2-btn--secondary rf2-btn--sm" to="/vacancies"><span>View open jobs</span></Link> : null}
+            {state.kind === 'ready' ? (
+              <Link className="rf2-btn rf2-btn--secondary rf2-btn--sm" to="/notifications">
+                <span className="rf2-mywork__btn-icon" aria-hidden="true"><Bell /></span>
+                <span>Notifications</span>
+              </Link>
+            ) : null}
+            {data ? (
+              <div className="rf2-mywork__quiet-day" role="group" aria-label="Day">
+                <ButtonV2 kind="secondary" size="sm" selected={day === 'today'} aria-label="Show today" onClick={() => setDay('today')}>Today</ButtonV2>
+                <ButtonV2 kind="secondary" size="sm" selected={day === 'tomorrow'} aria-label="Show tomorrow" onClick={() => setDay('tomorrow')}>Tomorrow</ButtonV2>
+              </div>
+            ) : null}
           </div>
           {data?.date ? <p className="rf2-mywork__today">{day === 'tomorrow' ? 'Tomorrow' : 'Today'} · {f.full(data.date)}</p> : null}
         </div>
@@ -231,65 +478,37 @@ export function MyWorkV2({ load = getMyWork }: { load?: typeof getMyWork } = {})
 
       {data ? (
         <>
-          {data.targets.length > 0 ? (
-            <ul className="rf2-mywork__targets" aria-label="Your targets">
-              {data.targets.map((t) => <li key={t.vacancyId}><TargetStrip target={t} format={f} /></li>)}
-            </ul>
-          ) : null}
-
-          {noWork ? (
-            <EmptyStateV2
-              icon={<Check />}
-              title={(data.emptyMessage ?? 'No open work assigned to you.').replace(/\.$/, '')}
-              body="New tasks appear here when a file on your jobs needs you: a screening to log, a scorecard to chase, an offer to send."
-              action={<Link className="rf2-btn rf2-btn--secondary rf2-btn--md" to="/vacancies"><span aria-hidden="true" style={{ display: 'contents' }}><BriefcaseBusiness /></span><span>View open jobs</span></Link>}
-            />
-          ) : (
-            <>
-              <dl className="rf2-mywork__counts" aria-label="Counts">
-                {([['Total open', total, 'Tasks assigned to you'], ['Overdue', data.counts.overdue, countHint(data.overdue, 'overdue')], [day === 'tomorrow' ? 'Due tomorrow' : 'Due today', data.counts.today, countHint(data.dueToday, 'dueToday')], ['Waiting on others', data.counts.waitingOnOthers, countHint(data.waitingOnOthers, 'waitingOnOthers')]] as const).map(([label, value, hint]) => (
-                  <div key={label} className="rf2-mywork__count" data-key={label}>
-                    <dt>{label}</dt>
-                    <dd data-count-value="">{value}</dd>
-                    {hint ? <dd className="rf2-mywork__count-hint">{hint}</dd> : null}
-                  </div>
-                ))}
-              </dl>
-              {BUCKETS.map(({ key, title: t0, empty: e0 }) => {
-                const title = key === 'dueToday' && day === 'tomorrow' ? 'Tomorrow' : t0;
-                const empty = key === 'dueToday' && day === 'tomorrow' ? 'Nothing booked for tomorrow.' : e0;
-                return (
-                <TaskSection key={key} title={title} count={data[key].length} tone={key === 'overdue' ? 'danger' : 'default'} emptyText={empty}>
-                  {data[key].map((item, index) => {
-                    const due = dueText(item, key, day, f);
-                    const sla = data.reminderWorkerHealthy ? slaChip(item, key, day) : null;
-                    return (
-                      <TaskRow key={`${item.type}-${item.id}`}
-                        icon={key === 'overdue' ? <TriangleAlert /> : TYPE_ICON[item.type] ?? <Clock />}
-                        iconTone={key === 'overdue' ? 'warning' : key === 'waitingOnOthers' ? 'neutral' : 'info'}
-                        title={rowTitle(item, key)}
-                        meta={<ItemMeta item={item} />}
-                        chip={<span className="rf2-mywork__chips">{item.waitingOn ? <StatusChip tone="neutral" label={item.waitingOn === 'approver' ? 'Waiting on approval' : WAITING_LABEL[item.waitingOn] ?? 'Waiting'} /> : <StatusChip tone={key === 'overdue' ? 'warning' : 'info'} label={TYPE_LABEL[item.type] ?? item.type} />}{sla ? <span data-testid="sla">{sla}</span> : null}</span>}
-                        due={key === 'waitingOnOthers' && readOnly(item) ? <span data-testid="due">No action for you</span> : due ? <span data-testid="due">{due}</span> : undefined}
-                        dueTone={key === 'overdue' ? 'danger' : 'default'}
-                        action={key === 'waitingOnOthers' && readOnly(item)
-                          ? <span className="rf2-mywork__readonly">Read-only</span>
-                          : <ItemActions item={item} bucket={key} primary={key === 'dueToday' && index === 0} ctx={hrefCtx} />}
-                      />
-                    );
-                  })}
-                </TaskSection>
-                );
-              })}
-            </>
-          )}
+          <TabsV2 items={tabs} activeKey={tab} onChange={setTab} ariaLabel="My Work sections" />
+          <div role="tabpanel" id={panelId(tab)} aria-labelledby={`rf2-tab-${tab}`} className="rf2-mywork__panel">
+            {tab === 'actions' ? (
+              <>
+                {data.targets.length > 0 ? (
+                  <ul className="rf2-mywork__targets" aria-label="Your targets">
+                    {data.targets.map((target) => <li key={target.vacancyId}><TargetStrip target={target} format={f} /></li>)}
+                  </ul>
+                ) : null}
+                {noWork ? (
+                  <EmptyStateV2
+                    icon={<Check />}
+                    title={(data.emptyMessage ?? 'No open work assigned to you.').replace(/\.$/, '')}
+                    body="New tasks appear here when a file on your jobs needs you: a screening to log, a scorecard to chase, an offer to send."
+                    action={<Link className="rf2-btn rf2-btn--secondary rf2-btn--md" to="/vacancies"><span aria-hidden="true" style={{ display: 'contents' }}><BriefcaseBusiness /></span><span>View open jobs</span></Link>}
+                  />
+                ) : (
+                  <NextActions data={data} day={day} filter={filter} onFilter={setFilter} f={f} ctx={hrefCtx} />
+                )}
+              </>
+            ) : null}
+            {tab === 'interviews' ? <InterviewPanel rows={data.upcomingInterviews} f={f} ctx={hrefCtx} /> : null}
+            {tab === 'joining' ? <JoiningPanel rows={data.joiningSoon} canOpenFile={Boolean(hrefCtx.canOpenFile)} f={f} /> : null}
+          </div>
         </>
       ) : null}
     </div>
   );
 }
 
-function TargetStrip({ target, format }: { target: MyWorkTarget; format: ReturnType<typeof makeFormat> }) {
+function TargetStrip({ target, format }: { target: MyWorkTarget; format: Format }) {
   const pct = target.target > 0 ? Math.min(100, Math.round((target.filled / target.target) * 100)) : 0;
   return (
     <section className="rf2-jobstrip" aria-label={`Job: ${target.title}`}>

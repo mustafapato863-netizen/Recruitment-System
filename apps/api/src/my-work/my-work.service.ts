@@ -1,11 +1,10 @@
 import { Inject, Injectable } from '@nestjs/common';
 import type { TeamWorkResponse, AuthUser } from '@recruitflow/contracts';
 // Runtime service imports must remain value imports for Nest DI metadata reflection.
-/* eslint-disable @typescript-eslint/consistent-type-imports */
 import { PrismaService } from '../database/prisma.service';
-/* eslint-enable @typescript-eslint/consistent-type-imports */
 import type { MyWorkDay } from '@recruitflow/contracts';
-import { buildMyWork, type MyWorkResponse } from './my-work.buckets';
+import { joiningTypeForRequirement, resolveSnapshot } from '../hiring/joining-policy';
+import { buildMyWork, UPCOMING_WINDOW_DAYS, type MyWorkJoiningDecisionFacts, type MyWorkJoiningInput, type MyWorkResponse } from './my-work.buckets';
 
 /** E1: the reminder worker's heartbeat (service_heartbeats, written after each sweep). */
 export const DUE_REMINDER_HEARTBEAT_SERVICE = 'due-reminders';
@@ -20,6 +19,103 @@ export function reminderWorkerHealthy(beat: { observedAt: Date; metadata: unknow
 }
 
 const CLOSED_STAGES = ['Joined', 'Rejected', 'Withdrawn'];
+/** Accepted, not yet a hire. Joined stays off this list so it cannot be counted again. */
+const OPEN_JOINING = ['Pending Compliance', 'Pending Final Approval', 'Awaiting Joining', 'Postponed'];
+
+type JoiningCaseRow = {
+  id: string;
+  status: string;
+  organizationId: string;
+  plannedJoiningDate: Date | null;
+  applicationId: string;
+  requirementSnapshot: unknown;
+  approvalFingerprint: string | null;
+  application: {
+    stage: string;
+    candidate: { id: string; firstName: string; lastName: string };
+    vacancy: {
+      status: string;
+      vacancyCode: string;
+      approvedHeadcount: number;
+      joinedHeadcount: number;
+      position: { title: string; metadata: unknown } | null;
+    };
+    joiningChecks: Array<{ type: string; verified: boolean; expiryDate: Date | null; documentId: string | null }>;
+  };
+  offer: { versions: Array<{ id: string; status: string; versionNumber: number }> } | null;
+  complianceRequirements: Array<{ type: string; name: string; status: string; isRequired: boolean }>;
+  approvals: Array<{ status: string; invalidatedAt: Date | null; roleCode: string; decisionFingerprint: string | null }>;
+};
+
+/** Null when the accepted-offer id, seat counts, or approval fingerprint were not in this query. */
+function joiningDecisionFacts(row: JoiningCaseRow): MyWorkJoiningDecisionFacts | null {
+  const versions = row.offer?.versions;
+  const vacancy = row.application.vacancy;
+  if (!Array.isArray(versions)) return null;
+  if (typeof row.organizationId !== 'string' || row.organizationId.length === 0) return null;
+  if (!Number.isFinite(vacancy.approvedHeadcount) || !Number.isFinite(vacancy.joinedHeadcount)) return null;
+  const accepted = [...versions].sort((a, b) => b.versionNumber - a.versionNumber)[0] ?? null;
+  return {
+    organizationId: row.organizationId,
+    snapshot: resolveSnapshot(row.requirementSnapshot, vacancy.position?.metadata),
+    acceptedOfferVersionId: accepted?.id ?? null,
+    hiringCaseStatus: row.status,
+    approvalFingerprint: row.approvalFingerprint ?? null,
+    approvals: row.approvals.map((approval) => ({
+      status: approval.status,
+      invalidatedAt: approval.invalidatedAt,
+      roleCode: approval.roleCode,
+      decisionFingerprint: approval.decisionFingerprint,
+    })),
+    checks: row.application.joiningChecks.map((check) => ({
+      type: check.type,
+      verified: check.verified === true,
+      expiryDate: check.expiryDate,
+      documentId: check.documentId,
+    })),
+    joinedHeadcount: vacancy.joinedHeadcount,
+    approvedHeadcount: vacancy.approvedHeadcount,
+  };
+}
+
+/** Display facts only. Does not record joining or change headcount. */
+function joiningSoonFact(row: JoiningCaseRow): MyWorkJoiningInput {
+  const snapshot = resolveSnapshot(row.requirementSnapshot, row.application.vacancy.position?.metadata);
+  const required = snapshot.checks;
+  const verified = new Map<string, boolean>();
+  for (const check of row.application.joiningChecks) verified.set(check.type, check.verified === true);
+  for (const req of row.complianceRequirements) {
+    if (!req.isRequired) continue;
+    const type = joiningTypeForRequirement(req);
+    if (!type || verified.has(type)) continue;
+    verified.set(type, req.status === 'Verified' || req.status === 'Not Required');
+  }
+  const checksComplete = required.filter((type) => verified.get(type) === true).length;
+  const currentApproval = row.approvals.some((approval) =>
+    approval.status === 'Approved' && !approval.invalidatedAt && (approval.roleCode || 'FINAL_HIRING_APPROVER') === 'FINAL_HIRING_APPROVER');
+  const postponed = row.status === 'Postponed';
+  const approvalPending = !postponed && !currentApproval && (
+    row.status === 'Pending Final Approval'
+    || row.status === 'Awaiting Joining'
+    || checksComplete >= required.length
+  );
+  const name = `${row.application.candidate.firstName} ${row.application.candidate.lastName}`.trim();
+  return {
+    id: row.id,
+    applicationId: row.applicationId,
+    candidateName: name || 'Candidate',
+    jobTitle: row.application.vacancy.position?.title ?? row.application.vacancy.vacancyCode,
+    intendedDate: row.plannedJoiningDate,
+    checksComplete,
+    checksRequired: required.length,
+    licenceRequired: required.includes('SCFHS_LICENCE'),
+    licenceVerified: verified.get('SCFHS_LICENCE') === true,
+    approvalPending,
+    postponed,
+    held: row.application.vacancy.status === 'On Hold',
+    decisionFacts: joiningDecisionFacts(row),
+  };
+}
 /** New sourcing and job targets. A held job is not a target. */
 const WORKING_JOB = ['Open', 'Partially Filled'];
 /** Interviews, offers, scorecards, and joining stay with the owner while the job is held. */
@@ -117,12 +213,13 @@ export class MyWorkService {
         where: {
           organizationId: org,
           status: { notIn: ['Cancelled'] },
-          scheduledStart: { gte: new Date(now.getTime() - 14 * 86_400_000), lte: new Date(now.getTime() + 3 * 86_400_000) },
+          // 14 days back keeps overdue scorecards. The forward bound is the upcoming panel's 30-day window.
+          scheduledStart: { gte: new Date(now.getTime() - 14 * 86_400_000), lte: new Date(now.getTime() + UPCOMING_WINDOW_DAYS * 86_400_000) },
           OR: [{ application: commitmentFileWhere }, { attendees: { some: { userId: me } } }],
         },
         select: {
-          id: true, title: true, scheduledStart: true, scheduledEnd: true, applicationId: true, locationUrl: true, roomName: true, legacyInterviewerName: true,
-          application: { select: { ...appSelect, primaryRecruiterId: true, taskOwnerId: true, vacancy: { select: { status: true, assignments: { where: { userId: me, isActive: true, assignmentKind: 'PRIMARY' }, select: { id: true } } } } } },
+          id: true, title: true, status: true, scheduledStart: true, scheduledEnd: true, applicationId: true, locationUrl: true, roomName: true, legacyInterviewerName: true,
+          application: { select: { ...appSelect, primaryRecruiterId: true, taskOwnerId: true, vacancy: { select: { status: true, position: { select: { title: true } }, assignments: { where: { userId: me, isActive: true, assignmentKind: 'PRIMARY' }, select: { id: true } } } } } },
           attendees: { select: { userId: true, role: true, user: { select: { displayName: true } } } },
           scorecards: { select: { interviewerId: true, status: true } },
         },
@@ -140,8 +237,7 @@ export class MyWorkService {
       this.prisma.hiringCase.findMany({
         where: {
           organizationId: org,
-          status: 'Awaiting Joining',
-          application: { vacancy: { organizationId: org, status: 'On Hold' } },
+          status: { in: OPEN_JOINING },
           OR: [
             { ownerUserId: me },
             { ownerUserId: null, application: { primaryRecruiterId: me } },
@@ -149,15 +245,20 @@ export class MyWorkService {
           ],
         },
         select: {
-          id: true, applicationId: true,
+          id: true, status: true, organizationId: true, plannedJoiningDate: true, applicationId: true, requirementSnapshot: true, approvalFingerprint: true,
+          offer: { select: { versions: { where: { status: 'Accepted' }, orderBy: { versionNumber: 'desc' }, take: 1, select: { id: true, status: true, versionNumber: true } } } },
           application: {
             select: {
               stage: true,
               candidate: { select: { id: true, firstName: true, lastName: true } },
-              vacancy: { select: { vacancyCode: true, position: { select: { title: true } } } },
+              vacancy: { select: { status: true, vacancyCode: true, approvedHeadcount: true, joinedHeadcount: true, position: { select: { title: true, metadata: true } } } },
+              joiningChecks: { select: { type: true, verified: true, expiryDate: true, documentId: true } },
             },
           },
+          complianceRequirements: { select: { type: true, name: true, status: true, isRequired: true } },
+          approvals: { select: { status: true, invalidatedAt: true, roleCode: true, decisionFingerprint: true } },
         },
+        orderBy: { plannedJoiningDate: 'asc' },
         take: 100,
       }),
       this.prisma.serviceHeartbeat.findUnique({ where: { service: DUE_REMINDER_HEARTBEAT_SERVICE }, select: { observedAt: true, metadata: true } }),
@@ -206,9 +307,12 @@ export class MyWorkService {
       interviews: interviews
         .filter((i) => ownsFile(i) || i.attendees.some((a) => a.userId === me))
         .map((i) => ({
-          id: i.id, title: i.title, start: i.scheduledStart, end: i.scheduledEnd, applicationId: i.applicationId,
+          id: i.id, title: i.title, status: i.status, start: i.scheduledStart, end: i.scheduledEnd, applicationId: i.applicationId,
           roomUrl: i.locationUrl, roomName: i.roomName,
           interviewers: interviewersOf(i), app: appInfo(i.application), iAmInterviewer: i.attendees.some((a) => a.userId === me),
+          ownsFile: ownsFile(i),
+          jobTitle: i.application.vacancy.position?.title ?? null,
+          jobHeld: i.application.vacancy.status === 'On Hold',
         })),
       myMissingScorecards: interviews
         .filter((i) => i.attendees.some((a) => a.userId === me) && !submitted(i, me))
@@ -221,16 +325,19 @@ export class MyWorkService {
         id: o.id, code: o.offerCode, status: o.status, applicationId: o.applicationId, updatedAt: o.updatedAt, app: appInfo(o.application),
         approvers: (o.versions[0]?.approvals ?? []).map((a) => ({ id: a.approverUserId, name: a.approver?.displayName ?? a.roleCode })),
       })),
-      joining: joiningCases.map((row) => {
-        const name = `${row.application.candidate.firstName} ${row.application.candidate.lastName}`.trim();
-        const jobTitle = row.application.vacancy.position?.title ?? row.application.vacancy.vacancyCode;
-        return {
-          id: row.id,
-          applicationId: row.applicationId,
-          title: `${name || 'Candidate'} — awaiting joining (${jobTitle})`,
-          app: appInfo({ id: row.applicationId, stage: row.application.stage, candidate: row.application.candidate }),
-        };
-      }),
+      joining: joiningCases
+        .filter((row) => row.status === 'Awaiting Joining' && row.application.vacancy.status === 'On Hold')
+        .map((row) => {
+          const name = `${row.application.candidate.firstName} ${row.application.candidate.lastName}`.trim();
+          const jobTitle = row.application.vacancy.position?.title ?? row.application.vacancy.vacancyCode;
+          return {
+            id: row.id,
+            applicationId: row.applicationId,
+            title: `${name || 'Candidate'} — awaiting joining (${jobTitle})`,
+            app: appInfo({ id: row.applicationId, stage: row.application.stage, candidate: row.application.candidate }),
+          };
+        }),
+      joiningSoon: joiningCases.map((row) => joiningSoonFact(row)),
       reminderWorkerHealthy: reminderWorkerHealthy(beat, now),
     }, now, day);
   }

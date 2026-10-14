@@ -70,10 +70,51 @@
 [data-ui='v2'] .rf2-mywork__readonly { color: var(--rf2-muted); font-size: var(--rf2-text-label); }
 [data-ui='v2'] .rf2-mywork__counts { margin-block: 0; }
 
+/* G02: separate raised tabs, three count filters, one urgency list. */
+[data-ui='v2'] .rf2-mywork .rf2-tabs {
+  gap: 12px; padding: 0; width: auto; max-width: 100%; overflow-x: auto;
+  background: transparent; border: 0; border-radius: 0;
+}
+[data-ui='v2'] .rf2-mywork .rf2-tab {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 8px 12px;
+  border: 1px solid var(--rf2-border); border-radius: 12px; background: var(--rf2-card);
+  box-shadow: var(--rf2-neo-raise-sm); color: var(--rf2-ink); font-weight: 500;
+}
+[data-ui='v2'] .rf2-mywork .rf2-tab[aria-selected='true'] {
+  border-color: var(--color-cyan); background: var(--rf2-card); color: var(--rf2-ink); box-shadow: var(--rf2-neo-raise-sm);
+}
+[data-ui='v2'] .rf2-mywork .rf2-tab__icon { display: inline-flex; width: 16px; height: 16px; }
+[data-ui='v2'] .rf2-mywork .rf2-tab__icon svg { width: 16px; height: 16px; }
+[data-ui='v2'] .rf2-mywork__btn-icon { display: inline-flex; }
+[data-ui='v2'] .rf2-mywork__quiet-day { display: inline-flex; gap: var(--rf2-space-1); }
+[data-ui='v2'] .rf2-mywork__panel { display: flex; flex-direction: column; gap: var(--rf2-space-2); }
+[data-ui='v2'] .rf2-mywork__filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--rf2-space-2); margin: 0; }
+[data-ui='v2'] .rf2-mywork__filter {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-height: 66px; padding: 10px 14px;
+  border: 1px solid var(--rf2-glass-line); border-radius: 16px; background: var(--rf2-glass-card);
+  box-shadow: var(--rf2-neo-raise); backdrop-filter: blur(12px); color: var(--rf2-ink-2);
+  font: inherit; text-align: left; cursor: pointer;
+}
+[data-ui='v2'] .rf2-mywork__filter[aria-pressed='true'] { border-color: var(--color-cyan); }
+[data-ui='v2'] .rf2-mywork__filter:focus-visible { outline: var(--rf2-focus-width) solid var(--rf2-focus-color); outline-offset: var(--rf2-focus-offset); }
+[data-ui='v2'] .rf2-mywork__filter-value { font-size: 20px; line-height: 22px; font-weight: 600; font-variant-numeric: tabular-nums; }
+[data-ui='v2'] .rf2-mywork__filter[data-filter='overdue'] .rf2-mywork__filter-value { color: var(--rf2-danger); }
+[data-ui='v2'] .rf2-mywork__filter[data-filter='today'] .rf2-mywork__filter-value { color: var(--rf2-action); }
+[data-ui='v2'] .rf2-mywork__filter[data-filter='waiting'] .rf2-mywork__filter-value { color: var(--rf2-info); }
+[data-ui='v2'] .rf2-mywork__filter-label { font-size: var(--rf2-text-label); line-height: var(--rf2-leading-label); font-weight: 500; }
+[data-ui='v2'] .rf2-mywork__list-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--rf2-space-1); }
+[data-ui='v2'] .rf2-mywork__list-title { margin: 0; font-size: var(--rf2-text-section); line-height: var(--rf2-leading-section); font-weight: var(--rf2-weight-section); }
+[data-ui='v2'] .rf2-mywork__list-head .rf2-mywork__list-title { flex: 1 1 12rem; }
+[data-ui='v2'] .rf2-mywork__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--rf2-space-2); }
+[data-ui='v2'] .rf2-mywork__group { display: flex; flex-direction: column; gap: var(--rf2-space-2); }
+[data-ui='v2'] .rf2-mywork__filter-empty { margin: 0; color: var(--rf2-muted); font-size: var(--rf2-text-body); line-height: var(--rf2-leading-body); }
+[data-ui='v2'] .rf2-mywork__footnote { margin: 0; color: var(--rf2-ink-2); font-size: var(--rf2-text-body); line-height: var(--rf2-leading-body); }
+
 @media (max-width: 767px) {
   [data-ui='v2'] .rf2-mywork { padding: var(--rf2-space-2); }
   [data-ui='v2'] .rf2-mywork__top { flex-direction: column; align-items: stretch; }
   [data-ui='v2'] .rf2-mywork__day { align-items: flex-start; width: 100%; }
   [data-ui='v2'] .rf2-mywork__head-actions { flex-wrap: wrap; justify-content: flex-start; }
   [data-ui='v2'] .rf2-mywork__counts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  [data-ui='v2'] .rf2-mywork__filters { grid-template-columns: 1fr; }
 }
