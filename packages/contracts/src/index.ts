@@ -1801,6 +1801,11 @@ export interface IntegrationItem {
   category: string;
   status: string;
   lastSyncAt?: string | null;
+  // Public settings only. Never apiKey, clientSecret, refreshToken, accessToken, or *Encrypted.
+  careersUrl?: string | null;
+  smtpHost?: string | null;
+  fromAddress?: string | null;
+  port?: number | null;
 }
 
 // ─── Phase C: Stage Automation — Email Templates ────────────────

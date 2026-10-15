@@ -7,14 +7,17 @@
  * - Audit (CoS): server-side GET /audit?actor&entity&from&to&page&pageSize (C5, admin-only, pageSize ≤ 100) when present;
  *   else GET /audit-logs?page&pageSize=100 with the client-side filters. Read-only.
  * - Every list call stays at pageSize ≤ 100 (B2-22) and pages through fetchAllPages.
- * - Integrations: B9 — only careers_site and smtp (others hidden / 404). GET /integrations, POST /integrations/:id/test.
+ * - Integrations: B9 — only careers_site and smtp (others hidden / 404).
+ *   GET /integrations, PATCH /integrations/:id { configJson } (never status), POST /integrations/:id/test.
+ *   A saved setting is not a verified send. The SMTP test does not send mail.
  * - Override: B9 POST /admin/overrides {action, entityId, reason}; actions job.hold | job.reopen | job.close; reason ≥ 10;
  *   #21 2ced190: hold/close send the list reason as `reason` (+ `note` for "Other") and holdUntil; reopen sends free text.
  *   400 OVERRIDE_REASON_REQUIRED / OVERRIDE_NOT_ALLOWED, 409 wrong state (OVERRIDE_NOT_ALLOWED), 403 non-admin.
  */
+import type { IntegrationItem } from '@recruitflow/contracts';
 import { override403Text } from './overrideErrors';
 import { serverFormErrors } from '../forms/serverErrors';
-import { getApi, postApi } from '../../api/client';
+import { getApi, patchApi, postApi } from '../../api/client';
 import { fetchAllPages } from '../api/paged';
 import { stripPay } from '../api/paySafety';
 import { domainError } from '../api/gates';
@@ -140,12 +143,45 @@ export function downloadCsv(name: string, csv: string) {
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 
-export interface Integration { id: string; name: string; provider: string; category: string; status: string; lastSyncAt?: string | null }
+export type Integration = IntegrationItem;
 export const ALLOWED_PROVIDERS = ['careers_site', 'smtp'] as const;
+
+function textField(raw: Record<string, unknown>, key: 'careersUrl' | 'smtpHost' | 'fromAddress'): string | null {
+  const value = raw[key];
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+function portField(value: unknown): number | null {
+  const port = typeof value === 'number' ? value : typeof value === 'string' && /^\d+$/.test(value) ? Number(value) : NaN;
+  return Number.isInteger(port) && port >= 1 && port <= 65535 ? port : null;
+}
+/** Keep the settings form fields. Drop secret and *Encrypted keys before they can reach the page. */
+export function publicIntegration(raw: Record<string, unknown>): Integration {
+  const provider = typeof raw.provider === 'string' ? raw.provider : '';
+  const status = typeof raw.status === 'string' ? raw.status : '';
+  return {
+    id: typeof raw.id === 'string' ? raw.id : '',
+    name: typeof raw.name === 'string' ? raw.name : '',
+    provider,
+    category: typeof raw.category === 'string' ? raw.category : '',
+    status: provider === 'smtp' && status === 'Connected' ? 'Not verified' : status,
+    lastSyncAt: typeof raw.lastSyncAt === 'string' ? raw.lastSyncAt : null,
+    careersUrl: textField(raw, 'careersUrl'),
+    smtpHost: textField(raw, 'smtpHost'),
+    fromAddress: textField(raw, 'fromAddress'),
+    port: portField(raw.port),
+  };
+}
 export async function fetchIntegrations(): Promise<Integration[]> {
-  return list(await getApi<Integration[] | { data: Integration[] }>('/integrations')).filter((i) => (ALLOWED_PROVIDERS as readonly string[]).includes(i.provider));
+  const rows = list(await getApi<Array<Record<string, unknown>> | { data: Array<Record<string, unknown>> }>('/integrations'));
+  return rows.filter((row) => typeof row.provider === 'string' && (ALLOWED_PROVIDERS as readonly string[]).includes(row.provider)).map(publicIntegration);
 }
 export const testIntegration = (id: string) => postApi<{ success?: boolean; ok?: boolean; message?: string; status?: string }>(`/integrations/${enc(id)}/test`);
+
+export interface IntegrationSettings { careersUrl?: string; smtpHost?: string; fromAddress?: string; port?: number }
+/** Patch settings only. Status is never sent — a save must not mark the provider connected. */
+export async function updateIntegration(id: string, configJson: IntegrationSettings): Promise<Integration> {
+  return publicIntegration(await patchApi<Record<string, unknown>>(`/integrations/${enc(id)}`, { configJson }));
+}
 
 export type OverrideAction = 'job.hold' | 'job.reopen' | 'job.close';
 export const OVERRIDE_FROM: Record<OverrideAction, readonly string[]> = {

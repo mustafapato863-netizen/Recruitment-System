@@ -14,7 +14,7 @@ vi.mock('../../../components/v2/shell/AppShellV2', () => ({ useV2Shell: () => sh
 import { ReportsRoute } from '../../pages/ReportsRoute';
 import { AuditRoute, IntegrationsRoute } from '../AdminRoutes';
 import { AuditV2 } from '../AuditV2';
-import { auditArea, namedAuditText, overrideError, toCsv } from '../opsApi';
+import { ALLOWED_PROVIDERS, auditArea, namedAuditText, overrideError, toCsv } from '../opsApi';
 import { cairoMonth } from '../../api/myResult';
 
 const M = cairoMonth();
@@ -230,7 +230,7 @@ describe('A09 Audit', () => {
 describe('A10 Integrations', () => {
   it('only careers + mail (others hidden), status text + icon; test connection posts and reports; axe', async () => {
     const u = userEvent.setup();
-    api.postApi.mockResolvedValueOnce({ success: true, message: 'SMTP handshake OK.' }).mockRejectedValueOnce(new ApiError(502, 'Careers site did not answer.'));
+    api.postApi.mockResolvedValueOnce({ success: false, verified: false, message: 'Mail delivery is not verified. A saved provider setting is not a connection, and this server does not send to candidates.' }).mockRejectedValueOnce(new ApiError(502, 'Careers site did not answer.'));
     const { container } = renderAt('/integrations');
     const mail = await screen.findByRole('region', { name: 'Mail (SMTP)' });
     expect(screen.getByRole('region', { name: 'Careers site' })).toHaveTextContent(/Connected.*Last sync.*Fri 9 Oct 2026, 08:45/);
@@ -238,11 +238,89 @@ describe('A10 Integrations', () => {
     expect(mail).toHaveTextContent(/Available.*Never/);
     await u.click(within(mail).getByRole('button', { name: 'Test connection: Mail (SMTP)' }));
     await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/integrations/i2/test'));
-    expect(await within(mail).findByRole('status')).toHaveTextContent('SMTP handshake OK.');
+    expect(await within(mail).findByRole('alert')).toHaveTextContent(/Mail delivery is not verified/);
+    expect(mail).not.toHaveTextContent(/\bSent\b/);
     const careers = screen.getByRole('region', { name: 'Careers site' });
     await u.click(within(careers).getByRole('button', { name: 'Test connection: Careers site' }));
     expect(await within(careers).findByRole('alert')).toHaveTextContent('Careers site did not answer.');
     expect(await axeViolations(container)).toEqual([]);
+  });
+
+  it('saves careers URL and SMTP settings without a send or a connected mail status', async () => {
+    const u = userEvent.setup();
+    const secret = 'cipher-blob-9f3a';
+    serve({
+      '/integrations': [
+        { id: 'i1', name: 'Careers site publishing', provider: 'careers_site', category: 'Publishing', status: 'Connected', lastSyncAt: '2026-10-09T05:45:00.000Z', careersUrl: 'https://careers.example.com/jobs', apiKeyEncrypted: secret, configJson: { apiKeyEncrypted: secret, clientSecret: 'client-secret-plain' } },
+        { id: 'i2', name: 'Email Provider', provider: 'smtp', category: 'Communication', status: 'Connected', lastSyncAt: null, smtpHost: 'mail.internal', fromAddress: 'recruiting@recruitflow.local', port: 25, refreshToken: 'refresh-token-plain', accessToken: 'access-token-plain', clientSecretEncrypted: 'client-cipher' },
+        { id: 'i3', name: 'WhatsApp Business', provider: 'whatsapp', category: 'x', status: 'Connected' },
+        { id: 'i4', name: 'Google Calendar', provider: 'google_calendar', category: 'x', status: 'Connected' },
+        { id: 'i5', name: 'Google Meet', provider: 'google_meet', category: 'x', status: 'Connected' },
+      ],
+    });
+    api.patchApi.mockImplementation(async (path: string, body: { configJson?: Record<string, unknown> }) => ({
+      id: String(path).endsWith('i2') ? 'i2' : 'i1',
+      name: String(path).endsWith('i2') ? 'Email Provider' : 'Careers site publishing',
+      provider: String(path).endsWith('i2') ? 'smtp' : 'careers_site',
+      category: String(path).endsWith('i2') ? 'Communication' : 'Publishing',
+      status: 'Connected',
+      ...(body?.configJson ?? {}),
+      apiKeyEncrypted: secret,
+      clientSecret: 'client-secret-plain',
+      refreshToken: 'refresh-token-plain',
+      accessToken: 'access-token-plain',
+    }));
+    renderAt('/integrations');
+    const careers = await screen.findByRole('region', { name: 'Careers site' });
+    const mail = screen.getByRole('region', { name: 'Mail (SMTP)' });
+    expect(ALLOWED_PROVIDERS).toEqual(['careers_site', 'smtp']);
+    expect(screen.getAllByRole('region')).toHaveLength(2);
+    expect(screen.queryByRole('region', { name: /WhatsApp|Calendar|Meet/ })).toBeNull();
+    expect(within(careers).getByLabelText(/Careers URL/)).toHaveValue('https://careers.example.com/jobs');
+    expect(within(mail).getByLabelText(/SMTP host/)).toHaveValue('mail.internal');
+    expect(within(mail).getByLabelText(/From address/)).toHaveValue('recruiting@recruitflow.local');
+    expect(within(mail).getByLabelText(/^Port/)).toHaveValue(25);
+    expect(mail).toHaveTextContent('Not verified');
+    expect(mail).not.toHaveTextContent(/\bConnected\b/);
+    const secretInFields = () => [...screen.queryAllByRole('textbox'), ...screen.queryAllByRole('spinbutton')].map((el) => (el as HTMLInputElement).value).join('\n');
+    for (const hidden of [secret, 'client-secret-plain', 'refresh-token-plain', 'access-token-plain', 'client-cipher']) {
+      expect(document.body.innerHTML).not.toContain(hidden);
+      expect(document.body.textContent).not.toContain(hidden);
+      expect(secretInFields()).not.toContain(hidden);
+    }
+
+    await u.clear(within(careers).getByLabelText(/Careers URL/));
+    await u.click(within(careers).getByRole('button', { name: 'Save settings' }));
+    expect(within(careers).getByText('Enter the careers URL.')).toBeInTheDocument();
+    expect(api.patchApi).not.toHaveBeenCalled();
+    await u.type(within(careers).getByLabelText(/Careers URL/), 'https://jobs.example.com/careers');
+    await u.click(within(careers).getByRole('button', { name: 'Save settings' }));
+    await waitFor(() => expect(api.patchApi).toHaveBeenCalledWith('/integrations/i1', { configJson: { careersUrl: 'https://jobs.example.com/careers' } }));
+    expect(await within(careers).findByText('Settings saved. This does not send mail or mark the provider connected.')).toBeInTheDocument();
+    expect(within(careers).getByRole('status')).not.toHaveTextContent(/\bSent\b/);
+
+    await u.clear(within(mail).getByLabelText(/SMTP host/));
+    await u.type(within(mail).getByLabelText(/SMTP host/), 'smtp.internal');
+    await u.clear(within(mail).getByLabelText(/^Port/));
+    await u.type(within(mail).getByLabelText(/^Port/), '587');
+    await u.click(within(mail).getByRole('button', { name: 'Save settings' }));
+    await waitFor(() => expect(api.patchApi).toHaveBeenCalledWith('/integrations/i2', { configJson: { smtpHost: 'smtp.internal', fromAddress: 'recruiting@recruitflow.local', port: 587 } }));
+    expect(await within(mail).findByText('Settings saved. This does not send mail or mark the provider connected.')).toBeInTheDocument();
+    expect(within(mail).getByRole('status')).not.toHaveTextContent(/\bSent\b/);
+    expect(mail).not.toHaveTextContent(/\bConnected\b/);
+    expect(api.patchApi.mock.calls.every((call) => call[1] && !Object.prototype.hasOwnProperty.call(call[1] as object, 'status'))).toBe(true);
+
+    api.postApi.mockResolvedValueOnce({ success: true, message: 'Sent' });
+    await u.click(within(mail).getByRole('button', { name: 'Test connection: Mail (SMTP)' }));
+    await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/integrations/i2/test'));
+    const testResult = await within(mail).findByRole('alert');
+    expect(testResult).toHaveTextContent(/not verified/i);
+    expect(testResult).not.toHaveTextContent(/\bSent\b/);
+    const urls = [...api.getApi.mock.calls, ...api.patchApi.mock.calls, ...api.postApi.mock.calls, ...api.deleteApi.mock.calls].map((call) => String(call[0]));
+    expect(urls.filter((url) => url.includes('/send') || /smtp\.|mail\.|gmail|outlook|sendgrid|mailgun|amazonaws|office365/i.test(url))).toEqual([]);
+    for (const hidden of [secret, 'client-secret-plain', 'refresh-token-plain', 'access-token-plain', 'client-cipher']) {
+      expect(document.body.innerHTML).not.toContain(hidden);
+    }
   });
 });
 
