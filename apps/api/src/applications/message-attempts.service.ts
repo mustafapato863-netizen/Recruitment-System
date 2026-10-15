@@ -11,9 +11,11 @@ import {
   MESSAGE_ATTEMPT_ACTION,
   attemptOutcome,
   mailDeliveryEnabled,
+  messageTemplateData,
   renderTemplate,
   writeLocalTestMessage,
   type MessageState,
+  type MessageTemplateData,
 } from './message-attempts';
 
 export interface MessageAttemptView {
@@ -27,6 +29,37 @@ export interface MessageAttemptView {
   retryOf: string | null;
   destination: string;
 }
+
+export interface FilledMessageTemplate {
+  id: string;
+  name: string;
+  subject: string;
+  body: string;
+}
+
+const applicationForMessage = {
+  stage: true,
+  candidate: { select: { firstName: true, lastName: true } },
+  vacancy: { select: { position: { select: { title: true } } } },
+  organization: { select: { name: true } },
+  primaryRecruiter: { select: { displayName: true } },
+  interviews: {
+    where: { status: { in: ['Scheduled', 'Rescheduled'] } },
+    orderBy: { scheduledStart: 'asc' as const },
+    select: {
+      status: true,
+      scheduledStart: true,
+      locationUrl: true,
+      legacyInterviewerName: true,
+      attendees: {
+        orderBy: { id: 'asc' as const },
+        select: { role: true, user: { select: { displayName: true } } },
+      },
+    },
+  },
+} satisfies Prisma.ApplicationSelect;
+
+type MessageApplication = Prisma.ApplicationGetPayload<{ select: typeof applicationForMessage }>;
 
 /**
  * File messages. Each attempt is its own row. Retry never overwrites a failed attempt.
@@ -45,23 +78,24 @@ export class MessageAttemptsService {
 
   async list(user: AuthUser, applicationId: string) {
     const app = await this.visible(user, applicationId);
-    const [rows, templates] = await Promise.all([
+    const [rows, templates, vars] = await Promise.all([
       this.prisma.auditLog.findMany({
         where: { organizationId: user.organizationId, action: MESSAGE_ATTEMPT_ACTION, entityType: 'Application', entityId: applicationId },
         orderBy: { createdAt: 'asc' },
       }),
       this.prisma.emailTemplate.findMany({
         where: { organizationId: user.organizationId, status: 'Active' },
-        select: { id: true, name: true },
+        select: { id: true, name: true, subject: true, bodyTemplate: true },
         orderBy: { name: 'asc' },
       }),
+      this.composition(user.organizationId, applicationId),
     ]);
     return {
       applicationId,
       followUpDate: app.followUpDate ? app.followUpDate.toISOString().slice(0, 10) : null,
       destination: LOCAL_TEST_DESTINATION,
       deliveryEnabled: mailDeliveryEnabled(),
-      templates,
+      templates: templates.map((template) => this.fill(template, vars)),
       attempts: rows.map((row) => this.toView(row)),
     };
   }
@@ -84,49 +118,72 @@ export class MessageAttemptsService {
     return this.record(user, applicationId, priorData.templateId, 'retry', prior.id);
   }
 
-  private async record(user: AuthUser, applicationId: string, templateId: string, kind: 'send' | 'retry', retryOf: string | null) {
+  private fill(template: { id: string; name: string; subject: string; bodyTemplate: string }, vars: MessageTemplateData): FilledMessageTemplate {
+    return {
+      id: template.id,
+      name: template.name,
+      subject: renderTemplate(template.subject, vars),
+      body: renderTemplate(template.bodyTemplate, vars),
+    };
+  }
+
+  private async composition(organizationId: string, applicationId: string): Promise<MessageTemplateData> {
     const app = await this.prisma.application.findFirst({
-      where: { id: applicationId, organizationId: user.organizationId },
-      select: {
-        candidate: { select: { firstName: true, lastName: true } },
-        vacancy: { select: { vacancyCode: true, position: { select: { title: true } } } },
-        organization: { select: { name: true } },
-      },
+      where: { id: applicationId, organizationId },
+      select: applicationForMessage,
     });
     if (!app) throw new NotFoundException('Application not found.');
+    return messageTemplateData(this.source(app));
+  }
+
+  private source(app: MessageApplication) {
+    return {
+      stage: app.stage,
+      candidateFirstName: app.candidate.firstName,
+      candidateLastName: app.candidate.lastName,
+      positionTitle: app.vacancy.position.title,
+      organizationName: app.organization.name,
+      recruiterName: app.primaryRecruiter?.displayName ?? null,
+      interviews: app.interviews.map((interview) => ({
+        status: interview.status,
+        scheduledStart: interview.scheduledStart,
+        locationUrl: interview.locationUrl,
+        legacyInterviewerName: interview.legacyInterviewerName,
+        attendees: interview.attendees.map((attendee) => ({
+          role: attendee.role,
+          displayName: attendee.user.displayName,
+        })),
+      })),
+    };
+  }
+
+  private async record(user: AuthUser, applicationId: string, templateId: string, kind: 'send' | 'retry', retryOf: string | null) {
     const template = await this.prisma.emailTemplate.findFirst({
       where: { id: templateId, organizationId: user.organizationId, status: 'Active' },
     });
     if (!template) throw new NotFoundException('The template does not exist or is not active.');
-
-    const vars: Record<string, string> = {
-      candidateName: `${app.candidate.firstName} ${app.candidate.lastName}`.trim(),
-      positionTitle: app.vacancy.position?.title ?? '',
-      organizationName: app.organization?.name ?? '',
-      stageName: '',
-    };
-    const subject = renderTemplate(template.subject, vars);
-    const body = renderTemplate(template.bodyTemplate, vars);
+    const vars = await this.composition(user.organizationId, applicationId);
+    const filled = this.fill(template, vars);
     const deliveryEnabled = mailDeliveryEnabled();
     const outcome = attemptOutcome(kind, deliveryEnabled);
     const id = randomUUID();
 
-    if (outcome.state === 'Sent') {
+    if (!deliveryEnabled && kind === 'retry') {
       const contents = [
         `destination: ${LOCAL_TEST_DESTINATION}`,
         `template: ${template.name}`,
-        `state: Sent`,
+        'state: Failed',
         '---',
-        body,
+        filled.body,
       ].join('\n');
       await this.writeLocal(id, contents);
-    } else if (outcome.state === 'Queued' && this.outbox) {
+    } else if (deliveryEnabled && this.outbox) {
       await this.outbox.enqueue({
         organizationId: user.organizationId,
         toEmail: LOCAL_TEST_DESTINATION,
-        subject,
+        subject: filled.subject,
         template: 'notification',
-        payload: { title: subject, message: body, applicationId, localTest: true },
+        payload: { title: filled.subject, message: filled.body, applicationId, localTest: true },
       });
     }
 
@@ -150,11 +207,9 @@ export class MessageAttemptsService {
       },
     });
 
-    const notice = outcome.state === 'Failed'
-      ? 'A message failed. Nothing was sent to a candidate.'
-      : outcome.state === 'Sent'
-        ? 'A message retry was delivered to the local test destination. The failed attempt is still in history.'
-        : 'A message was queued for the local test destination.';
+    const notice = outcome.state === 'Queued'
+      ? 'A message was queued for the local test destination.'
+      : 'A message failed. Nothing was sent to a candidate.';
     if (this.notifications) {
       await this.notifications.create({
         organizationId: user.organizationId,
