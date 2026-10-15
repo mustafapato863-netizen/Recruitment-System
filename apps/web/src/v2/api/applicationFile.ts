@@ -48,6 +48,9 @@ export interface HistoryItem { id: string; fromStage?: string | null; toStage: s
 export interface NoteItem { id: string; authorName?: string; content: string; createdAt: string }
 export interface ScreeningItem {
   id: string; screenerName?: string; outcome: 'Passed' | 'Failed' | 'On Hold'; notes?: string | null; noticePeriodDays?: number | null; screenedAt: string;
+  method?: string | null;
+  evidenceSource?: string | null;
+  nextStep?: string | null;
   /** Pay: only kept for the Manager seat with OFFER_PAY_VIEW (B2-23 / Figma 09); stripped for everyone else. */
   currentSalary?: number | string | null; expectedSalary?: number | string | null; salaryCurrency?: string | null;
 }
@@ -167,8 +170,16 @@ export function moveStage(app: Pick<FileApplication, 'id' | 'stage' | 'version'>
 }
 /** = CreateApplicationNoteDto. */
 export const addNote = (id: string, content: string) => postApi<NoteItem>(`/applications/${enc(id)}/notes`, { content });
-/** = CreateScreeningLogDto WITHOUT the salary fields. */
-export const logScreening = (body: { applicationId: string; outcome: ScreeningItem['outcome']; notes: string; noticePeriodDays?: number }) => postApi<ScreeningItem>('/screening', body);
+/** = CreateScreeningLogDto WITHOUT the salary fields. Next step is stored text; it does not move the stage. */
+export const logScreening = (body: {
+  applicationId: string;
+  outcome: ScreeningItem['outcome'];
+  notes: string;
+  method: string;
+  evidenceSource: string;
+  nextStep: string;
+  noticePeriodDays?: number;
+}) => postApi<ScreeningItem>('/screening', body);
 /** = CreateInterviewDto (B5): room URL only from v2; interviewers are users. */
 export interface ScheduleBody { applicationId: string; title: string; interviewType: string; scheduledStart: string; scheduledEnd: string; timezone: string; locationUrl: string; attendeeUserIds: string[] }
 export const scheduleInterview = (body: ScheduleBody) => postApi<InterviewItem>('/interviews', body);

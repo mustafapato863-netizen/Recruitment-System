@@ -307,9 +307,14 @@ describe('E14 Screen', () => {
     expect(api.postApi).not.toHaveBeenCalled();
     await u.type(within(d).getByLabelText(/Screen note/), 'Pass. Laravel + HRIS.');
     await u.type(within(d).getByLabelText(/Notice period/), '30');
+    await u.type(within(d).getByLabelText(/Evidence source/), 'Screening call');
+    await u.selectOptions(within(d).getByLabelText(/^Next step/), 'Keep in screening');
     await u.click(within(d).getByRole('button', { name: 'Save and move to Interview' }));
     await waitFor(() => expect(api.patchApi).toHaveBeenCalledTimes(2));
-    expect(api.postApi).toHaveBeenCalledWith('/screening', { applicationId: 'a1', outcome: 'Passed', notes: 'Pass. Laravel + HRIS.', noticePeriodDays: 30 });
+    expect(api.postApi).toHaveBeenCalledWith('/screening', {
+      applicationId: 'a1', outcome: 'Passed', notes: 'Pass. Laravel + HRIS.', noticePeriodDays: 30,
+      method: 'Phone', evidenceSource: 'Screening call', nextStep: 'Keep in screening',
+    });
     expect(api.patchApi).toHaveBeenNthCalledWith(1, '/applications/a1/stage', { stage: 'Screening', expectedStage: 'Applied', expectedVersion: 7 });
     expect(api.patchApi).toHaveBeenNthCalledWith(2, '/applications/a1/stage', { stage: 'Interview', expectedStage: 'Screening', expectedVersion: 8 });
   });
@@ -320,8 +325,100 @@ describe('E14 Screen', () => {
     renderFile('/applications/a1?drawer=screen');
     const d = await screen.findByRole('dialog');
     await u.type(within(d).getByLabelText(/Screen note/), 'x');
+    await u.type(within(d).getByLabelText(/Evidence source/), 'Screening call');
+    await u.selectOptions(within(d).getByLabelText(/^Next step/), 'Move to interview');
     await u.click(within(d).getByRole('button', { name: 'Save and move to Interview' }));
     expect(await within(d).findByTestId('drawer-error')).toHaveTextContent('Interview needs a saved screen note. Missing: screen note. Log the screen with a note first.');
+  });
+
+  it('opens with method, evidence source, and next step', async () => {
+    serve('applied');
+    renderFile('/applications/a1?drawer=screen');
+    const d = await screen.findByRole('dialog', { name: /Log screen/ });
+    expect(within(d).getByLabelText(/^Method/)).toHaveValue('Phone');
+    expect(within(d).getByRole('option', { name: 'Video' })).toBeInTheDocument();
+    expect(within(d).getByRole('option', { name: 'In person' })).toBeInTheDocument();
+    expect(within(d).getByLabelText(/Evidence source/)).toHaveAttribute('placeholder', 'Screening call');
+    expect(within(d).getByRole('option', { name: 'Move to interview' })).toBeInTheDocument();
+    expect(within(d).getByRole('option', { name: 'Keep in screening' })).toBeInTheDocument();
+    expect(within(d).getByRole('option', { name: 'Do not proceed' })).toBeInTheDocument();
+    expect(within(d).getByLabelText(/Screen note/)).toBeRequired();
+  });
+
+  it('posts method, evidence source, and next step and does not post salary', async () => {
+    const u = userEvent.setup();
+    serve('applied');
+    renderFile('/applications/a1?drawer=screen');
+    const d = await screen.findByRole('dialog');
+    await u.type(within(d).getByLabelText(/Screen note/), 'Reached the candidate.');
+    await u.type(within(d).getByLabelText(/Evidence source/), 'Screening call');
+    await u.selectOptions(within(d).getByLabelText(/^Next step/), 'Keep in screening');
+    await u.click(within(d).getByRole('checkbox', { name: /Move to Interview after saving/ }));
+    await u.click(within(d).getByRole('button', { name: 'Save screen' }));
+    await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/screening', {
+      applicationId: 'a1',
+      outcome: 'Passed',
+      notes: 'Reached the candidate.',
+      method: 'Phone',
+      evidenceSource: 'Screening call',
+      nextStep: 'Keep in screening',
+    }));
+    const body = api.postApi.mock.calls.find(([p]) => p === '/screening')![1] as Record<string, unknown>;
+    expect(Object.keys(body).some((key) => /salary|amount|currency|package|grade/i.test(key))).toBe(false);
+    expect(api.patchApi).not.toHaveBeenCalled();
+  });
+
+  it('stores Move to interview as text when the move checkbox is off', async () => {
+    const u = userEvent.setup();
+    serve('applied');
+    renderFile('/applications/a1?drawer=screen');
+    const d = await screen.findByRole('dialog');
+    await u.click(within(d).getByRole('checkbox', { name: /Move to Interview after saving/ }));
+    await u.type(within(d).getByLabelText(/Screen note/), 'Pass. Laravel + HRIS.');
+    await u.type(within(d).getByLabelText(/Evidence source/), 'Screening call');
+    await u.selectOptions(within(d).getByLabelText(/^Next step/), 'Move to interview');
+    await u.click(within(d).getByRole('button', { name: 'Save screen' }));
+    await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/screening', expect.objectContaining({
+      applicationId: 'a1',
+      method: 'Phone',
+      evidenceSource: 'Screening call',
+      nextStep: 'Move to interview',
+    })));
+    expect(api.patchApi).not.toHaveBeenCalled();
+  });
+
+  it('stays on the drawer when the evidence source is missing', async () => {
+    const u = userEvent.setup();
+    serve('applied');
+    renderFile('/applications/a1?drawer=screen');
+    const d = await screen.findByRole('dialog');
+    await u.type(within(d).getByLabelText(/Screen note/), 'Pass. Laravel + HRIS.');
+    await u.selectOptions(within(d).getByLabelText(/^Next step/), 'Do not proceed');
+    await u.click(within(d).getByRole('button', { name: 'Save and move to Interview' }));
+    expect(within(d).getByText('Write the evidence source.')).toBeInTheDocument();
+    expect(api.postApi).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog', { name: /Log screen/ })).toBeInTheDocument();
+  });
+
+  it('shows saved method, evidence source, and next step on the activity row and omits a null field', async () => {
+    const base = (fileResponses('screened')['/screening/application/a1'] as Array<Record<string, unknown>>)[0];
+    const named = { ...base, id: 's-named', method: 'Video', evidenceSource: 'Panel notes', nextStep: 'Keep in screening', screenedAt: '2026-10-02T10:00:00.000Z' };
+    const unnamed: Record<string, unknown> = { ...base, id: 's-unnamed', method: 'Phone', evidenceSource: null, nextStep: null, screenedAt: '2026-10-02T12:00:00.000Z', notes: 'Short call.' };
+    delete unnamed.screenerName;
+    serve('screened', { '/screening/application/a1': [named, unnamed] });
+    renderFile('/applications/a1?tab=activity');
+    const recorded = await screen.findByRole('list', { name: 'Recorded activity' });
+    const namedRow = within(recorded).getByText(/Panel notes/).closest('li');
+    expect(namedRow).toHaveTextContent('Screening logged by Mariam Farag — Passed');
+    expect(namedRow).toHaveTextContent('Method: Video');
+    expect(namedRow).toHaveTextContent('Evidence source: Panel notes');
+    expect(namedRow).toHaveTextContent('Next step: Keep in screening');
+    const unnamedRow = within(recorded).getByText(/Short call/).closest('li');
+    expect(unnamedRow).toHaveTextContent('Screening logged — Passed');
+    expect(unnamedRow).toHaveTextContent('Method: Phone');
+    expect(unnamedRow).not.toHaveTextContent('Evidence source');
+    expect(unnamedRow).not.toHaveTextContent('Next step');
+    expect(unnamedRow).not.toHaveTextContent('by ');
   });
 });
 

@@ -239,7 +239,18 @@ function recordedRows(file: ApplicationFile): ActivityRow[] {
   }
   for (const s of file.screening) {
     if (!s.screenedAt) continue;
-    rows.push({ at: s.screenedAt, title: `Screening logged${s.screenerName ? ` by ${s.screenerName}` : ''} — ${s.outcome}`, sub: s.notes ?? undefined });
+    const screener = s.screenerName?.trim();
+    const detail = [
+      s.notes?.trim() || null,
+      s.method?.trim() ? `Method: ${s.method.trim()}` : null,
+      s.evidenceSource?.trim() ? `Evidence source: ${s.evidenceSource.trim()}` : null,
+      s.nextStep?.trim() ? `Next step: ${s.nextStep.trim()}` : null,
+    ].filter(Boolean).join(' · ');
+    rows.push({
+      at: s.screenedAt,
+      title: `Screening logged${screener ? ` by ${screener}` : ''} — ${s.outcome}`,
+      sub: detail || undefined,
+    });
   }
   for (const i of file.interviews) {
     if (!i.createdAt) continue;
