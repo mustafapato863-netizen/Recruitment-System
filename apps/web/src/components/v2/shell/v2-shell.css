@@ -104,7 +104,9 @@
   [data-ui='v2'] .rf2-shell__header { gap: var(--rf2-space-1); padding: 0 var(--rf2-space-2); }
 }
 @media (max-width: 767px) {
-  [data-ui='v2'] .rf2-shell__header { padding: 0 var(--rf2-space-1); }
+  /* Title takes its own row so every character stays visible. The bar grows with the wrapped line. */
+  [data-ui='v2'] .rf2-shell__header { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; align-items: center; height: auto; min-height: 64px; min-width: 0; row-gap: var(--rf2-space-1); column-gap: var(--rf2-space-1); padding: var(--rf2-space-1); }
+  [data-ui='v2'] .rf2-shell__title { grid-column: 1 / -1; flex: none; min-width: 0; max-width: 100%; white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
   [data-ui='v2'] .rf2-shell__header .rf2-icon-button[aria-label^='Switch to'] { display: none; }
   [data-ui='v2'] .rf2-user-menu__text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   [data-ui='v2'] .rf2-hsearch { flex: 1 1 0; min-width: 36px; }

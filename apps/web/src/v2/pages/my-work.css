@@ -117,4 +117,5 @@
   [data-ui='v2'] .rf2-mywork__head-actions { flex-wrap: wrap; justify-content: flex-start; }
   [data-ui='v2'] .rf2-mywork__counts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   [data-ui='v2'] .rf2-mywork__filters { grid-template-columns: 1fr; }
+  [data-ui='v2'] .rf2-mywork .rf2-tabs { flex-wrap: wrap; width: 100%; max-width: 100%; min-width: 0; overflow: visible; }
 }
