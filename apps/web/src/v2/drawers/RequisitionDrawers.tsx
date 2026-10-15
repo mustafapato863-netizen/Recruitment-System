@@ -197,6 +197,16 @@ export function RequisitionDrawer({ req, ctx, people, grades, canActivate, canDe
       confirmClose={() => !editable || JSON.stringify(f) === initial || window.confirm('Discard the changes to this requisition?')}>
       <div className="rf2-drawer-form rf2-req">
         {errs.form ? <p className="rf2-form-error" role="alert">{errs.form}</p> : null}
+        <p className="rf2-jtable__sub">One record for the request and its hiring goal. Seats, the due date and the owner save on this requisition.</p>
+        {req?.targetChip ? (
+          <div className="rf2-req__chip">
+            <Target aria-hidden="true" />
+            <div>
+              <p className="rf2-jtable__name">Hiring goal</p>
+              <p className="rf2-req__chip-n">{req.targetChip.label}{req.targetChip.dueDate ? ` · due ${formatDue(req.targetChip.dueDate)}` : ''}</p>
+            </div>
+          </div>
+        ) : null}
         {ctx ? (
           <SelectV2 label="Title" required value={f.positionId} onChange={(e) => set('positionId')(e.target.value)} error={errs.positionId} disabled={ro} hint="From the Titles list in Master data.">
             <option value="">Choose a title</option>

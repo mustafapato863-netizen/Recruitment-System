@@ -103,7 +103,23 @@ export function RequisitionsV2() {
                 <tbody>
                   {rows.map((r) => (
                     <tr key={r.id}>
-                      <td><button type="button" className="rf2-link rf2-jtable__name" onClick={() => go(r.id)}>{title(r)}</button><p className="rf2-jtable__sub">{r.requestCode} · {targetText(r)}</p></td>
+                      <td>
+                        <div className="rf2-req__record">
+                          <button type="button" className="rf2-link rf2-jtable__name" onClick={() => go(r.id)}>{title(r)}</button>
+                          <StatusChip tone={STATUS_TONE[r.status]} label={r.status === 'Converted to Vacancy' ? 'Job active' : STATUS_LABEL[r.status]} />
+                          <p className="rf2-jtable__sub">{r.requestCode} · {targetText(r)}</p>
+                          <p className="rf2-jtable__sub">{r.requestedHeadcount} requested {r.requestedHeadcount === 1 ? 'seat' : 'seats'} · due {formatDue(dueOf(r))} · {owner(r)}</p>
+                          {r.targetChip ? (
+                            <div className="rf2-req__chip">
+                              <Target aria-hidden="true" />
+                              <div>
+                                <p className="rf2-req__chip-n">{r.targetChip.label}</p>
+                                {r.targetChip.dueDate ? <p className="rf2-jtable__sub">due {formatDue(r.targetChip.dueDate)}</p> : null}
+                              </div>
+                            </div>
+                          ) : null}
+                        </div>
+                      </td>
                       {showDept ? <td>{deptOf(r, data.ctx) ?? '—'}</td> : null}
                       <td>{site(r)}</td>
                       <td className="rf2-num">{r.requestedHeadcount}</td>

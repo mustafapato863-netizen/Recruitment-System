@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { ChevronLeft, ChevronRight, Clock, Info, RotateCw } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clock, Download, Info, RotateCw } from 'lucide-react';
 import { ButtonV2, EmptyStateV2, ForbiddenStateV2, initials, SkeletonV2, StatusChip } from '../../components/v2';
 import { cairoMonth, MIN_SAMPLE, monthLabel, tooFew, type ResultTile, type TileKey } from '../api/myResult';
-import { fetchTeamResult, rowTooFew, sampleText, type TeamResultLoad } from '../api/teamResult';
+import { fetchTeamResult, rowTooFew, sampleText, type TeamResult, type TeamResultLoad } from '../api/teamResult';
 import './jobs.css';
 import './team.css';
 
@@ -12,6 +12,35 @@ const COLS: Array<{ key: TileKey; label: string }> = [
   { key: 'screensReachedInterview', label: 'Screen → interview' }, { key: 'offersAccepted', label: 'Offers accepted' },
 ];
 const shift = (m: string, n: number) => { const d = new Date(`${m}-15T12:00:00Z`); d.setUTCMonth(d.getUTCMonth() + n); return d.toISOString().slice(0, 7); };
+const shownMeasure = (k: TileKey, t: ResultTile) => {
+  const value = k === 'overdueFollowUps' ? String(t.value) : `${t.value} of ${t.of}`;
+  return t.detail ? `${value} ${t.detail}` : value;
+};
+const csvCell = (value: string) => {
+  const text = /^[=+\-@]/.test(value) ? `'${value}` : value;
+  return /[",\n\r]/.test(text) || text !== value ? `"${text.replace(/"/g, '""')}"` : text;
+};
+/** CSV of the table already on screen for this month. No extra request, and no field the table does not show. */
+function teamResultCsv(data: TeamResult): string {
+  const head = ['Recruiter', ...COLS.map((c) => c.label), 'Sample'];
+  const lines = data.rows.map((row) => {
+    const names = data.people.map((p) => p.name).join(', ');
+    const recruiter = row.person?.name ?? (names ? `Your team: ${names}` : 'Your team');
+    const sample = `${sampleText(row.tiles)}${rowTooFew(row.tiles) ? ' Too few to judge' : ''}`;
+    return [recruiter, ...COLS.map((c) => shownMeasure(c.key, row.tiles[c.key])), sample].map(csvCell).join(',');
+  });
+  return [head.map(csvCell).join(','), ...lines].join('\r\n');
+}
+function downloadCsv(name: string, csv: string) {
+  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
 
 function Cell({ k, t }: { k: TileKey; t: ResultTile }) {
   const few = tooFew(k, t);
@@ -38,6 +67,7 @@ export function TeamResultV2() {
   const setMonth = (m: string) => { const n = new URLSearchParams(params); n.set('month', m); setParams(n); };
   const data = state.kind === 'ready' ? state.data : null;
   const isCurrent = month >= cairoMonth();
+  const canExport = !!data && data.rows.length > 0;
 
   return (
     <div className="rf2-jobs rf2-tres">
@@ -45,11 +75,15 @@ export function TeamResultV2() {
         <div>
           <h1 className="rf2-jobs__title">Team result</h1>
           <p className="rf2-jobs__sub">{data ? `Your ${data.people.length} direct ${data.people.length === 1 ? 'report' : 'reports'}, alphabetical, not ranked. ` : ''}Same four measures as each recruiter’s My result.</p>
+          <p className="rf2-jobs__sub">Team result counts direct reports, while Team work lists the reporting line.</p>
         </div>
-        <div className="rf2-segmented" role="group" aria-label="Month">
-          <ButtonV2 kind="secondary" size="sm" icon={<ChevronLeft />} onClick={() => setMonth(shift(month, -1))} aria-label="Previous month" />
-          <span className="rf2-tres__month" aria-live="polite">{monthLabel(month)}</span>
-          <ButtonV2 kind="secondary" size="sm" icon={<ChevronRight />} onClick={() => setMonth(shift(month, 1))} disabled={isCurrent} aria-label="Next month" />
+        <div className="rf2-row-between">
+          {canExport && data ? <ButtonV2 kind="secondary" size="sm" icon={<Download />} onClick={() => downloadCsv(`team-result-${month}.csv`, teamResultCsv(data))}>Export</ButtonV2> : null}
+          <div className="rf2-segmented" role="group" aria-label="Month">
+            <ButtonV2 kind="secondary" size="sm" icon={<ChevronLeft />} onClick={() => setMonth(shift(month, -1))} aria-label="Previous month" />
+            <span className="rf2-tres__month" aria-live="polite">{monthLabel(month)}</span>
+            <ButtonV2 kind="secondary" size="sm" icon={<ChevronRight />} onClick={() => setMonth(shift(month, 1))} disabled={isCurrent} aria-label="Next month" />
+          </div>
         </div>
       </div>
       {state.kind === 'loading' ? <SkeletonV2 lines={5} label="Loading team result…" /> : null}

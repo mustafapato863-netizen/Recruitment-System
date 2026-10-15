@@ -1,5 +1,7 @@
 /* M1 Requisitions (Manager, v2). Tokens only. */
 [data-ui='v2'] .rf2-req { display: flex; flex-direction: column; gap: var(--rf2-space-2); }
+[data-ui='v2'] .rf2-req__record { display: flex; flex-direction: column; align-items: flex-start; gap: var(--rf2-space-0-5); }
+[data-ui='v2'] .rf2-req__record .rf2-req__chip { align-self: stretch; }
 [data-ui='v2'] .rf2-req__row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--rf2-space-2); }
 [data-ui='v2'] .rf2-req__status, [data-ui='v2'] .rf2-req__preview { display: flex; flex-direction: column; gap: var(--rf2-space-1); padding: var(--rf2-space-1-5); border: 1px solid var(--rf2-border); border-radius: var(--rf2-radius-card); background: var(--rf2-neutral-tint); }
 [data-ui='v2'] .rf2-req__status .rf2-field__label { margin: 0; }
