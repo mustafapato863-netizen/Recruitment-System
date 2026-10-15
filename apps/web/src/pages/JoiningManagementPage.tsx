@@ -239,7 +239,13 @@ export function JoiningManagementPage() {
             label="Joining cases"
             className="px-4 pb-4 sm:px-5 sm:pb-5"
             renderActions={(item) => {
-              const blockers = item.status === 'Awaiting Joining' ? joiningBlockerSentences(item) : [];
+              const blockers = item.status === 'Awaiting Joining'
+                ? joiningBlockerSentences({
+                    approvedHeadcount: item.approvedHeadcount,
+                    joinedHeadcount: item.joinedHeadcount,
+                    requirements: item.complianceRequirements,
+                  })
+                : [];
               if (blockers.length > 0) {
                 return (
                   <div className="flex max-w-xs flex-col items-start gap-1">
