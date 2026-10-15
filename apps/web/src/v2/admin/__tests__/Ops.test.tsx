@@ -211,6 +211,86 @@ describe('A09 Audit', () => {
     expect(t).toMatch(/Only the job owner or their manager can change job status/);
     expect(t).not.toMatch(/Only an administrator/);
   });
+  it('exports an area that is not on the current page', async () => {
+    const u = userEvent.setup();
+    const offer = (id: string) => ({ id, actorUserId: 'u-omar', actorDisplayName: 'Omar Khalil', action: 'OFFER_DECISION', entityType: 'Offer', entityId: `${id}-ent`, result: 'Success', reason: 'offer-reason', createdAt: new Date().toISOString() });
+    const page1 = Array.from({ length: 100 }, (_, i) => offer(`p1-${i}`));
+    const page2 = [{ id: 'later-file', actorUserId: 'u-karim', actorDisplayName: 'Karim Hassan', action: 'APPLICATION_STAGE_MOVE', entityType: 'Application', entityId: 'later-file-ent', result: 'Success', reason: 'later-only-file', createdAt: new Date().toISOString() }];
+    api.getApi.mockImplementation(async (p: string) => {
+      if (p.startsWith('/users')) return { data: ufx.users, total: ufx.users.length };
+      if (p.startsWith('/audit?')) {
+        const page = Number(new URLSearchParams(p.split('?')[1]).get('page'));
+        if (page === 1) return { data: page1, total: 101 };
+        if (page === 2) return { data: page2, total: 101 };
+        return { data: [], total: 101 };
+      }
+      throw new ApiError(404, 'no');
+    });
+    const blobs: Blob[] = [];
+    const create = vi.spyOn(URL, 'createObjectURL').mockImplementation((value: Blob | MediaSource) => { blobs.push(value as Blob); return 'blob:audit'; });
+    const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+    try {
+      render(<MemoryRouter><AuditV2 /></MemoryRouter>);
+      await screen.findByRole('table', { name: 'Audit log' });
+      await u.selectOptions(screen.getByLabelText('Who'), 'u-omar');
+      await screen.findByRole('table', { name: 'Audit log' });
+      await u.selectOptions(screen.getByLabelText('Area'), 'File');
+      expect(screen.getByRole('table', { name: 'Audit log' })).not.toHaveTextContent('later-only-file');
+      expect(screen.getByRole('button', { name: 'Export' })).toBeEnabled();
+      const before = api.getApi.mock.calls.length;
+      await u.click(screen.getByRole('button', { name: 'Export' }));
+      await waitFor(() => expect(blobs).toHaveLength(1));
+      const csv = await blobs[0].text();
+      const calls = api.getApi.mock.calls.slice(before).map((c) => String(c[0]));
+      expect(calls.some((p) => /^\/audit\?page=2&pageSize=100&from=\d{4}-\d{2}-\d{2}&actor=u-omar$/.test(p))).toBe(true);
+      expect(csv).toContain('later-only-file');
+      expect(csv).not.toContain('offer-reason');
+    } finally {
+      create.mockRestore();
+      revoke.mockRestore();
+      anchorClick.mockRestore();
+    }
+  });
+  it('opens read-only evidence for one entry and includes correlation id when present', async () => {
+    const u = userEvent.setup();
+    const iso = '2026-10-14T22:30:00.000Z';
+    const fmtDay = (value: string) => new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Africa/Cairo' }).format(new Date(value));
+    const fmtTime = (value: string) => new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'Africa/Cairo' }).format(new Date(value));
+    const withCorrelation = { id: 'a-corr', actorUserId: 'u-karim', actorDisplayName: 'Karim Hassan', action: 'OFFER_DECISION', entityType: 'Offer', entityId: 'o1-aaaaaaaa-full-id', result: 'Success', reason: 'Approved v2', createdAt: iso, correlationId: 'corr-77', ipAddress: '203.0.113.9' };
+    const withoutCorrelation = { id: 'a-plain', actorUserId: 'u-omar', actorDisplayName: 'Omar Khalil', action: 'USER_UPDATE', entityType: 'User', entityId: 'user-99', result: 'Failure', reason: null, createdAt: iso, ipAddress: '203.0.113.10' };
+    api.getApi.mockImplementation(async (p: string) => {
+      if (p.startsWith('/users')) return { data: ufx.users, total: ufx.users.length };
+      if (p.startsWith('/audit?')) return { data: [withCorrelation, withoutCorrelation], total: 2 };
+      throw new ApiError(404, 'no');
+    });
+    render(<MemoryRouter><AuditV2 /></MemoryRouter>);
+    await u.click(await screen.findByRole('button', { name: 'Open evidence a-corr' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Audit entry' });
+    expect(dialog).toHaveTextContent(`${fmtDay(iso)} ${fmtTime(iso)}`);
+    expect(dialog).toHaveTextContent('Karim Hassan');
+    expect(dialog).toHaveTextContent('Offer');
+    expect(dialog).toHaveTextContent('Offer decision');
+    expect(dialog).toHaveTextContent('Approved v2');
+    expect(dialog).toHaveTextContent('Success');
+    expect(dialog).toHaveTextContent('o1-aaaaaaaa-full-id');
+    expect(dialog).toHaveTextContent('Correlation id');
+    expect(dialog).toHaveTextContent('corr-77');
+    expect(dialog).not.toHaveTextContent('203.0.113.9');
+    expect(dialog).not.toHaveTextContent(/Before|After/);
+    expect(within(dialog).queryByRole('textbox')).toBeNull();
+    await u.click(within(dialog).getByRole('button', { name: 'Close' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await u.click(screen.getByRole('button', { name: 'Open evidence a-plain' }));
+    const plain = await screen.findByRole('dialog', { name: 'Audit entry' });
+    expect(plain).toHaveTextContent('Omar Khalil');
+    expect(plain).toHaveTextContent('User update');
+    expect(plain).toHaveTextContent('Failure');
+    expect(plain).toHaveTextContent('user-99');
+    expect(plain).not.toHaveTextContent('Correlation id');
+    expect(plain).not.toHaveTextContent('203.0.113.10');
+    expect(document.body).not.toHaveTextContent('203.0.113.9');
+  });
   it('helpers: area mapping and CSV escaping (formula-safe)', () => {
     expect(auditArea({ entityType: 'User', action: 'USER_UPDATE' })).toBe('Users');
     expect(auditArea({ entityType: 'MasterDataValue', action: 'MASTER_DATA_BATCH_SAVE' })).toBe('Settings');

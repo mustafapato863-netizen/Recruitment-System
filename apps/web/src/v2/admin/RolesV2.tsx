@@ -1,13 +1,17 @@
 import { useEffect, useState } from 'react';
 import { CircleCheck, CircleMinus, Info, RotateCw, ShieldCheck } from 'lucide-react';
-import { ButtonV2, EmptyStateV2, SkeletonV2, StatusChip } from '../../components/v2';
+import { ButtonV2, DrawerV2, EmptyStateV2, SkeletonV2, StatusChip } from '../../components/v2';
 import { SEAT_LABEL } from '../seat';
 import { CAPABILITIES, POLICY, fetchPermissions, fetchRoles, grant, revoke, roleSeat, type AdminRole, type Permission } from './rolesApi';
+import { fetchUsers } from './usersApi';
 import '../pages/jobs.css';
 import './admin.css';
 
 const ICON = { yes: CircleCheck, info: Info, no: CircleMinus } as const;
 const COLS = ['employee', 'manager', 'admin', 'interviewer'] as const;
+function capabilityChange(count: number, roleName: string): string {
+  return `${count} ${count === 1 ? 'user has' : 'users have'} the ${roleName} role. Change this capability?`;
+}
 
 /** A04 Roles (Admin seat): the three-seat policy plus Interviewer / Licence check granted as permissions on roles. */
 export function RolesV2() {
@@ -16,6 +20,7 @@ export function RolesV2() {
   const [attempt, setAttempt] = useState(0);
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
+  const [pending, setPending] = useState<{ role: AdminRole; perm: Permission; on: boolean; label: string; count: number } | null>(null);
   useEffect(() => {
     let live = true; setError(null);
     Promise.all([fetchRoles(), fetchPermissions().catch(() => [] as Permission[])]).then(([roles, perms]) => live && setData({ roles, perms }))
@@ -23,10 +28,27 @@ export function RolesV2() {
     return () => { live = false; };
   }, [attempt]);
   const roles = (data?.roles ?? []).filter((r) => r.status === 'Active').sort((a, b) => a.name.localeCompare(b.name));
-  const toggle = async (role: AdminRole, perm: Permission, on: boolean, label: string) => {
+  const ask = async (role: AdminRole, perm: Permission, on: boolean, label: string) => {
+    if (busy || pending) return;
     setBusy(`${role.id}:${perm.id}`); setMsg(null);
-    try { await (on ? grant(role.id, perm.id) : revoke(role.id, perm.id)); setMsg({ tone: 'success', text: `${label} ${on ? 'granted to' : 'removed from'} ${role.name}.` }); setAttempt((n) => n + 1); }
-    catch (e) { setMsg({ tone: 'error', text: (e as { message?: string })?.message || 'Could not save.' }); } finally { setBusy(null); }
+    try {
+      const users = await fetchUsers();
+      const count = users.filter((u) => u.roles.some((rr) => rr.id === role.id)).length;
+      setPending({ role, perm, on, label, count });
+    } catch (e) {
+      setMsg({ tone: 'error', text: (e as { message?: string })?.message || 'Could not load users.' });
+    } finally { setBusy(null); }
+  };
+  const commit = async () => {
+    if (!pending) return;
+    const { role, perm, on, label } = pending;
+    setPending(null); setBusy(`${role.id}:${perm.id}`); setMsg(null);
+    try {
+      await (on ? grant(role.id, perm.id) : revoke(role.id, perm.id));
+      setMsg({ tone: 'success', text: `${label} ${on ? 'granted to' : 'removed from'} ${role.name}.` });
+      setAttempt((n) => n + 1);
+    } catch (e) { setMsg({ tone: 'error', text: (e as { message?: string })?.message || 'Could not save.' }); }
+    finally { setBusy(null); }
   };
 
   return (
@@ -71,7 +93,7 @@ export function RolesV2() {
                     return (
                       <li key={r.id}>
                         <label className="rf2-check">
-                          <input type="checkbox" checked={on} disabled={busy !== null} onChange={() => void toggle(r, perm, !on, cap.label)} />
+                          <input type="checkbox" checked={on} disabled={busy !== null || pending !== null} onChange={() => void ask(r, perm, !on, cap.label)} />
                           <span>{r.name}</span>
                         </label>
                         <span className="rf2-jtable__sub">{roleSeat(r) ? SEAT_LABEL[roleSeat(r)!] : 'Seat not mapped'}</span>
@@ -101,6 +123,11 @@ export function RolesV2() {
         </section>
       ) : null}
       <p className="rf2-inline-note"><ShieldCheck aria-hidden="true" /> Hidden means the page or action is absent from that role’s navigation. Interviewer is granted per interview, not as a fourth role.</p>
+      {pending ? (
+        <DrawerV2 open onClose={() => setPending(null)} kicker="Roles" title={capabilityChange(pending.count, pending.role.name)} subtitle={pending.label}
+          primaryAction={<ButtonV2 onClick={() => void commit()}>Confirm</ButtonV2>}
+          secondaryAction={<ButtonV2 kind="secondary" onClick={() => setPending(null)}>Cancel</ButtonV2>} />
+      ) : null}
     </div>
   );
 }

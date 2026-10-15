@@ -94,7 +94,7 @@ export function namedAuditText(text: string | null | undefined, names: ReadonlyM
   if (!text) return '';
   return text.replace(UUID, (id) => names.get(id.toLowerCase()) ?? names.get(id) ?? `${id.slice(0, 8)}…`).replace(/\s*->\s*/g, ' → ');
 }
-export interface AuditEntry { id: string; actorUserId: string | null; actorDisplayName?: string; action: string; entityType: string; entityId: string; result: string; reason: string | null; createdAt: string }
+export interface AuditEntry { id: string; actorUserId: string | null; actorDisplayName?: string; action: string; entityType: string; entityId: string; result: string; reason: string | null; createdAt: string; correlationId?: string | null }
 export interface AuditQuery { from?: string; to?: string; actor?: string; entity?: string; page?: number }
 export interface AuditPage { rows: AuditEntry[]; total: number; page: number; pageSize: number; server: boolean }
 export const AUDIT_PAGE_SIZE = 100;
