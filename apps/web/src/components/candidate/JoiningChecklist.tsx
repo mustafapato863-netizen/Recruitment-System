@@ -16,6 +16,77 @@ export interface ComplianceItem {
   isCompleted: boolean;
   notes: string | null;
   completedAt: string | null;
+  type?: string | null;
+  isRequired?: boolean | null;
+  expiryDate?: string | null;
+}
+
+const CAIRO_TIME_ZONE = 'Africa/Cairo';
+export const CAPACITY_FILLED_TEXT = 'Approved capacity is already filled.';
+export const LICENCE_EXPIRED_TEXT = 'The required licence is expired.';
+
+export type LicenceFact = {
+  type?: string | null;
+  name?: string | null;
+  label?: string | null;
+  isRequired?: boolean | null;
+  expiryDate?: string | Date | null;
+  status?: string | null;
+};
+
+/** Calendar date YYYY-MM-DD in Africa/Cairo. */
+export function cairoCalendarDate(instant: Date): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: CAIRO_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(instant);
+}
+
+/** True when the instant's Cairo calendar date is strictly before today's. */
+export function isBeforeCairoToday(value: string | Date | null | undefined, now: Date = new Date()): boolean {
+  if (value == null || value === '') return false;
+  const instant = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(instant.getTime())) return false;
+  return cairoCalendarDate(instant) < cairoCalendarDate(now);
+}
+
+export function isRequiredLicence(item: LicenceFact): boolean {
+  if (item.isRequired === false) return false;
+  const type = (item.type ?? '').trim().toLowerCase();
+  if (type === 'license' || type === 'licence') return true;
+  return /licen[cs]e/i.test(`${item.name ?? ''} ${item.label ?? ''}`);
+}
+
+export function isExpiredRequiredLicence(item: LicenceFact, now: Date = new Date()): boolean {
+  return isRequiredLicence(item) && isBeforeCairoToday(item.expiryDate, now);
+}
+
+/** Stored Verified / Not Required, except a required licence whose Cairo expiry is already past. */
+export function requirementCleared(item: LicenceFact): boolean {
+  if (isExpiredRequiredLicence(item)) return false;
+  return item.status === 'Verified' || item.status === 'Not Required';
+}
+
+export function approvedCapacityFilled(
+  approvedHeadcount: number | null | undefined,
+  joinedHeadcount: number | null | undefined,
+): boolean {
+  if (typeof approvedHeadcount !== 'number' || typeof joinedHeadcount !== 'number') return false;
+  if (!Number.isFinite(approvedHeadcount) || !Number.isFinite(joinedHeadcount)) return false;
+  return joinedHeadcount >= approvedHeadcount;
+}
+
+export function joiningBlockerSentences(input: {
+  approvedHeadcount?: number | null;
+  joinedHeadcount?: number | null;
+  requirements?: readonly LicenceFact[] | null;
+}, now: Date = new Date()): string[] {
+  const sentences: string[] = [];
+  if (approvedCapacityFilled(input.approvedHeadcount, input.joinedHeadcount)) sentences.push(CAPACITY_FILLED_TEXT);
+  if ((input.requirements ?? []).some((item) => isExpiredRequiredLicence(item, now))) sentences.push(LICENCE_EXPIRED_TEXT);
+  return sentences;
 }
 
 export interface JoiningChecklistProps {
@@ -27,6 +98,8 @@ export interface JoiningChecklistProps {
   onItemToggle: (itemId: string, isCompleted: boolean) => Promise<void>;
   onConfirmJoining: () => Promise<void>;
   onItemNoteSave?: (itemId: string, notes: string) => Promise<void>;
+  approvedHeadcount?: number | null;
+  joinedHeadcount?: number | null;
   className?: string;
 }
 
@@ -80,6 +153,8 @@ export function JoiningChecklist({
   onItemToggle,
   onConfirmJoining,
   onItemNoteSave,
+  approvedHeadcount,
+  joinedHeadcount,
   className,
 }: JoiningChecklistProps) {
   const [localItems, setLocalItems] = useState<ComplianceItem[]>(items);
@@ -94,6 +169,8 @@ export function JoiningChecklist({
 
   const isJoined = hiringCaseStatus === 'Joined';
   const isAwaitingJoining = hiringCaseStatus === 'Awaiting Joining';
+  const blockers = joiningBlockerSentences({ approvedHeadcount, joinedHeadcount, requirements: localItems });
+  const displayedItems = localItems.map((item) => (isExpiredRequiredLicence(item) ? { ...item, isCompleted: false } : item));
 
   // Synchronize with parent items while preserving optimistic in-flight toggles
   useEffect(() => {
@@ -110,15 +187,16 @@ export function JoiningChecklist({
     });
   }, [items, togglingIds]);
 
-  const totalCount = localItems.length;
-  const completedCount = localItems.filter((i) => i.isCompleted).length;
-  const allComplete = totalCount > 0 && localItems.every((i) => i.isCompleted);
-  const isConfirmDisabled = !(allComplete && canConfirmJoining && isAwaitingJoining);
+  const totalCount = displayedItems.length;
+  const completedCount = displayedItems.filter((i) => i.isCompleted).length;
+  const allComplete = totalCount > 0 && displayedItems.every((i) => i.isCompleted);
+  const offerConfirm = canConfirmJoining && blockers.length === 0;
+  const isConfirmDisabled = !(allComplete && offerConfirm && isAwaitingJoining);
 
   const handleToggle = async (itemId: string) => {
     if (isJoined || togglingIds.has(itemId)) return;
 
-    const currentItem = localItems.find((i) => i.id === itemId);
+    const currentItem = displayedItems.find((i) => i.id === itemId);
     if (!currentItem) return;
 
     const nextCompleted = !currentItem.isCompleted;
@@ -274,7 +352,7 @@ export function JoiningChecklist({
         </div>
       ) : (
         <div className="flex flex-col gap-2" role="group" aria-label="Compliance items">
-          {localItems.map((item) => {
+          {displayedItems.map((item) => {
             const isToggling = togglingIds.has(item.id);
             const itemError = itemErrors[item.id];
             const itemDescription = getItemDescription(item);
@@ -352,16 +430,23 @@ export function JoiningChecklist({
 
       {/* Action Footer */}
       <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-rf-border-subtle">
-        <span className="text-xs text-rf-ink-muted">
-          {isJoined
-            ? 'Headcount closed — candidate joined.'
-            : !isAwaitingJoining
-            ? 'Awaiting final approval before candidate joining can be confirmed.'
-            : allComplete
-            ? 'All compliance items verified. Ready to confirm joining.'
-            : `${totalCount - completedCount} requirement${totalCount - completedCount === 1 ? '' : 's'} remaining`}
-        </span>
-        {canConfirmJoining ? (
+        <div className="flex flex-col gap-1">
+          {blockers.map((sentence) => (
+            <p key={sentence} className="m-0 text-xs font-medium text-rf-ink">{sentence}</p>
+          ))}
+          {blockers.length === 0 ? (
+            <span className="text-xs text-rf-ink-muted">
+              {isJoined
+                ? 'Headcount closed — candidate joined.'
+                : !isAwaitingJoining
+                ? 'Awaiting final approval before candidate joining can be confirmed.'
+                : allComplete
+                ? 'All compliance items verified. Ready to confirm joining.'
+                : `${totalCount - completedCount} requirement${totalCount - completedCount === 1 ? '' : 's'} remaining`}
+            </span>
+          ) : null}
+        </div>
+        {offerConfirm ? (
           <Button
             variant="primary"
             size="sm"

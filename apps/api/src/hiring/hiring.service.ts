@@ -231,6 +231,8 @@ export class HiringService {
         candidateName: `${c.application.candidate.firstName} ${c.application.candidate.lastName}`,
         positionTitle: c.application.vacancy.position.title,
         branchName: c.application.vacancy.branch.name,
+        approvedHeadcount: c.application.vacancy.approvedHeadcount,
+        joinedHeadcount: c.application.vacancy.joinedHeadcount,
         createdAt: c.createdAt.toISOString(),
         updatedAt: c.updatedAt.toISOString(),
         completedItems,
@@ -272,6 +274,8 @@ export class HiringService {
       candidateName: `${hiringCase.application.candidate.firstName} ${hiringCase.application.candidate.lastName}`,
       positionTitle: hiringCase.application.vacancy.position.title,
       branchName: hiringCase.application.vacancy.branch.name,
+      approvedHeadcount: hiringCase.application.vacancy.approvedHeadcount,
+      joinedHeadcount: hiringCase.application.vacancy.joinedHeadcount,
       plannedJoiningDate: hiringCase.plannedJoiningDate?.toISOString() ?? null,
       actualJoiningDate: hiringCase.actualJoiningDate?.toISOString() ?? null,
       complianceRequirements: hiringCase.complianceRequirements.map(req => ({

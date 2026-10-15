@@ -14,6 +14,7 @@ import { ResponsiveDataView, type ResponsiveDataColumn } from '../components/ui/
 import { TableSkeleton } from '../components/ui/Skeleton';
 import { StatusBadge } from '../components/StatusBadge';
 import { Icon } from '../components/Icon';
+import { joiningBlockerSentences, requirementCleared, type LicenceFact } from '../components/candidate/JoiningChecklist';
 import './PageEnhancementsV2.css';
 
 type JoiningRow = {
@@ -27,6 +28,9 @@ type JoiningRow = {
   checklistProgress?: number;
   completedItems?: number;
   totalItems?: number;
+  approvedHeadcount?: number | null;
+  joinedHeadcount?: number | null;
+  complianceRequirements?: LicenceFact[];
 };
 
 const JOINING_STATUSES = ['', 'Awaiting Joining', 'Joined', 'Postponed', 'No-show'] as const;
@@ -125,17 +129,11 @@ export function JoiningManagementPage() {
     getApi<JoiningRow[]>('/hiring')
       .then((data) => {
         const enriched = data.map((item) => {
-          const rawItem = item as JoiningRow & {
-            complianceRequirements?: Array<{ status?: string }>;
-          };
-          const runtimeItems = rawItem.complianceRequirements;
-          const runtimeCompleted = Array.isArray(runtimeItems)
-            ? runtimeItems.filter((req) => req && (req.status === 'Verified' || req.status === 'Not Required')).length
-            : undefined;
-          const runtimeTotal = Array.isArray(runtimeItems) ? runtimeItems.length : undefined;
-
-          const completed = item.completedItems ?? runtimeCompleted ?? 0;
-          const total = item.totalItems ?? runtimeTotal ?? 0;
+          const runtimeItems = item.complianceRequirements;
+          const completed = Array.isArray(runtimeItems)
+            ? runtimeItems.filter((req) => req && requirementCleared(req)).length
+            : (item.completedItems ?? 0);
+          const total = Array.isArray(runtimeItems) ? runtimeItems.length : (item.totalItems ?? 0);
           const checklistProgress = total > 0 ? Math.round((completed / total) * 100) : 0;
 
           return {
@@ -241,6 +239,19 @@ export function JoiningManagementPage() {
             label="Joining cases"
             className="px-4 pb-4 sm:px-5 sm:pb-5"
             renderActions={(item) => {
+              const blockers = item.status === 'Awaiting Joining' ? joiningBlockerSentences(item) : [];
+              if (blockers.length > 0) {
+                return (
+                  <div className="flex max-w-xs flex-col items-start gap-1">
+                    {blockers.map((sentence) => (
+                      <p key={sentence} className="m-0 text-xs font-medium text-rf-ink">{sentence}</p>
+                    ))}
+                    <Button variant="secondary" size="sm" asChild>
+                      <Link to={`/hires/${item.id}`}>Open case</Link>
+                    </Button>
+                  </div>
+                );
+              }
               const action = joiningNextAction(item.status);
               return (
                 <Button variant={item.status === 'Joined' ? 'secondary' : 'primary'} size="sm" asChild>

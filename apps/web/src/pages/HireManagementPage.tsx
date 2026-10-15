@@ -13,6 +13,7 @@ import { StatusBadge } from '../components/StatusBadge';
 import { ResponsiveDataView, type ResponsiveDataColumn } from '../components/ui/ResponsiveDataView';
 import { TableSkeleton } from '../components/ui/Skeleton';
 import { Icon } from '../components/Icon';
+import { joiningBlockerSentences, type LicenceFact } from '../components/candidate/JoiningChecklist';
 import './PageEnhancementsV2.css';
 
 type HiringCaseRow = {
@@ -23,6 +24,9 @@ type HiringCaseRow = {
   plannedJoiningDate: string | null;
   status: string;
   ownerUserId: string | null;
+  approvedHeadcount?: number | null;
+  joinedHeadcount?: number | null;
+  complianceRequirements?: LicenceFact[];
 };
 
 const STATUSES = [
@@ -206,6 +210,19 @@ export function HireManagementPage() {
             label="Hiring cases"
             className="px-4 pb-4 sm:px-5 sm:pb-5"
             renderActions={(item) => {
+              const blockers = item.status === 'Awaiting Joining' ? joiningBlockerSentences(item) : [];
+              if (blockers.length > 0) {
+                return (
+                  <div className="flex max-w-xs flex-col items-start gap-1">
+                    {blockers.map((sentence) => (
+                      <p key={sentence} className="m-0 text-xs font-medium text-rf-ink">{sentence}</p>
+                    ))}
+                    <Button variant="secondary" size="sm" asChild>
+                      <Link to={`/hires/${item.id}`}>Open case</Link>
+                    </Button>
+                  </div>
+                );
+              }
               const action = hireNextAction(item.status);
               return (
                 <Button variant="primary" size="sm" asChild>

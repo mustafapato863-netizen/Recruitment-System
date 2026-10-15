@@ -280,9 +280,8 @@ function ShellFrame({ user, seat, onSignOut, children }: AppShellV2Props) {
   const classic = permittedClassicItems(user.permissions, isAdministrator, interviewerOnly);
   const home = specialHome(user);
   const pinned = home ? classic.filter((item) => item.to === home).map((item) => ({ ...item, icon: home === '/licenses' ? 'roles' as const : 'my-work' as const })) : [];
-  const daily = interviewerOnly ? allItems.filter((item) => item.key === 'my-work' || item.key === 'my-interviews')
-    : home ? allItems.filter((item) => item.key !== 'my-work') : allItems;
-  const items = [...pinned, ...daily];
+  const daily = interviewerOnly ? allItems.filter((item) => item.key === 'my-work' || item.key === 'my-interviews') : allItems;
+  const items = home ? pinned : daily;
   const tools = classic.filter((item) => !items.some((primary) => primary.to === item.to)
     && canOpenRoute(item.to, user.permissions, isAdministrator));
   const allNavigation = [...items, ...tools];
@@ -350,7 +349,7 @@ function ShellFrame({ user, seat, onSignOut, children }: AppShellV2Props) {
           <UserMenu user={user} seat={seat} onSignOut={onSignOut} />
         </header>
         <main id="rf2-main" className="rf2-shell__content" tabIndex={-1}>
-          <RetainedHomes items={classic} currentPath={location.pathname} />
+          <RetainedHomes items={home ? [] : classic} currentPath={location.pathname} />
           {children ?? (redirectTo ? <Navigate to={redirectTo} replace /> : <Outlet />)}
         </main>
       </div>

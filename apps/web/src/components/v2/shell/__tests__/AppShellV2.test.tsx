@@ -112,14 +112,17 @@ describe('nav per seat', () => {
   });
 
   it.each([
-    ['LICENSE_SPECIALIST', 'LICENSE_CHECK', 'Licences', '/licenses'],
-    ['FINAL_HIRING_APPROVER', 'FINAL_HIRING_APPROVAL', 'Final approvals', '/hires/approvals/inbox'],
-  ])('pins the essential queue for %s without unrelated tools', (role, permission, label, path) => {
-    renderShell('employee', user([permission], [role]), path);
+    ['LICENSE_SPECIALIST', ['LICENSE_CHECK', 'VACANCY_VIEW', 'CANDIDATE_VIEW'], 'Licences', '/licenses'],
+    ['FINAL_HIRING_APPROVER', ['FINAL_HIRING_APPROVAL', 'VACANCY_VIEW', 'CANDIDATE_VIEW'], 'Final approvals', '/hires/approvals/inbox'],
+  ])('pins %s to that home and hides Open jobs and Other work', (role, permissions, label, path) => {
+    renderShell('employee', user(permissions, [role]), path);
     const nav = screen.getByRole('navigation', { name: SEAT_NAV.employee.heading });
-    expect(within(nav).getAllByRole('link')).toHaveLength(1);
-    expect(within(nav).getByRole('link', { name: label })).toHaveAttribute('aria-current', 'page');
-    expect(screen.queryByRole('button', { name: 'More (classic)' })).not.toBeInTheDocument();
+    expect(within(nav).getAllByRole('link').map((link) => link.textContent)).toEqual([label]);
+    expect(within(nav).getByRole('link', { name: label })).toHaveAttribute('href', path);
+    expect(screen.queryByRole('link', { name: 'Open jobs' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Candidates' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'My Work' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Other work' })).not.toBeInTheDocument();
   });
 
   it('interviewer-only users never see jobs or hiring tools that redirect away from their work', () => {

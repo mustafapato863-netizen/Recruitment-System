@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { isLicenseCheckOnly } from '../utils/licenseCheck';
+import { isBeforeCairoToday } from '../components/candidate/JoiningChecklist';
 import type { HiringCase } from '@recruitflow/contracts';
 import { getApi } from '../api/client';
 import { Icon } from '../components/Icon';
@@ -86,7 +87,7 @@ export function LicenseManagementPage() {
   const [filter, setFilter] = useState('');
   const [search, setSearch] = useState('');
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -102,7 +103,7 @@ export function LicenseManagementPage() {
             type: requirement.name,
             number: `REQ-${requirement.id.slice(0, 6).toUpperCase()}`,
             expiry: requirement.expiryDate ? new Date(requirement.expiryDate).toLocaleDateString() : 'Not reported',
-            status: requirement.status,
+            status: isBeforeCairoToday(requirement.expiryDate) ? 'Expired' : requirement.status,
             owner: hiringCase.ownerUserId || 'Owner not reported',
           });
         });
@@ -113,11 +114,11 @@ export function LicenseManagementPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [licenseOnly]);
 
   useEffect(() => {
     void loadData();
-  }, []);
+  }, [loadData]);
 
   const filtered = licenses.filter((license) => {
     const searchable = `${license.candidate} ${license.number} ${license.type}`.toLowerCase();
