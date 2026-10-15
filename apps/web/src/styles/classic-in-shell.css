@@ -1,0 +1,96 @@
+/* Retained pages inside the glass shell. Daily v2 screens keep their own rf2- rules. */
+
+[data-ui='v2'] .rf2-shell__content .rf-page-title {
+  font-family: var(--rf2-font);
+  font-size: var(--rf2-text-page);
+  line-height: var(--rf2-leading-page);
+  font-weight: var(--rf2-weight-page);
+  letter-spacing: -0.02em;
+  color: var(--rf2-ink);
+}
+
+/* Brand action on real buttons. Status chips are spans and stay flat. */
+[data-ui='v2'] .rf2-shell__content :is(button, a).bg-blue-600 {
+  background-image: var(--rf2-brand-action);
+  background-color: transparent;
+  border-color: transparent;
+  color: var(--rf2-on-action);
+  box-shadow: var(--rf2-neo-raise-sm);
+}
+
+[data-ui='v2'] .rf2-shell__content :is(button, a).bg-blue-600:hover {
+  filter: brightness(1.06);
+}
+
+[data-ui='v2'] .rf2-shell__content :is(button, a).bg-blue-600:focus-visible {
+  outline: var(--rf2-focus-width) solid var(--rf2-focus-color);
+  outline-offset: var(--rf2-focus-offset);
+}
+
+/* Status filters read as quiet chips instead of a ruled toolbar. */
+[data-ui='v2'] .rf2-shell__content button.rounded-full:not(.h-5) {
+  background-color: var(--rf2-glass-card);
+  border: 1px solid var(--rf2-glass-line);
+  color: var(--rf2-ink-2);
+  box-shadow: var(--rf2-neo-raise-sm);
+}
+
+[data-ui='v2'] .rf2-shell__content button.rounded-full.bg-blue-50:not(.h-5),
+[data-ui='v2'] .rf2-shell__content button.rounded-full.border-blue-200:not(.h-5) {
+  background-color: var(--rf2-info-tint);
+  background-image: none;
+  color: var(--rf2-action);
+  border-color: var(--color-info-border);
+  box-shadow: var(--rf2-neo-inset);
+}
+
+[data-ui='v2'] .rf2-shell__content .border-slate-200,
+[data-ui='v2'] .rf2-shell__content .border-slate-100 {
+  border-color: var(--rf2-divider);
+}
+
+[data-ui='v2'] .rf2-shell__content :is(
+  input[type='text'],
+  input[type='search'],
+  input[type='email'],
+  input[type='number'],
+  select
+):not(.rf2-field__control) {
+  background: var(--rf2-well);
+  border-color: transparent;
+  box-shadow: var(--rf2-neo-inset);
+  color: var(--rf2-ink);
+}
+
+[data-ui='v2'] .rf2-shell__content table:not([class*='rf2-']) {
+  color: var(--rf2-ink);
+  font-size: var(--rf2-text-body);
+}
+
+[data-ui='v2'] .rf2-shell__content table:not([class*='rf2-']) thead tr {
+  background: transparent;
+}
+
+[data-ui='v2'] .rf2-shell__content table:not([class*='rf2-']) th {
+  color: var(--rf2-muted);
+  font-size: var(--rf2-text-caption);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+[data-ui='v2'] .rf2-shell__content table:not([class*='rf2-']) td,
+[data-ui='v2'] .rf2-shell__content table:not([class*='rf2-']) th {
+  padding-block: 14px;
+}
+
+[data-ui='v2'] .rf2-shell__content table:not([class*='rf2-']) tbody tr:hover {
+  background: color-mix(in srgb, var(--rf2-info-tint) 75%, transparent);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  [data-ui='v2'] .rf2-shell__content button.rounded-full:not(.h-5),
+  [data-ui='v2'] .rf2-shell__content :is(button, a).bg-blue-600 {
+    backdrop-filter: none;
+  }
+}

@@ -4,6 +4,7 @@
  * Employee seat never holds pay in state. Writes never carry pay (offer drafts
  * send components: []; screening never sends salary fields).
  */
+import type { ScreeningDraft, UpsertScreeningDraftInput } from '@recruitflow/contracts';
 import { downloadFileApi, getApi, patchApi, postApi, putApi } from '../../api/client';
 import { isScorecardSubmitted } from '../../utils/scorecardStatus';
 import { stripPay } from './paySafety';
@@ -48,6 +49,9 @@ export interface HistoryItem { id: string; fromStage?: string | null; toStage: s
 export interface NoteItem { id: string; authorName?: string; content: string; createdAt: string }
 export interface ScreeningItem {
   id: string; screenerName?: string; outcome: 'Passed' | 'Failed' | 'On Hold'; notes?: string | null; noticePeriodDays?: number | null; screenedAt: string;
+  method?: string | null;
+  evidenceSource?: string | null;
+  nextStep?: string | null;
   /** Pay: only kept for the Manager seat with OFFER_PAY_VIEW (B2-23 / Figma 09); stripped for everyone else. */
   currentSalary?: number | string | null; expectedSalary?: number | string | null; salaryCurrency?: string | null;
 }
@@ -55,6 +59,8 @@ export interface InterviewItem {
   id: string; interviewCode: string; applicationId: string; title: string; interviewType: string;
   scheduledStart: string; scheduledEnd: string; timezone: string; locationUrl?: string | null; roomName?: string | null;
   interviewerName?: string | null; status: 'Scheduled' | 'Completed' | 'Cancelled' | 'Rescheduled' | 'No-show';
+  /** Already returned by the interview payload. Absent means the appointment has no recorded creation time. */
+  createdAt?: string;
   attendees?: Array<{ userId?: string | null; displayName?: string | null; name?: string | null }>;
 }
 export interface ScorecardItem {
@@ -165,8 +171,62 @@ export function moveStage(app: Pick<FileApplication, 'id' | 'stage' | 'version'>
 }
 /** = CreateApplicationNoteDto. */
 export const addNote = (id: string, content: string) => postApi<NoteItem>(`/applications/${enc(id)}/notes`, { content });
-/** = CreateScreeningLogDto WITHOUT the salary fields. */
-export const logScreening = (body: { applicationId: string; outcome: ScreeningItem['outcome']; notes: string; noticePeriodDays?: number }) => postApi<ScreeningItem>('/screening', body);
+/** = CreateScreeningLogDto WITHOUT the salary fields. Next step is stored text; it does not move the stage. */
+export const logScreening = (body: {
+  applicationId: string;
+  outcome: ScreeningItem['outcome'];
+  notes: string;
+  method: string;
+  evidenceSource: string;
+  nextStep: string;
+  noticePeriodDays?: number;
+}) => postApi<ScreeningItem>('/screening', body);
+
+function emptyToNull(value: string | null | undefined): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed.length === 0 ? null : trimmed;
+}
+
+/** GET /screening/application/:id/draft — this user's private draft, or null. */
+export async function loadScreeningDraft(applicationId: string): Promise<ScreeningDraft | null> {
+  try {
+    const draft = await getApi<ScreeningDraft | null>(`/screening/application/${enc(applicationId)}/draft`);
+    if (!draft || typeof draft !== 'object') return null;
+    if (draft.applicationId && draft.applicationId !== applicationId) return null;
+    if (draft.outcome !== 'Passed' && draft.outcome !== 'Failed' && draft.outcome !== 'On Hold') return null;
+    return {
+      id: draft.id,
+      organizationId: draft.organizationId,
+      userId: draft.userId,
+      applicationId: draft.applicationId,
+      outcome: draft.outcome,
+      notes: draft.notes ?? null,
+      noticePeriodDays: draft.noticePeriodDays ?? null,
+      method: draft.method ?? null,
+      evidenceSource: draft.evidenceSource ?? null,
+      nextStep: draft.nextStep ?? null,
+      moveToInterview: draft.moveToInterview !== false,
+      createdAt: draft.createdAt,
+      updatedAt: draft.updatedAt,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** PUT /screening/application/:id/draft. Does not log the screen or move the stage. */
+export function saveScreeningDraft(applicationId: string, body: UpsertScreeningDraftInput) {
+  return putApi<ScreeningDraft>(`/screening/application/${enc(applicationId)}/draft`, {
+    outcome: body.outcome,
+    notes: emptyToNull(body.notes),
+    noticePeriodDays: body.noticePeriodDays ?? null,
+    method: emptyToNull(body.method),
+    evidenceSource: emptyToNull(body.evidenceSource),
+    nextStep: emptyToNull(body.nextStep),
+    moveToInterview: body.moveToInterview ?? true,
+  });
+}
 /** = CreateInterviewDto (B5): room URL only from v2; interviewers are users. */
 export interface ScheduleBody { applicationId: string; title: string; interviewType: string; scheduledStart: string; scheduledEnd: string; timezone: string; locationUrl: string; attendeeUserIds: string[] }
 export const scheduleInterview = (body: ScheduleBody) => postApi<InterviewItem>('/interviews', body);

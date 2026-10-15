@@ -1,11 +1,23 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '@recruitflow/database';
 import type { AuthUser } from '@recruitflow/contracts';
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { PrismaService } from '../database/prisma.service';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import { requirementProfileFromMetadata } from '../hiring/joining-policy';
+import { WORKFLOW_RULE_REASON_MAX } from './workflow-rules.dto';
 import { buildWorkflowImpact, type WorkflowImpact, type WorkflowProfile } from './workflow-rule-impact';
+
+function workflowRuleReason(reason: string): string {
+  const trimmed = typeof reason === 'string' ? reason.trim() : '';
+  if (!trimmed) {
+    throw new BadRequestException({ code: 'VALIDATION_ERROR', message: 'Enter a reason for this rule change.', field: 'reason' });
+  }
+  if (trimmed.length > WORKFLOW_RULE_REASON_MAX) {
+    throw new BadRequestException({ code: 'VALIDATION_ERROR', message: 'The reason is too long.', field: 'reason' });
+  }
+  return trimmed;
+}
 
 export const WORKFLOW_RULE_AUDIT = 'WORKFLOW_RULE_APPLY';
 
@@ -44,7 +56,7 @@ export class WorkflowRulesService {
    * Writes the position profile only when no protected job is on that position.
    * Vacancy status, seat counts, application stages, and stored snapshots are never updated.
    */
-  async apply(user: AuthUser, positionId: string, profile: WorkflowProfile): Promise<WorkflowImpact> {
+  async apply(user: AuthUser, positionId: string, profile: WorkflowProfile, reason: string): Promise<WorkflowImpact> {
     const impact = await this.preview(user.organizationId, positionId, profile);
     if (!impact.applyAllowed) {
       throw new ConflictException({
@@ -53,29 +65,35 @@ export class WorkflowRulesService {
         impact,
       });
     }
-    const position = await this.prisma.position.findFirst({
-      where: { id: positionId, organizationId: user.organizationId },
-      select: { id: true, metadata: true },
-    });
-    if (!position) throw new NotFoundException('Position not found.');
-    const metadata = position.metadata && typeof position.metadata === 'object' && !Array.isArray(position.metadata)
-      ? { ...(position.metadata as Record<string, unknown>) }
-      : {};
-    metadata.requirementProfile = profile;
-    await this.prisma.position.update({
-      where: { id: position.id },
-      data: { metadata: metadata as Prisma.InputJsonObject },
-    });
-    await this.prisma.auditLog.create({
-      data: {
-        organizationId: user.organizationId,
-        actorUserId: user.userId,
-        action: WORKFLOW_RULE_AUDIT,
-        entityType: 'Position',
-        entityId: position.id,
-        result: 'SUCCESS',
-        afterData: { requirementProfile: profile, applyAllowed: true },
-      },
+    const storedReason = workflowRuleReason(reason);
+    await this.prisma.$transaction(async (tx) => {
+      const position = await tx.position.findFirst({
+        where: { id: positionId, organizationId: user.organizationId },
+        select: { id: true, metadata: true },
+      });
+      if (!position) throw new NotFoundException('Position not found.');
+      const metadata = position.metadata && typeof position.metadata === 'object' && !Array.isArray(position.metadata)
+        ? { ...(position.metadata as Record<string, unknown>) }
+        : {};
+      const previous = requirementProfileFromMetadata(position.metadata);
+      metadata.requirementProfile = profile;
+      await tx.position.update({
+        where: { id: position.id },
+        data: { metadata: metadata as Prisma.InputJsonObject },
+      });
+      await tx.auditLog.create({
+        data: {
+          organizationId: user.organizationId,
+          actorUserId: user.userId,
+          action: WORKFLOW_RULE_AUDIT,
+          entityType: 'Position',
+          entityId: position.id,
+          result: 'SUCCESS',
+          reason: storedReason,
+          beforeData: { requirementProfile: previous },
+          afterData: { requirementProfile: profile, applyAllowed: true },
+        },
+      });
     });
     return impact;
   }

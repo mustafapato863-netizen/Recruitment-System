@@ -235,7 +235,7 @@ function BulkImportLandingPage() {
         </div>
       </section>
 
-      <section className="rf-table-shell overflow-hidden rounded-2xl border border-rf-border bg-rf-surface shadow-xs">
+      <section id="import-history" className="rf-table-shell overflow-hidden rounded-2xl border border-rf-border bg-rf-surface shadow-xs">
         <div className="flex items-center justify-between border-b border-rf-border-subtle p-4">
           <div>
             <h2 className="m-0 text-sm font-extrabold text-rf-ink">Recent {datasetLabel(dataset).toLowerCase()} batches</h2>

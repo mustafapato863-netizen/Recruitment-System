@@ -24,6 +24,21 @@ export function presentedIntegrationStatus(provider: string, status: string): st
   return status;
 }
 
+/** Fields the settings form may show again. Secret names and *Encrypted values are left out. */
+function publicConfig(value: unknown): { careersUrl: string | null; smtpHost: string | null; fromAddress: string | null; port: number | null } {
+  const raw = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  const text = (key: 'careersUrl' | 'smtpHost' | 'fromAddress') => {
+    const field = raw[key];
+    return typeof field === 'string' && field.trim() ? field.trim() : null;
+  };
+  return { careersUrl: text('careersUrl'), smtpHost: text('smtpHost'), fromAddress: text('fromAddress'), port: readPort(raw.port) };
+}
+
+function readPort(value: unknown): number | null {
+  const port = typeof value === 'number' ? value : typeof value === 'string' && /^\d+$/.test(value) ? Number(value) : NaN;
+  return Number.isInteger(port) && port >= 1 && port <= 65535 ? port : null;
+}
+
 @Injectable()
 export class IntegrationsService {
   constructor(private readonly prisma: PrismaService) {}
@@ -121,7 +136,8 @@ export class IntegrationsService {
     return this.toItem(updated);
   }
 
-  private toItem(integration: { id: string; name: string; provider: string; category: string; status: string; lastSyncAt: Date | null }): IntegrationItem {
+  private toItem(integration: { id: string; name: string; provider: string; category: string; status: string; lastSyncAt: Date | null; configJson?: unknown }): IntegrationItem {
+    const config = publicConfig(integration.configJson);
     return {
       id: integration.id,
       name: integration.name,
@@ -129,6 +145,10 @@ export class IntegrationsService {
       category: integration.category,
       status: presentedIntegrationStatus(integration.provider, integration.status),
       lastSyncAt: integration.lastSyncAt ? integration.lastSyncAt.toISOString() : null,
+      careersUrl: config.careersUrl,
+      smtpHost: config.smtpHost,
+      fromAddress: config.fromAddress,
+      port: config.port,
     };
   }
 

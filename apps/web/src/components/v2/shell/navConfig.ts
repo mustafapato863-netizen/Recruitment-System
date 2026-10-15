@@ -66,7 +66,7 @@ export const SEAT_NAV: Record<Seat, { heading: string; searchPlaceholder: string
 
 /**
  * Classic pages kept on their own URLs. Same for every seat; each item mirrors its route's PermissionGate
- * in App.tsx, so an item the user can't open is absent. The shell lists these as retained work, not a More menu.
+ * in App.tsx, so an item the user can't open is absent. The shell lists each one as its own nav link.
  */
 const C = (key: string, label: string, to: string, gate: Pick<SeatNavItem, 'requires' | 'requiresAny'>): SeatNavItem => ({ key: `classic-${key}`, label, to, icon: 'classic', ...gate });
 export const CLASSIC_NAV: SeatNavItem[] = [

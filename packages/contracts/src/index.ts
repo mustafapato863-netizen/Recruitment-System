@@ -1058,6 +1058,9 @@ export interface ScreeningLog {
   expectedSalary?: number | null | undefined;
   currentSalary?: number | null | undefined;
   salaryCurrency?: string | undefined;
+  method?: string | null | undefined;
+  evidenceSource?: string | null | undefined;
+  nextStep?: string | null | undefined;
   screenedAt: string;
   createdAt: string;
 }
@@ -1070,6 +1073,36 @@ export interface CreateScreeningLogInput {
   expectedSalary?: number | undefined;
   currentSalary?: number | undefined;
   salaryCurrency?: string | undefined;
+  method?: string | null | undefined;
+  evidenceSource?: string | null | undefined;
+  nextStep?: string | null | undefined;
+}
+
+/** Private to one signed-in user, organization, and application. No pay, documents, or tokens. */
+export interface ScreeningDraft {
+  id: string;
+  organizationId: string;
+  userId: string;
+  applicationId: string;
+  outcome: ScreeningOutcome;
+  notes?: string | null;
+  noticePeriodDays?: number | null;
+  method?: string | null;
+  evidenceSource?: string | null;
+  nextStep?: string | null;
+  moveToInterview: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpsertScreeningDraftInput {
+  outcome: ScreeningOutcome;
+  notes?: string | null;
+  noticePeriodDays?: number | null;
+  method?: string | null;
+  evidenceSource?: string | null;
+  nextStep?: string | null;
+  moveToInterview?: boolean;
 }
 
 export type InterviewType = 'Screening' | 'Technical' | 'Behavioral' | 'Managerial' | 'Executive' | (string & {});
@@ -1801,6 +1834,11 @@ export interface IntegrationItem {
   category: string;
   status: string;
   lastSyncAt?: string | null;
+  // Public settings only. Never apiKey, clientSecret, refreshToken, accessToken, or *Encrypted.
+  careersUrl?: string | null;
+  smtpHost?: string | null;
+  fromAddress?: string | null;
+  port?: number | null;
 }
 
 // ─── Phase C: Stage Automation — Email Templates ────────────────
@@ -1971,6 +2009,50 @@ export interface MyWorkTarget extends TargetChip {
   owner: { id: string; name: string } | null;
 }
 
+/** File = caller owns the recruiting file. Evaluation = assigned interviewer only, no file link. */
+export type MyWorkInterviewAccess = 'file' | 'evaluation';
+export type MyWorkInterviewStatus = 'scheduled' | 'scorecard_overdue' | 'assigned';
+
+/** Upcoming interviews for the caller. Display fields only. */
+export interface MyWorkUpcomingInterview {
+  id: string;
+  title: string;
+  candidateName: string | null;
+  jobTitle: string | null;
+  startAt: string;
+  endAt: string | null;
+  room: { name: string | null; url: string | null };
+  interviewers: MyWorkPerson[];
+  access: MyWorkInterviewAccess;
+  /** Present only when access is file. Omitted for a narrow assigned interviewer. */
+  applicationId?: string;
+  held: boolean;
+  status: MyWorkInterviewStatus;
+  action: MyWorkAction;
+}
+
+/** `blocked` carries the joining policy message. `review` means the facts needed to judge readiness were not loaded. */
+export type MyWorkJoiningReadiness = 'approval_pending' | 'licence_pending' | 'checks_pending' | 'ready' | 'postponed' | 'blocked' | 'review';
+
+/**
+ * Caller-owned accepted cases that have not joined.
+ * `joined` is always false: a scheduled start or an approval is not a hire.
+ */
+export interface MyWorkJoiningSoon {
+  id: string;
+  applicationId: string;
+  candidateName: string;
+  jobTitle: string;
+  /** Intended start (Cairo calendar date). Not an actual joining date. */
+  intendedDate: string | null;
+  checksComplete: number;
+  checksRequired: number;
+  readiness: MyWorkJoiningReadiness;
+  detail: string;
+  joined: false;
+  held: boolean;
+}
+
 /** M2-M4: GET /team/work — direct reports' My Work, each item tagged with its owner. */
 export type TeamWorkItem = MyWorkItem & { owner: { id: string; name: string } };
 export interface TeamWorkResponse {
@@ -2001,6 +2083,13 @@ export interface MyWorkResponse {
   dueToday: MyWorkItem[];
   waitingOnOthers: MyWorkItem[];
   targets: MyWorkTarget[];
+  /**
+   * Caller-scoped schedule. Absent on older payloads: clients must show an
+   * unavailable state rather than invent rows. Empty means none.
+   */
+  upcomingInterviews?: MyWorkUpcomingInterview[];
+  /** Caller-owned accepted cases. Same absent-vs-empty rule as upcomingInterviews. */
+  joiningSoon?: MyWorkJoiningSoon[];
   /** True when there are no work items; targets alone do not count. */
   empty: boolean;
   emptyMessage: string | null;

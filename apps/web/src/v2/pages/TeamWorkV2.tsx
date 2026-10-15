@@ -26,8 +26,23 @@ const ago = (iso: string | null) => {
   return days === 0 ? 'Waiting today' : `Waiting ${days} ${days === 1 ? 'day' : 'days'}`;
 };
 const when = (iso: string | null) => (iso ? new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Cairo', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(iso)) : '');
+const REASSIGN_NOTE = 'Reassign moves files to a new primary recruiter — one file, a person’s files on one job, or all their open files. Jobs keep their owner; as their manager you can hold or close a report’s job.';
 
-/** M2 Team work (Manager, v2): what is waiting on me, and each direct report's open work, with Reassign (B7). */
+/** True when no shown person has a managerId other than the signed-in user. Absent managerId stays on the direct-report wording. */
+function sameDirectReports(reports: ReportWork[], meId: string | undefined): boolean {
+  return !reports.some((r) => {
+    const managerId = r.person.managerId;
+    return managerId != null && managerId !== '' && managerId !== meId;
+  });
+}
+function teamWorkSubtitle(reports: ReportWork[] | null, meId: string | undefined): string {
+  if (!reports) return 'Open work of your direct reports.';
+  const n = reports.length;
+  if (sameDirectReports(reports, meId)) return `Open work of your ${n} direct ${n === 1 ? 'report' : 'reports'}. Counts equal the rows shown.`;
+  return `Open work of your ${n} ${n === 1 ? 'person' : 'people'} on the reporting line. Counts equal the rows shown.`;
+}
+
+/** M2 Team work (Manager, v2): what is waiting on me, and open work for the loaded roster, with Reassign (B7). */
 export function TeamWorkV2() {
   const { user } = useAuth();
   const [params, setParams] = useSearchParams();
@@ -67,12 +82,13 @@ export function TeamWorkV2() {
   const deciding: WaitingOffer | null = waiting.find((w) => w.offerId === params.get('offer')) ?? null;
   const showPay = canSeePay('manager', user?.permissions);
   const cards = data?.scorecards ?? [];
+  const reportingLine = !!reports && !sameDirectReports(reports, user?.id);
 
   return (
     <div className="rf2-jobs rf2-team">
       <div>
         <h1 className="rf2-jobs__title">Team work</h1>
-        <p className="rf2-jobs__sub">{reports ? `Open work of your ${reports.length} direct ${reports.length === 1 ? 'report' : 'reports'}. Counts equal the rows shown.` : 'Open work of your direct reports.'}</p>
+        <p className="rf2-jobs__sub">{teamWorkSubtitle(reports, user?.id)}</p>
       </div>
       {toast ? <p className="rf2-inline-note" data-tone="success" role="status"><CircleCheck aria-hidden="true" /> {toast}</p> : null}
       {state.kind === 'loading' ? <SkeletonV2 lines={6} label="Loading team work…" /> : null}
@@ -119,7 +135,7 @@ export function TeamWorkV2() {
             </div>
           )}
           {deciding ? <OfferDecisionDrawer offerId={deciding.offerId} ownerName={deciding.ownerName} showPay={showPay} onClose={() => go({ offer: null })} onDone={done} /> : null}
-          <p className="rf2-inline-note"><Users aria-hidden="true" /> Only your direct reports appear here. Reassign moves files to a new primary recruiter — one file, a person’s files on one job, or all their open files. Jobs keep their owner; as their manager you can hold or close a report’s job.</p>
+          <p className="rf2-inline-note"><Users aria-hidden="true" /> {reportingLine ? 'Your reporting line appears here, including people who report through someone else.' : 'Only your direct reports appear here.'} {REASSIGN_NOTE}</p>
           {jobAction ? (
             <JobStatusDrawer job={teamJobDetail(jobAction.job)} initial={jobAction.action} onClose={() => setJobAction(null)}
               onDone={() => { const t = jobAction.job.title; setJobAction(null); setToast(`${t}: status changed.`); setAttempt((n) => n + 1); }} />

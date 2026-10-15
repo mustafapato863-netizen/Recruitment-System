@@ -51,6 +51,28 @@ describe('M2 Team work', () => {
     expect(container.textContent).not.toMatch(/62,?000|71,?500|858|EGP|40000/);
     expect(await axeViolations(container)).toEqual([]);
   });
+  it('keeps the direct-report subtitle when every shown person reports to the signed-in user', async () => {
+    serve({ '/users/assignable': fx.assignable.map((person) => ({ ...person, managerId: 'u-karim' })) });
+    renderAt();
+    expect(await screen.findByText('Open work of your 3 direct reports. Counts equal the rows shown.')).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent).slice(1)).toEqual(['Mariam Farag', 'Noura Al-Dosari', 'Youssef Ibrahim']);
+    expect(screen.getByText(/Only your direct reports appear here/)).toBeInTheDocument();
+  });
+  it('a reporting line that is not all direct reports stays complete and is not labelled as direct reports', async () => {
+    serve({
+      '/users/assignable': [
+        { id: 'u-mariam', displayName: 'Mariam Farag', status: 'Active', managerId: 'u-karim', roles: [{ code: 'ROLE_001', name: 'Recruiter-offshore' }] },
+        { id: 'u-youssef', displayName: 'Youssef Ibrahim', status: 'Active', managerId: 'u-karim', roles: [{ code: 'ROLE_002', name: 'Recruiter-onshore' }] },
+        { id: 'u-noura', displayName: 'Noura Al-Dosari', status: 'Active', managerId: 'u-mariam', roles: [{ code: 'ROLE_003', name: 'Recruiter-clinical' }] },
+      ],
+    });
+    renderAt();
+    expect(await screen.findByText('Open work of your 3 people on the reporting line. Counts equal the rows shown.')).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent).slice(1)).toEqual(['Mariam Farag', 'Noura Al-Dosari', 'Youssef Ibrahim']);
+    expect(screen.getByText(/Your reporting line appears here, including people who report through someone else/)).toBeInTheDocument();
+    expect(screen.queryByText(/Only your direct reports appear here/)).toBeNull();
+    expect(screen.queryByText(/Open work of your 3 direct reports/)).toBeNull();
+  });
   it('reports list unavailable → honest empty state; offers list failing is not fatal', async () => {
     serve({ '/users/assignable': new ApiError(403, 'no') });
     renderAt();

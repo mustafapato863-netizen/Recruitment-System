@@ -33,7 +33,7 @@ export interface DrawerV2Props {
 }
 
 /**
- * v2 Drawer: right side, 520px, modal dialog. Focus trap, initial focus,
+ * v2 Drawer: right side, 560px opaque panel, modal dialog. Focus trap, initial focus,
  * focus return, Escape/backdrop close with optional guard, body scroll lock.
  * No dependency: the repo only has Radix alert-dialog, not Dialog.
  */

@@ -27,6 +27,7 @@ model Organization {
   applications        Application[]
   candidateDocuments  CandidateDocument[]
   screeningLogs       ScreeningLog[]
+  screeningDrafts     ScreeningDraft[]
   applicationNotes    ApplicationNote[]
   interviews          Interview[]
   offers              Offer[]
@@ -134,6 +135,7 @@ model User {
   uploadedDocuments        CandidateDocument[]
   deletedDocuments         CandidateDocument[]        @relation("DocumentDeleter")
   screeningLogs            ScreeningLog[]
+  screeningDrafts          ScreeningDraft[]
   applicationNotes         ApplicationNote[]
   interviewAttendeeLinks   InterviewAttendee[]
   submittedScorecards      InterviewScorecard[]
@@ -510,6 +512,7 @@ model Application {
   appliedAt          DateTime                   @default(now()) @db.Timestamptz(6)
   statusHistory      ApplicationStatusHistory[]
   screeningLogs      ScreeningLog[]
+  screeningDrafts    ScreeningDraft[]
   notes              ApplicationNote[]
   interviews         Interview[]
   offers             Offer[]
@@ -654,11 +657,37 @@ model ScreeningLog {
   expectedSalary   Decimal?     @db.Decimal(12, 2)
   currentSalary    Decimal?     @db.Decimal(12, 2)
   salaryCurrency   String       @default("SAR") @db.VarChar(10)
+  method           String?      @db.VarChar(80)
+  evidenceSource   String?      @map("evidence_source") @db.VarChar(500)
+  nextStep         String?      @map("next_step") @db.VarChar(200)
   screenedAt       DateTime     @default(now()) @db.Timestamptz(6)
   createdAt        DateTime     @default(now()) @db.Timestamptz(6)
 
   @@index([organizationId, applicationId])
   @@map("screening_logs")
+}
+
+// One unsaved screen per signed-in user, organization, and application.
+model ScreeningDraft {
+  id               String       @id @default(uuid()) @db.Uuid
+  organizationId   String       @map("organization_id") @db.Uuid
+  organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Restrict)
+  userId           String       @map("user_id") @db.Uuid
+  user             User         @relation(fields: [userId], references: [id], onDelete: Restrict)
+  applicationId    String       @map("application_id") @db.Uuid
+  application      Application  @relation(fields: [applicationId], references: [id], onDelete: Restrict)
+  outcome          String       @db.VarChar(40)
+  notes            String?      @db.Text
+  noticePeriodDays Int?         @map("notice_period_days")
+  method           String?      @db.VarChar(80)
+  evidenceSource   String?      @map("evidence_source") @db.VarChar(500)
+  nextStep         String?      @map("next_step") @db.VarChar(200)
+  moveToInterview  Boolean      @default(true) @map("move_to_interview")
+  createdAt        DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime     @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([organizationId, userId, applicationId])
+  @@map("screening_drafts")
 }
 
 model Interview {

@@ -146,4 +146,120 @@ describe('JoiningChecklist component', () => {
     await userEvent.click(confirmBtn);
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
+
+  it('does not offer confirm joining when approved capacity is already filled', () => {
+    render(
+      <JoiningChecklist
+        hiringCaseId="hc-100"
+        candidateName="Dr. Sarah Al-Otaibi"
+        items={mockItems.map((item) => ({ ...item, isCompleted: true }))}
+        hiringCaseStatus="Awaiting Joining"
+        canConfirmJoining
+        approvedHeadcount={1}
+        joinedHeadcount={1}
+        onItemToggle={vi.fn()}
+        onConfirmJoining={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: /Confirm Joining/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Record actual joining/i })).not.toBeInTheDocument();
+    expect(screen.getByText('Approved capacity is already filled.')).toBeInTheDocument();
+  });
+
+  it('does not offer confirm joining when a required licence expired before today in Cairo', () => {
+    render(
+      <JoiningChecklist
+        hiringCaseId="hc-100"
+        candidateName="Dr. Sarah Al-Otaibi"
+        items={[{
+          id: 'lic-1',
+          label: 'SCFHS licence',
+          type: 'License',
+          isRequired: true,
+          expiryDate: cairoOffsetIso(-1),
+          isCompleted: true,
+          notes: null,
+          completedAt: '2026-08-15T10:00:00.000Z',
+        }]}
+        hiringCaseStatus="Awaiting Joining"
+        canConfirmJoining
+        approvedHeadcount={2}
+        joinedHeadcount={1}
+        onItemToggle={vi.fn()}
+        onConfirmJoining={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: /Confirm Joining/i })).not.toBeInTheDocument();
+    expect(screen.getByText('The required licence is expired.')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: /SCFHS licence/i })).not.toBeChecked();
+    expect(screen.queryByText('Approved capacity is already filled.')).not.toBeInTheDocument();
+  });
+
+  it('still offers confirm joining when a headcount number is missing or the licence expires today', () => {
+    const { rerender } = render(
+      <JoiningChecklist
+        hiringCaseId="hc-100"
+        candidateName="Dr. Sarah Al-Otaibi"
+        items={[{
+          id: 'lic-1',
+          label: 'SCFHS licence',
+          type: 'License',
+          isRequired: true,
+          expiryDate: cairoOffsetIso(0),
+          isCompleted: true,
+          notes: null,
+          completedAt: null,
+        }]}
+        hiringCaseStatus="Awaiting Joining"
+        canConfirmJoining
+        approvedHeadcount={1}
+        onItemToggle={vi.fn()}
+        onConfirmJoining={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: /Confirm Joining/i })).toBeEnabled();
+    expect(screen.getByRole('checkbox', { name: /SCFHS licence/i })).toBeChecked();
+    expect(screen.queryByText('Approved capacity is already filled.')).not.toBeInTheDocument();
+    expect(screen.queryByText('The required licence is expired.')).not.toBeInTheDocument();
+
+    rerender(
+      <JoiningChecklist
+        hiringCaseId="hc-100"
+        candidateName="Dr. Sarah Al-Otaibi"
+        items={[{
+          id: 'lic-1',
+          label: 'SCFHS licence',
+          type: 'License',
+          isRequired: false,
+          expiryDate: cairoOffsetIso(-1),
+          isCompleted: true,
+          notes: null,
+          completedAt: null,
+        }]}
+        hiringCaseStatus="Awaiting Joining"
+        canConfirmJoining
+        joinedHeadcount={4}
+        onItemToggle={vi.fn()}
+        onConfirmJoining={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: /Confirm Joining/i })).toBeEnabled();
+    expect(screen.queryByText('The required licence is expired.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Approved capacity is already filled.')).not.toBeInTheDocument();
+  });
 });
+
+function cairoOffsetIso(dayOffset: number): string {
+  const today = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Africa/Cairo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+  const [year, month, day] = today.split('-').map(Number);
+  return new Date(Date.UTC(year ?? 2026, (month ?? 1) - 1, (day ?? 1) + dayOffset, 12, 0, 0)).toISOString();
+}

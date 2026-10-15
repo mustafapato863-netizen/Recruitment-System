@@ -204,16 +204,6 @@ function WorkspaceBlock({ options, collapsed }: { options: WorkspaceOption[]; co
   );
 }
 
-/** Classic pages this person can open. Not a menu named More. */
-function RetainedHomes({ items }: { items: { key: string; label: string; to: string }[] }) {
-  if (!items.length) return null;
-  return (
-    <nav className="rf2-retained" aria-label="Retained work">
-      {items.map((item) => <Link key={item.key} to={item.to}>{item.label}</Link>)}
-    </nav>
-  );
-}
-
 function HelpButton() {
   const { openGuide } = useQuickGuide();
   return (
@@ -241,12 +231,12 @@ function ShellFrame({ user, seat, onSignOut, children }: AppShellV2Props) {
   const classic = permittedClassicItems(user.permissions, isAdministrator, interviewerOnly);
   const home = specialHome(user);
   const pinned = home ? classic.filter((item) => item.to === home).map((item) => ({ ...item, icon: home === '/licenses' ? 'roles' as const : 'my-work' as const })) : [];
-  const daily = interviewerOnly ? allItems.filter((item) => item.key === 'my-work' || item.key === 'my-interviews')
-    : home ? allItems.filter((item) => item.key !== 'my-work') : allItems;
-  const items = [...pinned, ...daily];
-  const tools = classic.filter((item) => !items.some((primary) => primary.to === item.to)
+  const daily = interviewerOnly ? allItems.filter((item) => item.key === 'my-work' || item.key === 'my-interviews') : allItems;
+  const items = home ? pinned : daily;
+  const tools = home ? [] : classic.filter((item) => !items.some((primary) => primary.to === item.to)
     && canOpenRoute(item.to, user.permissions, isAdministrator));
-  const allNavigation = [...items, ...tools];
+  const sidebarItems = [...items, ...tools];
+  const allNavigation = sidebarItems;
   const activeKey = activeNavKey(allNavigation, location.pathname, location.hash);
   const canSeeNotifications = isAdministrator || (user.permissions ?? []).includes('NOTIFICATION_VIEW');
   const unread = useUnreadCount(true);
@@ -258,6 +248,7 @@ function ShellFrame({ user, seat, onSignOut, children }: AppShellV2Props) {
   const narrow = useNarrowViewport();
   const collapsed = storedCollapsed || narrow;
   const workspaces = workspaceOptions(user);
+  const { theme, toggleTheme } = useTheme();
 
   return (
     <div className={`rf2-shell${collapsed ? ' rf2-shell--collapsed' : ''}`} data-seat={seat}>
@@ -278,7 +269,7 @@ function ShellFrame({ user, seat, onSignOut, children }: AppShellV2Props) {
         <p className="rf2-shell__heading" id={headingId}>{config.heading}</p>
         <nav aria-labelledby={headingId} className="rf2-shell__nav">
           <ul className="rf2-nav-list">
-            {items.map((item) => (
+            {sidebarItems.map((item) => (
               <li key={item.key}>
                 <NavItem asChild label={item.label} icon={ICONS[item.icon]} active={item.key === activeKey} title={collapsed ? item.label : undefined}>
                   {/* Link, not NavLink: aria-current is decided once by activeNavKey (hash-aware). */}
@@ -300,6 +291,9 @@ function ShellFrame({ user, seat, onSignOut, children }: AppShellV2Props) {
         <header className="rf2-shell__header">
           <h1 className="rf2-shell__title">{title}</h1>
           <HeaderSearch placeholder={config.searchPlaceholder} meId={user.id} />
+          <button type="button" className="rf2-icon-button" aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'} title={theme === 'light' ? 'Dark mode' : 'Light mode'} onClick={toggleTheme}>
+            {theme === 'light' ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}
+          </button>
           <HelpButton />
           {canSeeNotifications ? (
             <NotificationsBell unread={unread} />
@@ -307,7 +301,6 @@ function ShellFrame({ user, seat, onSignOut, children }: AppShellV2Props) {
           <UserMenu user={user} seat={seat} onSignOut={onSignOut} />
         </header>
         <main id="rf2-main" className="rf2-shell__content" tabIndex={-1}>
-          <RetainedHomes items={classic} />
           {children ?? (redirectTo ? <Navigate to={redirectTo} replace /> : <Outlet />)}
         </main>
       </div>

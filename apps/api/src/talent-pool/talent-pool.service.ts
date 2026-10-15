@@ -24,7 +24,7 @@ export class TalentPoolService {
         where,
         include: {
           _count: {
-            select: { candidates: true },
+            select: { candidates: { where: { removedAt: null } } },
           },
         },
         orderBy: { createdAt: 'desc' },

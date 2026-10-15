@@ -14,7 +14,7 @@ vi.mock('../../../components/v2/shell/AppShellV2', () => ({ useV2Shell: () => sh
 import { ReportsRoute } from '../../pages/ReportsRoute';
 import { AuditRoute, IntegrationsRoute } from '../AdminRoutes';
 import { AuditV2 } from '../AuditV2';
-import { auditArea, namedAuditText, overrideError, toCsv } from '../opsApi';
+import { ALLOWED_PROVIDERS, auditArea, namedAuditText, overrideError, toCsv } from '../opsApi';
 import { cairoMonth } from '../../api/myResult';
 
 const M = cairoMonth();
@@ -211,6 +211,86 @@ describe('A09 Audit', () => {
     expect(t).toMatch(/Only the job owner or their manager can change job status/);
     expect(t).not.toMatch(/Only an administrator/);
   });
+  it('exports an area that is not on the current page', async () => {
+    const u = userEvent.setup();
+    const offer = (id: string) => ({ id, actorUserId: 'u-omar', actorDisplayName: 'Omar Khalil', action: 'OFFER_DECISION', entityType: 'Offer', entityId: `${id}-ent`, result: 'Success', reason: 'offer-reason', createdAt: new Date().toISOString() });
+    const page1 = Array.from({ length: 100 }, (_, i) => offer(`p1-${i}`));
+    const page2 = [{ id: 'later-file', actorUserId: 'u-karim', actorDisplayName: 'Karim Hassan', action: 'APPLICATION_STAGE_MOVE', entityType: 'Application', entityId: 'later-file-ent', result: 'Success', reason: 'later-only-file', createdAt: new Date().toISOString() }];
+    api.getApi.mockImplementation(async (p: string) => {
+      if (p.startsWith('/users')) return { data: ufx.users, total: ufx.users.length };
+      if (p.startsWith('/audit?')) {
+        const page = Number(new URLSearchParams(p.split('?')[1]).get('page'));
+        if (page === 1) return { data: page1, total: 101 };
+        if (page === 2) return { data: page2, total: 101 };
+        return { data: [], total: 101 };
+      }
+      throw new ApiError(404, 'no');
+    });
+    const blobs: Blob[] = [];
+    const create = vi.spyOn(URL, 'createObjectURL').mockImplementation((value: Blob | MediaSource) => { blobs.push(value as Blob); return 'blob:audit'; });
+    const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
+    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+    try {
+      render(<MemoryRouter><AuditV2 /></MemoryRouter>);
+      await screen.findByRole('table', { name: 'Audit log' });
+      await u.selectOptions(screen.getByLabelText('Who'), 'u-omar');
+      await screen.findByRole('table', { name: 'Audit log' });
+      await u.selectOptions(screen.getByLabelText('Area'), 'File');
+      expect(screen.getByRole('table', { name: 'Audit log' })).not.toHaveTextContent('later-only-file');
+      expect(screen.getByRole('button', { name: 'Export' })).toBeEnabled();
+      const before = api.getApi.mock.calls.length;
+      await u.click(screen.getByRole('button', { name: 'Export' }));
+      await waitFor(() => expect(blobs).toHaveLength(1));
+      const csv = await blobs[0].text();
+      const calls = api.getApi.mock.calls.slice(before).map((c) => String(c[0]));
+      expect(calls.some((p) => /^\/audit\?page=2&pageSize=100&from=\d{4}-\d{2}-\d{2}&actor=u-omar$/.test(p))).toBe(true);
+      expect(csv).toContain('later-only-file');
+      expect(csv).not.toContain('offer-reason');
+    } finally {
+      create.mockRestore();
+      revoke.mockRestore();
+      anchorClick.mockRestore();
+    }
+  });
+  it('opens read-only evidence for one entry and includes correlation id when present', async () => {
+    const u = userEvent.setup();
+    const iso = '2026-10-14T22:30:00.000Z';
+    const fmtDay = (value: string) => new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'Africa/Cairo' }).format(new Date(value));
+    const fmtTime = (value: string) => new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'Africa/Cairo' }).format(new Date(value));
+    const withCorrelation = { id: 'a-corr', actorUserId: 'u-karim', actorDisplayName: 'Karim Hassan', action: 'OFFER_DECISION', entityType: 'Offer', entityId: 'o1-aaaaaaaa-full-id', result: 'Success', reason: 'Approved v2', createdAt: iso, correlationId: 'corr-77', ipAddress: '203.0.113.9' };
+    const withoutCorrelation = { id: 'a-plain', actorUserId: 'u-omar', actorDisplayName: 'Omar Khalil', action: 'USER_UPDATE', entityType: 'User', entityId: 'user-99', result: 'Failure', reason: null, createdAt: iso, ipAddress: '203.0.113.10' };
+    api.getApi.mockImplementation(async (p: string) => {
+      if (p.startsWith('/users')) return { data: ufx.users, total: ufx.users.length };
+      if (p.startsWith('/audit?')) return { data: [withCorrelation, withoutCorrelation], total: 2 };
+      throw new ApiError(404, 'no');
+    });
+    render(<MemoryRouter><AuditV2 /></MemoryRouter>);
+    await u.click(await screen.findByRole('button', { name: 'Open evidence a-corr' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Audit entry' });
+    expect(dialog).toHaveTextContent(`${fmtDay(iso)} ${fmtTime(iso)}`);
+    expect(dialog).toHaveTextContent('Karim Hassan');
+    expect(dialog).toHaveTextContent('Offer');
+    expect(dialog).toHaveTextContent('Offer decision');
+    expect(dialog).toHaveTextContent('Approved v2');
+    expect(dialog).toHaveTextContent('Success');
+    expect(dialog).toHaveTextContent('o1-aaaaaaaa-full-id');
+    expect(dialog).toHaveTextContent('Correlation id');
+    expect(dialog).toHaveTextContent('corr-77');
+    expect(dialog).not.toHaveTextContent('203.0.113.9');
+    expect(dialog).not.toHaveTextContent(/Before|After/);
+    expect(within(dialog).queryByRole('textbox')).toBeNull();
+    await u.click(within(dialog).getByRole('button', { name: 'Close' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    await u.click(screen.getByRole('button', { name: 'Open evidence a-plain' }));
+    const plain = await screen.findByRole('dialog', { name: 'Audit entry' });
+    expect(plain).toHaveTextContent('Omar Khalil');
+    expect(plain).toHaveTextContent('User update');
+    expect(plain).toHaveTextContent('Failure');
+    expect(plain).toHaveTextContent('user-99');
+    expect(plain).not.toHaveTextContent('Correlation id');
+    expect(plain).not.toHaveTextContent('203.0.113.10');
+    expect(document.body).not.toHaveTextContent('203.0.113.9');
+  });
   it('helpers: area mapping and CSV escaping (formula-safe)', () => {
     expect(auditArea({ entityType: 'User', action: 'USER_UPDATE' })).toBe('Users');
     expect(auditArea({ entityType: 'MasterDataValue', action: 'MASTER_DATA_BATCH_SAVE' })).toBe('Settings');
@@ -230,7 +310,7 @@ describe('A09 Audit', () => {
 describe('A10 Integrations', () => {
   it('only careers + mail (others hidden), status text + icon; test connection posts and reports; axe', async () => {
     const u = userEvent.setup();
-    api.postApi.mockResolvedValueOnce({ success: true, message: 'SMTP handshake OK.' }).mockRejectedValueOnce(new ApiError(502, 'Careers site did not answer.'));
+    api.postApi.mockResolvedValueOnce({ success: false, verified: false, message: 'Mail delivery is not verified. A saved provider setting is not a connection, and this server does not send to candidates.' }).mockRejectedValueOnce(new ApiError(502, 'Careers site did not answer.'));
     const { container } = renderAt('/integrations');
     const mail = await screen.findByRole('region', { name: 'Mail (SMTP)' });
     expect(screen.getByRole('region', { name: 'Careers site' })).toHaveTextContent(/Connected.*Last sync.*Fri 9 Oct 2026, 08:45/);
@@ -238,11 +318,89 @@ describe('A10 Integrations', () => {
     expect(mail).toHaveTextContent(/Available.*Never/);
     await u.click(within(mail).getByRole('button', { name: 'Test connection: Mail (SMTP)' }));
     await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/integrations/i2/test'));
-    expect(await within(mail).findByRole('status')).toHaveTextContent('SMTP handshake OK.');
+    expect(await within(mail).findByRole('alert')).toHaveTextContent(/Mail delivery is not verified/);
+    expect(mail).not.toHaveTextContent(/\bSent\b/);
     const careers = screen.getByRole('region', { name: 'Careers site' });
     await u.click(within(careers).getByRole('button', { name: 'Test connection: Careers site' }));
     expect(await within(careers).findByRole('alert')).toHaveTextContent('Careers site did not answer.');
     expect(await axeViolations(container)).toEqual([]);
+  });
+
+  it('saves careers URL and SMTP settings without a send or a connected mail status', async () => {
+    const u = userEvent.setup();
+    const secret = 'cipher-blob-9f3a';
+    serve({
+      '/integrations': [
+        { id: 'i1', name: 'Careers site publishing', provider: 'careers_site', category: 'Publishing', status: 'Connected', lastSyncAt: '2026-10-09T05:45:00.000Z', careersUrl: 'https://careers.example.com/jobs', apiKeyEncrypted: secret, configJson: { apiKeyEncrypted: secret, clientSecret: 'client-secret-plain' } },
+        { id: 'i2', name: 'Email Provider', provider: 'smtp', category: 'Communication', status: 'Connected', lastSyncAt: null, smtpHost: 'mail.internal', fromAddress: 'recruiting@recruitflow.local', port: 25, refreshToken: 'refresh-token-plain', accessToken: 'access-token-plain', clientSecretEncrypted: 'client-cipher' },
+        { id: 'i3', name: 'WhatsApp Business', provider: 'whatsapp', category: 'x', status: 'Connected' },
+        { id: 'i4', name: 'Google Calendar', provider: 'google_calendar', category: 'x', status: 'Connected' },
+        { id: 'i5', name: 'Google Meet', provider: 'google_meet', category: 'x', status: 'Connected' },
+      ],
+    });
+    api.patchApi.mockImplementation(async (path: string, body: { configJson?: Record<string, unknown> }) => ({
+      id: String(path).endsWith('i2') ? 'i2' : 'i1',
+      name: String(path).endsWith('i2') ? 'Email Provider' : 'Careers site publishing',
+      provider: String(path).endsWith('i2') ? 'smtp' : 'careers_site',
+      category: String(path).endsWith('i2') ? 'Communication' : 'Publishing',
+      status: 'Connected',
+      ...(body?.configJson ?? {}),
+      apiKeyEncrypted: secret,
+      clientSecret: 'client-secret-plain',
+      refreshToken: 'refresh-token-plain',
+      accessToken: 'access-token-plain',
+    }));
+    renderAt('/integrations');
+    const careers = await screen.findByRole('region', { name: 'Careers site' });
+    const mail = screen.getByRole('region', { name: 'Mail (SMTP)' });
+    expect(ALLOWED_PROVIDERS).toEqual(['careers_site', 'smtp']);
+    expect(screen.getAllByRole('region')).toHaveLength(2);
+    expect(screen.queryByRole('region', { name: /WhatsApp|Calendar|Meet/ })).toBeNull();
+    expect(within(careers).getByLabelText(/Careers URL/)).toHaveValue('https://careers.example.com/jobs');
+    expect(within(mail).getByLabelText(/SMTP host/)).toHaveValue('mail.internal');
+    expect(within(mail).getByLabelText(/From address/)).toHaveValue('recruiting@recruitflow.local');
+    expect(within(mail).getByLabelText(/^Port/)).toHaveValue(25);
+    expect(mail).toHaveTextContent('Not verified');
+    expect(mail).not.toHaveTextContent(/\bConnected\b/);
+    const secretInFields = () => [...screen.queryAllByRole('textbox'), ...screen.queryAllByRole('spinbutton')].map((el) => (el as HTMLInputElement).value).join('\n');
+    for (const hidden of [secret, 'client-secret-plain', 'refresh-token-plain', 'access-token-plain', 'client-cipher']) {
+      expect(document.body.innerHTML).not.toContain(hidden);
+      expect(document.body.textContent).not.toContain(hidden);
+      expect(secretInFields()).not.toContain(hidden);
+    }
+
+    await u.clear(within(careers).getByLabelText(/Careers URL/));
+    await u.click(within(careers).getByRole('button', { name: 'Save settings' }));
+    expect(within(careers).getByText('Enter the careers URL.')).toBeInTheDocument();
+    expect(api.patchApi).not.toHaveBeenCalled();
+    await u.type(within(careers).getByLabelText(/Careers URL/), 'https://jobs.example.com/careers');
+    await u.click(within(careers).getByRole('button', { name: 'Save settings' }));
+    await waitFor(() => expect(api.patchApi).toHaveBeenCalledWith('/integrations/i1', { configJson: { careersUrl: 'https://jobs.example.com/careers' } }));
+    expect(await within(careers).findByText('Settings saved. This does not send mail or mark the provider connected.')).toBeInTheDocument();
+    expect(within(careers).getByRole('status')).not.toHaveTextContent(/\bSent\b/);
+
+    await u.clear(within(mail).getByLabelText(/SMTP host/));
+    await u.type(within(mail).getByLabelText(/SMTP host/), 'smtp.internal');
+    await u.clear(within(mail).getByLabelText(/^Port/));
+    await u.type(within(mail).getByLabelText(/^Port/), '587');
+    await u.click(within(mail).getByRole('button', { name: 'Save settings' }));
+    await waitFor(() => expect(api.patchApi).toHaveBeenCalledWith('/integrations/i2', { configJson: { smtpHost: 'smtp.internal', fromAddress: 'recruiting@recruitflow.local', port: 587 } }));
+    expect(await within(mail).findByText('Settings saved. This does not send mail or mark the provider connected.')).toBeInTheDocument();
+    expect(within(mail).getByRole('status')).not.toHaveTextContent(/\bSent\b/);
+    expect(mail).not.toHaveTextContent(/\bConnected\b/);
+    expect(api.patchApi.mock.calls.every((call) => call[1] && !Object.prototype.hasOwnProperty.call(call[1] as object, 'status'))).toBe(true);
+
+    api.postApi.mockResolvedValueOnce({ success: true, message: 'Sent' });
+    await u.click(within(mail).getByRole('button', { name: 'Test connection: Mail (SMTP)' }));
+    await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/integrations/i2/test'));
+    const testResult = await within(mail).findByRole('alert');
+    expect(testResult).toHaveTextContent(/not verified/i);
+    expect(testResult).not.toHaveTextContent(/\bSent\b/);
+    const urls = [...api.getApi.mock.calls, ...api.patchApi.mock.calls, ...api.postApi.mock.calls, ...api.deleteApi.mock.calls].map((call) => String(call[0]));
+    expect(urls.filter((url) => url.includes('/send') || /smtp\.|mail\.|gmail|outlook|sendgrid|mailgun|amazonaws|office365/i.test(url))).toEqual([]);
+    for (const hidden of [secret, 'client-secret-plain', 'refresh-token-plain', 'access-token-plain', 'client-cipher']) {
+      expect(document.body.innerHTML).not.toContain(hidden);
+    }
   });
 });
 

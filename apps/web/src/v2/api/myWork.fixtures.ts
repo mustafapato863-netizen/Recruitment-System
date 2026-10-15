@@ -2,7 +2,7 @@
  * Dev-only fixtures in the #9 @829983a shape (NOW 19 Oct 2026 09:00 Cairo, Mariam).
  * Mirrors #9's buckets: actions[], interview room/interviewers, candidate+stage, target dept/site/owner. No pay fields.
  */
-import type { MyWorkDay, MyWorkResponse, MyWorkTarget } from './myWork';
+import type { JoiningSoon, MyWorkDay, MyWorkResponse, MyWorkTarget, UpcomingInterview } from './myWork';
 
 export type FixtureVariant = 'mariam' | 'empty' | 'targets-only' | 'multi-target' | 'stale-worker';
 
@@ -12,7 +12,16 @@ export function myWorkFixture(opts: { variant?: FixtureVariant; day?: MyWorkDay 
   const hris: MyWorkTarget = { title: 'HRIS Developer', filled: 1, target: 3, label: '1 of 3', dueDate: '2026-10-25', vacancyId: 'j1', vacancyCode: 'VAC-1',
     department: 'Information Technology', site: 'Cairo HQ', owner: { id: 'u-mariam', name: 'Mariam Adel' } };
   const base = { timezone: 'Africa/Cairo', today: '2026-10-19', day, date: day === 'tomorrow' ? '2026-10-20' : '2026-10-19', generatedAt: '2026-10-19T06:00:00.000Z', reminderWorkerHealthy: variant !== 'stale-worker' };
-  const none = { counts: { overdue: 0, today: 0, waitingOnOthers: 0 }, overdue: [], dueToday: [], waitingOnOthers: [] };
+  const upcomingInterviews: UpcomingInterview[] = [
+    { id: 'iv2', title: 'Nourhan Sami · HRIS Developer', candidateName: 'Nourhan Sami', jobTitle: 'HRIS Developer', startAt: '2026-10-19T08:30:00.000Z', endAt: '2026-10-19T09:00:00.000Z', room: { name: 'Room 2A', url: 'https://rooms.sgh.test/2a' }, interviewers: [{ id: 'u-mariam', name: 'Mariam Adel' }], access: 'file', applicationId: 'a2', held: false, status: 'scheduled', action: { key: 'open-interview', label: 'Manage interview', disabled: false } },
+    { id: 'iv-held', title: 'Youssef Hamdy · Data Analyst', candidateName: 'Youssef Hamdy', jobTitle: 'Data Analyst', startAt: '2026-10-20T10:30:00.000Z', endAt: '2026-10-20T11:15:00.000Z', room: { name: null, url: null }, interviewers: [{ id: 'u-hana', name: 'Dr. Hana Saleh' }], access: 'file', applicationId: 'a6', held: true, status: 'scheduled', action: { key: 'open-interview', label: 'Manage interview', disabled: false } },
+    { id: 'iv-assigned', title: 'Rana Adel · BI Data Analyst', candidateName: 'Rana Adel', jobTitle: 'BI Data Analyst', startAt: '2026-10-21T06:00:00.000Z', endAt: '2026-10-21T07:00:00.000Z', room: { name: null, url: null }, interviewers: [{ id: 'u-mariam', name: 'Mariam Adel' }], access: 'evaluation', held: false, status: 'assigned', action: { key: 'open-interview', label: 'Open evaluation', disabled: false } },
+  ];
+  const joiningSoon: JoiningSoon[] = [
+    { id: 'hc1', applicationId: 'a3', candidateName: 'Lina Hassan', jobTitle: 'HRIS Developer', intendedDate: '2026-11-01', checksComplete: 2, checksRequired: 2, readiness: 'approval_pending', detail: 'Final approval pending', joined: false, held: false },
+    { id: 'hc2', applicationId: 'a8', candidateName: 'Mona Said', jobTitle: 'Staff Nurse — ICU', intendedDate: '2026-11-04', checksComplete: 2, checksRequired: 3, readiness: 'licence_pending', detail: 'Licence review assigned', joined: false, held: true },
+  ];
+  const none = { counts: { overdue: 0, today: 0, waitingOnOthers: 0 }, overdue: [], dueToday: [], waitingOnOthers: [], upcomingInterviews: [] as UpcomingInterview[], joiningSoon: [] as JoiningSoon[] };
   if (variant === 'empty') return { ...base, ...none, targets: [], empty: true, emptyMessage: 'No open work assigned to you.' };
   if (variant === 'targets-only') return { ...base, ...none, targets: [hris], empty: true, emptyMessage: 'No open work assigned to you.' };
   const targets = variant === 'multi-target'
@@ -59,5 +68,5 @@ export function myWorkFixture(opts: { variant?: FixtureVariant; day?: MyWorkDay 
           applicationId: 'a2', candidate: { id: 'c2', name: 'Nourhan Sami' }, stage: 'Screening',
           actions: [{ key: 'open-interview', label: 'Open interview', disabled: false }, { key: 'submit-scorecard', label: 'Submit scorecard', disabled: true, reason: 'Interview has not ended' }] },
       ];
-  return { ...base, counts: { overdue: overdue.length, today: dueToday.length, waitingOnOthers: waitingOnOthers.length }, overdue, dueToday, waitingOnOthers, targets, empty: false, emptyMessage: null };
+  return { ...base, counts: { overdue: overdue.length, today: dueToday.length, waitingOnOthers: waitingOnOthers.length }, overdue, dueToday, waitingOnOthers, targets, upcomingInterviews, joiningSoon, empty: false, emptyMessage: null };
 }

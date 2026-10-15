@@ -33,15 +33,22 @@ afterEach(() => document.documentElement.removeAttribute('data-ui'));
 
 describe('B2-23: the Manager decides on the same file', () => {
   it('file is read-only for the Manager: no Reject / owner actions / notes form; shows scorecards and salary', async () => {
-    renderFile();
+    renderFile(`/applications/a1?returnTo=${encodeURIComponent('/candidates?stage=Interview')}`);
     expect(await screen.findByRole('heading', { level: 2 })).toHaveTextContent('Ahmed Embaby');
     expect(screen.queryByRole('button', { name: 'Reject' })).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Team work/ })).toHaveAttribute('href', '/my-work');
+    const team = screen.getAllByRole('link', { name: /Team work/ });
+    expect(team.length).toBeGreaterThan(0);
+    for (const link of team) expect(link).toHaveAttribute('href', '/my-work');
+    expect(screen.queryByRole('link', { name: 'Back to Candidates' })).not.toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Scorecards and fit' })).toHaveTextContent('1 submitted · average 4 / 5');
     const salary = screen.getByRole('region', { name: 'Salary' });
     expect(salary).toHaveTextContent('35,000 EGP');
     expect(salary).toHaveTextContent('42,000 EGP');
     expect(screen.getByRole('button', { name: 'Review offer' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Add a note')).not.toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole('tab', { name: 'Activity' }));
+    expect(screen.queryByLabelText('Add a note')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reject' })).not.toBeInTheDocument();
   });
   it('without OFFER_PAY_VIEW there is no salary on the file', async () => {
     auth.perms = ['APPLICATION_VIEW'];
@@ -51,7 +58,7 @@ describe('B2-23: the Manager decides on the same file', () => {
     expect(document.body.textContent).not.toMatch(/42,000|35,000/);
   });
   it('?decide opens the decision drawer over the file; currency defaults to the band (AED), band range shown', async () => {
-    renderFile('/applications/a1?decide=o1');
+    renderFile('/applications/a1?decide=o1&tab=activity');
     const d = await screen.findByRole('dialog', { name: 'Offer for Ahmed Embaby' });
     expect(await within(d).findByLabelText(/^Monthly basic pay \(AED\)/)).toBeInTheDocument();
     const band = within(d).getByRole('region', { name: 'Pay band' });

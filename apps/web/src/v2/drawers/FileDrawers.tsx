@@ -11,7 +11,7 @@ import { StatusChip } from '../../components/v2/StatusChip';
 import { UserPicker, interviewersAdapter, type UserOption } from '../../components/v2/UserPicker';
 import {
   RECOMMENDATIONS, addNote, candidateName, createHiringCase, createOfferDraft, createOfferRevision,
-  gateState, isoDate, logScreening, moveStage, offerTemplates, recordActualJoining, rejectionReasons, reviseScorecard, scheduleInterview, sendOffer, setJoiningCheck, setOfferStatus, submitHiringCase, submitOffer, submitScorecard, updateInterview,
+  gateState, isoDate, loadScreeningDraft, logScreening, moveStage, offerTemplates, recordActualJoining, rejectionReasons, reviseScorecard, saveScreeningDraft, scheduleInterview, sendOffer, setJoiningCheck, setOfferStatus, submitHiringCase, submitOffer, submitScorecard, updateInterview,
   type ApplicationFile, type FileStage, type InterviewItem, type OfferTemplate, type OfferTerms, type Recommendation, type ScorecardItem, type SendChannel, type SendOfferResult,
   needsReasonNote, OTHER_NOTE_MIN,
 } from '../api/applicationFile';
@@ -87,39 +87,117 @@ async function advanceTo(app: ApplicationFile['workspace']['application'], targe
 }
 
 /* ── E14 Screen ─────────────────────────────────────────────────────────── */
+const SCREEN_METHODS = ['Phone', 'Video', 'In person'] as const;
+const SCREEN_NEXT_STEPS = ['Move to interview', 'Keep in screening', 'Do not proceed'] as const;
+
 export function ScreenDrawer({ file, onClose, onDone }: DrawerProps) {
   const app = file.workspace.application;
   const [outcome, setOutcome] = useState<'Passed' | 'Failed' | 'On Hold'>('Passed');
   const [notes, setNotes] = useState('');
   const [notice, setNotice] = useState('');
+  const [method, setMethod] = useState<string>('Phone');
+  const [evidenceSource, setEvidenceSource] = useState('');
+  const [nextStep, setNextStep] = useState('');
   const [move, setMove] = useState(true);
-  const [fieldErr, setFieldErr] = useState<string | undefined>();
-  const s = useSubmit(onDone, ['notes', 'noticePeriodDays', 'outcome']);
+  const [errs, setErrs] = useState<Record<string, string>>({});
+  const [draftBusy, setDraftBusy] = useState(false);
+  const [draftSaved, setDraftSaved] = useState(false);
+  const s = useSubmit(onDone, ['notes', 'noticePeriodDays', 'outcome', 'method', 'evidenceSource', 'nextStep']);
   const canMove = ['Applied', 'Screening'].includes(app.stage);
+  useEffect(() => {
+    let cancelled = false;
+    const applicationId = app.id;
+    setOutcome('Passed');
+    setNotes('');
+    setNotice('');
+    setMethod('Phone');
+    setEvidenceSource('');
+    setNextStep('');
+    setMove(true);
+    setDraftSaved(false);
+    void loadScreeningDraft(applicationId).then((draft) => {
+      if (cancelled || !draft) return;
+      if (draft.applicationId && draft.applicationId !== applicationId) return;
+      setOutcome(draft.outcome);
+      setNotes(draft.notes ?? '');
+      setNotice(draft.noticePeriodDays == null ? '' : String(draft.noticePeriodDays));
+      setMethod(draft.method?.trim() ? draft.method.trim() : 'Phone');
+      setEvidenceSource(draft.evidenceSource ?? '');
+      setNextStep(draft.nextStep ?? '');
+      setMove(draft.moveToInterview);
+    }).catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [app.id]);
+  const saveDraft = () => {
+    setDraftBusy(true);
+    setDraftSaved(false);
+    s.setError(null);
+    void (async () => {
+      try {
+        await saveScreeningDraft(app.id, {
+          outcome,
+          notes: notes.trim() || null,
+          noticePeriodDays: notice.trim() === '' ? null : Number(notice),
+          method: method.trim() || null,
+          evidenceSource: evidenceSource.trim() || null,
+          nextStep: nextStep.trim() || null,
+          moveToInterview: move,
+        });
+        setDraftSaved(true);
+      } catch (e) {
+        s.setError(errorText(e));
+      } finally {
+        setDraftBusy(false);
+      }
+    })();
+  };
   const submit = (e?: FormEvent) => {
     e?.preventDefault();
-    if (!notes.trim()) { setFieldErr('Write the screen note. Interview needs a saved screen note.'); return; }
-    setFieldErr(undefined);
+    const next: Record<string, string> = {};
+    if (!method.trim()) next.method = 'Choose how you screened.';
+    if (!evidenceSource.trim()) next.evidenceSource = 'Write the evidence source.';
+    if (!nextStep.trim()) next.nextStep = 'Choose the next step.';
+    if (!notes.trim()) next.notes = 'Write the screen note. Interview needs a saved screen note.';
+    setErrs(next);
+    if (Object.keys(next).length) return;
     void s.run(async () => {
-      await logScreening({ applicationId: app.id, outcome, notes: notes.trim(), ...(notice ? { noticePeriodDays: Number(notice) } : {}) });
+      await logScreening({
+        applicationId: app.id,
+        outcome,
+        notes: notes.trim(),
+        method: method.trim(),
+        evidenceSource: evidenceSource.trim(),
+        nextStep: nextStep.trim(),
+        ...(notice ? { noticePeriodDays: Number(notice) } : {}),
+      });
+      // Next step is stored text. Only this checkbox moves a passed screen.
       if (move && canMove && outcome === 'Passed') await advanceTo(app, 'Interview');
     });
   };
   return (
     <DrawerV2 open onClose={onClose} kicker="Screen" title={`Log screen — ${candidateName(app)}`} subtitle={`${app.positionTitle ?? ''} · ${app.stage}`}
       confirmClose={() => !notes.trim() || window.confirm('Discard the screen note?')}
-      primaryAction={<ButtonV2 onClick={() => submit()} loading={s.busy}>{move && canMove && outcome === 'Passed' ? 'Save and move to Interview' : 'Save screen'}</ButtonV2>}
+      primaryAction={<ButtonV2 onClick={() => submit()} loading={s.busy} disabled={draftBusy}>{move && canMove && outcome === 'Passed' ? 'Save and move to Interview' : 'Save screen'}</ButtonV2>}
       secondaryAction={<ButtonV2 kind="secondary" onClick={onClose}>Cancel</ButtonV2>}>
       <form className="rf2-drawer-form" onSubmit={submit} noValidate>
-        <SelectV2 label="Outcome" value={outcome} onChange={(e) => setOutcome(e.target.value as typeof outcome)}>
+        <SelectV2 label="Outcome" value={outcome} onChange={(e) => setOutcome(e.target.value as typeof outcome)} error={s.at('outcome')}>
           <option value="Passed">Pass</option><option value="On Hold">On hold</option><option value="Failed">Fail</option>
         </SelectV2>
-        <TextareaV2 label="Screen note" required value={notes} onChange={(e) => setNotes(e.target.value)} error={fieldErr ?? s.at('notes')}
+        <SelectV2 label="Method" required value={method} onChange={(e) => setMethod(e.target.value)} error={errs.method ?? s.at('method')}>
+          {SCREEN_METHODS.map((item) => <option key={item} value={item}>{item}</option>)}
+        </SelectV2>
+        <InputV2 label="Evidence source" required placeholder="Screening call" maxLength={500} value={evidenceSource} onChange={(e) => setEvidenceSource(e.target.value)} error={errs.evidenceSource ?? s.at('evidenceSource')} />
+        <SelectV2 label="Next step" required placeholder="Choose next step" value={nextStep} onChange={(e) => setNextStep(e.target.value)} error={errs.nextStep ?? s.at('nextStep')}>
+          {SCREEN_NEXT_STEPS.map((item) => <option key={item} value={item}>{item}</option>)}
+        </SelectV2>
+        <TextareaV2 label="Screen note" required value={notes} onChange={(e) => setNotes(e.target.value)} error={errs.notes ?? s.at('notes')}
           hint="What you checked and what you found, with evidence. Required to move to Interview." rows={6} />
         <InputV2 label="Notice period (days)" type="number" min={0} max={3650} inputMode="numeric" value={notice} onChange={(e) => setNotice(e.target.value)} error={s.at('noticePeriodDays')} />
         {canMove && outcome === 'Passed' ? (
           <label className="rf2-check"><input type="checkbox" checked={move} onChange={(e) => setMove(e.target.checked)} /> Move to Interview after saving</label>
         ) : null}
+        <ButtonV2 kind="secondary" onClick={saveDraft} loading={draftBusy} disabled={s.busy}>Save draft</ButtonV2>
+        {draftSaved ? <Note>Draft saved. It stays private to you on this application.</Note> : null}
         <Note>Pay is not recorded here.</Note>
         <FormError text={s.error} />
       </form>

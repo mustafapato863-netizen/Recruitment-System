@@ -26,6 +26,18 @@ const user = (permissions = ALL, codes = ['RECRUITER']): UserProfile => ({
   roles: codes.map((code) => ({ id: code, code, name: code })), permissions, lastLoginAt: null,
 });
 
+function visibleNavLabels(seat: Seat, profile: UserProfile): string[] {
+  const administrator = profile.roles.some((role) => role.code === 'ADMINISTRATOR');
+  const interviewer = profile.roles.some((role) => role.code === 'INTERVIEWER') || profile.permissions.includes('INTERVIEW_PARTICIPATE');
+  const interviewerOnly = interviewer && !profile.permissions.includes('APPLICATION_VIEW');
+  const recruiterOnly = profile.roles.length > 0 && profile.roles.every((role) => role.code === 'RECRUITER');
+  const daily = permittedNavItems(seat, profile.permissions, administrator, recruiterOnly, interviewer);
+  const shown = interviewerOnly ? daily.filter((item) => item.key === 'my-work' || item.key === 'my-interviews') : daily;
+  const classic = permittedClassicItems(profile.permissions, administrator, interviewerOnly);
+  const dailyPaths = new Set(shown.map((item) => item.to));
+  return [...shown, ...classic.filter((item) => !dailyPaths.has(item.to))].map((item) => item.label);
+}
+
 function renderShell(seat: Seat, u = user(), path = '/my-work', onSignOut = vi.fn()) {
   document.documentElement.setAttribute('data-ui', 'v2');
   return render(
@@ -53,48 +65,56 @@ describe('nav per seat', () => {
     ['employee', ['My Work', 'Open jobs', 'Candidates']],
     ['manager', ['Team work', 'Requisitions', 'Team result']],
     ['admin', ['Users', 'Roles', 'Pipeline template', 'Master data', 'Templates', 'Reports', 'Audit', 'Integrations']],
-  ] as const)('%s shows only daily destinations in the main menu', (seat, labels) => {
-    renderShell(seat, user(ALL, [seat === 'manager' ? 'HIRING_MANAGER' : seat === 'admin' ? 'ADMINISTRATOR' : 'RECRUITER']));
+  ] as const)('%s lists daily destinations and then each permitted classic page', (seat, labels) => {
+    const profile = user(ALL, [seat === 'manager' ? 'HIRING_MANAGER' : seat === 'admin' ? 'ADMINISTRATOR' : 'RECRUITER']);
+    renderShell(seat, profile);
     const nav = screen.getByRole('navigation', { name: SEAT_NAV[seat].heading });
-    expect(within(nav).getAllByRole('link').map((a) => a.textContent)).toEqual(labels);
+    const names = within(nav).getAllByRole('link').map((a) => a.textContent);
+    expect(names.slice(0, labels.length)).toEqual([...labels]);
+    expect(names).toEqual(visibleNavLabels(seat, profile));
+    expect(screen.queryByRole('button', { name: 'Other work' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Retained work' })).not.toBeInTheDocument();
   });
 
-  it('hides unavailable items and lists permitted classic work outside the daily menu', () => {
+  it('hides unavailable items and lists permitted classic pages in the same nav', () => {
     renderShell('employee', user(['VACANCY_VIEW']));
     const nav = screen.getByRole('navigation', { name: SEAT_NAV.employee.heading });
-    expect(within(nav).getAllByRole('link').map((a) => a.textContent)).toEqual(['My Work', 'Open jobs']);
-    expect(within(nav).queryByRole('link', { name: 'All interviews' })).not.toBeInTheDocument();
+    expect(within(nav).getAllByRole('link').map((a) => a.textContent)).toEqual(['My Work', 'Open jobs', 'All interviews', 'Interview calendar', 'Job exports']);
+    expect(within(nav).getByRole('link', { name: 'All interviews' })).toHaveAttribute('href', '/interviews');
+    expect(within(nav).getByRole('link', { name: 'Interview calendar' })).toHaveAttribute('href', '/interviews/calendar');
+    expect(within(nav).getByRole('link', { name: 'Job exports' })).toHaveAttribute('href', '/classic/vacancies');
     expect(screen.queryByRole('button', { name: 'More (classic)' })).not.toBeInTheDocument();
-    const retained = screen.getByRole('navigation', { name: 'Retained work' });
-    expect(within(retained).getAllByRole('link').map((a) => a.getAttribute('href'))).toEqual(['/interviews', '/interviews/calendar', '/classic/vacancies']);
+    expect(screen.queryByRole('button', { name: 'Other work' })).not.toBeInTheDocument();
     expect(screen.queryByText(/locked/i)).not.toBeInTheDocument();
   });
 
-  it('retained classic links are keyboard links and the More menu is absent', async () => {
+  it('a classic nav link opens that page and titles it', async () => {
     const u = userEvent.setup();
     renderShell('employee', user(['APPLICATION_VIEW']));
     expect(screen.queryByRole('button', { name: 'More (classic)' })).not.toBeInTheDocument();
     expect(screen.queryByRole('searchbox', { name: 'Find a tool' })).not.toBeInTheDocument();
-    const retained = screen.getByRole('navigation', { name: 'Retained work' });
-    const hiring = within(retained).getByRole('link', { name: 'Hiring cases' });
+    const nav = screen.getByRole('navigation', { name: SEAT_NAV.employee.heading });
+    const hiring = within(nav).getByRole('link', { name: 'Hiring cases' });
+    expect(hiring).toHaveAttribute('href', '/hires');
     hiring.focus();
     await u.keyboard('{Enter}');
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Hiring cases');
+    expect(hiring).toHaveAttribute('aria-current', 'page');
   });
 
-  it('keeps admin destinations in the menu and classic pages reachable without a More menu', async () => {
+  it('keeps admin destinations and classic pages in one menu', async () => {
     renderShell('admin', user([], ['ADMINISTRATOR']), '/hires');
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Hiring cases');
     const nav = screen.getByRole('navigation', { name: SEAT_NAV.admin.heading });
     expect(within(nav).getByRole('link', { name: 'Roles' })).toHaveAttribute('href', '/roles');
     expect(within(nav).getByRole('link', { name: 'Templates' })).toHaveAttribute('href', '/email-templates');
+    expect(within(nav).getByRole('link', { name: 'Hiring cases' })).toHaveAttribute('href', '/hires');
+    expect(within(nav).getByRole('link', { name: 'Joinings' })).toHaveAttribute('href', '/joinings');
+    expect(within(nav).getByRole('link', { name: 'Licences' })).toHaveAttribute('href', '/licenses');
+    expect(within(nav).getByRole('link', { name: 'Talent pools' })).toHaveAttribute('href', '/sourcing-match');
     expect(screen.queryByRole('button', { name: 'More (classic)' })).not.toBeInTheDocument();
-    const retained = screen.getByRole('navigation', { name: 'Retained work' });
-    expect(within(retained).queryByRole('link', { name: 'Roles' })).not.toBeInTheDocument();
-    expect(within(retained).queryByRole('link', { name: 'Templates' })).not.toBeInTheDocument();
-    expect(within(retained).getByRole('link', { name: 'Hiring cases' })).toHaveAttribute('href', '/hires');
-    expect(within(retained).getByRole('link', { name: 'Joinings' })).toHaveAttribute('href', '/joinings');
-    expect(await runAxe(retained)).toEqual([]);
+    expect(screen.queryByRole('button', { name: 'Other work' })).not.toBeInTheDocument();
+    expect(await runAxe(nav)).toEqual([]);
   });
 
   it('an old classic URL still titles the authorized page', () => {
@@ -102,17 +122,21 @@ describe('nav per seat', () => {
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Joinings');
     expect(screen.queryByRole('button', { name: 'More (classic)' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Joinings' })).toHaveAttribute('href', '/joinings');
+    expect(screen.getByRole('link', { name: 'Joinings' })).toHaveAttribute('aria-current', 'page');
   });
 
   it.each([
-    ['LICENSE_SPECIALIST', 'LICENSE_CHECK', 'Licences', '/licenses'],
-    ['FINAL_HIRING_APPROVER', 'FINAL_HIRING_APPROVAL', 'Final approvals', '/hires/approvals/inbox'],
-  ])('pins the essential queue for %s without unrelated tools', (role, permission, label, path) => {
-    renderShell('employee', user([permission], [role]), path);
+    ['LICENSE_SPECIALIST', ['LICENSE_CHECK', 'VACANCY_VIEW', 'CANDIDATE_VIEW'], 'Licences', '/licenses'],
+    ['FINAL_HIRING_APPROVER', ['FINAL_HIRING_APPROVAL', 'VACANCY_VIEW', 'CANDIDATE_VIEW'], 'Final approvals', '/hires/approvals/inbox'],
+  ])('pins %s to that home and hides Open jobs and Other work', (role, permissions, label, path) => {
+    renderShell('employee', user(permissions, [role]), path);
     const nav = screen.getByRole('navigation', { name: SEAT_NAV.employee.heading });
-    expect(within(nav).getAllByRole('link')).toHaveLength(1);
-    expect(within(nav).getByRole('link', { name: label })).toHaveAttribute('aria-current', 'page');
-    expect(screen.queryByRole('button', { name: 'More (classic)' })).not.toBeInTheDocument();
+    expect(within(nav).getAllByRole('link').map((link) => link.textContent)).toEqual([label]);
+    expect(within(nav).getByRole('link', { name: label })).toHaveAttribute('href', path);
+    expect(screen.queryByRole('link', { name: 'Open jobs' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Candidates' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'My Work' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Other work' })).not.toBeInTheDocument();
   });
 
   it('interviewer-only users never see jobs or hiring tools that redirect away from their work', () => {
@@ -124,12 +148,11 @@ describe('nav per seat', () => {
 
   it('does not offer an admin tool when its route requires a stronger permission', () => {
     renderShell('admin', user(['APPLICATION_VIEW'], ['CUSTOM_ADMIN']), '/reports');
+    const nav = screen.getByRole('navigation', { name: SEAT_NAV.admin.heading });
     expect(screen.queryByRole('button', { name: 'More (classic)' })).not.toBeInTheDocument();
-    const retained = screen.getByRole('navigation', { name: 'Retained work' });
-    expect(within(retained).queryByRole('link', { name: 'Templates' })).not.toBeInTheDocument();
-    expect(within(retained).queryByRole('link', { name: 'Roles' })).not.toBeInTheDocument();
-    expect(within(retained).getByRole('link', { name: 'Hiring cases' })).toHaveAttribute('href', '/hires');
-    expect(screen.queryByRole('link', { name: 'Roles' })).not.toBeInTheDocument();
+    expect(within(nav).getByRole('link', { name: 'Templates' })).toHaveAttribute('href', '/email-templates');
+    expect(within(nav).queryByRole('link', { name: 'Roles' })).not.toBeInTheDocument();
+    expect(within(nav).getByRole('link', { name: 'Hiring cases' })).toHaveAttribute('href', '/hires');
   });
 
   it('manager has no Approvals item (v2: not a destination)', () => {
@@ -155,6 +178,21 @@ describe('nav per seat', () => {
 
   it('administrators pass every gate like PermissionGate', () => {
     expect(permittedNavItems('admin', [], true)).toHaveLength(8);
+  });
+
+  it('classic nav links keep native tab order and open the chosen page', async () => {
+    const u = userEvent.setup();
+    renderShell('employee', user(['VACANCY_VIEW']));
+    const nav = screen.getByRole('navigation', { name: SEAT_NAV.employee.heading });
+    const links = within(nav).getAllByRole('link');
+    expect(links.map((a) => a.getAttribute('href'))).toEqual(['/my-work', '/vacancies', '/interviews', '/interviews/calendar', '/classic/vacancies']);
+    links[2].focus();
+    await u.tab();
+    expect(links[3]).toHaveFocus();
+    await u.click(within(nav).getByRole('link', { name: 'All interviews' }));
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('All interviews');
+    expect(within(nav).getByRole('link', { name: 'All interviews' })).toHaveAttribute('aria-current', 'page');
+    expect(screen.queryByRole('button', { name: 'Other work' })).not.toBeInTheDocument();
   });
 
   it('marks the active item and titles the header', () => {

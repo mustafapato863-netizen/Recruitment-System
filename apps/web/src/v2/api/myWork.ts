@@ -70,6 +70,44 @@ export interface WorkItem {
   stage?: string;
 }
 
+/** File = caller owns the recruiting file. Evaluation = assigned interviewer only. */
+export type InterviewAccess = 'file' | 'evaluation';
+export type InterviewScheduleStatus = 'scheduled' | 'scorecard_overdue' | 'assigned';
+
+export interface UpcomingInterview {
+  id: string;
+  title: string;
+  candidateName: string | null;
+  jobTitle: string | null;
+  startAt: string;
+  endAt: string | null;
+  room: { name: string | null; url: string | null };
+  interviewers: MyWorkPerson[];
+  access: InterviewAccess;
+  /** Set only for file access. Never present for a narrow assigned interviewer. */
+  applicationId?: string;
+  held: boolean;
+  status: InterviewScheduleStatus;
+  action: MyWorkAction;
+}
+
+export type JoiningReadiness = 'approval_pending' | 'licence_pending' | 'checks_pending' | 'ready' | 'postponed' | 'blocked' | 'review';
+
+export interface JoiningSoon {
+  id: string;
+  applicationId: string;
+  candidateName: string;
+  jobTitle: string;
+  intendedDate: string | null;
+  checksComplete: number;
+  checksRequired: number;
+  readiness: JoiningReadiness;
+  detail: string;
+  /** Always false. A scheduled start or an approval is not a completed hire. */
+  joined: false;
+  held: boolean;
+}
+
 /** = MyWorkTarget. */
 export interface MyWorkTarget extends TargetChip {
   vacancyId: string;
@@ -92,6 +130,10 @@ export interface MyWorkResponse {
   dueToday: WorkItem[];
   waitingOnOthers: WorkItem[];
   targets: MyWorkTarget[];
+  /** Absent when the payload omits the array. Empty means the caller has none. */
+  upcomingInterviews?: UpcomingInterview[];
+  /** Absent when the payload omits the array. Empty means the caller has none. */
+  joiningSoon?: JoiningSoon[];
   /** True when there are no work items; targets alone do not count. */
   empty: boolean;
   emptyMessage: string | null;
@@ -127,6 +169,58 @@ function normItem(raw: WorkItem): WorkItem {
   return { ...raw, actions: arr<MyWorkAction>(raw.actions), entity: { type: String(raw.entity?.type ?? '').toLowerCase() as MyWorkEntityType, id: raw.entity?.id ?? '' } };
 }
 
+function hasOwn(raw: object, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(raw, key);
+}
+
+const UPCOMING_ACTIONS = new Set(['open-interview', 'submit-scorecard']);
+const UPCOMING_STATUSES = new Set<InterviewScheduleStatus>(['scheduled', 'scorecard_overdue', 'assigned']);
+
+/** Unknown relationship or action data is dropped. An enabled action is never invented. */
+function normUpcoming(raw: UpcomingInterview): UpcomingInterview | null {
+  if (!raw || typeof raw !== 'object') return null;
+  if (raw.access !== 'file' && raw.access !== 'evaluation') return null;
+  const action = raw.action;
+  if (!action || typeof action.key !== 'string' || typeof action.label !== 'string' || action.label.trim() === '') return null;
+  if (typeof action.disabled !== 'boolean' || !UPCOMING_ACTIONS.has(action.key)) return null;
+  if (!UPCOMING_STATUSES.has(raw.status)) return null;
+  const row: UpcomingInterview = {
+    id: raw.id,
+    title: raw.title,
+    candidateName: raw.candidateName ?? null,
+    jobTitle: raw.jobTitle ?? null,
+    startAt: raw.startAt,
+    endAt: raw.endAt ?? null,
+    room: { name: raw.room?.name ?? null, url: raw.room?.url ?? null },
+    interviewers: arr<MyWorkPerson>(raw.interviewers),
+    access: raw.access,
+    held: raw.held === true,
+    status: raw.status,
+    action,
+  };
+  if (raw.access === 'file' && raw.applicationId) row.applicationId = raw.applicationId;
+  return row;
+}
+
+const JOINING_READINESS = new Set<JoiningReadiness>(['approval_pending', 'licence_pending', 'checks_pending', 'ready', 'postponed', 'blocked', 'review']);
+
+function normJoining(raw: JoiningSoon): JoiningSoon {
+  const known = JOINING_READINESS.has(raw?.readiness);
+  return {
+    id: raw.id,
+    applicationId: raw.applicationId,
+    candidateName: raw.candidateName,
+    jobTitle: raw.jobTitle,
+    intendedDate: raw.intendedDate ?? null,
+    checksComplete: raw.checksComplete ?? 0,
+    checksRequired: raw.checksRequired ?? 0,
+    readiness: known ? raw.readiness : 'review',
+    detail: known ? raw.detail : 'Review readiness',
+    joined: false,
+    held: raw.held === true,
+  };
+}
+
 /** Defensive normalisation so a partial payload can't crash the page. Invents nothing. */
 export function normalizeMyWork(raw: Partial<MyWorkResponse> | null | undefined, asked: MyWorkDay = 'today'): MyWorkResponse {
   const overdue = arr<WorkItem>(raw?.overdue).map(normItem);
@@ -135,6 +229,11 @@ export function normalizeMyWork(raw: Partial<MyWorkResponse> | null | undefined,
   const targets = arr<MyWorkTarget>(raw?.targets).map((t) => ({ ...t, department: t.department ?? null, site: t.site ?? null, owner: t.owner ?? null }));
   const empty = typeof raw?.empty === 'boolean' ? raw.empty : overdue.length + dueToday.length + waitingOnOthers.length === 0;
   const day: MyWorkDay = raw?.day === 'tomorrow' || raw?.day === 'today' ? raw.day : asked;
+  const source = raw ?? {};
+  const upcomingInterviews = hasOwn(source, 'upcomingInterviews')
+    ? arr<UpcomingInterview>(raw?.upcomingInterviews).map(normUpcoming).filter((row): row is UpcomingInterview => row !== null)
+    : undefined;
+  const joiningSoon = hasOwn(source, 'joiningSoon') ? arr<JoiningSoon>(raw?.joiningSoon).map(normJoining) : undefined;
   return {
     timezone: raw?.timezone || 'Africa/Cairo',
     today: raw?.today ?? '',
@@ -143,6 +242,8 @@ export function normalizeMyWork(raw: Partial<MyWorkResponse> | null | undefined,
     generatedAt: raw?.generatedAt ?? '',
     counts: raw?.counts ?? { overdue: overdue.length, today: dueToday.length, waitingOnOthers: waitingOnOthers.length },
     overdue, dueToday, waitingOnOthers, targets, empty,
+    ...(upcomingInterviews !== undefined ? { upcomingInterviews } : {}),
+    ...(joiningSoon !== undefined ? { joiningSoon } : {}),
     emptyMessage: raw?.emptyMessage ?? null,
     // Missing flag = unknown health: treat as not healthy (hide SLA) rather than invent it.
     reminderWorkerHealthy: raw?.reminderWorkerHealthy === true,
@@ -225,9 +326,69 @@ export function fileActionHref(item: WorkItem, action: MyWorkAction, ctx: HrefCo
 
 /** A role code (OFFER_APPROVER) is not a person; only real names are shown (B2-13). */
 const isRoleCode = (name: string) => /^[A-Z][A-Z0-9_]+$/.test(name.trim());
-/** The person a waiting item waits on, when the API names one. */
-export function waitingOnName(item: WorkItem): string | null {
-  const people = [item.approver, ...(item.approvers ?? [])].filter((p): p is MyWorkPerson => Boolean(p?.name && !isRoleCode(p.name)));
-  const names = Array.from(new Set(people.map((p) => p.name)));
+function personNames(people: Array<MyWorkPerson | null | undefined>): string | null {
+  const real = people.filter((person): person is MyWorkPerson => Boolean(person?.name && !isRoleCode(person.name)));
+  const names = Array.from(new Set(real.map((person) => person.name)));
   return names.length ? names.join(', ') : null;
+}
+/**
+ * The person a waiting item actually waits on.
+ * Approver names are used only when waitingOn is approver (or unset, for older rows).
+ * A sent offer (candidate) does not borrow an approver name.
+ */
+export function waitingOnName(item: WorkItem): string | null {
+  if (item.waitingOn === 'candidate') return personNames(item.candidate ? [{ id: item.candidate.id, name: item.candidate.name }] : []);
+  if (item.waitingOn === 'interviewer') return personNames([item.interviewer, ...(item.interviewers ?? [])]);
+  if (item.waitingOn === 'approver' || item.waitingOn == null) return personNames([item.approver, ...(item.approvers ?? [])]);
+  return null;
+}
+
+/** Sentence for the real blocker. Does not call every waiting offer an approval. */
+export function waitingBlockerPhrase(item: WorkItem): string {
+  const name = waitingOnName(item);
+  if (item.waitingOn === 'candidate') return name ? `Waiting on ${name}` : 'Waiting on the candidate';
+  if (item.waitingOn === 'interviewer') return name ? `Waiting on ${name}` : 'Waiting on the interviewer';
+  if (item.waitingOn === 'approver') return name ? `Waiting on ${name}'s approval` : 'Waiting on approval';
+  return name ? `Waiting on ${name}` : item.reason;
+}
+
+/** Waiting-offer title. The approver form stays "waiting on {name}" when a person is known. */
+export function waitingOfferTitle(item: WorkItem): string {
+  if (item.type !== 'offer' || !item.candidate) return item.title;
+  const who = item.candidate.name;
+  if (item.waitingOn === 'candidate') return `${who} — offer waiting on the candidate`;
+  if (item.waitingOn === 'interviewer') {
+    const on = waitingOnName(item);
+    return `${who} — offer waiting on ${on ?? 'the interviewer'}`;
+  }
+  if (item.waitingOn === 'approver') {
+    const on = waitingOnName(item);
+    return `${who} — offer waiting ${on ? `on ${on}` : 'on approval'}`;
+  }
+  return item.title;
+}
+
+/** Schedule or scorecard drawer for a file the caller can open. Assigned rows stay on the interview page and never carry an application id. */
+export function upcomingInterviewHref(row: UpcomingInterview, ctx: HrefContext = {}): string | null {
+  if (!row.action || row.action.disabled) return null;
+  const interviewId = encodeURIComponent(row.id);
+  const scorecard = row.action.key === 'submit-scorecard' || row.action.label === 'View scorecard';
+  if (row.access === 'evaluation') {
+    return `/my-interviews?interview=${interviewId}${scorecard ? '&scorecard=1' : ''}`;
+  }
+  if (row.access !== 'file' || !row.applicationId || ctx.canOpenFile !== true) return null;
+  const applicationId = encodeURIComponent(row.applicationId);
+  if (scorecard) return `/applications/${applicationId}?drawer=scorecard&interview=${interviewId}`;
+  if (row.action.label === 'Manage interview') return `/applications/${applicationId}?drawer=schedule&interview=${interviewId}`;
+  return null;
+}
+
+/** Checklist stays on the file. Readiness and a caller without file access use the hiring case. */
+export function joiningCaseHref(row: JoiningSoon, canOpenFile: boolean): { href: string; label: string } {
+  const caseHref = `/hires/${encodeURIComponent(row.id)}`;
+  if (row.readiness === 'licence_pending' || row.readiness === 'ready' || row.readiness === 'blocked' || row.readiness === 'review') {
+    return { href: caseHref, label: 'View readiness' };
+  }
+  if (canOpenFile) return { href: `/applications/${encodeURIComponent(row.applicationId)}?drawer=prehire`, label: 'Open checklist' };
+  return { href: caseHref, label: 'Open checklist' };
 }

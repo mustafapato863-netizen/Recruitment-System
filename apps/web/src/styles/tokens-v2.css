@@ -9,10 +9,20 @@
   --rf2-action-hover: var(--color-action-strong);
   --rf2-action-pressed: var(--color-action-strong);
   --rf2-canvas: var(--color-canvas);
-  --rf2-card: var(--color-surface);
+  --rf2-canvas-glow: linear-gradient(139deg, #dfeaf2 0%, #e8f5f4 71%);
+  --rf2-glow-cyan: radial-gradient(circle, rgba(0, 163, 224, 0.38) 0%, rgba(0, 163, 224, 0) 68%);
+  --rf2-glow-emerald: radial-gradient(circle, rgba(16, 185, 129, 0.3) 0%, rgba(16, 185, 129, 0) 68%);
+  --rf2-glass-nav: rgba(255, 255, 255, 0.56);
+  --rf2-glass-card: rgba(255, 255, 255, 0.86);
+  --rf2-glass-line: rgba(255, 255, 255, 0.88);
+  --rf2-well: rgba(230, 239, 245, 0.8);
+  --rf2-neo-raise: -4px -4px 14px rgba(255, 255, 255, 0.92), 6px 8px 18px rgba(145, 171, 189, 0.32);
+  --rf2-neo-raise-sm: -3px -3px 7px rgba(255, 255, 255, 0.96), 3px 4px 8px rgba(145, 170, 191, 0.38);
+  --rf2-neo-inset: inset -3px -3px 5px rgba(255, 255, 255, 0.94), inset 3px 3px 6px rgba(161, 183, 199, 0.38);
+  --rf2-card: var(--rf2-glass-card);
   --rf2-border: var(--color-border-strong);
   --rf2-divider: var(--color-border);
-  --rf2-nav: var(--color-surface);
+  --rf2-nav: var(--rf2-glass-nav);
   --rf2-nav-text: var(--color-ink-700);
   --rf2-on-nav: var(--color-ink-950);
   --rf2-nav-hover: var(--color-action-soft);
@@ -56,16 +66,26 @@
   --rf2-space-6: 48px;
   --rf2-space-8: 64px;
 
-  --rf2-radius-control: 6px;
-  --rf2-radius-card: 8px;
-  --rf2-radius-drawer: 12px;
+  --rf2-radius-control: 12px;
+  --rf2-radius-card: 20px;
+  --rf2-radius-drawer: 20px;
   --rf2-radius-pill: 9999px;
 
-  /* shadows: overlays only (menus, dialogs, drawers). Cards are flat + 1px border. */
+  /* Glass neo: raised panels and inset wells, from the approved desktop frames. */
   --rf2-shadow-none: none;
-  --rf2-shadow-menu: var(--shadow-md);
-  --rf2-shadow-overlay: var(--shadow-float);
+  --rf2-shadow-menu: var(--rf2-neo-raise);
+  --rf2-shadow-overlay: var(--rf2-neo-raise);
   --rf2-scrim: var(--color-overlay);
+  /* Drawer only. Glass cards stay translucent; this panel must hide the page. */
+  --rf2-text-drawer-title: 16px;
+  --rf2-leading-drawer-title: 22px;
+  --rf2-weight-drawer-title: 600;
+  --rf2-drawer-width: 560px;
+  --rf2-drawer-surface: #ffffff;
+  --rf2-drawer-field: #e6eff5;
+  --rf2-drawer-line: var(--rf2-glass-line);
+  --rf2-drawer-shadow: var(--rf2-neo-raise);
+  --rf2-drawer-scrim: rgba(11, 19, 43, 0.4);
 
   --rf2-focus-width: 2px;
   --rf2-focus-offset: 2px;
@@ -87,6 +107,33 @@
   --motion-fast: var(--rf2-motion-fast);
   --motion-standard: var(--rf2-motion-standard);
   --motion-slow: var(--rf2-motion-standard);
+}
+
+html[data-ui='v2'][data-theme='dark'],
+html.dark[data-ui='v2'] {
+  --rf2-canvas-glow: linear-gradient(160deg, #0b1020 0%, #0e1c2e 55%, #10241f 100%);
+  --rf2-glow-cyan: radial-gradient(circle, rgba(56, 189, 248, 0.22) 0%, rgba(56, 189, 248, 0) 68%);
+  --rf2-glow-emerald: radial-gradient(circle, rgba(16, 185, 129, 0.18) 0%, rgba(16, 185, 129, 0) 68%);
+  --rf2-glass-nav: rgba(15, 26, 46, 0.72);
+  --rf2-glass-card: rgba(17, 32, 54, 0.88);
+  --rf2-glass-line: rgba(255, 255, 255, 0.14);
+  --rf2-well: rgba(8, 16, 32, 0.55);
+  --rf2-neo-raise: -4px -4px 14px rgba(255, 255, 255, 0.04), 8px 10px 22px rgba(0, 0, 0, 0.45);
+  --rf2-neo-raise-sm: -2px -2px 6px rgba(255, 255, 255, 0.05), 3px 4px 10px rgba(0, 0, 0, 0.4);
+  --rf2-neo-inset: inset -2px -2px 4px rgba(255, 255, 255, 0.06), inset 3px 3px 6px rgba(0, 0, 0, 0.45);
+  --rf2-drawer-surface: #15283f;
+  --rf2-drawer-field: #11263b;
+  --rf2-drawer-line: rgba(155, 205, 230, 0.22);
+  --rf2-drawer-shadow: -4px -4px 14px rgba(100, 131, 163, 0.12), 6px 8px 18px rgba(2, 8, 20, 0.46);
+  --rf2-drawer-scrim: rgba(11, 19, 43, 0.58);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  [data-ui='v2'] {
+    --rf2-glass-nav: var(--color-surface);
+    --rf2-glass-card: var(--color-surface);
+    --rf2-well: var(--color-surface-muted);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

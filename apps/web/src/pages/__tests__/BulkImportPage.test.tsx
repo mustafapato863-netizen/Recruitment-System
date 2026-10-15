@@ -139,6 +139,7 @@ describe('BulkImportPage', () => {
       );
 
       expect(screen.getByText('Bulk Import Center')).toBeInTheDocument();
+      expect(document.getElementById('import-history')).not.toBeNull();
       expect(screen.getByRole('tab', { name: /candidates/i })).toBeInTheDocument();
       expect(screen.getByRole('tab', { name: /vacancy requests/i })).toBeInTheDocument();
       expect(screen.getByRole('tab', { name: /branches/i })).toBeInTheDocument();

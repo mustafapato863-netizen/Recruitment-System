@@ -85,6 +85,10 @@ describe('E09 Job pipeline', () => {
     const u = userEvent.setup();
     const { container } = renderAt('/vacancies/v1');
     expect(await screen.findByRole('heading', { level: 1, name: /HRIS Developer/ })).toBeInTheDocument();
+    const board = screen.getByRole('region', { name: 'HRIS Developer pipeline' });
+    expect(board).toHaveAttribute('tabindex', '0');
+    expect(board).toHaveAccessibleDescription(/five horizontally scrollable stages/);
+    expect(screen.getByText('Scroll horizontally to explore all five stages')).toBeInTheDocument();
     const cols = ['Applied', 'Screening', 'Interview', 'Offer', 'Pre-hire'].map((n) => screen.getByRole('region', { name: new RegExp(`^${n}`) }));
     expect(cols.map((c) => within(c).queryAllByRole('article').length)).toEqual([3, 3, 3, 1, 0]);
     expect(within(cols[4]).getByText('No files in Pre-hire')).toBeInTheDocument();

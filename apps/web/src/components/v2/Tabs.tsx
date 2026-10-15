@@ -3,6 +3,8 @@ import { useRef, type KeyboardEvent, type ReactNode } from 'react';
 export interface TabV2Item {
   key: string;
   label: string;
+  /** Decorative. The accessible name stays the label. */
+  icon?: ReactNode;
   disabled?: boolean;
   controls?: string;
 }
@@ -58,6 +60,7 @@ export function TabsV2({ items, activeKey, onChange, ariaLabel }: TabsV2Props) {
             onClick={() => { if (!item.disabled) onChange(item.key); }}
             onKeyDown={(event) => onKeyDown(event, index)}
           >
+            {item.icon ? <span className="rf2-tab__icon" aria-hidden="true">{item.icon}</span> : null}
             {item.label}
           </button>
         );

@@ -33,15 +33,17 @@ describe('A02 Users', () => {
     const table = await screen.findByRole('table', { name: 'Users' });
     const rows = within(table).getAllByRole('row').slice(1);
     expect(rows).toHaveLength(9);
-    expect(rows[0]).toHaveTextContent(/Ahmed Fathy.*Employee · Recruiter-clinical.*Employee.*Hala Mostafa.*Active/);
+    expect(rows[0]).toHaveTextContent(/Ahmed Fathy.*ahmed\.fathy@recruitflow\.app.*Employee.*Hala Mostafa.*—.*Active/);
     expect(rows[8]).toHaveTextContent(/Old Leaver.*Inactive/);
-    expect(within(table).getByRole('row', { name: /Omar Khalil/ })).toHaveTextContent(/Admin · HR Systems.*Admin—Active/);
+    expect(within(table).getByRole('row', { name: /Omar Khalil/ })).toHaveTextContent(/omar\.khalil@recruitflow\.app.*Admin.*Active/);
     expect(within(table).getByRole('row', { name: /Rasha Nabil/ })).toHaveTextContent('Invited');
     await u.selectOptions(screen.getByLabelText('Role filter'), 'manager');
     expect(within(table).getAllByRole('row')).toHaveLength(3);
     await u.selectOptions(screen.getByLabelText('Role filter'), 'all');
     await u.type(screen.getByLabelText('Search users'), 'noura');
     expect(within(table).getAllByRole('row')).toHaveLength(2);
+    expect(within(table).queryByRole('columnheader', { name: 'Email' })).toBeNull();
+    expect(within(table).getByRole('columnheader', { name: 'Site' })).toBeInTheDocument();
     expect(screen.getByText(/Interviewer is not a role/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /delete/i })).toBeNull();
     expect(await axeViolations(container)).toEqual([]);
@@ -150,6 +152,23 @@ describe('A02 Users', () => {
     await u.click(within(d).getByRole('button', { name: 'Send invitation' }));
     await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/users/invitations', { displayName: 'Sara Ali', email: 'sara@recruitflow.app', roleIds: ['r-rec'] }));
   });
+  it('shows the branch name, otherwise the site, otherwise an em dash', async () => {
+    serve({
+      '/users?directory=1&page=1&pageSize=100': [
+        { ...fx.users[6], branchName: 'SGH Cairo', site: 'Ignored' },
+        { ...fx.users[0], branchName: '', site: 'Jeddah' },
+        { ...fx.users[8], branchName: null, site: null },
+      ],
+    });
+    renderAt();
+    const table = await screen.findByRole('table', { name: 'Users' });
+    const site = (name: RegExp) => within(within(table).getByRole('row', { name })).getAllByRole('cell')[2];
+    expect(site(/Ahmed Fathy/)).toHaveTextContent('SGH Cairo');
+    expect(site(/Ahmed Fathy/)).not.toHaveTextContent('Ignored');
+    expect(within(table).getByRole('row', { name: /Ahmed Fathy/ })).toHaveTextContent('ahmed.fathy@recruitflow.app');
+    expect(site(/Omar Khalil/)).toHaveTextContent('Jeddah');
+    expect(site(/Old Leaver/)).toHaveTextContent('—');
+  });
 });
 
 describe('#23 400 fields inline (admin forms)', () => {
@@ -212,8 +231,15 @@ describe('A04 Roles', () => {
     const hm = within(interviewer).getByLabelText('Hiring Manager');
     expect(hm).toBeChecked();
     await u.click(within(interviewer).getByLabelText('Recruiter'));
+    expect(api.postApi).not.toHaveBeenCalled();
+    const grant = await screen.findByRole('dialog', { name: /6 users have the Recruiter role\. Change this capability\?/ });
+    await u.click(within(grant).getByRole('button', { name: 'Confirm' }));
     await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/roles/r-rec/permissions/p-int'));
-    await u.click(hm);
+    const hmAfter = within(screen.getByRole('list', { name: 'Interviewer by role' })).getByLabelText('Hiring Manager');
+    await u.click(hmAfter);
+    expect(api.deleteApi).not.toHaveBeenCalled();
+    const revoke = await screen.findByRole('dialog', { name: /2 users have the Hiring Manager role\. Change this capability\?/ });
+    await u.click(within(revoke).getByRole('button', { name: 'Confirm' }));
     await waitFor(() => expect(api.deleteApi).toHaveBeenCalledWith('/roles/r-hm/permissions/p-int'));
     expect(screen.getByRole('list', { name: 'Licence check by role' })).toBeInTheDocument();
     const map = screen.getByRole('table', { name: 'Production roles' });
@@ -226,6 +252,35 @@ describe('A04 Roles', () => {
     expect(await screen.findByText(/INTERVIEW_PARTICIPATE is not on this server yet\. Today this is the “Interviewer” role/)).toBeInTheDocument();
     expect(screen.getByText(/LICENSE_CHECK is not on this server yet\. Today this is the “License Specialist” role/)).toBeInTheDocument();
     expect(screen.queryByRole('checkbox')).toBeNull();
+  });
+  it('cancel closes the confirm and leaves the capability unchanged', async () => {
+    const u = userEvent.setup();
+    serve({ '/users?directory=1&page=1&pageSize=100': [fx.users[1]] });
+    renderAt('/roles');
+    const interviewer = await screen.findByRole('list', { name: 'Interviewer by role' });
+    const hm = within(interviewer).getByLabelText('Hiring Manager');
+    expect(hm).toBeChecked();
+    await u.click(hm);
+    const dialog = await screen.findByRole('dialog', { name: '1 user has the Hiring Manager role. Change this capability?' });
+    expect(api.postApi).not.toHaveBeenCalled();
+    expect(api.deleteApi).not.toHaveBeenCalled();
+    await u.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(api.postApi).not.toHaveBeenCalled();
+    expect(api.deleteApi).not.toHaveBeenCalled();
+    expect(within(interviewer).getByLabelText('Hiring Manager')).toBeChecked();
+  });
+  it('shows the directory error and does not change the capability', async () => {
+    const u = userEvent.setup();
+    serve({ '/users?directory=1&page=1&pageSize=100': new ApiError(500, 'Directory down') });
+    renderAt('/roles');
+    const interviewer = await screen.findByRole('list', { name: 'Interviewer by role' });
+    await u.click(within(interviewer).getByLabelText('Recruiter'));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Directory down');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(api.postApi).not.toHaveBeenCalled();
+    expect(api.deleteApi).not.toHaveBeenCalled();
+    expect(within(interviewer).getByLabelText('Recruiter')).not.toBeChecked();
   });
 });
 

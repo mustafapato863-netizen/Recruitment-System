@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { isForbiddenError } from '../utils/vacancyAccess';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { getApi, patchApi, postApi } from '../api/client';
@@ -14,7 +14,7 @@ import { Icon, type IconName } from '../components/Icon';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ListSkeleton } from '../components/ui/Skeleton';
 import { ActivityFeed, type FeedEntry } from '../components/candidate/ActivityFeed';
-import { JoiningChecklist, type ComplianceItem } from '../components/candidate/JoiningChecklist';
+import { JoiningChecklist, isExpiredRequiredLicence, joiningBlockerSentences, requirementCleared, type ComplianceItem } from '../components/candidate/JoiningChecklist';
 import { useAuth } from '../auth/AuthContext';
 import { useSetBreadcrumbTitle } from '../context/BreadcrumbContext';
 import './PageEnhancementsV2.css';
@@ -37,6 +37,11 @@ interface ConfirmState {
   action: (comment?: string) => Promise<void>;
 }
 
+type HiringCaseDetail = HiringCase & {
+  approvedHeadcount?: number | null;
+  joinedHeadcount?: number | null;
+};
+
 const initialConfirmState: ConfirmState = {
   isOpen: false,
   title: '',
@@ -51,7 +56,9 @@ export function HiringCasePage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const licenseOnly = isLicenseCheckOnly(user?.permissions, (user?.roles ?? []).some((r) => r.code === 'ADMINISTRATOR'));
-  const [hiringCase, setHiringCase] = useState<HiringCase | null>(null);
+  const [hiringCase, setHiringCase] = useState<HiringCaseDetail | null>(null);
+  const hiringCaseRef = useRef(hiringCase);
+  hiringCaseRef.current = hiringCase;
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [busyAction, setBusyAction] = useState<string | null>(null);
@@ -68,16 +75,16 @@ export function HiringCasePage() {
 
   const canConfirmJoining = Boolean(user?.permissions?.includes('RECORD_ACTUAL_JOINING'));
 
-  const loadCase = async () => {
+  const loadCase = useCallback(async () => {
     if (!id) return;
-    if (hiringCase) {
+    if (hiringCaseRef.current) {
       setIsRefreshing(true);
     } else {
       setLoading(true);
     }
     setError(null);
     try {
-      setHiringCase(await getApi<HiringCase>(`/hiring/${id}`));
+      setHiringCase(await getApi<HiringCaseDetail>(`/hiring/${id}`));
     } catch (reason: unknown) {
       setError(getErrorMessage(reason));
       setIsForbiddenError(isForbiddenError(reason));
@@ -85,11 +92,11 @@ export function HiringCasePage() {
       setLoading(false);
       setIsRefreshing(false);
     }
-  };
+  }, [id]);
 
   useEffect(() => {
     void loadCase();
-  }, [id]);
+  }, [loadCase]);
 
   const submitForApproval = async () => {
     if (!id) return;
@@ -234,19 +241,30 @@ export function HiringCasePage() {
   // LICENSE_CHECK-only users see (and verify) licence items only.
   const requirements = (hiringCase.complianceRequirements ?? []).filter((r) => !licenseOnly || r.type === 'License');
   const requiredCount = requirements.filter((item) => item.isRequired).length;
-  const verifiedCount = requirements.filter((item) => item.isRequired && ['Verified', 'Not Required'].includes(item.status)).length;
+  const verifiedCount = requirements.filter((item) => item.isRequired && requirementCleared(item)).length;
   const isReady = requiredCount > 0 ? requiredCount === verifiedCount : true;
+  const joiningBlockers = joiningBlockerSentences({
+    approvedHeadcount: hiringCase.approvedHeadcount,
+    joinedHeadcount: hiringCase.joinedHeadcount,
+    requirements,
+  });
 
-  const compliancePercentage = requirements.length === 0 ? 100 : Math.round((requirements.filter(r => ['Verified', 'Not Required'].includes(r.status)).length / requirements.length) * 100);
+  const compliancePercentage = requirements.length === 0 ? 100 : Math.round((requirements.filter((item) => requirementCleared(item)).length / requirements.length) * 100);
   const complianceTone = compliancePercentage >= 80 ? 'success' : compliancePercentage >= 50 ? 'warning' : 'danger';
 
-  const checklistItems: ComplianceItem[] = requirements.map((item) => ({
-    id: item.id,
-    label: item.name,
-    isCompleted: item.status === 'Verified' || item.status === 'Not Required',
-    notes: item.status === 'Not Required' ? 'Exempt / Not Required' : null,
-    completedAt: item.verifiedAt ?? null,
-  }));
+  const checklistItems: ComplianceItem[] = requirements.map((item) => {
+    const expired = isExpiredRequiredLicence(item);
+    return {
+      id: item.id,
+      label: item.name,
+      type: item.type,
+      isRequired: item.isRequired,
+      expiryDate: item.expiryDate ?? null,
+      isCompleted: !expired && (item.status === 'Verified' || item.status === 'Not Required'),
+      notes: item.status === 'Not Required' ? 'Exempt / Not Required' : null,
+      completedAt: expired ? null : (item.verifiedAt ?? null),
+    };
+  });
 
   const approvalTimelineItems: Array<{ id: string; title: string; timestamp: string; actor?: string; tone: 'action' | 'success' | 'warning' | 'danger' | 'neutral'; description?: string }> = hiringCase.approvals && hiringCase.approvals.length > 0
     ? hiringCase.approvals.map((app) => ({
@@ -298,7 +316,8 @@ export function HiringCasePage() {
     if (hiringCase.complianceRequirements && hiringCase.complianceRequirements.length > 0) {
       for (const req of hiringCase.complianceRequirements) {
         if (req.verifiedAt || req.status === 'Verified' || req.status === 'Not Required') {
-          const statusText = req.status === 'Not Required' ? 'marked as Exempt / Not Required' : 'verified';
+          const expired = isExpiredRequiredLicence(req);
+          const statusText = expired ? 'expired' : req.status === 'Not Required' ? 'marked as Exempt / Not Required' : 'verified';
           if (req.verifiedBy) {
             entries.push({
               type: 'stage_change',
@@ -390,7 +409,7 @@ export function HiringCasePage() {
               </Button>
             </>
           )}
-          {!licenseOnly && canConfirmJoining && hiringCase.status === 'Awaiting Joining' && (
+          {!licenseOnly && canConfirmJoining && hiringCase.status === 'Awaiting Joining' && joiningBlockers.length === 0 && (
             <Button
               variant="success"
               size="sm"
@@ -449,7 +468,9 @@ export function HiringCasePage() {
               : hiringCase.status === 'Pending Final Approval'
                 ? 'This hire is waiting for final approval.'
                 : hiringCase.status === 'Awaiting Joining'
-                  ? isReady
+                  ? joiningBlockers.length > 0
+                    ? joiningBlockers.join(' ')
+                    : isReady
                     ? canConfirmJoining
                       ? 'Record actual joining. This counts the hire once.'
                       : 'Waiting for the responsible recruiter to record joining.'
@@ -470,7 +491,7 @@ export function HiringCasePage() {
               Approve
             </Button>
           )}
-          {canConfirmJoining && hiringCase.status === 'Awaiting Joining' && (
+          {canConfirmJoining && hiringCase.status === 'Awaiting Joining' && joiningBlockers.length === 0 && (
             <Button variant="primary" size="sm" loading={busyAction === 'joining'} disabled={!isReady} onClick={triggerConfirmJoining}>
               Record actual joining
             </Button>
@@ -501,7 +522,9 @@ export function HiringCasePage() {
               candidateName={hiringCase.candidateName ?? 'Candidate'}
               items={checklistItems}
               hiringCaseStatus={hiringCase.status}
-              canConfirmJoining={!licenseOnly && canConfirmJoining}
+              canConfirmJoining={!licenseOnly && canConfirmJoining && joiningBlockers.length === 0}
+              approvedHeadcount={hiringCase.approvedHeadcount}
+              joinedHeadcount={hiringCase.joinedHeadcount}
               onItemToggle={handleItemToggle}
               onConfirmJoining={handleConfirmJoining}
               onItemNoteSave={handleItemNoteSave}

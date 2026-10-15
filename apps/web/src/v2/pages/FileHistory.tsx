@@ -24,10 +24,11 @@ type Attempt = {
   at: string;
   retryOf: string | null;
 };
+type MessageTemplate = { id: string; name: string; subject?: string; body?: string };
 type MessagePayload = {
   followUpDate: string | null;
   destination: string;
-  templates: Array<{ id: string; name: string }>;
+  templates: MessageTemplate[];
   attempts: Attempt[];
 };
 
@@ -199,6 +200,7 @@ export function MessagesCard({ applicationId, followUpDate }: { applicationId: s
   };
 
   const follow = payload?.followUpDate ?? followUpDate;
+  const chosen = payload?.templates.find((template) => template.id === templateId);
   return (
     <section className="rf2-card" aria-labelledby="msgs-h">
       <h3 id="msgs-h" className="rf2-card__title">Messages</h3>
@@ -213,6 +215,12 @@ export function MessagesCard({ applicationId, followUpDate }: { applicationId: s
               <option value="">Choose a template</option>
               {payload.templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
             </SelectV2>
+            {chosen ? (
+              <div aria-label="Filled message">
+                <p>{chosen.subject ?? ''}</p>
+                <p>{chosen.body ?? ''}</p>
+              </div>
+            ) : null}
             <ButtonV2 kind="secondary" size="sm" type="submit" loading={busy === 'send'} disabled={!templateId}>Send to local test</ButtonV2>
           </form>
           {payload.attempts.length === 0 ? <p className="rf2-file__muted">No attempts yet.</p> : (

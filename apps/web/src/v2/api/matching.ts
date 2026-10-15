@@ -7,8 +7,9 @@
  * - GET /vacancies/:id/compare?candidateIds=a,b[,c,d] → CompareResponse; 400 COMPARE_COUNT, 404 COMPARE_CANDIDATE_NOT_FOUND.
  * - Both: 403 NOT_JOB_OWNER for non-owners.
  * Add to this job: POST /applications {vacancyId, candidateId, source}.
- * Candidates: GET /applications (my files, B1-scoped) and GET /candidates (bank). Every row is reduced to an
- * allowlist: no email/phone/salary/notice/national id is kept. Error codes are dropped by the API filter
+ * Candidates: GET /applications (my files, B1-scoped, paged) and GET /candidates (bank). The active list does
+ * not send `search` (that parameter also matches email). Every row is reduced to an allowlist: no email/phone/
+ * salary/notice/national id is kept. Error codes are dropped by the API filter
  * (CONFLICT/VALIDATION_ERROR/FORBIDDEN/NOT_FOUND + message), so `matchErrorFromError` maps messages back.
  */
 import { domainError } from './gates';
@@ -55,22 +56,48 @@ export const sourceLabel = (t: string) => SOURCE_LABEL[t] ?? t.toLowerCase().rep
 
 // ── E23 Candidates ──────────────────────────────────────────────────────────
 export interface ActiveRow { applicationId: string; candidateId: string; name: string; title: string | null; experienceYears: number | null; vacancyId: string; job: string; stage: string; source: string | null; owner: string | null; next: string | null; nextAt: string | null }
+/** Caller-scoped pages of GET /applications. `truncated` is set only when 10 full pages are loaded and `total` is still larger. */
+export interface ActiveApplicationsResult { rows: ActiveRow[]; truncated: boolean; loaded: number; total: number | null }
 export interface BankRow { candidateId: string; code: string; name: string; title: string | null; location: string | null; experienceYears: number | null; status: string }
 
 type RawApp = { id: string; candidateId: string; vacancyId: string; stage: string; source?: string | null; positionTitle?: string; primaryRecruiterName?: string | null; lastActivityLabel?: string | null; nextFollowUpAt?: string | null; candidate?: { firstName?: string; lastName?: string; currentTitle?: string | null; experienceYears?: number | null } };
 type RawCand = { id: string; candidateCode: string; firstName: string; lastName: string; currentTitle?: string | null; location?: string | null; experienceYears?: number | null; status: string };
 const list = <T,>(r: T[] | { data: T[] } | null | undefined): T[] => (Array.isArray(r) ? r : r?.data ?? []);
-const OPEN = ['Applied', 'Screening', 'Interview', 'Offer', 'Pre-Hire'];
+/** Open files on the candidates list. Same bound as the bank loader: 10 pages of 100. */
+export const OPEN_APPLICATION_STAGES = ['Applied', 'Screening', 'Interview', 'Offer', 'Pre-Hire'] as const;
+const ACTIVE_PAGE_SIZE = 100;
+const ACTIVE_MAX_PAGES = 10;
 
-export async function fetchActiveApplications(): Promise<ActiveRow[]> {
-  const raw = list(await getApi<RawApp[] | { data: RawApp[] }>('/applications?pageSize=100&sortBy=updatedAt&sortDirection=desc'));
-  return raw.filter((a) => OPEN.includes(a.stage)).map((a) => ({
+function toActiveRow(a: RawApp): ActiveRow {
+  return {
     applicationId: a.id, candidateId: a.candidateId,
     name: `${a.candidate?.firstName ?? ''} ${a.candidate?.lastName ?? ''}`.trim() || 'Unnamed',
     title: a.candidate?.currentTitle ?? null, experienceYears: a.candidate?.experienceYears ?? null,
     vacancyId: a.vacancyId, job: a.positionTitle ?? '—', stage: a.stage, source: a.source ?? null,
     owner: a.primaryRecruiterName ?? null, next: a.lastActivityLabel ?? null, nextAt: a.nextFollowUpAt ?? null,
-  }));
+  };
+}
+
+/**
+ * Pages this caller's applications. Stage, job, source, and name/title/job search are applied by Candidates
+ * on the loaded window — `search` is not sent, because the server parameter also matches email.
+ * A thrown request is left thrown so the page can show an error instead of an empty list.
+ */
+export async function fetchActiveApplications(): Promise<ActiveApplicationsResult> {
+  const raw: RawApp[] = [];
+  let total: number | null = null;
+  let truncated = false;
+  for (let page = 1; page <= ACTIVE_MAX_PAGES; page++) {
+    const q = new URLSearchParams({ pageSize: String(ACTIVE_PAGE_SIZE), page: String(page), sortBy: 'updatedAt', sortDirection: 'desc' });
+    const r = await getApi<RawApp[] | { data: RawApp[]; total?: number }>(`/applications?${q}`);
+    const rows = list(r);
+    raw.push(...rows);
+    if (!Array.isArray(r) && typeof r?.total === 'number') total = r.total;
+    if (rows.length < ACTIVE_PAGE_SIZE || (total !== null && raw.length >= total)) break;
+    if (page === ACTIVE_MAX_PAGES && total !== null && raw.length < total) truncated = true;
+  }
+  const open = new Set<string>(OPEN_APPLICATION_STAGES);
+  return { rows: raw.filter((a) => open.has(a.stage)).map(toActiveRow), truncated, loaded: raw.length, total };
 }
 /** Bank = everyone Active in the org (CoS: all seats see the whole bank, never contact fields). Pages through up to 1000. */
 export async function fetchBank(search: string): Promise<BankRow[]> {

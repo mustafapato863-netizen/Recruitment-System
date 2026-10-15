@@ -148,7 +148,7 @@ describe('E23 Candidates', () => {
     expect(rows).toHaveLength(5);
     expect(rows[0]).toHaveTextContent(/Ahmed Embaby.*6 yrs · Laravel, HRIS.*HRIS Developer.*Interview.*LinkedIn.*Mariam Farag.*Scorecard missing/);
     expect(rows[3]).toHaveTextContent('Follow-up due 7 Oct 2026');
-    expect(within(rows[0]).getByRole('link', { name: 'Ahmed Embaby' })).toHaveAttribute('href', '/applications/a7');
+    expect(within(rows[0]).getByRole('link', { name: 'Ahmed Embaby' })).toHaveAttribute('href', '/applications/a7?returnTo=%2Fcandidates');
     expect(container.textContent).not.toMatch(NO_PAY);
     expect(container.textContent).not.toMatch(NO_PII);
     expect(await axeViolations(container)).toEqual([]);

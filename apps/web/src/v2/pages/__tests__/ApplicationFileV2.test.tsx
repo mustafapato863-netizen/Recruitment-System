@@ -1,6 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../../api/client';
 import { axeViolations } from '../../../components/v2/__tests__/axe';
@@ -16,7 +16,7 @@ import { cairoIso } from '../../drawers/FileDrawers';
 
 let responses: Record<string, unknown> = {};
 function serve(scenario: Scenario, extra: Record<string, unknown> = {}) {
-  responses = { ...fileResponses(scenario), '/users/interviewers': [{ id: 'u-karim', displayName: 'Karim Hassan', email: 'k@x', jobTitle: 'Hiring manager', roles: [] }], ...extra };
+  responses = { ...fileResponses(scenario), '/users/interviewers': [{ id: 'u-karim', displayName: 'Karim Hassan', email: 'k@x', jobTitle: 'Hiring manager', roles: [] }], '/screening/application/a1/draft': null, ...extra };
   api.getApi.mockImplementation(async (path: string) => {
     const p = path.split('?')[0];
     if (p in responses) { const v = responses[p]; if (v instanceof Error) throw v; return structuredClone(v); }
@@ -24,6 +24,7 @@ function serve(scenario: Scenario, extra: Record<string, unknown> = {}) {
   });
 }
 function Loc() { const l = useLocation(); return <output data-testid="loc" hidden>{l.pathname + l.search}</output>; }
+function HistoryBack() { const nav = useNavigate(); return <button type="button" onClick={() => nav(-1)}>History back</button>; }
 function renderFile(path = '/applications/a1') {
   document.documentElement.setAttribute('data-ui', 'v2');
   return render(<MemoryRouter initialEntries={[path]}><Routes><Route path="/applications/:id" element={<><ApplicationFileV2 /><Loc /></>} /></Routes></MemoryRouter>);
@@ -66,19 +67,39 @@ describe('pay safety', () => {
 });
 
 describe('E13 application file', () => {
-  it('renders header, stepper, gate, timeline, notes, details', async () => {
+  it('renders the hub header, next action, gate, evidence and documents', async () => {
+    const u = userEvent.setup();
     serve('interview');
     renderFile();
-    expect(await screen.findByRole('heading', { name: /Ahmed Embaby/, level: 2 })).toBeInTheDocument();
-    expect(screen.getByText('HRIS Developer · Offshore Cairo · Owner: Mariam Farag · Source: LinkedIn')).toBeInTheDocument();
-    const steps = within(screen.getByRole('list', { name: 'Stages' })).getAllByRole('listitem');
-    expect(steps.map((s) => s.dataset.state)).toEqual(['done', 'done', 'current', 'todo', 'todo', 'todo']);
-    expect(steps[2]).toHaveAttribute('aria-current', 'step');
+    expect(await screen.findByRole('heading', { name: 'Ahmed Embaby', level: 2 })).toBeInTheDocument();
+    expect(screen.getByText('HRIS Developer · Offshore Cairo · Owner: Mariam Farag')).toBeInTheDocument();
+    expect(screen.queryByRole('list', { name: 'Stages' })).not.toBeInTheDocument();
+    const stage = screen.getByText('Scorecard required').parentElement;
+    expect(stage).toHaveTextContent('Interview');
+    expect(stage).toHaveTextContent('Scorecard required');
+    expect(screen.getByRole('heading', { name: "Waiting on Karim Hassan's scorecard" })).toBeInTheDocument();
+    expect(screen.getByText('Karim Hassan · Interviewer')).toBeInTheDocument();
     expect(within(screen.getByRole('list', { name: 'Gate to Offer' })).getByText('Scorecard submitted').closest('li')).toHaveAttribute('data-ok', 'false');
-    expect(screen.getByText(/Technical interview: Ahmed Embaby — 6 Oct 2026, 10:00/)).toBeInTheDocument();
     expect(screen.getByText(/Fit note/)).toBeInTheDocument();
+    expect(screen.getByText('Screening notes · recorded by Mariam Farag')).toBeInTheDocument();
     expect(screen.getByText('ahmed.embaby@example.com')).toBeInTheDocument();
+    expect(screen.getByText('Source: LinkedIn')).toBeInTheDocument();
+    expect(screen.getByText('Notice: 30 days')).toBeInTheDocument();
     expect(screen.getByText('Follow-up date').parentElement).toHaveTextContent('12 Oct 2026');
+    expect(screen.getByRole('heading', { name: 'Latest activity' })).toBeInTheDocument();
+    expect(screen.getByText('Moved Screening → Interview')).toBeInTheDocument();
+    expect(screen.queryByText(/Technical interview: Ahmed Embaby/)).not.toBeInTheDocument();
+    const crumbs = screen.getByRole('navigation', { name: 'Breadcrumb' });
+    expect(within(crumbs).getByRole('link', { name: 'HRIS Developer' })).toHaveAttribute('href', '/vacancies/j1');
+    expect(within(crumbs).getByText('Ahmed Embaby')).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: 'HRIS Developer pipeline' })).toHaveAttribute('href', '/vacancies/j1');
+    await u.click(screen.getByRole('tab', { name: 'Activity' }));
+    const recorded = screen.getByRole('list', { name: 'Recorded activity' });
+    expect(recorded).not.toHaveTextContent('Technical interview: Ahmed Embaby — 6 Oct 2026, 10:00');
+    const interviews = screen.getByRole('list', { name: 'Interviews' });
+    expect(interviews).toHaveTextContent('Technical interview: Ahmed Embaby — 6 Oct 2026, 10:00');
+    expect(interviews).toHaveTextContent('Appointment on the file');
+    await u.click(screen.getByRole('tab', { name: 'Documents' }));
     const docs = screen.getByRole('region', { name: 'Documents' });
     expect(docs).toHaveTextContent('Ahmed_Embaby_CV.pdf');
     expect(docs).toHaveTextContent('CV · 1 Oct 2026 · by Mariam Farag');
@@ -158,9 +179,120 @@ describe('E13 application file', () => {
     const u = userEvent.setup();
     serve('applied');
     renderFile();
-    await u.type(await screen.findByLabelText('Add a note'), 'Called, interested.');
+    await screen.findByRole('heading', { name: 'Ahmed Embaby' });
+    await u.click(screen.getByRole('tab', { name: 'Activity' }));
+    await u.type(screen.getByLabelText('Add a note'), 'Called, interested.');
     await u.click(screen.getByRole('button', { name: 'Save note' }));
     expect(api.postApi).toHaveBeenCalledWith('/applications/a1/notes', { content: 'Called, interested.' });
+  });
+
+  it('keeps the selected tab through the drawer and a fresh open', async () => {
+    const u = userEvent.setup();
+    serve('interview');
+    const viewed = renderFile('/applications/a1?tab=activity');
+    expect(await screen.findByRole('tab', { name: 'Activity' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('region', { name: 'Timeline' })).toBeInTheDocument();
+    await u.click(screen.getByRole('button', { name: 'Open scorecard' }));
+    expect(screen.getByTestId('loc')).toHaveTextContent('tab=activity');
+    expect(screen.getByTestId('loc')).toHaveTextContent('drawer=scorecard');
+    await u.keyboard('{Escape}');
+    expect(screen.getByTestId('loc')).toHaveTextContent('tab=activity');
+    expect(screen.getByTestId('loc')).not.toHaveTextContent('drawer=');
+    viewed.unmount();
+    renderFile('/applications/a1?tab=documents');
+    expect(await screen.findByRole('tab', { name: 'Documents' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('region', { name: 'Documents' })).toBeInTheDocument();
+  });
+
+  it('accepts an internal candidates, my-work or job return and rejects anything else', async () => {
+    const u = userEvent.setup();
+    serve('interview');
+    const candidates = renderFile(`/applications/a1?returnTo=${encodeURIComponent('/candidates?stage=Interview&q=laravel')}`);
+    const back = await screen.findByRole('link', { name: 'Back to Candidates' });
+    expect(back).toHaveAttribute('href', '/candidates?stage=Interview&q=laravel');
+    expect(within(screen.getByRole('navigation', { name: 'Breadcrumb' })).getByRole('link', { name: 'Candidates' })).toHaveAttribute('href', '/candidates?stage=Interview&q=laravel');
+    await u.click(screen.getByRole('tab', { name: 'Activity' }));
+    expect(screen.getByTestId('loc')).toHaveTextContent('returnTo=');
+    expect(screen.getByTestId('loc')).toHaveTextContent('tab=activity');
+    candidates.unmount();
+
+    const myWork = renderFile(`/applications/a1?returnTo=${encodeURIComponent('/my-work?day=tomorrow&tab=joining')}`);
+    expect(await screen.findByRole('link', { name: 'Back to My Work' })).toHaveAttribute('href', '/my-work?day=tomorrow&tab=joining');
+    myWork.unmount();
+
+    const sameJob = renderFile(`/applications/a1?returnTo=${encodeURIComponent('/vacancies/j1?stage=Offer')}`);
+    expect(await screen.findByRole('link', { name: 'HRIS Developer pipeline' })).toHaveAttribute('href', '/vacancies/j1?stage=Offer');
+    sameJob.unmount();
+
+    const otherJob = renderFile(`/applications/a1?returnTo=${encodeURIComponent('/vacancies/other-job')}`);
+    expect(await screen.findByRole('link', { name: 'Job pipeline' })).toHaveAttribute('href', '/vacancies/other-job');
+    otherJob.unmount();
+
+    for (const raw of ['https://evil.example/candidates', '//evil.example/candidates', '/settings', '/candidates/extra', '/vacancies', '/vacancies/j1/edit', '/my-work/../settings']) {
+      const rejected = renderFile(`/applications/a1?returnTo=${encodeURIComponent(raw)}`);
+      expect(await screen.findByRole('link', { name: 'HRIS Developer pipeline' })).toHaveAttribute('href', '/vacancies/j1');
+      expect(screen.queryByRole('link', { name: 'Back to Candidates' })).not.toBeInTheDocument();
+      rejected.unmount();
+    }
+  });
+
+  it('keeps the hub tab when the reader comes back from the contextual link', async () => {
+    const u = userEvent.setup();
+    serve('interview');
+    render(
+      <MemoryRouter initialEntries={[`/applications/a1?tab=documents&returnTo=${encodeURIComponent('/candidates?q=hris')}`]}>
+        <Routes>
+          <Route path="/applications/:id" element={<><ApplicationFileV2 /><Loc /></>} />
+          <Route path="/candidates" element={<HistoryBack />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    expect(await screen.findByRole('tab', { name: 'Documents' })).toHaveAttribute('aria-selected', 'true');
+    await u.click(screen.getByRole('link', { name: 'Back to Candidates' }));
+    await u.click(screen.getByRole('button', { name: 'History back' }));
+    expect(await screen.findByRole('tab', { name: 'Documents' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByTestId('loc')).toHaveTextContent('tab=documents');
+    expect(screen.getByTestId('loc')).toHaveTextContent('returnTo=');
+  });
+
+  it('shows an empty evidence state instead of a CV summary', async () => {
+    serve('applied', { '/applications/a1/notes': [] });
+    renderFile();
+    expect(await screen.findByText('No screening note or fit evidence is recorded on this file yet.')).toBeInTheDocument();
+    expect(screen.queryByText(/CV summary/i)).not.toBeInTheDocument();
+  });
+
+  it('records an interview at its creation time and keeps the appointment separate', async () => {
+    const interviews = fileResponses('interview')['/interviews'] as Array<Record<string, unknown>>;
+    serve('interview', { '/interviews': [{ ...interviews[0], createdAt: '2026-10-04T09:00:00.000Z', status: 'Scheduled', scheduledStart: '2026-10-20T07:00:00.000Z' }] });
+    const recordedView = renderFile('/applications/a1?tab=activity');
+    const recorded = await screen.findByRole('list', { name: 'Recorded activity' });
+    const row = within(recorded).getByText(/Interview recorded/).closest('li');
+    expect(row?.querySelector('time')).toHaveAttribute('dateTime', '2026-10-04T09:00:00.000Z');
+    expect(recorded).toHaveTextContent('4 Oct 2026');
+    const commitments = screen.getByRole('list', { name: 'Interviews' });
+    expect(commitments).toHaveTextContent('Technical interview: Ahmed Embaby — 20 Oct 2026, 10:00');
+    expect(commitments.querySelector('time')).toHaveAttribute('dateTime', '2026-10-04T09:00:00.000Z');
+    recordedView.unmount();
+    serve('interview', { '/interviews': [{ ...interviews[0], status: 'Scheduled', scheduledStart: '2026-10-20T07:00:00.000Z' }] });
+    renderFile('/applications/a1?tab=activity');
+    const planned = await screen.findByRole('list', { name: 'Interviews' });
+    expect(planned).toHaveTextContent('Scheduled commitment');
+    expect(screen.getByRole('list', { name: 'Recorded activity' })).not.toHaveTextContent('Interview recorded');
+  });
+
+  it('does not treat a verified checklist as permission to join', async () => {
+    serve('prehire-done');
+    const verified = renderFile();
+    expect(await screen.findByRole('button', { name: 'Pre-hire checklist' })).toBeInTheDocument();
+    expect(screen.getByText(/They are not joining/)).toBeInTheDocument();
+    expect(screen.getByText(/Every check on this file is verified/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Record actual joining|Move to Joined/ })).not.toBeInTheDocument();
+    verified.unmount();
+    serve('prehire', { '/applications/a1/joining-checks': [] });
+    renderFile();
+    expect(await screen.findByText(/No required checks are on the file yet/)).toBeInTheDocument();
+    expect(screen.getByText(/They are not joining/)).toBeInTheDocument();
   });
 });
 
@@ -175,9 +307,14 @@ describe('E14 Screen', () => {
     expect(api.postApi).not.toHaveBeenCalled();
     await u.type(within(d).getByLabelText(/Screen note/), 'Pass. Laravel + HRIS.');
     await u.type(within(d).getByLabelText(/Notice period/), '30');
+    await u.type(within(d).getByLabelText(/Evidence source/), 'Screening call');
+    await u.selectOptions(within(d).getByLabelText(/^Next step/), 'Keep in screening');
     await u.click(within(d).getByRole('button', { name: 'Save and move to Interview' }));
     await waitFor(() => expect(api.patchApi).toHaveBeenCalledTimes(2));
-    expect(api.postApi).toHaveBeenCalledWith('/screening', { applicationId: 'a1', outcome: 'Passed', notes: 'Pass. Laravel + HRIS.', noticePeriodDays: 30 });
+    expect(api.postApi).toHaveBeenCalledWith('/screening', {
+      applicationId: 'a1', outcome: 'Passed', notes: 'Pass. Laravel + HRIS.', noticePeriodDays: 30,
+      method: 'Phone', evidenceSource: 'Screening call', nextStep: 'Keep in screening',
+    });
     expect(api.patchApi).toHaveBeenNthCalledWith(1, '/applications/a1/stage', { stage: 'Screening', expectedStage: 'Applied', expectedVersion: 7 });
     expect(api.patchApi).toHaveBeenNthCalledWith(2, '/applications/a1/stage', { stage: 'Interview', expectedStage: 'Screening', expectedVersion: 8 });
   });
@@ -188,8 +325,165 @@ describe('E14 Screen', () => {
     renderFile('/applications/a1?drawer=screen');
     const d = await screen.findByRole('dialog');
     await u.type(within(d).getByLabelText(/Screen note/), 'x');
+    await u.type(within(d).getByLabelText(/Evidence source/), 'Screening call');
+    await u.selectOptions(within(d).getByLabelText(/^Next step/), 'Move to interview');
     await u.click(within(d).getByRole('button', { name: 'Save and move to Interview' }));
     expect(await within(d).findByTestId('drawer-error')).toHaveTextContent('Interview needs a saved screen note. Missing: screen note. Log the screen with a note first.');
+  });
+
+  it('opens with method, evidence source, and next step', async () => {
+    serve('applied');
+    renderFile('/applications/a1?drawer=screen');
+    const d = await screen.findByRole('dialog', { name: /Log screen/ });
+    expect(within(d).getByLabelText(/^Method/)).toHaveValue('Phone');
+    expect(within(d).getByRole('option', { name: 'Video' })).toBeInTheDocument();
+    expect(within(d).getByRole('option', { name: 'In person' })).toBeInTheDocument();
+    expect(within(d).getByLabelText(/Evidence source/)).toHaveAttribute('placeholder', 'Screening call');
+    expect(within(d).getByRole('option', { name: 'Move to interview' })).toBeInTheDocument();
+    expect(within(d).getByRole('option', { name: 'Keep in screening' })).toBeInTheDocument();
+    expect(within(d).getByRole('option', { name: 'Do not proceed' })).toBeInTheDocument();
+    expect(within(d).getByLabelText(/Screen note/)).toBeRequired();
+  });
+
+  it('posts method, evidence source, and next step and does not post salary', async () => {
+    const u = userEvent.setup();
+    serve('applied');
+    renderFile('/applications/a1?drawer=screen');
+    const d = await screen.findByRole('dialog');
+    await u.type(within(d).getByLabelText(/Screen note/), 'Reached the candidate.');
+    await u.type(within(d).getByLabelText(/Evidence source/), 'Screening call');
+    await u.selectOptions(within(d).getByLabelText(/^Next step/), 'Keep in screening');
+    await u.click(within(d).getByRole('checkbox', { name: /Move to Interview after saving/ }));
+    await u.click(within(d).getByRole('button', { name: 'Save screen' }));
+    await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/screening', {
+      applicationId: 'a1',
+      outcome: 'Passed',
+      notes: 'Reached the candidate.',
+      method: 'Phone',
+      evidenceSource: 'Screening call',
+      nextStep: 'Keep in screening',
+    }));
+    const body = api.postApi.mock.calls.find(([p]) => p === '/screening')![1] as Record<string, unknown>;
+    expect(Object.keys(body).some((key) => /salary|amount|currency|package|grade/i.test(key))).toBe(false);
+    expect(api.patchApi).not.toHaveBeenCalled();
+  });
+
+  it('stores Move to interview as text when the move checkbox is off', async () => {
+    const u = userEvent.setup();
+    serve('applied');
+    renderFile('/applications/a1?drawer=screen');
+    const d = await screen.findByRole('dialog');
+    await u.click(within(d).getByRole('checkbox', { name: /Move to Interview after saving/ }));
+    await u.type(within(d).getByLabelText(/Screen note/), 'Pass. Laravel + HRIS.');
+    await u.type(within(d).getByLabelText(/Evidence source/), 'Screening call');
+    await u.selectOptions(within(d).getByLabelText(/^Next step/), 'Move to interview');
+    await u.click(within(d).getByRole('button', { name: 'Save screen' }));
+    await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/screening', expect.objectContaining({
+      applicationId: 'a1',
+      method: 'Phone',
+      evidenceSource: 'Screening call',
+      nextStep: 'Move to interview',
+    })));
+    expect(api.patchApi).not.toHaveBeenCalled();
+  });
+
+  it('stays on the drawer when the evidence source is missing', async () => {
+    const u = userEvent.setup();
+    serve('applied');
+    renderFile('/applications/a1?drawer=screen');
+    const d = await screen.findByRole('dialog');
+    await u.type(within(d).getByLabelText(/Screen note/), 'Pass. Laravel + HRIS.');
+    await u.selectOptions(within(d).getByLabelText(/^Next step/), 'Do not proceed');
+    await u.click(within(d).getByRole('button', { name: 'Save and move to Interview' }));
+    expect(within(d).getByText('Write the evidence source.')).toBeInTheDocument();
+    expect(api.postApi).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog', { name: /Log screen/ })).toBeInTheDocument();
+  });
+
+  it('shows saved method, evidence source, and next step on the activity row and omits a null field', async () => {
+    const base = (fileResponses('screened')['/screening/application/a1'] as Array<Record<string, unknown>>)[0];
+    const named = { ...base, id: 's-named', method: 'Video', evidenceSource: 'Panel notes', nextStep: 'Keep in screening', screenedAt: '2026-10-02T10:00:00.000Z' };
+    const unnamed: Record<string, unknown> = { ...base, id: 's-unnamed', method: 'Phone', evidenceSource: null, nextStep: null, screenedAt: '2026-10-02T12:00:00.000Z', notes: 'Short call.' };
+    delete unnamed.screenerName;
+    serve('screened', { '/screening/application/a1': [named, unnamed] });
+    renderFile('/applications/a1?tab=activity');
+    const recorded = await screen.findByRole('list', { name: 'Recorded activity' });
+    const namedRow = within(recorded).getByText(/Panel notes/).closest('li');
+    expect(namedRow).toHaveTextContent('Screening logged by Mariam Farag — Passed');
+    expect(namedRow).toHaveTextContent('Method: Video');
+    expect(namedRow).toHaveTextContent('Evidence source: Panel notes');
+    expect(namedRow).toHaveTextContent('Next step: Keep in screening');
+    const unnamedRow = within(recorded).getByText(/Short call/).closest('li');
+    expect(unnamedRow).toHaveTextContent('Screening logged — Passed');
+    expect(unnamedRow).toHaveTextContent('Method: Phone');
+    expect(unnamedRow).not.toHaveTextContent('Evidence source');
+    expect(unnamedRow).not.toHaveTextContent('Next step');
+    expect(unnamedRow).not.toHaveTextContent('by ');
+  });
+
+  it('saves a private draft without posting the screen or moving the stage, then restores it', async () => {
+    const u = userEvent.setup();
+    serve('applied');
+    api.putApi.mockImplementation(async (_path: string, body: Record<string, unknown>) => {
+      const saved = {
+        ...body,
+        id: 'draft-1',
+        applicationId: 'a1',
+        organizationId: 'o',
+        userId: 'u-mariam',
+        createdAt: '2026-10-15T12:00:00.000Z',
+        updatedAt: '2026-10-15T12:00:00.000Z',
+      };
+      responses['/screening/application/a1/draft'] = saved;
+      return saved;
+    });
+    renderFile('/applications/a1?drawer=screen');
+    const d = await screen.findByRole('dialog');
+    await u.type(within(d).getByLabelText(/Screen note/), 'Keep this call private.');
+    await u.type(within(d).getByLabelText(/Evidence source/), 'Screening call');
+    await u.selectOptions(within(d).getByLabelText(/^Next step/), 'Keep in screening');
+    await u.click(within(d).getByRole('button', { name: 'Save draft' }));
+    await waitFor(() => expect(api.putApi).toHaveBeenCalledWith('/screening/application/a1/draft', {
+      outcome: 'Passed',
+      notes: 'Keep this call private.',
+      noticePeriodDays: null,
+      method: 'Phone',
+      evidenceSource: 'Screening call',
+      nextStep: 'Keep in screening',
+      moveToInterview: true,
+    }));
+    expect(api.postApi).not.toHaveBeenCalled();
+    expect(api.patchApi).not.toHaveBeenCalled();
+    const draftBody = api.putApi.mock.calls.find(([path]) => path === '/screening/application/a1/draft')![1] as Record<string, unknown>;
+    expect(Object.keys(draftBody).some((key) => /salary|amount|currency|package|grade|document|token|secret/i.test(key))).toBe(false);
+    expect(await within(d).findByText('Draft saved. It stays private to you on this application.')).toBeInTheDocument();
+    await u.click(within(d).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await u.click(screen.getByRole('button', { name: 'Log screen' }));
+    const again = await screen.findByRole('dialog', { name: /Log screen/ });
+    await waitFor(() => expect(within(again).getByLabelText(/Screen note/)).toHaveValue('Keep this call private.'));
+    expect(within(again).getByLabelText(/Evidence source/)).toHaveValue('Screening call');
+  });
+
+  it('the saved screen request still has no salary keys', async () => {
+    const u = userEvent.setup();
+    serve('applied');
+    renderFile('/applications/a1?drawer=screen');
+    const d = await screen.findByRole('dialog');
+    await u.click(within(d).getByRole('checkbox', { name: /Move to Interview after saving/ }));
+    await u.type(within(d).getByLabelText(/Screen note/), 'Reached the candidate.');
+    await u.type(within(d).getByLabelText(/Evidence source/), 'Screening call');
+    await u.selectOptions(within(d).getByLabelText(/^Next step/), 'Keep in screening');
+    await u.click(within(d).getByRole('button', { name: 'Save screen' }));
+    await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/screening', expect.objectContaining({
+      applicationId: 'a1',
+      method: 'Phone',
+      evidenceSource: 'Screening call',
+      nextStep: 'Keep in screening',
+    })));
+    const body = api.postApi.mock.calls.find(([path]) => path === '/screening')![1] as Record<string, unknown>;
+    expect(Object.keys(body).some((key) => /salary|amount|currency|package|grade/i.test(key))).toBe(false);
+    expect(api.patchApi).not.toHaveBeenCalled();
   });
 });
 
@@ -297,7 +591,8 @@ describe('E17–E20 offer', () => {
     const u = userEvent.setup();
     serve('offer-sentback');
     renderFile();
-    expect(await screen.findByRole('heading', { level: 2 })).toHaveTextContent('Offer');
+    expect(await screen.findByRole('heading', { name: 'Ahmed Embaby', level: 2 })).toBeInTheDocument();
+    expect(screen.getByText('Sent back').parentElement).toHaveTextContent('Offer');
     await u.click(screen.getByRole('button', { name: 'Revise and resubmit' }));
     const d = await screen.findByRole('dialog', { name: /Revise and resubmit/ });
     expect(d).toHaveTextContent('The manager sent v1 back: “Start date clashes with Ramadan rota; move to 15 Nov.”');

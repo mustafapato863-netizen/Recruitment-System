@@ -20,6 +20,8 @@ import './styles/polish.css';
 import './styles/source-integration.css';
 import './styles/v2-parity.css';
 import './styles/tokens-v2.css';
+import './styles/glass-neo.css';
+import './styles/classic-in-shell.css';
 
 // Lazy loaded page components for optimal bundle splitting. v2 is the only signed-in UI (v2 default):
 // v1 URLs are redirected to their v2 equivalents by the shell (v2/destinations.ts), so only v2 routes exist here.
@@ -33,6 +35,8 @@ const SearchV2 = lazy(() => import('./v2/search/SearchV2').then((m) => ({ defaul
 const MyResultV2 = lazy(() => import('./v2/pages/MyResultV2').then((m) => ({ default: m.MyResultV2 })));
 const CandidatesListRoute = lazy(() => import('./v2/pages/CandidatesRoute').then((m) => ({ default: m.CandidatesListRoute })));
 const CandidatesCompareRoute = lazy(() => import('./v2/pages/CandidatesRoute').then((m) => ({ default: m.CandidatesCompareRoute })));
+const TalentPoolsListRoute = lazy(() => import('./v2/pages/TalentPoolsRoute').then((m) => ({ default: m.TalentPoolsListRoute })));
+const TalentPoolDetailRoute = lazy(() => import('./v2/pages/TalentPoolsRoute').then((m) => ({ default: m.TalentPoolDetailRoute })));
 const ReportsRoute = lazy(() => import('./v2/pages/ReportsRoute').then((m) => ({ default: m.ReportsRoute })));
 const UsersRoute = lazy(() => import('./v2/admin/AdminRoutes').then((m) => ({ default: m.UsersRoute })));
 const MasterDataRoute = lazy(() => import('./v2/admin/AdminRoutes').then((m) => ({ default: m.MasterDataRoute })));
@@ -113,6 +117,8 @@ function App() {
                   <Route path="/vacancies/:id" element={<PermissionGate requiredPermission="VACANCY_VIEW"><JobDetailRoute /></PermissionGate>} />
                   <Route path="/candidates" element={<PermissionGate requiredPermission="CANDIDATE_VIEW"><CandidatesListRoute /></PermissionGate>} />
                   <Route path="/candidates/compare" element={<PermissionGate requiredPermission="CANDIDATE_VIEW"><CandidatesCompareRoute /></PermissionGate>} />
+                  <Route path="/talent-pools" element={<PermissionGate requiredPermission="CANDIDATE_VIEW"><TalentPoolsListRoute /></PermissionGate>} />
+                  <Route path="/talent-pools/:id" element={<PermissionGate requiredPermission="CANDIDATE_VIEW"><TalentPoolDetailRoute /></PermissionGate>} />
                   <Route path="/offers/:id" element={<EntityLinkRoute kind="offer" />} />
                   <Route path="/applications/:id" element={<PermissionGate requiredAnyPermission={['APPLICATION_VIEW', 'FINAL_HIRING_APPROVAL']}><ApplicationRoute /></PermissionGate>} />
 
@@ -157,7 +163,7 @@ function App() {
                   <Route path="/classic/pipeline-settings" element={<PermissionGate requiredPermission="OVERRIDE_WORKFLOW"><PipelineSettingsPage /></PermissionGate>} />
                   <Route path="/joining" element={<Navigate to="/joinings" replace />} />
                   <Route path="/talent-pool" element={<Navigate to="/sourcing-match" replace />} />
-                  <Route path="/talent-pools" element={<Navigate to="/sourcing-match" replace />} />
+
                   {/* Every other signed-in URL (v1 pages included) is redirected by the shell; this is a safety net. */}
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Route>

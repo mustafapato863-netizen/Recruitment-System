@@ -47,6 +47,10 @@ export interface WorkflowImpact {
 export const fetchWorkflowRules = () => getApi<{ positions: WorkflowPosition[] }>('/workflow-rules');
 export const previewWorkflowRule = (positionId: string, profile: 'technical' | 'clinical') =>
   postApi<WorkflowImpact>('/workflow-rules/preview', { positionId, profile });
+/** Same bound as ApplyWorkflowRuleDto.reason. Preview stays reason-free. */
+export const WORKFLOW_RULE_REASON_MAX = 500;
+export const applyWorkflowRule = (positionId: string, profile: 'technical' | 'clinical', reason: string) =>
+  postApi<WorkflowImpact>('/workflow-rules/apply', { positionId, profile, reason: reason.trim() });
 export const createPipeline = () => postApi<PipelineTemplate>('/pipeline-templates', { name: 'Default pipeline', isDefault: true });
 export const isSingleTemplate = (e: unknown) => domainError(e)?.code === 'SINGLE_PIPELINE_TEMPLATE';
 const EXIT_TYPES = new Set(['rejected', 'withdrawn', 'declined', 'exit']);

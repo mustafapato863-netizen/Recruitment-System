@@ -46,6 +46,22 @@ describe('M1 requisitions list', () => {
     expect(container.textContent).not.toMatch(/30000|42000|EGP|NICU/);
     expect(await axeViolations(container)).toEqual([]);
   });
+  it('a requisition row shows requested seats and the due date on the same record as the title', async () => {
+    renderAt();
+    const title = await screen.findByRole('button', { name: 'HRIS Developer' });
+    const record = title.closest('td')!;
+    expect(record).toHaveTextContent('HRIS Developer');
+    expect(record).toHaveTextContent('Job active');
+    expect(record).toHaveTextContent('3 requested seats');
+    expect(record).toHaveTextContent('due 19 Oct 2026');
+    expect(record).toHaveTextContent('Mariam Farag');
+    expect(record).toHaveTextContent('1 of 3');
+    await userEvent.setup().click(title);
+    const drawer = await screen.findByRole('dialog', { name: 'HRIS Developer' });
+    expect(drawer).toHaveTextContent('One record for the request and its hiring goal.');
+    expect(within(drawer).getByLabelText(/^Seats/)).toHaveValue(3);
+    expect(within(drawer).getByLabelText(/^Due date/)).toHaveValue('2026-10-19');
+  });
   it('filters: cancelled with reason; search', async () => {
     const u = userEvent.setup();
     renderAt();

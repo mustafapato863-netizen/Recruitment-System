@@ -159,5 +159,7 @@ describe('E1 GET /me/work?day=', () => {
     expect(by('o1')).toMatchObject({ waitingOn: 'approver', approver: { id: 'u9', name: 'Mona Saleh' }, reason: 'Offer waiting for approval from Mona Saleh' });
     expect(by('o2')).toMatchObject({ approver: null, reason: 'Offer waiting for approval' });
     expect('approver' in by('o3')).toBe(false);
+    expect(by('o3')).toMatchObject({ waitingOn: 'candidate', reason: 'Offer waiting for the candidate' });
+    expect(by('o3').reason).not.toMatch(/approval/i);
   });
 });

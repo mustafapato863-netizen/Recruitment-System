@@ -17,6 +17,12 @@ import '../pages/jobs.css';
 import './admin.css';
 
 const Avatar = ({ name }: { name: string }) => <span className="rf2-avatar rf2-team__avatar" aria-hidden="true">{initials(name)}</span>;
+/** Branch wins when it is non-empty; otherwise the site; otherwise an em dash. */
+function siteOf(u: Pick<AdminUser, 'branchName' | 'site'>): string {
+  if (u.branchName) return u.branchName;
+  if (u.site) return u.site;
+  return '—';
+}
 
 /** A02 Users (Admin seat). Three seats; deactivate, never delete. */
 export function UsersV2() {
@@ -65,19 +71,19 @@ export function UsersV2() {
       {users ? (
         <div className="rf2-panel rf2-admin__card">
           <table className="rf2-jtable" aria-label="Users">
-            <thead><tr><th scope="col">Name</th><th scope="col">Email</th><th scope="col">Role</th><th scope="col">Reports to</th><th scope="col">Status</th></tr></thead>
+            <thead><tr><th scope="col">User</th><th scope="col">Role</th><th scope="col">Reports to</th><th scope="col">Site</th><th scope="col">Status</th></tr></thead>
             <tbody>
               {rows.map((u) => (
                 <tr key={u.id} data-inactive={!isActive(u) || undefined}>
                   <th scope="row">
                     <button type="button" className="rf2-admin__person" onClick={() => go({ user: u.id })} aria-label={`Open ${u.displayName}`}>
                       <Avatar name={u.displayName} />
-                      <span><span className="rf2-jtable__name">{u.displayName}</span><span className="rf2-jtable__sub">{subLine(u)}</span></span>
+                      <span><span className="rf2-jtable__name">{u.displayName}</span><span className="rf2-jtable__sub">{u.email}</span></span>
                     </button>
                   </th>
-                  <td>{u.email}</td>
                   <td className="rf2-admin__seat">{SEAT_LABEL[seatOf(u)]}</td>
                   <td>{u.managerId ? byId.get(u.managerId)?.displayName ?? '—' : '—'}</td>
+                  <td>{siteOf(u)}</td>
                   <td><StatusChip tone={statusTone(u.status)} label={u.status} /></td>
                 </tr>
               ))}

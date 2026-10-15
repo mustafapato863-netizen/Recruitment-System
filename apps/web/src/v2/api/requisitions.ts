@@ -47,7 +47,7 @@ export interface Requisition {
   createdAt: string; updatedAt: string;
 }
 export interface ReqContext { branches: Array<{ id: string; name: string }>; positions: Array<{ id: string; title: string }>; departments?: Array<{ id: string; name: string }> }
-export interface Person { id: string; name: string; detail?: string }
+export interface Person { id: string; name: string; detail?: string; /** Line manager from GET /users/assignable, when the row includes it. */ managerId?: string | null }
 export interface Grade { id: string; name: string }
 
 const list = <T,>(r: T[] | { data: T[] } | null | undefined): T[] => (Array.isArray(r) ? r : r?.data ?? []);
@@ -76,12 +76,16 @@ export async function fetchGrades(): Promise<Grade[] | null> {
     return rows.filter((r) => r.name?.trim() && (r.status ?? 'Active') === 'Active').map((r) => ({ id: r.id, name: r.name!.trim() }));
   } catch { return null; }
 }
-type RawUser = { id: string; displayName?: string; name?: string; status?: string; roles?: Array<{ name?: string; code?: string }> };
-/** The caller's reports (GET /users/assignable). null = not available to this user. */
+type RawUser = { id: string; displayName?: string; name?: string; status?: string; managerId?: string | null; roles?: Array<{ name?: string; code?: string }> };
+/** The caller's reports (GET /users/assignable). null = not available to this user. Keeps managerId when the row sends it. */
 export async function fetchPeople(): Promise<Person[] | null> {
   try {
     const rows = list(await getApi<RawUser[] | { data: RawUser[] }>('/users/assignable'));
-    return rows.filter((u) => (u.status ?? 'Active') === 'Active').map((u) => ({ id: u.id, name: u.displayName ?? u.name ?? 'Unnamed', detail: u.roles?.[0]?.name }));
+    return rows.filter((u) => (u.status ?? 'Active') === 'Active').map((u) => {
+      const person: Person = { id: u.id, name: u.displayName ?? u.name ?? 'Unnamed', detail: u.roles?.[0]?.name };
+      if ('managerId' in u) person.managerId = u.managerId ?? null;
+      return person;
+    });
   } catch { return null; }
 }
 
