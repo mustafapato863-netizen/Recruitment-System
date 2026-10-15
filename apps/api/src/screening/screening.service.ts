@@ -13,6 +13,12 @@ import { AccessControlService } from '../access-control/access-control.service';
 import type { CreateScreeningLogDto } from './screening.dto';
 import type { AuthUser } from '@recruitflow/contracts';
 
+function blankToNull(value: string | null | undefined): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed.length === 0 ? null : trimmed;
+}
+
 @Injectable()
 export class ScreeningService {
   constructor(
@@ -75,6 +81,9 @@ export class ScreeningService {
         expectedSalary: options.viewSalary ? (dto.expectedSalary ?? null) : null,
         currentSalary: options.viewSalary ? (dto.currentSalary ?? null) : null,
         salaryCurrency: options.viewSalary ? normalizedCurrency : 'AED',
+        method: blankToNull(dto.method),
+        evidenceSource: blankToNull(dto.evidenceSource),
+        nextStep: blankToNull(dto.nextStep),
       },
       include: { screener: true },
     });
@@ -104,6 +113,11 @@ export class ScreeningService {
             salaryCurrency: record.salaryCurrency,
           }
         : {}),
+      // How the person was screened, where the evidence came from, and the intended
+      // next step are stored text. They are not pay and stay on the payload when salary is hidden.
+      method: record.method ?? null,
+      evidenceSource: record.evidenceSource ?? null,
+      nextStep: record.nextStep ?? null,
       screenedAt: record.screenedAt.toISOString(),
       createdAt: record.createdAt.toISOString(),
     };

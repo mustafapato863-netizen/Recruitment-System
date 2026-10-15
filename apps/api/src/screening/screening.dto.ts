@@ -1,6 +1,12 @@
 import { IsEnum, IsInt, IsNumber, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import type { ScreeningOutcome } from '@recruitflow/contracts';
+
+function blankToNull(value: unknown): unknown {
+  if (typeof value !== 'string') return value;
+  const trimmed = value.trim();
+  return trimmed.length === 0 ? null : trimmed;
+}
 
 export class CreateScreeningLogDto {
   @IsUUID()
@@ -38,4 +44,22 @@ export class CreateScreeningLogDto {
   @IsOptional()
   @IsEnum(['AED', 'EGP', 'EGY'], { message: 'Currency must be either AED or EGP' })
   salaryCurrency?: string;
+
+  @IsOptional()
+  @Transform(({ value }) => blankToNull(value))
+  @IsString()
+  @MaxLength(80)
+  method?: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) => blankToNull(value))
+  @IsString()
+  @MaxLength(500)
+  evidenceSource?: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) => blankToNull(value))
+  @IsString()
+  @MaxLength(200)
+  nextStep?: string | null;
 }

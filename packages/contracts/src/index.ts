@@ -1058,6 +1058,9 @@ export interface ScreeningLog {
   expectedSalary?: number | null | undefined;
   currentSalary?: number | null | undefined;
   salaryCurrency?: string | undefined;
+  method?: string | null | undefined;
+  evidenceSource?: string | null | undefined;
+  nextStep?: string | null | undefined;
   screenedAt: string;
   createdAt: string;
 }
@@ -1070,6 +1073,9 @@ export interface CreateScreeningLogInput {
   expectedSalary?: number | undefined;
   currentSalary?: number | undefined;
   salaryCurrency?: string | undefined;
+  method?: string | null | undefined;
+  evidenceSource?: string | null | undefined;
+  nextStep?: string | null | undefined;
 }
 
 export type InterviewType = 'Screening' | 'Technical' | 'Behavioral' | 'Managerial' | 'Executive' | (string & {});

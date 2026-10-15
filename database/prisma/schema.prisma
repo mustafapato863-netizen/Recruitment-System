@@ -654,6 +654,9 @@ model ScreeningLog {
   expectedSalary   Decimal?     @db.Decimal(12, 2)
   currentSalary    Decimal?     @db.Decimal(12, 2)
   salaryCurrency   String       @default("SAR") @db.VarChar(10)
+  method           String?      @db.VarChar(80)
+  evidenceSource   String?      @map("evidence_source") @db.VarChar(500)
+  nextStep         String?      @map("next_step") @db.VarChar(200)
   screenedAt       DateTime     @default(now()) @db.Timestamptz(6)
   createdAt        DateTime     @default(now()) @db.Timestamptz(6)
 
