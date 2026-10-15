@@ -1078,6 +1078,33 @@ export interface CreateScreeningLogInput {
   nextStep?: string | null | undefined;
 }
 
+/** Private to one signed-in user, organization, and application. No pay, documents, or tokens. */
+export interface ScreeningDraft {
+  id: string;
+  organizationId: string;
+  userId: string;
+  applicationId: string;
+  outcome: ScreeningOutcome;
+  notes?: string | null;
+  noticePeriodDays?: number | null;
+  method?: string | null;
+  evidenceSource?: string | null;
+  nextStep?: string | null;
+  moveToInterview: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpsertScreeningDraftInput {
+  outcome: ScreeningOutcome;
+  notes?: string | null;
+  noticePeriodDays?: number | null;
+  method?: string | null;
+  evidenceSource?: string | null;
+  nextStep?: string | null;
+  moveToInterview?: boolean;
+}
+
 export type InterviewType = 'Screening' | 'Technical' | 'Behavioral' | 'Managerial' | 'Executive' | (string & {});
 export type InterviewStatus = 'Scheduled' | 'Completed' | 'Cancelled' | 'Rescheduled' | 'No-show';
 

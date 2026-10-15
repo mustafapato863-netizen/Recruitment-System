@@ -16,7 +16,7 @@ import { cairoIso } from '../../drawers/FileDrawers';
 
 let responses: Record<string, unknown> = {};
 function serve(scenario: Scenario, extra: Record<string, unknown> = {}) {
-  responses = { ...fileResponses(scenario), '/users/interviewers': [{ id: 'u-karim', displayName: 'Karim Hassan', email: 'k@x', jobTitle: 'Hiring manager', roles: [] }], ...extra };
+  responses = { ...fileResponses(scenario), '/users/interviewers': [{ id: 'u-karim', displayName: 'Karim Hassan', email: 'k@x', jobTitle: 'Hiring manager', roles: [] }], '/screening/application/a1/draft': null, ...extra };
   api.getApi.mockImplementation(async (path: string) => {
     const p = path.split('?')[0];
     if (p in responses) { const v = responses[p]; if (v instanceof Error) throw v; return structuredClone(v); }
@@ -419,6 +419,71 @@ describe('E14 Screen', () => {
     expect(unnamedRow).not.toHaveTextContent('Evidence source');
     expect(unnamedRow).not.toHaveTextContent('Next step');
     expect(unnamedRow).not.toHaveTextContent('by ');
+  });
+
+  it('saves a private draft without posting the screen or moving the stage, then restores it', async () => {
+    const u = userEvent.setup();
+    serve('applied');
+    api.putApi.mockImplementation(async (_path: string, body: Record<string, unknown>) => {
+      const saved = {
+        ...body,
+        id: 'draft-1',
+        applicationId: 'a1',
+        organizationId: 'o',
+        userId: 'u-mariam',
+        createdAt: '2026-10-15T12:00:00.000Z',
+        updatedAt: '2026-10-15T12:00:00.000Z',
+      };
+      responses['/screening/application/a1/draft'] = saved;
+      return saved;
+    });
+    renderFile('/applications/a1?drawer=screen');
+    const d = await screen.findByRole('dialog');
+    await u.type(within(d).getByLabelText(/Screen note/), 'Keep this call private.');
+    await u.type(within(d).getByLabelText(/Evidence source/), 'Screening call');
+    await u.selectOptions(within(d).getByLabelText(/^Next step/), 'Keep in screening');
+    await u.click(within(d).getByRole('button', { name: 'Save draft' }));
+    await waitFor(() => expect(api.putApi).toHaveBeenCalledWith('/screening/application/a1/draft', {
+      outcome: 'Passed',
+      notes: 'Keep this call private.',
+      noticePeriodDays: null,
+      method: 'Phone',
+      evidenceSource: 'Screening call',
+      nextStep: 'Keep in screening',
+      moveToInterview: true,
+    }));
+    expect(api.postApi).not.toHaveBeenCalled();
+    expect(api.patchApi).not.toHaveBeenCalled();
+    const draftBody = api.putApi.mock.calls.find(([path]) => path === '/screening/application/a1/draft')![1] as Record<string, unknown>;
+    expect(Object.keys(draftBody).some((key) => /salary|amount|currency|package|grade|document|token|secret/i.test(key))).toBe(false);
+    expect(await within(d).findByText('Draft saved. It stays private to you on this application.')).toBeInTheDocument();
+    await u.click(within(d).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await u.click(screen.getByRole('button', { name: 'Log screen' }));
+    const again = await screen.findByRole('dialog', { name: /Log screen/ });
+    await waitFor(() => expect(within(again).getByLabelText(/Screen note/)).toHaveValue('Keep this call private.'));
+    expect(within(again).getByLabelText(/Evidence source/)).toHaveValue('Screening call');
+  });
+
+  it('the saved screen request still has no salary keys', async () => {
+    const u = userEvent.setup();
+    serve('applied');
+    renderFile('/applications/a1?drawer=screen');
+    const d = await screen.findByRole('dialog');
+    await u.click(within(d).getByRole('checkbox', { name: /Move to Interview after saving/ }));
+    await u.type(within(d).getByLabelText(/Screen note/), 'Reached the candidate.');
+    await u.type(within(d).getByLabelText(/Evidence source/), 'Screening call');
+    await u.selectOptions(within(d).getByLabelText(/^Next step/), 'Keep in screening');
+    await u.click(within(d).getByRole('button', { name: 'Save screen' }));
+    await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/screening', expect.objectContaining({
+      applicationId: 'a1',
+      method: 'Phone',
+      evidenceSource: 'Screening call',
+      nextStep: 'Keep in screening',
+    })));
+    const body = api.postApi.mock.calls.find(([path]) => path === '/screening')![1] as Record<string, unknown>;
+    expect(Object.keys(body).some((key) => /salary|amount|currency|package|grade/i.test(key))).toBe(false);
+    expect(api.patchApi).not.toHaveBeenCalled();
   });
 });
 

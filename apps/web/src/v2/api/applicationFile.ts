@@ -4,6 +4,7 @@
  * Employee seat never holds pay in state. Writes never carry pay (offer drafts
  * send components: []; screening never sends salary fields).
  */
+import type { ScreeningDraft, UpsertScreeningDraftInput } from '@recruitflow/contracts';
 import { downloadFileApi, getApi, patchApi, postApi, putApi } from '../../api/client';
 import { isScorecardSubmitted } from '../../utils/scorecardStatus';
 import { stripPay } from './paySafety';
@@ -180,6 +181,52 @@ export const logScreening = (body: {
   nextStep: string;
   noticePeriodDays?: number;
 }) => postApi<ScreeningItem>('/screening', body);
+
+function emptyToNull(value: string | null | undefined): string | null {
+  if (typeof value !== 'string') return null;
+  const trimmed = value.trim();
+  return trimmed.length === 0 ? null : trimmed;
+}
+
+/** GET /screening/application/:id/draft — this user's private draft, or null. */
+export async function loadScreeningDraft(applicationId: string): Promise<ScreeningDraft | null> {
+  try {
+    const draft = await getApi<ScreeningDraft | null>(`/screening/application/${enc(applicationId)}/draft`);
+    if (!draft || typeof draft !== 'object') return null;
+    if (draft.applicationId && draft.applicationId !== applicationId) return null;
+    if (draft.outcome !== 'Passed' && draft.outcome !== 'Failed' && draft.outcome !== 'On Hold') return null;
+    return {
+      id: draft.id,
+      organizationId: draft.organizationId,
+      userId: draft.userId,
+      applicationId: draft.applicationId,
+      outcome: draft.outcome,
+      notes: draft.notes ?? null,
+      noticePeriodDays: draft.noticePeriodDays ?? null,
+      method: draft.method ?? null,
+      evidenceSource: draft.evidenceSource ?? null,
+      nextStep: draft.nextStep ?? null,
+      moveToInterview: draft.moveToInterview !== false,
+      createdAt: draft.createdAt,
+      updatedAt: draft.updatedAt,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** PUT /screening/application/:id/draft. Does not log the screen or move the stage. */
+export function saveScreeningDraft(applicationId: string, body: UpsertScreeningDraftInput) {
+  return putApi<ScreeningDraft>(`/screening/application/${enc(applicationId)}/draft`, {
+    outcome: body.outcome,
+    notes: emptyToNull(body.notes),
+    noticePeriodDays: body.noticePeriodDays ?? null,
+    method: emptyToNull(body.method),
+    evidenceSource: emptyToNull(body.evidenceSource),
+    nextStep: emptyToNull(body.nextStep),
+    moveToInterview: body.moveToInterview ?? true,
+  });
+}
 /** = CreateInterviewDto (B5): room URL only from v2; interviewers are users. */
 export interface ScheduleBody { applicationId: string; title: string; interviewType: string; scheduledStart: string; scheduledEnd: string; timezone: string; locationUrl: string; attendeeUserIds: string[] }
 export const scheduleInterview = (body: ScheduleBody) => postApi<InterviewItem>('/interviews', body);

@@ -11,7 +11,7 @@ import { StatusChip } from '../../components/v2/StatusChip';
 import { UserPicker, interviewersAdapter, type UserOption } from '../../components/v2/UserPicker';
 import {
   RECOMMENDATIONS, addNote, candidateName, createHiringCase, createOfferDraft, createOfferRevision,
-  gateState, isoDate, logScreening, moveStage, offerTemplates, recordActualJoining, rejectionReasons, reviseScorecard, scheduleInterview, sendOffer, setJoiningCheck, setOfferStatus, submitHiringCase, submitOffer, submitScorecard, updateInterview,
+  gateState, isoDate, loadScreeningDraft, logScreening, moveStage, offerTemplates, recordActualJoining, rejectionReasons, reviseScorecard, saveScreeningDraft, scheduleInterview, sendOffer, setJoiningCheck, setOfferStatus, submitHiringCase, submitOffer, submitScorecard, updateInterview,
   type ApplicationFile, type FileStage, type InterviewItem, type OfferTemplate, type OfferTerms, type Recommendation, type ScorecardItem, type SendChannel, type SendOfferResult,
   needsReasonNote, OTHER_NOTE_MIN,
 } from '../api/applicationFile';
@@ -100,8 +100,57 @@ export function ScreenDrawer({ file, onClose, onDone }: DrawerProps) {
   const [nextStep, setNextStep] = useState('');
   const [move, setMove] = useState(true);
   const [errs, setErrs] = useState<Record<string, string>>({});
+  const [draftBusy, setDraftBusy] = useState(false);
+  const [draftSaved, setDraftSaved] = useState(false);
   const s = useSubmit(onDone, ['notes', 'noticePeriodDays', 'outcome', 'method', 'evidenceSource', 'nextStep']);
   const canMove = ['Applied', 'Screening'].includes(app.stage);
+  useEffect(() => {
+    let cancelled = false;
+    const applicationId = app.id;
+    setOutcome('Passed');
+    setNotes('');
+    setNotice('');
+    setMethod('Phone');
+    setEvidenceSource('');
+    setNextStep('');
+    setMove(true);
+    setDraftSaved(false);
+    void loadScreeningDraft(applicationId).then((draft) => {
+      if (cancelled || !draft) return;
+      if (draft.applicationId && draft.applicationId !== applicationId) return;
+      setOutcome(draft.outcome);
+      setNotes(draft.notes ?? '');
+      setNotice(draft.noticePeriodDays == null ? '' : String(draft.noticePeriodDays));
+      setMethod(draft.method?.trim() ? draft.method.trim() : 'Phone');
+      setEvidenceSource(draft.evidenceSource ?? '');
+      setNextStep(draft.nextStep ?? '');
+      setMove(draft.moveToInterview);
+    }).catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [app.id]);
+  const saveDraft = () => {
+    setDraftBusy(true);
+    setDraftSaved(false);
+    s.setError(null);
+    void (async () => {
+      try {
+        await saveScreeningDraft(app.id, {
+          outcome,
+          notes: notes.trim() || null,
+          noticePeriodDays: notice.trim() === '' ? null : Number(notice),
+          method: method.trim() || null,
+          evidenceSource: evidenceSource.trim() || null,
+          nextStep: nextStep.trim() || null,
+          moveToInterview: move,
+        });
+        setDraftSaved(true);
+      } catch (e) {
+        s.setError(errorText(e));
+      } finally {
+        setDraftBusy(false);
+      }
+    })();
+  };
   const submit = (e?: FormEvent) => {
     e?.preventDefault();
     const next: Record<string, string> = {};
@@ -128,7 +177,7 @@ export function ScreenDrawer({ file, onClose, onDone }: DrawerProps) {
   return (
     <DrawerV2 open onClose={onClose} kicker="Screen" title={`Log screen — ${candidateName(app)}`} subtitle={`${app.positionTitle ?? ''} · ${app.stage}`}
       confirmClose={() => !notes.trim() || window.confirm('Discard the screen note?')}
-      primaryAction={<ButtonV2 onClick={() => submit()} loading={s.busy}>{move && canMove && outcome === 'Passed' ? 'Save and move to Interview' : 'Save screen'}</ButtonV2>}
+      primaryAction={<ButtonV2 onClick={() => submit()} loading={s.busy} disabled={draftBusy}>{move && canMove && outcome === 'Passed' ? 'Save and move to Interview' : 'Save screen'}</ButtonV2>}
       secondaryAction={<ButtonV2 kind="secondary" onClick={onClose}>Cancel</ButtonV2>}>
       <form className="rf2-drawer-form" onSubmit={submit} noValidate>
         <SelectV2 label="Outcome" value={outcome} onChange={(e) => setOutcome(e.target.value as typeof outcome)} error={s.at('outcome')}>
@@ -147,6 +196,8 @@ export function ScreenDrawer({ file, onClose, onDone }: DrawerProps) {
         {canMove && outcome === 'Passed' ? (
           <label className="rf2-check"><input type="checkbox" checked={move} onChange={(e) => setMove(e.target.checked)} /> Move to Interview after saving</label>
         ) : null}
+        <ButtonV2 kind="secondary" onClick={saveDraft} loading={draftBusy} disabled={s.busy}>Save draft</ButtonV2>
+        {draftSaved ? <Note>Draft saved. It stays private to you on this application.</Note> : null}
         <Note>Pay is not recorded here.</Note>
         <FormError text={s.error} />
       </form>

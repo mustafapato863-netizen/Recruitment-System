@@ -1,4 +1,4 @@
-import { IsEnum, IsInt, IsNumber, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
+import { IsBoolean, IsEnum, IsInt, IsNumber, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
 import type { ScreeningOutcome } from '@recruitflow/contracts';
 
@@ -62,4 +62,47 @@ export class CreateScreeningLogDto {
   @IsString()
   @MaxLength(200)
   nextStep?: string | null;
+}
+
+export class UpsertScreeningDraftDto {
+  @IsEnum(['Passed', 'Failed', 'On Hold'])
+  outcome!: ScreeningOutcome;
+
+  @IsOptional()
+  @Transform(({ value }) => blankToNull(value))
+  @IsString()
+  @MaxLength(5000)
+  notes?: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === null || value === undefined || value === '') return null;
+    return typeof value === 'number' ? value : Number(value);
+  })
+  @IsInt()
+  @Min(0)
+  @Max(3650)
+  noticePeriodDays?: number | null;
+
+  @IsOptional()
+  @Transform(({ value }) => blankToNull(value))
+  @IsString()
+  @MaxLength(80)
+  method?: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) => blankToNull(value))
+  @IsString()
+  @MaxLength(500)
+  evidenceSource?: string | null;
+
+  @IsOptional()
+  @Transform(({ value }) => blankToNull(value))
+  @IsString()
+  @MaxLength(200)
+  nextStep?: string | null;
+
+  @IsOptional()
+  @IsBoolean()
+  moveToInterview?: boolean;
 }
