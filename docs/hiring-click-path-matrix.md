@@ -1,10 +1,10 @@
-# Hiring Click-Path Matrix (Phase 0)
+# Hiring Click-Path Matrix (Phase 0) — Full Role Details & Diagrams
 
 **Date:** 26 October 2026  
 **Baseline:** Hiring V2 on `main` at `e3602a1`  
-**Purpose:** Document the current end-to-end hiring click paths so Phase 1+ can reduce context loss while keeping compliance gates, RBAC, and audit unchanged.
+**Purpose:** Document the current end-to-end hiring click paths (all roles) so Phase 1+ can reduce context loss while keeping compliance gates, RBAC, and audit unchanged.
 
-This matrix covers the primary recruiter path from Applied/Screening through Joined. Manager, interviewer, and approver paths are noted where they diverge. All gates listed are enforced server-side.
+All gates listed are enforced server-side. Diagrams use Mermaid.
 
 ---
 
@@ -36,7 +36,57 @@ Gates (from `apps/web/src/v2/api/gates.ts`):
 
 ---
 
-## Primary Recruiter Click Path (Happy Path)
+## Employee (Recruiter) Click Path
+
+Employees land on **My Work**. They own the primary hiring flow and have ownership restrictions.
+
+### Diagram
+
+```mermaid
+flowchart TD
+    A[Login] --> B{Seat?}
+    B -->|Employee| C[My Work<br/>/my-work]
+    B -->|Manager| D[Team Work]
+
+    C --> E[Overdue / Today / Waiting actions]
+    E --> F[Open Job]
+    F --> G[Job Pipeline<br/>/vacancies/:id<br/>own jobs only]
+    G --> H[Click Candidate Card]
+    H --> I[Application File<br/>owner mode]
+
+    I --> J{Stage}
+    J -->|Applied/Screening| K[Log Screen<br/>drawer=screen]
+    K -->|Gate: Screen note| L[Schedule Interview<br/>drawer=schedule]
+    J -->|Interview| M[Open Scorecard<br/>drawer=scorecard]
+    M -->|Gate: Scorecard| N[Draft Offer<br/>drawer=offer]
+    J -->|Offer| O[Draft / Submit / Send / Record answer]
+    O -->|Accepted| P[Move to Pre-hire<br/>drawer=prehire]
+    P --> Q[Complete Joining Checks<br/>drawer=prehire]
+    Q -->|Gate: Checks| R[Joined]
+
+    R --> S{Confirm joining}
+    S -->|Often| T[Classic pages<br/>/joinings or /hires/:id]
+
+    style K fill:#fef3c7
+    style M fill:#fef3c7
+    style P fill:#fef3c7
+    style Q fill:#fef3c7
+    style T fill:#fee2e2
+    style C fill:#dcfce7
+```
+
+### Employee differences
+
+| Area | Employee behavior | Notes |
+|------|-------------------|-------|
+| Home | My Work | Personal overdue / today / waiting / interviews / joining |
+| Pipeline access | Own jobs only | Ownership restriction (redacted jobs for others) |
+| Application File | Owner mode | Full primary actions (`primaryFor`) |
+| Offer approval | Cannot approve | Submits and waits; manager decides |
+| Special restrictions | Recruiter-only | Blocked from requisitions and some admin paths |
+| Joining | Same friction | Often still jumps to classic pages |
+
+### Primary Employee Happy Path (12 steps)
 
 | Step | Starting place | Action | Lands on | Drawer / next UI | Gate enforced | Notes |
 |------|----------------|--------|----------|------------------|---------------|-------|
@@ -53,30 +103,95 @@ Gates (from `apps/web/src/v2/api/gates.ts`):
 | 11 | Application File (Pre-Hire) | Complete required checks | Same file | `?drawer=prehire` | Joining checks | SCFHS / ID / Contract etc. |
 | 12 | Application File or classic | Confirm joining | File or `/joinings` / `/hires/:id` | — | Checks complete | Headcount updates; may still hit classic pages |
 
-**Context loss points (current):** Steps 1→2, and any jump to classic pages for joining confirmation, licenses, or final approval inbox. My Work links often go to the file without pre-opening the drawer.
+**Context loss points:** Steps 1→2, My Work links that do not pre-open the drawer, and classic joining/approval pages.
 
 ---
 
-## Divergent Paths
+## Manager Click Path
 
-### Interviewer
+Managers land on **Team Work** and have broader visibility. Many approval steps still use classic pages.
 
-- My Work or My Interviews → scorecard on the interview.
+### Diagram
+
+```mermaid
+flowchart TD
+    A[Login] --> B{Seat?}
+    B -->|Manager| C[Team Work<br/>/my-work]
+    B -->|Employee| D[My Work]
+
+    C --> E[Team actions / overdue / today]
+    E --> F[Open Job or Application]
+    F --> G[Job Pipeline<br/>/vacancies/:id<br/>sees more jobs]
+    G --> H[Click Candidate]
+    H --> I[Application File<br/>manager mode]
+
+    I --> J{Action needed?}
+    J -->|Offer pending approval| K[View / Decide Offer]
+    K --> L{Where?}
+    L -->|In file| M[drawer=waiting or offer]
+    L -->|Often| N[Classic Final Approvals Inbox<br/>/hires/approvals/inbox]
+
+    J -->|Review file / notes| I
+    J -->|Joining / licenses| O[Classic pages<br/>/joinings /licenses /hires/:id]
+
+    N --> P[Approve / Send back]
+    P --> I
+
+    O --> Q[Confirm joining or checks]
+    Q --> R[Joined]
+
+    style N fill:#fee2e2
+    style O fill:#fee2e2
+    style C fill:#dbeafe
+```
+
+### Manager differences
+
+| Area | Manager behavior | Notes |
+|------|------------------|-------|
+| Home | Team Work | Aggregates team’s work, not just personal |
+| Pipeline access | Broader | Can open more jobs (ownership + manager rights) |
+| Application File | Manager mode | Can see more (including pay if permitted); some actions read-only |
+| Offer approval | Primary responsibility | Often still uses classic `/hires/approvals/inbox` |
+| Joining / licenses | Classic pages | Same friction as employee for final confirmation |
+| Special roles | Final Hiring Approver, License Specialist | Separate classic homes |
+
+### Typical Manager path (offer approval)
+1. Team Work → see pending offer or open job
+2. Pipeline or direct link → Application File (manager mode)
+3. Open waiting/offer drawer **or** jump to classic Final Approvals Inbox
+4. Approve or send back
+5. Employee continues (send → record answer → pre-hire)
+6. Joining confirmation frequently still lands on classic pages
+
+---
+
+## Interviewer Path
+
+```mermaid
+flowchart TD
+    A[Login] --> B[My Interviews or My Work]
+    B --> C[Open Interview]
+    C --> D[Scorecard]
+    D -->|Submit| E[Scorecard on file]
+    E --> F[Unlocks Offer for recruiter]
+    style B fill:#fce7f3
+```
+
 - Limited destinations (interviewer-only users stay near `/my-interviews`).
-- Scorecard submission unlocks Offer for the recruiter.
+- Scorecard submission is the main action; unlocks the next stage for the recruiter.
 
-### Manager / Approver
+---
 
-- Team Work or Final approvals inbox (`/hires/approvals/inbox` — classic).
-- Offer approval/rejection via waiting/offer drawers or classic pages.
-- Can open the file in manager/approver mode (read-only for some actions).
-
-### License Specialist / Final Hiring Approver
+## License Specialist / Final Hiring Approver
 
 - Special home: `/licenses` or `/hires/approvals/inbox` (classic).
 - Joining checks and final approval still route through classic pages in many cases.
+- Can open the Application File in limited (often read-only) mode.
 
-### Reject / Withdraw
+---
+
+## Reject / Withdraw
 
 - Application File → reject drawer (requires reason).
 - Gate: `GATE_REJECT_REASON_REQUIRED`.
@@ -87,19 +202,31 @@ Gates (from `apps/web/src/v2/api/gates.ts`):
 
 | Entry | Typical next | Pre-opens drawer? | Notes |
 |-------|--------------|-------------------|-------|
-| My Work (actions) | Application File or related page | Partial | Links exist; `?drawer=` not always set |
+| My Work (employee) | Application File or related page | Partial | Links exist; `?drawer=` not always set |
+| Team Work (manager) | Application File or classic inbox | Partial | — |
 | Open Jobs → Pipeline | Application File | No | Card click goes to file |
 | Candidates list | Application File or bank | No | — |
-| Classic pages | Various | No | Still active for hires, licenses, offers list, calendar |
+| Classic pages | Various | No | Still active for hires, licenses, offers list, calendar, approvals |
+
+---
+
+## Context-Loss Points (All Roles)
+
+1. Leaving Pipeline or My Work to open the Application File (no drawer pre-open).
+2. Offer approval often jumps to classic Final Approvals Inbox.
+3. Joining confirmation and license steps frequently leave V2 for classic pages (`/joinings`, `/licenses`, `/hires/:id`).
+4. My Work / Team Work actions do not consistently deep-link with `?drawer=`.
 
 ---
 
 ## Phase 0 Completion Criteria
 
 - [x] Stages and gates documented
-- [x] Primary recruiter happy path mapped
-- [x] Divergent roles noted
-- [x] Context-loss points identified
+- [x] Employee (recruiter) happy path mapped with diagram
+- [x] Manager path mapped with diagram
+- [x] Interviewer path mapped with diagram
+- [x] Divergent roles noted (license specialist, final approver, reject)
+- [x] Entry points and context-loss points identified
 - [ ] Local V2 delta vs `main` confirmed (still open if local work exists)
 - [ ] Classic page inventory verified against live routes (implicit from `App.tsx` + `destinations.ts`)
 
