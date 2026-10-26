@@ -36,6 +36,64 @@ Gates (from `apps/web/src/v2/api/gates.ts`):
 
 ---
 
+## Recruiter (Employee) Dedicated Diagram
+
+Clear end-to-end flow for the primary recruiter path.
+
+```mermaid
+flowchart TD
+    A[My Work or Open Jobs] --> B[Open Job]
+    B --> C[Job Pipeline<br/>/vacancies/:id]
+    C --> D[Click Candidate Card]
+    D --> E[Application File<br/>/applications/:id]
+
+    E --> F{Stage?}
+    F -->|Applied / Screening<br/>no screen note| G[Log Screen<br/>drawer=screen]
+    G -->|Gate: Screen note| H[Schedule Interview<br/>drawer=schedule]
+
+    F -->|Applied / Screening<br/>screen note exists| H
+    H --> I[Interview Stage]
+
+    I --> J{Interview done?}
+    J -->|No| H
+    J -->|Yes, no scorecard| K[Open Scorecard<br/>drawer=scorecard]
+    K -->|Gate: Scorecard submitted| L[Draft Offer<br/>drawer=offer]
+
+    J -->|Scorecard exists| L
+    L --> M[Offer Stage]
+
+    M --> N{Offer status}
+    N -->|Draft| O[Submit for Approval<br/>drawer=waiting]
+    N -->|Pending| P[View Approval<br/>drawer=waiting]
+    N -->|Approved| Q[Send Offer<br/>drawer=send]
+    N -->|Sent| R[Record Answer<br/>drawer=answer]
+    N -->|Accepted| S[Move to Pre-hire<br/>drawer=prehire<br/>Gate: Offer accepted]
+
+    O --> P
+    P --> Q
+    Q --> R
+    R --> S
+
+    S --> T[Pre-Hire Stage]
+    T --> U[Complete Joining Checks<br/>drawer=prehire<br/>Gate: Checks verified]
+    U --> V[Joined]
+
+    V --> W{Confirm joining}
+    W -->|Often| X[Classic pages<br/>/joinings or /hires/:id]
+
+    style G fill:#fef3c7
+    style K fill:#fef3c7
+    style S fill:#fef3c7
+    style U fill:#fef3c7
+    style X fill:#fee2e2
+```
+
+**Legend**
+- Yellow = gated steps (screen note, scorecard, offer accepted, joining checks)
+- Red = current context-loss point (joining confirmation often leaves V2)
+
+---
+
 ## Employee (Recruiter) Click Path
 
 Employees land on **My Work**. They own the primary hiring flow and have ownership restrictions.
