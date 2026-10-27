@@ -42,6 +42,64 @@ describe('My Work desk', () => {
     const tabs = screen.getByRole('tablist', { name: 'My Work sections' });
     expect(subtitle.compareDocumentPosition(tabs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
+
+  it('fills the next action on the first Overdue, Today, and Waiting row', async () => {
+    renderPage(ok());
+    await screen.findByRole('list', { name: 'Next actions' });
+
+    const overdue = within(rowsIn('overdue')[0]!);
+    expect(overdue.getByRole('link', { name: 'Submit scorecard: Interview: Ahmed Embaby' })).toHaveClass('rf2-btn--primary');
+
+    const today = within(rowsIn('dueToday')[0]!);
+    expect(today.getByRole('link', { name: 'Review applicants: HRIS Developer (VAC-1)' })).toHaveClass('rf2-btn--primary');
+    expect(today.getByRole('link', { name: 'Put on hold: HRIS Developer (VAC-1)' })).toHaveClass('rf2-btn--tertiary');
+
+    const waiting = within(rowsIn('waitingOnOthers')[0]!);
+    expect(waiting.getByText('Salma Farouk — offer waiting on Karim Hassan')).toBeInTheDocument();
+    expect(waiting.getByText("Waiting on Karim Hassan's approval")).toBeInTheDocument();
+    expect(waiting.getByRole('link', { name: 'Open offer: Offer OFF-1' })).toHaveClass('rf2-btn--primary');
+    const refused = waiting.getByRole('button', { name: 'Send offer' });
+    expect(refused).toBeDisabled();
+    expect(refused).toHaveAccessibleDescription('Waiting for approval');
+
+    const laterToday = within(rowsIn('dueToday')[1]!);
+    expect(laterToday.getByRole('link', { name: 'Open interview: Screening: Nourhan Sami' })).toHaveClass('rf2-btn--secondary');
+    expect(laterToday.getByRole('button', { name: 'Submit scorecard' })).toBeDisabled();
+
+    const stillWaiting = within(rowsIn('waitingOnOthers')[1]!);
+    expect(stillWaiting.getByText('Waiting on interviewer')).toBeInTheDocument();
+    expect(stillWaiting.getByRole('link', { name: 'Open interview: Interview: Omar Said' })).toHaveClass('rf2-btn--tertiary');
+    const gated = stillWaiting.getByRole('button', { name: 'Move to Offer' });
+    expect(gated).toBeDisabled();
+    expect(gated).toHaveAccessibleDescription('Gate not met: scorecard not submitted');
+
+    expect(document.querySelectorAll('.rf2-btn--primary')).toHaveLength(3);
+    expect(screen.queryByText(/caught up/i)).not.toBeInTheDocument();
+    expect(screen.queryByText('Read-only')).not.toBeInTheDocument();
+    expect(screen.queryByText('No action for you')).not.toBeInTheDocument();
+  });
+
+  it('fills the first row of the bucket a recruiter filters to', async () => {
+    const u = userEvent.setup();
+    renderPage(ok());
+    await screen.findByRole('list', { name: 'Next actions' });
+
+    await u.click(screen.getByRole('button', { name: '1 Overdue' }));
+    expect(within(rowsIn('overdue')[0]!).getByRole('link', { name: 'Submit scorecard: Interview: Ahmed Embaby' })).toHaveClass('rf2-btn--primary');
+    expect(screen.queryByText('Screening: Nourhan Sami')).not.toBeInTheDocument();
+    expect(document.querySelectorAll('.rf2-btn--primary')).toHaveLength(1);
+
+    await u.click(screen.getByRole('button', { name: '2 Today' }));
+    expect(within(rowsIn('dueToday')[0]!).getByRole('link', { name: 'Review applicants: HRIS Developer (VAC-1)' })).toHaveClass('rf2-btn--primary');
+    expect(within(rowsIn('dueToday')[1]!).getByRole('link', { name: 'Open interview: Screening: Nourhan Sami' })).toHaveClass('rf2-btn--secondary');
+    expect(document.querySelectorAll('.rf2-btn--primary')).toHaveLength(1);
+
+    await u.click(screen.getByRole('button', { name: '2 Waiting' }));
+    expect(within(rowsIn('waitingOnOthers')[0]!).getByRole('link', { name: 'Open offer: Offer OFF-1' })).toHaveClass('rf2-btn--primary');
+    expect(within(rowsIn('waitingOnOthers')[1]!).getByRole('link', { name: 'Open interview: Interview: Omar Said' })).toHaveClass('rf2-btn--tertiary');
+    expect(within(rowsIn('waitingOnOthers')[0]!).getByRole('button', { name: 'Send offer' })).toBeDisabled();
+    expect(document.querySelectorAll('.rf2-btn--primary')).toHaveLength(1);
+  });
 });
 
 describe('My Work (E02) from the #9 contract', () => {

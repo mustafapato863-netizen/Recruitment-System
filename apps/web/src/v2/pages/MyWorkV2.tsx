@@ -114,7 +114,7 @@ function DisabledAction({ action }: { action: MyWorkAction }) {
   );
 }
 
-/** #9 actions[]: enabled → link to the page; disabled → disabled button with the reason as tooltip + aria-describedby. */
+/** #9 actions[]: the bucket's next action is filled. Other destinations on that row are text. A refused destination stays disabled. */
 function ItemActions({ item, bucket, primary, ctx }: { item: WorkItem; bucket: Bucket; primary: boolean; ctx: HrefContext }) {
   const actions = item.actions.length ? item.actions : [{ key: item.nextAction.code, label: item.nextAction.label, disabled: false }];
   let usedPrimary = false;
@@ -124,8 +124,9 @@ function ItemActions({ item, bucket, primary, ctx }: { item: WorkItem; bucket: B
         if (action.disabled) return <DisabledAction key={action.key} action={action} />;
         const href = fileActionHref(item, action, ctx);
         if (!href) return null;
-        const kind = primary && !usedPrimary ? 'primary' : bucket === 'waitingOnOthers' ? 'tertiary' : 'secondary';
-        if (kind === 'primary') usedPrimary = true;
+        const filled = primary && !usedPrimary && action.key === item.nextAction.code;
+        const kind = filled ? 'primary' : primary || bucket === 'waitingOnOthers' ? 'tertiary' : 'secondary';
+        if (filled) usedPrimary = true;
         return (
           <Link key={action.key} className={`rf2-btn rf2-btn--${kind} rf2-btn--md`} to={href} aria-label={`${action.label}: ${item.title}`}>
             <span>{action.label}</span>
@@ -169,9 +170,6 @@ function rowTitle(item: WorkItem, bucket: Bucket): string {
   return item.title;
 }
 
-/** A waiting row is read-only unless it has an enabled action beyond opening the record. */
-const readOnly = (item: WorkItem) => !item.actions.some((a) => !a.disabled && !a.key.startsWith('open-'));
-
 function filterEmpty(filter: WorkFilter, day: MyWorkDay): string {
   if (filter === 'overdue') return 'Nothing overdue.';
   if (filter === 'waiting') return 'Nothing waiting on others.';
@@ -194,9 +192,9 @@ function NextActions({ data, day, filter, onFilter, f, ctx }: {
     { key: 'waiting', label: 'Waiting', count: data.counts.waitingOnOthers },
   ];
   const ordered: Array<{ item: WorkItem; bucket: Bucket; primary: boolean }> = [
-    ...data.overdue.map((item) => ({ item, bucket: 'overdue' as const, primary: false })),
+    ...data.overdue.map((item, index) => ({ item, bucket: 'overdue' as const, primary: index === 0 })),
     ...data.dueToday.map((item, index) => ({ item, bucket: 'dueToday' as const, primary: index === 0 })),
-    ...data.waitingOnOthers.map((item) => ({ item, bucket: 'waitingOnOthers' as const, primary: false })),
+    ...data.waitingOnOthers.map((item, index) => ({ item, bucket: 'waitingOnOthers' as const, primary: index === 0 })),
   ];
   const visible = ordered.filter((row) => {
     if (filter === 'overdue') return row.bucket === 'overdue';
@@ -234,7 +232,6 @@ function NextActions({ data, day, filter, onFilter, f, ctx }: {
             const sla = data.reminderWorkerHealthy ? slaChip(item, bucket, day) : null;
             const waitingChip = item.waitingOn ? <StatusChip tone="neutral" label={WAITING_LABEL[item.waitingOn] ?? 'Waiting'} /> : null;
             const typeChip = <StatusChip tone={bucket === 'overdue' ? 'warning' : 'info'} label={TYPE_LABEL[item.type] ?? item.type} />;
-            const locked = bucket === 'waitingOnOthers' && readOnly(item);
             return (
               <li key={`${bucket}-${item.type}-${item.id}`} data-testid="work-row" data-bucket={bucket}>
                 <TaskRow
@@ -243,9 +240,9 @@ function NextActions({ data, day, filter, onFilter, f, ctx }: {
                   title={rowTitle(item, bucket)}
                   meta={<ItemMeta item={item} />}
                   chip={<span className="rf2-mywork__chips">{waitingChip ?? typeChip}{sla ? <span data-testid="sla">{sla}</span> : null}</span>}
-                  due={locked ? <span data-testid="due">No action for you</span> : due ? <span data-testid="due">{due}</span> : undefined}
+                  due={due ? <span data-testid="due">{due}</span> : undefined}
                   dueTone={bucket === 'overdue' ? 'danger' : 'default'}
-                  action={locked ? <span className="rf2-mywork__readonly">Read-only</span> : <ItemActions item={item} bucket={bucket} primary={primary} ctx={ctx} />}
+                  action={<ItemActions item={item} bucket={bucket} primary={primary} ctx={ctx} />}
                 />
               </li>
             );
