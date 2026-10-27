@@ -161,11 +161,10 @@ export function JobPipelineV2() {
         const app = apps.find((a) => a.id === sourceId);
         if (app && target && target !== app.stage) void move(app, target);
       }}>
-        <p className="rf2-board__hint" aria-hidden="true"><ArrowRight /> Scroll horizontally to explore all five stages</p>
-        <p id="pipeline-scroll-help" className="rf2-sr-only">
-          This pipeline has five horizontally scrollable stages. Scroll to view each stage; files can also be moved with each card&apos;s Move to menu.
+        <p id="pipeline-board-help" className="rf2-sr-only">
+          This pipeline has five stages. Files can be moved with each card&apos;s Move to menu.
         </p>
-        <div className="rf2-board" aria-describedby="pipeline-scroll-help" aria-label={`${title} pipeline`} role="region" tabIndex={0}>
+        <div className="rf2-board" aria-describedby="pipeline-board-help" aria-label={`${title} pipeline`} role="region" tabIndex={0}>
           {BOARD_STAGES.map((stage) => (
             <Column key={stage} stage={stage} apps={apps.filter((a) => a.stage === stage)} job={job} moving={moving} onMove={move} />
           ))}

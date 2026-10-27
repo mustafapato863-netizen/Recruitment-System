@@ -16,6 +16,7 @@ import { DRAWERS, DRAWER_KEYS, errorText, sentBack, type DrawerKey } from '../dr
 import { OfferDecisionDrawer } from '../drawers/OfferDecisionDrawer';
 import { canSeePay, money } from '../api/offerDecision';
 import { useAuth } from '../../auth/AuthContext';
+import { useSetBreadcrumbTitle } from '../../context/BreadcrumbContext';
 
 type Load = { kind: 'loading' } | { kind: 'ready'; file: ApplicationFile } | { kind: 'forbidden'; message: string } | { kind: 'missing' } | { kind: 'error'; message: string };
 
@@ -381,6 +382,9 @@ export function ApplicationFileV2({ load = loadApplicationFile, mode = 'owner' }
       .catch(() => { if (live) setMessages([]); });
     return () => { live = false; };
   }, [id, manager, attempt]);
+
+  const headerName = state.kind === 'ready' ? candidateName(state.file.workspace.application) : null;
+  useSetBreadcrumbTitle(headerName);
 
   const openDrawer = useCallback((key: DrawerKey, extra?: Record<string, string>) => setParams((p) => {
     const n = new URLSearchParams(p); n.set('drawer', key);

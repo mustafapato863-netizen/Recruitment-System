@@ -1,0 +1,59 @@
+/* Notification Center on the same desk as My Work. Existing v2 tokens only. */
+[data-ui='v2'] .rf2-notify {
+  display: flex; flex-direction: column; align-items: stretch; gap: var(--rf2-space-2); flex: 1 1 auto;
+  width: 100%; max-width: min(100%, 1440px); min-height: calc(100vh - 64px - var(--rf2-space-4));
+  box-sizing: border-box; padding: var(--rf2-space-4); font-family: var(--rf2-font); color: var(--rf2-ink);
+}
+[data-ui='v2'] .rf2-notify__subtitle {
+  margin: 0; text-align: left;
+  font-size: var(--rf2-text-page); line-height: var(--rf2-leading-page); font-weight: var(--rf2-weight-page); color: var(--rf2-ink);
+}
+[data-ui='v2'] .rf2-notify__bar {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--rf2-space-2);
+}
+[data-ui='v2'] .rf2-notify__actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--rf2-space-1); }
+[data-ui='v2'] .rf2-notify .rf2-tabs {
+  flex-wrap: wrap; gap: 12px; padding: 0; width: auto; max-width: 100%; overflow-x: auto;
+  background: transparent; border: 0; border-radius: 0;
+}
+[data-ui='v2'] .rf2-notify .rf2-tab {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 8px 12px;
+  border: 1px solid transparent; border-radius: 12px; background: var(--rf2-card);
+  box-shadow: var(--rf2-neo-raise-sm); color: var(--rf2-ink); font-weight: 500;
+}
+[data-ui='v2'] .rf2-notify .rf2-tab[aria-selected='true'] {
+  border-color: transparent; background: var(--rf2-info-tint); color: var(--rf2-action); box-shadow: var(--rf2-neo-raise-sm);
+}
+[data-ui='v2'] .rf2-notify .rf2-state--empty {
+  align-items: flex-start; justify-content: flex-start; text-align: left;
+  flex: 0 0 auto; min-height: 0; width: 100%;
+  background: var(--rf2-glass-card); border-color: var(--rf2-glass-line); box-shadow: var(--rf2-neo-raise);
+}
+[data-ui='v2'] .rf2-notify__surface {
+  display: flex; flex-direction: column; align-items: stretch; justify-content: flex-start;
+  flex: 0 0 auto; align-self: stretch; min-height: 0; width: 100%;
+  padding: var(--rf2-space-2) var(--rf2-space-3);
+  border: 1px dashed var(--rf2-glass-line); border-radius: var(--rf2-radius-card);
+  background: var(--rf2-glass-card); box-shadow: var(--rf2-neo-raise);
+}
+[data-ui='v2'] .rf2-notify__list { display: flex; flex-direction: column; gap: var(--rf2-space-2); margin: 0; padding: 0; list-style: none; }
+[data-ui='v2'] .rf2-notify__item { display: flex; flex-direction: column; gap: var(--rf2-space-1); min-width: 0; padding-top: var(--rf2-space-2); border-top: 1px solid var(--rf2-divider); }
+[data-ui='v2'] .rf2-notify__list > li:first-child .rf2-notify__item { padding-top: 0; border-top: 0; }
+[data-ui='v2'] .rf2-notify__item[data-unread='true'] { box-shadow: inset 3px 0 0 var(--rf2-action); padding-left: var(--rf2-space-1-5); }
+[data-ui='v2'] .rf2-notify__title { margin: 0; font-size: var(--rf2-text-card); line-height: var(--rf2-leading-card); font-weight: var(--rf2-weight-card); color: var(--rf2-ink); }
+[data-ui='v2'] .rf2-notify__message { margin: 0; color: var(--rf2-ink-2); font-size: var(--rf2-text-body); line-height: var(--rf2-leading-body); }
+[data-ui='v2'] .rf2-notify__meta {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--rf2-space-1);
+  color: var(--rf2-muted); font-size: var(--rf2-text-label); line-height: var(--rf2-leading-label);
+}
+[data-ui='v2'] .rf2-notify__meta time { font-variant-numeric: tabular-nums; }
+[data-ui='v2'] .rf2-notify__controls { display: flex; flex-wrap: wrap; align-items: center; gap: var(--rf2-space-1); }
+[data-ui='v2'] .rf2-notify__category { color: var(--rf2-muted); }
+
+@media (min-width: 768px) and (max-width: 1279px) {
+  [data-ui='v2'] .rf2-notify { padding: var(--rf2-space-3); }
+}
+@media (max-width: 767px) {
+  [data-ui='v2'] .rf2-notify { padding: var(--rf2-space-2); min-height: 0; }
+  [data-ui='v2'] .rf2-notify .rf2-tabs { width: 100%; overflow: visible; }
+}

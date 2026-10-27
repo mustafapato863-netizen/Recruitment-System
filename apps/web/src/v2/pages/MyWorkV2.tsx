@@ -224,31 +224,33 @@ function NextActions({ data, day, filter, onFilter, f, ctx }: {
       <div className="rf2-mywork__list-head">
         <ButtonV2 kind="tertiary" size="sm" selected={filter === null} onClick={() => { if (filter) onFilter(null); }}>All tasks</ButtonV2>
       </div>
-      {visible.length === 0 && filter ? <p className="rf2-mywork__filter-empty">{filterEmpty(filter, day)}</p> : null}
-      {visible.length > 0 ? (
-        <ul className="rf2-mywork__list" aria-label="Next actions">
-          {visible.map(({ item, bucket, primary }) => {
-            const due = dueText(item, bucket, day, f);
-            const sla = data.reminderWorkerHealthy ? slaChip(item, bucket, day) : null;
-            const waitingChip = item.waitingOn ? <StatusChip tone="neutral" label={WAITING_LABEL[item.waitingOn] ?? 'Waiting'} /> : null;
-            const typeChip = <StatusChip tone={bucket === 'overdue' ? 'warning' : 'info'} label={TYPE_LABEL[item.type] ?? item.type} />;
-            return (
-              <li key={`${bucket}-${item.type}-${item.id}`} data-testid="work-row" data-bucket={bucket}>
-                <TaskRow
-                  icon={bucket === 'overdue' ? <TriangleAlert /> : TYPE_ICON[item.type] ?? <Clock />}
-                  iconTone={bucket === 'overdue' ? 'warning' : bucket === 'waitingOnOthers' ? 'neutral' : 'info'}
-                  title={rowTitle(item, bucket)}
-                  meta={<ItemMeta item={item} />}
-                  chip={<span className="rf2-mywork__chips">{waitingChip ?? typeChip}{sla ? <span data-testid="sla">{sla}</span> : null}</span>}
-                  due={due ? <span data-testid="due">{due}</span> : undefined}
-                  dueTone={bucket === 'overdue' ? 'danger' : 'default'}
-                  action={<ItemActions item={item} bucket={bucket} primary={primary} ctx={ctx} />}
-                />
-              </li>
-            );
-          })}
-        </ul>
-      ) : null}
+      <div className="rf2-mywork__surface">
+        {visible.length === 0 && filter ? <p className="rf2-mywork__filter-empty">{filterEmpty(filter, day)}</p> : null}
+        {visible.length > 0 ? (
+          <ul className="rf2-mywork__list" aria-label="Next actions">
+            {visible.map(({ item, bucket, primary }) => {
+              const due = dueText(item, bucket, day, f);
+              const sla = data.reminderWorkerHealthy ? slaChip(item, bucket, day) : null;
+              const waitingChip = item.waitingOn ? <StatusChip tone="neutral" label={WAITING_LABEL[item.waitingOn] ?? 'Waiting'} /> : null;
+              const typeChip = <StatusChip tone={bucket === 'overdue' ? 'warning' : 'info'} label={TYPE_LABEL[item.type] ?? item.type} />;
+              return (
+                <li key={`${bucket}-${item.type}-${item.id}`} data-testid="work-row" data-bucket={bucket}>
+                  <TaskRow
+                    icon={bucket === 'overdue' ? <TriangleAlert /> : TYPE_ICON[item.type] ?? <Clock />}
+                    iconTone={bucket === 'overdue' ? 'warning' : bucket === 'waitingOnOthers' ? 'neutral' : 'info'}
+                    title={rowTitle(item, bucket)}
+                    meta={<ItemMeta item={item} />}
+                    chip={<span className="rf2-mywork__chips">{waitingChip ?? typeChip}{sla ? <span data-testid="sla">{sla}</span> : null}</span>}
+                    due={due ? <span data-testid="due">{due}</span> : undefined}
+                    dueTone={bucket === 'overdue' ? 'danger' : 'default'}
+                    action={<ItemActions item={item} bucket={bucket} primary={primary} ctx={ctx} />}
+                  />
+                </li>
+              );
+            })}
+          </ul>
+        ) : null}
+      </div>
     </>
   );
 }
@@ -331,10 +333,10 @@ function InterviewPanel({ rows, f, ctx }: { rows: UpcomingInterview[] | undefine
   const fileRows = rows.filter((row) => row.access === 'file');
   const assigned = rows.filter((row) => row.access === 'evaluation');
   return (
-    <>
+    <div className="rf2-mywork__surface">
       <InterviewGroup title="Interview schedule" rows={fileRows} f={f} ctx={ctx} />
       <InterviewGroup title="Your assigned interviews" rows={assigned} f={f} ctx={ctx} />
-    </>
+    </div>
   );
 }
 
@@ -361,27 +363,29 @@ function JoiningPanel({ rows, canOpenFile, f }: { rows: JoiningSoon[] | undefine
           body="A start date appears here after an offer is accepted, with the checks still open."
         />
       ) : (
-        <ul className="rf2-mywork__list">
-          {rows.map((row) => {
-            const dest = joiningCaseHref(row, canOpenFile);
-            return (
-              <li key={row.id} data-testid="joining-row" data-readiness={row.readiness}>
-                <TaskRow
-                  icon={<CircleCheck />}
-                  iconTone="info"
-                  title={`${row.candidateName} · ${row.jobTitle}`}
-                  meta={<span className="rf2-mywork__meta-line">{joiningMeta(row, f)}</span>}
-                  chip={<StatusChip tone={joiningTone(row)} label={READINESS_LABEL[row.readiness]} />}
-                  action={(
-                    <Link className="rf2-btn rf2-btn--secondary rf2-btn--md" to={dest.href} aria-label={`${dest.label}: ${row.candidateName}`}>
-                      <span>{dest.label}</span>
-                    </Link>
-                  )}
-                />
-              </li>
-            );
-          })}
-        </ul>
+        <div className="rf2-mywork__surface">
+          <ul className="rf2-mywork__list">
+            {rows.map((row) => {
+              const dest = joiningCaseHref(row, canOpenFile);
+              return (
+                <li key={row.id} data-testid="joining-row" data-readiness={row.readiness}>
+                  <TaskRow
+                    icon={<CircleCheck />}
+                    iconTone="info"
+                    title={`${row.candidateName} · ${row.jobTitle}`}
+                    meta={<span className="rf2-mywork__meta-line">{joiningMeta(row, f)}</span>}
+                    chip={<StatusChip tone={joiningTone(row)} label={READINESS_LABEL[row.readiness]} />}
+                    action={(
+                      <Link className="rf2-btn rf2-btn--secondary rf2-btn--md" to={dest.href} aria-label={`${dest.label}: ${row.candidateName}`}>
+                        <span>{dest.label}</span>
+                      </Link>
+                    )}
+                  />
+                </li>
+              );
+            })}
+          </ul>
+        </div>
       )}
       <p className="rf2-mywork__footnote" data-testid="joining-footnote">Counts update after joining is confirmed. A scheduled start is not a completed hire.</p>
     </section>

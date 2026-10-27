@@ -77,8 +77,9 @@
 [data-ui='v2'] .rf2-shell--collapsed .rf2-nav-item,
 [data-ui='v2'] .rf2-shell--collapsed .rf2-shell__account { justify-content: center; padding-left: 0; padding-right: 0; }
 
-/* Matrix fix: the header title must never shrink to 0 (overflow:hidden made its min-width 0 next to the 360px search). */
-[data-ui='v2'] .rf2-shell__title { min-width: 6rem; }
+/* overflow:hidden would shrink this title to 0 beside the search. Size it to the label, cap a long name, and let the search keep the right side. */
+[data-ui='v2'] .rf2-shell__title { flex: 0 0 auto; width: max-content; max-width: 18rem; }
+[data-ui='v2'] .rf2-hsearch { margin-inline-start: auto; min-width: 8rem; }
 [data-ui='v2'] .rf2-collapse[hidden] { display: none; }
 /* Below 1024px the sidebar is the 64px icon rail (AppShellV2 forces collapsed). */
 @media (max-width: 1023px) {
@@ -87,10 +88,10 @@
 @media (max-width: 767px) {
   /* Title takes its own row so every character stays visible. The bar grows with the wrapped line. */
   [data-ui='v2'] .rf2-shell__header { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; align-items: center; height: auto; min-height: 64px; min-width: 0; row-gap: var(--rf2-space-1); column-gap: var(--rf2-space-1); padding: var(--rf2-space-1); }
-  [data-ui='v2'] .rf2-shell__title { grid-column: 1 / -1; flex: none; min-width: 0; max-width: 100%; white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+  [data-ui='v2'] .rf2-shell__title { grid-column: 1 / -1; flex: none; width: auto; min-width: 0; max-width: 100%; white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
   [data-ui='v2'] .rf2-shell__header .rf2-icon-button[aria-label^='Switch to'] { display: none; }
   [data-ui='v2'] .rf2-user-menu__text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-  [data-ui='v2'] .rf2-hsearch { flex: 1 1 0; min-width: 36px; }
+  [data-ui='v2'] .rf2-hsearch { flex: 1 1 0; margin-inline-start: 0; min-width: 36px; }
   [data-ui='v2'] .rf2-shell__header .rf2-hsearch__box { width: 100%; min-width: 0; }
   [data-ui='v2'] .rf2-hsearch__pop { min-width: 0; width: calc(100vw - 2 * var(--rf2-space-2)); }
 }

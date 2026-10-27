@@ -1,6 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { BreadcrumbProvider, useBreadcrumb } from '../../../context/BreadcrumbContext';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../../api/client';
 import { axeViolations } from '../../../components/v2/__tests__/axe';
@@ -63,6 +64,30 @@ describe('pay safety', () => {
     const body = api.postApi.mock.calls.find(([p]) => p === '/offers')![1];
     expect(JSON.stringify(body)).not.toMatch(/salary|amount|currency|package|grade/i);
     await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/offers/o1/submit', {}));
+  });
+});
+
+function ShellTitle() {
+  const { customLabels } = useBreadcrumb();
+  const { pathname } = useLocation();
+  return <h1>{customLabels[pathname] ?? 'Applications'}</h1>;
+}
+
+describe('File header', () => {
+  it('shows the candidate name in the header and the page heading', async () => {
+    serve('interview');
+    document.documentElement.setAttribute('data-ui', 'v2');
+    render(
+      <BreadcrumbProvider>
+        <MemoryRouter initialEntries={['/applications/a1']}>
+          <Routes>
+            <Route path="/applications/:id" element={<><ShellTitle /><ApplicationFileV2 /><Loc /></>} />
+          </Routes>
+        </MemoryRouter>
+      </BreadcrumbProvider>,
+    );
+    expect(await screen.findByRole('heading', { level: 1, name: 'Ahmed Embaby' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: 'Ahmed Embaby' })).toBeInTheDocument();
   });
 });
 

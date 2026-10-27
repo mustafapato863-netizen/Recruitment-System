@@ -15,6 +15,7 @@ vi.mock('../../../../quickguide', () => ({
 }));
 
 import { AppShellV2 } from '../AppShellV2';
+import { useSetBreadcrumbTitle } from '../../../../context/BreadcrumbContext';
 import { ThemeProvider } from '../../../../theme/ThemeContext';
 import { activeNavKey, permittedNavItems, SEAT_NAV, CLASSIC_NAV, permittedClassicItems } from '../navConfig';
 import type { Seat } from '../../../../v2/seat';
@@ -139,6 +140,25 @@ describe('nav per seat', () => {
     expect(within(nav).queryByRole('link', { name: 'Licences' })).toBeNull();
     expect(within(nav).queryByRole('link', { name: 'Final approvals' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Other work' })).not.toBeInTheDocument();
+  });
+
+  it('names a file with the candidate in the header', async () => {
+    function NamedFile() {
+      useSetBreadcrumbTitle('Ahmed Embaby');
+      return <p>page content</p>;
+    }
+    document.documentElement.setAttribute('data-ui', 'v2');
+    render(
+      <ThemeProvider><MemoryRouter initialEntries={['/applications/a1']}>
+        <Routes>
+          <Route element={<AppShellV2 user={user()} seat="employee" onSignOut={vi.fn()} />}>
+            <Route path="/applications/:id" element={<NamedFile />} />
+          </Route>
+        </Routes>
+      </MemoryRouter></ThemeProvider>,
+    );
+    expect(await screen.findByRole('heading', { level: 1, name: 'Ahmed Embaby' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 1, name: 'Applications' })).not.toBeInTheDocument();
   });
 
   it.each(['/applications/a1', '/applications/a1?drawer=prehire'])('a licence specialist mounts the application file at %s', async (path) => {

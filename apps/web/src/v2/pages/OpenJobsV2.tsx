@@ -51,10 +51,7 @@ export function OpenJobsV2() {
 
   return (
     <div className="rf2-jobs">
-      <div className="rf2-jobs__head">
-        <h1 className="rf2-jobs__title">Open jobs</h1>
-        <p className="rf2-jobs__sub">Jobs you own as primary recruiter. A job is the container; each candidate has one application file per job.</p>
-      </div>
+      <p className="rf2-jobs__lead">Jobs you own as primary recruiter. A job is the container; each candidate has one application file per job.</p>
       {state.kind === 'loading' ? <SkeletonV2 lines={6} label="Loading your jobs…" /> : null}
       {state.kind === 'forbidden' ? <ForbiddenStateV2 body="Your role does not include jobs." /> : null}
       {state.kind === 'error' ? (

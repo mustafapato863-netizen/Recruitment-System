@@ -2,6 +2,7 @@
 [data-ui='v2'] .rf2-jobs { display: flex; flex-direction: column; gap: var(--rf2-space-2); width: 100%; max-width: min(100%, 1560px); box-sizing: border-box; padding: var(--rf2-space-4); font-family: var(--rf2-font); color: var(--rf2-ink); }
 [data-ui='v2'] .rf2-jobs__title, [data-ui='v2'] .rf2-jobhead__title { display: flex; align-items: center; gap: var(--rf2-space-1); margin: 0; font-size: var(--rf2-text-page); line-height: var(--rf2-leading-page); font-weight: var(--rf2-weight-page); }
 [data-ui='v2'] .rf2-jobs__sub { margin: var(--rf2-space-0-5) 0 0; color: var(--rf2-ink-2); font-size: var(--rf2-text-body); }
+[data-ui='v2'] .rf2-jobs__lead { margin: 0; font-size: var(--rf2-text-page); line-height: var(--rf2-leading-page); font-weight: var(--rf2-weight-page); color: var(--rf2-ink); }
 [data-ui='v2'] .rf2-jobs__filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--rf2-space-1); margin-top: var(--rf2-space-2); }
 [data-ui='v2'] .rf2-jobs__search { min-width: 240px; }
 [data-ui='v2'] .rf2-sr-label .rf2-field__label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
@@ -37,8 +38,9 @@
 [data-ui='v2'] .rf2-jobhead__stats dd { margin: 0; font-weight: 600; }
 [data-ui='v2'] .rf2-jobhead__note { display: flex; align-items: center; gap: var(--rf2-space-1); margin: 0; color: var(--rf2-warning); font-size: var(--rf2-text-label); }
 [data-ui='v2'] .rf2-jobhead__note svg { width: 16px; height: 16px; }
-[data-ui='v2'] .rf2-board { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--rf2-space-1-5); align-items: start; }
-[data-ui='v2'] .rf2-col { display: flex; flex-direction: column; gap: var(--rf2-space-1); padding: var(--rf2-space-1); border: 1px dashed transparent; border-radius: var(--rf2-radius-card); background: var(--rf2-neutral-tint); }
+[data-ui='v2'] .rf2-board { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--rf2-space-1-5); align-items: start; width: 100%; min-width: 0; }
+[data-ui='v2'] .rf2-board:focus-visible { outline: var(--rf2-focus-width) solid var(--rf2-focus-color); outline-offset: var(--rf2-focus-offset); }
+[data-ui='v2'] .rf2-col { display: flex; flex-direction: column; gap: var(--rf2-space-1); min-width: 0; padding: var(--rf2-space-1); border: 1px dashed transparent; border-radius: var(--rf2-radius-card); background: var(--rf2-neutral-tint); }
 [data-ui='v2'] .rf2-col[data-drop] { border-color: var(--rf2-action); background: var(--rf2-info-tint); }
 [data-ui='v2'] .rf2-col__head { display: flex; align-items: center; justify-content: space-between; margin: 0; padding: 0 var(--rf2-space-0-5); font-size: var(--rf2-text-body); font-weight: 600; }
 [data-ui='v2'] .rf2-col__count { min-width: 20px; padding: 0 var(--rf2-space-0-5); border-radius: var(--rf2-radius-control); background: var(--rf2-card); font-size: var(--rf2-text-caption); text-align: center; font-variant-numeric: tabular-nums; }
@@ -156,8 +158,6 @@
 [data-ui='v2'] .rf2-jstatus { display: flex; flex-direction: column; gap: var(--rf2-space-2); }
 [data-ui='v2'] .rf2-jtable__sub > svg { display: inline; width: 14px; height: 14px; vertical-align: -2px; }
 
-[data-ui='v2'] .rf2-board__hint { display: none; }
-
 @media (max-width: 1359px) {
   [data-ui='v2'] .rf2-jobs { gap: var(--rf2-space-1-5); padding: var(--rf2-space-2); }
   [data-ui='v2'] .rf2-jobhead__top { flex-wrap: wrap; }
@@ -165,36 +165,13 @@
   [data-ui='v2'] .rf2-jobhead__title { flex-wrap: wrap; overflow-wrap: anywhere; }
   [data-ui='v2'] .rf2-jobhead__actions { flex: 1 1 100%; flex-wrap: wrap; }
   [data-ui='v2'] .rf2-jobhead__stats { flex-wrap: wrap; gap: var(--rf2-space-1) var(--rf2-space-2); }
-
-  [data-ui='v2'] .rf2-board {
-    min-width: 0;
-    grid-template-columns: none;
-    grid-auto-flow: column;
-    grid-auto-columns: minmax(224px, 1fr);
-    overflow-x: auto;
-    overscroll-behavior-inline: contain;
-    scroll-snap-type: inline proximity;
-    scrollbar-width: thin;
-    scrollbar-color: var(--rf2-muted) transparent;
-    padding: 2px 2px var(--rf2-space-1);
-  }
-  [data-ui='v2'] .rf2-board:focus-visible { outline: var(--rf2-focus-width) solid var(--rf2-focus-color); outline-offset: var(--rf2-focus-offset); }
-  [data-ui='v2'] .rf2-col { min-width: 0; scroll-snap-align: start; }
-  [data-ui='v2'] .rf2-board__hint { display: flex; align-items: center; gap: var(--rf2-space-0-5); margin: 0; color: var(--rf2-muted); font-size: var(--rf2-text-label); }
-  [data-ui='v2'] .rf2-board__hint svg { width: 14px; height: 14px; flex: none; }
 }
 
-/* Tablet: stages wrap into two columns instead of a sideways strip. Desktop from 1360px stays five columns. */
+/* Five columns from 1280px. Two columns from 768px to 1279px. */
 @media (min-width: 768px) and (max-width: 1279px) {
   [data-ui='v2'] .rf2-board {
-    display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-auto-flow: row;
-    grid-auto-columns: unset;
-    overflow-x: hidden;
-    scroll-snap-type: none;
   }
-  [data-ui='v2'] .rf2-board__hint { display: none; }
   [data-ui='v2'] .rf2-jobs { max-width: none; }
   [data-ui='v2'] .rf2-panel:has(.rf2-jtable) { overflow-x: auto; }
 }
@@ -207,9 +184,8 @@
   [data-ui='v2'] .rf2-jobhead__stats > div { min-width: 0; }
   [data-ui='v2'] .rf2-jobhead__stats dd { overflow-wrap: anywhere; }
   [data-ui='v2'] .rf2-jobs { max-width: 100%; overflow-x: clip; }
-  [data-ui='v2'] .rf2-board { display: flex; flex-direction: column; width: 100%; min-width: 0; overflow-x: hidden; scroll-snap-type: none; grid-auto-flow: row; grid-auto-columns: unset; }
-  [data-ui='v2'] .rf2-col { width: 100%; min-width: 0; }
-  [data-ui='v2'] .rf2-board__hint { display: none; }
+  [data-ui='v2'] .rf2-board { display: flex; flex-direction: column; }
+  [data-ui='v2'] .rf2-col { width: 100%; }
   [data-ui='v2'] .rf2-kcard__next { min-height: 44px; width: 100%; justify-content: center; }
   [data-ui='v2'] .rf2-kcard__name, [data-ui='v2'] .rf2-kcard__sub, [data-ui='v2'] .rf2-kcard__iv { min-width: 0; overflow-wrap: anywhere; }
   [data-ui='v2'] .rf2-kcard__menu > .rf2-link { min-height: 44px; padding-inline: var(--rf2-space-1); }

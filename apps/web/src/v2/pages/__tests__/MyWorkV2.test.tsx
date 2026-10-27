@@ -100,6 +100,34 @@ describe('My Work desk', () => {
     expect(within(rowsIn('waitingOnOthers')[0]!).getByRole('button', { name: 'Send offer' })).toBeDisabled();
     expect(document.querySelectorAll('.rf2-btn--primary')).toHaveLength(1);
   });
+
+  it('keeps one empty card, and the interview and joining sentences stay exact', async () => {
+    const u = userEvent.setup();
+    renderPage(ok('empty'));
+    expect(await screen.findByRole('heading', { name: 'No open work assigned to you' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'No open work assigned to you.' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/caught up/i)).not.toBeInTheDocument();
+    await u.click(screen.getByRole('tab', { name: 'Upcoming interviews' }));
+    expect(screen.getByRole('heading', { name: 'No upcoming interviews assigned to you.' })).toBeInTheDocument();
+    await u.click(screen.getByRole('tab', { name: 'Joining soon' }));
+    expect(screen.getByRole('heading', { name: 'No joining dates on your accepted cases.' })).toBeInTheDocument();
+    expect(screen.getByTestId('joining-footnote')).toHaveTextContent('Counts update after joining is confirmed. A scheduled start is not a completed hire.');
+  });
+
+  it('keeps the interview and joining row actions', async () => {
+    const u = userEvent.setup();
+    authState.user = { displayName: 'Mariam Farag', permissions: ['APPLICATION_VIEW'] };
+    renderPage(ok());
+    await screen.findByRole('list', { name: 'Next actions' });
+    await u.click(screen.getByRole('tab', { name: 'Upcoming interviews' }));
+    const manage = screen.getByRole('link', { name: 'Manage interview: Nourhan Sami · HRIS Developer' });
+    expect(manage).toHaveClass('rf2-btn--secondary');
+    expect(manage).toHaveAttribute('href', '/applications/a2?drawer=schedule&interview=iv2');
+    await u.click(screen.getByRole('tab', { name: 'Joining soon' }));
+    expect(screen.getByRole('link', { name: 'Open checklist: Lina Hassan' })).toHaveClass('rf2-btn--secondary');
+    expect(screen.getByRole('link', { name: 'Open checklist: Lina Hassan' })).toHaveAttribute('href', '/applications/a3?drawer=prehire');
+    expect(screen.getByRole('link', { name: 'View readiness: Mona Said' })).toHaveAttribute('href', '/applications/a8?drawer=prehire');
+  });
 });
 
 describe('My Work (E02) from the #9 contract', () => {
@@ -140,22 +168,21 @@ describe('My Work (E02) from the #9 contract', () => {
     expect(disabled).toBeDisabled();
     expect(disabled).toHaveAccessibleDescription('Interview has not ended');
     expect(disabled).toHaveAttribute('title', 'Interview has not ended');
-    expect(today.getByRole('link', { name: 'Put on hold: HRIS Developer (VAC-1)' })).toHaveClass('rf2-btn--secondary');
-    expect(document.querySelectorAll('.rf2-btn--primary')).toHaveLength(1);
+    expect(today.getByRole('link', { name: 'Put on hold: HRIS Developer (VAC-1)' })).toHaveClass('rf2-btn--tertiary');
+    expect(document.querySelectorAll('.rf2-btn--primary')).toHaveLength(3);
     expect(today.getByRole('link', { name: /^Review applicants/ })).toHaveClass('rf2-btn--primary');
     expect(todayRows).toHaveLength(2);
 
     const waitingRows = rowsIn('waitingOnOthers');
-    const waiting = within(waitingRows[0]!.parentElement!);
     expect(within(waitingRows[0]!).getByText('Salma Farouk — offer waiting on Karim Hassan')).toBeInTheDocument();
     expect(within(waitingRows[0]!).getByText("Waiting on Karim Hassan's approval")).toBeInTheDocument();
     expect(within(waitingRows[0]!).getByText('Waiting on approval')).toBeInTheDocument();
     expect(within(waitingRows[1]!).getByText('Waiting on interviewer')).toBeInTheDocument();
     expect(within(waitingRows[1]!).getByText('2 scorecard(s) missing')).toBeInTheDocument();
-    expect(waiting.queryByRole('button', { name: 'Send offer' })).not.toBeInTheDocument();
-    expect(waitingRows.every((row) => within(row).queryByRole('link') === null)).toBe(true);
-    expect(waiting.getAllByText('Read-only')).toHaveLength(2);
-    expect(waiting.getAllByText('No action for you')).toHaveLength(2);
+    expect(within(waitingRows[0]!).getByRole('link', { name: 'Open offer: Offer OFF-1' })).toHaveAttribute('href', '/applications/a3?drawer=offer');
+    expect(within(waitingRows[0]!).getByRole('button', { name: 'Send offer' })).toBeDisabled();
+    expect(within(waitingRows[1]!).getByRole('link', { name: 'Open interview: Interview: Omar Said' })).toHaveAttribute('href', '/applications/a4');
+    expect(within(waitingRows[1]!).getByRole('button', { name: 'Move to Offer' })).toBeDisabled();
     const counts = screen.getByLabelText('Counts');
     expect(Array.from(counts.querySelectorAll('[data-count-value]')).map((d) => d.textContent)).toEqual(['1', '2', '2']);
     expect(counts.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
@@ -318,7 +345,7 @@ describe('tabs, filters, and caller data', () => {
 
     await u.click(screen.getByRole('button', { name: '2 Waiting' }));
     expect(rowsIn('waitingOnOthers')).toHaveLength(2);
-    expect(document.querySelectorAll('.rf2-btn--primary')).toHaveLength(0);
+    expect(document.querySelectorAll('.rf2-btn--primary')).toHaveLength(1);
     await u.click(screen.getByRole('button', { name: 'All tasks' }));
     expect(screen.getByRole('button', { name: 'All tasks' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByTestId('loc')).toHaveTextContent(/^\/my-work$/);
@@ -337,10 +364,10 @@ describe('tabs, filters, and caller data', () => {
     }, data.waitingOnOthers[1]!];
     renderPage(async () => ({ data, source: 'api' }));
     const row = within((await screen.findAllByTestId('work-row')).find((item) => item.getAttribute('data-bucket') === 'waitingOnOthers')!);
-    expect(row.getByText('Lina Hassan — offer waiting on the candidate')).toBeInTheDocument();
-    expect(row.getByText('Waiting on candidate')).toBeInTheDocument();
-    expect(row.getByText('Waiting on Lina Hassan')).toBeInTheDocument();
-    expect(row.queryByText(/approval/i)).not.toBeInTheDocument();
+    expect(row.getByText('Lina Hassan — offer waiting on the candidate').textContent).not.toMatch(/approval/i);
+    expect(row.getByText('Waiting on candidate').textContent).not.toMatch(/approval/i);
+    expect(row.getByText('Waiting on Lina Hassan').textContent).not.toMatch(/approval/i);
+    expect(row.getByRole('button', { name: 'Send offer' })).toHaveAccessibleDescription('Waiting for approval');
   });
 
   it('upcoming interviews keep file links and evaluation links apart, including a held job', async () => {

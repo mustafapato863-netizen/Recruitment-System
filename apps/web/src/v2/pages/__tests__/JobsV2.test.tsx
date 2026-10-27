@@ -36,6 +36,18 @@ const PAY = /42000|42,000|99000|30000|EGP|AED|salary|budget|compensation/i;
 beforeEach(() => { Object.values(api).forEach((f) => f.mockReset()); serve(); });
 afterEach(() => document.documentElement.removeAttribute('data-ui'));
 
+const OPEN_JOBS_SUBTITLE = 'Jobs you own as primary recruiter. A job is the container; each candidate has one application file per job.';
+
+describe('Open jobs desk', () => {
+  it('lets the existing subtitle lead, with the header as the only Open jobs', async () => {
+    renderAt('/vacancies');
+    const subtitle = await screen.findByText(OPEN_JOBS_SUBTITLE);
+    expect(screen.queryByRole('heading', { name: 'Open jobs' })).not.toBeInTheDocument();
+    const search = screen.getByLabelText('Search my jobs');
+    expect(subtitle.compareDocumentPosition(search) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});
+
 describe('E08 Open jobs', () => {
   it('lists my open jobs with seats, due date, stage counts and status; others read-only; no pay; axe clean', async () => {
     const { container } = renderAt('/vacancies');
@@ -87,8 +99,9 @@ describe('E09 Job pipeline', () => {
     expect(await screen.findByRole('heading', { level: 1, name: /HRIS Developer/ })).toBeInTheDocument();
     const board = screen.getByRole('region', { name: 'HRIS Developer pipeline' });
     expect(board).toHaveAttribute('tabindex', '0');
-    expect(board).toHaveAccessibleDescription(/five horizontally scrollable stages/);
-    expect(screen.getByText('Scroll horizontally to explore all five stages')).toBeInTheDocument();
+    expect(board).toHaveAccessibleDescription(/five stages/);
+    expect(board).not.toHaveAccessibleDescription(/scroll/i);
+    expect(screen.queryByText('Scroll horizontally to explore all five stages')).not.toBeInTheDocument();
     const cols = ['Applied', 'Screening', 'Interview', 'Offer', 'Pre-hire'].map((n) => screen.getByRole('region', { name: new RegExp(`^${n}`) }));
     expect(cols.map((c) => within(c).queryAllByRole('article').length)).toEqual([3, 3, 3, 1, 0]);
     expect(within(cols[4]).getByText('No files in Pre-hire')).toBeInTheDocument();

@@ -86,10 +86,7 @@ export function TeamWorkV2() {
 
   return (
     <div className="rf2-jobs rf2-team">
-      <div>
-        <h1 className="rf2-jobs__title">Team work</h1>
-        <p className="rf2-jobs__sub">{teamWorkSubtitle(reports, user?.id)}</p>
-      </div>
+      <p className="rf2-team__subtitle">{teamWorkSubtitle(reports, user?.id)}</p>
       {toast ? <p className="rf2-inline-note" data-tone="success" role="status"><CircleCheck aria-hidden="true" /> {toast}</p> : null}
       {state.kind === 'loading' ? <SkeletonV2 lines={6} label="Loading team work…" /> : null}
       {state.kind === 'forbidden' ? <ForbiddenStateV2 body="Your role does not include your team’s files." /> : null}
@@ -130,8 +127,10 @@ export function TeamWorkV2() {
           ) : reports.length === 0 ? (
             <EmptyStateV2 title="No direct reports" body="People whose manager is you appear here with their open files." />
           ) : (
-            <div className="rf2-team__grid">
-              {reports.map((r) => <ReportCard key={r.person.id} r={r} jobs={jobs?.filter((j) => j.ownerId === r.person.id) ?? []} onJob={(job, action) => setJobAction({ job, action })} onReassign={() => go({ reassign: r.person.id, file: null })} canReassign={reports.length > 1} />)}
+            <div className="rf2-team__surface">
+              <div className="rf2-team__grid">
+                {reports.map((r) => <ReportCard key={r.person.id} r={r} jobs={jobs?.filter((j) => j.ownerId === r.person.id) ?? []} onJob={(job, action) => setJobAction({ job, action })} onReassign={() => go({ reassign: r.person.id, file: null })} canReassign={reports.length > 1} />)}
+              </div>
             </div>
           )}
           {deciding ? <OfferDecisionDrawer offerId={deciding.offerId} ownerName={deciding.ownerName} showPay={showPay} onClose={() => go({ offer: null })} onDone={done} /> : null}

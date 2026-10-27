@@ -28,6 +28,42 @@ const renderAt = (path = '/my-work') => {
 beforeEach(() => { vi.clearAllMocks(); serve(); });
 const card = (name: string) => screen.getByRole('heading', { name }).closest('section') as HTMLElement;
 
+describe('Team work desk', () => {
+  it('lets the subtitle lead, with the header as the only Team work', async () => {
+    renderAt();
+    const subtitle = await screen.findByText('Open work of your 3 direct reports. Counts equal the rows shown.');
+    expect(screen.queryByRole('heading', { name: 'Team work' })).not.toBeInTheDocument();
+    const waiting = screen.getByRole('heading', { name: 'Waiting on you' });
+    expect(subtitle.compareDocumentPosition(waiting) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Mariam Farag' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Noura Al-Dosari' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Youssef Ibrahim' })).toBeInTheDocument();
+  });
+
+  it('keeps the waiting note as one line inside Waiting on you', async () => {
+    serve({
+      '/offers?status=Pending+Approval&pageSize=100': [],
+      '/me/work?day=today': {
+        date: fx.myWork.date,
+        counts: { overdue: 0, today: 0, waitingOnOthers: 0 },
+        overdue: [],
+        dueToday: [],
+        waitingOnOthers: [],
+        targets: [],
+        empty: true,
+        emptyMessage: null,
+        reminderWorkerHealthy: true,
+      },
+    });
+    renderAt();
+    const waiting = (await screen.findByRole('heading', { name: 'Waiting on you' })).closest('section')!;
+    const note = within(waiting).getByText('Nothing is waiting on your decision.');
+    expect(note).toHaveTextContent(/^Nothing is waiting on your decision\.$/);
+    expect(within(waiting).queryByRole('heading', { name: 'Nothing is waiting on your decision.' })).not.toBeInTheDocument();
+    expect(within(waiting).getAllByRole('heading')).toHaveLength(1);
+  });
+});
+
 describe('M2 Team work', () => {
   it('waiting on you (my team only), one card per report A–Z, counts equal rows, closed files hidden, no pay; axe', async () => {
     const { container } = renderAt();
