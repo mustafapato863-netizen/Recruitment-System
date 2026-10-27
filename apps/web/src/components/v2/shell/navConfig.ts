@@ -89,12 +89,9 @@ export const CLASSIC_NAV: SeatNavItem[] = [
   C('pipeline', 'Advanced pipeline templates', '/classic/pipeline-settings', { requires: ['OVERRIDE_WORKFLOW'] }),
 ];
 
-/** The classic items this user may open (ADMINISTRATOR passes every v1 PermissionGate). Interviewer-only users get none. */
-export function permittedClassicItems(permissions: readonly string[] | undefined, isAdministrator = false, interviewerOnly = false): SeatNavItem[] {
-  if (interviewerOnly) return [];
-  const held = new Set(permissions ?? []);
-  return CLASSIC_NAV.filter((i) => isAdministrator
-    || ((!i.requires || i.requires.every((p) => held.has(p))) && (!i.requiresAny || i.requiresAny.some((p) => held.has(p)))));
+/** Classic labels are retired from the sidebar. Signed-in visits redirect in v2Redirect. */
+export function permittedClassicItems(_permissions?: readonly string[], _isAdministrator = false, _interviewerOnly = false): SeatNavItem[] {
+  return [];
 }
 
 export function permittedNavItems(seat: Seat, permissions: readonly string[] | undefined, isAdministrator = false, recruiterOnly = false, interviewer = false): SeatNavItem[] {

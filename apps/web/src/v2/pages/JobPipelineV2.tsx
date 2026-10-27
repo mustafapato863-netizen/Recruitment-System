@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { DragDropProvider, useDraggable, useDroppable, type DragEndEvent } from '@dnd-kit/react';
 import { ArrowRight, CalendarDays, CircleAlert, CircleX, Clock, MoveRight, Pause, Play, RotateCw, Sparkles, Upload } from 'lucide-react';
 import { ButtonV2, EmptyStateV2, ForbiddenStateV2, SkeletonV2, StatusChip } from '../../components/v2';
 import { patchApi } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
 import {
-  ACCEPTING_JOB_STATUSES, ADMIN_STATUS_TEXT, BOARD_LABEL, BOARD_STAGES, MOVE_GATE_HINT, blockingGate, canChangeJobStatus, errorMessage, fetchAssignable, isRedactedJob, isStaleStage, jobActions, jobErrorFromError, jobOwner, jobTitle, loadClosedFiles, loadJobBoard, moveCheck,
+  ACCEPTING_JOB_STATUSES, ADMIN_STATUS_TEXT, BOARD_LABEL, BOARD_STAGES, MOVE_GATE_HINT, blockingGate, canChangeJobStatus, cardFileHref, cardNextAction, errorMessage, fetchAssignable, gateRefusesMove, isRedactedJob, isStaleStage, jobActions, jobErrorFromError, jobOwner, jobTitle, loadClosedFiles, loadJobBoard, moveCheck,
   type AssignablePerson, type BoardApplication, type BoardStage, type JobBoard, type JobDetail,
 } from '../api/jobs';
 import { GATE_COPY, type GateCode } from '../api/gates';
@@ -38,6 +38,7 @@ const initials = (n: string) => n.split(/\s+/).filter(Boolean).slice(0, 2).map((
 /** E09 Job pipeline board + E11/E12 drawers (?drawer=import|status). */
 export function JobPipelineV2() {
   const { id = '' } = useParams();
+  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const drawer = params.get('drawer');
   const [state, setState] = useState<State>({ kind: 'loading' });
@@ -82,6 +83,7 @@ export function JobPipelineV2() {
     const check = moveCheck(app, target, state.board.job);
     const name = cardName(app);
     if (!check.ok) { setToast({ tone: 'danger', title: `Can't move ${name} to ${BOARD_LABEL[target]}`, body: check.reason }); return; }
+    if (gateRefusesMove(app, target, state.board.job)) { navigate(cardFileHref(app)); return; }
     setMoving(app.id);
     setToast(null);
     try {
@@ -91,10 +93,9 @@ export function JobPipelineV2() {
     } catch (e) {
       const d = jobErrorFromError(e);
       const gate = d && 'gate' in d && d.gate ? GATE_COPY[d.gate as GateCode] : null;
+      if (gate) { navigate(cardFileHref(app)); return; }
       const closedFile = d?.code === 'FILE_CLOSED';
-      const body = gate
-        ? `Missing gate: ${gate.gate.toLowerCase()}. ${name.split(' ')[0]} stays in ${BOARD_LABEL[app.stage as BoardStage]}. ${gate.fix}`
-        : isStaleStage(e) ? 'Someone changed this file first. The board was refreshed.'
+      const body = isStaleStage(e) ? 'Someone changed this file first. The board was refreshed.'
         : closedFile ? `${d?.message || 'This file is closed.'} The board was refreshed.` : errorMessage(e, 'The move failed.');
       setToast({ tone: 'danger', title: `Can't move ${name} to ${BOARD_LABEL[target]}`, body });
       if (isStaleStage(e) || closedFile) reload();
@@ -228,6 +229,7 @@ function Card({ app, job, moving, onMove }: { app: BoardApplication; job: JobDet
     return () => document.removeEventListener('mousedown', close);
   }, [menu]);
   const blocked = blockingGate(app);
+  const next = cardNextAction(app);
   const followUp = app.followUpDate ?? app.nextFollowUpAt?.slice(0, 10) ?? null;
   const todayIso = new Date().toISOString().slice(0, 10);
   const sub = app.lastActivityLabel ? `${app.lastActivityLabel}${app.lastActivityAt ? ` · ${formatDay(app.lastActivityAt)}` : ''}` : `Applied ${formatDay(app.appliedAt)}${app.source ? ` · ${app.source}` : ''}`;
@@ -240,6 +242,7 @@ function Card({ app, job, moving, onMove }: { app: BoardApplication; job: JobDet
       <p className="rf2-kcard__sub">{sub}</p>
       {app.interview ? <p className="rf2-kcard__iv"><CalendarDays aria-hidden="true" /> {app.interview.when === 'next' ? 'Interview' : 'Last interview'} {formatSlot(app.interview.startAt, app.interview.endAt)}{app.interview.room.name ? ` · ${app.interview.room.name}` : app.interview.room.url ? ' · room link' : ''}</p> : null}
       {blocked ? <p className="rf2-kcard__chip" data-tone="warning" data-testid="gate-badge"><CircleAlert aria-hidden="true" /> {GATE_BADGE[blocked.gate]}</p> : null}
+      {next ? <Link className="rf2-kcard__next" to={cardFileHref(app)}>{next.label} <span className="rf2-sr-only">for {name}</span></Link> : null}
       {followUp ? <p className="rf2-kcard__chip" data-tone={followUp < todayIso ? 'warning' : 'info'}><Clock aria-hidden="true" /> Follow-up {formatDay(`${followUp}T12:00:00Z`)}</p> : null}
       <div className="rf2-kcard__menu">
         <button ref={btnRef} type="button" className="rf2-link" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu((v) => !v)} disabled={moving}>

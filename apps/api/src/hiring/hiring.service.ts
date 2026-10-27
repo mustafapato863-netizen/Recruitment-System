@@ -400,6 +400,7 @@ export class HiringService {
 
     return cases.map(c => ({
       id: c.id,
+      applicationId: c.applicationId,
       candidateName: `${c.application.candidate.firstName} ${c.application.candidate.lastName}`,
       positionTitle: c.application.vacancy.position.title,
       branchName: c.application.vacancy.branch.name,
@@ -555,6 +556,7 @@ export class HiringService {
 /** FINAL-2: what a LICENSE_CHECK-only caller sees of a hiring case. */
 type CaseForLicense = {
   id: string;
+  applicationId: string;
   status: string;
   application: { candidate: { firstName: string; lastName: string }; vacancy: { position: { title: string }; branch: { name: string } } };
   complianceRequirements: Array<{ id: string; type: string; name: string; status: string; isRequired: boolean; expiryDate: Date | string | null; verifiedAt: Date | string | null; documentId: string | null }>;
@@ -563,6 +565,7 @@ export function licenseView(c: CaseForLicense) {
   const iso = (d: Date | string | null) => (d instanceof Date ? d.toISOString() : d);
   return {
     id: c.id,
+    applicationId: c.applicationId,
     status: c.status,
     candidateName: `${c.application.candidate.firstName} ${c.application.candidate.lastName}`,
     positionTitle: c.application.vacancy.position.title,
@@ -607,6 +610,7 @@ export function licenseAssignmentWhere(userId: string, organizationId: string): 
 
 type ApproverCase = {
   id: string;
+  applicationId?: string;
   status: string;
   application: { candidate: { firstName: string; lastName: string }; vacancy: { position: { title: string }; branch: { name: string } } };
   approvals?: Array<{ id: string; roleCode: string; status: string; comment?: string | null; decidedAt?: Date | string | null; invalidatedAt?: Date | string | null }>;
@@ -616,6 +620,7 @@ export function finalApproverView(c: ApproverCase) {
   const iso = (d: Date | string | null | undefined) => (d instanceof Date ? d.toISOString() : d ?? null);
   return {
     id: c.id,
+    ...(c.applicationId ? { applicationId: c.applicationId } : {}),
     status: c.status,
     candidateName: `${c.application.candidate.firstName} ${c.application.candidate.lastName}`,
     positionTitle: c.application.vacancy.position.title,

@@ -23,12 +23,12 @@
 [data-ui='v2'] .rf2-avatar { display: grid; place-items: center; flex: none; width: 32px; height: 32px; border-radius: var(--rf2-radius-pill); background: var(--rf2-success); color: var(--rf2-on-action); font-size: var(--rf2-text-caption); font-weight: 700; }
 [data-ui='v2'] .rf2-avatar--sm { width: 28px; height: 28px; }
 
-[data-ui='v2'] .rf2-shell__main { position: relative; z-index: 1; display: flex; flex-direction: column; min-width: 0; }
+[data-ui='v2'] .rf2-shell__main { position: relative; z-index: 1; display: flex; flex-direction: column; min-width: 0; min-height: 100vh; }
 [data-ui='v2'] .rf2-shell__header { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: var(--rf2-space-2); height: 64px; padding: 0 var(--rf2-space-4); background: var(--rf2-glass-nav); border: 0; border-bottom: 1px solid var(--rf2-glass-line); box-shadow: var(--rf2-neo-raise); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
 [data-ui='v2'] .rf2-shell__title { flex: 1; margin: 0; font-size: var(--rf2-text-body); line-height: var(--rf2-leading-body); font-weight: 500; color: var(--rf2-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 [data-ui='v2'] .rf2-search-entry { display: flex; align-items: center; gap: var(--rf2-space-1); width: 320px; height: 36px; padding: 0 var(--rf2-space-1-5); border: 1px solid var(--rf2-border); border-radius: 12px; background: var(--rf2-well); color: var(--rf2-muted); font: inherit; font-size: var(--rf2-text-body); cursor: default; box-shadow: var(--rf2-neo-inset); }
 [data-ui='v2'] .rf2-search-entry svg, [data-ui='v2'] .rf2-icon-button svg, [data-ui='v2'] .rf2-user-menu__item svg { width: 16px; height: 16px; flex: none; }
-[data-ui='v2'] .rf2-icon-button { position: relative; display: grid; place-items: center; width: 40px; height: 40px; border: 1px solid var(--rf2-border); border-radius: 12px; background: var(--rf2-neutral-tint); color: var(--rf2-ink-2); box-shadow: var(--rf2-neo-raise-sm); }
+[data-ui='v2'] .rf2-icon-button { position: relative; display: grid; place-items: center; width: 40px; height: 40px; border: 1px solid transparent; border-radius: 12px; background: var(--rf2-neutral-tint); color: var(--rf2-ink-2); box-shadow: var(--rf2-neo-raise-sm); }
 [data-ui='v2'] .rf2-icon-button:hover { filter: brightness(0.98); }
 [data-ui='v2'] .rf2-icon-button[aria-label^='Help'] { background: var(--rf2-success-tint); }
 [data-ui='v2'] .rf2-bell .rf2-icon-button { background: var(--rf2-info-tint); }
@@ -44,7 +44,7 @@
 [data-ui='v2'] .rf2-user-menu__head { padding: var(--rf2-space-1) var(--rf2-space-1-5); border-bottom: 1px solid var(--rf2-divider); margin-bottom: var(--rf2-space-0-5); }
 [data-ui='v2'] .rf2-user-menu__item { display: flex; align-items: center; gap: var(--rf2-space-1); width: 100%; min-height: 40px; padding: 0 var(--rf2-space-1-5); border: 0; border-radius: var(--rf2-radius-control); background: transparent; color: var(--rf2-ink); font: inherit; font-size: var(--rf2-text-body); text-align: left; cursor: pointer; }
 [data-ui='v2'] .rf2-user-menu__item:hover { background: var(--rf2-neutral-tint); }
-[data-ui='v2'] .rf2-shell__content { flex: 1; min-width: 0; outline: none; padding-bottom: var(--rf2-space-4); }
+[data-ui='v2'] .rf2-shell__content { display: flex; flex-direction: column; flex: 1; min-width: 0; outline: none; padding-bottom: var(--rf2-space-4); }
 @media (prefers-reduced-motion: reduce) { [data-ui='v2'] .rf2-shell * { transition: none !important; animation: none !important; } }
 
 /* F4 follow-ups: collapse rail, workspace block */

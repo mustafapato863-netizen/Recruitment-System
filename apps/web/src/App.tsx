@@ -120,7 +120,7 @@ function App() {
                   <Route path="/talent-pools" element={<PermissionGate requiredPermission="CANDIDATE_VIEW"><TalentPoolsListRoute /></PermissionGate>} />
                   <Route path="/talent-pools/:id" element={<PermissionGate requiredPermission="CANDIDATE_VIEW"><TalentPoolDetailRoute /></PermissionGate>} />
                   <Route path="/offers/:id" element={<EntityLinkRoute kind="offer" />} />
-                  <Route path="/applications/:id" element={<PermissionGate requiredAnyPermission={['APPLICATION_VIEW', 'FINAL_HIRING_APPROVAL']}><ApplicationRoute /></PermissionGate>} />
+                  <Route path="/applications/:id" element={<PermissionGate requiredAnyPermission={['APPLICATION_VIEW', 'FINAL_HIRING_APPROVAL', 'LICENSE_CHECK']}><ApplicationRoute /></PermissionGate>} />
 
                   {/* Manager */}
                   <Route path="/vacancy-requests" element={<RequisitionsGate><PermissionGate requiredPermission="VACANCY_REQUEST_VIEW"><RequisitionsRoute /></PermissionGate></RequisitionsGate>} />

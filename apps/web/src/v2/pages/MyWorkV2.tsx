@@ -224,7 +224,6 @@ function NextActions({ data, day, filter, onFilter, f, ctx }: {
         ))}
       </div>
       <div className="rf2-mywork__list-head">
-        <h3 className="rf2-mywork__list-title">Next actions</h3>
         <ButtonV2 kind="tertiary" size="sm" selected={filter === null} onClick={() => { if (filter) onFilter(null); }}>All tasks</ButtonV2>
       </div>
       {visible.length === 0 && filter ? <p className="rf2-mywork__filter-empty">{filterEmpty(filter, day)}</p> : null}
@@ -323,7 +322,15 @@ function InterviewGroup({ title, rows, f, ctx }: { title: string; rows: Upcoming
 
 function InterviewPanel({ rows, f, ctx }: { rows: UpcomingInterview[] | undefined; f: Format; ctx: HrefContext }) {
   if (rows === undefined) return <p className="rf2-mywork__note" role="status">Upcoming interviews are unavailable in this response.</p>;
-  if (rows.length === 0) return <p className="rf2-mywork__filter-empty">No upcoming interviews assigned to you.</p>;
+  if (rows.length === 0) {
+    return (
+      <EmptyStateV2
+        icon={<CalendarClock />}
+        title="No upcoming interviews assigned to you."
+        body="Interviews on your jobs, and interviews assigned to you, show here with one way to open the file."
+      />
+    );
+  }
   const fileRows = rows.filter((row) => row.access === 'file');
   const assigned = rows.filter((row) => row.access === 'evaluation');
   return (
@@ -350,7 +357,13 @@ function JoiningPanel({ rows, canOpenFile, f }: { rows: JoiningSoon[] | undefine
   if (rows === undefined) return <p className="rf2-mywork__note" role="status">Joining cases are unavailable in this response.</p>;
   return (
     <section className="rf2-mywork__group" aria-label="Joining soon">
-      {rows.length === 0 ? <p className="rf2-mywork__filter-empty">No joining dates on your accepted cases.</p> : (
+      {rows.length === 0 ? (
+        <EmptyStateV2
+          icon={<CircleCheck />}
+          title="No joining dates on your accepted cases."
+          body="A start date appears here after an offer is accepted, with the checks still open."
+        />
+      ) : (
         <ul className="rf2-mywork__list">
           {rows.map((row) => {
             const dest = joiningCaseHref(row, canOpenFile);
@@ -431,30 +444,7 @@ export function MyWorkV2({ load = getMyWork }: { load?: typeof getMyWork } = {})
 
   return (
     <div className="rf2-mywork">
-      <div className="rf2-mywork__top">
-        <div>
-          <h2 className="rf2-mywork__title">My Work</h2>
-          {data ? <p className="rf2-mywork__subtitle">{subtitleFor(tab, noWork)}</p> : null}
-        </div>
-        <div className="rf2-mywork__day">
-          <div className="rf2-mywork__head-actions">
-            {data && !noWork && tab === 'actions' ? <Link className="rf2-btn rf2-btn--secondary rf2-btn--sm" to="/vacancies"><span>View open jobs</span></Link> : null}
-            {state.kind === 'ready' ? (
-              <Link className="rf2-btn rf2-btn--secondary rf2-btn--sm" to="/notifications">
-                <span className="rf2-mywork__btn-icon" aria-hidden="true"><Bell /></span>
-                <span>Notifications</span>
-              </Link>
-            ) : null}
-            {data ? (
-              <div className="rf2-mywork__quiet-day" role="group" aria-label="Day">
-                <ButtonV2 kind="secondary" size="sm" selected={day === 'today'} aria-label="Show today" onClick={() => setDay('today')}>Today</ButtonV2>
-                <ButtonV2 kind="secondary" size="sm" selected={day === 'tomorrow'} aria-label="Show tomorrow" onClick={() => setDay('tomorrow')}>Tomorrow</ButtonV2>
-              </div>
-            ) : null}
-          </div>
-          {data?.date ? <p className="rf2-mywork__today">{day === 'tomorrow' ? 'Tomorrow' : 'Today'} · {f.full(data.date)}</p> : null}
-        </div>
-      </div>
+      {data ? <p className="rf2-mywork__subtitle">{subtitleFor(tab, noWork)}</p> : null}
 
       {data && !data.reminderWorkerHealthy && !noWork ? (
         <p className="rf2-mywork__note" role="note" data-testid="sla-hidden">
@@ -478,7 +468,25 @@ export function MyWorkV2({ load = getMyWork }: { load?: typeof getMyWork } = {})
 
       {data ? (
         <>
-          <TabsV2 items={tabs} activeKey={tab} onChange={setTab} ariaLabel="My Work sections" />
+          <div className="rf2-mywork__toolbar">
+            <div className="rf2-mywork__day">
+              <div className="rf2-mywork__head-actions">
+                {!noWork && tab === 'actions' ? <Link className="rf2-btn rf2-btn--secondary rf2-btn--sm" to="/vacancies"><span>View open jobs</span></Link> : null}
+                {state.kind === 'ready' ? (
+                  <Link className="rf2-btn rf2-btn--secondary rf2-btn--sm" to="/notifications">
+                    <span className="rf2-mywork__btn-icon" aria-hidden="true"><Bell /></span>
+                    <span>Notifications</span>
+                  </Link>
+                ) : null}
+                <div className="rf2-mywork__quiet-day" role="group" aria-label="Day">
+                  <ButtonV2 kind="secondary" size="sm" selected={day === 'today'} aria-label="Show today" onClick={() => setDay('today')}>Today</ButtonV2>
+                  <ButtonV2 kind="secondary" size="sm" selected={day === 'tomorrow'} aria-label="Show tomorrow" onClick={() => setDay('tomorrow')}>Tomorrow</ButtonV2>
+                </div>
+              </div>
+              {data.date ? <p className="rf2-mywork__today">{day === 'tomorrow' ? 'Tomorrow' : 'Today'} · {f.full(data.date)}</p> : null}
+            </div>
+            <TabsV2 items={tabs} activeKey={tab} onChange={setTab} ariaLabel="My Work sections" />
+          </div>
           <div role="tabpanel" id={panelId(tab)} aria-labelledby={`rf2-tab-${tab}`} className="rf2-mywork__panel">
             {tab === 'actions' ? (
               <>

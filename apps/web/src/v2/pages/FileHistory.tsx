@@ -157,7 +157,7 @@ export function DocumentHistory({ applicationId, fallback, onToast }: { applicat
 const TONE = { Queued: 'warning', Sent: 'success', Failed: 'danger' } as const;
 
 /** Templates and queued, sent, and failed attempts. Retry adds a row and leaves the failed attempt. */
-export function MessagesCard({ applicationId, followUpDate }: { applicationId: string; followUpDate: string | null }) {
+export function MessagesCard({ applicationId, followUpDate, omitAttempts = false }: { applicationId: string; followUpDate: string | null; omitAttempts?: boolean }) {
   const [payload, setPayload] = useState<MessagePayload | null>(null);
   const [missing, setMissing] = useState(false);
   const [templateId, setTemplateId] = useState('');
@@ -223,7 +223,8 @@ export function MessagesCard({ applicationId, followUpDate }: { applicationId: s
             ) : null}
             <ButtonV2 kind="secondary" size="sm" type="submit" loading={busy === 'send'} disabled={!templateId}>Send to local test</ButtonV2>
           </form>
-          {payload.attempts.length === 0 ? <p className="rf2-file__muted">No attempts yet.</p> : (
+          {!omitAttempts && payload.attempts.length === 0 ? <p className="rf2-file__muted">No attempts yet.</p> : null}
+          {!omitAttempts && payload.attempts.length > 0 ? (
             <ul className="rf2-msg-list" aria-label="Message attempts">
               {payload.attempts.map((row) => (
                 <li key={row.id}>
@@ -234,7 +235,7 @@ export function MessagesCard({ applicationId, followUpDate }: { applicationId: s
                 </li>
               ))}
             </ul>
-          )}
+          ) : null}
         </>
       ) : null}
       {err ? <p className="rf2-form-error" role="alert">{err}</p> : null}

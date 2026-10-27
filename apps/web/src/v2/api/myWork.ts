@@ -313,16 +313,22 @@ export function fileActionHref(item: WorkItem, action: MyWorkAction, ctx: HrefCo
   if (!appId) return actionHref(item, action);
   const base = `/applications/${encodeURIComponent(appId)}`;
   const iv = item.entity.type === 'interview' ? `&interview=${encodeURIComponent(item.entity.id)}` : '';
-  switch (action.key) {
-    case 'submit-scorecard': return `${base}?drawer=scorecard${iv}`;
-    case 'move-to-offer': return `${base}?drawer=offer`;
-    case 'send-offer': return `${base}?drawer=send`;
-    case 'record-response': return `${base}?drawer=answer`;
-    case 'open-interview':
-    case 'open-offer':
-    default: return base;
-  }
+  if (action.key === 'open-interview') return base;
+  const drawer = FILE_DRAWER[action.key];
+  if (!drawer) return base;
+  return drawer === 'scorecard' ? `${base}?drawer=scorecard${iv}` : `${base}?drawer=${drawer}`;
 }
+
+/** Drawer keys the application file already opens. open-interview stays on the file without a drawer. */
+const FILE_DRAWER: Record<string, string> = {
+  screen: 'screen', 'log-screen': 'screen',
+  schedule: 'schedule', 'schedule-interview': 'schedule',
+  scorecard: 'scorecard', 'submit-scorecard': 'scorecard',
+  offer: 'offer', 'move-to-offer': 'offer', 'draft-offer': 'offer', 'open-offer': 'offer',
+  send: 'send', 'send-offer': 'send',
+  answer: 'answer', 'record-response': 'answer',
+  prehire: 'prehire', 'pre-hire': 'prehire', 'record-joining': 'prehire',
+};
 
 /** A role code (OFFER_APPROVER) is not a person; only real names are shown (B2-13). */
 const isRoleCode = (name: string) => /^[A-Z][A-Z0-9_]+$/.test(name.trim());
@@ -383,11 +389,13 @@ export function upcomingInterviewHref(row: UpcomingInterview, ctx: HrefContext =
   return null;
 }
 
-/** Checklist stays on the file. Readiness and a caller without file access use the hiring case. */
+const PREHIRE_READINESS: ReadonlySet<JoiningSoon['readiness']> = new Set(['licence_pending', 'ready', 'blocked', 'review']);
+
+/** Checklist stays on the file. Those four readiness values open the pre-hire drawer; other rows without file access stay on the hiring case. */
 export function joiningCaseHref(row: JoiningSoon, canOpenFile: boolean): { href: string; label: string } {
   const caseHref = `/hires/${encodeURIComponent(row.id)}`;
-  if (row.readiness === 'licence_pending' || row.readiness === 'ready' || row.readiness === 'blocked' || row.readiness === 'review') {
-    return { href: caseHref, label: 'View readiness' };
+  if (PREHIRE_READINESS.has(row.readiness)) {
+    return { href: `/applications/${encodeURIComponent(row.applicationId)}?drawer=prehire`, label: 'View readiness' };
   }
   if (canOpenFile) return { href: `/applications/${encodeURIComponent(row.applicationId)}?drawer=prehire`, label: 'Open checklist' };
   return { href: caseHref, label: 'Open checklist' };

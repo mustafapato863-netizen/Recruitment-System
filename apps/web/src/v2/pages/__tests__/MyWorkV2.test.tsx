@@ -31,10 +31,24 @@ function rowsIn(bucket: string) {
   return screen.getAllByTestId('work-row').filter((row) => row.getAttribute('data-bucket') === bucket);
 }
 
+describe('My Work desk', () => {
+  it('lets the subtitle lead, with the header as the only My Work', async () => {
+    renderPage(ok());
+    const subtitle = await screen.findByText('Your next actions, ordered by urgency.');
+    expect(screen.queryByRole('heading', { name: 'My Work' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Next actions' })).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Next actions' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('button', { name: 'All tasks' })).toBeInTheDocument();
+    const tabs = screen.getByRole('tablist', { name: 'My Work sections' });
+    expect(subtitle.compareDocumentPosition(tabs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+});
+
 describe('My Work (E02) from the #9 contract', () => {
   it('renders the target chip, one urgency list, and the three filters', async () => {
     renderPage(ok());
-    expect(await screen.findByRole('heading', { name: 'My Work', level: 2 })).toBeInTheDocument();
+    expect(await screen.findByText('Your next actions, ordered by urgency.')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'My Work' })).not.toBeInTheDocument();
     expect(screen.getByText('Today · 19 Oct 2026')).toBeInTheDocument();
     expect(screen.getByText('Your next actions, ordered by urgency.')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Next actions' })).toHaveAttribute('aria-selected', 'true');
@@ -349,7 +363,7 @@ describe('tabs, filters, and caller data', () => {
     expect(within(joining).getByText('Mona Said · Staff Nurse — ICU')).toBeInTheDocument();
     expect(within(joining).getByText(/Starts 4 Nov · 2 of 3 checks complete · Licence review assigned · On hold/)).toBeInTheDocument();
     expect(within(joining).getByText('Licence pending')).toBeInTheDocument();
-    expect(within(joining).getByRole('link', { name: 'View readiness: Mona Said' })).toHaveAttribute('href', '/hires/hc2');
+    expect(within(joining).getByRole('link', { name: 'View readiness: Mona Said' })).toHaveAttribute('href', '/applications/a8?drawer=prehire');
     expect(within(joining).getByTestId('joining-footnote')).toHaveTextContent('A scheduled start is not a completed hire');
     expect(within(joining).queryByText('Joined')).not.toBeInTheDocument();
     await u.click(screen.getByRole('tab', { name: 'Next actions' }));
@@ -363,7 +377,7 @@ describe('tabs, filters, and caller data', () => {
     await screen.findByRole('tab', { name: 'Joining soon' });
     await u.click(screen.getByRole('tab', { name: 'Joining soon' }));
     expect(screen.getByRole('link', { name: 'Open checklist: Lina Hassan' })).toHaveAttribute('href', '/applications/a3?drawer=prehire');
-    expect(screen.getByRole('link', { name: 'View readiness: Mona Said' })).toHaveAttribute('href', '/hires/hc2');
+    expect(screen.getByRole('link', { name: 'View readiness: Mona Said' })).toHaveAttribute('href', '/applications/a8?drawer=prehire');
     await u.click(screen.getByRole('tab', { name: 'Upcoming interviews' }));
     const assigned = screen.getByRole('region', { name: 'Your assigned interviews' });
     expect(within(assigned).getByRole('link').getAttribute('href')).toBe('/my-interviews?interview=iv-assigned');

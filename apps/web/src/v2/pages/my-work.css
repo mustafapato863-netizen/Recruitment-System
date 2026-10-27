@@ -1,15 +1,13 @@
 /* E1 My Work page. Scoped, tokens only. */
-[data-ui='v2'] .rf2-mywork { display: flex; flex-direction: column; gap: var(--rf2-space-2); max-width: 1136px; padding: var(--rf2-space-4); font-family: var(--rf2-font); color: var(--rf2-ink); }
-[data-ui='v2'] .rf2-mywork__top { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--rf2-space-2); }
-[data-ui='v2'] .rf2-mywork__title { margin: 0; font-size: var(--rf2-text-page); line-height: var(--rf2-leading-page); font-weight: var(--rf2-weight-page); }
-[data-ui='v2'] .rf2-mywork__subtitle { margin: var(--rf2-space-0-5) 0 0; font-size: var(--rf2-text-body); line-height: var(--rf2-leading-body); color: var(--rf2-ink-2); }
+[data-ui='v2'] .rf2-mywork { display: flex; flex-direction: column; gap: var(--rf2-space-2); flex: 1 1 auto; width: 100%; max-width: min(100%, 1440px); min-height: calc(100vh - 64px); box-sizing: border-box; padding: var(--rf2-space-4); font-family: var(--rf2-font); color: var(--rf2-ink); }
+[data-ui='v2'] .rf2-mywork__subtitle { margin: 0; font-size: var(--rf2-text-page); line-height: var(--rf2-leading-page); font-weight: var(--rf2-weight-page); color: var(--rf2-ink); }
 [data-ui='v2'] .rf2-mywork__note { display: flex; align-items: center; gap: var(--rf2-space-1); margin: 0; padding: var(--rf2-space-1) var(--rf2-space-1-5); border-radius: var(--rf2-radius-control); background: var(--rf2-info-tint); color: var(--rf2-info); font-size: var(--rf2-text-label); line-height: var(--rf2-leading-label); }
 [data-ui='v2'] .rf2-mywork__note svg { width: 16px; height: 16px; flex: none; }
 [data-ui='v2'] .rf2-mywork__no-action { color: var(--rf2-muted); font-size: var(--rf2-text-label); }
 
 [data-ui='v2'] .rf2-daytoggle { display: inline-flex; padding: 2px; border: 1px solid var(--rf2-divider); border-radius: var(--rf2-radius-card); background: var(--rf2-neutral-tint); }
 [data-ui='v2'] .rf2-daytoggle__btn { min-height: 32px; padding: 0 var(--rf2-space-1-5); border: 1px solid transparent; border-radius: var(--rf2-radius-control); background: transparent; color: var(--rf2-ink-2); font: inherit; font-size: var(--rf2-text-label); font-weight: 500; cursor: pointer; }
-[data-ui='v2'] .rf2-daytoggle__btn[aria-pressed='true'] { border-color: var(--rf2-border); background: var(--rf2-card); color: var(--rf2-action); font-weight: 600; }
+[data-ui='v2'] .rf2-daytoggle__btn[aria-pressed='true'] { border-color: transparent; background: var(--rf2-card); color: var(--rf2-action); font-weight: 600; }
 [data-ui='v2'] .rf2-daytoggle__btn:focus-visible { outline: var(--rf2-focus-width) solid var(--rf2-focus-color); outline-offset: var(--rf2-focus-offset); }
 
 [data-ui='v2'] .rf2-jobstrip { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; padding: 16px 18px; border: 1px solid var(--rf2-glass-line); border-radius: 20px; background: var(--rf2-glass-card); box-shadow: var(--rf2-neo-raise); backdrop-filter: blur(12px); }
@@ -77,17 +75,23 @@
 }
 [data-ui='v2'] .rf2-mywork .rf2-tab {
   display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 8px 12px;
-  border: 1px solid var(--rf2-border); border-radius: 12px; background: var(--rf2-card);
+  border: 1px solid transparent; border-radius: 12px; background: var(--rf2-card);
   box-shadow: var(--rf2-neo-raise-sm); color: var(--rf2-ink); font-weight: 500;
 }
 [data-ui='v2'] .rf2-mywork .rf2-tab[aria-selected='true'] {
-  border-color: var(--color-cyan); background: var(--rf2-card); color: var(--rf2-ink); box-shadow: var(--rf2-neo-raise-sm);
+  border-color: transparent; background: var(--rf2-info-tint); color: var(--rf2-action); box-shadow: var(--rf2-neo-raise-sm);
 }
 [data-ui='v2'] .rf2-mywork .rf2-tab__icon { display: inline-flex; width: 16px; height: 16px; }
 [data-ui='v2'] .rf2-mywork .rf2-tab__icon svg { width: 16px; height: 16px; }
 [data-ui='v2'] .rf2-mywork__btn-icon { display: inline-flex; }
 [data-ui='v2'] .rf2-mywork__quiet-day { display: inline-flex; gap: var(--rf2-space-1); }
-[data-ui='v2'] .rf2-mywork__panel { display: flex; flex-direction: column; gap: var(--rf2-space-2); }
+[data-ui='v2'] .rf2-mywork__toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--rf2-space-2); }
+[data-ui='v2'] .rf2-mywork__toolbar .rf2-tabs { order: 1; }
+[data-ui='v2'] .rf2-mywork__toolbar .rf2-mywork__day { order: 2; flex-direction: row; align-items: center; }
+[data-ui='v2'] .rf2-mywork__panel { display: flex; flex-direction: column; flex: 1 1 auto; gap: var(--rf2-space-2); }
+[data-ui='v2'] .rf2-mywork__panel > .rf2-state,
+[data-ui='v2'] .rf2-mywork__panel > .rf2-mywork__group { flex: 1 1 auto; }
+[data-ui='v2'] .rf2-mywork .rf2-state--empty { flex: 1 1 auto; justify-content: center; min-height: 18rem; background: var(--rf2-glass-card); border-color: var(--rf2-glass-line); box-shadow: var(--rf2-neo-raise); }
 [data-ui='v2'] .rf2-mywork__filters { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--rf2-space-2); margin: 0; }
 [data-ui='v2'] .rf2-mywork__filter {
   display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-height: 66px; padding: 10px 14px;
@@ -102,7 +106,7 @@
 [data-ui='v2'] .rf2-mywork__filter[data-filter='today'] .rf2-mywork__filter-value { color: var(--rf2-action); }
 [data-ui='v2'] .rf2-mywork__filter[data-filter='waiting'] .rf2-mywork__filter-value { color: var(--rf2-info); }
 [data-ui='v2'] .rf2-mywork__filter-label { font-size: var(--rf2-text-label); line-height: var(--rf2-leading-label); font-weight: 500; }
-[data-ui='v2'] .rf2-mywork__list-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--rf2-space-1); }
+[data-ui='v2'] .rf2-mywork__list-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--rf2-space-1); }
 [data-ui='v2'] .rf2-mywork__list-title { margin: 0; font-size: var(--rf2-text-section); line-height: var(--rf2-leading-section); font-weight: var(--rf2-weight-section); }
 [data-ui='v2'] .rf2-mywork__list-head .rf2-mywork__list-title { flex: 1 1 12rem; }
 [data-ui='v2'] .rf2-mywork__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--rf2-space-2); }
@@ -110,12 +114,27 @@
 [data-ui='v2'] .rf2-mywork__filter-empty { margin: 0; color: var(--rf2-muted); font-size: var(--rf2-text-body); line-height: var(--rf2-leading-body); }
 [data-ui='v2'] .rf2-mywork__footnote { margin: 0; color: var(--rf2-ink-2); font-size: var(--rf2-text-body); line-height: var(--rf2-leading-body); }
 
+/* Tablet: tabs take the first row; day, notifications, and the date sit on the next row with the work. */
+@media (min-width: 768px) and (max-width: 1279px) {
+  [data-ui='v2'] .rf2-mywork { padding: var(--rf2-space-3); }
+  [data-ui='v2'] .rf2-mywork__toolbar .rf2-tabs { flex: 1 1 100%; }
+  [data-ui='v2'] .rf2-mywork__toolbar .rf2-mywork__day { width: 100%; align-items: flex-start; }
+  [data-ui='v2'] .rf2-mywork__head-actions { justify-content: flex-start; flex-wrap: wrap; }
+  [data-ui='v2'] .rf2-mywork__filters { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (min-width: 1280px) {
+  [data-ui='v2'] .rf2-mywork__toolbar { flex-wrap: nowrap; align-items: center; }
+  [data-ui='v2'] .rf2-mywork__today { white-space: nowrap; }
+  [data-ui='v2'] .rf2-mywork__filters { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
 @media (max-width: 767px) {
-  [data-ui='v2'] .rf2-mywork { padding: var(--rf2-space-2); }
-  [data-ui='v2'] .rf2-mywork__top { flex-direction: column; align-items: stretch; }
-  [data-ui='v2'] .rf2-mywork__day { align-items: flex-start; width: 100%; }
+  [data-ui='v2'] .rf2-mywork { padding: var(--rf2-space-2); min-height: 0; }
+  [data-ui='v2'] .rf2-mywork__toolbar .rf2-mywork__day { flex-direction: column; align-items: flex-start; width: 100%; }
   [data-ui='v2'] .rf2-mywork__head-actions { flex-wrap: wrap; justify-content: flex-start; }
   [data-ui='v2'] .rf2-mywork__counts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   [data-ui='v2'] .rf2-mywork__filters { grid-template-columns: 1fr; }
   [data-ui='v2'] .rf2-mywork .rf2-tabs { flex-wrap: wrap; width: 100%; max-width: 100%; min-width: 0; overflow: visible; }
+  [data-ui='v2'] .rf2-mywork .rf2-state--empty { min-height: 16rem; }
 }

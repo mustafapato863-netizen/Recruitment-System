@@ -30,13 +30,12 @@ describe('#34 final approver: read-only file', () => {
     expect(api.getApi.mock.calls.map(([p]) => p).sort()).toEqual(['/applications/a1', '/documents/candidate/c1']);
     expect(screen.queryByRole('dialog')).toBeNull();
     for (const name of [/Reject/, /Review offer/, /Add note/i, /Follow-up/i]) expect(screen.queryByRole('button', { name })).toBeNull();
-    await u.click(screen.getByRole('tab', { name: 'Activity' }));
-    for (const name of [/Reject/, /Review offer/, /Add note/i, /Follow-up/i]) expect(screen.queryByRole('button', { name })).toBeNull();
+    for (const name of [/Reject/, /Review offer/, /Add note/i, /Follow-up/i, /^Schedule$/, /^Offer$/]) expect(screen.queryByRole('button', { name })).toBeNull();
     const approvals = screen.getAllByRole('link', { name: /Final approvals/ });
     expect(approvals.length).toBeGreaterThan(0);
     for (const link of approvals) expect(link).toHaveAttribute('href', '/hires/approvals/inbox');
     expect(screen.queryByRole('link', { name: 'Back to Candidates' })).not.toBeInTheDocument();
-    await u.click(screen.getByRole('tab', { name: 'Documents' }));
+    await u.click(screen.getByRole('button', { name: 'Documents' }));
     const dl = screen.getAllByRole('button', { name: 'Download CV' });
     expect(dl).toHaveLength(1);
     await u.click(dl[0]);

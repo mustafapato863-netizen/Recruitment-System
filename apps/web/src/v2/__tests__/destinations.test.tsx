@@ -30,11 +30,11 @@ describe('B2-18: v1 pages are not destinations for v2 seats', () => {
   it.each([
     ['employee', '/my-work'], ['employee', '/vacancies/v1'], ['employee', '/candidates/compare'], ['employee', '/applications/a1'], ['employee', '/my-result'],
     ['manager', '/vacancy-requests'], ['manager', '/reports'], ['manager', '/applications/a1'], ['manager', '/my-interviews'],
-    ['employee', '/offers/o1'], ['employee', '/hires/h1'], ['manager', '/offers/o1'], ['admin', '/audit-log'], ['admin', '/whatsapp-templates'], ['admin', '/roles'], ['employee', '/profile'], ['admin', '/notifications'],
+    ['employee', '/offers/o1'], ['manager', '/offers/o1'], ['admin', '/audit-log'], ['admin', '/whatsapp-templates'], ['admin', '/roles'], ['employee', '/profile'], ['admin', '/notifications'],
   ] as const)('%s keeps %s', (seat, path) => expect(v2Redirect(seat, path)).toBeNull());
 });
 
-function Where() { return <output aria-label="where">{useLocation().pathname}</output>; }
+function Where() { const loc = useLocation(); return <output aria-label="where">{loc.pathname + loc.search}</output>; }
 const user = { id: 'u', email: 'e@x', displayName: 'E', organizationId: 'o', organizationName: 'O', roles: [{ id: 'r', code: 'ADMINISTRATOR', name: 'Admin' }], permissions: [], lastLoginAt: null } as UserProfile;
 
 describe('shell redirects in place', () => {
@@ -93,12 +93,32 @@ describe('candidate entry paths stay out of the staff home', () => {
   });
 });
 
-describe('v2 default decision: classic (v1) pages stay reachable, not redirected', () => {
-  const CLASSIC = ['/hires/approvals/inbox', '/hires', '/hires/h1', '/licenses', '/joinings', '/joining', '/interviews', '/interviews/calendar', '/offers',
-    '/vacancies/v1/analytics', '/candidates/c1', '/candidates/c1/documents', '/cv-bank', '/sourcing-match', '/import', '/import/candidates/j1',
-    '/classic/candidates', '/classic/vacancies', '/settings/targets', '/access-control', '/classic/master-data', '/settings', '/classic/pipeline-settings'];
-  it.each(CLASSIC)('%s is never redirected (any seat); its v1 PermissionGate decides', (path) => {
-    for (const seat of ['employee', 'manager', 'admin'] as const) expect(v2Redirect(seat, path, { requisitions: true, interviews: true })).toBeNull();
+describe('classic staff URLs land on a v2 surface', () => {
+  const opts = { requisitions: true, interviews: true } as const;
+  const employee: Record<string, string> = {
+    '/hires/approvals/inbox': '/my-work', '/hires': '/my-work', '/hires/h1': '/my-work', '/licenses': '/my-work',
+    '/joinings': '/my-work', '/joining': '/my-work', '/interviews': '/my-interviews', '/interviews/calendar': '/my-interviews', '/offers': '/my-work',
+    '/vacancies/v1/analytics': '/vacancies/v1', '/candidates/c1': '/candidates?tab=bank', '/candidates/c1/documents': '/candidates?tab=bank',
+    '/cv-bank': '/candidates', '/sourcing-match': '/talent-pools', '/talent-pool': '/talent-pools', '/import': '/candidates', '/import/candidates/j1': '/candidates',
+    '/classic/candidates': '/candidates', '/classic/vacancies': '/vacancies', '/settings/targets': '/my-work', '/access-control': '/my-work',
+    '/classic/master-data': '/my-work', '/settings': '/my-work', '/classic/pipeline-settings': '/my-work',
+  };
+  const manager: Record<string, string> = Object.fromEntries(Object.keys(employee).map((path) => [path, path.startsWith('/interviews') ? '/my-interviews' : '/my-work']));
+  const admin: Record<string, string> = {
+    ...Object.fromEntries(Object.keys(employee).map((path) => [path, '/users'])),
+    '/access-control': '/roles', '/settings': '/master-data', '/settings/targets': '/master-data', '/classic/master-data': '/master-data',
+    '/classic/pipeline-settings': '/pipeline-settings',
+  };
+  it.each(Object.entries(employee))('employee %s → %s', (path, to) => {
+    expect(v2Redirect('employee', path, opts)).toBe(to);
+    expect(v2Redirect('employee', path, opts)).not.toBeNull();
+  });
+  it.each(Object.entries(manager))('manager %s → %s', (path, to) => expect(v2Redirect('manager', path, opts)).toBe(to));
+  it.each(Object.entries(admin))('admin %s → %s', (path, to) => expect(v2Redirect('admin', path, opts)).toBe(to));
+  it('a viewer the route gate refuses does not land on the target', () => {
+    expect(v2Redirect('employee', '/cv-bank', { ...opts, permissions: ['VACANCY_VIEW'] })).toBe('/my-work');
+    expect(v2Redirect('employee', '/classic/vacancies', { ...opts, permissions: ['CANDIDATE_VIEW'] })).toBe('/my-work');
+    expect(v2Redirect('employee', '/applications/a1', { permissions: ['CANDIDATE_VIEW'] })).toBe('/my-work');
   });
   it('the other redirects stay: requisition approval inbox, offer approvals, /interviews/:id', () => {
     for (const p of ['/approval-inbox', '/inbox']) expect(v2Redirect('manager', p)).toBe('/my-work');
@@ -119,27 +139,30 @@ describe('talent pools are an employee page', () => {
     expect(v2Redirect('employee', '/talent-pools/pool-1', opts)).toBeNull();
     expect(v2Redirect('employee', '/talent-pools', { permissions: ['VACANCY_VIEW'] })).toBe('/my-work');
   });
-  it('sends other seats home; sourcing-match, CV bank, and import stay classic', () => {
-    expect(v2Redirect('manager', '/talent-pools', { requisitions: true, interviews: true })).toBe('/my-work');
-    expect(v2Redirect('admin', '/talent-pools/pool-1', { requisitions: true, interviews: true })).toBe('/users');
-    for (const path of ['/sourcing-match', '/cv-bank', '/import', '/import/candidates/j1']) {
-      for (const seat of ['employee', 'manager', 'admin'] as const) {
-        expect(v2Redirect(seat, path, { requisitions: true, interviews: true })).toBeNull();
-      }
-    }
+  it('sends other seats home; sourcing-match, CV bank, and import land on a v2 page', () => {
+    const opts = { requisitions: true, interviews: true } as const;
+    expect(v2Redirect('manager', '/talent-pools', opts)).toBe('/my-work');
+    expect(v2Redirect('admin', '/talent-pools/pool-1', opts)).toBe('/users');
+    expect(v2Redirect('employee', '/sourcing-match', { ...opts, permissions: ['CANDIDATE_VIEW'] })).toBe('/talent-pools');
+    expect(v2Redirect('employee', '/cv-bank', { ...opts, permissions: ['CANDIDATE_VIEW'] })).toBe('/candidates');
+    expect(v2Redirect('employee', '/import', { ...opts, permissions: ['CANDIDATE_VIEW'] })).toBe('/candidates');
+    expect(v2Redirect('manager', '/sourcing-match', opts)).toBe('/my-work');
+    expect(v2Redirect('admin', '/cv-bank', opts)).toBe('/users');
   });
 });
 
 describe('PR33-3 seat homes', () => {
-  it('final approvers land on the final approval inbox, licence specialists on licences', async () => {
+  it('final approvers and licence specialists resolve to their queues', async () => {
     const { specialHome } = await import('../destinations');
-    const r = (code: string) => ({ roles: [{ code }], permissions: ['FINAL_HIRING_APPROVAL', 'APPLICATION_VIEW'] });
-    expect(specialHome(r('FINAL_HIRING_APPROVER'))).toBe('/hires/approvals/inbox');
-    expect(specialHome(r('LICENSE_SPECIALIST'))).toBe('/licenses');
-    expect(specialHome(r('RECRUITER'))).toBeNull();
-    expect(v2Redirect('employee', '/', { home: '/hires/approvals/inbox' })).toBe('/hires/approvals/inbox');
-    expect(v2Redirect('employee', '/', { home: '/licenses' })).toBe('/licenses');
-    expect(v2Redirect('employee', '/licenses', { home: '/licenses' })).toBeNull();
+    const approver = { roles: [{ code: 'FINAL_HIRING_APPROVER' }], permissions: ['FINAL_HIRING_APPROVAL'] };
+    const specialist = { roles: [{ code: 'LICENSE_SPECIALIST' }], permissions: ['LICENSE_CHECK'] };
+    expect(specialHome(approver)).toBe('/hires/approvals/inbox');
+    expect(specialHome(specialist)).toBe('/licenses');
+    expect(specialHome({ roles: [{ code: 'RECRUITER' }], permissions: ['APPLICATION_VIEW'] })).toBeNull();
+    expect(v2Redirect('employee', '/', { home: specialHome(approver), permissions: approver.permissions })).toBe('/hires/approvals/inbox');
+    expect(v2Redirect('employee', '/', { home: specialHome(specialist), permissions: specialist.permissions })).toBe('/licenses');
+    expect(v2Redirect('employee', '/hires/approvals/inbox', { home: specialHome(approver), permissions: approver.permissions })).toBeNull();
+    expect(v2Redirect('employee', '/licenses', { home: specialHome(specialist), permissions: specialist.permissions })).toBeNull();
   });
 });
 
@@ -151,30 +174,44 @@ describe('PR33-3: seeded licence specialist (Omar) and final approver (Aya)', ()
     return v2Redirect('employee', path, { requisitions: false, interviews: false, home: specialHome(u), permissions: u.permissions });
   };
 
-  it('Aya: home is the final approval inbox; she opens the hiring case (GET /hiring/:id allows FINAL_HIRING_APPROVAL)', async () => {
+  it('Aya: home is the approval inbox, and a file she may open stays the application file', async () => {
     expect(await go(AYA, '/')).toBe('/hires/approvals/inbox');
     expect(await go(AYA, '/hires/approvals/inbox')).toBeNull();
-    expect(await go(AYA, '/hires/h1')).toBeNull();
-    expect(canOpenRoute('/hires/h1', AYA.permissions)).toBe(true);
-  });
-  it('Aya opens the file read-only (#34); candidates, CV Bank, the hiring list and licences stay closed → her home', async () => {
     expect(await go(AYA, '/applications/a1')).toBeNull();
+    expect(canOpenRoute('/applications/a1', AYA.permissions)).toBe(true);
+    expect(await go(AYA, '/hires/h1')).toBeNull();
     for (const p of ['/candidates', '/cv-bank', '/candidates/c1', '/hires', '/licenses']) expect(await go(AYA, p)).toBe('/hires/approvals/inbox');
   });
-  it('Omar (LICENSE_CHECK, #34): home and nav item are /licenses; he opens hiring cases; the file, candidates and the hiring list stay closed', async () => {
+  it('Omar: the licence desk stays his home, and a file the hiring gate allows stays on the application file', async () => {
     expect(await go(OMAR, '/')).toBe('/licenses');
     expect(await go(OMAR, '/licenses')).toBeNull();
     expect(await go(OMAR, '/hires/h1')).toBeNull();
-    for (const p of ['/applications/a1', '/candidates', '/cv-bank', '/hires']) expect(await go(OMAR, p)).toBe('/licenses');
+    expect(canOpenRoute('/hires/h1', OMAR.permissions)).toBe(true);
+    expect(canOpenRoute('/applications/a1', OMAR.permissions)).toBe(true);
+    expect(await go(OMAR, '/applications/a1')).toBeNull();
+    for (const p of ['/candidates', '/cv-bank', '/hires']) expect(await go(OMAR, p)).toBe('/licenses');
     const { specialHome } = await import('../destinations');
     expect(specialHome({ ...OMAR, permissions: OMAR.permissions.filter((x) => x !== 'LICENSE_CHECK') })).toBeNull();
-    const { permittedClassicItems } = await import('../../components/v2/shell/navConfig');
-    expect(permittedClassicItems(OMAR.permissions).map((i) => i.to)).toEqual(['/licenses', '/interviews', '/interviews/calendar', '/classic/vacancies']);
+    const { permittedClassicItems, permittedNavItems } = await import('../../components/v2/shell/navConfig');
+    expect(permittedClassicItems(OMAR.permissions)).toEqual([]);
+    const recruiter = ['VACANCY_VIEW', 'CANDIDATE_VIEW', 'APPLICATION_VIEW'];
+    expect(permittedNavItems('employee', recruiter, false, true, false).map((item) => item.label)).toEqual(['My Work', 'Open jobs', 'Candidates']);
+    expect(permittedNavItems('manager', ['VACANCY_REQUEST_VIEW', 'APPLICATION_VIEW'], false, false, false).map((item) => item.label)).toEqual(['Team work', 'Requisitions', 'Team result']);
+    expect(permittedNavItems('admin', [], true, false, false).map((item) => item.label)).toEqual(['Users', 'Roles', 'Pipeline template', 'Master data', 'Templates', 'Reports', 'Audit', 'Integrations']);
   });
-  it('admins keep every classic page exactly as in v1', () => {
-    for (const p of ['/hires', '/hires/h1', '/licenses', '/cv-bank', '/access-control', '/settings']) {
-      expect(canOpenRoute(p, [], true)).toBe(true);
-      expect(v2Redirect('admin', p, { permissions: [], isAdministrator: true })).toBeNull();
-    }
+  it.each(['/applications/a1', '/applications/a1?drawer=prehire'])('Omar: the shell mounts the application file at %s', async (path) => {
+    expect(await go(OMAR, path.split('?')[0])).toBeNull();
+    const omar = { ...user, displayName: 'Omar Nasser', roles: [{ id: 'ls', code: 'LICENSE_SPECIALIST', name: 'Licence specialist' }], permissions: [...OMAR.permissions] };
+    render(<ThemeProvider><MemoryRouter initialEntries={[path]}><Routes><Route element={<AppShellV2 user={omar} seat="employee" onSignOut={() => {}} />}><Route path="*" element={<Where />} /></Route></Routes></MemoryRouter></ThemeProvider>);
+    expect(await screen.findByLabelText('where')).toHaveTextContent(path);
+  });
+  it('admins leave classic URLs for the matching v2 page', () => {
+    expect(v2Redirect('admin', '/hires', { permissions: [], isAdministrator: true })).toBe('/users');
+    expect(v2Redirect('admin', '/hires/h1', { permissions: [], isAdministrator: true })).toBe('/users');
+    expect(v2Redirect('admin', '/licenses', { permissions: [], isAdministrator: true })).toBe('/users');
+    expect(v2Redirect('admin', '/cv-bank', { permissions: [], isAdministrator: true })).toBe('/users');
+    expect(v2Redirect('admin', '/access-control', { permissions: [], isAdministrator: true })).toBe('/roles');
+    expect(v2Redirect('admin', '/settings', { permissions: [], isAdministrator: true })).toBe('/master-data');
+    expect(canOpenRoute('/roles', [], true)).toBe(true);
   });
 });

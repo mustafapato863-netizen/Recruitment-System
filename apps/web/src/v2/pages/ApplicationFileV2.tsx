@@ -1,14 +1,13 @@
 import type React from 'react';
 import { isScorecardSubmitted } from '../../utils/scorecardStatus';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, CalendarDays, Check, CircleCheck, Clock, Download, FileText, RotateCw, Send, Star, XCircle } from 'lucide-react';
-import { ApiError } from '../../api/client';
+import { ApiError, getApi } from '../../api/client';
 import { ButtonV2 } from '../../components/v2/Button';
 import { StatusChip } from '../../components/v2/StatusChip';
 import { EmptyStateV2, ForbiddenStateV2, SkeletonV2 } from '../../components/v2/PageStates';
 import { InputV2, TextareaV2 } from '../../components/v2/Field';
-import { TabPanelV2, TabsV2 } from '../../components/v2/Tabs';
 import '../../components/v2/v2-primitives.css';
 import './application-file.css';
 import { addNote, downloadDocument, isClosedStage, isCvDoc, candidateName, gateState, loadApplicationFile, setFollowUp, updateInterview, type ApplicationFile, type InterviewItem } from '../api/applicationFile';
@@ -79,12 +78,7 @@ function gateRows(file: ApplicationFile): Array<{ to: string; label: string; ok:
 }
 
 type HubTab = 'overview' | 'activity' | 'documents';
-type FileMode = 'owner' | 'manager' | 'approver';
-const HUB_TABS: Array<{ key: HubTab; label: string }> = [
-  { key: 'overview', label: 'Overview' },
-  { key: 'activity', label: 'Activity' },
-  { key: 'documents', label: 'Documents' },
-];
+type FileMode = 'owner' | 'manager' | 'approver' | 'licence';
 const hubTab = (raw: string | null): HubTab => (raw === 'activity' || raw === 'documents' ? raw : 'overview');
 
 type ReturnDest = { href: string; kind: 'candidates' | 'my-work' | 'vacancy'; vacancyId?: string };
@@ -125,6 +119,7 @@ function destination(file: ApplicationFile, mode: FileMode, raw: string | null):
   const title = app.positionTitle ?? 'Job';
   const pipeline = `/vacancies/${encodeURIComponent(app.vacancyId)}`;
   if (mode === 'approver') return { href: '/hires/approvals/inbox', label: 'Final approvals', crumb: 'Final approvals' };
+  if (mode === 'licence') return { href: '/licenses', label: 'Licences', crumb: 'Licences' };
   if (mode === 'manager') return { href: '/my-work', label: 'Team work', crumb: 'Team work' };
   const dest = fileReturnTo(raw);
   if (dest?.kind === 'candidates') return { href: dest.href, label: 'Back to Candidates', crumb: 'Candidates' };
@@ -226,6 +221,29 @@ function nextCopy(file: ApplicationFile): { title: string; detail: string; who: 
 }
 
 type ActivityRow = { at: string; title: string; sub?: string };
+type MessageAttempt = { at: string; templateName: string; state: string };
+
+const HIRING_STAGES = ['Applied', 'Screening', 'Interview', 'Offer', 'Pre-Hire', 'Joined'] as const;
+
+/** Drawer a stage-rail click may open. A later stage whose gate is still open uses the current next action and does not move the file. */
+export function drawerForStage(file: ApplicationFile, target: string): DrawerKey | null {
+  const order = HIRING_STAGES as readonly string[];
+  const current = file.workspace.application.stage;
+  const cur = order.indexOf(current);
+  const tgt = order.indexOf(target);
+  if (tgt < 0) return null;
+  const blocked = gateRows(file).some((gate) => !gate.ok);
+  if (cur >= 0 && tgt > cur && blocked) return primaryFor(file)?.key ?? null;
+  const gates = gateState(file);
+  if (target === 'Applied' || target === 'Screening') return gates.screenNote ? 'schedule' : 'screen';
+  if (target === 'Interview') {
+    const live = file.interviews.filter((interview) => interview.status !== 'Cancelled');
+    return live.length === 0 ? 'schedule' : 'scorecard';
+  }
+  if (target === 'Offer') return 'offer';
+  if (target === 'Pre-Hire' || target === 'Joined') return 'prehire';
+  return null;
+}
 
 function recordedRows(file: ApplicationFile): ActivityRow[] {
   const rows: ActivityRow[] = [];
@@ -277,6 +295,22 @@ function recordedRows(file: ApplicationFile): ActivityRow[] {
   return rows.sort((a, b) => b.at.localeCompare(a.at));
 }
 
+/** Notes, screening, scorecards, offer versions, stage changes, and messages, oldest first. */
+export function chatterRows(file: ApplicationFile, messages: MessageAttempt[] = []): ActivityRow[] {
+  const rows = recordedRows(file).slice();
+  for (const note of file.notes) {
+    if (!note.createdAt) continue;
+    const author = note.authorName?.trim();
+    const text = note.content?.trim();
+    rows.push({ at: note.createdAt, title: author ? `Note by ${author}` : 'Note', sub: text || undefined });
+  }
+  for (const message of messages) {
+    if (!message.at || !message.templateName) continue;
+    rows.push({ at: message.at, title: `Message ${message.state}: ${message.templateName}` });
+  }
+  return rows.sort((a, b) => a.at.localeCompare(b.at) || a.title.localeCompare(b.title));
+}
+
 function evidenceOf(file: ApplicationFile): Array<{ text: string; by: string }> {
   const items: Array<{ at: string; text: string; by: string }> = [];
   for (const s of file.screening) {
@@ -298,20 +332,33 @@ function evidenceOf(file: ApplicationFile): Array<{ text: string; by: string }> 
   return items.sort((a, b) => b.at.localeCompare(a.at));
 }
 
-export function ApplicationFileV2({ load = loadApplicationFile, mode = 'owner' }: { load?: typeof loadApplicationFile; mode?: 'owner' | 'manager' | 'approver' } = {}) {
+export function ApplicationFileV2({ load = loadApplicationFile, mode = 'owner' }: { load?: typeof loadApplicationFile; mode?: FileMode } = {}) {
   const { id = '' } = useParams();
   const { user } = useAuth();
   // #34: 'approver' = a final-hire approver without APPLICATION_VIEW: read-only like the Manager view (no drawers,
   // notes or follow-up), no offer decision, no pay, CV download allowed.
   const approver = mode === 'approver';
-  const manager = mode === 'manager' || approver;
+  const licence = mode === 'licence';
+  const manager = mode === 'manager' || approver || licence;
   // Pay (salary, band) only for the Manager seat holding OFFER_PAY_VIEW.
   const showPay = mode === 'manager' && canSeePay('manager', user?.permissions);
   const [toast, setToast] = useState<string | null>(null);
   const [params, setParams] = useSearchParams();
   const [state, setState] = useState<Load>({ kind: 'loading' });
   const [attempt, setAttempt] = useState(0);
+  const [messages, setMessages] = useState<MessageAttempt[]>([]);
   const drawer = params.get('drawer') as DrawerKey | null;
+  const licenceDrawerSet = useRef(false);
+  useEffect(() => {
+    if (!licence || licenceDrawerSet.current) return;
+    licenceDrawerSet.current = true;
+    if (params.get('drawer') === 'prehire') return;
+    setParams((current) => {
+      const next = new URLSearchParams(current);
+      next.set('drawer', 'prehire');
+      return next;
+    }, { replace: true });
+  }, [licence, params, setParams]);
 
   useEffect(() => {
     let alive = true;
@@ -326,6 +373,15 @@ export function ApplicationFileV2({ load = loadApplicationFile, mode = 'owner' }
     return () => { alive = false; };
   }, [id, load, attempt, showPay]);
 
+  useEffect(() => {
+    if (manager) return undefined;
+    let live = true;
+    getApi<{ attempts?: MessageAttempt[] }>(`/applications/${encodeURIComponent(id)}/messages`)
+      .then((row) => { if (live) setMessages(Array.isArray(row?.attempts) ? row.attempts : []); })
+      .catch(() => { if (live) setMessages([]); });
+    return () => { live = false; };
+  }, [id, manager, attempt]);
+
   const openDrawer = useCallback((key: DrawerKey, extra?: Record<string, string>) => setParams((p) => {
     const n = new URLSearchParams(p); n.set('drawer', key);
     for (const [k, v] of Object.entries(extra ?? {})) n.set(k, v);
@@ -335,7 +391,7 @@ export function ApplicationFileV2({ load = loadApplicationFile, mode = 'owner' }
   const done = useCallback(() => { closeDrawer(); setAttempt((n) => n + 1); }, [closeDrawer]);
 
   if (state.kind === 'loading') return <div className="rf2-file"><SkeletonV2 lines={8} label="Loading the application file…" /></div>;
-  if (state.kind === 'forbidden') return <div className="rf2-file"><ForbiddenStateV2 title="This file belongs to another owner" body="Ask the owner or your manager if you need it." action={<Link className="rf2-btn rf2-btn--secondary rf2-btn--md" to="/my-work">Back to My Work</Link>} /></div>;
+  if (state.kind === 'forbidden') return <div className="rf2-file"><ForbiddenStateV2 title="This file belongs to another owner" body="Ask the owner or your manager if you need it." action={<Link className="rf2-btn rf2-btn--secondary rf2-btn--md" to={mode === 'licence' ? '/licenses' : '/my-work'}>{mode === 'licence' ? 'Back to Licences' : 'Back to My Work'}</Link>} /></div>;
   if (state.kind === 'missing') return <div className="rf2-file"><EmptyStateV2 title="File not found" body="It may have been moved or closed." /></div>;
   if (state.kind === 'error') return <div className="rf2-file" role="alert"><EmptyStateV2 title="Could not load this file" body={state.message} action={<ButtonV2 kind="secondary" icon={<RotateCw />} onClick={() => setAttempt((n) => n + 1)}>Try again</ButtonV2>} /></div>;
 
@@ -345,7 +401,7 @@ export function ApplicationFileV2({ load = loadApplicationFile, mode = 'owner' }
   const primary = primaryFor(file);
   // #21 (B2-4): Joined/Rejected/Withdrawn files are closed (409 FILE_CLOSED): no move, no reject, and no drawer that moves the file.
   const closed = isClosedStage(app.stage);
-  const Drawer = !manager && drawer && DRAWER_KEYS.includes(drawer) && !(closed && MOVING_DRAWERS.includes(drawer)) ? DRAWERS[drawer] : null;
+  const Drawer = drawer && DRAWER_KEYS.includes(drawer) && (licence ? drawer === 'prehire' : !manager && !(closed && MOVING_DRAWERS.includes(drawer))) ? DRAWERS[drawer] : null;
   // Manager: the offer decision opens here, over the file (Figma 09). ?decide=<offerId> deep-links from Team work.
   const pendingOffer = file.offer && file.offer.status === 'Pending Approval' ? file.offer : null;
   const decideId = mode === 'manager' ? params.get('decide') : null;
@@ -359,13 +415,9 @@ export function ApplicationFileV2({ load = loadApplicationFile, mode = 'owner' }
   const noticeDays = file.screening.find((s) => s.noticePeriodDays != null)?.noticePeriodDays;
   const evidence = evidenceOf(file);
   const latest = recordedRows(file)[0];
-  const stageTone = app.stage === 'Rejected' ? 'danger' : app.stage === 'Joined' ? 'success' : 'info';
-  const setTab = (key: string) => setParams((p) => {
-    const n = new URLSearchParams(p);
-    if (key === 'activity' || key === 'documents') n.set('tab', key);
-    else n.delete('tab');
-    return n;
-  });
+  const showDocuments = tab === 'documents';
+  const openDocuments = () => setParams((p) => { const n = new URLSearchParams(p); n.set('tab', 'documents'); return n; });
+  const focusNote = () => document.getElementById('file-note')?.focus();
 
   return (
     <div className="rf2-file">
@@ -386,7 +438,19 @@ export function ApplicationFileV2({ load = loadApplicationFile, mode = 'owner' }
         <p className="rf2-file__meta">{[app.positionTitle, app.vacancyBranchName ?? app.vacancyLocation, app.primaryRecruiterName ? `Owner: ${app.primaryRecruiterName}` : null].filter(Boolean).join(' · ')}</p>
       </header>
       <div className="rf2-file__stage">
-        <StatusChip tone={stageTone} label={label(app.stage)} />
+        <ol className="rf2-rail" aria-label="Stages">
+          {HIRING_STAGES.map((stage) => {
+            const currentStep = label(stage).toLowerCase() === label(app.stage).toLowerCase();
+            if (manager || closed) {
+              return <li key={stage}><span className="rf2-rail__step" aria-current={currentStep ? 'step' : undefined}>{label(stage)}</span></li>;
+            }
+            return (
+              <li key={stage}>
+                <button type="button" className="rf2-rail__step" aria-current={currentStep ? 'step' : undefined} onClick={() => { const key = drawerForStage(file, stage); if (key) openDrawer(key); }}>{label(stage)}</button>
+              </li>
+            );
+          })}
+        </ol>
         <p className="rf2-file__status">{copy.status}</p>
       </div>
       <section className="rf2-card" aria-labelledby="next-h">
@@ -402,27 +466,37 @@ export function ApplicationFileV2({ load = loadApplicationFile, mode = 'owner' }
         ) : null}
         <div className="rf2-file__next-row">
           <p className="rf2-file__muted">{copy.who}</p>
-          <div className="rf2-file__actions">
-            {manager ? (
-              pendingOffer && !approver ? <ButtonV2 icon={<CircleCheck />} onClick={() => setParams((p) => { const n = new URLSearchParams(p); n.set('decide', pendingOffer.id); return n; })}>Review offer</ButtonV2> : null
+          <div className="rf2-smart" role="group" aria-label="Smart actions">
+            {licence ? (
+              <>
+                <ButtonV2 size="lg" icon={<CircleCheck />} onClick={() => openDrawer('prehire')}>Pre-hire</ButtonV2>
+                <ButtonV2 kind="secondary" size="lg" icon={<FileText />} aria-pressed={showDocuments} onClick={openDocuments}>Documents</ButtonV2>
+              </>
+            ) : manager ? (
+              <>
+                <ButtonV2 kind="secondary" size="lg" icon={<FileText />} aria-pressed={showDocuments} onClick={openDocuments}>Documents</ButtonV2>
+                {pendingOffer && !approver ? <ButtonV2 size="lg" icon={<CircleCheck />} onClick={() => setParams((p) => { const n = new URLSearchParams(p); n.set('decide', pendingOffer.id); return n; })}>Review offer</ButtonV2> : null}
+              </>
             ) : (
               <>
-                {!closed ? <ButtonV2 kind="danger-outline" icon={<XCircle />} onClick={() => openDrawer('reject')}>Reject</ButtonV2> : null}
-                {primary && !closed ? <ButtonV2 icon={primary.icon} onClick={() => openDrawer(primary.key)}>{primary.label}</ButtonV2> : null}
+                {primary && !closed ? <ButtonV2 size="lg" icon={primary.icon} onClick={() => openDrawer(primary.key)}>{primary.label}</ButtonV2> : null}
+                <ButtonV2 kind="secondary" size="lg" icon={<FileText />} onClick={focusNote}>Note</ButtonV2>
+                <ButtonV2 kind="secondary" size="lg" icon={<FileText />} aria-pressed={showDocuments} onClick={openDocuments}>Documents</ButtonV2>
+                {!closed ? (
+                  <>
+                    <ButtonV2 kind="secondary" size="lg" icon={<CalendarDays />} onClick={() => openDrawer('schedule')}>Schedule</ButtonV2>
+                    <ButtonV2 kind="secondary" size="lg" icon={<Star />} onClick={() => openDrawer('scorecard')}>Scorecard</ButtonV2>
+                    <ButtonV2 kind="secondary" size="lg" icon={<Send />} onClick={() => openDrawer('offer')}>Offer</ButtonV2>
+                    <ButtonV2 kind="secondary" size="lg" icon={<CircleCheck />} onClick={() => openDrawer('prehire')}>Pre-hire</ButtonV2>
+                    <ButtonV2 kind="danger-outline" size="lg" icon={<XCircle />} onClick={() => openDrawer('reject')}>Reject</ButtonV2>
+                  </>
+                ) : null}
               </>
             )}
           </div>
         </div>
       </section>
-      <TabsV2
-        ariaLabel="Application file"
-        activeKey={tab}
-        onChange={setTab}
-        items={HUB_TABS.map((item) => ({ ...item, controls: item.key === tab ? `file-panel-${item.key}` : undefined }))}
-      />
-      <TabPanelV2 id={`file-panel-${tab}`} labelledBy={`rf2-tab-${tab}`}>
-        {tab === 'overview' ? (
-          <div className="rf2-file__stack">
+      <div className="rf2-file__stack">
             <section className="rf2-card" aria-labelledby="glance-h">
               <h3 id="glance-h" className="rf2-card__title">At a glance</h3>
               <div className="rf2-file__glance">
@@ -476,16 +550,10 @@ export function ApplicationFileV2({ load = loadApplicationFile, mode = 'owner' }
                 <p className="rf2-file__muted">{manager ? (pendingOffer ? 'Waiting on your decision. Review offer opens the pay and the band.' : 'Pay and the band show in the offer decision.') : 'Pay is set by the approving manager and not shown here.'}</p>
               </section>
             ) : null}
-          </div>
-        ) : null}
-        {tab === 'activity' ? (
-          <div className="rf2-file__stack">
-            <Timeline file={file} writable={!manager} onScorecard={manager ? undefined : (iid) => openDrawer('scorecard', { interview: iid })} onReschedule={manager ? undefined : (iid) => openDrawer('schedule', { interview: iid })} onChanged={() => setAttempt((n) => n + 1)} />
+            <Timeline file={file} messages={manager ? [] : messages} writable={!manager} onScorecard={manager ? undefined : (iid) => openDrawer('scorecard', { interview: iid })} onReschedule={manager ? undefined : (iid) => openDrawer('schedule', { interview: iid })} onChanged={() => setAttempt((n) => n + 1)} />
             {manager ? null : <Notes file={file} onAdded={() => setAttempt((n) => n + 1)} />}
-            {manager ? null : <MessagesCard applicationId={app.id} followUpDate={app.followUpDate ?? null} />}
-          </div>
-        ) : null}
-        {tab === 'documents' ? (
+            {manager ? null : <MessagesCard applicationId={app.id} followUpDate={app.followUpDate ?? null} omitAttempts />}
+        {showDocuments ? (
           <section className="rf2-card" aria-labelledby="docs-h">
             <h3 id="docs-h" className="rf2-card__title">Documents</h3>
             {manager ? (
@@ -500,7 +568,7 @@ export function ApplicationFileV2({ load = loadApplicationFile, mode = 'owner' }
             ) : <DocumentHistory applicationId={app.id} fallback={file.documents} onToast={setToast} />}
           </section>
         ) : null}
-      </TabPanelV2>
+      </div>
 
       {Drawer ? <Drawer file={file} onClose={closeDrawer} onDone={done} params={params} /> : null}
       {decideId ? (
@@ -563,21 +631,20 @@ function ScorecardFit({ file }: { file: ApplicationFile }) {
   );
 }
 
-function Timeline({ file, writable, onScorecard, onReschedule, onChanged }: { file: ApplicationFile; writable?: boolean; onScorecard?: (interviewId: string) => void; onReschedule?: (interviewId: string) => void; onChanged: () => void }) {
+function Timeline({ file, messages = [], writable, onScorecard, onReschedule, onChanged }: { file: ApplicationFile; messages?: MessageAttempt[]; writable?: boolean; onScorecard?: (interviewId: string) => void; onReschedule?: (interviewId: string) => void; onChanged: () => void }) {
   const [err, setErr] = useState<string | null>(null);
   const markNoShow = async (interview: InterviewItem) => {
     setErr(null);
     try { await updateInterview(interview.id, { status: 'No-show' }); onChanged(); } catch (e) { setErr(errorText(e)); }
   };
-  const recorded = recordedRows(file);
+  const recorded = chatterRows(file, messages);
   const interviews = [...file.interviews].sort((a, b) => b.scheduledStart.localeCompare(a.scheduledStart));
   return (
-    <section className="rf2-card" aria-labelledby="timeline-h">
-      <h3 id="timeline-h" className="rf2-card__title">Timeline</h3>
+    <section className="rf2-card rf2-file__chatter" aria-labelledby="chatter-h">
+      <h3 id="chatter-h" className="rf2-card__title">Chatter</h3>
       {err ? <p className="rf2-inline-note" role="alert">{err}</p> : null}
-      <h4 className="rf2-file__subhead">Recorded</h4>
       {recorded.length === 0 ? <p className="rf2-file__muted">Nothing recorded yet.</p> : (
-        <ol className="rf2-timeline" aria-label="Recorded activity">
+        <ol className="rf2-timeline" aria-label="Chatter">
           {recorded.map((r, index) => (
             <li key={`${r.at}-${index}`} className="rf2-timeline__row">
               <time dateTime={r.at}>{fmt(r.at)}</time>
@@ -628,10 +695,7 @@ function Notes({ file, onAdded }: { file: ApplicationFile; onAdded: () => void }
   return (
     <section className="rf2-card" aria-labelledby="notes-h">
       <h3 id="notes-h" className="rf2-card__title">Notes</h3>
-      <ul className="rf2-notes">
-        {file.notes.map((n) => <li key={n.id} className="rf2-notes__item"><p>{n.content}</p><p className="rf2-timeline__sub">{n.authorName ?? 'System'} · {fmt(n.createdAt)}</p></li>)}
-      </ul>
-      <TextareaV2 label="Add a note" rows={3} value={text} onChange={(e) => setText(e.target.value)} error={err} hint="Write with evidence. Notes can't be deleted." />
+      <TextareaV2 id="file-note" label="Add a note" rows={3} value={text} onChange={(e) => setText(e.target.value)} error={err} hint="Write with evidence. Notes can't be deleted." />
       <div className="rf2-notes__actions"><ButtonV2 kind="secondary" onClick={save} loading={busy}>Save note</ButtonV2></div>
     </section>
   );

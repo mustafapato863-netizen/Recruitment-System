@@ -1,5 +1,5 @@
 /* E2 application file (E13) + drawer forms (E14–E22). Scoped, tokens only. */
-[data-ui='v2'] .rf2-file { display: flex; flex-direction: column; gap: var(--rf2-space-2); max-width: 1136px; min-width: 0; padding: var(--rf2-space-4); font-family: var(--rf2-font); color: var(--rf2-ink); }
+[data-ui='v2'] .rf2-file { display: flex; flex-direction: column; gap: var(--rf2-space-2); width: 100%; max-width: min(100%, 1440px); min-width: 0; box-sizing: border-box; padding: var(--rf2-space-4); font-family: var(--rf2-font); color: var(--rf2-ink); }
 /* The shared tab row is nowrap and fit-content. On a narrow file that clips the last label. Wrap whole tabs inside this page, and scroll the row only if a label is still wider than the file. */
 [data-ui='v2'] .rf2-file .rf2-tabs { display: flex; flex-wrap: wrap; align-self: stretch; width: fit-content; max-width: 100%; min-width: 0; overflow-x: auto; }
 [data-ui='v2'] .rf2-file .rf2-tab { flex: 0 0 auto; max-width: 100%; }
@@ -11,7 +11,12 @@
 [data-ui='v2'] .rf2-file__intro { display: flex; flex-direction: column; gap: var(--rf2-space-0-5); min-width: 0; }
 [data-ui='v2'] .rf2-file__name { margin: 0; font-size: var(--rf2-text-page); line-height: var(--rf2-leading-page); font-weight: var(--rf2-weight-page); }
 [data-ui='v2'] .rf2-file__meta, [data-ui='v2'] .rf2-file__muted { margin: 0; color: var(--rf2-muted); font-size: var(--rf2-text-label); line-height: var(--rf2-leading-label); }
-[data-ui='v2'] .rf2-file__actions { display: flex; flex-wrap: wrap; gap: var(--rf2-space-1); }
+[data-ui='v2'] .rf2-file__actions, [data-ui='v2'] .rf2-smart { display: flex; flex-wrap: wrap; gap: var(--rf2-space-1); align-items: center; }
+[data-ui='v2'] .rf2-rail { display: flex; flex-wrap: wrap; gap: var(--rf2-space-1); margin: 0; padding: 0; list-style: none; }
+[data-ui='v2'] .rf2-rail__step { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; padding: 0 var(--rf2-space-1-5); border: 1px solid var(--rf2-divider); border-radius: var(--rf2-radius-control); background: transparent; color: var(--rf2-ink); font: inherit; font-size: var(--rf2-text-label); line-height: var(--rf2-leading-label); }
+[data-ui='v2'] button.rf2-rail__step { cursor: pointer; }
+[data-ui='v2'] .rf2-rail__step[aria-current='step'] { background: var(--rf2-info-tint); color: var(--rf2-ink); font-weight: 600; }
+[data-ui='v2'] button.rf2-rail__step:focus-visible, [data-ui='v2'] .rf2-smart .rf2-btn:focus-visible { outline: var(--rf2-focus-width) solid var(--rf2-focus-color); outline-offset: var(--rf2-focus-offset); }
 [data-ui='v2'] .rf2-file__crumbs ol { display: flex; flex-wrap: wrap; align-items: center; gap: var(--rf2-space-1); margin: 0; padding: 0; list-style: none; color: var(--rf2-muted); font-size: var(--rf2-text-label); line-height: var(--rf2-leading-label); }
 [data-ui='v2'] .rf2-file__crumbs a { color: var(--rf2-action); font-weight: 600; text-decoration: none; }
 [data-ui='v2'] .rf2-file__crumbs [aria-current='page'] { color: var(--rf2-ink); font-weight: 600; }
@@ -88,3 +93,18 @@
 [data-ui='v2'] .rf2-preview { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: var(--rf2-space-2); background: var(--rf2-scrim); }
 [data-ui='v2'] .rf2-preview__sheet { display: flex; flex-direction: column; gap: var(--rf2-space-1); width: min(100%, 48rem); max-height: 90vh; padding: var(--rf2-space-2); border-radius: var(--rf2-radius-card); background: var(--rf2-card); color: var(--rf2-ink); }
 [data-ui='v2'] .rf2-preview__frame { width: 100%; height: 60vh; border: 1px solid var(--rf2-divider); background: var(--rf2-card); }
+
+/* After the base stack rules so the wide layout wins. Tablet uses the content width; desktop keeps chatter beside the record. */
+@media (min-width: 768px) and (max-width: 1279px) {
+  [data-ui='v2'] .rf2-file { max-width: none; padding: var(--rf2-space-3); }
+  [data-ui='v2'] .rf2-file__stage, [data-ui='v2'] .rf2-smart { align-items: flex-start; }
+  [data-ui='v2'] .rf2-timeline__row { grid-template-columns: 88px minmax(0, 1fr); }
+  [data-ui='v2'] .rf2-timeline__actions { grid-column: 1 / -1; justify-content: flex-start; }
+}
+@media (min-width: 1280px) {
+  [data-ui='v2'] .rf2-file { max-width: min(100%, 1560px); }
+  [data-ui='v2'] .rf2-file__stack { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(280px, 400px); align-items: start; }
+  [data-ui='v2'] .rf2-file__chatter { grid-column: 2; grid-row: 1 / span 12; position: sticky; top: 80px; align-self: start; }
+  [data-ui='v2'] .rf2-file__chatter .rf2-timeline__row { grid-template-columns: minmax(0, 1fr); }
+  [data-ui='v2'] .rf2-file__chatter .rf2-timeline__actions { grid-column: auto; justify-content: flex-start; }
+}

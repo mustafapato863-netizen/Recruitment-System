@@ -9,10 +9,10 @@ import { getApi } from '../../../api/client';
 import { BreadcrumbProvider, useBreadcrumb } from '../../../context/BreadcrumbContext';
 import { QuickGuideModal, QuickGuideProvider, useQuickGuide } from '../../../quickguide';
 import { SEAT_LABEL, type Seat } from '../../../v2/seat';
-import { canOpenRoute, canUseRequisitions, isInterviewerOnly, specialHome, isRecruiterOnly, v2Redirect } from '../../../v2/destinations';
+import { canUseRequisitions, isInterviewerOnly, specialHome, isRecruiterOnly, v2Redirect } from '../../../v2/destinations';
 import { NavItem } from '../NavItem';
 import { canUseMyInterviews } from '../../../auth/interviewer';
-import { SEAT_NAV, activeNavKey, permittedClassicItems, permittedNavItems, type NavIconName } from './navConfig';
+import { SEAT_NAV, activeNavKey, permittedNavItems, type NavIconName } from './navConfig';
 import { workspaceOptions, type WorkspaceOption } from './workspace';
 import { useTheme } from '../../../theme/ThemeContext';
 import { SghHeartIcon } from '../../../design-system/brand/sgh-logo';
@@ -224,18 +224,14 @@ function ShellFrame({ user, seat, onSignOut, children }: AppShellV2Props) {
   const location = useLocation();
   // B2-17/18: "/" goes to the seat's home; v1 pages the seat can't use redirect to their v2 equivalent.
   const redirectTo = v2Redirect(seat, location.pathname, { requisitions: canUseRequisitions(user), interviews: canUseMyInterviews(user), interviewerOnly: isInterviewerOnly(user, canUseMyInterviews(user)), home: specialHome(user), permissions: user.permissions ?? [], isAdministrator: (user.roles ?? []).some((r) => r.code === 'ADMINISTRATOR') });
+  // A same-path target (adding ?drawer=) must not replace the outlet. Navigate would run again on the next pathname check and the page would never mount.
+  const redirectPath = redirectTo?.split('?')[0];
+  const leavesPage = Boolean(redirectTo) && redirectPath !== location.pathname;
   const { customLabels } = useBreadcrumb();
   const isAdministrator = (user.roles ?? []).some((r) => r.code === 'ADMINISTRATOR');
   const interviewerOnly = isInterviewerOnly(user, canUseMyInterviews(user));
   const allItems = permittedNavItems(seat, user.permissions, isAdministrator, isRecruiterOnly(user.roles), canUseMyInterviews(user));
-  const classic = permittedClassicItems(user.permissions, isAdministrator, interviewerOnly);
-  const home = specialHome(user);
-  const pinned = home ? classic.filter((item) => item.to === home).map((item) => ({ ...item, icon: home === '/licenses' ? 'roles' as const : 'my-work' as const })) : [];
-  const daily = interviewerOnly ? allItems.filter((item) => item.key === 'my-work' || item.key === 'my-interviews') : allItems;
-  const items = home ? pinned : daily;
-  const tools = home ? [] : classic.filter((item) => !items.some((primary) => primary.to === item.to)
-    && canOpenRoute(item.to, user.permissions, isAdministrator));
-  const sidebarItems = [...items, ...tools];
+  const sidebarItems = interviewerOnly ? allItems.filter((item) => item.key === 'my-work' || item.key === 'my-interviews') : allItems;
   const allNavigation = sidebarItems;
   const activeKey = activeNavKey(allNavigation, location.pathname, location.hash);
   const canSeeNotifications = isAdministrator || (user.permissions ?? []).includes('NOTIFICATION_VIEW');
@@ -301,7 +297,7 @@ function ShellFrame({ user, seat, onSignOut, children }: AppShellV2Props) {
           <UserMenu user={user} seat={seat} onSignOut={onSignOut} />
         </header>
         <main id="rf2-main" className="rf2-shell__content" tabIndex={-1}>
-          {children ?? (redirectTo ? <Navigate to={redirectTo} replace /> : <Outlet />)}
+          {children ?? (leavesPage && redirectTo ? <Navigate to={redirectTo} replace /> : <Outlet />)}
         </main>
       </div>
     </div>

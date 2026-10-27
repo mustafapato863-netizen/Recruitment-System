@@ -116,9 +116,13 @@ describe('E2: My Work actions open the v2 file', () => {
     const sc = fx.overdue[0];
     expect(fileActionHref(sc, sc.actions[0])).toBe('/applications/a1?drawer=scorecard&interview=i1');
     const offer = fx.waitingOnOthers[0];
+    expect(fileActionHref(offer, { key: 'screen', label: 'Log screen', disabled: false })).toBe('/applications/a3?drawer=screen');
+    expect(fileActionHref(offer, { key: 'schedule', label: 'Schedule interview', disabled: false })).toBe('/applications/a3?drawer=schedule');
+    expect(fileActionHref(offer, { key: 'scorecard', label: 'Open scorecard', disabled: false })).toBe('/applications/a3?drawer=scorecard');
     expect(fileActionHref(offer, { key: 'send-offer', label: 'Send offer', disabled: false })).toBe('/applications/a3?drawer=send');
     expect(fileActionHref(offer, { key: 'record-response', label: 'Record response', disabled: false })).toBe('/applications/a3?drawer=answer');
-    expect(fileActionHref(offer, offer.actions[0])).toBe('/applications/a3');
+    expect(fileActionHref(offer, { key: 'pre-hire', label: 'Pre-hire checklist', disabled: false })).toBe('/applications/a3?drawer=prehire');
+    expect(fileActionHref(offer, offer.actions[0])).toBe('/applications/a3?drawer=offer');
     expect(fileActionHref(fx.waitingOnOthers[1], { key: 'move-to-offer', label: 'Move to Offer', disabled: false })).toBe('/applications/a4?drawer=offer');
     const job = fx.dueToday[0];
     expect(fileActionHref(job, job.actions[0])).toBe('/vacancies/j1');
@@ -151,10 +155,23 @@ describe('E2: My Work actions open the v2 file', () => {
     expect(assignedScore).not.toContain('/applications/');
     const [approval, licence] = fx.joiningSoon!;
     expect(joiningCaseHref(approval!, true)).toEqual({ href: '/applications/a3?drawer=prehire', label: 'Open checklist' });
-    expect(joiningCaseHref(licence!, true)).toEqual({ href: '/hires/hc2', label: 'View readiness' });
-    expect(joiningCaseHref({ ...licence!, readiness: 'blocked', detail: 'Approved capacity is already filled.' }, true)).toEqual({ href: '/hires/hc2', label: 'View readiness' });
-    expect(joiningCaseHref({ ...licence!, readiness: 'review', detail: 'Review readiness' }, true)).toEqual({ href: '/hires/hc2', label: 'View readiness' });
+    expect(joiningCaseHref(licence!, true)).toEqual({ href: '/applications/a8?drawer=prehire', label: 'View readiness' });
+    expect(joiningCaseHref(licence!, false)).toEqual({ href: '/applications/a8?drawer=prehire', label: 'View readiness' });
+    expect(joiningCaseHref({ ...licence!, readiness: 'ready', detail: 'Ready to join' }, false)).toEqual({ href: '/applications/a8?drawer=prehire', label: 'View readiness' });
+    expect(joiningCaseHref({ ...licence!, readiness: 'blocked', detail: 'Approved capacity is already filled.' }, false)).toEqual({ href: '/applications/a8?drawer=prehire', label: 'View readiness' });
+    expect(joiningCaseHref({ ...licence!, readiness: 'review', detail: 'Review readiness' }, false)).toEqual({ href: '/applications/a8?drawer=prehire', label: 'View readiness' });
     expect(joiningCaseHref(approval!, false).href).toBe('/hires/hc1');
     expect(fx.joiningSoon!.every((row) => row.joined === false)).toBe(true);
   });
+
+  it.each(['licence_pending', 'ready', 'blocked', 'review'] as const)(
+    'joining readiness %s uses the pre-hire drawer /applications/:id?drawer=prehire',
+    (readiness) => {
+      const licence = myWorkFixture().joiningSoon!.find((row) => row.readiness === 'licence_pending')!;
+      expect(joiningCaseHref({ ...licence, readiness }, false)).toEqual({
+        href: '/applications/a8?drawer=prehire',
+        label: 'View readiness',
+      });
+    },
+  );
 });

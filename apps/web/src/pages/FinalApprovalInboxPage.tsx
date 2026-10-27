@@ -19,6 +19,7 @@ import './PageEnhancementsV2.css';
 
 type FinalApprovalRow = {
   id: string;
+  applicationId?: string;
   candidateName: string;
   positionTitle: string;
   branchName: string;
@@ -217,7 +218,7 @@ export function FinalApprovalInboxPage() {
             renderActions={(row) => (
               <>
                 <Button variant="secondary" size="sm" asChild>
-                  <Link to={`/hires/${row.id}`}>Review case</Link>
+                  <Link to={row.applicationId ? `/applications/${row.applicationId}` : `/hires/${row.id}`}>Review case</Link>
                 </Button>
                 <Button
                   variant="danger"

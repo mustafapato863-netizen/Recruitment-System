@@ -40,9 +40,10 @@ describe('#34 LICENSE_CHECK-only (Omar)', () => {
     render(<MemoryRouter><LicenseManagementPage /></MemoryRouter>);
     expect((await screen.findAllByText('Nursing license')).length).toBeGreaterThan(0);
     expect(screen.queryByText('Passport copy')).toBeNull();
+    expect(screen.getAllByRole('link', { name: 'Review case' }).every((link) => link.getAttribute('href') === '/applications/a1?drawer=prehire')).toBe(true);
   });
 
-  it('hiring case: only licence items, no submit/approve/joining or Application link; LICENSE_CHECK_SCOPE shows a clear message', async () => {
+  it('hiring case: only licence items, no submit/approve/joining; the file opens on the pre-hire drawer', async () => {
     auth.perms = OMAR;
     api.patchApi.mockRejectedValueOnce(new ApiError(403, 'LICENSE_CHECK only covers license requirements.', { code: 'LICENSE_CHECK_SCOPE' }, { code: 'LICENSE_CHECK_SCOPE' }));
     render(<MemoryRouter initialEntries={['/hires/hc1']}><Routes><Route path="/hires/:id" element={<HiringCasePage />} /></Routes></MemoryRouter>);
@@ -52,6 +53,7 @@ describe('#34 LICENSE_CHECK-only (Omar)', () => {
     expect(screen.queryByRole('button', { name: /Confirm Joining/ })).toBeNull();
     expect(screen.queryByText('Invalid Date')).toBeNull();
     expect(screen.queryByRole('link', { name: 'Application' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Open pre-hire file' })).toHaveAttribute('href', '/applications/a1?drawer=prehire');
     const toggle = screen.getAllByRole('checkbox')[0] ?? screen.getAllByRole('button', { name: /Nursing license|verify|mark/i })[0];
     await userEvent.click(toggle);
     await waitFor(() => expect(api.patchApi).toHaveBeenCalledWith('/hiring/hc1/compliance/lic1', { status: 'Verified' }));

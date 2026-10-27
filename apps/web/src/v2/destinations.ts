@@ -36,8 +36,8 @@ const PARAM_EQUIVALENT: Array<{ from: RegExp; to: Partial<Record<Seat, string>> 
 ];
 
 /**
- * v1 pages stay on their own URL. They are never redirected; their PermissionGate (as in v1) decides access.
- * Keep in step with CLASSIC_NAV and App.tsx.
+ * Classic staff URLs. A signed-in visit redirects to the closest v2 surface (classicStaffLanding).
+ * Keep in step with App.tsx. The sidebar no longer lists them.
  */
 export const CLASSIC_PATHS: RegExp[] = [
   /^\/hires(\/approvals\/inbox|\/[^/]+)?\/?$/, /^\/licenses\/?$/, /^\/joinings?\/?$/,
@@ -49,8 +49,8 @@ export const CLASSIC_PATHS: RegExp[] = [
 export const isClassicPath = (pathname: string) => CLASSIC_PATHS.some((r) => r.test(pathname));
 
 /**
- * PR33-3: roles whose work only has a classic page get it as their home (they are seated Employee by /auth/me).
- * Final hiring approvers → the final approval inbox; licence specialists → the licences desk.
+ * Final hiring approvers and licence specialists keep the queue that already lists their work.
+ * My Work only loads files the caller owns, so it is not that queue.
  */
 export function specialHome(user: { roles?: ReadonlyArray<{ code: string }>; permissions?: readonly string[] } | null | undefined): string | null {
   const codes = new Set((user?.roles ?? []).map((r) => r.code.trim().toUpperCase()));
@@ -73,8 +73,8 @@ const ROUTE_GATES: Array<[RegExp, Gate]> = [
   [/^\/hires\/[^/]+\/?$/, { any: ['APPLICATION_VIEW', 'APPROVE_OFFERS', 'FINAL_HIRING_APPROVAL', 'LICENSE_CHECK'] }],
   [/^\/licenses\/?$/, { any: ['APPLICATION_VIEW', 'LICENSE_CHECK'] }],
   [/^\/(hires|joinings|offers|reports)\/?$/, { all: ['APPLICATION_VIEW'] }],
-  // #34: final-hire approvers read the file (read-only approver view).
-  [/^\/applications\/[^/]+\/?$/, { any: ['APPLICATION_VIEW', 'FINAL_HIRING_APPROVAL'] }],
+  // #34: final-hire approvers read the file. LICENSE_CHECK opens the same file on the pre-hire drawer.
+  [/^\/applications\/[^/]+\/?$/, { any: ['APPLICATION_VIEW', 'FINAL_HIRING_APPROVAL', 'LICENSE_CHECK'] }],
   [/^\/(candidates|cv-bank|sourcing-match|talent-pools|classic\/candidates)(\/|$)/, { all: ['CANDIDATE_VIEW'] }],
   [/^\/import\/[^/]+\/[^/]+\/?$/, { any: ['CANDIDATE_VIEW', 'VACANCY_REQUEST_VIEW', 'MASTER_DATA_VIEW'] }],
   [/^\/import\/?$/, { any: ['CANDIDATE_CREATE', 'VACANCY_REQUEST_CREATE', 'MASTER_DATA_MANAGE'] }],
@@ -148,11 +148,43 @@ export function isInterviewerOnly(user: { permissions?: readonly string[] } | nu
   return interviewer && !(user?.permissions ?? []).includes('APPLICATION_VIEW');
 }
 export function v2Redirect(seat: Seat, pathname: string, opts: { requisitions?: boolean; interviews?: boolean; interviewerOnly?: boolean; home?: string | null; permissions?: readonly string[]; isAdministrator?: boolean } = {}): string | null {
+  // Stay on /applications/:id. A redirect that only adds ?drawer= keeps the same pathname, and the
+  // shell would render Navigate instead of the file on every pass. The licence file opens that drawer.
   const to = v2RedirectByPath(seat, pathname, opts);
-  // PR33-3: a URL the user can't open (route gate) goes home, not to the v1 Access Restricted page.
+  // A URL, or a redirect target, the route gate refuses goes home instead of the v1 Access Restricted page.
+  if (!opts.permissions) return samePath(pathname, to) ? null : to;
   const home = opts.home ?? SEAT_HOME[seat];
-  if (to === null && opts.permissions && pathname !== home && !canOpenRoute(pathname, opts.permissions, opts.isAdministrator)) return home;
-  return to;
+  const target = (to ?? pathname).split('?')[0];
+  if (target !== home && !canOpenRoute(target, opts.permissions, opts.isAdministrator)) return home;
+  // A same-path result only adds a query. The shell would replace the page with Navigate and the file would never mount.
+  return samePath(pathname, to) ? null : to;
+}
+
+function samePath(pathname: string, to: string | null): boolean {
+  return Boolean(to) && to!.split('?')[0] === pathname.split('?')[0];
+}
+
+/** Closest existing v2 page for a classic staff URL. Null when the path is not classic, or when it is the caller's own queue. */
+function classicStaffLanding(seat: Seat, pathname: string, opts: { interviews?: boolean; home?: string | null }): string | null {
+  if (!isClassicPath(pathname)) return null;
+  const seatHome = SEAT_HOME[seat];
+  const focused = opts.home && opts.home !== seatHome ? opts.home : null;
+  const here = pathname.replace(/\/$/, '') || '/';
+  // The approval inbox and the licence desk are the queues. A hiring case the gate already allows stays so its file link can open.
+  if (focused && here === focused.replace(/\/$/, '')) return null;
+  if (focused && /^\/hires\/(?!approvals\/)[^/]+$/.test(here)) return null;
+  const home = focused ?? seatHome;
+  if (/^\/interviews(\/calendar)?\/?$/.test(pathname)) {
+    if (seat === 'admin' || (seat === 'employee' && opts.interviews === false)) return home;
+    return '/my-interviews';
+  }
+  if (/^\/(sourcing-match|talent-pool)\/?$/.test(pathname)) return seat === 'employee' ? '/talent-pools' : home;
+  if (/^\/(cv-bank|classic\/candidates)\/?$/.test(pathname) || /^\/import(\/[^/]+\/[^/]+)?\/?$/.test(pathname)) return seat === 'employee' ? '/candidates' : home;
+  if (/^\/classic\/vacancies\/?$/.test(pathname)) return seat === 'employee' ? '/vacancies' : home;
+  if (/^\/access-control\/?$/.test(pathname)) return seat === 'admin' ? '/roles' : home;
+  if (/^\/(settings(\/targets)?|classic\/master-data)\/?$/.test(pathname)) return seat === 'admin' ? '/master-data' : home;
+  if (/^\/classic\/pipeline-settings\/?$/.test(pathname)) return seat === 'admin' ? '/pipeline-settings' : home;
+  return home;
 }
 /** Candidate entry paths. They are public routes, never the staff seat home. */
 const CANDIDATE_ENTRY = /^\/(?:portal(?:\/.*)?|my-applications)\/?$/;
@@ -160,7 +192,6 @@ const CANDIDATE_ENTRY = /^\/(?:portal(?:\/.*)?|my-applications)\/?$/;
 function v2RedirectByPath(seat: Seat, pathname: string, opts: { requisitions?: boolean; interviews?: boolean; interviewerOnly?: boolean; home?: string | null } = {}): string | null {
   if (pathname === '/' || pathname === '') return opts.home ?? SEAT_HOME[seat];
   if (CANDIDATE_ENTRY.test(pathname)) return null;
-  if (!opts.interviewerOnly && isClassicPath(pathname)) return null;
   for (const rule of PARAM_EQUIVALENT) {
     const m = rule.from.exec(pathname);
     const to = m ? rule.to[seat] : undefined;
@@ -175,6 +206,8 @@ function v2RedirectByPath(seat: Seat, pathname: string, opts: { requisitions?: b
   if (MY_INTERVIEWS.test(pathname) && seat !== 'admin') return opts.interviews === false && seat !== 'manager' ? SEAT_HOME[seat] : null;
   if (opts.requisitions === false && REQUISITIONS.test(pathname)) return SEAT_HOME[seat];
   if (isV2Destination(seat, pathname)) return null;
+  // Null here means stay. A classic path must not fall through to EQUIVALENT, which would send /hires/:id home.
+  if (isClassicPath(pathname)) return classicStaffLanding(seat, pathname, opts);
   for (const rule of EQUIVALENT) if (rule.from.test(pathname) && rule.to[seat]) return rule.to[seat]!;
   return SEAT_HOME[seat];
 }

@@ -86,7 +86,9 @@ describe('#23 400 fields inline', () => {
     renderFile('/applications/a1?drawer=screen');
     const d = await screen.findByRole('dialog');
     await u.type(within(d).getByLabelText(/Screen note/), 'Long note');
-    await u.click(within(d).getByRole('button', { name: /Save/ }));
+    await u.type(within(d).getByLabelText(/Evidence source/), 'Screening call');
+    await u.selectOptions(within(d).getByLabelText(/^Next step/), 'Keep in screening');
+    await u.click(within(d).getByRole('button', { name: 'Save and move to Interview' }));
     expect(await within(d).findByText('notes must be shorter than or equal to 4000 characters')).toBeInTheDocument();
     expect(within(d).getByText('noticePeriodDays must not be greater than 3650')).toBeInTheDocument();
     expect(within(d).queryByTestId('drawer-error')).toBeNull();

@@ -124,6 +124,35 @@ export function blockingGate(app: Pick<BoardApplication, 'stage' | 'gates' | 'in
   return g && !g.met ? g : null;
 }
 
+export type CardDrawer = 'screen' | 'schedule' | 'scorecard' | 'offer' | 'prehire';
+
+/** The file drawer this card should open, from the stage and gates the board already loaded. */
+export function cardNextAction(app: Pick<BoardApplication, 'stage' | 'gates' | 'interview'>): { key: CardDrawer; label: string } | null {
+  if (isClosedStage(app.stage)) return null;
+  const unmet = (gate: GateKey) => !app.gates?.some((row) => row.gate === gate && row.met);
+  switch (app.stage) {
+    case 'Applied':
+      return { key: 'screen', label: 'Log screen' };
+    case 'Screening':
+      return unmet('screen-note') ? { key: 'screen', label: 'Log screen' } : { key: 'schedule', label: 'Schedule interview' };
+    case 'Interview':
+      if (app.interview?.when !== 'last') return { key: 'schedule', label: 'Schedule interview' };
+      return unmet('scorecard') ? { key: 'scorecard', label: 'Open scorecard' } : { key: 'offer', label: 'Draft offer' };
+    case 'Offer':
+      return unmet('offer-accepted') ? { key: 'offer', label: 'Draft offer' } : { key: 'prehire', label: 'Move to Pre-hire' };
+    case 'Pre-Hire':
+      return { key: 'prehire', label: 'Pre-hire checklist' };
+    default:
+      return null;
+  }
+}
+
+export function cardFileHref(app: Pick<BoardApplication, 'id' | 'stage' | 'gates' | 'interview'>): string {
+  const file = `/applications/${encodeURIComponent(app.id)}`;
+  const next = cardNextAction(app);
+  return next ? `${file}?drawer=${next.key}` : file;
+}
+
 // ── Open jobs (E08) ──────────────────────────────────────────────────────────
 export interface MyJobRow {
   id: string; code: string; title: string; status: JobStatus;
@@ -223,6 +252,13 @@ export function moveCheck(app: BoardApplication, target: BoardStage, job: JobDet
   if (Math.abs(to - from) !== 1) return { ok: false, reason: `Move one stage at a time; ${BOARD_LABEL[BOARD_STAGES[from + Math.sign(to - from)]]} comes first.` };
   if (!app.allowedTransitions?.includes(target)) return { ok: false, reason: `${BOARD_LABEL[app.stage as BoardStage]} cannot move to ${BOARD_LABEL[target]}.` };
   return { ok: true };
+}
+
+/** A forward column the gate still blocks. The stage stays; the card's next action opens instead. */
+export function gateRefusesMove(app: BoardApplication, target: BoardStage, job: JobDetail | RedactedJob): boolean {
+  if (!moveCheck(app, target, job).ok) return false;
+  const from = BOARD_STAGES.indexOf(app.stage as BoardStage);
+  return BOARD_STAGES.indexOf(target) > from && Boolean(blockingGate(app));
 }
 
 /** The gate each forward move needs (#11), for the hint under "Move to…". */

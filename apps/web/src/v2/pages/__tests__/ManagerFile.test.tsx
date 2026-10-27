@@ -46,9 +46,9 @@ describe('B2-23: the Manager decides on the same file', () => {
     expect(salary).toHaveTextContent('42,000 EGP');
     expect(screen.getByRole('button', { name: 'Review offer' })).toBeInTheDocument();
     expect(screen.queryByLabelText('Add a note')).not.toBeInTheDocument();
-    await userEvent.setup().click(screen.getByRole('tab', { name: 'Activity' }));
-    expect(screen.queryByLabelText('Add a note')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Reject' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: (value) => value === 'Reject' || value === 'Schedule' || value === 'Offer' || value === 'Note' })).not.toBeInTheDocument();
+    expect(screen.getByRole('list', { name: 'Stages' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Applied' })).not.toBeInTheDocument();
   });
   it('without OFFER_PAY_VIEW there is no salary on the file', async () => {
     auth.perms = ['APPLICATION_VIEW'];
@@ -63,7 +63,7 @@ describe('B2-23: the Manager decides on the same file', () => {
     expect(await within(d).findByLabelText(/^Monthly basic pay \(AED\)/)).toBeInTheDocument();
     const band = within(d).getByRole('region', { name: 'Pay band' });
     expect(band).toHaveTextContent('Min 12,000Mid 15,000Max 18,000');
-    expect(screen.getByRole('region', { name: 'Timeline' })).toBeInTheDocument(); // the file stays behind the drawer
+    expect(screen.getByRole('region', { name: 'Chatter' })).toBeInTheDocument();
   });
   it('Approve sends the flat B7 body; a 400 shows the API message in the drawer', async () => {
     const u = userEvent.setup();

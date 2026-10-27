@@ -103,10 +103,23 @@ describe('E09 Job pipeline', () => {
     expect(tarek).toHaveTextContent('Interview 12 Oct, 10:00–11:00 · Room 3B, IT wing');
     expect(within(tarek).queryByTestId('gate-badge')).toBeNull();
     expect(screen.getByRole('article', { name: 'Ahmed Embaby, Interview' })).toHaveTextContent('Last interview 6 Oct, 10:00–11:00 · room link');
+    expect(screen.getByRole('link', { name: 'Log screen for Hany Fawzy' })).toHaveAttribute('href', '/applications/a1?drawer=screen');
+    expect(screen.getByRole('link', { name: 'Open scorecard for Ahmed Embaby' })).toHaveAttribute('href', '/applications/a7?drawer=scorecard');
+    expect(screen.getByRole('link', { name: 'Schedule interview for Tarek Lotfy' })).toHaveAttribute('href', '/applications/a8?drawer=schedule');
+    expect(screen.getByRole('link', { name: 'Draft offer for Lina Hassan' })).toHaveAttribute('href', '/applications/a10?drawer=offer');
+    expect(screen.getByRole('button', { name: 'Suggest from bank' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Import CVs' })).toBeInTheDocument();
     expect(container.textContent).not.toMatch(PAY);
     expect(await axeViolations(container)).toEqual([]);
-    await u.click(screen.getByRole('link', { name: 'Ahmed Embaby' }));
+    await u.click(screen.getByRole('link', { name: (value) => value === 'Ahmed Embaby' }));
     expect(screen.getByTestId('loc')).toHaveTextContent('/applications/a7');
+    expect(screen.getByTestId('loc').textContent).not.toContain('drawer');
+  });
+  it('the next-action control opens the file on that drawer', async () => {
+    const u = userEvent.setup();
+    renderAt('/vacancies/v1');
+    await u.click(await screen.findByRole('link', { name: 'Open scorecard for Ahmed Embaby' }));
+    expect(screen.getByTestId('loc')).toHaveTextContent('/applications/a7?drawer=scorecard');
   });
   it('keyboard "Move to…": allowed next stage moves (PATCH with expectedStage/version)', async () => {
     const u = userEvent.setup();
@@ -134,27 +147,24 @@ describe('E09 Job pipeline', () => {
     expect(within(card).queryByRole('menu')).not.toBeInTheDocument();
     expect(btn).toHaveFocus();
   });
-  it('gate 409 {code, gate, missing[]} → toast naming the missing gate; the card stays', async () => {
+  it('a move the gate refuses does not change the stage and opens the next-action drawer', async () => {
     const u = userEvent.setup();
-    api.patchApi.mockRejectedValue(new ApiError(409, 'Offer needs a submitted interview scorecard.', { code: 'GATE_SCORECARD_NOT_SUBMITTED', gate: 'scorecard', missing: ['submitted scorecard'] }, { code: 'GATE_SCORECARD_NOT_SUBMITTED' }));
     renderAt('/vacancies/v1');
     const card = await screen.findByRole('article', { name: 'Ahmed Embaby, Interview' });
     await u.click(within(card).getByRole('button', { name: /Move to…/ }));
     expect(within(card).getByRole('menuitem', { name: /^Offer/ })).toHaveTextContent('Needs a submitted scorecard');
     await u.click(within(card).getByRole('menuitem', { name: /^Offer/ }));
-    const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent("Can't move Ahmed Embaby to Offer");
-    expect(alert).toHaveTextContent('Missing gate: scorecard. Ahmed stays in Interview.');
-    expect(screen.getByRole('article', { name: 'Ahmed Embaby, Interview' })).toBeInTheDocument();
+    expect(api.patchApi).not.toHaveBeenCalled();
+    expect(screen.getByTestId('loc')).toHaveTextContent('/applications/a7?drawer=scorecard');
   });
   it('stale version → refreshes the board', async () => {
     const u = userEvent.setup();
-    api.patchApi.mockRejectedValue(new ApiError(409, 'This application changed before the stage update could be saved.', { code: 'CONFLICT', details: { currentStage: 'Offer', currentVersion: 4 } }, { code: 'CONFLICT' }));
+    api.patchApi.mockRejectedValue(new ApiError(409, 'This application changed before the stage update could be saved.', { code: 'CONFLICT', details: { currentStage: 'Screening', currentVersion: 4 } }, { code: 'CONFLICT' }));
     renderAt('/vacancies/v1');
-    const card = await screen.findByRole('article', { name: 'Lina Hassan, Offer' });
+    const card = await screen.findByRole('article', { name: 'Hany Fawzy, Applied' });
     const before = api.getApi.mock.calls.length;
     await u.click(within(card).getByRole('button', { name: /Move to…/ }));
-    await u.click(within(card).getByRole('menuitem', { name: /Pre-hire/ }));
+    await u.click(within(card).getByRole('menuitem', { name: /^Screening/ }));
     expect(await screen.findByRole('alert')).toHaveTextContent('Someone changed this file first');
     await waitFor(() => expect(api.getApi.mock.calls.length).toBeGreaterThan(before));
   });

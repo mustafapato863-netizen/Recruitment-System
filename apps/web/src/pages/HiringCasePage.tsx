@@ -480,7 +480,15 @@ export function HiringCasePage() {
                     : `Status: ${hiringCase.status}`}
           </p>
         </div>
-        {licenseOnly ? null : <div className="flex shrink-0 items-center gap-2">
+        {licenseOnly ? (
+          hiringCase.applicationId ? (
+            <div className="flex shrink-0 items-center gap-2">
+              <Button variant="secondary" size="sm" asChild>
+                <Link to={`/applications/${hiringCase.applicationId}?drawer=prehire`}>Open pre-hire file</Link>
+              </Button>
+            </div>
+          ) : null
+        ) : <div className="flex shrink-0 items-center gap-2">
           {hiringCase.status === 'Pending Compliance' && (
             <Button variant="primary" size="sm" loading={busyAction === 'submit'} disabled={!isReady} onClick={() => void submitForApproval()}>
               Submit approval

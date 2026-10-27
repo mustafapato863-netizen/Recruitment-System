@@ -5,7 +5,7 @@
  * send components: []; screening never sends salary fields).
  */
 import type { ScreeningDraft, UpsertScreeningDraftInput } from '@recruitflow/contracts';
-import { downloadFileApi, getApi, patchApi, postApi, putApi } from '../../api/client';
+import { ApiError, downloadFileApi, getApi, patchApi, postApi, putApi } from '../../api/client';
 import { isScorecardSubmitted } from '../../utils/scorecardStatus';
 import { stripPay } from './paySafety';
 import type { JoiningCheckType } from './gates';
@@ -136,6 +136,36 @@ export async function loadApplicationFile(id: string, opts: { keepScreeningPay?:
  * approval is pending: GET /applications/:id and the candidate's documents (GET /documents/candidate/:id). Every
  * other file call needs APPLICATION_VIEW, so it is skipped rather than sent to fail.
  */
+/** Licence specialist: GET /hiring already allows LICENSE_CHECK. The file opens on that case, with the licence item as the pre-hire check. */
+export async function loadLicenseFile(id: string): Promise<ApplicationFile> {
+  const rows = list<HiringItem & { candidateName?: string; positionTitle?: string }>(await getApi(`/hiring?applicationId=${enc(id)}`));
+  const hiring = rows[0];
+  if (!hiring) throw new ApiError(404, 'No licence work is assigned on this file.', { code: 'NOT_FOUND' });
+  const fullName = hiring.candidateName?.trim() || 'Candidate';
+  const [firstName, ...rest] = fullName.split(/\s+/);
+  const licences = (hiring.complianceRequirements ?? []).filter((item) => item.type === 'License');
+  const now = new Date().toISOString();
+  return {
+    workspace: {
+      application: {
+        id, applicationCode: id, vacancyId: '', candidateId: '', stage: 'Pre-Hire', allowedTransitions: [], version: 0,
+        positionTitle: hiring.positionTitle, candidate: { id: '', firstName, lastName: rest.join(' '), fullName }, appliedAt: now, updatedAt: now,
+      },
+      stages: [], nextStageRequirements: [], canAdvance: false,
+    },
+    history: [], notes: [], screening: [], interviews: [], scorecards: {}, offer: null,
+    hiring, joiningChecks: licences.length ? [{
+      type: 'SCFHS_LICENCE',
+      label: licences.map((item) => item.name).filter(Boolean).join(', ') || 'SCFHS licence',
+      verified: licences.every((item) => item.status === 'Verified' || item.status === 'Not Required'),
+      verifiedBy: null,
+      verifiedAt: licences.find((item) => item.verifiedAt)?.verifiedAt ?? null,
+      documentId: null,
+    }] : [],
+    documents: [],
+  };
+}
+
 export async function loadApproverFile(id: string): Promise<ApplicationFile> {
   const application = stripPay(await getApi<FileApplication>(`/applications/${enc(id)}`));
   type RawDoc = { id: string; documentType?: string; type?: string; fileName?: string; name?: string; createdAt?: string; uploadedAt?: string };
