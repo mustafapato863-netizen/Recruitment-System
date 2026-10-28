@@ -207,7 +207,7 @@ export function HiringCasePage() {
 
   if (loading) {
     return (
-      <PageFrame title="Hire" description="Loading case">
+      <PageFrame title="Hire">
         <PageState kind="loading" title="Loading hiring case" description="Fetching pre-hire readiness checklist." />
       </PageFrame>
     );
@@ -216,7 +216,7 @@ export function HiringCasePage() {
   if (!hiringCase) {
     const isForbidden = forbidden403 || error?.toLowerCase().includes('denied') || error?.toLowerCase().includes('permission') || error?.includes('403');
     return (
-      <PageFrame title="Hire" description="Pre-hire checks and joining.">
+      <PageFrame title="Hire">
         {isForbidden ? (
           <PageState
             kind="forbidden"

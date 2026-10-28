@@ -147,7 +147,6 @@ function BulkImportLandingPage() {
     <PageFrame
       eyebrow="Data Operations"
       title="Bulk Import Center"
-      description="Load candidates, vacancy requests, and controlled master data from Excel, validate them, resolve issues, then confirm changes with an audit trail."
       actions={
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" onClick={() => void downloadTemplate()}>
@@ -342,18 +341,13 @@ function BulkImportReviewPage({ dataset, jobId }: { dataset: BulkImportDataset; 
     return ['code', 'title', 'departmentName', 'level', 'entity', 'type', 'description', 'status'];
   }, [dataset]);
 
-  if (loading && !summary) return <PageFrame eyebrow="Data Operations" title="Import Review" description="Loading staged rows..."><PageState kind="loading" title="Loading import batch" description="Fetching validation results." /></PageFrame>;
-  if (error && !summary) return <PageFrame eyebrow="Data Operations" title="Import Review" description="The batch could not be loaded."><Alert tone="danger" title="Import unavailable">{error}</Alert></PageFrame>;
+  if (loading && !summary) return <PageFrame eyebrow="Data Operations" title="Import Review"><PageState kind="loading" title="Loading import batch" description="Fetching validation results." /></PageFrame>;
+  if (error && !summary) return <PageFrame eyebrow="Data Operations" title="Import Review"><Alert tone="danger" title="Import unavailable">{error}</Alert></PageFrame>;
 
   return (
     <PageFrame
       eyebrow={`Data Operations / ${datasetLabel(dataset)}`}
       title={`Review ${summary?.fileName ?? 'import batch'}`}
-      description={dataset === 'vacancy-requests'
-        ? 'Review rows before creating draft vacancy requests. Approval is still required before a vacancy becomes active.'
-        : dataset === 'candidates'
-          ? 'Review and confirm the candidate database rows before they become authoritative records.'
-          : 'Review master-data rows, resolve duplicates, and confirm controlled records with automatic code generation.'}
       actions={<>
         <Button variant="ghost" size="sm" onClick={() => void downloadErrors()}><Icon name="download" size={13} /> Error report</Button>
         <Button variant="secondary" size="sm" onClick={() => void navigate(isMasterData ? '/master-data' : '/import')}>{isMasterData ? 'Back to Master Data' : 'New import'}</Button>

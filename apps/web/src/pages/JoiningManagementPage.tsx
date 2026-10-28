@@ -165,7 +165,6 @@ export function JoiningManagementPage() {
   return (
     <PageFrame
       title="Joining"
-      description="Confirm start dates and close headcount."
       actions={
         <Button variant="ghost" size="sm" onClick={loadData}>
           <Icon name="refresh-cw" size={13} className={isLoading ? 'animate-spin' : ''} />

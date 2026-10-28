@@ -130,7 +130,6 @@ export function TalentPoolsListV2() {
     <div className="rf2-pools">
       <header>
         <h1 className="rf2-pools__title">Talent pools</h1>
-        <p className="rf2-pools__sub">Groups of people you may hire later. Adding or removing someone does not change an application.</p>
       </header>
       {notice ? <p className="rf2-pools__note" role="status">{notice}</p> : null}
       {state.kind === 'ready' ? (

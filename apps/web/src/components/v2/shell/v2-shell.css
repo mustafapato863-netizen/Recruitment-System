@@ -77,9 +77,9 @@
 [data-ui='v2'] .rf2-shell--collapsed .rf2-nav-item,
 [data-ui='v2'] .rf2-shell--collapsed .rf2-shell__account { justify-content: center; padding-left: 0; padding-right: 0; }
 
-/* overflow:hidden would shrink this title to 0 beside the search. Size it to the label, cap a long name, and let the search keep the right side. */
+/* overflow:hidden would shrink this title to 0 beside the search. Size it to the label and cap a long name. */
 [data-ui='v2'] .rf2-shell__title { flex: 0 0 auto; width: max-content; max-width: 18rem; }
-[data-ui='v2'] .rf2-hsearch { margin-inline-start: auto; min-width: 8rem; }
+[data-ui='v2'] .rf2-shell__header > .rf2-hsearch { flex: 1 1 16rem; min-width: 0; max-width: 40rem; margin-inline-start: 0; }
 [data-ui='v2'] .rf2-collapse[hidden] { display: none; }
 /* Below 1024px the sidebar is the 64px icon rail (AppShellV2 forces collapsed). */
 @media (max-width: 1023px) {
@@ -91,6 +91,8 @@
   [data-ui='v2'] .rf2-shell__title { grid-column: 1 / -1; flex: none; width: auto; min-width: 0; max-width: 100%; white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
   [data-ui='v2'] .rf2-shell__header .rf2-icon-button[aria-label^='Switch to'] { display: none; }
   [data-ui='v2'] .rf2-user-menu__text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  [data-ui='v2'] .rf2-shell__header > .rf2-hsearch,
+  [data-ui='v2'] .rf2-shell__end .rf2-hsearch { flex: 1 1 auto; min-width: 0; max-width: none; margin-inline-start: 0; }
   [data-ui='v2'] .rf2-hsearch { flex: 1 1 0; margin-inline-start: 0; min-width: 36px; }
   [data-ui='v2'] .rf2-shell__header .rf2-hsearch__box { width: 100%; min-width: 0; }
   [data-ui='v2'] .rf2-hsearch__pop { min-width: 0; width: calc(100vw - 2 * var(--rf2-space-2)); }
@@ -118,5 +120,65 @@
 [data-ui='v2'] .rf2-tools-link { display: flex; justify-content: space-between; align-items: center; gap: var(--rf2-space-1); min-height: 44px; padding: var(--rf2-space-1-5) var(--rf2-space-2); color: var(--rf2-ink); text-decoration: none; font-size: var(--rf2-text-body); }
 [data-ui='v2'] .rf2-tools-link:hover { background: var(--rf2-neutral-tint); }
 [data-ui='v2'] .rf2-tools-link[aria-current='page'] { background: var(--rf2-info-tint); color: var(--rf2-action); font-weight: 600; }
+
+/* Recruiter and manager: brand, desk links, then search and account. The workspace name stays in the admin sidebar. */
+[data-ui='v2'] .rf2-shell--topnav { grid-template-columns: minmax(0, 1fr); }
+[data-ui='v2'] .rf2-shell--topnav .rf2-shell__header { height: auto; min-height: 64px; flex-wrap: wrap; align-items: center; column-gap: var(--rf2-space-3); row-gap: var(--rf2-space-1); }
+[data-ui='v2'] .rf2-shell__lead { display: flex; align-items: center; gap: var(--rf2-space-1); flex: none; min-width: 0; }
+[data-ui='v2'] .rf2-brand--bar { flex: none; align-self: center; gap: 10px; height: 40px; padding: 0 var(--rf2-space-3) 0 0; border-inline-end: 1px solid var(--rf2-divider); color: inherit; text-decoration: none; }
+[data-ui='v2'] .rf2-shell__menu-button { width: 44px; height: 44px; flex: none; }
+[data-ui='v2'] .rf2-brand--bar:focus-visible { outline: var(--rf2-focus-width) solid var(--rf2-focus-color); outline-offset: var(--rf2-focus-offset); border-radius: 8px; }
+[data-ui='v2'] .rf2-shell__nav--bar { flex: 0 1 auto; min-width: 0; overflow: visible; }
+[data-ui='v2'] .rf2-shell__links { display: flex; flex-wrap: wrap; align-items: center; gap: var(--rf2-space-1); margin: 0; padding: 0; list-style: none; }
+[data-ui='v2'] .rf2-shell__links .rf2-nav-item { width: auto; min-height: 36px; padding: 0 12px; border-radius: 12px; white-space: nowrap; }
+[data-ui='v2'] .rf2-shell__end { position: relative; display: flex; align-items: center; justify-content: flex-end; gap: var(--rf2-space-3); flex: 1 1 auto; min-width: 0; margin-inline-start: auto; }
+[data-ui='v2'] .rf2-shell__end .rf2-hsearch { flex: 1 1 16rem; max-width: 40rem; min-width: 0; margin-inline-start: 0; }
+[data-ui='v2'] .rf2-shell__end .rf2-shell__title:not(.rf2-shell__title--echo) { flex: 0 0 auto; width: auto; max-width: 16rem; margin: 0; }
+[data-ui='v2'] .rf2-shell__actions { display: flex; align-items: center; gap: var(--rf2-space-1-5); flex: none; }
+[data-ui='v2'] .rf2-shell__title--echo { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+@media (min-width: 1280px) {
+  [data-ui='v2'] .rf2-shell--topnav .rf2-shell__header { height: 64px; flex-wrap: nowrap; }
+  [data-ui='v2'] .rf2-shell--topnav .rf2-shell__links { flex-wrap: nowrap; }
+  [data-ui='v2'] .rf2-shell--topnav .rf2-shell__nav--bar { flex: none; }
+}
+@media (max-width: 1279px) {
+  [data-ui='v2'] .rf2-shell--topnav .rf2-shell__header { height: auto; flex-wrap: wrap; padding-block: var(--rf2-space-1); }
+  [data-ui='v2'] .rf2-shell--topnav .rf2-shell__links { flex-wrap: nowrap; }
+  [data-ui='v2'] .rf2-shell--topnav .rf2-shell__end { flex: 1 1 100%; margin-inline-start: 0; }
+  [data-ui='v2'] .rf2-shell--topnav .rf2-shell__end .rf2-hsearch { max-width: none; }
+  /* The menu replaces the link row, so search and tools stay on the bar. */
+  [data-ui='v2'] .rf2-shell--menu .rf2-shell__header { flex-wrap: nowrap; }
+  [data-ui='v2'] .rf2-shell--menu .rf2-shell__end { flex: 1 1 auto; margin-inline-start: auto; }
+}
+@media (pointer: coarse) {
+  [data-ui='v2'] .rf2-shell__links .rf2-nav-item { min-height: 44px; }
+}
+@media (max-width: 1023px) {
+  [data-ui='v2'] .rf2-shell--topnav .rf2-brand__text { display: none; }
+  [data-ui='v2'] .rf2-shell--topnav .rf2-brand--bar { width: 40px; padding: 0; border-inline-end: 0; justify-content: center; }
+}
+@media (max-width: 767px) {
+  [data-ui='v2'] .rf2-shell--topnav .rf2-shell__header { display: flex; flex-wrap: wrap; align-items: center; height: auto; column-gap: var(--rf2-space-1); }
+  [data-ui='v2'] .rf2-shell--topnav .rf2-shell__nav--bar { flex: 1 1 100%; min-width: 0; overflow-x: auto; }
+  [data-ui='v2'] .rf2-shell--topnav .rf2-shell__links { flex: none; flex-wrap: nowrap; }
+  [data-ui='v2'] .rf2-shell--topnav .rf2-shell__links .rf2-nav-item { padding-inline: var(--rf2-space-1); }
+  [data-ui='v2'] .rf2-shell--topnav .rf2-shell__end:has(.rf2-shell__title:not(.rf2-shell__title--echo)) { flex: 1 1 100%; flex-wrap: wrap; }
+  [data-ui='v2'] .rf2-shell--topnav .rf2-shell__title--echo { position: absolute; width: 1px; max-width: none; white-space: nowrap; overflow: hidden; }
+  [data-ui='v2'] .rf2-shell--topnav .rf2-shell__end .rf2-shell__title:not(.rf2-shell__title--echo) { flex: 1 1 100%; width: auto; max-width: 100%; }
+  [data-ui='v2'] .rf2-shell--topnav .rf2-shell__end .rf2-hsearch { flex: 1 1 0; min-width: 36px; max-width: none; }
+  /* A real page title still takes the next row. The menu button stays with the brand. */
+  [data-ui='v2'] .rf2-shell--menu .rf2-shell__header { flex-wrap: wrap; }
+}
+[data-ui='v2'] .rf2-shell__nav--sheet { position: absolute; z-index: 30; inset-inline: 0; top: 100%; max-height: min(70vh, 480px); overflow: auto; padding: var(--rf2-space-1); background: var(--rf2-drawer-surface); border-bottom: 1px solid var(--rf2-divider); box-shadow: var(--rf2-shadow-menu); backdrop-filter: none; }
+[data-ui='v2'] .rf2-shell__nav--sheet .rf2-shell__links { flex-direction: column; align-items: stretch; width: 100%; }
+[data-ui='v2'] .rf2-shell__nav--sheet .rf2-shell__links > li { width: 100%; }
+[data-ui='v2'] .rf2-shell__nav--sheet .rf2-shell__links .rf2-nav-item { width: 100%; min-height: 44px; justify-content: flex-start; padding-inline: var(--rf2-space-2); }
+@media (max-width: 767px) {
+  /* Logo and tools share the top row. A real title, then search, use the rows under it. */
+  [data-ui='v2'] .rf2-shell--topnav.rf2-shell--menu .rf2-shell__header > .rf2-shell__end { display: contents; }
+  [data-ui='v2'] .rf2-shell--menu .rf2-shell__actions { order: 1; margin-inline-start: auto; }
+  [data-ui='v2'] .rf2-shell--menu .rf2-shell__end .rf2-shell__title:not(.rf2-shell__title--echo) { order: 2; }
+  [data-ui='v2'] .rf2-shell--menu .rf2-shell__end .rf2-hsearch { order: 3; flex: 1 1 100%; width: auto; min-width: 0; }
+}
 [data-ui='v2'] .rf2-tools-link:focus-visible { outline-offset: -2px; }
 [data-ui='v2'] .rf2-tools-empty { color: var(--rf2-muted); font-size: var(--rf2-text-body); }

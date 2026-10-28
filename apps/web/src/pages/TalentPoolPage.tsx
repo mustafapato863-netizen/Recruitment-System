@@ -226,7 +226,6 @@ export function TalentPoolPage() {
   return (
     <PageFrame
       title="Talent pool"
-      description="Rank people against one job, then add the best fit."
       actions={
         <Button
           variant="outline"

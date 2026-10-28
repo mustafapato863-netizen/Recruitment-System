@@ -59,7 +59,7 @@ export function AdminReportsV2() {
   return (
     <div className="rf2-jobs rf2-admin">
       <div className="rf2-row-between">
-        <div><h1 className="rf2-jobs__title">Reports</h1><p className="rf2-jobs__sub">Open jobs, files by stage, offers waiting and the hiring report by team. Not a daily desk.</p></div>
+        <div><h1 className="rf2-jobs__title">Reports</h1></div>
         <ButtonV2 icon={<Download />} onClick={exportCsv} disabled={!data}>Export CSV</ButtonV2>
       </div>
       <div className="rf2-admin__filterset">

@@ -1,6 +1,6 @@
 import { useEffect, useId, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Bell, BriefcaseBusiness, CalendarClock, Check, CircleCheck, ClipboardCheck, ClipboardList, Clock, FileSignature, Info, ListChecks, RotateCw, TriangleAlert } from 'lucide-react';
+import { Bell, BriefcaseBusiness, CalendarClock, Check, CircleCheck, ClipboardCheck, ClipboardList, Clock, FileSignature, Info, ListChecks, RotateCw, Sparkles, TriangleAlert } from 'lucide-react';
 import { useAuth } from '../../auth/AuthContext';
 import { ApiError } from '../../api/client';
 import { ButtonV2 } from '../../components/v2/Button';
@@ -76,11 +76,9 @@ function panelId(tab: WorkTab): string {
   return 'my-work-actions';
 }
 
-function subtitleFor(tab: WorkTab, noWork: boolean): string {
-  if (tab === 'interviews') return 'Upcoming interviews assigned to you or your candidates.';
-  if (tab === 'joining') return 'Upcoming start dates, readiness and remaining checks.';
-  if (noWork) return 'Open files on your jobs that need you appear here.';
-  return 'Your next actions, ordered by urgency.';
+function welcomeLine(displayName: string | null | undefined): string {
+  const first = displayName?.trim().split(/\s+/)[0];
+  return first ? `Welcome back, ${first}.` : 'Welcome back.';
 }
 
 function dueText(item: WorkItem, bucket: Bucket, day: MyWorkDay, f: Format): string | null {
@@ -220,9 +218,9 @@ function NextActions({ data, day, filter, onFilter, f, ctx }: {
             <span className="rf2-mywork__filter-label">{entry.label}</span>
           </button>
         ))}
-      </div>
-      <div className="rf2-mywork__list-head">
-        <ButtonV2 kind="tertiary" size="sm" selected={filter === null} onClick={() => { if (filter) onFilter(null); }}>All tasks</ButtonV2>
+        <div className="rf2-mywork__list-head">
+          <ButtonV2 kind="secondary" size="md" selected={filter === null} onClick={() => { if (filter) onFilter(null); }}>All tasks</ButtonV2>
+        </div>
       </div>
       <div className="rf2-mywork__surface">
         {visible.length === 0 && filter ? <p className="rf2-mywork__filter-empty">{filterEmpty(filter, day)}</p> : null}
@@ -445,7 +443,7 @@ export function MyWorkV2({ load = getMyWork }: { load?: typeof getMyWork } = {})
 
   return (
     <div className="rf2-mywork">
-      {data ? <p className="rf2-mywork__subtitle">{subtitleFor(tab, noWork)}</p> : null}
+      <p className="rf2-mywork__welcome"><Sparkles aria-hidden="true" />{welcomeLine(user?.displayName)}</p>
 
       {data && !data.reminderWorkerHealthy && !noWork ? (
         <p className="rf2-mywork__note" role="note" data-testid="sla-hidden">
@@ -469,6 +467,25 @@ export function MyWorkV2({ load = getMyWork }: { load?: typeof getMyWork } = {})
 
       {data ? (
         <>
+          <dl className="rf2-mywork__counts" aria-label="Priority summary">
+            <div className="rf2-mywork__count" data-key="Overdue">
+              <dt>Overdue</dt>
+              <dd data-count-value="">{data.counts.overdue}</dd>
+            </div>
+            <div className="rf2-mywork__count" data-key="Today">
+              <dt>Today</dt>
+              <dd data-count-value="">{data.counts.today}</dd>
+            </div>
+            <div className="rf2-mywork__count" data-key="Waiting on others">
+              <dt>Waiting</dt>
+              <dd data-count-value="">{data.counts.waitingOnOthers}</dd>
+            </div>
+            <div className="rf2-mywork__count" data-key="Open jobs">
+              <dt>Open jobs</dt>
+              <dd data-count-value="">{data.targets.length}</dd>
+            </div>
+          </dl>
+
           <div className="rf2-mywork__toolbar">
             <div className="rf2-mywork__day">
               <div className="rf2-mywork__head-actions">

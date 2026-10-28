@@ -218,7 +218,7 @@ export function ProfilePage() {
 
   if (loading) {
     return (
-      <PageFrame eyebrow="Workspace" title="Account & System Settings" description="Manage your personal preferences, identity provider links, security credentials, and accessibility.">
+      <PageFrame eyebrow="Workspace" title="Account & System Settings">
         <PageState kind="loading" title="Loading settings" description="Checking your account and saved preferences." />
       </PageFrame>
     );
@@ -226,7 +226,7 @@ export function ProfilePage() {
 
   if (error && (!profile || !preferences)) {
     return (
-      <PageFrame eyebrow="Workspace" title="Account & System Settings" description="Manage your personal preferences, identity provider links, security credentials, and accessibility.">
+      <PageFrame eyebrow="Workspace" title="Account & System Settings">
         <PageState kind="error" title="Profile settings unavailable" description={error} actionLabel="Retry" onAction={() => void load()} />
       </PageFrame>
     );
@@ -246,7 +246,6 @@ export function ProfilePage() {
     <PageFrame
       eyebrow="Workspace"
       title="Account & System Settings"
-      description="Manage your personal preferences, identity provider links, security credentials, and accessibility"
     >
       {error && (
         <Alert tone="danger" title="Unable to save changes" action={<Button variant="ghost" size="sm" onClick={() => setError(null)}>Dismiss</Button>}>

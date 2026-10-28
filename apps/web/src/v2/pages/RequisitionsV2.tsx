@@ -76,7 +76,6 @@ export function RequisitionsV2() {
       <div className="rf2-row-between">
         <div>
           <h1 className="rf2-jobs__title">Requisitions</h1>
-          <p className="rf2-jobs__sub">Requisitions for your team. Activate job turns a requisition with a due date into an open job in one step. Cancelled lives on the requisition.</p>
         </div>
         {canCreate ? <ButtonV2 icon={<Plus />} onClick={() => go('new')}>New requisition</ButtonV2> : null}
       </div>

@@ -103,7 +103,6 @@ export function CVBankPage() {
     <PageFrame
       eyebrow="Talent / CV Bank"
       title="CV Bank"
-      description="Secure organization-scoped CV records with controlled downloads and an Excel metadata backup manifest."
       actions={(
         <>
           {canDownload && (

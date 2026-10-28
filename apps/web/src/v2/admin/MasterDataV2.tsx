@@ -18,7 +18,6 @@ export function MasterDataV2() {
     <div className="rf2-jobs rf2-admin">
       <div>
         <h1 className="rf2-jobs__title">Master data</h1>
-        <p className="rf2-jobs__sub">Lists used across requisitions, jobs and drawers. Entries are deactivated, never deleted.</p>
       </div>
       <div className="rf2-admin__grid">
         {CATALOGS.map((c) => <CatalogCard key={c.category} def={c} />)}

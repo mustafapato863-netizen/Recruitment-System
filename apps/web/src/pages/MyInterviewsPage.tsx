@@ -78,7 +78,7 @@ export function MyInterviewsPage({ load = listMyInterviews }: { load?: typeof li
   }, []);
 
   return (
-    <PageFrame eyebrow="Interviewer" title="My interviews" description="Interviews you attend. You can download the candidate's CV, answer the invite and submit your scorecard.">
+    <PageFrame eyebrow="Interviewer" title="My interviews">
       {state.kind === 'loading' ? <PageState kind="loading" title="Loading your interviews" /> : null}
       {state.kind === 'error' ? (
         state.forbidden

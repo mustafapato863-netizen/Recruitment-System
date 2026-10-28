@@ -131,7 +131,6 @@ export function LicenseManagementPage() {
     <PageFrame
       eyebrow="Joining & Compliance"
       title="License Management & Verification"
-      description="Track healthcare and professional license requirements, verification authority, validity and expiry risks."
       actions={
         <Button variant="ghost" size="sm" onClick={() => void loadData()}>
           <Icon name="refresh-cw" size={13} className={loading ? 'animate-spin' : ''} />

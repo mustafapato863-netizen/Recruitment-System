@@ -12,7 +12,6 @@ import { InterviewFiltersBar } from '../components/interview/InterviewFiltersBar
 import { FastScorecardModal } from '../components/interview/FastScorecardModal';
 import { SelfScheduleModal } from '../components/interview/SelfScheduleModal';
 import { useAuth } from '../auth/AuthContext';
-import { QuickGuideTrigger } from '../quickguide';
 import { useInterviewTypeOptions } from '../hooks/useInterviewTypeOptions';
 import './PageEnhancementsV2.css';
 
@@ -465,15 +464,9 @@ export function InterviewsPage() {
       {/* ── Page Header & Top Controls ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <h1 className="rf-page-title">
-              Interviews &amp; Scheduling
-            </h1>
-            <QuickGuideTrigger />
-          </div>
-          <p className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">
-            Upcoming interviews and pending scorecards.
-          </p>
+          <h1 className="rf-page-title">
+            Interviews &amp; Scheduling
+          </h1>
         </div>
 
         <div className="flex w-full flex-col sm:w-auto sm:flex-row sm:flex-wrap sm:items-center gap-2 sm:gap-2.5">

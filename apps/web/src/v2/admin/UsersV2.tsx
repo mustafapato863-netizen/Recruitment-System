@@ -51,7 +51,6 @@ export function UsersV2() {
       <div className="rf2-row-between">
         <div>
           <h1 className="rf2-jobs__title">Users</h1>
-          <p className="rf2-jobs__sub">Three roles only: Employee, Manager, Admin. Users are deactivated, never deleted.</p>
         </div>
         <ButtonV2 icon={<UserPlus />} onClick={() => go({ drawer: 'invite' })}>Invite user</ButtonV2>
       </div>

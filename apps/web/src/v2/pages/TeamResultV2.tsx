@@ -74,8 +74,6 @@ export function TeamResultV2() {
       <div className="rf2-row-between">
         <div>
           <h1 className="rf2-jobs__title">Team result</h1>
-          <p className="rf2-jobs__sub">{data ? `Your ${data.people.length} direct ${data.people.length === 1 ? 'report' : 'reports'}, alphabetical, not ranked. ` : ''}Same four measures as each recruiter’s My result.</p>
-          <p className="rf2-jobs__sub">Team result counts direct reports, while Team work lists the reporting line.</p>
         </div>
         <div className="rf2-row-between">
           {canExport && data ? <ButtonV2 kind="secondary" size="sm" icon={<Download />} onClick={() => downloadCsv(`team-result-${month}.csv`, teamResultCsv(data))}>Export</ButtonV2> : null}

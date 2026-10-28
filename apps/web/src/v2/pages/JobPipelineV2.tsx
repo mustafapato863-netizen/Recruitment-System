@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { DragDropProvider, useDraggable, useDroppable, type DragEndEvent } from '@dnd-kit/react';
-import { ArrowRight, CalendarDays, CircleAlert, CircleX, Clock, MoveRight, Pause, Play, RotateCw, Sparkles, Upload } from 'lucide-react';
+import { useDndContext } from '@dnd-kit/core';
+import { ArrowRight, BriefcaseBusiness, Building2, CalendarDays, CircleAlert, CircleX, Clock, MoveRight, Pause, Play, RotateCw, Sparkles, Upload } from 'lucide-react';
+import { Kanban, KanbanBoard, KanbanColumn, KanbanColumnContent, KanbanItem, KanbanItemHandle, KanbanOverlay, type KanbanMoveEvent } from '../../components/ui/kanban';
 import { ButtonV2, EmptyStateV2, ForbiddenStateV2, SkeletonV2, StatusChip } from '../../components/v2';
 import { patchApi } from '../../api/client';
 import { useAuth } from '../../auth/AuthContext';
@@ -34,6 +35,24 @@ export function formatSlot(startAt: string, endAt: string): string {
   return `${day}, ${t(s)}${Number.isNaN(e.getTime()) ? '' : `–${t(e)}`}`;
 }
 const initials = (n: string) => n.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join('');
+function cardRole(app: BoardApplication): string | null {
+  const title = app.candidate?.currentTitle?.trim();
+  return title || null;
+}
+/** File code, applied day, and source. Contact details and pay stay off the card. */
+function cardFacts(app: BoardApplication): { code: string; applied: string; source: string } {
+  return {
+    code: app.applicationCode?.trim() || '',
+    applied: app.appliedAt ? `Applied ${formatDay(app.appliedAt)}` : '',
+    source: app.source?.trim() || '',
+  };
+}
+/** Latest activity, except a bare note or update line that does not say what changed. */
+function cardActivity(app: BoardApplication): string | null {
+  const label = app.lastActivityLabel?.trim();
+  if (!label || /^(note added|application updated)$/i.test(label)) return null;
+  return `${label}${app.lastActivityAt ? ` · ${formatDay(app.lastActivityAt)}` : ''}`;
+}
 
 /** E09 Job pipeline board + E11/E12 drawers (?drawer=import|status). */
 export function JobPipelineV2() {
@@ -102,17 +121,17 @@ export function JobPipelineV2() {
     } finally { setMoving(null); }
   };
 
-  if (state.kind === 'loading') return <div className="rf2-jobs"><SkeletonV2 lines={8} label="Loading the pipeline…" /></div>;
-  if (state.kind === 'forbidden') return <div className="rf2-jobs"><ForbiddenStateV2 body={state.message || 'Only the job owner and their manager can open this pipeline.'} action={<Link className="rf2-link" to="/vacancies">Back to Open jobs</Link>} /></div>;
-  if (state.kind === 'missing') return <div className="rf2-jobs"><EmptyStateV2 title="Job not found" body="It may have been removed from your scope." action={<Link className="rf2-link" to="/vacancies">Back to Open jobs</Link>} /></div>;
-  if (state.kind === 'error') return <div className="rf2-jobs" role="alert"><EmptyStateV2 title="Could not load this pipeline" body={state.message} action={<ButtonV2 kind="secondary" icon={<RotateCw />} onClick={reload}>Try again</ButtonV2>} /></div>;
+  if (state.kind === 'loading') return <div className="rf2-jobs rf2-pipeline"><SkeletonV2 lines={8} label="Loading the pipeline…" /></div>;
+  if (state.kind === 'forbidden') return <div className="rf2-jobs rf2-pipeline"><ForbiddenStateV2 body={state.message || 'Only the job owner and their manager can open this pipeline.'} action={<Link className="rf2-link" to="/vacancies">Back to Open jobs</Link>} /></div>;
+  if (state.kind === 'missing') return <div className="rf2-jobs rf2-pipeline"><EmptyStateV2 title="Job not found" body="It may have been removed from your scope." action={<Link className="rf2-link" to="/vacancies">Back to Open jobs</Link>} /></div>;
+  if (state.kind === 'error') return <div className="rf2-jobs rf2-pipeline" role="alert"><EmptyStateV2 title="Could not load this pipeline" body={state.message} action={<ButtonV2 kind="secondary" icon={<RotateCw />} onClick={reload}>Try again</ButtonV2>} /></div>;
 
   const { job, apps, closed } = state.board;
   if (isRedactedJob(job)) {
     return (
-      <div className="rf2-jobs">
+      <div className="rf2-jobs rf2-pipeline">
         <nav aria-label="Breadcrumb" className="rf2-crumbs"><Link to="/vacancies">Open jobs</Link> › <span aria-current="page">{job.title}</span></nav>
-        <ForbiddenStateV2 title={`${job.title} is owned by another recruiter`} body={`${job.site?.name ?? 'Site not shown'} · ${job.seats.filled} of ${job.seats.target} seats. Files on this job are visible only to its owner and the owner’s manager.`} action={<Link className="rf2-link" to="/vacancies">Back to Open jobs</Link>} />
+        <ForbiddenStateV2 title={`${job.title} is owned by another recruiter`} body={`${job.site?.name ?? 'Site not shown'} · ${job.seats.filled} of ${job.seats.target} seats.`} action={<Link className="rf2-link" to="/vacancies">Back to Open jobs</Link>} />
       </div>
     );
   }
@@ -126,16 +145,26 @@ export function JobPipelineV2() {
   const due = job.targetChip?.dueDate ?? null;
   const overdue = due ? due < new Date().toISOString().slice(0, 10) : false;
   const blockedCount = apps.filter((a) => blockingGate(a)).length;
+  const columns = Object.fromEntries(BOARD_STAGES.map((stage) => [stage, apps.filter((a) => a.stage === stage)])) as Record<BoardStage, BoardApplication[]>;
 
   return (
-    <div className="rf2-jobs">
-      <nav aria-label="Breadcrumb" className="rf2-crumbs"><Link to="/vacancies">Open jobs</Link> › <span aria-current="page">{title}</span></nav>
+    <div className="rf2-jobs rf2-pipeline">
       <section className="rf2-panel rf2-jobhead" aria-label="Job summary">
+        <nav aria-label="Breadcrumb" className="rf2-crumbs"><Link to="/vacancies">Open jobs</Link> › <span aria-current="page">{title}</span></nav>
         <div className="rf2-jobhead__top">
-          <div>
-            <h1 className="rf2-jobhead__title">{title} <StatusChip tone={STATUS_TONE[job.status]} label={STATUS_LABEL[job.status]} /></h1>
-            <p className="rf2-jtable__sub">{[job.department, job.branch?.name, owner ? `Owner: ${owner.name}` : null].filter(Boolean).join(' · ')}</p>
-            {me?.isAdmin ? <p className="rf2-jtable__sub" data-testid="admin-status-note">{ADMIN_STATUS_TEXT}</p> : null}
+          <div className="rf2-jobhead__id">
+            <span className="rf2-jobhead__mark" aria-hidden="true"><BriefcaseBusiness /></span>
+            <div className="rf2-jobhead__copy">
+              <h1 className="rf2-jobhead__title">{title} <StatusChip tone={STATUS_TONE[job.status]} label={STATUS_LABEL[job.status]} /></h1>
+              {job.department || job.branch?.name || owner ? (
+                <p className="rf2-jobhead__meta">
+                  {job.department ? <span>{job.department}</span> : null}
+                  {job.branch?.name ? <span><Building2 aria-hidden="true" />{job.branch.name}</span> : null}
+                  {owner ? <span>Owner: {owner.name}</span> : null}
+                </p>
+              ) : null}
+              {me?.isAdmin ? <p className="rf2-jtable__sub" data-testid="admin-status-note">{ADMIN_STATUS_TEXT}</p> : null}
+            </div>
           </div>
           <div className="rf2-jobhead__actions">
             {actions.includes('reopen') ? <ButtonV2 kind="tertiary" icon={<Play />} onClick={() => setDrawer('status')}>Reopen job</ButtonV2>
@@ -151,25 +180,38 @@ export function JobPipelineV2() {
           <div><dt>Active files</dt><dd className="rf2-num">{apps.length}</dd></div>
           <div><dt>Gate blocked</dt><dd className="rf2-num" data-tone={blockedCount ? 'warning' : undefined}>{blockedCount}</dd></div>
         </dl>
-        {job.status === 'On Hold' ? <p className="rf2-jobhead__note"><Clock aria-hidden="true" /> On hold{job.holdUntil ? ` until ${formatDay(`${job.holdUntil.slice(0, 10)}T12:00:00Z`)}` : ''}: new applications are paused. Scheduled interviews, sent offers, and joining commitments stay on My Work. Files stay in their stages.</p> : null}
+        {job.status === 'On Hold' ? <p className="rf2-jobhead__note"><Clock aria-hidden="true" /> On hold{job.holdUntil ? ` until ${formatDay(`${job.holdUntil.slice(0, 10)}T12:00:00Z`)}` : ''}: new applications are paused. Scheduled interviews, sent offers, and joining commitments stay on My Work.</p> : null}
       </section>
 
-      <DragDropProvider onDragEnd={(event: DragEndEvent) => {
-        if (event.canceled) return;
-        const sourceId = event.operation.source?.id;
-        const target = event.operation.target?.data?.stage as BoardStage | undefined;
-        const app = apps.find((a) => a.id === sourceId);
-        if (app && target && target !== app.stage) void move(app, target);
-      }}>
+      <Kanban
+        value={columns}
+        onValueChange={() => {}}
+        getItemValue={(item) => item.id}
+        onMove={(event: KanbanMoveEvent) => {
+          if (event.activeContainer === event.overContainer) return;
+          const app = columns[event.activeContainer as BoardStage]?.[event.activeIndex];
+          const target = event.overContainer as BoardStage;
+          if (!app || !(BOARD_STAGES as readonly string[]).includes(target)) return;
+          if (!moveCheck(app, target, job).ok) return;
+          void move(app, target);
+        }}
+      >
         <p id="pipeline-board-help" className="rf2-sr-only">
-          This pipeline has five stages. Files can be moved with each card&apos;s Move to menu.
+          This pipeline has five stages. Drag a file by its initials, or move it with the Move to menu.
         </p>
-        <div className="rf2-board" aria-describedby="pipeline-board-help" aria-label={`${title} pipeline`} role="region" tabIndex={0}>
+        <KanbanBoard className="rf2-board" aria-describedby="pipeline-board-help" aria-label={`${title} pipeline`} role="region" tabIndex={0}>
           {BOARD_STAGES.map((stage) => (
-            <Column key={stage} stage={stage} apps={apps.filter((a) => a.stage === stage)} job={job} moving={moving} onMove={move} />
+            <Column key={stage} stage={stage} apps={columns[stage]} allApps={apps} job={job} moving={moving} onMove={move} />
           ))}
-        </div>
-      </DragDropProvider>
+        </KanbanBoard>
+        <KanbanOverlay>
+          {({ value, variant }) => {
+            if (variant !== 'item') return null;
+            const app = apps.find((item) => item.id === value);
+            return app ? <CardFace app={app} /> : null;
+          }}
+        </KanbanOverlay>
+      </Kanban>
 
       <div className="rf2-board__foot">
         <button type="button" className="rf2-link rf2-closed-link" aria-expanded={closedOpen} aria-controls="closed-files" onClick={() => setClosedOpen((v) => !v)}>
@@ -192,23 +234,73 @@ export function JobPipelineV2() {
   );
 }
 
-function Column({ stage, apps, job, moving, onMove }: { stage: BoardStage; apps: BoardApplication[]; job: JobDetail; moving: string | null; onMove: (a: BoardApplication, s: BoardStage) => void }) {
-  const { ref, isDropTarget } = useDroppable({
-    id: `col-${stage}`,
-    data: { stage },
-    accept: (source) => {
-      const app = source.data?.app as BoardApplication | undefined;
-      return Boolean(app && moveCheck(app, stage, job).ok);
-    },
-  });
+function Column({ stage, apps, allApps, job, moving, onMove }: { stage: BoardStage; apps: BoardApplication[]; allApps: BoardApplication[]; job: JobDetail; moving: string | null; onMove: (a: BoardApplication, s: BoardStage) => void }) {
+  const { active, over } = useDndContext();
+  const activeApp = allApps.find((item) => item.id === active?.id);
+  const overId = over?.id != null ? String(over.id) : '';
+  const overHere = overId === stage || apps.some((item) => item.id === overId);
+  const showDrop = Boolean(activeApp && overHere && moveCheck(activeApp, stage, job).ok);
   const headId = `col-${stage}-h`;
   return (
-    <section ref={ref} className="rf2-col" data-drop={isDropTarget || undefined} aria-labelledby={headId}>
+    <KanbanColumn value={stage} className="rf2-col" data-drop={showDrop || undefined} role="region" aria-labelledby={headId}>
       <h2 id={headId} className="rf2-col__head"><span>{BOARD_LABEL[stage]}</span><span className="rf2-col__count" aria-label={`${apps.length} files`}>{apps.length}</span></h2>
-      {apps.length === 0 ? <p className="rf2-col__empty">No files in {BOARD_LABEL[stage]}</p> : (
-        <ul className="rf2-col__list">{apps.map((a) => <li key={a.id}><Card app={a} job={job} moving={moving === a.id} onMove={onMove} /></li>)}</ul>
-      )}
-    </section>
+      <KanbanColumnContent value={stage} className="rf2-col__list">
+        {apps.length === 0 ? <p className="rf2-col__empty">No files in {BOARD_LABEL[stage]}</p> : apps.map((a) => (
+          <Card key={a.id} app={a} job={job} moving={moving === a.id} onMove={onMove} />
+        ))}
+      </KanbanColumnContent>
+    </KanbanColumn>
+  );
+}
+
+function CardTag({ app }: { app: BoardApplication }) {
+  const source = cardFacts(app).source;
+  if (!source) return null;
+  return <p className="rf2-kcard__chip" data-tone="source"><span className="rf2-kcard__dot" aria-hidden="true" />{source}</p>;
+}
+
+function CardStamp({ app }: { app: BoardApplication }) {
+  const { code, applied } = cardFacts(app);
+  if (!code && !applied) return null;
+  return (
+    <p className="rf2-kcard__meta">
+      {applied ? <span className="rf2-kcard__when"><CalendarDays aria-hidden="true" />{applied}</span> : null}
+      {code ? <span className="rf2-kcard__code">{code}</span> : null}
+    </p>
+  );
+}
+
+function CardSignals({ app, preview = false }: { app: BoardApplication; preview?: boolean }) {
+  const blocked = blockingGate(app);
+  const followUp = app.followUpDate ?? app.nextFollowUpAt?.slice(0, 10) ?? null;
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const activity = cardActivity(app);
+  return (
+    <>
+      {activity ? <p className="rf2-kcard__sub">{activity}</p> : null}
+      {app.interview ? <p className="rf2-kcard__iv"><CalendarDays aria-hidden="true" /> {app.interview.when === 'next' ? 'Interview' : 'Last interview'} {formatSlot(app.interview.startAt, app.interview.endAt)}{app.interview.room.name ? ` · ${app.interview.room.name}` : app.interview.room.url ? ' · room link' : ''}</p> : null}
+      {blocked ? <p className="rf2-kcard__chip" data-tone="warning" data-testid={preview ? undefined : 'gate-badge'}><CircleAlert aria-hidden="true" /> {GATE_BADGE[blocked.gate]}</p> : null}
+      {followUp ? <p className="rf2-kcard__chip" data-tone={followUp < todayIso ? 'warning' : 'info'}><Clock aria-hidden="true" /> Follow-up {formatDay(`${followUp}T12:00:00Z`)}</p> : null}
+    </>
+  );
+}
+
+function CardFace({ app }: { app: BoardApplication }) {
+  const name = cardName(app);
+  const next = cardNextAction(app);
+  return (
+    <article className="rf2-kcard" aria-hidden="true">
+      <CardTag app={app} />
+      <div className="rf2-kcard__top">
+        <span className="rf2-kcard__avatar">{initials(name)}</span>
+        <span className="rf2-kcard__who"><span className="rf2-kcard__name">{name}</span>{cardRole(app) ? <span className="rf2-kcard__role">{cardRole(app)}</span> : null}</span>
+      </div>
+      <CardSignals app={app} preview />
+      <div className="rf2-kcard__foot">
+        <CardStamp app={app} />
+        {next ? <span className="rf2-kcard__next">{next.label}</span> : null}
+      </div>
+    </article>
   );
 }
 
@@ -216,7 +308,6 @@ function Card({ app, job, moving, onMove }: { app: BoardApplication; job: JobDet
   const name = cardName(app);
   const targets = BOARD_STAGES.filter((s) => s !== app.stage).map((s) => ({ stage: s, ...moveCheck(app, s, job) }));
   const canDrag = targets.some((t) => t.ok) && !moving;
-  const { ref, handleRef, isDragging } = useDraggable({ id: app.id, data: { app }, disabled: !canDrag });
   const [menu, setMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
@@ -227,22 +318,24 @@ function Card({ app, job, moving, onMove }: { app: BoardApplication; job: JobDet
     document.addEventListener('mousedown', close);
     return () => document.removeEventListener('mousedown', close);
   }, [menu]);
-  const blocked = blockingGate(app);
   const next = cardNextAction(app);
-  const followUp = app.followUpDate ?? app.nextFollowUpAt?.slice(0, 10) ?? null;
-  const todayIso = new Date().toISOString().slice(0, 10);
-  const sub = app.lastActivityLabel ? `${app.lastActivityLabel}${app.lastActivityAt ? ` · ${formatDay(app.lastActivityAt)}` : ''}` : `Applied ${formatDay(app.appliedAt)}${app.source ? ` · ${app.source}` : ''}`;
   return (
-    <article ref={ref} className="rf2-kcard" data-dragging={isDragging || undefined} aria-busy={moving || undefined} aria-label={`${name}, ${BOARD_LABEL[app.stage as BoardStage]}`}>
+    <KanbanItem value={app.id} asChild disabled={!canDrag}>
+    <article className="rf2-kcard" aria-busy={moving || undefined} aria-label={`${name}, ${BOARD_LABEL[app.stage as BoardStage]}`}>
+      <CardTag app={app} />
       <div className="rf2-kcard__top">
-        <span className="rf2-kcard__avatar" aria-hidden="true" ref={handleRef}>{initials(name)}</span>
-        <Link className="rf2-kcard__name" to={`/applications/${encodeURIComponent(app.id)}`}>{name}</Link>
+        <KanbanItemHandle asChild>
+          <span className="rf2-kcard__avatar" aria-label={`Drag ${name}`}>{initials(name)}</span>
+        </KanbanItemHandle>
+        <div className="rf2-kcard__who">
+          <Link className="rf2-kcard__name" to={`/applications/${encodeURIComponent(app.id)}`}>{name}</Link>
+          {cardRole(app) ? <p className="rf2-kcard__role">{cardRole(app)}</p> : null}
+        </div>
       </div>
-      <p className="rf2-kcard__sub">{sub}</p>
-      {app.interview ? <p className="rf2-kcard__iv"><CalendarDays aria-hidden="true" /> {app.interview.when === 'next' ? 'Interview' : 'Last interview'} {formatSlot(app.interview.startAt, app.interview.endAt)}{app.interview.room.name ? ` · ${app.interview.room.name}` : app.interview.room.url ? ' · room link' : ''}</p> : null}
-      {blocked ? <p className="rf2-kcard__chip" data-tone="warning" data-testid="gate-badge"><CircleAlert aria-hidden="true" /> {GATE_BADGE[blocked.gate]}</p> : null}
+      <CardSignals app={app} />
+      <div className="rf2-kcard__foot">
+      <CardStamp app={app} />
       {next ? <Link className="rf2-kcard__next" to={cardFileHref(app)}>{next.label} <span className="rf2-sr-only">for {name}</span></Link> : null}
-      {followUp ? <p className="rf2-kcard__chip" data-tone={followUp < todayIso ? 'warning' : 'info'}><Clock aria-hidden="true" /> Follow-up {formatDay(`${followUp}T12:00:00Z`)}</p> : null}
       <div className="rf2-kcard__menu">
         <button ref={btnRef} type="button" className="rf2-link" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu((v) => !v)} disabled={moving}>
           <MoveRight aria-hidden="true" /> Move to…<span className="rf2-sr-only"> ({name})</span>
@@ -266,7 +359,9 @@ function Card({ app, job, moving, onMove }: { app: BoardApplication; job: JobDet
           </div>
         ) : null}
       </div>
+      </div>
     </article>
+    </KanbanItem>
   );
 }
 

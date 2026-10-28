@@ -166,15 +166,14 @@ export function NotificationsPage() {
 
   const totalPages = Math.ceil(total / pageSize);
   const filters: TabV2Item[] = [
-    { key: 'all', label: `All Notifications ${total}` },
-    { key: 'unread', label: unreadCount > 0 ? `Unread Only ${unreadCount}` : 'Unread Only' },
-    { key: 'alerts', label: systemAlertsCount > 0 ? `System Alerts ${systemAlertsCount}` : 'System Alerts' },
-    { key: 'approvals', label: pendingApprovalsCount > 0 ? `Pending Approvals ${pendingApprovalsCount}` : 'Pending Approvals' },
+    { key: 'all', label: 'All Notifications', count: total },
+    { key: 'unread', label: 'Unread Only', count: unreadCount },
+    { key: 'alerts', label: 'System Alerts', count: systemAlertsCount },
+    { key: 'approvals', label: 'Pending Approvals', count: pendingApprovalsCount },
   ];
 
   return (
     <div className="rf2-notify">
-      <p className="rf2-notify__subtitle">Stay updated with cross-system alerts, approvals, and workflow events</p>
       <div className="rf2-notify__bar">
         <TabsV2
           items={filters}
@@ -238,12 +237,17 @@ export function NotificationsPage() {
               return (
                 <li key={notification.id}>
                   <article className="rf2-notify__item" data-unread={isUnread ? 'true' : 'false'}>
-                    <h2 className="rf2-notify__title">{notification.title}</h2>
+                    <div className="rf2-notify__header">
+                      <div className="rf2-notify__title-wrap">
+                        <h2 className="rf2-notify__title">{notification.title}</h2>
+                        {isUnread ? <span className="rf2-notify__status">Unread</span> : null}
+                      </div>
+                      <span className={`rf2-notify__tag rf2-notify__tag--${presentation.tone}`}>{presentation.category}</span>
+                    </div>
                     {isUnread ? <span className="rf2-sr-only">Unread notification</span> : null}
                     <p className="rf2-notify__message">{notification.message}</p>
                     <div className="rf2-notify__meta">
                       <time dateTime={notification.createdAt}>{formatRelativeTime(notification.createdAt)}</time>
-                      <span className="rf2-notify__category">{presentation.category}</span>
                       <div className="rf2-notify__controls">
                         {href ? <Link className="rf2-btn rf2-btn--tertiary rf2-btn--sm" to={href}><span>Open details</span></Link> : null}
                         {isUnread ? (

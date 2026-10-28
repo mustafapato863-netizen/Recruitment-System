@@ -23,7 +23,6 @@ import { useFeedback } from '../hooks/useFeedback';
 import { confirmDiscardChanges, useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import { useMasterDataOptions } from '../hooks/useMasterDataOptions';
 import { CANDIDATE_SOURCE_FALLBACK } from '../data/masterDataDefaults';
-import { QuickGuideTrigger } from '../quickguide';
 import './PageEnhancementsV2.css';
 
 interface EditCandidateForm {
@@ -614,15 +613,9 @@ export function CandidatesPage() {
       {/* ── Page Header matching Enterprise System ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <h1 className="rf-page-title">
-              Candidates
-            </h1>
-            <QuickGuideTrigger />
-          </div>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            Find a person, then assign them to a job.
-          </p>
+          <h1 className="rf-page-title">
+            Candidates
+          </h1>
         </div>
 
         <div className="flex w-full flex-col sm:w-auto sm:flex-row sm:flex-wrap sm:items-center gap-2 sm:gap-2.5">

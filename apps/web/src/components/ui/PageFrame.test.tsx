@@ -40,6 +40,7 @@ describe('PageFrame component', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Openings & Job Cards' })).toHaveClass('rf-page-title');
     expect(screen.getByText('Manage active requisitions and vacancies across all branches.')).toBeVisible();
     expect(screen.getByText('Content Body')).toBeVisible();
+    expect(screen.queryByRole('button', { name: /page guide/i })).not.toBeInTheDocument();
   });
 
   it('renders actions and back button when configured', () => {

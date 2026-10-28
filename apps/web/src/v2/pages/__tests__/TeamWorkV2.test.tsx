@@ -29,12 +29,13 @@ beforeEach(() => { vi.clearAllMocks(); serve(); });
 const card = (name: string) => screen.getByRole('heading', { name }).closest('section') as HTMLElement;
 
 describe('Team work desk', () => {
-  it('lets the subtitle lead, with the header as the only Team work', async () => {
+  it('keeps the header as the only Team work name', async () => {
     renderAt();
-    const subtitle = await screen.findByText('Open work of your 3 direct reports. Counts equal the rows shown.');
+    const waiting = await screen.findByRole('heading', { name: 'Waiting on you' });
+    expect(screen.queryByText(/Open work of your/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Welcome back/)).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Team work' })).not.toBeInTheDocument();
-    const waiting = screen.getByRole('heading', { name: 'Waiting on you' });
-    expect(subtitle.compareDocumentPosition(waiting) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(waiting).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Mariam Farag' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Noura Al-Dosari' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Youssef Ibrahim' })).toBeInTheDocument();
@@ -67,7 +68,8 @@ describe('Team work desk', () => {
 describe('M2 Team work', () => {
   it('waiting on you (my team only), one card per report A–Z, counts equal rows, closed files hidden, no pay; axe', async () => {
     const { container } = renderAt();
-    expect(await screen.findByText('Open work of your 3 direct reports. Counts equal the rows shown.')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Waiting on you' })).toBeInTheDocument();
+    expect(screen.queryByText(/Open work of your/)).not.toBeInTheDocument();
     const wait = screen.getByRole('heading', { name: 'Waiting on you' }).closest('section')!;
     expect(within(wait).getAllByRole('listitem')).toHaveLength(2);
     expect(wait).toHaveTextContent(/Your scorecard — Ahmed Embaby, HRIS Developer.*Late/);
@@ -90,7 +92,8 @@ describe('M2 Team work', () => {
   it('keeps the direct-report subtitle when every shown person reports to the signed-in user', async () => {
     serve({ '/users/assignable': fx.assignable.map((person) => ({ ...person, managerId: 'u-karim' })) });
     renderAt();
-    expect(await screen.findByText('Open work of your 3 direct reports. Counts equal the rows shown.')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Mariam Farag' })).toBeInTheDocument();
+    expect(screen.queryByText(/Open work of your/)).not.toBeInTheDocument();
     expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent).slice(1)).toEqual(['Mariam Farag', 'Noura Al-Dosari', 'Youssef Ibrahim']);
     expect(screen.getByText(/Only your direct reports appear here/)).toBeInTheDocument();
   });
@@ -103,11 +106,11 @@ describe('M2 Team work', () => {
       ],
     });
     renderAt();
-    expect(await screen.findByText('Open work of your 3 people on the reporting line. Counts equal the rows shown.')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Noura Al-Dosari' })).toBeInTheDocument();
+    expect(screen.queryByText(/Open work of your/)).not.toBeInTheDocument();
     expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent).slice(1)).toEqual(['Mariam Farag', 'Noura Al-Dosari', 'Youssef Ibrahim']);
     expect(screen.getByText(/Your reporting line appears here, including people who report through someone else/)).toBeInTheDocument();
     expect(screen.queryByText(/Only your direct reports appear here/)).toBeNull();
-    expect(screen.queryByText(/Open work of your 3 direct reports/)).toBeNull();
   });
   it('reports list unavailable → honest empty state; offers list failing is not fatal', async () => {
     serve({ '/users/assignable': new ApiError(403, 'no') });
@@ -207,7 +210,8 @@ describe('M2 CoS follow-ups', () => {
     serve({ '/team/work': fx.teamWorkApi });
     renderAt();
     // #21 B2-16: the roster is /users/assignable, so a report with nothing open on /team/work still has a row.
-    expect(await screen.findByText('Open work of your 3 direct reports. Counts equal the rows shown.')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Waiting on you' })).toBeInTheDocument();
+    expect(screen.queryByText(/Open work of your/)).not.toBeInTheDocument();
     const calls = api.getApi.mock.calls.map((c) => String(c[0]));
     expect(calls).toContain('/users/assignable');
     expect(calls.some((c) => c.startsWith('/applications?primaryRecruiterId='))).toBe(false);

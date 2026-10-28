@@ -36,35 +36,70 @@ const PAY = /42000|42,000|99000|30000|EGP|AED|salary|budget|compensation/i;
 beforeEach(() => { Object.values(api).forEach((f) => f.mockReset()); serve(); });
 afterEach(() => document.documentElement.removeAttribute('data-ui'));
 
-const OPEN_JOBS_SUBTITLE = 'Jobs you own as primary recruiter. A job is the container; each candidate has one application file per job.';
-
 describe('Open jobs desk', () => {
-  it('lets the existing subtitle lead, with the header as the only Open jobs', async () => {
+  it('keeps the header as the only Open jobs name', async () => {
     renderAt('/vacancies');
-    const subtitle = await screen.findByText(OPEN_JOBS_SUBTITLE);
+    const search = await screen.findByLabelText('Search my jobs');
+    expect(screen.queryByText('Jobs assigned to you.')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Welcome back/)).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Open jobs' })).not.toBeInTheDocument();
-    const search = screen.getByLabelText('Search my jobs');
-    expect(subtitle.compareDocumentPosition(search) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(search).toBeInTheDocument();
   });
 });
 
 describe('E08 Open jobs', () => {
-  it('lists my open jobs with seats, due date, stage counts and status; others read-only; no pay; axe clean', async () => {
+  it('lists my open jobs as cards with seats, due date, stage counts and status; others read-only; no pay; axe clean', async () => {
+    const u = userEvent.setup();
     const { container } = renderAt('/vacancies');
-    const table = await screen.findByRole('table', { name: '' }).catch(() => screen.getAllByRole('table')[0]);
-    const rows = within(table).getAllByRole('row').slice(1);
-    expect(rows).toHaveLength(4);
-    expect(rows[0]).toHaveTextContent(/HRIS Developer.*IT · Owner: Mariam Farag.*Offshore Cairo.*1 of 3.*19 Oct 2026.*10 active.*Open/);
-    expect(screen.getByText('4 jobs · On hold and Closed hidden')).toBeInTheDocument();
-    expect(screen.getAllByRole('link', { name: /^Open pipeline/ })[0]).toHaveAttribute('href', '/vacancies/v1');
-    const others = screen.getByRole('region', { name: 'Other recruiters’ jobs in your team' });
-    expect(within(others).getAllByRole('row')).toHaveLength(4);
+    expect(await screen.findByRole('table', { name: 'My jobs' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'List' })).toHaveAttribute('aria-pressed', 'true');
+    await u.click(screen.getByRole('button', { name: 'Cards' }));
+    const cards = within(await screen.findByRole('list', { name: 'My jobs' })).getAllByRole('article');
+    expect(cards).toHaveLength(4);
+    expect(cards[0]).toHaveTextContent(/VAC-v1.*IT.*Open.*HRIS Developer.*Offshore Cairo.*Due 19 Oct 2026.*Applicants.*10 active.*Mariam Farag.*Headcount filled.*1 \/ 3/);
+    expect(screen.getByRole('button', { name: 'Cards' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByText(/On hold and Closed hidden/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Jobs owned by your reports/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Files on these jobs/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /Other recruiters/ })).not.toBeInTheDocument();
+    expect(within(cards[0]).getByRole('link', { name: /^Open pipeline/ })).toHaveAttribute('href', '/vacancies/v1');
+    expect(screen.queryByRole('table', { name: 'My jobs' })).not.toBeInTheDocument();
+    const others = screen.getByRole('region', { name: 'Other jobs' });
+    expect(within(others).getAllByRole('article')).toHaveLength(3);
+    expect(within(others).getByText('Pharmacist').closest('article')).toHaveTextContent(/Read-only/);
+    expect(within(others).getByRole('link', { name: 'Open pipeline: BI Data Analyst' })).toHaveAttribute('href', '/vacancies/v9');
     // #23 603d44d: an unredacted row (a report's job the manager may see) links to its board; redacted ones stay read-only.
     expect(within(others).getAllByRole('link').map((a) => a.getAttribute('href'))).toEqual(['/vacancies/v9']);
     expect(within(others).queryAllByRole('button')).toHaveLength(0);
     expect(within(others).getByText('Pharmacist')).toBeInTheDocument();
     expect(container.textContent).not.toMatch(PAY);
     expect(await axeViolations(container)).toEqual([]);
+  });
+  it('keeps the same jobs in the list', async () => {
+    const u = userEvent.setup();
+    renderAt('/vacancies');
+    const table = await screen.findByRole('table', { name: 'My jobs' });
+    const rows = within(table).getAllByRole('row').slice(1);
+    expect(rows).toHaveLength(4);
+    expect(rows[0]).toHaveTextContent(/HRIS Developer.*IT · Owner: Mariam Farag.*Offshore Cairo.*1 of 3.*19 Oct 2026.*10 active.*Applied 3.*Screening 3.*Interview 3.*Offer 1.*Open/);
+    expect(rows.find((row) => /Patient Relations Officer/.test(row.textContent ?? ''))).toHaveTextContent(/Patient Experience · Owner: Mariam Farag/);
+    expect(within(table).getAllByRole('link', { name: /^Open pipeline/ })[0]).toHaveAttribute('href', '/vacancies/v1');
+    expect(screen.queryByRole('list', { name: 'My jobs' })).not.toBeInTheDocument();
+    const others = screen.getByRole('region', { name: "Other recruiters' jobs in your team" });
+    expect(within(others).getByText('Title, site and seats only. Other teams are not shown.')).toBeInTheDocument();
+    expect(within(others).getByText("Files on these jobs are visible only to their owner and the owner's manager.")).toBeInTheDocument();
+    expect(within(others).getAllByRole('row')).toHaveLength(4);
+    const pharmacist = within(others).getByText('Pharmacist').closest('tr');
+    expect(pharmacist).toHaveTextContent(/Read-only/);
+    expect(pharmacist).toHaveTextContent(/SGH Jeddah/);
+    expect(pharmacist).not.toHaveTextContent(/1 of 4/);
+    expect(within(others).queryByRole('link', { name: 'Pharmacist' })).not.toBeInTheDocument();
+    const analyst = within(others).getByRole('link', { name: 'BI Data Analyst' });
+    expect(analyst).toHaveAttribute('href', '/vacancies/v9');
+    expect(analyst.closest('tr')).toHaveTextContent(/0 of 1/);
+    expect(within(others).getAllByRole('link').map((a) => a.getAttribute('href'))).toEqual(['/vacancies/v9']);
+    await u.click(screen.getByRole('button', { name: 'Cards' }));
+    expect(screen.getByRole('list', { name: 'My jobs' })).toBeInTheDocument();
   });
   it('filters by status, site and search', async () => {
     const u = userEvent.setup();
@@ -75,7 +110,8 @@ describe('E08 Open jobs', () => {
     expect(screen.queryByText('HRIS Developer')).not.toBeInTheDocument();
     await u.selectOptions(screen.getByLabelText('Status'), 'open');
     await u.selectOptions(screen.getByLabelText('Site'), 'SGH Jeddah');
-    expect(screen.getByText('1 job · On hold and Closed hidden')).toBeInTheDocument();
+    expect(screen.getByText('Patient Relations Officer')).toBeInTheDocument();
+    expect(screen.queryByText('HRIS Developer')).not.toBeInTheDocument();
     await u.selectOptions(screen.getByLabelText('Site'), '');
     await u.type(screen.getByLabelText('Search my jobs'), 'laravel');
     expect(screen.getByText('Laravel Backend Engineer')).toBeInTheDocument();
@@ -117,6 +153,14 @@ describe('E09 Job pipeline', () => {
     expect(within(tarek).queryByTestId('gate-badge')).toBeNull();
     expect(screen.getByRole('article', { name: 'Ahmed Embaby, Interview' })).toHaveTextContent('Last interview 6 Oct, 10:00–11:00 · room link');
     expect(screen.getByRole('link', { name: 'Log screen for Hany Fawzy' })).toHaveAttribute('href', '/applications/a1?drawer=screen');
+    const hany = screen.getByRole('article', { name: 'Hany Fawzy, Applied' });
+    expect(hany).not.toHaveAttribute('data-dragging');
+    expect(hany).toHaveTextContent('Analyst');
+    expect(hany).toHaveTextContent('APP-a1');
+    expect(hany).toHaveTextContent('Applied 8 Oct 2026');
+    expect(hany).toHaveTextContent('LinkedIn');
+    expect(hany.textContent ?? '').not.toMatch(/@|\+20|salary|phone/i);
+    expect(screen.getByRole('article', { name: 'Nourhan Sami, Screening' })).toHaveTextContent('Phone screening booked · 10 Oct 2026');
     expect(screen.getByRole('link', { name: 'Open scorecard for Ahmed Embaby' })).toHaveAttribute('href', '/applications/a7?drawer=scorecard');
     expect(screen.getByRole('link', { name: 'Schedule interview for Tarek Lotfy' })).toHaveAttribute('href', '/applications/a8?drawer=schedule');
     expect(screen.getByRole('link', { name: 'Draft offer for Lina Hassan' })).toHaveAttribute('href', '/applications/a10?drawer=offer');

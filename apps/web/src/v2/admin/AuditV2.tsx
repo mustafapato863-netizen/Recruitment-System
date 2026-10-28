@@ -88,7 +88,7 @@ export function AuditV2({ now = () => Date.now() }: { now?: () => number } = {})
   return (
     <div className="rf2-jobs rf2-admin">
       <div className="rf2-row-between">
-        <div><h1 className="rf2-jobs__title">Audit</h1><p className="rf2-jobs__sub">Every change on files, jobs, requisitions and settings. Read-only; nothing can be deleted.</p></div>
+        <div><h1 className="rf2-jobs__title">Audit</h1></div>
         <ButtonV2 kind="secondary" icon={<Download />} onClick={() => void exportCsv()} disabled={!data || data.total === 0 || exporting}>Export</ButtonV2>
       </div>
       {exportError ? <p className="rf2-form-error" role="alert">{exportError}</p> : null}

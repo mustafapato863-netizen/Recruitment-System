@@ -416,6 +416,8 @@ export function ApplicationFileV2({ load = loadApplicationFile, mode = 'owner' }
   const gates = gateRows(file);
   const jobLabel = app.positionTitle ?? 'Job';
   const crumbs = crumbTrail(back, jobLabel, mode === 'owner' ? `/vacancies/${encodeURIComponent(app.vacancyId)}` : null, name);
+  const stageAt = HIRING_STAGES.findIndex((stage) => label(stage).toLowerCase() === label(app.stage).toLowerCase());
+  const statusTone = closed ? 'closed' : /required/i.test(copy.status) ? 'attention' : 'steady';
   const noticeDays = file.screening.find((s) => s.noticePeriodDays != null)?.noticePeriodDays;
   const evidence = evidenceOf(file);
   const latest = recordedRows(file)[0];
@@ -425,38 +427,43 @@ export function ApplicationFileV2({ load = loadApplicationFile, mode = 'owner' }
 
   return (
     <div className="rf2-file">
-      <Link className="rf2-file__back" to={back.href}><ArrowLeft aria-hidden="true" /> {back.label}</Link>
-      <nav className="rf2-file__crumbs" aria-label="Breadcrumb">
-        <ol>
-          {crumbs.map((item, index) => (
-            <li key={`${item.label}-${index}`}>
-              {index > 0 ? <span aria-hidden="true">/</span> : null}
-              {item.to && index < crumbs.length - 1 ? <Link to={item.to}>{item.label}</Link> : <span aria-current={index === crumbs.length - 1 ? 'page' : undefined}>{item.label}</span>}
-            </li>
-          ))}
-        </ol>
-      </nav>
+      <section className="rf2-file__head" aria-labelledby="file-name">
+        <div className="rf2-file__navline">
+          <Link className="rf2-file__back" to={back.href}><ArrowLeft aria-hidden="true" /> {back.label}</Link>
+          <nav className="rf2-file__crumbs" aria-label="Breadcrumb">
+            <ol>
+              {crumbs.map((item, index) => (
+                <li key={`${item.label}-${index}`}>
+                  {index > 0 ? <span aria-hidden="true">/</span> : null}
+                  {item.to && index < crumbs.length - 1 ? <Link to={item.to}>{item.label}</Link> : <span aria-current={index === crumbs.length - 1 ? 'page' : undefined}>{item.label}</span>}
+                </li>
+              ))}
+            </ol>
+          </nav>
+        </div>
+        <div className="rf2-file__intro">
+          <h2 id="file-name" className="rf2-file__name">{name}</h2>
+          <p className="rf2-file__meta">{[app.positionTitle, app.vacancyBranchName ?? app.vacancyLocation, app.primaryRecruiterName ? `Owner: ${app.primaryRecruiterName}` : null].filter(Boolean).join(' · ')}</p>
+        </div>
+        <div className="rf2-file__stage">
+          <ol className="rf2-rail" aria-label="Stages">
+            {HIRING_STAGES.map((stage, index) => {
+              const currentStep = index === stageAt;
+              const place = stageAt < 0 ? 'later' : index < stageAt ? 'done' : currentStep ? 'current' : 'later';
+              if (manager || closed) {
+                return <li key={stage}><span className="rf2-rail__step" data-place={place} aria-current={currentStep ? 'step' : undefined}>{label(stage)}</span></li>;
+              }
+              return (
+                <li key={stage}>
+                  <button type="button" className="rf2-rail__step" data-place={place} aria-current={currentStep ? 'step' : undefined} onClick={() => { const key = drawerForStage(file, stage); if (key) openDrawer(key); }}>{label(stage)}</button>
+                </li>
+              );
+            })}
+          </ol>
+          <p className="rf2-file__status" data-tone={statusTone}>{copy.status}</p>
+        </div>
+      </section>
       {toast ? <p className="rf2-inline-note" role="status">{toast}</p> : null}
-      <header className="rf2-file__intro">
-        <h2 id="file-name" className="rf2-file__name">{name}</h2>
-        <p className="rf2-file__meta">{[app.positionTitle, app.vacancyBranchName ?? app.vacancyLocation, app.primaryRecruiterName ? `Owner: ${app.primaryRecruiterName}` : null].filter(Boolean).join(' · ')}</p>
-      </header>
-      <div className="rf2-file__stage">
-        <ol className="rf2-rail" aria-label="Stages">
-          {HIRING_STAGES.map((stage) => {
-            const currentStep = label(stage).toLowerCase() === label(app.stage).toLowerCase();
-            if (manager || closed) {
-              return <li key={stage}><span className="rf2-rail__step" aria-current={currentStep ? 'step' : undefined}>{label(stage)}</span></li>;
-            }
-            return (
-              <li key={stage}>
-                <button type="button" className="rf2-rail__step" aria-current={currentStep ? 'step' : undefined} onClick={() => { const key = drawerForStage(file, stage); if (key) openDrawer(key); }}>{label(stage)}</button>
-              </li>
-            );
-          })}
-        </ol>
-        <p className="rf2-file__status">{copy.status}</p>
-      </div>
       <section className="rf2-card" aria-labelledby="next-h">
         <h3 id="next-h" className="rf2-card__title">{copy.title}</h3>
         <p className={closed ? 'rf2-file__closed' : undefined} role={closed ? 'note' : undefined} data-testid={closed && app.stage !== 'Rejected' ? 'file-closed' : undefined}>{copy.detail}</p>
@@ -473,26 +480,26 @@ export function ApplicationFileV2({ load = loadApplicationFile, mode = 'owner' }
           <div className="rf2-smart" role="group" aria-label="Smart actions">
             {licence ? (
               <>
-                <ButtonV2 size="lg" icon={<CircleCheck />} onClick={() => openDrawer('prehire')}>Pre-hire</ButtonV2>
-                <ButtonV2 kind="secondary" size="lg" icon={<FileText />} aria-pressed={showDocuments} onClick={openDocuments}>Documents</ButtonV2>
+                <ButtonV2 size="md" icon={<CircleCheck />} onClick={() => openDrawer('prehire')}>Pre-hire</ButtonV2>
+                <ButtonV2 kind="secondary" size="md" icon={<FileText />} aria-pressed={showDocuments} onClick={openDocuments}>Documents</ButtonV2>
               </>
             ) : manager ? (
               <>
-                <ButtonV2 kind="secondary" size="lg" icon={<FileText />} aria-pressed={showDocuments} onClick={openDocuments}>Documents</ButtonV2>
-                {pendingOffer && !approver ? <ButtonV2 size="lg" icon={<CircleCheck />} onClick={() => setParams((p) => { const n = new URLSearchParams(p); n.set('decide', pendingOffer.id); return n; })}>Review offer</ButtonV2> : null}
+                <ButtonV2 kind="secondary" size="md" icon={<FileText />} aria-pressed={showDocuments} onClick={openDocuments}>Documents</ButtonV2>
+                {pendingOffer && !approver ? <ButtonV2 size="md" icon={<CircleCheck />} onClick={() => setParams((p) => { const n = new URLSearchParams(p); n.set('decide', pendingOffer.id); return n; })}>Review offer</ButtonV2> : null}
               </>
             ) : (
               <>
-                {primary && !closed ? <ButtonV2 size="lg" icon={primary.icon} onClick={() => openDrawer(primary.key)}>{primary.label}</ButtonV2> : null}
-                <ButtonV2 kind="secondary" size="lg" icon={<FileText />} onClick={focusNote}>Note</ButtonV2>
-                <ButtonV2 kind="secondary" size="lg" icon={<FileText />} aria-pressed={showDocuments} onClick={openDocuments}>Documents</ButtonV2>
+                {primary && !closed ? <ButtonV2 size="md" icon={primary.icon} onClick={() => openDrawer(primary.key)}>{primary.label}</ButtonV2> : null}
+                <ButtonV2 kind="secondary" size="md" icon={<FileText />} onClick={focusNote}>Note</ButtonV2>
+                <ButtonV2 kind="secondary" size="md" icon={<FileText />} aria-pressed={showDocuments} onClick={openDocuments}>Documents</ButtonV2>
                 {!closed ? (
                   <>
-                    <ButtonV2 kind="secondary" size="lg" icon={<CalendarDays />} onClick={() => openDrawer('schedule')}>Schedule</ButtonV2>
-                    <ButtonV2 kind="secondary" size="lg" icon={<Star />} onClick={() => openDrawer('scorecard')}>Scorecard</ButtonV2>
-                    <ButtonV2 kind="secondary" size="lg" icon={<Send />} onClick={() => openDrawer('offer')}>Offer</ButtonV2>
-                    <ButtonV2 kind="secondary" size="lg" icon={<CircleCheck />} onClick={() => openDrawer('prehire')}>Pre-hire</ButtonV2>
-                    <ButtonV2 kind="danger-outline" size="lg" icon={<XCircle />} onClick={() => openDrawer('reject')}>Reject</ButtonV2>
+                    <ButtonV2 kind="secondary" size="md" icon={<CalendarDays />} onClick={() => openDrawer('schedule')}>Schedule</ButtonV2>
+                    <ButtonV2 kind="secondary" size="md" icon={<Star />} onClick={() => openDrawer('scorecard')}>Scorecard</ButtonV2>
+                    <ButtonV2 kind="secondary" size="md" icon={<Send />} onClick={() => openDrawer('offer')}>Offer</ButtonV2>
+                    <ButtonV2 kind="secondary" size="md" icon={<CircleCheck />} onClick={() => openDrawer('prehire')}>Pre-hire</ButtonV2>
+                    <ButtonV2 kind="danger-outline" size="md" icon={<XCircle />} onClick={() => openDrawer('reject')}>Reject</ButtonV2>
                   </>
                 ) : null}
               </>

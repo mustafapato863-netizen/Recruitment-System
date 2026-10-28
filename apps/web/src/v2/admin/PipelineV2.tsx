@@ -32,7 +32,6 @@ export function PipelineV2() {
     <div className="rf2-jobs rf2-admin">
       <div>
         <h1 className="rf2-jobs__title">Pipeline template</h1>
-        <p className="rf2-jobs__sub">One template for every job. Stages in order, two exits. Gates are checks inside a stage, not extra stages.</p>
       </div>
       {note ? <p className="rf2-inline-note" data-tone={note.tone} role="status">{note.tone === 'success' ? <CircleCheck aria-hidden="true" /> : <Info aria-hidden="true" />} {note.text}</p> : null}
       {data === undefined && !error ? <SkeletonV2 lines={6} label="Loading pipeline…" /> : null}

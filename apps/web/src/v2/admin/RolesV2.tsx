@@ -55,7 +55,6 @@ export function RolesV2() {
     <div className="rf2-jobs rf2-admin">
       <div>
         <h1 className="rf2-jobs__title">Roles</h1>
-        <p className="rf2-jobs__sub">Three roles and one per-interview capability. A missing permission hides the page — nothing is shown locked.</p>
       </div>
       <div className="rf2-panel rf2-admin__card">
         <table className="rf2-jtable rf2-admin__matrix" aria-label="What each role can do">

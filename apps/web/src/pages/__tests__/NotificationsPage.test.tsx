@@ -9,8 +9,6 @@ vi.mock('../../api/client', async () => ({ ...(await vi.importActual<object>('..
 
 import { NotificationsPage } from '../NotificationsPage';
 
-const SUBTITLE = 'Stay updated with cross-system alerts, approvals, and workflow events';
-
 const unread: NotificationRecord = {
   id: 'n1',
   organizationId: 'org-1',
@@ -52,22 +50,20 @@ describe('Notification Center desk', () => {
     api.postApi.mockReset();
   });
 
-  it('lets the subtitle lead and keeps the filters, refresh, and notification actions', async () => {
+  it('keeps the filters, refresh, and notification actions', async () => {
     mockFeed([unread], 1);
     renderPage();
 
-    const lead = await screen.findByText(SUBTITLE);
-    const filters = screen.getByRole('tablist', { name: 'Notification filters' });
-    expect(lead.compareDocumentPosition(filters) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Screen Nour Ali' })).toBeInTheDocument();
+    expect(screen.queryByText('Stay updated with cross-system alerts, approvals, and workflow events')).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Notification Center' })).not.toBeInTheDocument();
 
-    expect(screen.getByRole('tab', { name: /All Notifications/ })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('tab', { name: /Unread Only/ })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /System Alerts/ })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /Pending Approvals/ })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'All Notifications 1' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'Unread Only 1' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'System Alerts' })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Pending Approvals 1' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Refresh notifications' })).toBeInTheDocument();
 
-    expect(await screen.findByRole('heading', { name: 'Screen Nour Ali' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Open details/ })).toHaveAttribute('href', '/applications/20000000-0000-4000-8000-000000000510');
     expect(screen.getByRole('button', { name: 'Mark as read' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Mark all as read/ })).toBeInTheDocument();
@@ -81,7 +77,7 @@ describe('Notification Center desk', () => {
     expect(await screen.findByRole('heading', { name: 'No notifications in this view' })).toBeInTheDocument();
     expect(screen.getByText('New approvals, system alerts, and workflow events will appear here.')).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Notification Center' })).not.toBeInTheDocument();
-    expect(screen.getByText(SUBTITLE).compareDocumentPosition(screen.getByRole('tablist', { name: 'Notification filters' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByText('Stay updated with cross-system alerts, approvals, and workflow events')).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('tab', { name: /Unread Only/ }));
 

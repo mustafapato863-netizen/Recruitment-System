@@ -66,7 +66,7 @@ export function TemplatesV2({ initial = 'email' }: { initial?: Channel } = {}) {
   return (
     <div className="rf2-jobs rf2-admin">
       <div className="rf2-row-between">
-        <div><h1 className="rf2-jobs__title">Templates</h1><p className="rf2-jobs__sub">Email and WhatsApp messages used by the drawers. Variables fill in from the file.</p></div>
+        <div><h1 className="rf2-jobs__title">Templates</h1></div>
         <div className="rf2-segmented" role="group" aria-label="Channel">
           <ButtonV2 kind={ch === 'email' ? 'primary' : 'secondary'} size="sm" aria-pressed={ch === 'email'} onClick={() => setCh('email')}>Email</ButtonV2>
           <ButtonV2 kind={ch === 'whatsapp' ? 'primary' : 'secondary'} size="sm" aria-pressed={ch === 'whatsapp'} onClick={() => setCh('whatsapp')}>WhatsApp</ButtonV2>

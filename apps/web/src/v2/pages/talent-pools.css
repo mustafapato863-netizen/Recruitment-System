@@ -18,7 +18,6 @@
   font-weight: var(--rf2-weight-page);
   overflow-wrap: break-word;
 }
-[data-ui='v2'] .rf2-pools__sub,
 [data-ui='v2'] .rf2-pools__bound,
 [data-ui='v2'] .rf2-pools__note {
   margin: var(--rf2-space-0-5) 0 0;

@@ -35,13 +35,6 @@ function sameDirectReports(reports: ReportWork[], meId: string | undefined): boo
     return managerId != null && managerId !== '' && managerId !== meId;
   });
 }
-function teamWorkSubtitle(reports: ReportWork[] | null, meId: string | undefined): string {
-  if (!reports) return 'Open work of your direct reports.';
-  const n = reports.length;
-  if (sameDirectReports(reports, meId)) return `Open work of your ${n} direct ${n === 1 ? 'report' : 'reports'}. Counts equal the rows shown.`;
-  return `Open work of your ${n} ${n === 1 ? 'person' : 'people'} on the reporting line. Counts equal the rows shown.`;
-}
-
 /** M2 Team work (Manager, v2): what is waiting on me, and open work for the loaded roster, with Reassign (B7). */
 export function TeamWorkV2() {
   const { user } = useAuth();
@@ -86,7 +79,6 @@ export function TeamWorkV2() {
 
   return (
     <div className="rf2-jobs rf2-team">
-      <p className="rf2-team__subtitle">{teamWorkSubtitle(reports, user?.id)}</p>
       {toast ? <p className="rf2-inline-note" data-tone="success" role="status"><CircleCheck aria-hidden="true" /> {toast}</p> : null}
       {state.kind === 'loading' ? <SkeletonV2 lines={6} label="Loading team work…" /> : null}
       {state.kind === 'forbidden' ? <ForbiddenStateV2 body="Your role does not include your team’s files." /> : null}

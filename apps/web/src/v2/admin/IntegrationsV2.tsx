@@ -160,7 +160,7 @@ export function IntegrationsV2() {
   };
   return (
     <div className="rf2-jobs rf2-admin rf2-int">
-      <div><h1 className="rf2-jobs__title">Integrations</h1><p className="rf2-jobs__sub">Connections that feed and send for RecruitFlow: the careers site and mail. Status is shown with text and an icon.</p></div>
+      <div><h1 className="rf2-jobs__title">Integrations</h1></div>
       {!items && !error ? <SkeletonV2 lines={6} label="Loading integrations…" /> : null}
       {error ? <div role="alert"><EmptyStateV2 title="Could not load integrations" body={error} action={<ButtonV2 kind="secondary" icon={<RotateCw />} onClick={() => setAttempt((n) => n + 1)}>Try again</ButtonV2>} /></div> : null}
       {items ? (

@@ -125,7 +125,6 @@ export function CandidatesV2() {
       <div className="rf2-row-between">
         <div>
           <h1 className="rf2-jobs__title">Candidates</h1>
-          <p className="rf2-jobs__sub">People and their next action. A person can have applications on several jobs; nothing is ever deleted.</p>
         </div>
         {tab === 'active' ? (canCompare
           ? <Link className="rf2-btn rf2-btn--primary rf2-btn--md" to={`/candidates/compare?job=${encodeURIComponent(pickedRows[0].vacancyId)}&ids=${pickedRows.map((row) => encodeURIComponent(row.candidateId)).join(',')}`}><Scale aria-hidden="true" /> Compare {pickedRows.length} on skills</Link>

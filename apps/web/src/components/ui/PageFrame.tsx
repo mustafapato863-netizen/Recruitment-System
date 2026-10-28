@@ -1,7 +1,6 @@
 import { Children, Fragment, isValidElement, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Icon } from '../Icon';
-import { QuickGuideTrigger } from '../../quickguide';
 import { OverflowMenu } from './OverflowMenu';
 import { useMediaQuery } from './useMediaQuery';
 
@@ -69,10 +68,7 @@ export function PageFrame({
             </Link>
           )}
           {eyebrow && <div className="rf-page-eyebrow mb-1.5 text-xs font-bold uppercase tracking-[0.08em] text-rf-ink-muted">{eyebrow}</div>}
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <h1 className="rf-page-title">{title}</h1>
-            <QuickGuideTrigger />
-          </div>
+          <h1 className="rf-page-title">{title}</h1>
           {description && <p className="m-0 mt-1.5 max-w-[860px] text-xs font-medium leading-5 text-rf-ink-muted">{description}</p>}
         </div>
         {hasActions && (

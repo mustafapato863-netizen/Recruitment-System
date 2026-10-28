@@ -7,14 +7,12 @@ import { axeViolations as runAxe, axeViolations } from '../../__tests__/axe';
 
 const getApi = vi.fn();
 vi.mock('../../../../api/client', () => ({ getApi: (p: string) => getApi(p) }));
-const openGuide = vi.fn();
 vi.mock('../../../../quickguide', () => ({
   QuickGuideProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   QuickGuideModal: () => null,
-  useQuickGuide: () => ({ openGuide }),
 }));
 
-import { AppShellV2 } from '../AppShellV2';
+import { AppShellV2, TOPNAV_MENU_QUERY } from '../AppShellV2';
 import { useSetBreadcrumbTitle } from '../../../../context/BreadcrumbContext';
 import { ThemeProvider } from '../../../../theme/ThemeContext';
 import { activeNavKey, permittedNavItems, SEAT_NAV, CLASSIC_NAV, permittedClassicItems } from '../navConfig';
@@ -52,7 +50,7 @@ function renderShell(seat: Seat, u = user(), path = '/my-work', onSignOut = vi.f
   );
 }
 
-beforeEach(() => { getApi.mockReset(); getApi.mockResolvedValue({ unreadCount: 0 }); openGuide.mockReset(); window.localStorage.clear(); });
+beforeEach(() => { getApi.mockReset(); getApi.mockResolvedValue({ unreadCount: 0 }); window.localStorage.clear(); });
 afterEach(() => { document.documentElement.removeAttribute('data-ui'); });
 
 describe('nav per seat', () => {
@@ -316,42 +314,48 @@ describe('a11y', () => {
 });
 
 describe('F4 follow-ups', () => {
-  it('Help opens the existing quick guide', async () => {
-    const u = userEvent.setup();
+  it('keeps the quick guide out of the header', () => {
     renderShell('employee');
-    await u.click(screen.getByRole('button', { name: /Help/ }));
-    expect(openGuide).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: /Help/ })).not.toBeInTheDocument();
   });
 
   it('sidebar collapses to an icon rail, keeps accessible names, and persists', async () => {
     const u = userEvent.setup();
-    const { unmount } = renderShell('employee');
+    const admin = user(ALL, ['ADMINISTRATOR']);
+    const { unmount } = renderShell('admin', admin, '/users');
     const toggle = screen.getByRole('button', { name: 'Collapse sidebar' });
     expect(toggle).toHaveAttribute('aria-expanded', 'true');
     toggle.focus();
     await u.keyboard('{Enter}');
     expect(screen.getByRole('button', { name: 'Expand sidebar' })).toHaveAttribute('aria-expanded', 'false');
     expect(document.querySelector('.rf2-shell')).toHaveClass('rf2-shell--collapsed');
-    const link = screen.getByRole('link', { name: 'Open jobs' });
-    expect(link).toHaveAttribute('title', 'Open jobs');
+    const link = screen.getByRole('link', { name: 'Users' });
+    expect(link).toHaveAttribute('title', 'Users');
     expect(window.localStorage.getItem('recruitflow.ui.v2.sidebar')).toBe('collapsed');
     unmount();
-    renderShell('employee');
+    renderShell('admin', admin, '/users');
     expect(document.querySelector('.rf2-shell')).toHaveClass('rf2-shell--collapsed');
     expect(await axeViolations(document.body)).toEqual([]);
   });
 
-  it('shows a static workspace label for the real /auth/me shape (one org)', () => {
+  it('keeps the workspace name out of the daily header', () => {
     renderShell('employee', { ...user(), organizationName: 'IT Recruiting' });
+    expect(screen.queryByTestId('workspace-label')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Change workspace/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'RecruitFlow, Saudi German Health' })).toBeInTheDocument();
+  });
+
+  it('shows a static workspace label for the real /auth/me shape (one org)', () => {
+    renderShell('admin', { ...user(ALL, ['ADMINISTRATOR']), organizationName: 'IT Recruiting' }, '/users');
     expect(screen.getByTestId('workspace-label')).toHaveTextContent('IT Recruiting');
     expect(screen.queryByRole('button', { name: /Change workspace/ })).not.toBeInTheDocument();
   });
 
   it('shows the switcher only when /auth/me lists more than one org', async () => {
     const u = userEvent.setup();
-    const me = { ...user(), organizationId: 'o1', organizationName: 'IT Recruiting',
+    const me = { ...user(ALL, ['ADMINISTRATOR']), organizationId: 'o1', organizationName: 'IT Recruiting',
       organizations: [{ id: 'o1', name: 'IT Recruiting' }, { id: 'o2', name: 'Nursing' }] } as never;
-    renderShell('employee', me);
+    renderShell('admin', me, '/users');
     await u.click(screen.getByRole('button', { name: 'Workspace: IT Recruiting. Change workspace' }));
     const list = screen.getByRole('listbox', { name: 'Workspaces' });
     expect(within(list).getByRole('option', { name: 'IT Recruiting' })).toHaveAttribute('aria-selected', 'true');
@@ -362,11 +366,45 @@ describe('F4 follow-ups', () => {
 describe('matrix fix: narrow viewports', () => {
   const realMatchMedia = window.matchMedia;
   afterEach(() => { window.matchMedia = realMatchMedia; });
-  it('below 1024px the sidebar is the icon rail (no toggle) and the header title is rendered as the h1', () => {
-    window.matchMedia = ((q: string) => ({ matches: q.includes('1023px'), media: q, addEventListener: () => {}, removeEventListener: () => {} })) as unknown as typeof window.matchMedia;
+  const match = (q: string) => q === TOPNAV_MENU_QUERY || q.includes('1023px');
+
+  it('keeps daily links in the header on a wide screen', () => {
+    renderShell('employee');
+    expect(screen.queryByRole('button', { name: 'Open menu' })).not.toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: SEAT_NAV.employee.heading })).toBeInTheDocument();
+  });
+
+  it('below 1280px a daily seat opens the same links from a menu', async () => {
+    const u = userEvent.setup();
+    window.matchMedia = ((q: string) => ({ matches: match(q), media: q, addEventListener: () => {}, removeEventListener: () => {} })) as unknown as typeof window.matchMedia;
     const { container } = renderShell('employee');
+    expect(container.querySelector('.rf2-shell__sidebar')).toBeNull();
+    expect(screen.queryByRole('button', { name: /sidebar/i })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Open jobs' })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1 })).toHaveClass('rf2-shell__title');
+    const menu = screen.getByRole('button', { name: 'Open menu' });
+    expect(menu).toHaveAttribute('aria-expanded', 'false');
+    await u.click(menu);
+    expect(menu).toHaveAttribute('aria-expanded', 'true');
+    const nav = screen.getByRole('navigation', { name: SEAT_NAV.employee.heading });
+    const jobs = within(nav).getByRole('link', { name: 'Open jobs' });
+    expect(jobs).toHaveAttribute('href', '/vacancies');
+    menu.focus();
+    await u.keyboard('{Escape}');
+    expect(screen.queryByRole('link', { name: 'Open jobs' })).not.toBeInTheDocument();
+    expect(menu).toHaveFocus();
+    await u.click(menu);
+    await u.click(screen.getByRole('link', { name: 'Open jobs' }));
+    expect(await screen.findByRole('heading', { level: 1, name: 'Open jobs' })).toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: SEAT_NAV.employee.heading })).not.toBeInTheDocument();
+  });
+
+  it('keeps the admin sidebar below 1024px as the icon rail', () => {
+    window.matchMedia = ((q: string) => ({ matches: match(q), media: q, addEventListener: () => {}, removeEventListener: () => {} })) as unknown as typeof window.matchMedia;
+    const { container } = renderShell('admin', user(ALL, ['ADMINISTRATOR']), '/users');
     expect(container.querySelector('.rf2-shell')).toHaveClass('rf2-shell--collapsed');
     expect(screen.queryByRole('button', { name: /sidebar/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Open menu' })).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 1 })).toHaveClass('rf2-shell__title');
   });
 });

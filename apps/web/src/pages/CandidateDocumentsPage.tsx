@@ -169,7 +169,7 @@ export function CandidateDocumentsPage() {
 
   if (loading) {
     return (
-      <PageFrame eyebrow="Candidates / Documents" title="Document Records" description="Loading document records...">
+      <PageFrame eyebrow="Candidates / Documents" title="Document Records">
         <PageState kind="loading" title="Loading document records" description="Fetching candidate document metadata." />
       </PageFrame>
     );
@@ -177,7 +177,7 @@ export function CandidateDocumentsPage() {
 
   if (error || !candidate) {
     return (
-      <PageFrame eyebrow="Candidates / Documents" title="Document Records" description="Candidate document metadata and extracted text.">
+      <PageFrame eyebrow="Candidates / Documents" title="Document Records">
         <Alert tone="danger" title="Candidate not found">
           {error || 'The requested candidate profile does not exist.'}
           <Button variant="secondary" size="sm" asChild className="mt-2">
@@ -199,7 +199,6 @@ export function CandidateDocumentsPage() {
     <PageFrame
       eyebrow={`Candidates / ${candidate.firstName} ${candidate.lastName} / Vault`}
       title={`Document Vault — ${candidate.firstName} ${candidate.lastName}`}
-      description="Candidate document compliance metadata, certifications and extracted text records."
       actions={
         <>
           <Button variant="ghost" size="sm" asChild>

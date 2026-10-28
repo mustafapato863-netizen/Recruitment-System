@@ -7,16 +7,61 @@
 [data-ui='v2'] .rf2-task-section__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--rf2-space-2); }
 [data-ui='v2'] .rf2-task-section__list > li + li { border-top: 0; }
 [data-ui='v2'] .rf2-task-section__empty { margin: 0; padding: var(--rf2-space-2); color: var(--rf2-muted); font-size: var(--rf2-text-body); }
-[data-ui='v2'] .rf2-task-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 4px var(--rf2-space-2); padding: 16px 18px; border: 1px solid var(--rf2-glass-line); border-radius: 20px; background: var(--rf2-glass-card); box-shadow: var(--rf2-neo-raise); backdrop-filter: blur(12px); }
-[data-ui='v2'] .rf2-task-row__icon { display: none; }
-[data-ui='v2'] .rf2-task-row__icon svg { width: 16px; height: 16px; }
+[data-ui='v2'] .rf2-task-row {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 12px 16px;
+  padding: 16px 18px; border: 1px solid var(--rf2-glass-line); border-radius: 20px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.78), rgba(255,255,255,0.62));
+  box-shadow: var(--rf2-neo-raise); backdrop-filter: blur(12px);
+}
+[data-ui='v2'] .rf2-task-row__icon {
+  display: grid; place-items: center; width: 38px; height: 38px; border-radius: 12px;
+  box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.15);
+}
+[data-ui='v2'] .rf2-task-row__icon svg { width: 18px; height: 18px; }
 [data-ui='v2'] .rf2-task-row__icon[data-tone='warning'] { background: var(--rf2-warning-tint); color: var(--rf2-warning); }
 [data-ui='v2'] .rf2-task-row__icon[data-tone='danger'] { background: var(--rf2-danger-tint); color: var(--rf2-danger); }
 [data-ui='v2'] .rf2-task-row__icon[data-tone='neutral'] { background: var(--rf2-neutral-tint); color: var(--rf2-ink-2); }
 [data-ui='v2'] .rf2-task-row__main { min-width: 0; }
-[data-ui='v2'] .rf2-task-row__title { margin: 0; font-size: var(--rf2-text-body); line-height: var(--rf2-leading-body); font-weight: 600; color: var(--rf2-ink); }
-[data-ui='v2'] .rf2-task-row__meta { margin: 0; font-size: var(--rf2-text-caption); line-height: var(--rf2-leading-caption); color: var(--rf2-muted); }
+[data-ui='v2'] .rf2-task-row__title {
+  margin: 0; font-size: 15px; line-height: 1.4; font-weight: 700; letter-spacing: -0.02em; color: var(--rf2-ink);
+  overflow-wrap: break-word;
+}
+[data-ui='v2'] .rf2-task-row__meta {
+  margin: 6px 0 0; font-size: 12px; line-height: 1.5; color: var(--rf2-muted); font-weight: 500;
+}
 [data-ui='v2'] .rf2-task-row__chip { justify-self: end; }
-[data-ui='v2'] .rf2-task-row__due { grid-column: 1; font-size: var(--rf2-text-label); line-height: var(--rf2-leading-label); color: var(--rf2-ink-2); font-variant-numeric: tabular-nums; }
-[data-ui='v2'] .rf2-task-row__due[data-tone='danger'] { color: var(--rf2-danger); font-weight: 600; }
-[data-ui='v2'] .rf2-task-row__action { grid-column: 2; grid-row: 2 / span 2; display: flex; justify-content: flex-end; align-self: end; min-width: 140px; }
+[data-ui='v2'] .rf2-task-row__due {
+  grid-column: 2; justify-self: start; margin-top: 2px; font-size: var(--rf2-text-label); line-height: var(--rf2-leading-label); color: var(--rf2-ink-2); font-variant-numeric: tabular-nums;
+}
+[data-ui='v2'] .rf2-task-row__due[data-tone='danger'] { color: var(--rf2-danger); font-weight: 700; }
+[data-ui='v2'] .rf2-task-row__action {
+  grid-column: 3 / span 2; display: flex; justify-content: flex-end; align-items: center; gap: 8px; min-width: 140px;
+}
+[data-ui='v2'] .rf2-task-row__action .rf2-mywork__actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+
+/* Phone: one column so the title uses the card and the actions sit under the text. */
+@media (max-width: 767px) {
+  [data-ui='v2'] .rf2-task-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--rf2-space-1);
+    min-width: 0;
+    max-width: 100%;
+  }
+  [data-ui='v2'] .rf2-task-row__main,
+  [data-ui='v2'] .rf2-task-row__chip,
+  [data-ui='v2'] .rf2-task-row__due,
+  [data-ui='v2'] .rf2-task-row__action {
+    grid-column: 1;
+    grid-row: auto;
+    min-width: 0;
+    max-width: 100%;
+  }
+  [data-ui='v2'] .rf2-task-row__chip { justify-self: start; }
+  [data-ui='v2'] .rf2-task-row__action {
+    justify-content: flex-start;
+    width: 100%;
+    margin-top: var(--rf2-space-1);
+    padding-top: var(--rf2-space-1-5);
+    border-top: 1px solid var(--rf2-divider);
+  }
+}

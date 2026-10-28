@@ -168,7 +168,6 @@ export function FinalApprovalInboxPage() {
       className="rf-final-approval-page"
       eyebrow="Joining &amp; Compliance"
       title="Final Hiring Approval Inbox"
-      description="Final governance gate before a candidate can transition to Awaiting Joining status."
       actions={
         <Button variant="ghost" size="sm" disabled={isLoading} onClick={() => void loadApprovals()}>
           <Icon name="refresh-cw" size={13} className={isLoading ? 'animate-spin' : ''} />

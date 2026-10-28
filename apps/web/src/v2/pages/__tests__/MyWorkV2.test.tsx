@@ -32,15 +32,19 @@ function rowsIn(bucket: string) {
 }
 
 describe('My Work desk', () => {
-  it('lets the subtitle lead, with the header as the only My Work', async () => {
+  it('greets by first name on the home desk, with the header as the only My Work', async () => {
     renderPage(ok());
-    const subtitle = await screen.findByText('Your next actions, ordered by urgency.');
+    const welcome = screen.getByText('Welcome back, Mariam.');
+    expect(screen.queryByText('Your next actions, ordered by urgency.')).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'My Work' })).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Next actions' })).not.toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Next actions' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('button', { name: 'All tasks' })).toBeInTheDocument();
+    expect(await screen.findByRole('tab', { name: 'Next actions' })).toHaveAttribute('aria-selected', 'true');
+    const allTasks = screen.getByRole('button', { name: 'All tasks' });
+    expect(allTasks).toHaveClass('rf2-btn--secondary', 'rf2-btn--md');
+    expect(allTasks).toHaveAttribute('aria-pressed', 'true');
     const tabs = screen.getByRole('tablist', { name: 'My Work sections' });
-    expect(subtitle.compareDocumentPosition(tabs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(welcome.compareDocumentPosition(tabs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByText('Welcome back, Mariam.')).toBeInTheDocument();
   });
 
   it('fills the next action on the first Overdue, Today, and Waiting row', async () => {
@@ -133,10 +137,11 @@ describe('My Work desk', () => {
 describe('My Work (E02) from the #9 contract', () => {
   it('renders the target chip, one urgency list, and the three filters', async () => {
     renderPage(ok());
-    expect(await screen.findByText('Your next actions, ordered by urgency.')).toBeInTheDocument();
+    expect(await screen.findByRole('list', { name: 'Next actions' })).toBeInTheDocument();
+    expect(screen.getByText('Welcome back, Mariam.')).toBeInTheDocument();
+    expect(screen.queryByText('Your next actions, ordered by urgency.')).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'My Work' })).not.toBeInTheDocument();
     expect(screen.getByText('Today · 19 Oct 2026')).toBeInTheDocument();
-    expect(screen.getByText('Your next actions, ordered by urgency.')).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Next actions' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('link', { name: 'Notifications' })).toHaveAttribute('href', '/notifications');
     const strip = screen.getByRole('region', { name: 'Job: HRIS Developer' });
@@ -195,7 +200,8 @@ describe('My Work (E02) from the #9 contract', () => {
     const list = await screen.findByRole('list', { name: 'Your targets' });
     expect(within(list).getAllByRole('region').map((r) => r.getAttribute('aria-label'))).toEqual(['Job: HRIS Developer', 'Job: Data Analyst']);
     expect(within(list).getByText('No due date')).toBeInTheDocument();
-    expect(screen.getByText('Your next actions, ordered by urgency.')).toBeInTheDocument();
+    expect(screen.getByText('Welcome back, Mariam.')).toBeInTheDocument();
+    expect(screen.queryByText('Your next actions, ordered by urgency.')).not.toBeInTheDocument();
   });
 
   it('worker stale: SLA chips hidden with a note; due facts still shown', async () => {
@@ -259,7 +265,8 @@ describe('Empty (E03), loading, error, forbidden', () => {
     renderPage(ok('targets-only'));
     expect(await screen.findByRole('heading', { name: 'No open work assigned to you' })).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Job: HRIS Developer' })).toBeInTheDocument();
-    expect(screen.getByText('Open files on your jobs that need you appear here.')).toBeInTheDocument();
+    expect(screen.getByText('Welcome back, Mariam.')).toBeInTheDocument();
+    expect(screen.queryByText('Open files on your jobs that need you appear here.')).not.toBeInTheDocument();
     expect(screen.queryByRole('list', { name: 'Next actions' })).not.toBeInTheDocument();
   });
   it('loading skeleton', () => {
@@ -393,7 +400,8 @@ describe('tabs, filters, and caller data', () => {
     await screen.findByRole('list', { name: 'Next actions' });
     await u.click(screen.getByRole('tab', { name: 'Upcoming interviews' }));
     expect(screen.getByTestId('loc')).toHaveTextContent('tab=interviews');
-    expect(screen.getByText('Upcoming interviews assigned to you or your candidates.')).toBeInTheDocument();
+    expect(screen.getByText('Welcome back, Mariam.')).toBeInTheDocument();
+    expect(screen.queryByText('Upcoming interviews assigned to you or your candidates.')).not.toBeInTheDocument();
     const schedule = screen.getByRole('region', { name: 'Interview schedule' });
     expect(within(schedule).getByRole('link', { name: 'Manage interview: Nourhan Sami · HRIS Developer' })).toHaveAttribute('href', '/applications/a2?drawer=schedule&interview=iv2');
     expect(within(schedule).getByRole('link', { name: 'View scorecard: Ahmed Embaby · HRIS Developer' })).toHaveAttribute('href', '/applications/a1?drawer=scorecard&interview=iv-score');
@@ -439,7 +447,8 @@ describe('tabs, filters, and caller data', () => {
     renderPage(ok());
     await screen.findByRole('list', { name: 'Next actions' });
     await u.click(screen.getByRole('tab', { name: 'Joining soon' }));
-    expect(screen.getByText('Upcoming start dates, readiness and remaining checks.')).toBeInTheDocument();
+    expect(screen.getByText('Welcome back, Mariam.')).toBeInTheDocument();
+    expect(screen.queryByText('Upcoming start dates, readiness and remaining checks.')).not.toBeInTheDocument();
     const joining = screen.getByRole('region', { name: 'Joining soon' });
     expect(within(joining).getByText('Lina Hassan · HRIS Developer')).toBeInTheDocument();
     expect(within(joining).getByText('Starts 1 Nov · 2 of 2 checks complete · Final approval pending')).toBeInTheDocument();
