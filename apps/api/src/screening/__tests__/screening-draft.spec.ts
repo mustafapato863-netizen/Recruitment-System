@@ -101,12 +101,15 @@ function makeService() {
         drafts[index] = row;
         return row;
       }),
-      deleteMany: vi.fn(async ({ where }: { where: DraftKey }) => {
-        const before = drafts.length;
-        for (let i = drafts.length - 1; i >= 0; i -= 1) {
-          if (matches(drafts[i], where)) drafts.splice(i, 1);
+      updateMany: vi.fn(async ({ where, data }: { where: DraftKey & { outcome: { not: string } }; data: { outcome: string } }) => {
+        let count = 0;
+        for (const draft of drafts) {
+          if (matches(draft, where) && draft.outcome !== where.outcome.not) {
+            draft.outcome = data.outcome;
+            count += 1;
+          }
         }
-        return { count: before - drafts.length };
+        return { count };
       }),
       create: vi.fn(),
       update: vi.fn(),
@@ -232,8 +235,8 @@ describe('Screening drafts', () => {
     });
   });
 
-  it('createScreeningLog deletes that user draft and does not update the application', async () => {
-    const { service, prisma } = makeService();
+  it('saving a screen hides only that user draft without deleting it or updating the application', async () => {
+    const { service, prisma, drafts } = makeService();
     await service.upsertScreeningDraft(ORG, USER_A, APP, privateScreen);
     await service.upsertScreeningDraft(ORG, USER_B, APP, {
       outcome: 'On Hold',
@@ -249,12 +252,24 @@ describe('Screening drafts', () => {
       evidenceSource: 'Screening call',
       nextStep: 'Keep in screening',
     }, { viewSalary: false });
-    expect(prisma.screeningDraft.deleteMany).toHaveBeenCalledWith({
-      where: { organizationId: ORG, userId: USER_A, applicationId: APP },
+    expect(prisma.screeningDraft.updateMany).toHaveBeenCalledWith({
+      where: { organizationId: ORG, userId: USER_A, applicationId: APP, outcome: { not: '__discarded__' } },
+      data: { outcome: '__discarded__' },
     });
+    expect(drafts.find((draft) => draft.userId === USER_A)?.notes).toBe(privateScreen.notes);
     expect(await service.getScreeningDraft(ORG, USER_A, APP)).toBeNull();
     expect(await service.getScreeningDraft(ORG, USER_B, APP)).toMatchObject({ notes: 'Leave mine' });
     expect(prisma.application.update).not.toHaveBeenCalled();
     expect(prisma.application.updateMany).not.toHaveBeenCalled();
+  });
+  it('discard is idempotent, retains the data and permits the same user to start again', async () => {
+    const { service, drafts } = makeService();
+    await service.upsertScreeningDraft(ORG, USER_A, APP, privateScreen);
+    await expect(service.deleteScreeningDraft(ORG, USER_A, APP)).resolves.toEqual({ deleted: true });
+    await expect(service.deleteScreeningDraft(ORG, USER_A, APP)).resolves.toEqual({ deleted: false });
+    expect(drafts[0]?.notes).toBe(privateScreen.notes);
+    expect(await service.getScreeningDraft(ORG, USER_A, APP)).toBeNull();
+    await service.upsertScreeningDraft(ORG, USER_A, APP, { outcome: 'Failed', notes: 'New draft' });
+    expect(await service.getScreeningDraft(ORG, USER_A, APP)).toMatchObject({ outcome: 'Failed', notes: 'New draft' });
   });
 });
