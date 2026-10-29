@@ -1,6 +1,6 @@
 import type React from 'react';
 import { isScorecardSubmitted } from '../../utils/scorecardStatus';
-import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { CircleCheck, Clock, Copy, ExternalLink, Info, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../../auth/AuthContext';
@@ -12,7 +12,7 @@ import { UserPicker, interviewersAdapter, type UserOption } from '../../componen
 import {
   RECOMMENDATIONS, addNote, candidateName, createHiringCase, createOfferDraft, createOfferRevision,
   gateState, isoDate, loadScreeningDraft, logScreening, moveStage, offerTemplates, recordActualJoining, rejectionReasons, reviseScorecard, saveScreeningDraft, scheduleInterview, sendOffer, setJoiningCheck, setOfferStatus, submitHiringCase, submitOffer, submitScorecard, updateInterview,
-  type ApplicationFile, type FileStage, type InterviewItem, type OfferTemplate, type OfferTerms, type Recommendation, type ScorecardItem, type SendChannel, type SendOfferResult,
+  type ApplicationFile, type FileStage, type InterviewItem, type OfferTemplate, type OfferTerms, type Recommendation, type ScorecardItem, type ScreeningDraftLoad, type SendChannel, type SendOfferResult,
   needsReasonNote, OTHER_NOTE_MIN,
 } from '../api/applicationFile';
 import { bannerError, fieldError, serverFormErrors, NO_SERVER_ERRORS, type ServerFormErrors } from '../forms/serverErrors';
@@ -65,12 +65,12 @@ function FormError({ text }: { text: string | null }) {
 function Note({ children, tone = 'info' }: { children: ReactNode; tone?: 'info' | 'warning' }) {
   return <p className={`rf2-drawer-form__note rf2-drawer-form__note--${tone}`}><Info aria-hidden="true" /> <span>{children}</span></p>;
 }
-function Gate({ ok, label, hint }: { ok: boolean; label: string; hint?: string }) {
+function Gate({ ok, unknown = false, label, hint }: { ok: boolean; unknown?: boolean; label: string; hint?: string }) {
   return (
-    <li className="rf2-gate" data-ok={ok}>
-      {ok ? <CircleCheck aria-hidden="true" /> : <Clock aria-hidden="true" />}
-      <span>{label}{hint && !ok ? <span className="rf2-gate__hint"> — {hint}</span> : null}</span>
-      <span className="rf2-visually-hidden">{ok ? '(done)' : '(not done)'}</span>
+    <li className="rf2-gate" data-ok={unknown ? 'unknown' : ok ? 'true' : 'false'}>
+      {ok && !unknown ? <CircleCheck aria-hidden="true" /> : <Clock aria-hidden="true" />}
+      <span>{label}{unknown ? <span className="rf2-gate__hint"> — could not be checked</span> : hint && !ok ? <span className="rf2-gate__hint"> — {hint}</span> : null}</span>
+      <span className="rf2-visually-hidden">{unknown ? '(unknown)' : ok ? '(done)' : '(not done)'}</span>
     </li>
   );
 }
@@ -89,6 +89,7 @@ async function advanceTo(app: ApplicationFile['workspace']['application'], targe
 /* ── E14 Screen ─────────────────────────────────────────────────────────── */
 const SCREEN_METHODS = ['Phone', 'Video', 'In person'] as const;
 const SCREEN_NEXT_STEPS = ['Move to interview', 'Keep in screening', 'Do not proceed'] as const;
+type DraftField = 'outcome' | 'notes' | 'notice' | 'method' | 'evidenceSource' | 'nextStep' | 'move';
 
 export function ScreenDrawer({ file, onClose, onDone }: DrawerProps) {
   const app = file.workspace.application;
@@ -102,11 +103,24 @@ export function ScreenDrawer({ file, onClose, onDone }: DrawerProps) {
   const [errs, setErrs] = useState<Record<string, string>>({});
   const [draftBusy, setDraftBusy] = useState(false);
   const [draftSaved, setDraftSaved] = useState(false);
+  const [draftRead, setDraftRead] = useState<ScreeningDraftLoad | { status: 'loading' }>({ status: 'loading' });
+  const [draftAttempt, setDraftAttempt] = useState(0);
+  const dirty = useRef<Set<DraftField>>(new Set());
+  const currentAppId = useRef(app.id);
+  currentAppId.current = app.id;
   const s = useSubmit(onDone, ['notes', 'noticePeriodDays', 'outcome', 'method', 'evidenceSource', 'nextStep']);
   const canMove = ['Applied', 'Screening'].includes(app.stage);
+
+
+  const gate = gateState(file);
+  const screeningState = file.sections?.screening;
+  const screeningUnknown = gate.unknown.screening;
+  const draftKnown = draftRead.status === 'ready' || draftRead.status === 'empty';
+
+  const draftFailed = !screeningUnknown && (draftRead.status === 'error' || draftRead.status === 'unavailable');
+  const draftBlocked = screeningUnknown || !draftKnown;
   useEffect(() => {
-    let cancelled = false;
-    const applicationId = app.id;
+    dirty.current.clear();
     setOutcome('Passed');
     setNotes('');
     setNotice('');
@@ -115,26 +129,40 @@ export function ScreenDrawer({ file, onClose, onDone }: DrawerProps) {
     setNextStep('');
     setMove(true);
     setDraftSaved(false);
-    void loadScreeningDraft(applicationId).then((draft) => {
-      if (cancelled || !draft) return;
-      if (draft.applicationId && draft.applicationId !== applicationId) return;
-      setOutcome(draft.outcome);
-      setNotes(draft.notes ?? '');
-      setNotice(draft.noticePeriodDays == null ? '' : String(draft.noticePeriodDays));
-      setMethod(draft.method?.trim() ? draft.method.trim() : 'Phone');
-      setEvidenceSource(draft.evidenceSource ?? '');
-      setNextStep(draft.nextStep ?? '');
-      setMove(draft.moveToInterview);
-    }).catch(() => undefined);
-    return () => { cancelled = true; };
   }, [app.id]);
+  useEffect(() => {
+    let cancelled = false;
+    const applicationId = app.id;
+    if (screeningState?.status === 'unavailable') {
+      setDraftRead({ status: 'unavailable' });
+      return undefined;
+    }
+    setDraftRead({ status: 'loading' });
+    void loadScreeningDraft(applicationId).then((result) => {
+      if (cancelled) return;
+      setDraftRead(result);
+      if (result.status !== 'ready') return;
+      const draft = result.draft;
+      const edited = dirty.current;
+      if (!edited.has('outcome')) setOutcome(draft.outcome);
+      if (!edited.has('notes')) setNotes(draft.notes ?? '');
+      if (!edited.has('notice')) setNotice(draft.noticePeriodDays == null ? '' : String(draft.noticePeriodDays));
+      if (!edited.has('method')) setMethod(draft.method?.trim() ? draft.method.trim() : 'Phone');
+      if (!edited.has('evidenceSource')) setEvidenceSource(draft.evidenceSource ?? '');
+      if (!edited.has('nextStep')) setNextStep(draft.nextStep ?? '');
+      if (!edited.has('move')) setMove(draft.moveToInterview);
+    });
+    return () => { cancelled = true; };
+  }, [app.id, draftAttempt, screeningState?.status]);
   const saveDraft = () => {
+    if (draftBlocked || draftBusy || s.busy) return;
+    const applicationId = app.id;
     setDraftBusy(true);
     setDraftSaved(false);
     s.setError(null);
     void (async () => {
       try {
-        await saveScreeningDraft(app.id, {
+        await saveScreeningDraft(applicationId, {
           outcome,
           notes: notes.trim() || null,
           noticePeriodDays: notice.trim() === '' ? null : Number(notice),
@@ -143,16 +171,18 @@ export function ScreenDrawer({ file, onClose, onDone }: DrawerProps) {
           nextStep: nextStep.trim() || null,
           moveToInterview: move,
         });
-        setDraftSaved(true);
+        if (currentAppId.current === applicationId) setDraftSaved(true);
       } catch (e) {
-        s.setError(errorText(e));
+        if (currentAppId.current === applicationId) s.setError(errorText(e));
       } finally {
-        setDraftBusy(false);
+        if (currentAppId.current === applicationId) setDraftBusy(false);
       }
     })();
   };
+  const touch = (field: DraftField) => { dirty.current.add(field); };
   const submit = (e?: FormEvent) => {
     e?.preventDefault();
+    if (draftBlocked || draftBusy || s.busy) return;
     const next: Record<string, string> = {};
     if (!method.trim()) next.method = 'Choose how you screened.';
     if (!evidenceSource.trim()) next.evidenceSource = 'Write the evidence source.';
@@ -177,26 +207,42 @@ export function ScreenDrawer({ file, onClose, onDone }: DrawerProps) {
   return (
     <DrawerV2 open onClose={onClose} kicker="Screen" title={`Log screen — ${candidateName(app)}`} subtitle={`${app.positionTitle ?? ''} · ${app.stage}`}
       confirmClose={() => !notes.trim() || window.confirm('Discard the screen note?')}
-      primaryAction={<ButtonV2 onClick={() => submit()} loading={s.busy} disabled={draftBusy}>{move && canMove && outcome === 'Passed' ? 'Save and move to Interview' : 'Save screen'}</ButtonV2>}
+      primaryAction={<ButtonV2 onClick={() => submit()} loading={s.busy} disabled={draftBusy || draftBlocked}>{move && canMove && outcome === 'Passed' ? 'Save and move to Interview' : 'Save screen'}</ButtonV2>}
       secondaryAction={<ButtonV2 kind="secondary" onClick={onClose}>Cancel</ButtonV2>}>
       <form className="rf2-drawer-form" onSubmit={submit} noValidate>
-        <SelectV2 label="Outcome" value={outcome} onChange={(e) => setOutcome(e.target.value as typeof outcome)} error={s.at('outcome')}>
+        {screeningUnknown ? (
+          screeningState?.status === 'loading' ? <Note>Loading screening. Saving stays off until this read finishes.</Note>
+          : screeningState?.status === 'unavailable' ? <Note tone="warning">Screening is not available for this role. Saving is turned off so a failed read is not replaced.</Note>
+          : <Note tone="warning">Screening could not be checked. Saving is turned off so a failed read is not replaced.</Note>
+        ) : null}
+        {!screeningUnknown && draftRead.status === 'loading' ? <Note>Loading screening draft. Saving stays off until this read finishes.</Note> : null}
+        {!screeningUnknown && draftRead.status === 'unavailable' ? <Note tone="warning">The screening draft is not available for this role. Saving is turned off so a failed read is not replaced.</Note> : null}
+        {!screeningUnknown && draftRead.status === 'error' ? (
+
+
+          <Note tone="warning">
+            {draftRead.failure === 'not-found' ? 'The screening draft could not be found for this file.' : draftRead.failure === 'transient' ? 'The screening draft could not be loaded. Try again.' : draftRead.message}
+            {' '}Saving stays off until this read succeeds.
+          </Note>
+        ) : null}
+        {draftFailed ? <ButtonV2 kind="secondary" onClick={() => { setDraftRead({ status: 'loading' }); setDraftAttempt((n) => n + 1); }}>Retry screening draft</ButtonV2> : null}
+        <SelectV2 label="Outcome" value={outcome} onChange={(e) => { touch('outcome'); setOutcome(e.target.value as typeof outcome); }} error={s.at('outcome')}>
           <option value="Passed">Pass</option><option value="On Hold">On hold</option><option value="Failed">Fail</option>
         </SelectV2>
-        <SelectV2 label="Method" required value={method} onChange={(e) => setMethod(e.target.value)} error={errs.method ?? s.at('method')}>
+        <SelectV2 label="Method" required value={method} onChange={(e) => { touch('method'); setMethod(e.target.value); }} error={errs.method ?? s.at('method')}>
           {SCREEN_METHODS.map((item) => <option key={item} value={item}>{item}</option>)}
         </SelectV2>
-        <InputV2 label="Evidence source" required placeholder="Screening call" maxLength={500} value={evidenceSource} onChange={(e) => setEvidenceSource(e.target.value)} error={errs.evidenceSource ?? s.at('evidenceSource')} />
-        <SelectV2 label="Next step" required placeholder="Choose next step" value={nextStep} onChange={(e) => setNextStep(e.target.value)} error={errs.nextStep ?? s.at('nextStep')}>
+        <InputV2 label="Evidence source" required placeholder="Screening call" maxLength={500} value={evidenceSource} onChange={(e) => { touch('evidenceSource'); setEvidenceSource(e.target.value); }} error={errs.evidenceSource ?? s.at('evidenceSource')} />
+        <SelectV2 label="Next step" required placeholder="Choose next step" value={nextStep} onChange={(e) => { touch('nextStep'); setNextStep(e.target.value); }} error={errs.nextStep ?? s.at('nextStep')}>
           {SCREEN_NEXT_STEPS.map((item) => <option key={item} value={item}>{item}</option>)}
         </SelectV2>
-        <TextareaV2 label="Screen note" required value={notes} onChange={(e) => setNotes(e.target.value)} error={errs.notes ?? s.at('notes')}
+        <TextareaV2 label="Screen note" required value={notes} onChange={(e) => { touch('notes'); setNotes(e.target.value); }} error={errs.notes ?? s.at('notes')}
           hint="What you checked and what you found, with evidence. Required to move to Interview." rows={6} />
-        <InputV2 label="Notice period (days)" type="number" min={0} max={3650} inputMode="numeric" value={notice} onChange={(e) => setNotice(e.target.value)} error={s.at('noticePeriodDays')} />
+        <InputV2 label="Notice period (days)" type="number" min={0} max={3650} inputMode="numeric" value={notice} onChange={(e) => { touch('notice'); setNotice(e.target.value); }} error={s.at('noticePeriodDays')} />
         {canMove && outcome === 'Passed' ? (
-          <label className="rf2-check"><input type="checkbox" checked={move} onChange={(e) => setMove(e.target.checked)} /> Move to Interview after saving</label>
+          <label className="rf2-check"><input type="checkbox" checked={move} onChange={(e) => { touch('move'); setMove(e.target.checked); }} /> Move to Interview after saving</label>
         ) : null}
-        <ButtonV2 kind="secondary" onClick={saveDraft} loading={draftBusy} disabled={s.busy}>Save draft</ButtonV2>
+        <ButtonV2 kind="secondary" onClick={saveDraft} loading={draftBusy} disabled={s.busy || draftBlocked}>Save draft</ButtonV2>
         {draftSaved ? <Note>Draft saved. It stays private to you on this application.</Note> : null}
         <Note>Pay is not recorded here.</Note>
         <FormError text={s.error} />
@@ -244,6 +290,7 @@ export function ScheduleDrawer({ file, onClose, onDone, params }: DrawerProps) {
     }
     setErrs(next);
     if (Object.keys(next).length) return;
+    if (!openInterview && ((needsMove && (gate.unknown.screening || !gate.screenNote)) || gate.unknown.interviews)) return;
     const start = cairoIso(date, time);
     const end = new Date(new Date(start).getTime() + Number(duration) * 60_000).toISOString();
     void s.run(async () => {
@@ -261,12 +308,12 @@ export function ScheduleDrawer({ file, onClose, onDone, params }: DrawerProps) {
   };
   return (
     <DrawerV2 open onClose={onClose} kicker="Interview" title={`${openInterview ? 'Reschedule interview' : 'Schedule interview'} — ${candidateName(app)}`} subtitle={app.positionTitle}
-      primaryAction={<ButtonV2 onClick={submit} loading={s.busy} disabled={!openInterview && needsMove && !gate.screenNote}>{openInterview ? 'Reschedule' : 'Schedule interview'}</ButtonV2>}
+      primaryAction={<ButtonV2 onClick={submit} loading={s.busy} disabled={!openInterview && ((needsMove && (gate.unknown.screening || !gate.screenNote)) || gate.unknown.interviews)}>{openInterview ? 'Reschedule' : 'Schedule interview'}</ButtonV2>}
       secondaryAction={<ButtonV2 kind="secondary" onClick={onClose}>Cancel</ButtonV2>}>
       <div className="rf2-drawer-form">
         {needsMove ? (
           <ul className="rf2-gates" aria-label="Gate to Interview">
-            <Gate ok={gate.screenNote} label="Screen note saved" hint="log the screen first" />
+            <Gate ok={gate.screenNote} unknown={gate.unknown.screening} label="Screen note saved" hint="log the screen first" />
           </ul>
         ) : null}
         {openInterview ? null : (
@@ -301,7 +348,9 @@ export function ScheduleDrawer({ file, onClose, onDone, params }: DrawerProps) {
 export function ScorecardDrawer({ file, onClose, onDone, params }: DrawerProps) {
   const app = file.workspace.application;
   const { user } = useAuth();
+  const gate = gateState(file);
   const interviews = file.interviews.filter((i) => i.status !== 'Cancelled');
+  const scoreUnknown = gate.unknown.interviews || gate.unknown.scorecards;
   const [interviewId, setInterviewId] = useState(params?.get('interview') ?? interviews[interviews.length - 1]?.id ?? '');
   const iv: InterviewItem | undefined = interviews.find((i) => i.id === interviewId);
   const cards = file.scorecards[interviewId] ?? [];
@@ -320,24 +369,25 @@ export function ScorecardDrawer({ file, onClose, onDone, params }: DrawerProps) 
     if (!form.notes.trim()) next.notes = 'Write the evidence behind your rating.';
     if (revising && form.reason.trim().length < 3) next.reason = 'Say why you are revising (at least 3 characters).';
     setErrs(next);
-    if (Object.keys(next).length) return;
+    if (Object.keys(next).length || scoreUnknown) return;
     const body = { overallRating: form.overallRating || 1, recommendation: form.recommendation, notes: form.notes.trim(), ...(form.strengths.trim() ? { strengths: form.strengths.trim() } : {}), ...(form.concerns.trim() ? { concerns: form.concerns.trim() } : {}) };
     void s.run(() => (revising ? reviseScorecard(interviewId, { ...body, reason: form.reason.trim() }) : submitScorecard(interviewId, { ...body, status })));
   };
   return (
     <DrawerV2 open onClose={onClose} kicker="Scorecard" title={`Scorecard — ${candidateName(app)}`} subtitle={iv ? `${iv.title} · ${new Date(iv.scheduledStart).toLocaleDateString('en-GB', { timeZone: TZ, day: 'numeric', month: 'short' })}` : 'No interview yet'}
-      primaryAction={editable && iv ? <ButtonV2 onClick={() => send('Submitted')} loading={s.busy} disabled={!ended && !revising}>{revising ? 'Submit revision' : 'Submit scorecard'}</ButtonV2>
+      primaryAction={scoreUnknown ? <ButtonV2 disabled>Scorecard unavailable</ButtonV2> : editable && iv ? <ButtonV2 onClick={() => send('Submitted')} loading={s.busy} disabled={!ended && !revising}>{revising ? 'Submit revision' : 'Submit scorecard'}</ButtonV2>
         : submitted ? <ButtonV2 kind="secondary" onClick={() => setRevising(true)}>Revise with a reason</ButtonV2> : undefined}
-      secondaryAction={editable && iv && !revising ? <ButtonV2 kind="secondary" onClick={() => send('Draft')} disabled={s.busy}>Save draft</ButtonV2> : <ButtonV2 kind="tertiary" onClick={onClose}>Close</ButtonV2>}>
+      secondaryAction={scoreUnknown ? <ButtonV2 kind="tertiary" onClick={onClose}>Close</ButtonV2> : editable && iv && !revising ? <ButtonV2 kind="secondary" onClick={() => send('Draft')} disabled={s.busy}>Save draft</ButtonV2> : <ButtonV2 kind="tertiary" onClick={onClose}>Close</ButtonV2>}>
       <div className="rf2-drawer-form">
         {interviews.length > 1 ? (
           <SelectV2 label="Interview" value={interviewId} onChange={(e) => setInterviewId(e.target.value)}>
             {interviews.map((i) => <option key={i.id} value={i.id}>{i.title}</option>)}
           </SelectV2>
         ) : null}
-        {!iv ? <Note tone="warning">There is no interview on this file yet. Schedule one first.</Note> : null}
-        {iv && !ended && !submitted ? <Note>The interview has not ended. You can save a draft now and submit after it ends.</Note> : null}
-        <ul className="rf2-gates" aria-label="Gate to Offer"><Gate ok={gateState(file).scorecard} label="A scorecard is submitted" hint="Offer is blocked until then" /></ul>
+        {scoreUnknown ? <Note tone="warning">Interviews or scorecards could not be checked. Submitting is turned off so a failed read is not treated as a missing scorecard.</Note> : null}
+        {!scoreUnknown && !iv ? <Note tone="warning">There is no interview on this file yet. Schedule one first.</Note> : null}
+        {!scoreUnknown && iv && !ended && !submitted ? <Note>The interview has not ended. You can save a draft now and submit after it ends.</Note> : null}
+        <ul className="rf2-gates" aria-label="Gate to Offer"><Gate ok={gate.scorecard} unknown={gate.unknown.scorecards || gate.unknown.interviews} label="A scorecard is submitted" hint="Offer is blocked until then" /></ul>
         {cards.filter((c) => c !== mine).map((c) => <ScorecardSummary key={c.id} card={c} />)}
         {submitted && !revising ? <ScorecardSummary card={mine} own /> : null}
         {editable && iv ? (
@@ -423,7 +473,7 @@ export function OfferDraftDrawer({ file, onClose, onDone }: DrawerProps) {
     const next: Record<string, string> = {};
     if (!terms.proposedJoiningDate) next.start = 'Pick the start date.';
     setErrs(next);
-    if (Object.keys(next).length) return;
+    if (Object.keys(next).length || gate.unknown.offer || (needsMove && (gate.unknown.scorecards || !gate.scorecard))) return;
     void s.run(async () => {
       if (needsMove) await advanceTo(app, 'Offer');
       let offerId: string;
@@ -435,10 +485,11 @@ export function OfferDraftDrawer({ file, onClose, onDone }: DrawerProps) {
   };
   return (
     <DrawerV2 open onClose={onClose} kicker={`Offer · Draft v${nextVersion}`} title={`${prior ? (sentBack(prior) ? 'Revise and resubmit' : 'New offer version') : 'Draft offer'} — ${candidateName(app)}`}
-      primaryAction={<ButtonV2 onClick={submit} loading={s.busy} disabled={needsMove && !gate.scorecard}>Submit for approval</ButtonV2>}
+      primaryAction={<ButtonV2 onClick={submit} loading={s.busy} disabled={gate.unknown.offer || (needsMove && (gate.unknown.scorecards || !gate.scorecard))}>Submit for approval</ButtonV2>}
       secondaryAction={<ButtonV2 kind="secondary" onClick={onClose}>Cancel</ButtonV2>}>
       <div className="rf2-drawer-form">
-        {needsMove ? <ul className="rf2-gates" aria-label="Gate to Offer"><Gate ok={gate.scorecard} label="A scorecard is submitted" hint="submit or chase the scorecard first" /></ul> : null}
+        {gate.unknown.offer ? <Note tone="warning">The offer could not be checked. A new draft stays unavailable so this failure is not treated as a missing offer.</Note> : null}
+        {needsMove ? <ul className="rf2-gates" aria-label="Gate to Offer"><Gate ok={gate.scorecard} unknown={gate.unknown.scorecards} label="A scorecard is submitted" hint="submit or chase the scorecard first" /></ul> : null}
         {prior && sentBack(prior) ? <Note tone="warning">The manager sent v{pv?.versionNumber} back{back?.comment ? `: “${back.comment}”` : ''}. Change the terms and submit v{nextVersion}.</Note> : null}
         <InputV2 label="Job" readOnly value={[app.positionTitle, app.vacancyBranchName].filter(Boolean).join(' · ')} />
         <TermsFields terms={terms} set={setTerms} errs={errs} at={s.at} />
@@ -634,7 +685,10 @@ export function PreHireDrawer({ file, onDone }: DrawerProps) {
   const [recording, setRecording] = useState(false);
   const [checkErr, setCheckErr] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const allDone = checks.length > 0 && checks.every((c) => c.verified);
+  const checksKnown = !gate.unknown.joining;
+  const offerKnown = !gate.unknown.offer;
+  const hiringKnown = !gate.unknown.hiring;
+  const allDone = checksKnown && checks.length > 0 && checks.every((c) => c.verified);
   const inOffer = app.stage === 'Offer';
   const status = file.hiring?.status ?? '';
   const canRecord = Boolean(user?.permissions?.includes('RECORD_ACTUAL_JOINING'));
@@ -660,29 +714,31 @@ export function PreHireDrawer({ file, onDone }: DrawerProps) {
     } catch (e) { setCheckErr(errorText(e)); } finally { setRecording(false); }
   };
   const primary = inOffer
-    ? <ButtonV2 onClick={() => s.run(async () => { await advanceTo(app, 'Pre-Hire'); if (!file.hiring && file.offer) await createHiringCase(file.offer.id); })} loading={s.busy} disabled={!gate.offerAccepted}>Move to Pre-hire</ButtonV2>
+    ? <ButtonV2 onClick={() => { if (!offerKnown || !gate.offerAccepted) return; void s.run(async () => { await advanceTo(app, 'Pre-Hire'); if (!file.hiring && file.offer) await createHiringCase(file.offer.id); }); }} loading={s.busy} disabled={!offerKnown || !gate.offerAccepted}>Move to Pre-hire</ButtonV2>
     : waitingApproval
       ? <ButtonV2 disabled>Waiting for final approval</ButtonV2>
       : awaiting && canRecord
-        ? <ButtonV2 onClick={() => void record()} loading={recording} disabled={!allDone}>Record actual joining</ButtonV2>
+        ? <ButtonV2 onClick={() => { if (!hiringKnown || !checksKnown) return; void record(); }} loading={recording} disabled={!allDone || !hiringKnown}>Record actual joining</ButtonV2>
         : awaiting
           ? <ButtonV2 disabled>Waiting for the responsible recruiter</ButtonV2>
           : joined
             ? <ButtonV2 disabled>Joined</ButtonV2>
-            : <ButtonV2 onClick={() => s.run(async () => {
+            : <ButtonV2 onClick={() => { if (!checksKnown || !hiringKnown || !offerKnown) return; void s.run(async () => {
                 let caseId = file.hiring?.id;
                 if (!caseId) {
                   if (!file.offer) throw new Error('An accepted offer is required before final approval.');
                   caseId = (await createHiringCase(file.offer.id)).id;
                 }
                 await submitHiringCase(caseId);
-              })} loading={s.busy} disabled={!allDone || app.stage !== 'Pre-Hire'}>Submit for final approval</ButtonV2>;
+              }); }} loading={s.busy} disabled={!allDone || app.stage !== 'Pre-Hire' || !hiringKnown || !offerKnown}>Submit for final approval</ButtonV2>;
   return (
     <DrawerV2 open onClose={onDone} kicker="Pre-hire" title={`Pre-hire checklist — ${candidateName(app)}`}
       primaryAction={primary}
       secondaryAction={<ButtonV2 kind="secondary" onClick={onDone}>Close</ButtonV2>}>
       <div className="rf2-drawer-form">
-        {inOffer ? <ul className="rf2-gates" aria-label="Gate to Pre-hire"><Gate ok={gate.offerAccepted} label="The candidate accepted the offer" hint="record the answer first" /></ul> : null}
+        {inOffer ? <ul className="rf2-gates" aria-label="Gate to Pre-hire"><Gate ok={gate.offerAccepted} unknown={gate.unknown.offer} label="The candidate accepted the offer" hint="record the answer first" /></ul> : null}
+        {!checksKnown ? <Note tone="warning">Joining checks could not be checked. Verification and final approval stay off so a failed read is not treated as a job with no checks.</Note> : null}
+        {!hiringKnown ? <Note tone="warning">Hiring could not be checked. A new hiring case is not opened from this view.</Note> : null}
         <ul className="rf2-checklist" aria-label="Joining checks">
           {checks.map((row) => {
             const ok = Boolean(row.verified);
@@ -700,7 +756,7 @@ export function PreHireDrawer({ file, onDone }: DrawerProps) {
             );
           })}
         </ul>
-        {checks.length === 0 ? <Note tone="warning">This job has no required checks on the file yet.</Note> : null}
+        {checksKnown && checks.length === 0 ? <Note tone="warning">This job has no required checks on the file yet.</Note> : null}
         <Note>Verified checks are recorded on the file. They are not joining. The responsible recruiter records joining once, after final approval.</Note>
         {notice ? <p className="rf2-drawer-form__note" role="status">{notice}</p> : null}
         <FormError text={checkErr ?? s.error} />
