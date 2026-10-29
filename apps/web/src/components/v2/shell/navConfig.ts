@@ -90,9 +90,9 @@ export const CLASSIC_NAV: SeatNavItem[] = [
 ];
 
 /** Classic labels are retired from the sidebar. Signed-in visits redirect in v2Redirect. */
-export function permittedClassicItems(_permissions?: readonly string[], _isAdministrator = false, _interviewerOnly = false): SeatNavItem[] {
+export const permittedClassicItems: (permissions?: readonly string[], isAdministrator?: boolean, interviewerOnly?: boolean) => SeatNavItem[] = () => {
   return [];
-}
+};
 
 export function permittedNavItems(seat: Seat, permissions: readonly string[] | undefined, isAdministrator = false, recruiterOnly = false, interviewer = false): SeatNavItem[] {
   const held = new Set(permissions ?? []);
