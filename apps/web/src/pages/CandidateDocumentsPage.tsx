@@ -27,6 +27,7 @@ export function CandidateDocumentsPage() {
   const { id } = useParams<{ id: string }>();
   const [params] = useSearchParams();
   const { user } = useAuth();
+  const canEdit = Boolean(user?.permissions.includes('CANDIDATE_EDIT') || user?.roles.some((role) => role.code === 'ADMINISTRATOR'));
   const seat = useV2Shell()?.seat ?? resolveSeat(user);
   const back = allowedReturn(params.get('returnTo'), routeActor(seat, user));
   const [candidate, setCandidate] = useState<Candidate | null>(null);
@@ -72,7 +73,7 @@ export function CandidateDocumentsPage() {
 
   const handleUpload = async (e: FormEvent) => {
     e.preventDefault();
-    if (!id || !candidate || (!fileName && !selectedFile)) return;
+    if (!canEdit || !id || !candidate || (!fileName && !selectedFile)) return;
     setSubmitting(true);
     setUploadError(null);
 
@@ -216,10 +217,9 @@ export function CandidateDocumentsPage() {
               Back to profile
             </Link>
           </Button>
-          <Button variant="primary" size="sm" onClick={() => setIsUploadModalOpen(true)}>
-            <Icon name="plus" size={14} />
-            Add document record
-          </Button>
+          {canEdit ? <Button variant="primary" size="sm" onClick={() => setIsUploadModalOpen(true)}>
+            <Icon name="plus" size={14} /> Add document record
+          </Button> : null}
         </>
       }
     >
@@ -239,9 +239,9 @@ export function CandidateDocumentsPage() {
       )}
 
       <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
-        <MetricCard label="Total Documents" value={documents.length} detail={`${cvCount} CVs on record`} tone="action" />
-        <MetricCard label="Verified Files" value={verifiedCount} detail="Passed virus & format scan" tone="success" />
-        <MetricCard label="Pending Review" value={pendingCount} detail="Awaiting verification" tone="warning" />
+        <MetricCard label="Total Documents" value={documentsError ? '—' : documents.length} detail={documentsError ? 'Document records unavailable' : `${cvCount} CVs on record`} tone="action" />
+        <MetricCard label="Verified Files" value={documentsError ? '—' : verifiedCount} detail="Passed virus & format scan" tone="success" />
+        <MetricCard label="Pending Review" value={documentsError ? '—' : pendingCount} detail="Awaiting verification" tone="warning" />
       </div>
 
       <section className="rf-table-shell rf-long-content overflow-hidden rounded-2xl border border-rf-border bg-rf-surface shadow-xs">
@@ -275,7 +275,7 @@ export function CandidateDocumentsPage() {
                   <PageState
                     kind="empty"
                     title="No document records"
-                    description="Add metadata for a CV, educational certificate, or ID document."
+                    description={canEdit ? 'Add metadata for a CV, educational certificate, or ID document.' : 'No documents have been recorded for this person.'}
                   />
                 </td>
               </tr>
