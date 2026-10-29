@@ -63,7 +63,12 @@ export function CandidateDetailPage() {
   const back = allowedReturn(searchParams.get('returnTo'), routeActor(seat, user));
   const backHref = back ?? '/candidates';
   // B2 (v2 §3): no delete for anyone. The action archives the candidate.
-  const canDeleteCandidate = Boolean(user?.permissions.includes('CANDIDATE_EDIT'));
+  const isAdministrator = Boolean(user?.roles.some((role) => role.code === 'ADMINISTRATOR'));
+  const canEditCandidate = isAdministrator || Boolean(user?.permissions.includes('CANDIDATE_EDIT'));
+  const canViewApplications = isAdministrator || Boolean(user?.permissions.includes('APPLICATION_VIEW'));
+  const canViewInterviews = isAdministrator || Boolean(user?.permissions.includes('VACANCY_VIEW'));
+  const canAssign = isAdministrator || (canViewInterviews && Boolean(user?.permissions.includes('APPLICATION_CREATE')));
+  const canDeleteCandidate = canEditCandidate;
 
   // Core candidate identity state
   const [candidate, setCandidate] = useState<Candidate | null>(null);
@@ -142,16 +147,16 @@ export function CandidateDetailPage() {
     // records are not exposed through whole-collection client filtering.
     const validCandidateId = id && id !== 'undefined' && id !== 'null' ? id : null;
     const [appsRes, interviewsRes, offersRes, vacsRes] = await Promise.allSettled([
-      validCandidateId
+      validCandidateId && canViewApplications
         ? getApi<PaginatedResult<Application>>(`/applications?candidateId=${encodeURIComponent(validCandidateId)}&page=1&pageSize=100`)
-        : Promise.resolve({ data: [], total: 0, page: 1, pageSize: 100, totalPages: 0 } as PaginatedResult<Application>),
-      validCandidateId
+        : Promise.reject(new Error('Application history is not available for your role.')),
+      validCandidateId && canViewInterviews
         ? getApi<Interview[]>(`/interviews?candidateId=${encodeURIComponent(validCandidateId)}`)
-        : Promise.resolve([]),
-      validCandidateId
+        : Promise.reject(new Error('Interviews are not available for your role.')),
+      validCandidateId && canViewApplications
         ? getApi<Offer[]>(`/offers?candidateId=${encodeURIComponent(validCandidateId)}`)
-        : Promise.resolve([]),
-      fetchVacancyList(),
+        : Promise.reject(new Error('Offers are not available for your role.')),
+      canAssign && canViewInterviews ? fetchVacancyList() : Promise.reject(new Error('Job choices are not available for your role.')),
     ]);
 
     if (appsRes.status === 'fulfilled') {
@@ -193,12 +198,12 @@ export function CandidateDetailPage() {
 
   useEffect(() => {
     void loadAllData();
-  }, [id]);
+  }, [id, canViewApplications, canViewInterviews, canAssign]);
 
   // ─── Individual Tab Retry Handlers ────────────────────────────
 
   const retryApplications = async () => {
-    if (!id) return;
+    if (!id || !canViewApplications) return;
     setApplicationsLoading(true);
     setApplicationsError(null);
     try {
@@ -215,6 +220,7 @@ export function CandidateDetailPage() {
   };
 
   const retryInterviewsWithAppIds = async () => {
+    if (!canViewInterviews) return;
     setInterviewsLoading(true);
     setInterviewsError(null);
     try {
@@ -232,6 +238,7 @@ export function CandidateDetailPage() {
   };
 
   const retryOffersWithAppIds = async () => {
+    if (!canViewApplications) return;
     if (!id || id === 'undefined' || id === 'null') {
       setOffers([]);
       setOffersLoading(false);
@@ -257,7 +264,7 @@ export function CandidateDetailPage() {
 
   const handleApply = async (e: FormEvent) => {
     e.preventDefault();
-    if (!id || !selectedVacancyId) return;
+    if (!canAssign || !id || !selectedVacancyId) return;
 
     setApplySubmitting(true);
     setApplyError(null);
@@ -277,7 +284,7 @@ export function CandidateDetailPage() {
 
   const handleAddTag = async (e: FormEvent) => {
     e.preventDefault();
-    if (!id || !candidate || !newTag.trim()) return;
+    if (!canEditCandidate || !id || !candidate || !newTag.trim()) return;
 
     setTagSubmitting(true);
     setTagError(null);
@@ -363,18 +370,17 @@ export function CandidateDetailPage() {
   const fullName =
     [candidate.firstName, candidate.lastName].filter(Boolean).join(' ').trim() || 'Candidate';
 
-  const activeApplication =
-    applications.find((app) => app.stage !== 'Rejected' && app.stage !== 'Withdrawn') ??
-    applications[0] ??
-    null;
+  const activeApplication = canViewApplications && !applicationsLoading && !applicationsError
+    ? applications.find((app) => app.stage !== 'Rejected' && app.stage !== 'Withdrawn') ?? applications[0] ?? null
+    : null;
 
   // ─── Tab Item Definitions ─────────────────────────────────────
 
   const tabItems: TabItem[] = [
     { key: 'overview', label: 'Overview', controls: 'tabpanel-overview' },
-    { key: 'applications', label: 'Applications', count: applications.length, controls: 'tabpanel-applications' },
-    { key: 'interviews', label: 'Interviews', count: interviews.length, controls: 'tabpanel-interviews' },
-    { key: 'offers', label: 'Offers', count: offers.length, controls: 'tabpanel-offers' },
+    { key: 'applications', label: 'Applications', count: !canViewApplications || applicationsLoading || applicationsError ? undefined : applications.length, controls: 'tabpanel-applications' },
+    { key: 'interviews', label: 'Interviews', count: !canViewInterviews || interviewsLoading || interviewsError ? undefined : interviews.length, controls: 'tabpanel-interviews' },
+    { key: 'offers', label: 'Offers', count: !canViewApplications || offersLoading || offersError ? undefined : offers.length, controls: 'tabpanel-offers' },
   ];
 
   // ─── Overview Details (P0.2: Null fields hidden, not fallback strings) ───
@@ -490,10 +496,10 @@ export function CandidateDetailPage() {
               Back
             </Link>
           </Button>
-          <Button variant="primary" size="sm" onClick={() => setIsApplyModalOpen(true)}>
+          {canAssign ? <Button variant="primary" size="sm" onClick={() => setIsApplyModalOpen(true)}>
             <Icon name="plus" size={13} />
             Assign to job
-          </Button>
+          </Button> : null}
           <Button variant="secondary" size="sm" asChild>
             <Link to={withReturnTo(`/candidates/${encodeURIComponent(candidate.id)}/documents`, back)}>
               <Icon name="file-text" size={13} />
@@ -534,7 +540,7 @@ export function CandidateDetailPage() {
         email={candidate.email || null}
         phone={candidate.phone || null}
         location={candidate.location || null}
-        onAddTag={() => setIsTagModalOpen(true)}
+        onAddTag={canEditCandidate ? () => setIsTagModalOpen(true) : undefined}
       />
 
       {activeApplication ? (
@@ -545,9 +551,11 @@ export function CandidateDetailPage() {
           </Link>
           {activeApplication.stage ? ` · ${activeApplication.stage}` : ''}
         </p>
-      ) : (
+      ) : applicationsError ? (
+        <p className="text-xs text-slate-600 dark:text-slate-300">Application history could not be checked.</p>
+      ) : !applicationsLoading && canAssign ? (
         <p className="text-xs text-slate-600 dark:text-slate-300">Next: assign this person to a job.</p>
-      )}
+      ) : null}
 
       {/* Tabs Navigation */}
       <CandidateActivityPanel key={candidate.id} candidateId={candidate.id} />
@@ -596,17 +604,19 @@ export function CandidateDetailPage() {
 
         {/* Applications Tab */}
         <TabPanel id="applications" activeKey={activeTab}>
-          {applicationsLoading ? (
+          {!canViewApplications ? (
+            <PageState kind="forbidden" title="Applications unavailable" description="Application history is not available for your role." />
+          ) : applicationsLoading ? (
             <TableSkeleton rows={4} columns={5} />
           ) : applicationsError ? (
             <Alert
               tone="danger"
               title="Failed to load applications"
-              action={
+              action={canViewApplications ?
                 <Button variant="secondary" size="sm" onClick={() => void retryApplications()}>
                   Retry
                 </Button>
-              }
+              : undefined}
             >
               {applicationsError}
             </Alert>
@@ -615,8 +625,8 @@ export function CandidateDetailPage() {
               kind="empty"
               title="No applications"
               description="This person is not on a job yet."
-              actionLabel="Assign to job"
-              onAction={() => setIsApplyModalOpen(true)}
+              actionLabel={canAssign ? 'Assign to job' : undefined}
+              onAction={canAssign ? () => setIsApplyModalOpen(true) : undefined}
             />
           ) : (
             <div className="rf-table-shell overflow-hidden rounded-2xl border border-rf-border-subtle bg-white shadow-xs">
@@ -624,10 +634,10 @@ export function CandidateDetailPage() {
                 <div>
                   <h3 className="text-xs font-semibold text-rf-ink m-0">Applications ({applications.length})</h3>
                 </div>
-                <Button variant="primary" size="sm" onClick={() => setIsApplyModalOpen(true)}>
+                {canAssign ? <Button variant="primary" size="sm" onClick={() => setIsApplyModalOpen(true)}>
                   <Icon name="plus" size={13} />
                   Assign to job
-                </Button>
+                </Button> : null}
               </div>
               <ResponsiveDataView
                 rows={applications}
@@ -641,7 +651,9 @@ export function CandidateDetailPage() {
 
         {/* Interviews Tab */}
         <TabPanel id="interviews" activeKey={activeTab}>
-          {interviewsLoading ? (
+          {!canViewInterviews ? (
+            <PageState kind="forbidden" title="Interviews unavailable" description="Interviews are not available for your role." />
+          ) : interviewsLoading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <TableSkeleton rows={2} columns={3} />
               <TableSkeleton rows={2} columns={3} />
@@ -650,11 +662,11 @@ export function CandidateDetailPage() {
             <Alert
               tone="danger"
               title="Failed to load interviews"
-              action={
+              action={canViewInterviews ?
                 <Button variant="secondary" size="sm" onClick={() => void retryInterviews()}>
                   Retry
                 </Button>
-              }
+              : undefined}
             >
               {interviewsError}
             </Alert>
@@ -738,17 +750,19 @@ export function CandidateDetailPage() {
 
         {/* Offers Tab */}
         <TabPanel id="offers" activeKey={activeTab}>
-          {offersLoading ? (
+          {!canViewApplications ? (
+            <PageState kind="forbidden" title="Offers unavailable" description="Offers are not available for your role." />
+          ) : offersLoading ? (
             <ListSkeleton count={3} />
           ) : offersError ? (
             <Alert
               tone="danger"
               title="Failed to load offers"
-              action={
+              action={canViewApplications ?
                 <Button variant="secondary" size="sm" onClick={() => void retryOffers()}>
                   Retry
                 </Button>
-              }
+              : undefined}
             >
               {offersError}
             </Alert>
