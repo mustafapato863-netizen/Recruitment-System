@@ -43,6 +43,15 @@ describe('#34 LICENSE_CHECK-only (Omar)', () => {
     expect(screen.getAllByRole('link', { name: 'Review case' }).every((link) => link.getAttribute('href') === '/applications/a1?drawer=prehire')).toBe(true);
   });
 
+  it('opens the permitted case when a licence-only response omits application identity', async () => {
+    auth.perms = OMAR;
+    const { applicationId: _applicationId, ...narrowCase } = hc;
+    api.getApi.mockResolvedValue([narrowCase]);
+    render(<MemoryRouter><LicenseManagementPage /></MemoryRouter>);
+    expect((await screen.findAllByText('Nursing license')).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('link', { name: 'Review case' }).every((link) => link.getAttribute('href') === '/hires/hc1')).toBe(true);
+  });
+
   it('hiring case: only licence items, no submit/approve/joining; the file opens on the pre-hire drawer', async () => {
     auth.perms = OMAR;
     api.patchApi.mockRejectedValueOnce(new ApiError(403, 'LICENSE_CHECK only covers license requirements.', { code: 'LICENSE_CHECK_SCOPE' }, { code: 'LICENSE_CHECK_SCOPE' }));

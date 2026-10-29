@@ -152,7 +152,7 @@ function App() {
                   <Route path="/candidates/:id/documents" element={<PermissionGate requiredPermission="CANDIDATE_VIEW"><CandidateDocumentsPage /></PermissionGate>} />
                   <Route path="/cv-bank" element={<PermissionGate requiredPermission="CANDIDATE_VIEW"><CVBankPage /></PermissionGate>} />
                   <Route path="/sourcing-match" element={<PermissionGate requiredPermission="CANDIDATE_VIEW"><TalentPoolPage /></PermissionGate>} />
-                  <Route path="/import" element={<PermissionGate requiredAnyPermission={['CANDIDATE_CREATE', 'VACANCY_REQUEST_CREATE', 'MASTER_DATA_MANAGE']}><BulkImportPage /></PermissionGate>} />
+                  <Route path="/import" element={<PermissionGate requiredAnyPermission={['CANDIDATE_VIEW', 'VACANCY_REQUEST_VIEW', 'MASTER_DATA_VIEW', 'CANDIDATE_CREATE', 'VACANCY_REQUEST_CREATE', 'MASTER_DATA_MANAGE']}><BulkImportPage /></PermissionGate>} />
                   <Route path="/import/:dataset/:jobId" element={<PermissionGate requiredAnyPermission={['CANDIDATE_VIEW', 'VACANCY_REQUEST_VIEW', 'MASTER_DATA_VIEW']}><BulkImportPage /></PermissionGate>} />
                   <Route path="/classic/candidates" element={<PermissionGate requiredPermission="CANDIDATE_VIEW"><CandidatesPage /></PermissionGate>} />
                   <Route path="/classic/vacancies" element={<PermissionGate requiredPermission="VACANCY_VIEW"><VacantListPage /></PermissionGate>} />

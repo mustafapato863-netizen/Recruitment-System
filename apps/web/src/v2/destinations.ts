@@ -76,8 +76,10 @@ const ROUTE_GATES: Array<[RegExp, Gate]> = [
   // #34: final-hire approvers read the file. LICENSE_CHECK opens the same file on the pre-hire drawer.
   [/^\/applications\/[^/]+\/?$/, { any: ['APPLICATION_VIEW', 'FINAL_HIRING_APPROVAL', 'LICENSE_CHECK'] }],
   [/^\/(candidates|cv-bank|sourcing-match|talent-pools|classic\/candidates)(\/|$)/, { all: ['CANDIDATE_VIEW'] }],
-  [/^\/import\/[^/]+\/[^/]+\/?$/, { any: ['CANDIDATE_VIEW', 'VACANCY_REQUEST_VIEW', 'MASTER_DATA_VIEW'] }],
-  [/^\/import\/?$/, { any: ['CANDIDATE_CREATE', 'VACANCY_REQUEST_CREATE', 'MASTER_DATA_MANAGE'] }],
+  [/^\/import\/candidates\/[^/]+\/?$/, { all: ['CANDIDATE_VIEW'] }],
+  [/^\/import\/vacancy-requests\/[^/]+\/?$/, { all: ['VACANCY_REQUEST_VIEW'] }],
+  [/^\/import\/(?:branches|positions|departments|skills|candidate-sources|interview-types)\/[^/]+\/?$/, { all: ['MASTER_DATA_VIEW'] }],
+  [/^\/import\/?$/, { any: ['CANDIDATE_VIEW', 'VACANCY_REQUEST_VIEW', 'MASTER_DATA_VIEW', 'CANDIDATE_CREATE', 'VACANCY_REQUEST_CREATE', 'MASTER_DATA_MANAGE'] }],
   [/^\/(my-interviews|vacancies|interviews|classic\/vacancies)(\/|$)/, { all: ['VACANCY_VIEW'] }],
   [/^\/notifications\/?$/, { all: ['NOTIFICATION_VIEW'] }],
   [/^\/vacancy-requests(\/|$)/, { all: ['VACANCY_REQUEST_VIEW'] }],
@@ -89,9 +91,70 @@ const ROUTE_GATES: Array<[RegExp, Gate]> = [
   [/^\/settings\/targets\/?$/, { any: ['VACANCY_REQUEST_APPROVE', 'USERS_MANAGE', 'VACANCY_MANAGE', 'VACANCY_ASSIGN', 'VACANCY_REASSIGN', 'MASTER_DATA_VIEW'] }],
   [/^\/settings\/?$/, { any: ['USERS_VIEW', 'MASTER_DATA_VIEW', 'OVERRIDE_WORKFLOW', 'AUDIT_VIEW'] }],
 ];
+const MASTER_IMPORT_DATASETS = new Set([
+  'branches',
+  'positions',
+  'departments',
+  'skills',
+  'candidate-sources',
+  'interview-types',
+]);
+const UNSUPPORTED_IMPORT_BATCH_ROUTE = /^\/import\/(?!(?:candidates|vacancy-requests|branches|positions|departments|skills|candidate-sources|interview-types)\/[^/]+\/?$)[^/]+\/[^/]+\/?$/;
+
+function importDatasetViewPermission(dataset: string): string | null {
+  if (dataset === 'candidates') return 'CANDIDATE_VIEW';
+  if (dataset === 'vacancy-requests') return 'VACANCY_REQUEST_VIEW';
+  if (MASTER_IMPORT_DATASETS.has(dataset)) return 'MASTER_DATA_VIEW';
+  return null;
+}
+
+function importDatasetCreatePermission(dataset: string): string | null {
+  if (dataset === 'candidates') return 'CANDIDATE_CREATE';
+  if (dataset === 'vacancy-requests') return 'VACANCY_REQUEST_CREATE';
+  if (MASTER_IMPORT_DATASETS.has(dataset)) return 'MASTER_DATA_MANAGE';
+  return null;
+}
+
+function isInvalidImportQuery(path: string, query: string): boolean {
+  if (!/^\/import\/?$/.test(path) || !query) return false;
+  const params = new URLSearchParams(query);
+  if (params.has('dataset')) {
+    const dataset = params.get('dataset')?.trim() ?? '';
+    if (!importDatasetViewPermission(dataset)) return true;
+  }
+  if (params.has('jobId')) {
+    const jobId = params.get('jobId')?.trim() ?? '';
+    if (!jobId) return true;
+  }
+  return false;
+}
+
 export function canOpenRoute(pathname: string, permissions: readonly string[] | undefined, isAdministrator = false): boolean {
+  const [beforeHash] = pathname.split('#');
+  const [path, query = ''] = beforeHash.split('?');
+  try {
+    decodeURIComponent(path);
+    if (query) decodeURIComponent(query);
+  } catch {
+    return false;
+  }
+  if (UNSUPPORTED_IMPORT_BATCH_ROUTE.test(path) || isInvalidImportQuery(path, query)) return false;
   if (isAdministrator) return true;
-  const gate = ROUTE_GATES.find(([re]) => re.test(pathname))?.[1];
+  if (/^\/import\/?$/.test(path) && query) {
+    const params = new URLSearchParams(query);
+    const dataset = params.get('dataset')?.trim() || null;
+    if (params.has('jobId')) {
+      const requiredView = importDatasetViewPermission(dataset ?? 'candidates');
+      return requiredView ? new Set(permissions ?? []).has(requiredView) : false;
+    }
+    if (dataset) {
+      const requiredView = importDatasetViewPermission(dataset);
+      const requiredCreate = importDatasetCreatePermission(dataset);
+      const held = new Set(permissions ?? []);
+      return Boolean((requiredView && held.has(requiredView)) || (requiredCreate && held.has(requiredCreate)));
+    }
+  }
+  const gate = ROUTE_GATES.find(([re]) => re.test(path))?.[1];
   if (!gate) return true;
   const held = new Set(permissions ?? []);
   return (!gate.all || gate.all.every((p) => held.has(p))) && (!gate.any || gate.any.some((p) => held.has(p)));
@@ -144,17 +207,27 @@ const MY_INTERVIEWS = /^\/my-interviews\/?$/;
  * goes to /my-interviews instead.
  */
 const INTERVIEWER_ONLY_OK = ['/my-work', '/my-interviews', ...COMMON];
+// Temporary, permission-gated bridge for import landing and supported dataset batch review routes.
+const IMPORT_BRIDGE = /^\/import(?:\/(?:candidates|vacancy-requests|branches|positions|departments|skills|candidate-sources|interview-types)\/[^/]+)?\/?$/;
 export function isInterviewerOnly(user: { permissions?: readonly string[] } | null | undefined, interviewer: boolean): boolean {
   return interviewer && !(user?.permissions ?? []).includes('APPLICATION_VIEW');
 }
 export function v2Redirect(seat: Seat, pathname: string, opts: { requisitions?: boolean; interviews?: boolean; interviewerOnly?: boolean; home?: string | null; permissions?: readonly string[]; isAdministrator?: boolean } = {}): string | null {
   // Stay on /applications/:id. A redirect that only adds ?drawer= keeps the same pathname, and the
   // shell would render Navigate instead of the file on every pass. The licence file opens that drawer.
-  const to = v2RedirectByPath(seat, pathname, opts);
-  // A URL, or a redirect target, the route gate refuses goes home instead of the v1 Access Restricted page.
-  if (!opts.permissions) return samePath(pathname, to) ? null : to;
+  const [beforeHash] = pathname.split('#');
+  const [cleanPath, query = ''] = beforeHash.split('?');
   const home = opts.home ?? SEAT_HOME[seat];
-  const target = (to ?? pathname).split('?')[0];
+  try {
+    if (query) decodeURIComponent(query);
+  } catch {
+    return home;
+  }
+  if (isInvalidImportQuery(cleanPath, query)) return home;
+  const to = v2RedirectByPath(seat, cleanPath, opts);
+  // A URL, or a redirect target, the route gate refuses goes home instead of the v1 Access Restricted page.
+  if (!opts.permissions && !opts.isAdministrator) return samePath(pathname, to) ? null : to;
+  const target = to ?? beforeHash;
   if (target !== home && !canOpenRoute(target, opts.permissions, opts.isAdministrator)) return home;
   // A same-path result only adds a query. The shell would replace the page with Navigate and the file would never mount.
   return samePath(pathname, to) ? null : to;
@@ -197,10 +270,13 @@ function v2RedirectByPath(seat: Seat, pathname: string, opts: { requisitions?: b
     const to = m ? rule.to[seat] : undefined;
     if (to) {
       if (opts.requisitions === false && REQUISITIONS.test(to)) return SEAT_HOME[seat];
-      return to.replace('$1', encodeURIComponent(decodeURIComponent(m![1] ?? '')));
+      try { return to.replace('$1', encodeURIComponent(decodeURIComponent(m![1] ?? ''))); }
+      catch { return opts.home ?? SEAT_HOME[seat]; }
     }
   }
   if (opts.interviewerOnly && seat !== 'admin') return INTERVIEWER_ONLY_OK.some((p) => matches(p, pathname)) ? null : '/my-interviews';
+  if (UNSUPPORTED_IMPORT_BATCH_ROUTE.test(pathname)) return opts.home ?? SEAT_HOME[seat];
+  if (seat === 'employee' && IMPORT_BRIDGE.test(pathname)) { try { decodeURIComponent(pathname); return null; } catch { return opts.home ?? SEAT_HOME[seat]; } }
   // B2F-3: an interviewer (any non-admin seat) reads the CV and submits their scorecard on /my-interviews, inside the v2 shell.
   // The Manager seat always may: its own scorecards (Team work → Waiting on you) open there.
   if (MY_INTERVIEWS.test(pathname) && seat !== 'admin') return opts.interviews === false && seat !== 'manager' ? SEAT_HOME[seat] : null;
