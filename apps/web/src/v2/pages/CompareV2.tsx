@@ -4,6 +4,7 @@ import { ArrowLeft, CircleCheck, CircleMinus, CircleX, FileText, Info } from 'lu
 import { EmptyStateV2, ForbiddenStateV2, SkeletonV2, StatusChip } from '../../components/v2';
 import { getApi } from '../../api/client';
 import { fetchCompare, matchErrorFromError, sourceLabel, type CompareInfoCell, type CompareResponse } from '../api/matching';
+import { compareCandidatesReturn, parseCompareIds, usePageReturn, withReturnTo } from '../returnTarget';
 import { jobTitle, type JobDetail } from '../api/jobs';
 import { formatDay } from './OpenJobsV2';
 import './jobs.css';
@@ -21,11 +22,13 @@ function infoText(key: 'notice-period' | 'fit-note', cell?: CompareInfoCell) {
 /** E24 Compare on skills (B6 #13): each cell is written evidence or a written gap. No scores or percentages. */
 export function CompareV2() {
   const [params] = useSearchParams();
-  const job = params.get('job') ?? '';
-  const ids = (params.get('ids') ?? '').split(',').filter(Boolean);
+  const job = (params.get('job') ?? '').trim();
+  const rawIds = params.get('ids') ?? '';
+  const rawCount = rawIds.split(',').map((s) => s.trim()).filter(Boolean).length;
+  const ids = parseCompareIds(rawIds);
   const [state, setState] = useState<{ kind: 'loading' } | { kind: 'ready'; data: CompareResponse; title: string; apps: App[] } | { kind: 'error'; message: string; forbidden?: boolean }>({ kind: 'loading' });
   useEffect(() => {
-    if (!job || ids.length < 2 || ids.length > 4) { setState({ kind: 'error', message: 'Compare 2 to 4 candidates on one job.' }); return; }
+    if (!job || ids.length < 2 || ids.length > 4 || rawCount > 4) { setState({ kind: 'error', message: 'Compare 2 to 4 candidates on one job.' }); return; }
     let live = true;
     Promise.all([
       fetchCompare(job, ids),
@@ -35,9 +38,11 @@ export function CompareV2() {
       .catch((e: { statusCode?: number; message?: string }) => live && setState({ kind: 'error', forbidden: e?.statusCode === 403, message: matchErrorFromError(e)?.message || e?.message || 'Could not compare.' }));
     return () => { live = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [job, params.get('ids')]);
+  }, [job, rawIds]);
 
-  const back = <Link className="rf2-file__back" to="/candidates"><ArrowLeft aria-hidden="true" /> Back to Candidates</Link>;
+  const candidatesReturn = compareCandidatesReturn(params);
+  const fileReturn = usePageReturn() ?? candidatesReturn;
+  const back = <Link className="rf2-file__back" to={candidatesReturn}><ArrowLeft aria-hidden="true" /> Back to Candidates</Link>;
   if (state.kind === 'loading') return <div className="rf2-jobs">{back}<SkeletonV2 lines={6} label="Comparing…" /></div>;
   if (state.kind === 'error') return <div className="rf2-jobs">{back}{state.forbidden ? <ForbiddenStateV2 body={state.message} /> : <div role="alert"><EmptyStateV2 title="Could not compare" body={state.message} /></div>}</div>;
   const { data, title, apps } = state;
@@ -55,8 +60,8 @@ export function CompareV2() {
                 <p className="rf2-jtable__sub">{app ? <><StatusChip tone="info" label={app.stage} /> {app.source ? `Source: ${app.source}` : ''}</> : 'In the bank · not on this job'}</p>
                 {app ? (
                   <div className="rf2-cmp__acts">
-                    <Link className="rf2-btn rf2-btn--secondary rf2-btn--sm" to={`/applications/${encodeURIComponent(app.id)}`}><FileText aria-hidden="true" /> Open file</Link>
-                    {!['Joined', 'Rejected', 'Withdrawn'].includes(app.stage) ? <Link className="rf2-btn rf2-btn--danger-outline rf2-btn--sm" to={`/applications/${encodeURIComponent(app.id)}?drawer=reject`}><CircleX aria-hidden="true" /> Reject for {title}</Link> : null}
+                    <Link className="rf2-btn rf2-btn--secondary rf2-btn--sm" to={withReturnTo(`/applications/${encodeURIComponent(app.id)}`, fileReturn)}><FileText aria-hidden="true" /> Open file</Link>
+                    {!['Joined', 'Rejected', 'Withdrawn'].includes(app.stage) ? <Link className="rf2-btn rf2-btn--danger-outline rf2-btn--sm" to={withReturnTo(`/applications/${encodeURIComponent(app.id)}?drawer=reject`, fileReturn)}><CircleX aria-hidden="true" /> Reject for {title}</Link> : null}
                   </div>
                 ) : null}
               </th>

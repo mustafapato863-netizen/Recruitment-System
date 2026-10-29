@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search } from 'lucide-react';
 import { scopedSearch, type ScopedResult, type ScopedSearch } from '../api/searchNotify';
+import { usePageReturn } from '../returnTarget';
 
 const initials = (n: string) => n.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join('');
 
@@ -14,6 +15,7 @@ export function HeaderSearch({ placeholder, meId }: { placeholder: string; meId:
   const id = useId();
   const wrap = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const pageReturn = usePageReturn();
   const flat: ScopedResult[] = res.kind === 'ready' ? res.data.groups.flatMap((g) => g.items) : [];
 
   useEffect(() => {
@@ -21,11 +23,11 @@ export function HeaderSearch({ placeholder, meId }: { placeholder: string; meId:
     const sig = { aborted: false };
     setRes({ kind: 'loading' });
     const t = window.setTimeout(() => {
-      scopedSearch(q, sig).then((data) => { if (!sig.aborted) { setRes({ kind: 'ready', data }); setActive(-1); } })
+      scopedSearch(q, sig, pageReturn).then((data) => { if (!sig.aborted) { setRes({ kind: 'ready', data }); setActive(-1); } })
         .catch((e: { statusCode?: number; message?: string }) => { if (!sig.aborted) setRes({ kind: 'error', message: e?.statusCode === 403 ? 'Your role does not include search.' : 'Search failed. Try again.' }); });
     }, 250);
     return () => { sig.aborted = true; window.clearTimeout(t); };
-  }, [q, meId]);
+  }, [q, meId, pageReturn]);
   useEffect(() => {
     const onDoc = (e: MouseEvent) => { if (!wrap.current?.contains(e.target as Node)) setOpen(false); };
     document.addEventListener('mousedown', onDoc);

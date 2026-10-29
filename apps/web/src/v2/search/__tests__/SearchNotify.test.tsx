@@ -43,7 +43,7 @@ describe('scopedSearch (client mitigation of an unscoped /search)', () => {
     const flat = r.groups.flatMap((g) => g.items);
     expect(flat.map((i) => [i.title, i.href])).toEqual([
       ['Ahmed Embaby', '/applications/a7'],
-      ['Ahmed Fathy', '/candidates?tab=bank'],
+      ['Ahmed Fathy', '/candidates/c-x'],
       ['HRIS Developer', '/vacancies/v1'],
       ['Pharmacist', '/vacancies/r1'],
       ['Lab Technician', '/vacancies/r9'],
@@ -55,15 +55,31 @@ describe('scopedSearch (client mitigation of an unscoped /search)', () => {
     expect(flat[4]).toMatchObject({ kind: 'redacted-job', meta: 'SGH Riyadh · 1 of 2 seats' });
     expect(flat[5].meta).toBe('High · Due 12 Oct');
     expect(r.hidden).toBe(3);
+    const kept = await scopedSearch('Ahmed', undefined, '/my-work?filter=waiting');
+    const keptFlat = kept.groups.flatMap((g) => g.items);
+    expect(keptFlat.find((i) => i.title === 'Ahmed Embaby')?.href).toBe(`/applications/a7?returnTo=${encodeURIComponent('/my-work?filter=waiting')}`);
+    expect(keptFlat.find((i) => i.title === 'Ahmed Fathy')?.href).toBe(`/candidates/c-x?returnTo=${encodeURIComponent('/my-work?filter=waiting')}`);
+    expect(keptFlat.find((i) => i.title === 'HRIS Developer')?.href).toBe('/vacancies/v1');
+    const fromSearch = await scopedSearch('Ahmed', undefined, '/search?q=Ahmed');
+    expect(fromSearch.groups.flatMap((g) => g.items).find((i) => i.title === 'Ahmed Embaby')?.href).toBe(`/applications/a7?returnTo=${encodeURIComponent('/search?q=Ahmed')}`);
     expect(JSON.stringify(r)).not.toMatch(/@mail\.test|EGP|APP-2026-0200|NICU|VAC-2026-0099/);
   });
   it('notificationHref: the file by applicationId first, else safe entity pages', () => {
     const [a, i, v, o] = sfx.notifications().data;
-    expect([a, i, v, o].map(notificationHref)).toEqual(['/applications/a10', '/applications/a7', '/vacancies/v1', '/applications/a10']);
-    expect(notificationHref({ ...o, applicationId: null })).toBeNull();
+    expect([a, i, v, o].map((item) => notificationHref(item))).toEqual(['/applications/a10', '/applications/a7', '/vacancies/v1', '/applications/a10']);
+    expect(notificationHref({ ...o, applicationId: null })).toBe('/offers/o1');
     expect(notificationHref({ ...o, applicationId: null, entityType: 'VacancyRequest', entityId: 'r1' })).toBe('/vacancy-requests?req=r1');
     expect(notificationHref({ ...o, applicationId: null, entityType: 'Interview', entityId: 'i9' })).toBe('/my-interviews?interview=i9');
     expect(notificationHref({ ...o, applicationId: null, entityType: 'HiringCase', entityId: 'h1' })).toBe('/hires/h1');
+    expect(notificationHref({ ...o, applicationId: null, entityType: 'Candidate', entityId: 'c1' })).toBe('/candidates/c1');
+    const kept = '/my-work?day=tomorrow&tab=interviews';
+    expect(notificationHref(a, kept)).toBe(`/applications/a10?returnTo=${encodeURIComponent(kept)}`);
+    expect(notificationHref({ ...o, applicationId: null }, kept)).toBe(`/offers/o1?returnTo=${encodeURIComponent(kept)}`);
+    expect(notificationHref({ ...o, applicationId: null, entityType: 'HiringCase', entityId: 'h1' }, kept)).toBe(`/hires/h1?returnTo=${encodeURIComponent(kept)}`);
+    expect(notificationHref(v, kept)).toBe('/vacancies/v1');
+    expect(notificationHref({ ...o, applicationId: null, entityType: 'Candidate', entityId: 'c1' }, kept)).toBe(`/candidates/c1?returnTo=${encodeURIComponent(kept)}`);
+    expect(notificationHref(a, '/search?q=Ahmed')).toBe(`/applications/a10?returnTo=${encodeURIComponent('/search?q=Ahmed')}`);
+    expect(notificationHref(a, 'https://evil.example/my-work')).toBe('/applications/a10');
   });
 });
 
@@ -83,7 +99,15 @@ describe('E07 header search', () => {
     await u.keyboard('{ArrowDown}');
     expect(box).toHaveAttribute('aria-activedescendant', expect.stringMatching(/o0$/));
     await u.keyboard('{Enter}');
-    expect(screen.getByTestId('loc')).toHaveTextContent('/applications/a7');
+    expect(screen.getByTestId('loc')).toHaveTextContent(`/applications/a7?returnTo=${encodeURIComponent('/my-work')}`);
+  });
+  it('keeps the My Work query on a file opened from the header', async () => {
+    const u = userEvent.setup();
+    renderUI('/my-work?day=tomorrow&tab=interviews');
+    await u.type(screen.getByRole('combobox', { name: 'Search candidates and jobs' }), 'Ahmed');
+    await screen.findAllByRole('option');
+    await u.keyboard('{ArrowDown}{Enter}');
+    expect(screen.getByTestId('loc')).toHaveTextContent(`/applications/a7?returnTo=${encodeURIComponent('/my-work?day=tomorrow&tab=interviews')}`);
   });
   it('Enter with no option → results page; Escape closes', async () => {
     const u = userEvent.setup();
@@ -98,6 +122,7 @@ describe('E07 header search', () => {
     expect(screen.getByTestId('loc')).toHaveTextContent('/search?q=Ahmed');
     expect(await screen.findByRole('heading', { name: 'Search results' })).toBeInTheDocument();
     expect(await screen.findByRole('link', { name: 'Pharmacist' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Ahmed Embaby' })).toHaveAttribute('href', `/applications/a7?returnTo=${encodeURIComponent('/search?q=Ahmed')}`);
     expect(screen.getByText(/3 matches are outside your scope/)).toBeInTheDocument();
   });
   it('403 from /search → clear message', async () => {
@@ -126,9 +151,19 @@ describe('E06 notifications panel', () => {
     expect(await axeViolations(container)).toEqual([]);
     await u.click(within(items[0]).getByRole('button'));
     expect(api.patchApi).toHaveBeenCalledWith('/notifications/n1/read', {});
-    await waitFor(() => expect(screen.getByTestId('loc')).toHaveTextContent('/applications/a10'));
+    await waitFor(() => expect(screen.getByTestId('loc')).toHaveTextContent(`/applications/a10?returnTo=${encodeURIComponent('/my-work')}`));
     expect(changed).toHaveBeenCalled();
     window.removeEventListener(NOTIFICATIONS_CHANGED, changed);
+  });
+  it('keeps the My Work day and tab on a notification opened from that page', async () => {
+    const u = userEvent.setup();
+    api.patchApi.mockResolvedValue({});
+    renderUI('/my-work?day=tomorrow&tab=interviews');
+    await u.click(screen.getByRole('button', { name: 'Notifications, 2 unread' }));
+    const d = await screen.findByRole('dialog', { name: 'Notifications' });
+    const items = await within(d).findAllByRole('listitem');
+    await u.click(within(items[0]).getByRole('button'));
+    await waitFor(() => expect(screen.getByTestId('loc')).toHaveTextContent(`/applications/a10?returnTo=${encodeURIComponent('/my-work?day=tomorrow&tab=interviews')}`));
   });
   it('Mark all read → POST /notifications/read-all; Escape closes and returns focus', async () => {
     const u = userEvent.setup();

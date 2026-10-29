@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { usePageReturn, withReturnTo } from '../returnTarget';
 import { CircleCheck, CircleMinus, FileText, Info, Scale, UserPlus } from 'lucide-react';
 import { ButtonV2, DrawerV2, EmptyStateV2, SkeletonV2, StatusChip } from '../../components/v2';
 import { findExistingFile, isApplicationExists } from '../api/applicationExists';
@@ -11,6 +12,7 @@ const initials = (n: string) => n.split(/\s+/).filter(Boolean).slice(0, 2).map((
 
 /** E10 Suggest from bank (B6 #13): evidence lines, never a score. Add to this job; select 2–4 to compare (E24). */
 export function SuggestDrawer({ job, accepting, onClose, onAdded }: { job: JobDetail; accepting: boolean; onClose: () => void; onAdded: () => void }) {
+  const pageReturn = usePageReturn();
   const [state, setState] = useState<{ kind: 'loading' } | { kind: 'ready'; data: SuggestionsResponse } | { kind: 'error'; message: string; forbidden?: boolean }>({ kind: 'loading' });
   const [added, setAdded] = useState<Record<string, 'busy' | 'done' | string>>({});
   // #23 409 APPLICATION_EXISTS: already on this job; link to that file (id looked up, the 409 carries none).
@@ -65,7 +67,7 @@ export function SuggestDrawer({ job, accepting, onClose, onAdded }: { job: JobDe
                       <span className="rf2-kcard__avatar" aria-hidden="true">{initials(s.candidate.name)}</span>
                       <div className="rf2-sugg__who"><p className="rf2-jtable__name">{s.candidate.name}</p>{!canAdd(s) ? <span className="rf2-sr-only"> Already on this job{s.stage ? ` in ${s.stage}` : ''}; cannot be added again.</span> : null}<p className="rf2-jtable__sub">{[s.candidate.code, s.candidate.currentTitle, s.candidate.location].filter(Boolean).join(' · ')}</p></div>
                       {s.candidate.id in onJob ? (onJob[s.candidate.id]
-                        ? <Link className="rf2-link" to={`/applications/${encodeURIComponent(onJob[s.candidate.id] as string)}`} data-testid="application-exists">Already on this job · open the file</Link>
+                        ? <Link className="rf2-link" to={withReturnTo(`/applications/${encodeURIComponent(onJob[s.candidate.id] as string)}`, pageReturn)} data-testid="application-exists">Already on this job · open the file</Link>
                         : <StatusChip tone="info" label="Already on this job" />)
                         : st === 'done' ? <StatusChip tone="success" label="Added to Applied" />
                         : !canAdd(s) ? <StatusChip tone="info" label={`On this job · ${s.stage ?? 'in progress'}`} />

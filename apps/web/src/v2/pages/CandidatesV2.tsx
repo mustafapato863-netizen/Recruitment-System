@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { History, Info, RotateCw, Scale, Search, Users } from 'lucide-react';
 import { ApiError, postApi } from '../../api/client';
@@ -7,6 +7,7 @@ import { findExistingFile, isApplicationExists } from '../api/applicationExists'
 import { existingPerson } from '../api/cvImport';
 import { ACCEPTING_JOB_STATUSES, fetchOpenJobs } from '../api/jobs';
 import { addToJob, fetchActiveApplications, fetchBank, OPEN_APPLICATION_STAGES, type ActiveRow, type BankRow } from '../api/matching';
+import { buildCandidatesHref, buildCompareHref, parseCompareIds, withReturnTo } from '../returnTarget';
 import { formatDay } from './OpenJobsV2';
 import './jobs.css';
 import './candidates.css';
@@ -32,15 +33,8 @@ function orderedQuery(current: URLSearchParams, patch: Partial<Record<QueryKey, 
   return ordered;
 }
 
-function candidatesPath(params: URLSearchParams) {
-  const query = params.toString();
-  return query ? `/candidates?${query}` : '/candidates';
-}
-
 function applicationHref(applicationId: string, returnTo: string) {
-  const query = new URLSearchParams();
-  query.set('returnTo', returnTo);
-  return `/applications/${encodeURIComponent(applicationId)}?${query.toString()}`;
+  return withReturnTo(`/applications/${encodeURIComponent(applicationId)}`, returnTo);
 }
 
 function listCount(count: number, selected: number, truncated: boolean) {
@@ -60,7 +54,9 @@ export function CandidatesV2() {
   const job = params.get('job') ?? '';
   const source = params.get('source') ?? '';
   const stage = knownStage(params.get('stage') ?? '');
-  const returnTo = candidatesPath(params);
+  const rawIds = params.get('ids') ?? '';
+  const urlIds = useMemo(() => parseCompareIds(rawIds), [rawIds]);
+  const seededIdsRef = useRef<string | null>(null);
   const [picked, setPicked] = useState<string[]>([]);
   const [attempt, setAttempt] = useState(0);
   const [active, setActive] = useState<ActiveState>({ kind: 'loading' });
@@ -100,20 +96,49 @@ export function CandidatesV2() {
       return `${row.name} ${row.title ?? ''} ${row.job}`.toLowerCase().includes(needle);
     });
   }, [active, q, job, source, stage]);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (tab !== 'active' || active.kind !== 'ready') return;
     const visible = new Set(activeRows.map((row) => row.applicationId));
+    if (seededIdsRef.current !== rawIds) {
+      seededIdsRef.current = rawIds;
+      if (urlIds.length > 0) {
+        const idSet = new Set(urlIds);
+        const restored = activeRows
+          .filter((row) => idSet.has(row.candidateId) || idSet.has(row.applicationId))
+          .slice(0, 4)
+          .map((row) => row.applicationId);
+        setPicked(restored);
+        return;
+      }
+    }
     setPicked((prev) => {
       const next = prev.filter((id) => visible.has(id));
       return next.length === prev.length ? prev : next;
     });
-  }, [tab, active, activeRows]);
+  }, [tab, active, activeRows, rawIds, urlIds]);
 
   const jobs = active.kind === 'ready' ? [...new Map(active.rows.map((row) => [row.vacancyId, row.job])).entries()] : [];
   const sources = active.kind === 'ready' ? [...new Set(active.rows.map((row) => row.source).filter((value): value is string => Boolean(value)))] : [];
   const pickedRows = activeRows.filter((row) => picked.includes(row.applicationId));
+  const returnTo = buildCandidatesHref({
+    tab,
+    search: q,
+    job,
+    source,
+    stage,
+    ids: tab === 'active' && pickedRows.length > 0 ? pickedRows.map((row) => row.candidateId) : null,
+  });
   const sameJob = pickedRows.length > 0 && pickedRows.every((row) => row.vacancyId === pickedRows[0].vacancyId);
   const canCompare = pickedRows.length >= 2 && pickedRows.length <= 4 && sameJob;
+  const compareHref = canCompare
+    ? buildCompareHref({
+      job: pickedRows[0].vacancyId,
+      ids: pickedRows.map((row) => row.candidateId),
+      search: q,
+      source,
+      stage,
+    })
+    : null;
   const why = pickedRows.length < 2 ? 'Select 2 to 4 people on the same job.' : !sameJob ? 'Compare works within one job; select people on the same job.' : pickedRows.length > 4 ? 'Compare up to 4.' : '';
   const toggle = (id: string) => setPicked((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]));
   const cur = tab === 'active' ? active : bank;
@@ -126,8 +151,8 @@ export function CandidatesV2() {
         <div>
           <h1 className="rf2-jobs__title">Candidates</h1>
         </div>
-        {tab === 'active' ? (canCompare
-          ? <Link className="rf2-btn rf2-btn--primary rf2-btn--md" to={`/candidates/compare?job=${encodeURIComponent(pickedRows[0].vacancyId)}&ids=${pickedRows.map((row) => encodeURIComponent(row.candidateId)).join(',')}`}><Scale aria-hidden="true" /> Compare {pickedRows.length} on skills</Link>
+        {tab === 'active' ? (compareHref
+          ? <Link className="rf2-btn rf2-btn--primary rf2-btn--md" to={compareHref}><Scale aria-hidden="true" /> Compare {pickedRows.length} on skills</Link>
           : <><ButtonV2 icon={<Scale />} disabled aria-describedby="cmp-why">Compare on skills</ButtonV2><span id="cmp-why" className="rf2-sr-only">{why}</span></>) : null}
       </div>
       <nav className="rf2-cand__actions" aria-label="Candidate records">
@@ -286,7 +311,7 @@ function BankPanel({ rows, returnTo, onAdded }: { rows: BankRow[]; returnTo: str
           <tbody>{rows.map((row) => (
             <tr key={row.candidateId}>
               <td><input type="radio" name="bank-person" value={row.candidateId} aria-label={`Choose ${row.name} for a job`} checked={chosen === row.candidateId} onChange={() => setChosen(row.candidateId)} /></td>
-              <td><p className="rf2-jtable__name">{row.name}</p><p className="rf2-jtable__sub">{row.code}</p></td>
+              <td><Link className="rf2-jtable__name" to={withReturnTo(`/candidates/${encodeURIComponent(row.candidateId)}`, returnTo)}>{row.name}</Link><p className="rf2-jtable__sub">{row.code}</p></td>
               <td><span className="rf2-cand__label">Title</span>{row.title ?? '—'}</td>
               <td><span className="rf2-cand__label">Location</span>{row.location ?? '—'}</td>
               <td className="rf2-num"><span className="rf2-cand__label">Experience</span>{row.experienceYears != null ? `${row.experienceYears} yrs` : '—'}</td>

@@ -152,6 +152,29 @@ describe('Candidates page', () => {
     expect(returnToOf(nameHref)).toBe(here);
   });
 
+  it('sanitizes returnTo and restores filters and selected candidates across Compare', async () => {
+    const u = userEvent.setup();
+    renderAt('/candidates?search=HRIS&job=v1&stage=Screening&ids=c-a4,c-a6&returnTo=%2Fsettings&junk=1');
+    await screen.findByRole('table');
+    expect(screen.getByLabelText('Search people')).toHaveValue('HRIS');
+    expect(screen.getByLabelText('Job')).toHaveValue('v1');
+    expect(screen.getByLabelText('Stage')).toHaveValue('Screening');
+    expect(screen.getByRole('checkbox', { name: 'Select Nourhan Sami (HRIS Developer)' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Select Salma Adel (HRIS Developer)' })).toBeChecked();
+    expect(screen.getByText('2 people · 2 selected')).toBeInTheDocument();
+    const compareLink = screen.getByRole('link', { name: 'Compare 2 on skills' });
+    expect(compareLink).toHaveAttribute(
+      'href',
+      '/candidates/compare?job=v1&ids=c-a4,c-a6&search=HRIS&stage=Screening',
+    );
+    const nameHref = screen.getByRole('link', { name: 'Nourhan Sami' }).getAttribute('href');
+    expect(returnToOf(nameHref)).toBe('/candidates?search=HRIS&job=v1&stage=Screening&ids=c-a4,c-a6');
+    await u.click(screen.getByRole('checkbox', { name: 'Select Salma Adel (HRIS Developer)' }));
+    expect(returnToOf(screen.getByRole('link', { name: 'Nourhan Sami' }).getAttribute('href'))).toBe(
+      '/candidates?search=HRIS&job=v1&stage=Screening&ids=c-a4',
+    );
+  });
+
   it('restores the bank tab and its search', async () => {
     renderAt('/candidates?tab=bank&search=heba');
     expect(await screen.findByText('Heba Mansour')).toBeInTheDocument();

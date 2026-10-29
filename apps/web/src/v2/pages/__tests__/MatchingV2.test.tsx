@@ -120,7 +120,7 @@ describe('E10 Suggest from bank', () => {
     renderAt('/vacancies/v1?drawer=suggest');
     const d = await screen.findByRole('dialog');
     await u.click(await within(d).findByRole('button', { name: 'Add Heba Mansour to this job' }));
-    expect(await within(d).findByTestId('application-exists')).toHaveAttribute('href', '/applications/app-heba');
+    expect(await within(d).findByTestId('application-exists')).toHaveAttribute('href', `/applications/app-heba?returnTo=${encodeURIComponent('/vacancies/v1?drawer=suggest')}`);
   });
   it('select 2–4 → Compare link to E24; held job disables Add', async () => {
     const u = userEvent.setup();
@@ -196,12 +196,48 @@ describe('E24 Compare on skills', () => {
     expect(rows[3]).toHaveTextContent('No Oracle on the profile.');
     expect(rows[4]).toHaveTextContent(/Notice period.*30 days.*screening.*Immediately.*profile/);
     expect(rows[5]).toHaveTextContent(/Fit note.*“Strong Laravel; HRIS from leave\/attendance only\.”.*Mariam Farag.*Not recorded\./);
-    expect(screen.getAllByRole('link', { name: 'Open file' })[0]).toHaveAttribute('href', '/applications/a7');
+    expect(screen.getByRole('link', { name: 'Back to Candidates' })).toHaveAttribute('href', '/candidates?job=v1&ids=c-a7,c-a4');
+    expect(screen.getAllByRole('link', { name: 'Open file' })[0]).toHaveAttribute('href', `/applications/a7?returnTo=${encodeURIComponent('/candidates/compare?job=v1&ids=c-a7,c-a4')}`);
     const rej = screen.getAllByRole('link', { name: 'Reject for HRIS Developer' })[0];
-    expect(rej).toHaveAttribute('href', '/applications/a7?drawer=reject');
+    expect(rej).toHaveAttribute('href', `/applications/a7?drawer=reject&returnTo=${encodeURIComponent('/candidates/compare?job=v1&ids=c-a7,c-a4')}`);
     expect(rej.className).toMatch(/danger-outline/);
     expect(container.textContent).not.toMatch(NO_SCORE);
     expect(await axeViolations(container)).toEqual([]);
+  });
+  it('preserves filters and selected candidate IDs from Candidates through Compare and Back to Candidates', async () => {
+    const u = userEvent.setup();
+    const bothInterviewLinkedIn = {
+      data: mfx.myApplications.data.map((row) =>
+        row.candidateId === 'c-a4' ? { ...row, stage: 'Interview', source: 'LinkedIn' } : row,
+      ),
+    };
+    serve({ '/applications': bothInterviewLinkedIn, '/applications@v1': bothInterviewLinkedIn });
+    renderAt('/candidates?search=HRIS&job=v1&source=LinkedIn&stage=Interview');
+    await screen.findByRole('table');
+    await u.click(screen.getByRole('checkbox', { name: 'Select Ahmed Embaby (HRIS Developer)' }));
+    await u.click(screen.getByRole('checkbox', { name: 'Select Nourhan Sami (HRIS Developer)' }));
+    const compareBtn = screen.getByRole('link', { name: 'Compare 2 on skills' });
+    const compareUrl = '/candidates/compare?job=v1&ids=c-a7,c-a4&search=HRIS&source=LinkedIn&stage=Interview';
+    expect(compareBtn).toHaveAttribute('href', compareUrl);
+    await u.click(compareBtn);
+    expect(await screen.findByRole('heading', { name: 'Compare on skills — HRIS Developer' })).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: 'Open file' })[0]).toHaveAttribute(
+      'href',
+      `/applications/a7?returnTo=${encodeURIComponent(compareUrl)}`,
+    );
+    const backLink = screen.getByRole('link', { name: 'Back to Candidates' });
+    expect(backLink).toHaveAttribute(
+      'href',
+      '/candidates?search=HRIS&job=v1&source=LinkedIn&stage=Interview&ids=c-a7,c-a4',
+    );
+    await u.click(backLink);
+    await screen.findByRole('table');
+    expect(screen.getByLabelText('Search people')).toHaveValue('HRIS');
+    expect(screen.getByLabelText('Job')).toHaveValue('v1');
+    expect(screen.getByLabelText('Source')).toHaveValue('LinkedIn');
+    expect(screen.getByLabelText('Stage')).toHaveValue('Interview');
+    expect(screen.getByRole('checkbox', { name: 'Select Ahmed Embaby (HRIS Developer)' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Select Nourhan Sami (HRIS Developer)' })).toBeChecked();
   });
   it('bad count → COMPARE_COUNT message without calling the API; 403 → forbidden', async () => {
     const { unmount } = renderAt('/candidates/compare?job=v1&ids=c-a7');

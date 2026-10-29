@@ -126,11 +126,11 @@ describe('My Work desk', () => {
     await u.click(screen.getByRole('tab', { name: 'Upcoming interviews' }));
     const manage = screen.getByRole('link', { name: 'Manage interview: Nourhan Sami · HRIS Developer' });
     expect(manage).toHaveClass('rf2-btn--secondary');
-    expect(manage).toHaveAttribute('href', '/applications/a2?drawer=schedule&interview=iv2');
+    expect(manage).toHaveAttribute('href', '/applications/a2?drawer=schedule&interview=iv2&returnTo=%2Fmy-work%3Ftab%3Dinterviews');
     await u.click(screen.getByRole('tab', { name: 'Joining soon' }));
     expect(screen.getByRole('link', { name: 'Open checklist: Lina Hassan' })).toHaveClass('rf2-btn--secondary');
-    expect(screen.getByRole('link', { name: 'Open checklist: Lina Hassan' })).toHaveAttribute('href', '/applications/a3?drawer=prehire');
-    expect(screen.getByRole('link', { name: 'View readiness: Mona Said' })).toHaveAttribute('href', '/applications/a8?drawer=prehire');
+    expect(screen.getByRole('link', { name: 'Open checklist: Lina Hassan' })).toHaveAttribute('href', '/applications/a3?drawer=prehire&returnTo=%2Fmy-work%3Ftab%3Djoining');
+    expect(screen.getByRole('link', { name: 'View readiness: Mona Said' })).toHaveAttribute('href', '/applications/a8?drawer=prehire&returnTo=%2Fmy-work%3Ftab%3Djoining');
   });
 });
 
@@ -161,12 +161,12 @@ describe('My Work (E02) from the #9 contract', () => {
     expect(overdue.getByTestId('candidate')).toHaveTextContent('Ahmed Embaby · Interview');
     expect(overdue.getByTestId('sla')).toHaveTextContent('Overdue');
     expect(overdue.getByTestId('due')).toHaveTextContent('Due 18 Oct');
-    expect(overdue.getByRole('link', { name: 'Submit scorecard: Interview: Ahmed Embaby' })).toHaveAttribute('href', '/applications/a1?drawer=scorecard&interview=i1');
+    expect(overdue.getByRole('link', { name: 'Submit scorecard: Interview: Ahmed Embaby' })).toHaveAttribute('href', '/applications/a1?drawer=scorecard&interview=i1&returnTo=%2Fmy-work');
 
     const todayRows = rowsIn('dueToday');
     const today = within(list);
     expect(today.getByRole('link', { name: 'Review applicants: HRIS Developer (VAC-1)' })).toHaveAttribute('href', '/vacancies/j1');
-    expect(today.getByRole('link', { name: 'Open interview: Screening: Nourhan Sami' })).toHaveAttribute('href', '/applications/a2');
+    expect(today.getByRole('link', { name: 'Open interview: Screening: Nourhan Sami' })).toHaveAttribute('href', '/applications/a2?returnTo=%2Fmy-work');
     expect(today.getByText('19 Oct, 11:30–12:00')).toBeInTheDocument();
     expect(today.getByRole('link', { name: 'Room 2A' })).toHaveAttribute('href', 'https://rooms.sgh.test/2a');
     const disabled = today.getByRole('button', { name: 'Submit scorecard' });
@@ -184,9 +184,9 @@ describe('My Work (E02) from the #9 contract', () => {
     expect(within(waitingRows[0]!).getByText('Waiting on approval')).toBeInTheDocument();
     expect(within(waitingRows[1]!).getByText('Waiting on interviewer')).toBeInTheDocument();
     expect(within(waitingRows[1]!).getByText('2 scorecard(s) missing')).toBeInTheDocument();
-    expect(within(waitingRows[0]!).getByRole('link', { name: 'Open offer: Offer OFF-1' })).toHaveAttribute('href', '/applications/a3?drawer=offer');
+    expect(within(waitingRows[0]!).getByRole('link', { name: 'Open offer: Offer OFF-1' })).toHaveAttribute('href', '/applications/a3?drawer=offer&returnTo=%2Fmy-work');
     expect(within(waitingRows[0]!).getByRole('button', { name: 'Send offer' })).toBeDisabled();
-    expect(within(waitingRows[1]!).getByRole('link', { name: 'Open interview: Interview: Omar Said' })).toHaveAttribute('href', '/applications/a4');
+    expect(within(waitingRows[1]!).getByRole('link', { name: 'Open interview: Interview: Omar Said' })).toHaveAttribute('href', '/applications/a4?returnTo=%2Fmy-work');
     expect(within(waitingRows[1]!).getByRole('button', { name: 'Move to Offer' })).toBeDisabled();
     const counts = screen.getByLabelText('Counts');
     expect(Array.from(counts.querySelectorAll('[data-count-value]')).map((d) => d.textContent)).toEqual(['1', '2', '2']);
@@ -403,13 +403,13 @@ describe('tabs, filters, and caller data', () => {
     expect(screen.getByText('Welcome back, Mariam.')).toBeInTheDocument();
     expect(screen.queryByText('Upcoming interviews assigned to you or your candidates.')).not.toBeInTheDocument();
     const schedule = screen.getByRole('region', { name: 'Interview schedule' });
-    expect(within(schedule).getByRole('link', { name: 'Manage interview: Nourhan Sami · HRIS Developer' })).toHaveAttribute('href', '/applications/a2?drawer=schedule&interview=iv2');
-    expect(within(schedule).getByRole('link', { name: 'View scorecard: Ahmed Embaby · HRIS Developer' })).toHaveAttribute('href', '/applications/a1?drawer=scorecard&interview=iv-score');
+    expect(within(schedule).getByRole('link', { name: 'Manage interview: Nourhan Sami · HRIS Developer' })).toHaveAttribute('href', '/applications/a2?drawer=schedule&interview=iv2&returnTo=%2Fmy-work%3Ftab%3Dinterviews');
+    expect(within(schedule).getByRole('link', { name: 'View scorecard: Ahmed Embaby · HRIS Developer' })).toHaveAttribute('href', '/applications/a1?drawer=scorecard&interview=iv-score&returnTo=%2Fmy-work%3Ftab%3Dinterviews');
     expect(within(schedule).getByRole('link', { name: 'Room 2A' })).toHaveAttribute('href', 'https://rooms.sgh.test/2a');
     expect(within(schedule).getByText(/19 Oct · 11:30–12:00/)).toBeInTheDocument();
     const held = within(schedule).getByText('Youssef Hamdy · Data Analyst').closest('li')!;
     expect(within(held).getByText(/On hold/)).toBeInTheDocument();
-    expect(within(held).getByRole('link', { name: 'Manage interview: Youssef Hamdy · Data Analyst' })).toHaveAttribute('href', '/applications/a6?drawer=schedule&interview=iv-held');
+    expect(within(held).getByRole('link', { name: 'Manage interview: Youssef Hamdy · Data Analyst' })).toHaveAttribute('href', '/applications/a6?drawer=schedule&interview=iv-held&returnTo=%2Fmy-work%3Ftab%3Dinterviews');
     const assigned = screen.getByRole('region', { name: 'Your assigned interviews' });
     const evaluation = within(assigned).getByRole('link', { name: 'Open evaluation: Rana Adel · BI Data Analyst' });
     expect(evaluation).toHaveAttribute('href', '/my-interviews?interview=iv-assigned');
@@ -453,11 +453,11 @@ describe('tabs, filters, and caller data', () => {
     expect(within(joining).getByText('Lina Hassan · HRIS Developer')).toBeInTheDocument();
     expect(within(joining).getByText('Starts 1 Nov · 2 of 2 checks complete · Final approval pending')).toBeInTheDocument();
     expect(within(joining).getByText('Approval pending')).toBeInTheDocument();
-    expect(within(joining).getByRole('link', { name: 'Open checklist: Lina Hassan' })).toHaveAttribute('href', '/hires/hc1');
+    expect(within(joining).getByRole('link', { name: 'Open checklist: Lina Hassan' })).toHaveAttribute('href', '/hires/hc1?returnTo=%2Fmy-work%3Ftab%3Djoining');
     expect(within(joining).getByText('Mona Said · Staff Nurse — ICU')).toBeInTheDocument();
     expect(within(joining).getByText(/Starts 4 Nov · 2 of 3 checks complete · Licence review assigned · On hold/)).toBeInTheDocument();
     expect(within(joining).getByText('Licence pending')).toBeInTheDocument();
-    expect(within(joining).getByRole('link', { name: 'View readiness: Mona Said' })).toHaveAttribute('href', '/applications/a8?drawer=prehire');
+    expect(within(joining).getByRole('link', { name: 'View readiness: Mona Said' })).toHaveAttribute('href', '/applications/a8?drawer=prehire&returnTo=%2Fmy-work%3Ftab%3Djoining');
     expect(within(joining).getByTestId('joining-footnote')).toHaveTextContent('A scheduled start is not a completed hire');
     expect(within(joining).queryByText('Joined')).not.toBeInTheDocument();
     await u.click(screen.getByRole('tab', { name: 'Next actions' }));
@@ -470,8 +470,8 @@ describe('tabs, filters, and caller data', () => {
     renderPage(ok());
     await screen.findByRole('tab', { name: 'Joining soon' });
     await u.click(screen.getByRole('tab', { name: 'Joining soon' }));
-    expect(screen.getByRole('link', { name: 'Open checklist: Lina Hassan' })).toHaveAttribute('href', '/applications/a3?drawer=prehire');
-    expect(screen.getByRole('link', { name: 'View readiness: Mona Said' })).toHaveAttribute('href', '/applications/a8?drawer=prehire');
+    expect(screen.getByRole('link', { name: 'Open checklist: Lina Hassan' })).toHaveAttribute('href', '/applications/a3?drawer=prehire&returnTo=%2Fmy-work%3Ftab%3Djoining');
+    expect(screen.getByRole('link', { name: 'View readiness: Mona Said' })).toHaveAttribute('href', '/applications/a8?drawer=prehire&returnTo=%2Fmy-work%3Ftab%3Djoining');
     await u.click(screen.getByRole('tab', { name: 'Upcoming interviews' }));
     const assigned = screen.getByRole('region', { name: 'Your assigned interviews' });
     expect(within(assigned).getByRole('link').getAttribute('href')).toBe('/my-interviews?interview=iv-assigned');
@@ -485,6 +485,9 @@ describe('tabs, filters, and caller data', () => {
     expect(load).toHaveBeenCalledWith('tomorrow');
     expect(screen.getByText('Tomorrow · 20 Oct 2026')).toBeInTheDocument();
     expect(screen.getByText('Starts 1 Nov · 2 of 2 checks complete · Final approval pending')).toBeInTheDocument();
+    const kept = encodeURIComponent('/my-work?tab=joining&filter=waiting&day=tomorrow');
+    expect(screen.getByRole('link', { name: 'Open checklist: Lina Hassan' })).toHaveAttribute('href', `/hires/hc1?returnTo=${kept}`);
+    expect(screen.getByRole('link', { name: 'View readiness: Mona Said' })).toHaveAttribute('href', `/applications/a8?drawer=prehire&returnTo=${kept}`);
     await u.click(screen.getByRole('tab', { name: 'Next actions' }));
     expect(screen.getByRole('button', { name: '2 Waiting' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByTestId('loc')).toHaveTextContent('filter=waiting');

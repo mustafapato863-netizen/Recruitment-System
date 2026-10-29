@@ -15,6 +15,7 @@
  *   failure); the page then shows a "Sample data" notice.
  */
 import { getApi, ApiError } from '../../api/client';
+import { withReturnTo } from '../returnTarget';
 
 /** = TargetChip in packages/contracts (#9). */
 export interface TargetChip {
@@ -299,7 +300,8 @@ export function actionHref(item: WorkItem, action: MyWorkAction): string | null 
  * E2: in the v2 Employee seat, application-linked actions open the v2 file (E13)
  * or its drawer instead of v1 pages. Others fall back to actionHref().
  */
-export interface HrefContext { meId?: string; canOpenFile?: boolean; interviewer?: boolean }
+export interface HrefContext { meId?: string; canOpenFile?: boolean; interviewer?: boolean; returnTo?: string | null }
+const carried = (href: string | null, returnTo: string | null | undefined) => (href == null ? null : withReturnTo(href, returnTo));
 export function fileActionHref(item: WorkItem, action: MyWorkAction, ctx: HrefContext = {}): string | null {
   // B2F-3: an interviewer's interview opens their v2 interview view (CV + own scorecard), never the file
   // (which needs APPLICATION_VIEW / ownership and showed v1 "Access Restricted").
@@ -310,13 +312,13 @@ export function fileActionHref(item: WorkItem, action: MyWorkAction, ctx: HrefCo
     }
   }
   const appId = item.applicationId ?? (item.entity.type === 'application' ? item.entity.id : undefined);
-  if (!appId) return actionHref(item, action);
+  if (!appId) return carried(actionHref(item, action), ctx.returnTo);
   const base = `/applications/${encodeURIComponent(appId)}`;
   const iv = item.entity.type === 'interview' ? `&interview=${encodeURIComponent(item.entity.id)}` : '';
-  if (action.key === 'open-interview') return base;
+  if (action.key === 'open-interview') return carried(base, ctx.returnTo);
   const drawer = FILE_DRAWER[action.key];
-  if (!drawer) return base;
-  return drawer === 'scorecard' ? `${base}?drawer=scorecard${iv}` : `${base}?drawer=${drawer}`;
+  if (!drawer) return carried(base, ctx.returnTo);
+  return carried(drawer === 'scorecard' ? `${base}?drawer=scorecard${iv}` : `${base}?drawer=${drawer}`, ctx.returnTo);
 }
 
 /** Drawer keys the application file already opens. open-interview stays on the file without a drawer. */
@@ -384,19 +386,19 @@ export function upcomingInterviewHref(row: UpcomingInterview, ctx: HrefContext =
   }
   if (row.access !== 'file' || !row.applicationId || ctx.canOpenFile !== true) return null;
   const applicationId = encodeURIComponent(row.applicationId);
-  if (scorecard) return `/applications/${applicationId}?drawer=scorecard&interview=${interviewId}`;
-  if (row.action.label === 'Manage interview') return `/applications/${applicationId}?drawer=schedule&interview=${interviewId}`;
+  if (scorecard) return carried(`/applications/${applicationId}?drawer=scorecard&interview=${interviewId}`, ctx.returnTo);
+  if (row.action.label === 'Manage interview') return carried(`/applications/${applicationId}?drawer=schedule&interview=${interviewId}`, ctx.returnTo);
   return null;
 }
 
 const PREHIRE_READINESS: ReadonlySet<JoiningSoon['readiness']> = new Set(['licence_pending', 'ready', 'blocked', 'review']);
 
 /** Checklist stays on the file. Those four readiness values open the pre-hire drawer; other rows without file access stay on the hiring case. */
-export function joiningCaseHref(row: JoiningSoon, canOpenFile: boolean): { href: string; label: string } {
+export function joiningCaseHref(row: JoiningSoon, canOpenFile: boolean, returnTo?: string | null): { href: string; label: string } {
   const caseHref = `/hires/${encodeURIComponent(row.id)}`;
   if (PREHIRE_READINESS.has(row.readiness)) {
-    return { href: `/applications/${encodeURIComponent(row.applicationId)}?drawer=prehire`, label: 'View readiness' };
+    return { href: withReturnTo(`/applications/${encodeURIComponent(row.applicationId)}?drawer=prehire`, returnTo), label: 'View readiness' };
   }
-  if (canOpenFile) return { href: `/applications/${encodeURIComponent(row.applicationId)}?drawer=prehire`, label: 'Open checklist' };
-  return { href: caseHref, label: 'Open checklist' };
+  if (canOpenFile) return { href: withReturnTo(`/applications/${encodeURIComponent(row.applicationId)}?drawer=prehire`, returnTo), label: 'Open checklist' };
+  return { href: withReturnTo(caseHref, returnTo), label: 'Open checklist' };
 }

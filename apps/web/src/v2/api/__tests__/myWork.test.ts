@@ -126,6 +126,10 @@ describe('E2: My Work actions open the v2 file', () => {
     expect(fileActionHref(fx.waitingOnOthers[1], { key: 'move-to-offer', label: 'Move to Offer', disabled: false })).toBe('/applications/a4?drawer=offer');
     const job = fx.dueToday[0];
     expect(fileActionHref(job, job.actions[0])).toBe('/vacancies/j1');
+    const back = '/my-work?day=tomorrow&tab=joining';
+    expect(fileActionHref(sc, sc.actions[0], { returnTo: back })).toBe(`/applications/a1?drawer=scorecard&interview=i1&returnTo=${encodeURIComponent(back)}`);
+    expect(fileActionHref(offer, offer.actions[0], { returnTo: 'https://evil.example/my-work' })).toBe('/applications/a3?drawer=offer');
+    expect(fileActionHref(job, job.actions[0], { returnTo: back })).toBe('/vacancies/j1');
   });
 
   it('labels the waitingOn blocker and does not treat a sent offer as approval', () => {
@@ -161,6 +165,12 @@ describe('E2: My Work actions open the v2 file', () => {
     expect(joiningCaseHref({ ...licence!, readiness: 'blocked', detail: 'Approved capacity is already filled.' }, false)).toEqual({ href: '/applications/a8?drawer=prehire', label: 'View readiness' });
     expect(joiningCaseHref({ ...licence!, readiness: 'review', detail: 'Review readiness' }, false)).toEqual({ href: '/applications/a8?drawer=prehire', label: 'View readiness' });
     expect(joiningCaseHref(approval!, false).href).toBe('/hires/hc1');
+    const back = '/my-work?filter=waiting';
+    expect(upcomingInterviewHref(fileRow!, { ...file, returnTo: back })).toBe(`/applications/a2?drawer=schedule&interview=iv2&returnTo=${encodeURIComponent(back)}`);
+    expect(upcomingInterviewHref(assigned!, { canOpenFile: false, returnTo: back })).toBe('/my-interviews?interview=iv-assigned');
+    expect(upcomingInterviewHref(assigned!, { canOpenFile: false, returnTo: back })).not.toContain('/applications/');
+    expect(joiningCaseHref(approval!, false, back).href).toBe(`/hires/hc1?returnTo=${encodeURIComponent(back)}`);
+    expect(joiningCaseHref(licence!, false, '/search?q=Ahmed').href).toBe(`/applications/a8?drawer=prehire&returnTo=${encodeURIComponent('/search?q=Ahmed')}`);
     expect(fx.joiningSoon!.every((row) => row.joined === false)).toBe(true);
   });
 

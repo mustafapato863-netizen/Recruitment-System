@@ -73,7 +73,7 @@ describe('M2 Team work', () => {
     const wait = screen.getByRole('heading', { name: 'Waiting on you' }).closest('section')!;
     expect(within(wait).getAllByRole('listitem')).toHaveLength(2);
     expect(wait).toHaveTextContent(/Your scorecard — Ahmed Embaby, HRIS Developer.*Late/);
-    expect(within(wait).getByRole('link', { name: 'Submit scorecard: Ahmed Embaby' })).toHaveAttribute('href', '/applications/a1?drawer=scorecard&interview=i1');
+    expect(within(wait).getByRole('link', { name: 'Submit scorecard: Ahmed Embaby' })).toHaveAttribute('href', '/applications/a1?drawer=scorecard&interview=i1&returnTo=%2Fmy-work');
     expect(wait).toHaveTextContent(/Offer approval — Lina Hassan, HRIS Developer.*Offer v1 submitted by Mariam Farag/);
     expect(within(wait).getByRole('button', { name: 'Review offer: Lina Hassan' })).toBeInTheDocument();
     expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent).slice(1)).toEqual(['Mariam Farag', 'Noura Al-Dosari', 'Youssef Ibrahim']);
@@ -85,7 +85,7 @@ describe('M2 Team work', () => {
     expect(card('Noura Al-Dosari')).toHaveTextContent('3 open · 2 overdue');
     expect(within(card('Noura Al-Dosari')).getAllByText('Overdue')).toHaveLength(2);
     expect(card('Youssef Ibrahim')).toHaveTextContent(/Interview — Rana Adel.*BI Data Analyst · SGH Riyadh.*This week/);
-    expect(within(m).getByRole('link', { name: 'Follow up — Nourhan Sami' })).toHaveAttribute('href', '/applications/a2');
+    expect(within(m).getByRole('link', { name: 'Follow up — Nourhan Sami' })).toHaveAttribute('href', '/applications/a2?returnTo=%2Fmy-work');
     expect(container.textContent).not.toMatch(/62,?000|71,?500|858|EGP|40000/);
     expect(await axeViolations(container)).toEqual([]);
   });

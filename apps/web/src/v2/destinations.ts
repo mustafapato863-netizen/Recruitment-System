@@ -1,3 +1,5 @@
+import { canUseMyInterviews } from '../auth/interviewer';
+import { allowedReturn, withReturnTo } from './returnTarget';
 import type { Seat } from './seat';
 
 /**
@@ -32,7 +34,6 @@ const PARAM_EQUIVALENT: Array<{ from: RegExp; to: Partial<Record<Seat, string>> 
   { from: /^\/vacancy-requests\/([^/]+)\/?$/, to: { manager: '/vacancy-requests?req=$1' } },
   { from: /^\/vacancies\/([^/]+)\/.+$/, to: { employee: '/vacancies/$1' } },
   { from: /^\/applications\/([^/]+)\/.+$/, to: { employee: '/applications/$1', manager: '/applications/$1' } },
-  { from: /^\/candidates\/(?!compare\/?$)[^/]+(\/.*)?$/, to: { employee: '/candidates?tab=bank' } },
 ];
 
 /**
@@ -209,6 +210,8 @@ const MY_INTERVIEWS = /^\/my-interviews\/?$/;
 const INTERVIEWER_ONLY_OK = ['/my-work', '/my-interviews', ...COMMON];
 // Temporary, permission-gated bridge for import landing and supported dataset batch review routes.
 const IMPORT_BRIDGE = /^\/import(?:\/(?:candidates|vacancy-requests|branches|positions|departments|skills|candidate-sources|interview-types)\/[^/]+)?\/?$/;
+const PERSON_BRIDGE = /^\/(?:candidates\/(?!compare\/?$)[^/]+(?:\/documents)?|cv-bank)\/?$/;
+const RECORD_TARGET = /^\/(?:applications|offers|hires|candidates)\/(?!compare(?:\/|$))[^/?#]+$/;
 export function isInterviewerOnly(user: { permissions?: readonly string[] } | null | undefined, interviewer: boolean): boolean {
   return interviewer && !(user?.permissions ?? []).includes('APPLICATION_VIEW');
 }
@@ -224,11 +227,21 @@ export function v2Redirect(seat: Seat, pathname: string, opts: { requisitions?: 
     return home;
   }
   if (isInvalidImportQuery(cleanPath, query)) return home;
-  const to = v2RedirectByPath(seat, cleanPath, opts);
+  const rawReturn = query ? new URLSearchParams(query).get('returnTo') : null;
+  const validatedReturn = rawReturn ? allowedReturn(rawReturn, { seat, ...opts }) : null;
+  let to = v2RedirectByPath(seat, cleanPath, opts);
+  if (to && validatedReturn) {
+    const toPath = to.split('?')[0];
+    if (RECORD_TARGET.test(toPath)) {
+      to = withReturnTo(to, validatedReturn);
+    } else if (to === home) {
+      to = validatedReturn;
+    }
+  }
   // A URL, or a redirect target, the route gate refuses goes home instead of the v1 Access Restricted page.
   if (!opts.permissions && !opts.isAdministrator) return samePath(pathname, to) ? null : to;
   const target = to ?? beforeHash;
-  if (target !== home && !canOpenRoute(target, opts.permissions, opts.isAdministrator)) return home;
+  if (target !== home && !canOpenRoute(target, opts.permissions, opts.isAdministrator)) return validatedReturn ?? home;
   // A same-path result only adds a query. The shell would replace the page with Navigate and the file would never mount.
   return samePath(pathname, to) ? null : to;
 }
@@ -265,6 +278,9 @@ const CANDIDATE_ENTRY = /^\/(?:portal(?:\/.*)?|my-applications)\/?$/;
 function v2RedirectByPath(seat: Seat, pathname: string, opts: { requisitions?: boolean; interviews?: boolean; interviewerOnly?: boolean; home?: string | null } = {}): string | null {
   if (pathname === '/' || pathname === '') return opts.home ?? SEAT_HOME[seat];
   if (CANDIDATE_ENTRY.test(pathname)) return null;
+  if (seat === 'employee' && !opts.interviewerOnly && PERSON_BRIDGE.test(pathname)) {
+    try { decodeURIComponent(pathname); return null; } catch { return opts.home ?? SEAT_HOME[seat]; }
+  }
   for (const rule of PARAM_EQUIVALENT) {
     const m = rule.from.exec(pathname);
     const to = m ? rule.to[seat] : undefined;
@@ -286,4 +302,52 @@ function v2RedirectByPath(seat: Seat, pathname: string, opts: { requisitions?: b
   if (isClassicPath(pathname)) return classicStaffLanding(seat, pathname, opts);
   for (const rule of EQUIVALENT) if (rule.from.test(pathname) && rule.to[seat]) return rule.to[seat]!;
   return SEAT_HOME[seat];
+}
+
+/** Seat plus the same flags the shell passes to v2Redirect. */
+export interface RoutePolicy {
+  seat: Seat;
+  permissions?: readonly string[];
+  isAdministrator?: boolean;
+  interviewerOnly?: boolean;
+  requisitions?: boolean;
+  interviews?: boolean;
+  home?: string | null;
+}
+
+/** The shell's route actor: special home, interviewer desk, and requisition rights. */
+export function routeActor(
+  seat: Seat,
+  user: { roles?: ReadonlyArray<{ code: string }>; permissions?: readonly string[] } | null | undefined,
+): RoutePolicy {
+  const hasExplicitPolicy = Boolean((user?.permissions && user.permissions.length > 0) || (user?.roles && user.roles.length > 0));
+  const permissions = hasExplicitPolicy ? (user?.permissions ?? []) : undefined;
+  const isAdministrator = (user?.roles ?? []).some((role) => role.code === 'ADMINISTRATOR');
+  const interviews = canUseMyInterviews(user as Parameters<typeof canUseMyInterviews>[0]);
+  return {
+    seat,
+    permissions,
+    isAdministrator,
+    interviews,
+    interviewerOnly: isInterviewerOnly(user, interviews),
+    requisitions: canUseRequisitions(user),
+    home: specialHome(user),
+  };
+}
+
+/**
+ * Where a direct offer/hire link goes when the record cannot be opened.
+ * Interviewer-only users stay on My interviews. Specialists stay on their queue.
+ */
+export function authorizedLanding(actor: RoutePolicy): string {
+  if (actor.interviewerOnly && actor.seat !== 'admin') {
+    const desk = '/my-interviews';
+    if ((!actor.permissions && !actor.isAdministrator) || canOpenRoute(desk, actor.permissions, actor.isAdministrator)) return desk;
+  }
+  const preferred = actor.home ?? SEAT_HOME[actor.seat];
+  if ((actor.permissions || actor.isAdministrator) && !canOpenRoute(preferred, actor.permissions, actor.isAdministrator)) {
+    const seatHome = SEAT_HOME[actor.seat];
+    if (seatHome !== preferred && canOpenRoute(seatHome, actor.permissions, actor.isAdministrator)) return seatHome;
+  }
+  return preferred;
 }

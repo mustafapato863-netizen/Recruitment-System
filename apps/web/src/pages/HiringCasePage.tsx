@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { isForbiddenError } from '../utils/vacancyAccess';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { getApi, patchApi, postApi } from '../api/client';
 import type { HiringCase, ComplianceStatus } from '@recruitflow/contracts';
 import { PageFrame } from '../components/ui/PageFrame';
@@ -16,7 +16,11 @@ import { ListSkeleton } from '../components/ui/Skeleton';
 import { ActivityFeed, type FeedEntry } from '../components/candidate/ActivityFeed';
 import { JoiningChecklist, isExpiredRequiredLicence, joiningBlockerSentences, requirementCleared, type ComplianceItem } from '../components/candidate/JoiningChecklist';
 import { useAuth } from '../auth/AuthContext';
+import { useV2Shell } from '../components/v2/shell/AppShellV2';
 import { useSetBreadcrumbTitle } from '../context/BreadcrumbContext';
+import { routeActor } from '../v2/destinations';
+import { allowedReturn, withReturnTo } from '../v2/returnTarget';
+import { resolveSeat } from '../v2/seat';
 import './PageEnhancementsV2.css';
 import { isLicenseCheckOnly, LICENSE_SCOPE_TEXT } from '../utils/licenseCheck';
 
@@ -54,7 +58,12 @@ const initialConfirmState: ConfirmState = {
 export function HiringCasePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
+  const shellSeat = useV2Shell()?.seat;
+  const seat = shellSeat ?? resolveSeat(user);
+  const back = allowedReturn(searchParams.get('returnTo'), routeActor(seat, user));
+  const backHref = back ?? '/hires';
   const licenseOnly = isLicenseCheckOnly(user?.permissions, (user?.roles ?? []).some((r) => r.code === 'ADMINISTRATOR'));
   const [hiringCase, setHiringCase] = useState<HiringCaseDetail | null>(null);
   const hiringCaseRef = useRef(hiringCase);
@@ -223,7 +232,7 @@ export function HiringCasePage() {
             title="Access restricted"
             description="You do not have permission to view this hiring case."
             actionLabel="Back to hires"
-            onAction={() => navigate('/hires')}
+            onAction={() => navigate(backHref)}
           />
         ) : (
           <PageState
@@ -231,7 +240,7 @@ export function HiringCasePage() {
             title="Hire not found"
             description="This hiring case does not exist or was removed."
             actionLabel="Back to hires"
-            onAction={() => navigate('/hires')}
+            onAction={() => navigate(backHref)}
           />
         )}
       </PageFrame>
@@ -370,7 +379,7 @@ export function HiringCasePage() {
         <>
           <StatusBadge status={hiringCase.status} />
           <Button variant="ghost" size="sm" asChild>
-            <Link to="/hires">
+            <Link to={backHref}>
               <Icon name="arrow-left" size={13} />
               Back
             </Link>
@@ -484,7 +493,7 @@ export function HiringCasePage() {
           hiringCase.applicationId ? (
             <div className="flex shrink-0 items-center gap-2">
               <Button variant="secondary" size="sm" asChild>
-                <Link to={`/applications/${hiringCase.applicationId}?drawer=prehire`}>Open pre-hire file</Link>
+                <Link to={withReturnTo(`/applications/${hiringCase.applicationId}?drawer=prehire`, back)}>Open pre-hire file</Link>
               </Button>
             </div>
           ) : null
@@ -506,7 +515,7 @@ export function HiringCasePage() {
           )}
           {hiringCase.applicationId && (
             <Button variant="secondary" size="sm" asChild>
-              <Link to={`/applications/${hiringCase.applicationId}`}>Application</Link>
+              <Link to={withReturnTo(`/applications/${hiringCase.applicationId}`, back)}>Application</Link>
             </Button>
           )}
         </div>}
