@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Download, Eye, FileText } from 'lucide-react';
+import { Download, Eye, FileText, RotateCw } from 'lucide-react';
 import { ApiError, downloadFileApi, getApi, postApi } from '../../api/client';
 import { ButtonV2 } from '../../components/v2/Button';
 import { InputV2, SelectV2 } from '../../components/v2/Field';
 import { StatusChip } from '../../components/v2/StatusChip';
-import { downloadDocument, type FileDocument } from '../api/applicationFile';
+import { downloadDocument, loadMessageSection, type FileDocument, type FileMessages, type SectionState } from '../api/applicationFile';
+import { canRetrySection, classifyReadError, isSectionKnown, sectionProblem } from '../api/sectionState';
 
 type HistDoc = FileDocument & {
   hasFile?: boolean;
@@ -15,22 +16,7 @@ type HistDoc = FileDocument & {
 };
 type HistRequest = { id: string; documentType: string; at: string };
 type HistoryPayload = { documents: HistDoc[]; requests: HistRequest[] };
-type Attempt = {
-  id: string;
-  templateId: string;
-  templateName: string;
-  state: 'Queued' | 'Sent' | 'Failed';
-  reason: string | null;
-  at: string;
-  retryOf: string | null;
-};
-type MessageTemplate = { id: string; name: string; subject?: string; body?: string };
-type MessagePayload = {
-  followUpDate: string | null;
-  destination: string;
-  templates: MessageTemplate[];
-  attempts: Attempt[];
-};
+type MessagePayload = FileMessages;
 
 const dayFmt = new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Cairo', day: 'numeric', month: 'short', year: 'numeric' });
 const timeFmt = new Intl.DateTimeFormat('en-GB', { timeZone: 'Africa/Cairo', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false });
@@ -50,32 +36,115 @@ function problem(e: unknown, fallback: string): string {
   return e instanceof ApiError || e instanceof Error ? e.message : fallback;
 }
 
-/** Versions, stored files, downloads and requests. A 404 keeps the file's existing document list. */
-export function DocumentHistory({ applicationId, fallback, onToast }: { applicationId: string; fallback: FileDocument[]; onToast: (message: string) => void }) {
-  const [docs, setDocs] = useState<HistDoc[] | null>(null);
-  const [requests, setRequests] = useState<HistRequest[] | null>(null);
+type HistoryRead =
+  | { status: 'loading' }
+  | { status: 'ready'; docs: HistDoc[]; requests: HistRequest[] }
+  | { status: 'not-found' }
+  | { status: 'unavailable' }
+  | { status: 'error'; failure: 'domain' | 'transient'; message: string };
+
+/** Versions, stored files, downloads and requests. Fallback rows stay visible if document-history fails. */
+export function DocumentHistory({
+  applicationId,
+  fallback,
+  fallbackKnown = true,
+  section,
+  onRetrySection,
+  hideUnavailableAlert = false,
+  onToast,
+}: {
+  applicationId: string;
+  fallback: FileDocument[];
+  fallbackKnown?: boolean;
+  section?: SectionState<FileDocument[]>;
+  onRetrySection?: () => void;
+  hideUnavailableAlert?: boolean;
+  onToast: (message: string) => void;
+}) {
+  const [read, setRead] = useState<HistoryRead>({ status: 'loading' });
   const [type, setType] = useState('Contract');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | undefined>();
   const [preview, setPreview] = useState<{ name: string; url: string } | null>(null);
   const [reload, setReload] = useState(0);
+  const hasSection = section !== undefined;
+  const parentKnown = section ? isSectionKnown(section) : fallbackKnown;
+  const parentUnavailable = section?.status === 'unavailable';
+  const parentLoading = section?.status === 'loading';
+  const parentError = section ? section.status === 'error' : !fallbackKnown;
 
   useEffect(() => {
+    if (parentLoading) {
+      setRead({ status: 'loading' });
+      return undefined;
+    }
+    if (parentUnavailable) {
+      setRead({ status: 'unavailable' });
+      return undefined;
+    }
+    if (hasSection && parentError) {
+      setRead({ status: 'loading' });
+      return undefined;
+    }
     let live = true;
-    getApi<HistoryPayload>(`/applications/${encodeURIComponent(applicationId)}/document-history`)
+    const requested = applicationId;
+    setRead({ status: 'loading' });
+    getApi<HistoryPayload>(`/applications/${encodeURIComponent(requested)}/document-history`)
       .then((payload) => {
-        if (!live || !payload || !Array.isArray(payload.documents)) return;
-        setDocs(payload.documents);
-        setRequests(Array.isArray(payload.requests) ? payload.requests : []);
+        if (!live) return;
+        if (
+          !payload
+          || !Array.isArray(payload.documents)
+          || !Array.isArray(payload.requests)
+          || !payload.documents.every((d) => d && typeof d === 'object' && !Array.isArray(d) && typeof d.id === 'string' && d.id.trim().length > 0 && typeof d.type === 'string' && d.type.trim().length > 0 && typeof d.name === 'string' && d.name.trim().length > 0 && typeof d.uploadedAt === 'string' && d.uploadedAt.trim().length > 0 && (d.downloads === undefined || (Array.isArray(d.downloads) && d.downloads.every((dl) => dl && typeof dl === 'object' && typeof dl.at === 'string' && dl.at.trim().length > 0))))
+          || !payload.requests.every((r) => r && typeof r === 'object' && !Array.isArray(r) && typeof r.id === 'string' && r.id.trim().length > 0 && typeof r.documentType === 'string' && r.documentType.trim().length > 0 && typeof r.at === 'string' && r.at.trim().length > 0)
+        ) {
+          setRead({ status: 'error', failure: 'domain', message: 'Document history could not be read.' });
+          return;
+        }
+        setRead({ status: 'ready', docs: payload.documents, requests: payload.requests });
       })
-      .catch(() => undefined);
+      .catch((error: unknown) => {
+        if (!live) return;
+        const failed = classifyReadError(error);
+        if (failed.status === 'unavailable') setRead({ status: 'unavailable' });
+        else if (failed.failure === 'not-found') setRead({ status: 'not-found' });
+        else setRead({ status: 'error', failure: failed.failure === 'transient' ? 'transient' : 'domain', message: failed.message });
+      });
     return () => { live = false; };
-  }, [applicationId, reload]);
+  }, [applicationId, hasSection, parentError, parentLoading, parentUnavailable, reload]);
 
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview.url); }, [preview]);
 
-  const shown: HistDoc[] = docs ?? fallback;
+  const shown: HistDoc[] = read.status === 'ready' ? read.docs : parentKnown ? fallback : [];
+  const requests = read.status === 'ready' ? read.requests : null;
+  const parentProblem = section && !parentKnown && section.status !== 'loading' ? sectionProblem('Documents', section) : null;
+  const historyProblem = parentProblem
+    ? (hideUnavailableAlert && parentProblem.tone === 'unavailable' ? null : parentProblem)
+    : read.status === 'unavailable'
+      ? { tone: 'unavailable' as const, message: 'Document history is not available for this role.' }
+      : read.status === 'error'
+        ? { tone: read.failure === 'transient' ? ('transient' as const) : ('danger' as const), message: read.failure === 'transient' ? 'Document history could not be loaded. Try again.' : read.message }
+        : read.status === 'not-found'
+          ? { tone: 'danger' as const, message: 'Document history could not be found for this file.' }
+          : null;
+  const canRetry = parentProblem
+    ? Boolean(section && canRetrySection(section) && onRetrySection)
+    : read.status === 'error' || read.status === 'not-found';
+  const handleRetry = () => {
+    if (parentProblem && onRetrySection) {
+      onRetrySection();
+      return;
+    }
+    if (!parentKnown && onRetrySection) onRetrySection();
+    setReload((n) => n + 1);
+  };
+  const showLoading = parentLoading || (parentKnown && read.status === 'loading');
+  const sayEmpty = shown.length === 0 && parentKnown && read.status === 'ready';
+  const requestUnavailable = parentUnavailable || read.status === 'unavailable';
+  const requestDisabled = !parentKnown || read.status !== 'ready';
   const ask = async () => {
+    if (requestUnavailable || requestDisabled || busy) return;
     const name = type.trim();
     if (name.length < 2 || name.length > 60) {
       setErr('Name the document in 2 to 60 characters.');
@@ -104,7 +173,14 @@ export function DocumentHistory({ applicationId, fallback, onToast }: { applicat
 
   return (
     <>
-      {shown.length === 0 ? <p className="rf2-file__muted">No documents yet.</p> : (
+      {showLoading ? <p className="rf2-file__muted">Loading document history.</p> : null}
+      {historyProblem ? (
+        <div className="rf2-file__section" role="alert" data-tone={historyProblem.tone === 'unavailable' ? 'unavailable' : historyProblem.tone === 'transient' ? 'warning' : 'danger'}>
+          <p>{historyProblem.message}</p>
+          {canRetry ? <ButtonV2 kind="secondary" size="sm" icon={<RotateCw />} onClick={handleRetry}>Retry documents</ButtonV2> : null}
+        </div>
+      ) : null}
+      {sayEmpty ? <p className="rf2-file__muted">No documents yet.</p> : shown.length === 0 ? null : (
         <ul className="rf2-docs">
           {shown.map((doc) => {
             const stored = typeof doc.hasFile === 'boolean' ? doc.hasFile : null;
@@ -137,10 +213,12 @@ export function DocumentHistory({ applicationId, fallback, onToast }: { applicat
         </ul>
       ) : null}
       <p className="rf2-file__muted">Rows without a stored file stay in history. This screen does not create bytes for them.</p>
-      <form className="rf2-file__request" onSubmit={(e) => { e.preventDefault(); void ask(); }}>
-        <InputV2 label="Document type" value={type} onChange={(e) => setType(e.target.value)} error={err} />
-        <ButtonV2 kind="secondary" size="sm" type="submit" loading={busy}>Request this document</ButtonV2>
-      </form>
+      {!requestUnavailable ? (
+        <form className="rf2-file__request" onSubmit={(e) => { e.preventDefault(); void ask(); }}>
+          <InputV2 label="Document type" value={type} disabled={requestDisabled} onChange={(e) => setType(e.target.value)} error={err} />
+          <ButtonV2 kind="secondary" size="sm" type="submit" loading={busy} disabled={requestDisabled}>Request this document</ButtonV2>
+        </form>
+      ) : null}
       {preview ? (
         <div className="rf2-preview" onClick={() => setPreview(null)}>
           <div role="dialog" aria-modal="true" aria-labelledby="doc-preview-h" className="rf2-preview__sheet" onClick={(e) => e.stopPropagation()} onKeyDown={(e) => { if (e.key === 'Escape') setPreview(null); }}>
@@ -156,22 +234,26 @@ export function DocumentHistory({ applicationId, fallback, onToast }: { applicat
 
 const TONE = { Queued: 'warning', Sent: 'success', Failed: 'danger' } as const;
 
-/** Templates and queued, sent, and failed attempts. Retry adds a row and leaves the failed attempt. */
-export function MessagesCard({ applicationId, followUpDate, omitAttempts = false }: { applicationId: string; followUpDate: string | null; omitAttempts?: boolean }) {
-  const [payload, setPayload] = useState<MessagePayload | null>(null);
-  const [missing, setMissing] = useState(false);
+/** Templates and queued, sent, and failed attempts. Retry of a failed send adds a row and leaves the failed attempt. */
+export function MessagesCard({ applicationId, followUpDate, omitAttempts = false, read, onReload }: { applicationId: string; followUpDate: string | null; omitAttempts?: boolean; read?: SectionState<MessagePayload>; onReload?: () => void }) {
+  const [localRead, setLocalRead] = useState<SectionState<MessagePayload>>({ status: 'loading' });
   const [templateId, setTemplateId] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [reload, setReload] = useState(0);
+  const section = read ?? localRead;
+  const payload = section.status === 'ready' ? section.data : null;
 
   useEffect(() => {
+    if (read) return undefined;
     let live = true;
-    getApi<MessagePayload>(`/applications/${encodeURIComponent(applicationId)}/messages`)
-      .then((row) => { if (live && row && Array.isArray(row.attempts)) setPayload(row); })
-      .catch(() => { if (live) setMissing(true); });
+    const requested = applicationId;
+    setLocalRead({ status: 'loading' });
+    void loadMessageSection(requested).then((next) => { if (live) setLocalRead(next); });
     return () => { live = false; };
-  }, [applicationId, reload]);
+  }, [applicationId, read, reload]);
+
+  const reloadRead = () => { if (onReload) onReload(); else setReload((n) => n + 1); };
 
   const send = async () => {
     if (!templateId) return;
@@ -179,7 +261,7 @@ export function MessagesCard({ applicationId, followUpDate, omitAttempts = false
     setErr(null);
     try {
       await postApi(`/applications/${encodeURIComponent(applicationId)}/messages`, { templateId });
-      setReload((n) => n + 1);
+      reloadRead();
     } catch (e) {
       setErr(problem(e, 'Could not send.'));
     } finally {
@@ -191,7 +273,7 @@ export function MessagesCard({ applicationId, followUpDate, omitAttempts = false
     setErr(null);
     try {
       await postApi(`/applications/${encodeURIComponent(applicationId)}/messages/${encodeURIComponent(attemptId)}/retry`, {});
-      setReload((n) => n + 1);
+      reloadRead();
     } catch (e) {
       setErr(problem(e, 'Could not retry.'));
     } finally {
@@ -201,12 +283,19 @@ export function MessagesCard({ applicationId, followUpDate, omitAttempts = false
 
   const follow = payload?.followUpDate ?? followUpDate;
   const chosen = payload?.templates.find((template) => template.id === templateId);
+  const readProblem = sectionProblem('Messages', section);
+  const attemptsEmpty = payload ? payload.attempts.length === 0 : false;
   return (
     <section className="rf2-card" aria-labelledby="msgs-h">
       <h3 id="msgs-h" className="rf2-card__title">Messages</h3>
       <p className="rf2-file__muted">Follow-up on this file: {follow ? day(follow) : 'not set'}. Sending does not change it.</p>
-      {missing ? <p className="rf2-file__muted">Message history is not available on this file.</p> : null}
-      {!payload && !missing ? <p className="rf2-file__muted">Loading message history.</p> : null}
+      {section.status === 'loading' ? <p className="rf2-file__muted">Loading message history.</p> : null}
+      {readProblem && section.status !== 'loading' ? (
+        <div className="rf2-file__section" role="alert" data-tone={readProblem.tone === 'unavailable' ? 'unavailable' : readProblem.tone === 'transient' ? 'warning' : 'danger'}>
+          <p>{readProblem.message}</p>
+          {section.status === 'error' ? <ButtonV2 kind="secondary" size="sm" icon={<RotateCw />} onClick={reloadRead}>Retry messages</ButtonV2> : null}
+        </div>
+      ) : null}
       {payload ? (
         <>
           <p className="rf2-file__muted">Recipient {payload.destination}. The candidate is not emailed.</p>
@@ -223,7 +312,7 @@ export function MessagesCard({ applicationId, followUpDate, omitAttempts = false
             ) : null}
             <ButtonV2 kind="secondary" size="sm" type="submit" loading={busy === 'send'} disabled={!templateId}>Send to local test</ButtonV2>
           </form>
-          {!omitAttempts && payload.attempts.length === 0 ? <p className="rf2-file__muted">No attempts yet.</p> : null}
+          {!omitAttempts && attemptsEmpty ? <p className="rf2-file__muted">No attempts yet.</p> : null}
           {!omitAttempts && payload.attempts.length > 0 ? (
             <ul className="rf2-msg-list" aria-label="Message attempts">
               {payload.attempts.map((row) => (

@@ -90,6 +90,8 @@ export function TeamResultV2() {
       {state.kind === 'error' ? <div role="alert"><EmptyStateV2 title="Could not load team result" body={state.message} action={<ButtonV2 kind="secondary" icon={<RotateCw />} onClick={() => setAttempt((n) => n + 1)}>Try again</ButtonV2>} /></div> : null}
       {data ? (
         <>
+          <p className="rf2-inline-note">Your {data.people.length} direct {data.people.length === 1 ? 'report' : 'reports'}, alphabetical, not ranked.</p>
+          <p className="rf2-inline-note">Team result counts direct reports, while Team work lists the reporting line.</p>
           <section className="rf2-panel" aria-labelledby="tres-h">
             <h2 id="tres-h" className="rf2-sr-only">Team result for {monthLabel(month)}</h2>
             <table className="rf2-jtable rf2-tres__table">

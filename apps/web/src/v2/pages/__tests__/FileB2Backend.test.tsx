@@ -12,7 +12,7 @@ import { ApplicationFileV2 } from '../ApplicationFileV2';
 
 let responses: Record<string, unknown> = {};
 function serve(scenario: Scenario, stage?: string) {
-  responses = { ...fileResponses(scenario), '/users/interviewers': [] };
+  responses = { ...fileResponses(scenario), '/users/interviewers': [], '/screening/application/a1/draft': null };
   if (stage) (responses['/applications/a1/workspace'] as { application: { stage: string } }).application.stage = stage;
   api.getApi.mockImplementation(async (path: string) => {
     const p = path.split('?')[0];
