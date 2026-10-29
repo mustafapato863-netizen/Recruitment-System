@@ -14,6 +14,10 @@ import { AccessControlService } from '../access-control/access-control.service';
 import type { CreateScreeningLogDto, UpsertScreeningDraftDto } from './screening.dto';
 import type { AuthUser } from '@recruitflow/contracts';
 
+// Drafts are private working records. Keep their contents when discarded, in line
+// with the no-hard-delete policy; this reserved value is never returned as an outcome.
+const DISCARDED_DRAFT = '__discarded__';
+
 function blankToNull(value: string | null | undefined): string | null {
   if (typeof value !== 'string') return null;
   const trimmed = value.trim();
@@ -106,8 +110,9 @@ export class ScreeningService {
 
     // A saved screen replaces only this user's draft. The stage stays where it is.
     if (this.prisma.screeningDraft) {
-      await this.prisma.screeningDraft.deleteMany({
-        where: { organizationId, userId: screenerId, applicationId: dto.applicationId },
+      await this.prisma.screeningDraft.updateMany({
+        where: { organizationId, userId: screenerId, applicationId: dto.applicationId, outcome: { not: DISCARDED_DRAFT } },
+        data: { outcome: DISCARDED_DRAFT },
       });
     }
 
@@ -124,7 +129,7 @@ export class ScreeningService {
     const row = await this.prisma.screeningDraft.findUnique({
       where: { organizationId_userId_applicationId: { organizationId, userId, applicationId } },
     });
-    return row ? this.toScreeningDraft(row) : null;
+    return row && row.outcome !== DISCARDED_DRAFT ? this.toScreeningDraft(row) : null;
   }
 
   async upsertScreeningDraft(
@@ -160,8 +165,9 @@ export class ScreeningService {
     user?: AuthUser,
   ): Promise<{ deleted: boolean }> {
     await this.requireApplication(organizationId, applicationId, user);
-    const result = await this.prisma.screeningDraft.deleteMany({
-      where: { organizationId, userId, applicationId },
+    const result = await this.prisma.screeningDraft.updateMany({
+      where: { organizationId, userId, applicationId, outcome: { not: DISCARDED_DRAFT } },
+      data: { outcome: DISCARDED_DRAFT },
     });
     return { deleted: result.count > 0 };
   }
