@@ -3,7 +3,7 @@ import { canOpenRoute, v2Redirect, type RoutePolicy } from './destinations';
 
 export type ReturnDest = {
   href: string;
-  kind: 'candidates' | 'compare' | 'my-work' | 'vacancy' | 'notifications' | 'search';
+  kind: 'candidates' | 'compare' | 'my-work' | 'vacancy' | 'notifications' | 'search' | 'cv-bank';
   vacancyId?: string;
 };
 
@@ -202,6 +202,15 @@ export function fileReturnTo(raw: string | null | undefined): ReturnDest | null 
   if (path === '/candidates') {
     return { href: `/candidates${sanitizeCandidatesQuery(queryParams)}`, kind: 'candidates' };
   }
+  if (path === '/cv-bank') {
+    const params = new URLSearchParams();
+    const search = (queryParams.get('search') ?? '').trim();
+    const page = queryParams.get('page');
+    if (search) params.set('search', search);
+    if (page && /^[1-9]\d{0,5}$/.test(page)) params.set('page', page);
+    const query = params.toString();
+    return { href: query ? `/cv-bank?${query}` : '/cv-bank', kind: 'cv-bank' };
+  }
   if (path === '/candidates/compare') {
     const href = buildCompareHref({
       job: queryParams.get('job') ?? '',
@@ -263,7 +272,7 @@ export function allowedReturn(raw: string | null | undefined, actor: RoutePolicy
   return allowedReturnDest(raw, actor)?.href ?? null;
 }
 
-const RECORD = /^\/(?:applications|offers|hires|candidates)\/(?!compare(?:\/|$))[^/?#]+$/;
+const RECORD = /^\/(?:applications\/[^/?#]+|offers\/[^/?#]+|hires\/[^/?#]+|candidates\/(?!compare(?:\/|$))[^/?#]+(?:\/documents)?)$/;
 
 /** Append a shaped return onto an application, offer, hire, or candidate detail link. Other hrefs stay as they are. */
 export function withReturnTo(href: string, returnTo: string | null | undefined): string {

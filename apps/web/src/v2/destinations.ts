@@ -34,7 +34,6 @@ const PARAM_EQUIVALENT: Array<{ from: RegExp; to: Partial<Record<Seat, string>> 
   { from: /^\/vacancy-requests\/([^/]+)\/?$/, to: { manager: '/vacancy-requests?req=$1' } },
   { from: /^\/vacancies\/([^/]+)\/.+$/, to: { employee: '/vacancies/$1' } },
   { from: /^\/applications\/([^/]+)\/.+$/, to: { employee: '/applications/$1', manager: '/applications/$1' } },
-  { from: /^\/candidates\/(?!compare\/?$)[^/]+(\/.*)?$/, to: { employee: '/candidates?tab=bank' } },
 ];
 
 /**
@@ -211,6 +210,7 @@ const MY_INTERVIEWS = /^\/my-interviews\/?$/;
 const INTERVIEWER_ONLY_OK = ['/my-work', '/my-interviews', ...COMMON];
 // Temporary, permission-gated bridge for import landing and supported dataset batch review routes.
 const IMPORT_BRIDGE = /^\/import(?:\/(?:candidates|vacancy-requests|branches|positions|departments|skills|candidate-sources|interview-types)\/[^/]+)?\/?$/;
+const PERSON_BRIDGE = /^\/(?:candidates\/(?!compare\/?$)[^/]+(?:\/documents)?|cv-bank)\/?$/;
 const RECORD_TARGET = /^\/(?:applications|offers|hires|candidates)\/(?!compare(?:\/|$))[^/?#]+$/;
 export function isInterviewerOnly(user: { permissions?: readonly string[] } | null | undefined, interviewer: boolean): boolean {
   return interviewer && !(user?.permissions ?? []).includes('APPLICATION_VIEW');
@@ -278,6 +278,9 @@ const CANDIDATE_ENTRY = /^\/(?:portal(?:\/.*)?|my-applications)\/?$/;
 function v2RedirectByPath(seat: Seat, pathname: string, opts: { requisitions?: boolean; interviews?: boolean; interviewerOnly?: boolean; home?: string | null } = {}): string | null {
   if (pathname === '/' || pathname === '') return opts.home ?? SEAT_HOME[seat];
   if (CANDIDATE_ENTRY.test(pathname)) return null;
+  if (seat === 'employee' && !opts.interviewerOnly && PERSON_BRIDGE.test(pathname)) {
+    try { decodeURIComponent(pathname); return null; } catch { return opts.home ?? SEAT_HOME[seat]; }
+  }
   for (const rule of PARAM_EQUIVALENT) {
     const m = rule.from.exec(pathname);
     const to = m ? rule.to[seat] : undefined;

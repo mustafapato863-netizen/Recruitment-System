@@ -19,6 +19,7 @@ vi.mock('../../context/BreadcrumbContext', () => ({ useSetBreadcrumbTitle: vi.fn
 vi.mock('../PageEnhancementsV2.css', () => ({}));
 
 import { CandidateDetailPage } from '../CandidateDetailPage';
+import { CandidateDocumentsPage } from '../CandidateDocumentsPage';
 import { NotificationsPage } from '../NotificationsPage';
 
 const unread: NotificationRecord = {
@@ -201,7 +202,7 @@ describe('CandidateDetailPage returnTo contract', () => {
 
     expect(await screen.findByRole('heading', { name: 'Ahmed Embaby' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Back/i })).toHaveAttribute('href', '/notifications');
-    expect(screen.getByRole('link', { name: /Documents/i })).toHaveAttribute('href', '/candidates/c1/documents');
+    expect(screen.getByRole('link', { name: /Documents/i })).toHaveAttribute('href', '/candidates/c1/documents?returnTo=%2Fnotifications');
     expect(screen.getByRole('link', { name: 'Review application' })).toHaveAttribute(
       'href',
       '/applications/app-1?returnTo=%2Fnotifications',
@@ -253,5 +254,22 @@ describe('CandidateDetailPage returnTo contract', () => {
     const actionBtn = await screen.findByRole('button', { name: 'Back to Candidates' });
     await u.click(actionBtn);
     expect(screen.getByTestId('loc')).toHaveTextContent('/search?q=Ahmed');
+  });
+
+  it('keeps the authorized source through profile, documents and explicit Back', async () => {
+    const u = userEvent.setup();
+    mockCandidateDetail();
+    const existing = api.getApi.getMockImplementation()!;
+    api.getApi.mockImplementation(async (url: string) => url === '/documents/candidate/c1' ? [] : existing(url));
+    render(<MemoryRouter initialEntries={['/candidates/c1?returnTo=%2Fcandidates%3Ftab%3Dbank%26search%3DAhmed']}><Routes>
+      <Route path="/candidates/:id" element={<CandidateDetailPage />} />
+      <Route path="/candidates/:id/documents" element={<CandidateDocumentsPage />} />
+    </Routes><Loc /></MemoryRouter>);
+    await screen.findByRole('heading', { name: 'Ahmed Embaby' });
+    await u.click(screen.getByRole('link', { name: /Documents/i }));
+    expect(await screen.findByRole('heading', { name: /Document Vault/ })).toBeInTheDocument();
+    await u.click(screen.getByRole('link', { name: 'Back to profile' }));
+    await screen.findByRole('heading', { name: 'Ahmed Embaby' });
+    expect(screen.getByRole('link', { name: 'Back' })).toHaveAttribute('href', '/candidates?tab=bank&search=Ahmed');
   });
 });

@@ -43,7 +43,7 @@ describe('scopedSearch (client mitigation of an unscoped /search)', () => {
     const flat = r.groups.flatMap((g) => g.items);
     expect(flat.map((i) => [i.title, i.href])).toEqual([
       ['Ahmed Embaby', '/applications/a7'],
-      ['Ahmed Fathy', '/candidates?tab=bank'],
+      ['Ahmed Fathy', '/candidates/c-x'],
       ['HRIS Developer', '/vacancies/v1'],
       ['Pharmacist', '/vacancies/r1'],
       ['Lab Technician', '/vacancies/r9'],
@@ -58,7 +58,7 @@ describe('scopedSearch (client mitigation of an unscoped /search)', () => {
     const kept = await scopedSearch('Ahmed', undefined, '/my-work?filter=waiting');
     const keptFlat = kept.groups.flatMap((g) => g.items);
     expect(keptFlat.find((i) => i.title === 'Ahmed Embaby')?.href).toBe(`/applications/a7?returnTo=${encodeURIComponent('/my-work?filter=waiting')}`);
-    expect(keptFlat.find((i) => i.title === 'Ahmed Fathy')?.href).toBe('/candidates?tab=bank');
+    expect(keptFlat.find((i) => i.title === 'Ahmed Fathy')?.href).toBe(`/candidates/c-x?returnTo=${encodeURIComponent('/my-work?filter=waiting')}`);
     expect(keptFlat.find((i) => i.title === 'HRIS Developer')?.href).toBe('/vacancies/v1');
     const fromSearch = await scopedSearch('Ahmed', undefined, '/search?q=Ahmed');
     expect(fromSearch.groups.flatMap((g) => g.items).find((i) => i.title === 'Ahmed Embaby')?.href).toBe(`/applications/a7?returnTo=${encodeURIComponent('/search?q=Ahmed')}`);

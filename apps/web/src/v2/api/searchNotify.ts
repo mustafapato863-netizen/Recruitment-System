@@ -60,7 +60,7 @@ export async function scopedSearch(q: string, signal?: { aborted: boolean }, ret
         const app = appByCandidate.get(it.entityId);
         const titleOnly = (it.subtitle ?? '').split(' · ').filter((p) => !EMAIL.test(p) && !/^CAN-/.test(p))[0] ?? '';
         if (app) people.push({ key: `c:${it.entityId}`, kind: 'file', title: it.title, meta: [app.positionTitle, app.stage, app.primaryRecruiterName ? `Owner: ${app.primaryRecruiterName}` : null].filter(Boolean).join(' · '), href: withReturnTo(`/applications/${enc(app.id)}`, returnTo) });
-        else people.push({ key: `c:${it.entityId}`, kind: 'person', title: it.title, meta: [titleOnly, 'In the bank'].filter(Boolean).join(' · '), href: `/candidates?tab=bank` });
+        else people.push({ key: `c:${it.entityId}`, kind: 'person', title: it.title, meta: [titleOnly, 'In the bank'].filter(Boolean).join(' · '), href: withReturnTo(`/candidates/${enc(it.entityId)}`, returnTo) });
         break;
       }
       case 'vacancy': {

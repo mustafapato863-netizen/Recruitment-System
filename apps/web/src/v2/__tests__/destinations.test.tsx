@@ -95,11 +95,11 @@ describe('candidate entry paths stay out of the staff home', () => {
 
 describe('classic staff URLs land on a v2 surface', () => {
   const opts = { requisitions: true, interviews: true } as const;
-  const employee: Record<string, string> = {
+  const employee: Record<string, string | null> = {
     '/hires/approvals/inbox': '/my-work', '/hires': '/my-work', '/hires/h1': '/my-work', '/licenses': '/my-work',
     '/joinings': '/my-work', '/joining': '/my-work', '/interviews': '/my-interviews', '/interviews/calendar': '/my-interviews', '/offers': '/my-work',
-    '/vacancies/v1/analytics': '/vacancies/v1', '/candidates/c1': '/candidates?tab=bank', '/candidates/c1/documents': '/candidates?tab=bank',
-    '/cv-bank': '/candidates', '/sourcing-match': '/talent-pools', '/talent-pool': '/talent-pools',
+    '/vacancies/v1/analytics': '/vacancies/v1', '/candidates/c1': null, '/candidates/c1/documents': null,
+    '/cv-bank': null, '/sourcing-match': '/talent-pools', '/talent-pool': '/talent-pools',
     '/classic/candidates': '/candidates', '/classic/vacancies': '/vacancies', '/settings/targets': '/my-work', '/access-control': '/my-work',
     '/classic/master-data': '/my-work', '/settings': '/my-work', '/classic/pipeline-settings': '/my-work',
   };
@@ -117,7 +117,6 @@ describe('classic staff URLs land on a v2 surface', () => {
   };
   it.each(Object.entries(employee))('employee %s → %s', (path, to) => {
     expect(v2Redirect('employee', path, opts)).toBe(to);
-    expect(v2Redirect('employee', path, opts)).not.toBeNull();
   });
   it.each(Object.entries(manager))('manager %s → %s', (path, to) => expect(v2Redirect('manager', path, opts)).toBe(to));
   it.each(Object.entries(admin))('admin %s → %s', (path, to) => expect(v2Redirect('admin', path, opts)).toBe(to));
@@ -135,6 +134,14 @@ describe('classic staff URLs land on a v2 surface', () => {
   });
   it('interviewer-only users still go to /my-interviews (B2V-2)', () => {
     expect(v2Redirect('employee', '/cv-bank', { interviews: true, interviewerOnly: true })).toBe('/my-interviews');
+  });
+  it('only retains person, documents and CV Bank for authorized employees', () => {
+    for (const path of ['/candidates/c1', '/candidates/c1/documents', '/cv-bank']) {
+      expect(v2Redirect('employee', path, { permissions: ['CANDIDATE_VIEW'] })).toBeNull();
+      expect(v2Redirect('employee', path, { permissions: ['VACANCY_VIEW'] })).toBe('/my-work');
+      expect(v2Redirect('employee', path, { interviewerOnly: true })).toBe('/my-interviews');
+    }
+    expect(v2Redirect('employee', '/candidates/%zz')).toBe('/my-work');
   });
   it('keeps authorized import landing and batch review routes at their original URLs for employees', () => {
     expect(v2Redirect('employee', '/import', { permissions: ['CANDIDATE_CREATE'] })).toBeNull();
@@ -217,7 +224,7 @@ describe('talent pools are an employee page', () => {
     expect(v2Redirect('manager', '/talent-pools', opts)).toBe('/my-work');
     expect(v2Redirect('admin', '/talent-pools/pool-1', opts)).toBe('/users');
     expect(v2Redirect('employee', '/sourcing-match', { ...opts, permissions: ['CANDIDATE_VIEW'] })).toBe('/talent-pools');
-    expect(v2Redirect('employee', '/cv-bank', { ...opts, permissions: ['CANDIDATE_VIEW'] })).toBe('/candidates');
+    expect(v2Redirect('employee', '/cv-bank', { ...opts, permissions: ['CANDIDATE_VIEW'] })).toBeNull();
     expect(v2Redirect('employee', '/import', { ...opts, permissions: ['CANDIDATE_VIEW'] })).toBeNull();
     expect(v2Redirect('employee', '/import', { ...opts, permissions: ['VACANCY_VIEW'] })).toBe('/my-work');
     expect(v2Redirect('manager', '/sourcing-match', opts)).toBe('/my-work');

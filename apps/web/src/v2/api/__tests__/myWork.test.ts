@@ -170,7 +170,7 @@ describe('E2: My Work actions open the v2 file', () => {
     expect(upcomingInterviewHref(assigned!, { canOpenFile: false, returnTo: back })).toBe('/my-interviews?interview=iv-assigned');
     expect(upcomingInterviewHref(assigned!, { canOpenFile: false, returnTo: back })).not.toContain('/applications/');
     expect(joiningCaseHref(approval!, false, back).href).toBe(`/hires/hc1?returnTo=${encodeURIComponent(back)}`);
-    expect(joiningCaseHref(licence!, false, '/search?q=Ahmed').href).toBe('/applications/a8?drawer=prehire');
+    expect(joiningCaseHref(licence!, false, '/search?q=Ahmed').href).toBe(`/applications/a8?drawer=prehire&returnTo=${encodeURIComponent('/search?q=Ahmed')}`);
     expect(fx.joiningSoon!.every((row) => row.joined === false)).toBe(true);
   });
 

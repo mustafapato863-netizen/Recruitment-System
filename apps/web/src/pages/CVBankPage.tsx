@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
+import { withReturnTo } from '../v2/returnTarget';
 import type { CandidateDocument, CvBankBackupStatus, PaginatedResult } from '@recruitflow/contracts';
 import { downloadApi, getApi } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
@@ -18,14 +19,19 @@ import './PageEnhancementsV2.css';
 
 export function CVBankPage() {
   const { user } = useAuth();
+  const [params, setParams] = useSearchParams();
   const canDownload = Boolean(user?.permissions.includes('DOWNLOAD_DOCUMENTS'));
   const [result, setResult] = useState<PaginatedResult<CandidateDocument> | null>(null);
   const [backupStatus, setBackupStatus] = useState<CvBankBackupStatus | null>(null);
-  const [search, setSearch] = useState('');
-  const [appliedSearch, setAppliedSearch] = useState('');
-  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState(params.get('search') ?? '');
+  const appliedSearch = params.get('search') ?? '';
+  const rawPage = params.get('page') ?? '';
+  const page = /^[1-9]\d{0,5}$/.test(rawPage) ? Number(rawPage) : 1;
+  const returnTo = `/cv-bank${params.toString() ? `?${params.toString()}` : ''}`;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  useEffect(() => { setSearch(appliedSearch); }, [appliedSearch]);
 
   const load = async () => {
     setLoading(true);
@@ -86,7 +92,7 @@ export function CVBankPage() {
       header: 'Candidate',
       priority: 'primary',
       render: (document) => (
-        <Link className="font-bold text-rf-action hover:underline" to={`/candidates/${document.candidateId}`}>
+        <Link className="font-bold text-rf-action hover:underline" to={withReturnTo(`/candidates/${encodeURIComponent(document.candidateId)}`, returnTo)}>
           {document.candidateName || document.candidateId}
         </Link>
       ),
@@ -126,7 +132,7 @@ export function CVBankPage() {
       {backupStatus && (backupStatus.pendingFiles > 0 || backupStatus.rejectedFiles > 0 || backupStatus.metadataOnlyFiles > 0) && <Alert tone="warning" title="CV records need attention">{backupStatus.pendingFiles} pending, {backupStatus.rejectedFiles} rejected, and {backupStatus.metadataOnlyFiles} metadata-only record(s). Only clean stored files can be downloaded.</Alert>}
       <section className="rf-table-shell overflow-hidden rounded-2xl border border-rf-border-subtle bg-rf-surface shadow-xs">
         <SectionHeader title="Candidate CV records" description="Use the candidate profile to upload a new CV file; download access is permission-protected." density="compact" className="border-b border-rf-border-subtle p-4" />
-        <DataToolbar search={<Input aria-label="Search CV Bank" placeholder="Search candidate or file name..." value={search} onChange={(event) => setSearch(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { setPage(1); setAppliedSearch(search.trim()); } }} />} />
+        <DataToolbar search={<Input aria-label="Search CV Bank" placeholder="Search candidate or file name..." value={search} onChange={(event) => setSearch(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') { const next = new URLSearchParams(); if (search.trim()) next.set('search', search.trim()); setParams(next); } }} />} />
         {loading ? <TableSkeleton columns={5} rows={6} /> : documents.length === 0 ? <PageState kind="empty" title="No CV records found" description={appliedSearch ? 'Try a different candidate or file search.' : 'Upload a CV from a candidate profile to build the bank.'} /> : (
           <ResponsiveDataView
             rows={documents}
