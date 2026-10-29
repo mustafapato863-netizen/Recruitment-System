@@ -272,4 +272,46 @@ describe('CandidateDetailPage returnTo contract', () => {
     await screen.findByRole('heading', { name: 'Ahmed Embaby' });
     expect(screen.getByRole('link', { name: 'Back' })).toHaveAttribute('href', '/candidates?tab=bank&search=Ahmed');
   });
+
+  it('keeps document edits unavailable to read-only users and does not report failed reads as zero', async () => {
+    const u = userEvent.setup();
+    auth.user.permissions = ['CANDIDATE_VIEW'];
+    api.postApi.mockClear();
+    mockCandidateDetail();
+    const existing = api.getApi.getMockImplementation()!;
+    let fail = true;
+    api.getApi.mockImplementation(async (url: string) => {
+      if (url === '/documents/candidate/c1') {
+        if (fail) throw new Error('Documents are unavailable');
+        return [];
+      }
+      return existing(url);
+    });
+    render(<MemoryRouter initialEntries={['/candidates/c1/documents']}><Routes>
+      <Route path="/candidates/:id/documents" element={<CandidateDocumentsPage />} />
+    </Routes></MemoryRouter>);
+    await screen.findByText('Document list unavailable');
+    expect(screen.queryByRole('button', { name: 'Add document record' })).not.toBeInTheDocument();
+    for (const label of ['Total Documents', 'Verified Files', 'Pending Review']) {
+      expect(screen.getByText(label).closest('article')).toHaveTextContent('—');
+    }
+    expect(screen.queryByText('No document records')).not.toBeInTheDocument();
+    fail = false;
+    await u.click(screen.getAllByRole('button', { name: 'Retry' })[0]);
+    expect(await screen.findByText('No document records')).toBeInTheDocument();
+    expect(screen.getByText('Total Documents').closest('article')).toHaveTextContent('0');
+    expect(api.postApi).not.toHaveBeenCalled();
+  });
+  it('allows an editor to open the document form', async () => {
+    auth.user.permissions = ['CANDIDATE_VIEW', 'CANDIDATE_EDIT'];
+    mockCandidateDetail();
+    const existing = api.getApi.getMockImplementation()!;
+    api.getApi.mockImplementation(async (url: string) => url === '/documents/candidate/c1' ? [] : existing(url));
+    render(<MemoryRouter initialEntries={['/candidates/c1/documents']}><Routes>
+      <Route path="/candidates/:id/documents" element={<CandidateDocumentsPage />} />
+    </Routes></MemoryRouter>);
+    const u = userEvent.setup();
+    await u.click(await screen.findByRole('button', { name: 'Add document record' }));
+    expect(screen.getByRole('dialog', { name: 'Add Document Record' })).toBeInTheDocument();
+  });
 });
