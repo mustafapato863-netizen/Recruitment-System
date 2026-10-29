@@ -17,6 +17,7 @@
 import { getApi, patchApi, postApi } from '../../api/client';
 import { stripPay } from './paySafety';
 import { fetchOpenJobs } from './jobs';
+import { withReturnTo } from '../returnTarget';
 
 /** #4 @2aab3e3: another owner's job comes back with redacted:true, subtitle "site · joined/target seats", no code, no status. */
 export interface GlobalSearchItem { entityType: string; entityId: string; title: string; subtitle?: string; status?: string; redacted?: boolean }
@@ -31,7 +32,7 @@ type MyApp = { id: string; candidateId: string; stage: string; positionTitle?: s
 const list = <T,>(r: T[] | { data: T[] } | null | undefined): T[] => (Array.isArray(r) ? r : r?.data ?? []);
 const day = (iso: string) => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? iso : new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', timeZone: 'Africa/Cairo' }).format(d); };
 
-export async function scopedSearch(q: string, signal?: { aborted: boolean }): Promise<ScopedSearch> {
+export async function scopedSearch(q: string, signal?: { aborted: boolean }, returnTo?: string | null): Promise<ScopedSearch> {
   const query = q.trim();
   const [raw, apps, jobs] = await Promise.all([
     getApi<GlobalSearchResponse>(`/search?q=${enc(query)}&limit=10`),
@@ -51,14 +52,14 @@ export async function scopedSearch(q: string, signal?: { aborted: boolean }): Pr
     switch (it.entityType) {
       case 'application':
         if (!myAppIds.has(it.entityId)) { hidden++; break; }
-        files.push({ key: `a:${it.entityId}`, kind: 'file', title: it.title, meta: [it.subtitle, it.status].filter(Boolean).join(' · '), href: `/applications/${enc(it.entityId)}` });
+        files.push({ key: `a:${it.entityId}`, kind: 'file', title: it.title, meta: [it.subtitle, it.status].filter(Boolean).join(' · '), href: withReturnTo(`/applications/${enc(it.entityId)}`, returnTo) });
         break;
       case 'candidate': {
         if (seenCandidates.has(it.entityId)) break;
         seenCandidates.add(it.entityId);
         const app = appByCandidate.get(it.entityId);
         const titleOnly = (it.subtitle ?? '').split(' · ').filter((p) => !EMAIL.test(p) && !/^CAN-/.test(p))[0] ?? '';
-        if (app) people.push({ key: `c:${it.entityId}`, kind: 'file', title: it.title, meta: [app.positionTitle, app.stage, app.primaryRecruiterName ? `Owner: ${app.primaryRecruiterName}` : null].filter(Boolean).join(' · '), href: `/applications/${enc(app.id)}` });
+        if (app) people.push({ key: `c:${it.entityId}`, kind: 'file', title: it.title, meta: [app.positionTitle, app.stage, app.primaryRecruiterName ? `Owner: ${app.primaryRecruiterName}` : null].filter(Boolean).join(' · '), href: withReturnTo(`/applications/${enc(app.id)}`, returnTo) });
         else people.push({ key: `c:${it.entityId}`, kind: 'person', title: it.title, meta: [titleOnly, 'In the bank'].filter(Boolean).join(' · '), href: `/candidates?tab=bank` });
         break;
       }
@@ -90,19 +91,27 @@ export const fetchNotifications = async (pageSize = 10) => {
 };
 export const markRead = (id: string) => patchApi(`/notifications/${enc(id)}/read`, {});
 export const markAllRead = () => postApi<{ count: number }>('/notifications/read-all', {});
-/** v2 Employee routing: only E13 files, jobs and My Work. Offers/requisitions/interviews/candidates have no Employee-safe page → no link. */
-/** The file comes first (b280ac5: offer/interview/file notifications carry applicationId); else the entity. */
-export function notificationHref(n: NotificationRecord): string | null {
-  if (n.applicationId) return `/applications/${enc(n.applicationId)}`;
+/**
+ * The file comes first (offer/interview/file notifications carry applicationId); else the entity.
+ * An offer with no file opens /offers/:id so the offer lookup can resolve it.
+ * A candidate with no file opens /candidates/:id, preserving the candidate id.
+ * returnTo is attached on application, offer, hire, and candidate detail links the return contract accepts.
+ */
+export function notificationHref(n: NotificationRecord, returnTo?: string | null): string | null {
+  // Array.map passes its index as the second argument. Only a real return string is kept.
+  const back = typeof returnTo === 'string' ? returnTo : null;
+  const record = (href: string) => withReturnTo(href, back);
+  if (n.applicationId) return record(`/applications/${enc(n.applicationId)}`);
   if (!n.entityId) return null;
   const t = (n.entityType ?? '').toLowerCase().replace(/[^a-z]/g, '');
-  if (t === 'application') return `/applications/${enc(n.entityId)}`;
+  if (t === 'application') return record(`/applications/${enc(n.entityId)}`);
   if (t === 'vacancy' || t === 'job') return `/vacancies/${enc(n.entityId)}`;
   if (t === 'task') return '/my-work';
   if (t === 'vacancyrequest' || t === 'requisition') return `/vacancy-requests?req=${enc(n.entityId)}`;
   if (t === 'interview') return `/my-interviews?interview=${enc(n.entityId)}`;
-  if (t === 'hiringcase') return `/hires/${enc(n.entityId)}`;
-  if (t === 'candidate') return `/candidates/${enc(n.entityId)}`;
+  if (t === 'hiringcase') return record(`/hires/${enc(n.entityId)}`);
+  if (t === 'offer') return record(`/offers/${enc(n.entityId)}`);
+  if (t === 'candidate') return record(`/candidates/${enc(n.entityId)}`);
   return null;
 }
 /** Hide pay text even inside messages (e.g. a v1 template that quotes a salary). */

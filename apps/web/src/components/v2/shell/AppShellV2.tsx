@@ -217,7 +217,7 @@ export interface AppShellV2Props {
 function ShellFrame({ user, seat, onSignOut, children }: AppShellV2Props) {
   const location = useLocation();
   // B2-17/18: "/" goes to the seat's home; v1 pages the seat can't use redirect to their v2 equivalent.
-  const redirectTo = v2Redirect(seat, location.pathname, { requisitions: canUseRequisitions(user), interviews: canUseMyInterviews(user), interviewerOnly: isInterviewerOnly(user, canUseMyInterviews(user)), home: specialHome(user), permissions: user.permissions ?? [], isAdministrator: (user.roles ?? []).some((r) => r.code === 'ADMINISTRATOR') });
+  const redirectTo = v2Redirect(seat, `${location.pathname}${location.search}`, { requisitions: canUseRequisitions(user), interviews: canUseMyInterviews(user), interviewerOnly: isInterviewerOnly(user, canUseMyInterviews(user)), home: specialHome(user), permissions: user.permissions ?? [], isAdministrator: (user.roles ?? []).some((r) => r.code === 'ADMINISTRATOR') });
   // A same-path target (adding ?drawer=) must not replace the outlet. Navigate would run again on the next pathname check and the page would never mount.
   const redirectPath = redirectTo?.split('?')[0];
   const leavesPage = Boolean(redirectTo) && redirectPath !== location.pathname;

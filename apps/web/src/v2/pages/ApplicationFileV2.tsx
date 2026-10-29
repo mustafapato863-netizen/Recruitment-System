@@ -16,7 +16,12 @@ import { DRAWERS, DRAWER_KEYS, errorText, sentBack, type DrawerKey } from '../dr
 import { OfferDecisionDrawer } from '../drawers/OfferDecisionDrawer';
 import { canSeePay, money } from '../api/offerDecision';
 import { useAuth } from '../../auth/AuthContext';
+import { useV2Shell } from '../../components/v2/shell/AppShellV2';
 import { useSetBreadcrumbTitle } from '../../context/BreadcrumbContext';
+import { authorizedLanding, routeActor, type RoutePolicy } from '../destinations';
+import { allowedReturnDest, fileReturnTo } from '../returnTarget';
+
+export { fileReturnTo };
 
 type Load = { kind: 'loading' } | { kind: 'ready'; file: ApplicationFile } | { kind: 'forbidden'; message: string } | { kind: 'missing' } | { kind: 'error'; message: string };
 
@@ -82,54 +87,51 @@ type HubTab = 'overview' | 'activity' | 'documents';
 type FileMode = 'owner' | 'manager' | 'approver' | 'licence';
 const hubTab = (raw: string | null): HubTab => (raw === 'activity' || raw === 'documents' ? raw : 'overview');
 
-type ReturnDest = { href: string; kind: 'candidates' | 'my-work' | 'vacancy'; vacancyId?: string };
-
-const hasControl = (value: string) => {
-  for (let i = 0; i < value.length; i += 1) {
-    const code = value.charCodeAt(i);
-    if (code <= 31 || code === 127) return true;
-  }
-  return false;
-};
-
-/** Same-origin relative return targets only: /candidates, /my-work, or /vacancies/:id, plus the original query. */
-export function fileReturnTo(raw: string | null): ReturnDest | null {
-  if (raw == null) return null;
-  const value = raw.trim();
-  if (value.length === 0 || value.length > 2000 || !value.startsWith('/') || value.startsWith('//')) return null;
-  if (hasControl(value) || value.includes('\\') || value.includes('#') || value.includes('://')) return null;
-  const qIndex = value.indexOf('?');
-  const rawPath = qIndex === -1 ? value : value.slice(0, qIndex);
-  const rawQuery = qIndex === -1 ? '' : value.slice(qIndex);
-  if (rawQuery.slice(1).includes('?')) return null;
-  let path: string;
-  try { path = decodeURIComponent(rawPath); } catch { return null; }
-  if (!path.startsWith('/') || path.startsWith('//') || path.includes('\\') || path.includes('://')) return null;
-  const segments = path.split('/');
-  if (segments[0] !== '' || segments.slice(1).some((seg) => seg === '' || seg === '.' || seg === '..')) return null;
-  if (path === '/candidates') return { href: `/candidates${rawQuery}`, kind: 'candidates' };
-  if (path === '/my-work') return { href: `/my-work${rawQuery}`, kind: 'my-work' };
-  if (segments.length === 3 && segments[1] === 'vacancies' && /^[A-Za-z0-9_-]+$/.test(segments[2] ?? '')) {
-    return { href: `/vacancies/${segments[2]}${rawQuery}`, kind: 'vacancy', vacancyId: segments[2] };
-  }
-  return null;
+function fallbackBack(actor: RoutePolicy): { href: string; label: string; crumb: string } {
+  const landing = authorizedLanding(actor);
+  if (landing === '/hires/approvals/inbox') return { href: landing, label: 'Final approvals', crumb: 'Final approvals' };
+  if (landing === '/licenses') return { href: landing, label: 'Licences', crumb: 'Licences' };
+  if (landing === '/users') return { href: landing, label: 'Back to Users', crumb: 'Users' };
+  if (landing === '/my-interviews') return { href: landing, label: 'Back to My interviews', crumb: 'My interviews' };
+  return actor.seat === 'manager'
+    ? { href: '/my-work', label: 'Team work', crumb: 'Team work' }
+    : { href: '/my-work', label: 'Back to My Work', crumb: 'My Work' };
 }
 
-function destination(file: ApplicationFile, mode: FileMode, raw: string | null): { href: string; label: string; crumb: string } {
+function destination(file: ApplicationFile, mode: FileMode, raw: string | null, actor: RoutePolicy): { href: string; label: string; crumb: string } {
   const app = file.workspace.application;
   const title = app.positionTitle ?? 'Job';
   const pipeline = `/vacancies/${encodeURIComponent(app.vacancyId)}`;
-  if (mode === 'approver') return { href: '/hires/approvals/inbox', label: 'Final approvals', crumb: 'Final approvals' };
-  if (mode === 'licence') return { href: '/licenses', label: 'Licences', crumb: 'Licences' };
-  if (mode === 'manager') return { href: '/my-work', label: 'Team work', crumb: 'Team work' };
-  const dest = fileReturnTo(raw);
+  const dest = allowedReturnDest(raw, actor);
+  if (mode === 'approver') {
+    if (dest?.kind === 'notifications') return { href: dest.href, label: 'Back to Notifications', crumb: 'Notifications' };
+    if (dest?.kind === 'search') return { href: dest.href, label: 'Back to Search', crumb: 'Search' };
+    return { href: '/hires/approvals/inbox', label: 'Final approvals', crumb: 'Final approvals' };
+  }
+  if (mode === 'licence') {
+    if (dest?.kind === 'notifications') return { href: dest.href, label: 'Back to Notifications', crumb: 'Notifications' };
+    if (dest?.kind === 'search') return { href: dest.href, label: 'Back to Search', crumb: 'Search' };
+    return { href: '/licenses', label: 'Licences', crumb: 'Licences' };
+  }
+  if (mode === 'manager') {
+    if (dest?.kind === 'my-work') return { href: dest.href, label: 'Team work', crumb: 'Team work' };
+    if (dest?.kind === 'notifications') return { href: dest.href, label: 'Back to Notifications', crumb: 'Notifications' };
+    if (dest?.kind === 'search') return { href: dest.href, label: 'Back to Search', crumb: 'Search' };
+    return { href: '/my-work', label: 'Team work', crumb: 'Team work' };
+  }
   if (dest?.kind === 'candidates') return { href: dest.href, label: 'Back to Candidates', crumb: 'Candidates' };
+  if (dest?.kind === 'compare') return { href: dest.href, label: 'Back to Compare', crumb: 'Compare' };
   if (dest?.kind === 'my-work') return { href: dest.href, label: 'Back to My Work', crumb: 'My Work' };
+  if (dest?.kind === 'notifications') return { href: dest.href, label: 'Back to Notifications', crumb: 'Notifications' };
+  if (dest?.kind === 'search') return { href: dest.href, label: 'Back to Search', crumb: 'Search' };
   if (dest?.kind === 'vacancy') {
     const same = dest.vacancyId === app.vacancyId;
     return { href: dest.href, label: same ? `${title} pipeline` : 'Job pipeline', crumb: same ? title : 'Job' };
   }
-  return { href: pipeline, label: `${title} pipeline`, crumb: title };
+  if (allowedReturnDest(pipeline, actor)) {
+    return { href: pipeline, label: `${title} pipeline`, crumb: title };
+  }
+  return fallbackBack(actor);
 }
 
 function crumbTrail(back: { href: string; crumb: string }, jobLabel: string, jobHref: string | null, name: string): Array<{ label: string; to?: string }> {
@@ -336,6 +338,7 @@ function evidenceOf(file: ApplicationFile): Array<{ text: string; by: string }> 
 export function ApplicationFileV2({ load = loadApplicationFile, mode = 'owner' }: { load?: typeof loadApplicationFile; mode?: FileMode } = {}) {
   const { id = '' } = useParams();
   const { user } = useAuth();
+  const shellSeat = useV2Shell()?.seat;
   // #34: 'approver' = a final-hire approver without APPLICATION_VIEW: read-only like the Manager view (no drawers,
   // notes or follow-up), no offer decision, no pay, CV download allowed.
   const approver = mode === 'approver';
@@ -411,11 +414,14 @@ export function ApplicationFileV2({ load = loadApplicationFile, mode = 'owner' }
   const decideId = mode === 'manager' ? params.get('decide') : null;
   const latestScreen = [...file.screening].sort((a, b) => b.screenedAt.localeCompare(a.screenedAt))[0] ?? null;
   const tab = hubTab(params.get('tab'));
-  const back = destination(file, mode, params.get('returnTo'));
+  const actor = routeActor(shellSeat ?? (mode === 'manager' ? 'manager' : 'employee'), user);
+  const back = destination(file, mode, params.get('returnTo'), actor);
   const copy = nextCopy(file);
   const gates = gateRows(file);
   const jobLabel = app.positionTitle ?? 'Job';
-  const crumbs = crumbTrail(back, jobLabel, mode === 'owner' ? `/vacancies/${encodeURIComponent(app.vacancyId)}` : null, name);
+  const defaultPipeline = `/vacancies/${encodeURIComponent(app.vacancyId)}`;
+  const canOpenVacancy = mode === 'owner' && allowedReturnDest(defaultPipeline, actor) != null;
+  const crumbs = crumbTrail(back, jobLabel, canOpenVacancy ? defaultPipeline : null, name);
   const stageAt = HIRING_STAGES.findIndex((stage) => label(stage).toLowerCase() === label(app.stage).toLowerCase());
   const statusTone = closed ? 'closed' : /required/i.test(copy.status) ? 'attention' : 'steady';
   const noticeDays = file.screening.find((s) => s.noticePeriodDays != null)?.noticePeriodDays;

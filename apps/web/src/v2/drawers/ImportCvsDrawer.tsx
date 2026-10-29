@@ -1,4 +1,6 @@
 import { useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { usePageReturn, withReturnTo } from '../returnTarget';
 import { CircleCheck, CircleX, FileText, Link2, TriangleAlert, Upload } from 'lucide-react';
 import { ButtonV2, DrawerV2, StatusChip } from '../../components/v2';
 import { FIELD_LABEL, candidateExistsDetails, cvFileProblem, duplicateCheck, existingPerson, importRow, parseCv, splitName, type DuplicateCheckResult, type ExtractedCv, type ExistingPerson, type ImportDecision, type LinkResult } from '../api/cvImport';
@@ -104,6 +106,7 @@ export function ImportCvsDrawer({ job, onClose, onDone, onImported }: { job: Job
 }
 
 function ImportRow({ row, onDecide }: { row: Row; onDecide: (d: ImportDecision) => void }) {
+  const pageReturn = usePageReturn();
   const chip = {
     parsing: <StatusChip tone="neutral" label="Reading…" />,
     ready: row.dup?.isDuplicate ? <StatusChip tone="warning" label="Duplicate" /> : <StatusChip tone="success" label="Parsed" />,
@@ -149,7 +152,7 @@ function ImportRow({ row, onDecide }: { row: Row; onDecide: (d: ImportDecision) 
       ) : null}
       {row.status === 'done' && row.onJob ? (
         <p className="rf2-inline-note" data-tone="warning" role="note" data-testid="application-exists"><Link2 aria-hidden="true" /> Already on this job.{' '}
-          {row.onJob.applicationId ? <a className="rf2-link" href={`/applications/${encodeURIComponent(row.onJob.applicationId)}`}>Open the existing file</a> : 'Find the existing file on the board.'}</p>
+          {row.onJob.applicationId ? <Link className="rf2-link" to={withReturnTo(`/applications/${encodeURIComponent(row.onJob.applicationId)}`, pageReturn)}>Open the existing file</Link> : 'Find the existing file on the board.'}</p>
       ) : null}
       {row.status === 'done' && !row.onJob ? <p className="rf2-jtable__sub"><CircleCheck aria-hidden="true" /> Added to Applied.{row.link?.filled.length ? ` Filled from the CV: ${row.link.filled.map((f) => FIELD_LABEL[f] ?? f).join(', ')}.` : ''}</p> : null}
       {row.status === 'done' && row.link?.conflicts.length ? (

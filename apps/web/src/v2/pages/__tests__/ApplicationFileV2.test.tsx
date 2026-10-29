@@ -321,7 +321,18 @@ describe('E13 application file', () => {
     expect(await screen.findByRole('link', { name: 'Job pipeline' })).toHaveAttribute('href', '/vacancies/other-job');
     otherJob.unmount();
 
-    for (const raw of ['https://evil.example/candidates', '//evil.example/candidates', '/settings', '/candidates/extra', '/vacancies', '/vacancies/j1/edit', '/my-work/../settings']) {
+    const searchBack = renderFile(`/applications/a1?returnTo=${encodeURIComponent('/search?q=Ahmed')}`);
+    expect(await screen.findByRole('link', { name: 'Back to Search' })).toHaveAttribute('href', '/search?q=Ahmed');
+    expect(within(screen.getByRole('navigation', { name: 'Breadcrumb' })).getByRole('link', { name: 'Search' })).toHaveAttribute('href', '/search?q=Ahmed');
+    searchBack.unmount();
+
+    const compareHref = '/candidates/compare?job=v1&ids=c-a7,c-a4&search=HRIS&source=LinkedIn&stage=Interview';
+    const compareBack = renderFile(`/applications/a1?returnTo=${encodeURIComponent(compareHref)}`);
+    expect(await screen.findByRole('link', { name: 'Back to Compare' })).toHaveAttribute('href', compareHref);
+    expect(within(screen.getByRole('navigation', { name: 'Breadcrumb' })).getByRole('link', { name: 'Compare' })).toHaveAttribute('href', compareHref);
+    compareBack.unmount();
+
+    for (const raw of ['https://evil.example/candidates', '//evil.example/candidates', '/settings', '/candidates/extra', '/vacancies', '/vacancies/j1/edit', '/my-work/../settings', '/search', '/candidates/compare?job=v1']) {
       const rejected = renderFile(`/applications/a1?returnTo=${encodeURIComponent(raw)}`);
       expect(await screen.findByRole('link', { name: 'HRIS Developer pipeline' })).toHaveAttribute('href', '/vacancies/j1');
       expect(screen.queryByRole('link', { name: 'Back to Candidates' })).not.toBeInTheDocument();

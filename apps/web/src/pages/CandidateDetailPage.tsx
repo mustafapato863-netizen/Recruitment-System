@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, type FormEvent } from 'react';
 import { fetchVacancyList } from '../utils/vacancyAccess';
 import type { RedactedVacancy } from '../types/redactedVacancy';
 import { RedactedJobOptions } from '../components/access/RedactedJobOptions';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   PageFrame,
   PageState,
@@ -45,6 +45,10 @@ import type {
 } from '@recruitflow/contracts';
 import { useSetBreadcrumbTitle } from '../context/BreadcrumbContext';
 import { useAuth } from '../auth/AuthContext';
+import { useV2Shell } from '../components/v2/shell/AppShellV2';
+import { routeActor } from '../v2/destinations';
+import { allowedReturn, withReturnTo } from '../v2/returnTarget';
+import { resolveSeat } from '../v2/seat';
 import './PageEnhancementsV2.css';
 
 type TabKey = 'overview' | 'applications' | 'interviews' | 'offers';
@@ -52,7 +56,12 @@ type TabKey = 'overview' | 'applications' | 'interviews' | 'offers';
 export function CandidateDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
+  const shellSeat = useV2Shell()?.seat;
+  const seat = shellSeat ?? resolveSeat(user);
+  const back = allowedReturn(searchParams.get('returnTo'), routeActor(seat, user));
+  const backHref = back ?? '/candidates';
   // B2 (v2 §3): no delete for anyone. The action archives the candidate.
   const canDeleteCandidate = Boolean(user?.permissions.includes('CANDIDATE_EDIT'));
 
@@ -299,7 +308,7 @@ export function CandidateDetailPage() {
     setDeleteError(null);
     try {
       await deleteApi(`/candidates/${id}`);
-      navigate('/candidates', { replace: true });
+      navigate(backHref, { replace: true });
       return true;
     } catch (err: unknown) {
       setDeleteError((err as Error).message || 'Failed to archive candidate.');
@@ -334,7 +343,7 @@ export function CandidateDetailPage() {
             title="Access Restricted"
             description="You do not have the required permissions to view this candidate profile."
             actionLabel="Back to Candidates"
-            onAction={() => navigate('/candidates')}
+            onAction={() => navigate(backHref)}
           />
         ) : (
           <PageState
@@ -342,7 +351,7 @@ export function CandidateDetailPage() {
             title="Candidate Not Found"
             description="The requested candidate profile does not exist or has been removed."
             actionLabel="Back to Candidates"
-            onAction={() => navigate('/candidates')}
+            onAction={() => navigate(backHref)}
           />
         )}
       </PageFrame>
@@ -456,7 +465,7 @@ export function CandidateDetailPage() {
       priority: 'secondary',
       render: (app) => (
         <Button variant="secondary" size="sm" asChild>
-          <Link to={`/applications/${app.id}`}>View application</Link>
+          <Link to={withReturnTo(`/applications/${app.id}`, back)}>View application</Link>
         </Button>
       ),
     },
@@ -475,6 +484,12 @@ export function CandidateDetailPage() {
       actions={
         <>
           <StatusBadge status={candidate.status} />
+          <Button variant="ghost" size="sm" asChild>
+            <Link to={backHref}>
+              <Icon name="arrow-left" size={13} />
+              Back
+            </Link>
+          </Button>
           <Button variant="primary" size="sm" onClick={() => setIsApplyModalOpen(true)}>
             <Icon name="plus" size={13} />
             Assign to job
@@ -525,7 +540,7 @@ export function CandidateDetailPage() {
       {activeApplication ? (
         <p className="text-xs text-slate-600 dark:text-slate-300">
           Next:{' '}
-          <Link className="font-semibold text-blue-700 hover:underline dark:text-blue-300" to={`/applications/${activeApplication.id}`}>
+          <Link className="font-semibold text-blue-700 hover:underline dark:text-blue-300" to={withReturnTo(`/applications/${activeApplication.id}`, back)}>
             Review application
           </Link>
           {activeApplication.stage ? ` · ${activeApplication.stage}` : ''}
@@ -768,7 +783,7 @@ export function CandidateDetailPage() {
                   </div>
                   <div className="flex items-center gap-2 self-end sm:self-center">
                     <Button variant="secondary" size="sm" asChild>
-                      <Link to={`/offers/${offer.id}`}>View offer</Link>
+                      <Link to={withReturnTo(`/offers/${offer.id}`, back)}>View offer</Link>
                     </Button>
                   </div>
                 </div>

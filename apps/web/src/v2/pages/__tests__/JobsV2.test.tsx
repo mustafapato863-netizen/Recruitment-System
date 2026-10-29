@@ -152,7 +152,7 @@ describe('E09 Job pipeline', () => {
     expect(tarek).toHaveTextContent('Interview 12 Oct, 10:00–11:00 · Room 3B, IT wing');
     expect(within(tarek).queryByTestId('gate-badge')).toBeNull();
     expect(screen.getByRole('article', { name: 'Ahmed Embaby, Interview' })).toHaveTextContent('Last interview 6 Oct, 10:00–11:00 · room link');
-    expect(screen.getByRole('link', { name: 'Log screen for Hany Fawzy' })).toHaveAttribute('href', '/applications/a1?drawer=screen');
+    expect(screen.getByRole('link', { name: 'Log screen for Hany Fawzy' })).toHaveAttribute('href', '/applications/a1?drawer=screen&returnTo=%2Fvacancies%2Fv1');
     const hany = screen.getByRole('article', { name: 'Hany Fawzy, Applied' });
     expect(hany).not.toHaveAttribute('data-dragging');
     expect(hany).toHaveTextContent('Analyst');
@@ -161,22 +161,26 @@ describe('E09 Job pipeline', () => {
     expect(hany).toHaveTextContent('LinkedIn');
     expect(hany.textContent ?? '').not.toMatch(/@|\+20|salary|phone/i);
     expect(screen.getByRole('article', { name: 'Nourhan Sami, Screening' })).toHaveTextContent('Phone screening booked · 10 Oct 2026');
-    expect(screen.getByRole('link', { name: 'Open scorecard for Ahmed Embaby' })).toHaveAttribute('href', '/applications/a7?drawer=scorecard');
-    expect(screen.getByRole('link', { name: 'Schedule interview for Tarek Lotfy' })).toHaveAttribute('href', '/applications/a8?drawer=schedule');
-    expect(screen.getByRole('link', { name: 'Draft offer for Lina Hassan' })).toHaveAttribute('href', '/applications/a10?drawer=offer');
+    expect(screen.getByRole('link', { name: 'Open scorecard for Ahmed Embaby' })).toHaveAttribute('href', '/applications/a7?drawer=scorecard&returnTo=%2Fvacancies%2Fv1');
+    expect(screen.getByRole('link', { name: 'Schedule interview for Tarek Lotfy' })).toHaveAttribute('href', '/applications/a8?drawer=schedule&returnTo=%2Fvacancies%2Fv1');
+    expect(screen.getByRole('link', { name: 'Draft offer for Lina Hassan' })).toHaveAttribute('href', '/applications/a10?drawer=offer&returnTo=%2Fvacancies%2Fv1');
     expect(screen.getByRole('button', { name: 'Suggest from bank' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Import CVs' })).toBeInTheDocument();
     expect(container.textContent).not.toMatch(PAY);
     expect(await axeViolations(container)).toEqual([]);
     await u.click(screen.getByRole('link', { name: (value) => value === 'Ahmed Embaby' }));
-    expect(screen.getByTestId('loc')).toHaveTextContent('/applications/a7');
+    expect(screen.getByTestId('loc')).toHaveTextContent('/applications/a7?returnTo=%2Fvacancies%2Fv1');
     expect(screen.getByTestId('loc').textContent).not.toContain('drawer');
   });
   it('the next-action control opens the file on that drawer', async () => {
     const u = userEvent.setup();
     renderAt('/vacancies/v1');
     await u.click(await screen.findByRole('link', { name: 'Open scorecard for Ahmed Embaby' }));
-    expect(screen.getByTestId('loc')).toHaveTextContent('/applications/a7?drawer=scorecard');
+    expect(screen.getByTestId('loc')).toHaveTextContent('/applications/a7?drawer=scorecard&returnTo=%2Fvacancies%2Fv1');
+  });
+  it('keeps the pipeline stage query on the file link', async () => {
+    renderAt('/vacancies/v1?stage=Offer');
+    expect(await screen.findByRole('link', { name: 'Log screen for Hany Fawzy' })).toHaveAttribute('href', `/applications/a1?drawer=screen&returnTo=${encodeURIComponent('/vacancies/v1?stage=Offer')}`);
   });
   it('keyboard "Move to…": allowed next stage moves (PATCH with expectedStage/version)', async () => {
     const u = userEvent.setup();
@@ -212,7 +216,7 @@ describe('E09 Job pipeline', () => {
     expect(within(card).getByRole('menuitem', { name: /^Offer/ })).toHaveTextContent('Needs a submitted scorecard');
     await u.click(within(card).getByRole('menuitem', { name: /^Offer/ }));
     expect(api.patchApi).not.toHaveBeenCalled();
-    expect(screen.getByTestId('loc')).toHaveTextContent('/applications/a7?drawer=scorecard');
+    expect(screen.getByTestId('loc')).toHaveTextContent('/applications/a7?drawer=scorecard&returnTo=%2Fvacancies%2Fv1');
   });
   it('stale version → refreshes the board', async () => {
     const u = userEvent.setup();

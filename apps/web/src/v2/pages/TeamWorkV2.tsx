@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { usePageReturn, withReturnTo } from '../returnTarget';
 import { ArrowLeftRight, Briefcase, Pause, XCircle, Star, CalendarClock, CircleAlert, CircleCheck, Clock, Eye, Info, RotateCw, TriangleAlert, Users } from 'lucide-react';
 import { ButtonV2, EmptyStateV2, ForbiddenStateV2, initials, SkeletonV2, StatusChip } from '../../components/v2';
 import { useAuth } from '../../auth/AuthContext';
@@ -38,6 +39,7 @@ function sameDirectReports(reports: ReportWork[], meId: string | undefined): boo
 /** M2 Team work (Manager, v2): what is waiting on me, and open work for the loaded roster, with Reassign (B7). */
 export function TeamWorkV2() {
   const { user } = useAuth();
+  const pageReturn = usePageReturn();
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
   const [state, setState] = useState<{ kind: 'loading' } | { kind: 'ready'; data: TeamWork } | { kind: 'forbidden' } | { kind: 'error'; message: string }>({ kind: 'loading' });
@@ -97,7 +99,7 @@ export function TeamWorkV2() {
                       <p className="rf2-jtable__sub">Offer v{w.versionNumber} submitted{w.ownerName ? ` by ${w.ownerName}` : ''}{w.submittedAt ? ` · ${when(w.submittedAt)}` : ''}</p>
                     </div>
                     {ago(w.submittedAt) ? <StatusChip tone="neutral" label={ago(w.submittedAt)!} /> : null}
-                    <ButtonV2 size="sm" icon={<Eye />} onClick={() => (w.applicationId ? navigate(`/applications/${encodeURIComponent(w.applicationId)}?decide=${encodeURIComponent(w.offerId)}`) : go({ offer: w.offerId }))} aria-label={`Review offer: ${w.candidate}`}>Review offer</ButtonV2>
+                    <ButtonV2 size="sm" icon={<Eye />} onClick={() => (w.applicationId ? navigate(withReturnTo(`/applications/${encodeURIComponent(w.applicationId)}?decide=${encodeURIComponent(w.offerId)}`, pageReturn)) : go({ offer: w.offerId }))} aria-label={`Review offer: ${w.candidate}`}>Review offer</ButtonV2>
                   </li>
                 ))}
                 {cards.map((c) => (
@@ -108,7 +110,7 @@ export function TeamWorkV2() {
                       <p className="rf2-jtable__sub">You interviewed them as interviewer · the gate blocks Offer until it is submitted</p>
                     </div>
                     {c.overdue ? <StatusChip tone="danger" label="Late" /> : c.dueAt ? <StatusChip tone="info" label="Due today" /> : null}
-                    <Link className="rf2-btn rf2-btn--secondary rf2-btn--sm" to={c.applicationId ? `/applications/${encodeURIComponent(c.applicationId)}?drawer=scorecard&interview=${encodeURIComponent(c.interviewId)}` : `/my-interviews?interview=${encodeURIComponent(c.interviewId)}&scorecard=1`} aria-label={`Submit scorecard: ${c.candidate}`}>Submit scorecard</Link>
+                    <Link className="rf2-btn rf2-btn--secondary rf2-btn--sm" to={c.applicationId ? withReturnTo(`/applications/${encodeURIComponent(c.applicationId)}?drawer=scorecard&interview=${encodeURIComponent(c.interviewId)}`, pageReturn) : `/my-interviews?interview=${encodeURIComponent(c.interviewId)}&scorecard=1`} aria-label={`Submit scorecard: ${c.candidate}`}>Submit scorecard</Link>
                   </li>
                 ))}
               </ul>
@@ -121,7 +123,7 @@ export function TeamWorkV2() {
           ) : (
             <div className="rf2-team__surface">
               <div className="rf2-team__grid">
-                {reports.map((r) => <ReportCard key={r.person.id} r={r} jobs={jobs?.filter((j) => j.ownerId === r.person.id) ?? []} onJob={(job, action) => setJobAction({ job, action })} onReassign={() => go({ reassign: r.person.id, file: null })} canReassign={reports.length > 1} />)}
+                {reports.map((r) => <ReportCard key={r.person.id} r={r} jobs={jobs?.filter((j) => j.ownerId === r.person.id) ?? []} returnTo={pageReturn} onJob={(job, action) => setJobAction({ job, action })} onReassign={() => go({ reassign: r.person.id, file: null })} canReassign={reports.length > 1} />)}
               </div>
             </div>
           )}
@@ -138,7 +140,7 @@ export function TeamWorkV2() {
   );
 }
 
-function ReportCard({ r, jobs: owned, onJob, onReassign, canReassign }: { r: ReportWork; jobs: TeamJob[]; onJob: (j: TeamJob, a: JobAction) => void; onReassign: () => void; canReassign: boolean }) {
+function ReportCard({ r, jobs: owned, returnTo, onJob, onReassign, canReassign }: { r: ReportWork; jobs: TeamJob[]; returnTo: string | null; onJob: (j: TeamJob, a: JobAction) => void; onReassign: () => void; canReassign: boolean }) {
   const jobs = [...new Set(r.files.map((f) => f.job))];
   const shown = r.tasks.slice(0, MAX_TASKS);
   return (
@@ -157,7 +159,7 @@ function ReportCard({ r, jobs: owned, onJob, onReassign, canReassign }: { r: Rep
           {shown.map((t) => (
             <li key={t.fileId} className="rf2-team__task" data-kind={t.kind}>
               <span className="rf2-team__ticon" data-tone={t.tone ?? undefined}>{t.tone === 'overdue' && t.kind === 'gate' ? <CircleAlert aria-hidden="true" /> : ICON[t.kind]}</span>
-              <div className="rf2-team__ttext"><Link className="rf2-link rf2-jtable__name" to={fileHref(t.fileId)}>{t.title}</Link><p className="rf2-jtable__sub">{t.meta}</p></div>
+              <div className="rf2-team__ttext"><Link className="rf2-link rf2-jtable__name" to={withReturnTo(fileHref(t.fileId), returnTo)}>{t.title}</Link><p className="rf2-jtable__sub">{t.meta}</p></div>
               {t.tone ? <StatusChip tone={CHIP[t.tone].tone} label={CHIP[t.tone].label} /> : null}
             </li>
           ))}

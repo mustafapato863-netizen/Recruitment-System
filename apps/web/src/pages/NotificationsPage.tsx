@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
+import { usePageReturn } from '../v2/returnTarget';
 import { RefreshCw } from 'lucide-react';
 import type { NotificationRecord, PaginatedResult } from '@recruitflow/contracts';
 import { getApi, patchApi, postApi } from '../api/client';
@@ -43,8 +44,8 @@ function getNotificationPresentation(notification: NotificationRecord): Notifica
   return { category: notification.entityType ?? 'Workspace', tone: 'info', icon: 'bell' };
 }
 
-function getNotificationHref(notification: NotificationRecord): string | null {
-  return notificationHref(notification);
+function getNotificationHref(notification: NotificationRecord, returnTo: string | null): string | null {
+  return notificationHref(notification, returnTo);
 }
 
 function formatRelativeTime(value: string): string {
@@ -65,17 +66,44 @@ function formatRelativeTime(value: string): string {
   return new Intl.RelativeTimeFormat('en', { numeric: 'auto' }).format(valueInUnit, unit);
 }
 
+const FILTER_CATEGORIES: readonly FilterCategory[] = ['all', 'unread', 'alerts', 'approvals'];
+
+function parseCategory(params: URLSearchParams): FilterCategory {
+  const raw = params.get('tab') ?? params.get('category') ?? params.get('filter');
+  return FILTER_CATEGORIES.includes(raw as FilterCategory) ? (raw as FilterCategory) : 'all';
+}
+
+function parsePage(params: URLSearchParams): number {
+  const raw = Number.parseInt(params.get('page') ?? '1', 10);
+  return Number.isFinite(raw) && raw >= 1 ? raw : 1;
+}
+
 export function NotificationsPage() {
   useSetBreadcrumbTitle('Notification Center');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const pageReturn = usePageReturn();
   const [notifications, setNotifications] = useState<NotificationRecord[]>([]);
   const [total, setTotal] = useState(0);
   const [unreadCount, setUnreadCount] = useState(0);
-  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeCategory, setActiveCategory] = useState<FilterCategory>('all');
   const [markingAll, setMarkingAll] = useState(false);
   const [markingId, setMarkingId] = useState<string | null>(null);
+  const activeCategory = parseCategory(searchParams);
+  const page = parsePage(searchParams);
+
+  const updateView = useCallback((nextCategory: FilterCategory, nextPage: number) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('category');
+      next.delete('filter');
+      if (nextCategory === 'all') next.delete('tab');
+      else next.set('tab', nextCategory);
+      if (nextPage <= 1) next.delete('page');
+      else next.set('page', String(nextPage));
+      return next;
+    });
+  }, [setSearchParams]);
 
   const pageSize = 20;
 
@@ -180,8 +208,7 @@ export function NotificationsPage() {
           activeKey={activeCategory}
           ariaLabel="Notification filters"
           onChange={(key) => {
-            setActiveCategory(key as FilterCategory);
-            setPage(1);
+            updateView(key as FilterCategory, 1);
           }}
         />
         <div className="rf2-notify__actions">
@@ -217,8 +244,7 @@ export function NotificationsPage() {
               kind="secondary"
               size="sm"
               onClick={() => {
-                setActiveCategory('all');
-                setPage(1);
+                updateView('all', 1);
               }}
             >
               Show all notifications
@@ -232,7 +258,7 @@ export function NotificationsPage() {
           <ul className="rf2-notify__list" aria-live="polite">
             {filteredNotifications.map((notification) => {
               const presentation = getNotificationPresentation(notification);
-              const href = getNotificationHref(notification);
+              const href = getNotificationHref(notification, pageReturn);
               const isUnread = !notification.readAt;
               return (
                 <li key={notification.id}>
@@ -270,7 +296,7 @@ export function NotificationsPage() {
           ariaLabel="Notification pages"
           currentPage={page}
           totalPages={totalPages}
-          onPageChange={setPage}
+          onPageChange={(nextPage) => updateView(activeCategory, nextPage)}
           disabled={loading}
           summary={`${total} notifications`}
         />

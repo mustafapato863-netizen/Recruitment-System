@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { usePageReturn, withReturnTo } from '../returnTarget';
 import { useDndContext } from '@dnd-kit/core';
 import { ArrowRight, BriefcaseBusiness, Building2, CalendarDays, CircleAlert, CircleX, Clock, MoveRight, Pause, Play, RotateCw, Sparkles, Upload } from 'lucide-react';
 import { Kanban, KanbanBoard, KanbanColumn, KanbanColumnContent, KanbanItem, KanbanItemHandle, KanbanOverlay, type KanbanMoveEvent } from '../../components/ui/kanban';
@@ -58,6 +59,7 @@ function cardActivity(app: BoardApplication): string | null {
 export function JobPipelineV2() {
   const { id = '' } = useParams();
   const navigate = useNavigate();
+  const pageReturn = usePageReturn();
   const [params, setParams] = useSearchParams();
   const drawer = params.get('drawer');
   const [state, setState] = useState<State>({ kind: 'loading' });
@@ -102,7 +104,7 @@ export function JobPipelineV2() {
     const check = moveCheck(app, target, state.board.job);
     const name = cardName(app);
     if (!check.ok) { setToast({ tone: 'danger', title: `Can't move ${name} to ${BOARD_LABEL[target]}`, body: check.reason }); return; }
-    if (gateRefusesMove(app, target, state.board.job)) { navigate(cardFileHref(app)); return; }
+    if (gateRefusesMove(app, target, state.board.job)) { navigate(withReturnTo(cardFileHref(app), pageReturn)); return; }
     setMoving(app.id);
     setToast(null);
     try {
@@ -112,7 +114,7 @@ export function JobPipelineV2() {
     } catch (e) {
       const d = jobErrorFromError(e);
       const gate = d && 'gate' in d && d.gate ? GATE_COPY[d.gate as GateCode] : null;
-      if (gate) { navigate(cardFileHref(app)); return; }
+      if (gate) { navigate(withReturnTo(cardFileHref(app), pageReturn)); return; }
       const closedFile = d?.code === 'FILE_CLOSED';
       const body = isStaleStage(e) ? 'Someone changed this file first. The board was refreshed.'
         : closedFile ? `${d?.message || 'This file is closed.'} The board was refreshed.` : errorMessage(e, 'The move failed.');
@@ -305,6 +307,7 @@ function CardFace({ app }: { app: BoardApplication }) {
 }
 
 function Card({ app, job, moving, onMove }: { app: BoardApplication; job: JobDetail; moving: boolean; onMove: (a: BoardApplication, s: BoardStage) => void }) {
+  const pageReturn = usePageReturn();
   const name = cardName(app);
   const targets = BOARD_STAGES.filter((s) => s !== app.stage).map((s) => ({ stage: s, ...moveCheck(app, s, job) }));
   const canDrag = targets.some((t) => t.ok) && !moving;
@@ -328,14 +331,14 @@ function Card({ app, job, moving, onMove }: { app: BoardApplication; job: JobDet
           <span className="rf2-kcard__avatar" aria-label={`Drag ${name}`}>{initials(name)}</span>
         </KanbanItemHandle>
         <div className="rf2-kcard__who">
-          <Link className="rf2-kcard__name" to={`/applications/${encodeURIComponent(app.id)}`}>{name}</Link>
+          <Link className="rf2-kcard__name" to={withReturnTo(`/applications/${encodeURIComponent(app.id)}`, pageReturn)}>{name}</Link>
           {cardRole(app) ? <p className="rf2-kcard__role">{cardRole(app)}</p> : null}
         </div>
       </div>
       <CardSignals app={app} />
       <div className="rf2-kcard__foot">
       <CardStamp app={app} />
-      {next ? <Link className="rf2-kcard__next" to={cardFileHref(app)}>{next.label} <span className="rf2-sr-only">for {name}</span></Link> : null}
+      {next ? <Link className="rf2-kcard__next" to={withReturnTo(cardFileHref(app), pageReturn)}>{next.label} <span className="rf2-sr-only">for {name}</span></Link> : null}
       <div className="rf2-kcard__menu">
         <button ref={btnRef} type="button" className="rf2-link" aria-haspopup="menu" aria-expanded={menu} onClick={() => setMenu((v) => !v)} disabled={moving}>
           <MoveRight aria-hidden="true" /> Move to…<span className="rf2-sr-only"> ({name})</span>
@@ -366,12 +369,13 @@ function Card({ app, job, moving, onMove }: { app: BoardApplication; job: JobDet
 }
 
 function ClosedFiles({ id, vacancyId }: { id: string; vacancyId: string }) {
+  const pageReturn = usePageReturn();
   const [rows, setRows] = useState<BoardApplication[] | null>(null);
   useEffect(() => { void loadClosedFiles(vacancyId).then(setRows).catch(() => setRows([])); }, [vacancyId]);
   return (
     <section id={id} className="rf2-panel" aria-label="Closed files">
       {rows === null ? <SkeletonV2 lines={2} label="Loading closed files…" /> : rows.length === 0 ? <p className="rf2-jtable__sub">No closed files yet.</p> : (
-        <ul className="rf2-closed">{rows.map((a) => <li key={a.id}><Link to={`/applications/${encodeURIComponent(a.id)}`}>{cardName(a)}</Link> <StatusChip tone={a.stage === 'Joined' ? 'success' : 'neutral'} label={a.stage} /></li>)}</ul>
+        <ul className="rf2-closed">{rows.map((a) => <li key={a.id}><Link to={withReturnTo(`/applications/${encodeURIComponent(a.id)}`, pageReturn)}>{cardName(a)}</Link> <StatusChip tone={a.stage === 'Joined' ? 'success' : 'neutral'} label={a.stage} /></li>)}</ul>
       )}
     </section>
   );

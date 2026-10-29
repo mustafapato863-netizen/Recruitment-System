@@ -11,6 +11,7 @@ import { TaskRow } from '../../components/v2/Task';
 import '../../components/v2/v2-primitives.css';
 import './my-work.css';
 import { canUseMyInterviews } from '../../auth/interviewer';
+import { usePageReturn } from '../returnTarget';
 import {
   fileActionHref, getMyWork, joiningCaseHref, upcomingInterviewHref, waitingBlockerPhrase, waitingOfferTitle,
   type HrefContext, type JoiningSoon, type MyWorkAction, type MyWorkDay, type MyWorkResponse, type MyWorkResult,
@@ -350,7 +351,7 @@ function joiningTone(row: JoiningSoon): 'warning' | 'info' | 'neutral' {
   return 'warning';
 }
 
-function JoiningPanel({ rows, canOpenFile, f }: { rows: JoiningSoon[] | undefined; canOpenFile: boolean; f: Format }) {
+function JoiningPanel({ rows, canOpenFile, f, returnTo }: { rows: JoiningSoon[] | undefined; canOpenFile: boolean; f: Format; returnTo: string | null }) {
   if (rows === undefined) return <p className="rf2-mywork__note" role="status">Joining cases are unavailable in this response.</p>;
   return (
     <section className="rf2-mywork__group" aria-label="Joining soon">
@@ -364,7 +365,7 @@ function JoiningPanel({ rows, canOpenFile, f }: { rows: JoiningSoon[] | undefine
         <div className="rf2-mywork__surface">
           <ul className="rf2-mywork__list">
             {rows.map((row) => {
-              const dest = joiningCaseHref(row, canOpenFile);
+              const dest = joiningCaseHref(row, canOpenFile, returnTo);
               return (
                 <li key={row.id} data-testid="joining-row" data-readiness={row.readiness}>
                   <TaskRow
@@ -392,7 +393,8 @@ function JoiningPanel({ rows, canOpenFile, f }: { rows: JoiningSoon[] | undefine
 
 export function MyWorkV2({ load = getMyWork }: { load?: typeof getMyWork } = {}) {
   const { user } = useAuth();
-  const hrefCtx: HrefContext = { meId: user?.id, canOpenFile: (user?.permissions ?? []).includes('APPLICATION_VIEW'), interviewer: canUseMyInterviews(user) };
+  const pageReturn = usePageReturn();
+  const hrefCtx: HrefContext = { meId: user?.id, canOpenFile: (user?.permissions ?? []).includes('APPLICATION_VIEW'), interviewer: canUseMyInterviews(user), returnTo: pageReturn };
   const [params, setParams] = useSearchParams();
   const day: MyWorkDay = params.get('day') === 'tomorrow' ? 'tomorrow' : 'today';
   const tab = workTab(params.get('tab'));
@@ -526,7 +528,7 @@ export function MyWorkV2({ load = getMyWork }: { load?: typeof getMyWork } = {})
               </>
             ) : null}
             {tab === 'interviews' ? <InterviewPanel rows={data.upcomingInterviews} f={f} ctx={hrefCtx} /> : null}
-            {tab === 'joining' ? <JoiningPanel rows={data.joiningSoon} canOpenFile={Boolean(hrefCtx.canOpenFile)} f={f} /> : null}
+            {tab === 'joining' ? <JoiningPanel rows={data.joiningSoon} canOpenFile={Boolean(hrefCtx.canOpenFile)} f={f} returnTo={pageReturn} /> : null}
           </div>
         </>
       ) : null}

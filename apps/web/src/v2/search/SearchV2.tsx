@@ -5,6 +5,7 @@ import { EmptyStateV2, ForbiddenStateV2, SkeletonV2 } from '../../components/v2'
 import { useV2Shell } from '../../components/v2/shell/AppShellV2';
 import { useAuth } from '../../auth/AuthContext';
 import { scopedSearch, type ScopedSearch } from '../api/searchNotify';
+import { usePageReturn } from '../returnTarget';
 import '../pages/jobs.css';
 
 /** E07 full results page (/search?q=), v2 shell only. */
@@ -13,15 +14,16 @@ export function SearchV2() {
   const meId = useAuth().user?.id;
   const [params] = useSearchParams();
   const q = (params.get('q') ?? '').trim();
+  const pageReturn = usePageReturn();
   const [state, setState] = useState<{ kind: 'loading' } | { kind: 'ready'; data: ScopedSearch } | { kind: 'forbidden' } | { kind: 'error'; message: string }>({ kind: 'loading' });
   useEffect(() => {
     if (!shell || q.length < 2 || !meId) return undefined;
     const sig = { aborted: false };
     setState({ kind: 'loading' });
-    scopedSearch(q, sig).then((data) => !sig.aborted && setState({ kind: 'ready', data }))
+    scopedSearch(q, sig, pageReturn).then((data) => !sig.aborted && setState({ kind: 'ready', data }))
       .catch((e: { statusCode?: number; message?: string }) => !sig.aborted && setState(e?.statusCode === 403 ? { kind: 'forbidden' } : { kind: 'error', message: e?.message || 'Search failed.' }));
     return () => { sig.aborted = true; };
-  }, [shell, q, meId]);
+  }, [shell, q, meId, pageReturn]);
   if (!shell) return <Navigate to="/" replace />;
   return (
     <div className="rf2-jobs">

@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 import type { UserProfile } from '@recruitflow/contracts';
-import { canOpenRoute, v2Redirect, SEAT_HOME } from '../destinations';
+import { authorizedLanding, canOpenRoute, routeActor, v2Redirect, SEAT_HOME } from '../destinations';
 
 vi.mock('../../api/client', () => ({ getApi: vi.fn().mockResolvedValue({ unreadCount: 0 }) }));
 vi.mock('../../quickguide', () => ({
@@ -287,5 +287,16 @@ describe('PR33-3: seeded licence specialist (Omar) and final approver (Aya)', ()
     expect(v2Redirect('admin', '/access-control', { permissions: [], isAdministrator: true })).toBe('/roles');
     expect(v2Redirect('admin', '/settings', { permissions: [], isAdministrator: true })).toBe('/master-data');
     expect(canOpenRoute('/roles', [], true)).toBe(true);
+  });
+});
+
+describe('direct offer and hire links land on an authorized page', () => {
+  it('uses the seat home, the interviewer desk, or the specialist queue', () => {
+    expect(authorizedLanding(routeActor('employee', { roles: [{ code: 'RECRUITER' }], permissions: ['APPLICATION_VIEW'] }))).toBe('/my-work');
+    expect(authorizedLanding(routeActor('manager', { roles: [{ code: 'HIRING_MANAGER' }], permissions: ['APPLICATION_VIEW'] }))).toBe('/my-work');
+    expect(authorizedLanding(routeActor('admin', { roles: [{ code: 'ADMINISTRATOR' }], permissions: [] }))).toBe('/users');
+    expect(authorizedLanding(routeActor('employee', { roles: [{ code: 'INTERVIEWER' }], permissions: ['VACANCY_VIEW', 'INTERVIEW_PARTICIPATE'] }))).toBe('/my-interviews');
+    expect(authorizedLanding(routeActor('employee', { roles: [{ code: 'FINAL_HIRING_APPROVER' }], permissions: ['FINAL_HIRING_APPROVAL'] }))).toBe('/hires/approvals/inbox');
+    expect(authorizedLanding(routeActor('employee', { roles: [{ code: 'LICENSE_SPECIALIST' }], permissions: ['LICENSE_CHECK'] }))).toBe('/licenses');
   });
 });
