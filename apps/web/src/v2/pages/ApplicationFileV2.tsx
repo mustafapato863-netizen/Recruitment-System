@@ -128,6 +128,7 @@ function destination(file: ApplicationFile, mode: FileMode, raw: string | null, 
     return { href: '/my-work', label: 'Team work', crumb: 'Team work' };
   }
   if (dest?.kind === 'candidates') return { href: dest.href, label: 'Back to Candidates', crumb: 'Candidates' };
+  if (dest?.kind === 'cv-bank') return { href: dest.href, label: 'Back to CV Bank', crumb: 'CV Bank' };
   if (dest?.kind === 'compare') return { href: dest.href, label: 'Back to Compare', crumb: 'Compare' };
   if (dest?.kind === 'my-work') return { href: dest.href, label: 'Back to My Work', crumb: 'My Work' };
   if (dest?.kind === 'notifications') return { href: dest.href, label: 'Back to Notifications', crumb: 'Notifications' };

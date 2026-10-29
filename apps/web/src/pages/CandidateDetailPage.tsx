@@ -495,7 +495,7 @@ export function CandidateDetailPage() {
             Assign to job
           </Button>
           <Button variant="secondary" size="sm" asChild>
-            <Link to={`/candidates/${candidate.id}/documents`}>
+            <Link to={withReturnTo(`/candidates/${encodeURIComponent(candidate.id)}/documents`, back)}>
               <Icon name="file-text" size={13} />
               Documents
             </Link>

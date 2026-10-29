@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { History, Info, RotateCw, Scale, Search, Users } from 'lucide-react';
 import { ApiError, postApi } from '../../api/client';
@@ -96,7 +96,7 @@ export function CandidatesV2() {
       return `${row.name} ${row.title ?? ''} ${row.job}`.toLowerCase().includes(needle);
     });
   }, [active, q, job, source, stage]);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (tab !== 'active' || active.kind !== 'ready') return;
     const visible = new Set(activeRows.map((row) => row.applicationId));
     if (seededIdsRef.current !== rawIds) {
@@ -311,7 +311,7 @@ function BankPanel({ rows, returnTo, onAdded }: { rows: BankRow[]; returnTo: str
           <tbody>{rows.map((row) => (
             <tr key={row.candidateId}>
               <td><input type="radio" name="bank-person" value={row.candidateId} aria-label={`Choose ${row.name} for a job`} checked={chosen === row.candidateId} onChange={() => setChosen(row.candidateId)} /></td>
-              <td><p className="rf2-jtable__name">{row.name}</p><p className="rf2-jtable__sub">{row.code}</p></td>
+              <td><Link className="rf2-jtable__name" to={withReturnTo(`/candidates/${encodeURIComponent(row.candidateId)}`, returnTo)}>{row.name}</Link><p className="rf2-jtable__sub">{row.code}</p></td>
               <td><span className="rf2-cand__label">Title</span>{row.title ?? '—'}</td>
               <td><span className="rf2-cand__label">Location</span>{row.location ?? '—'}</td>
               <td className="rf2-num"><span className="rf2-cand__label">Experience</span>{row.experienceYears != null ? `${row.experienceYears} yrs` : '—'}</td>

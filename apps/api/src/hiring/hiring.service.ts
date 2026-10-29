@@ -565,7 +565,6 @@ export function licenseView(c: CaseForLicense) {
   const iso = (d: Date | string | null) => (d instanceof Date ? d.toISOString() : d);
   return {
     id: c.id,
-    applicationId: c.applicationId,
     status: c.status,
     candidateName: `${c.application.candidate.firstName} ${c.application.candidate.lastName}`,
     positionTitle: c.application.vacancy.position.title,

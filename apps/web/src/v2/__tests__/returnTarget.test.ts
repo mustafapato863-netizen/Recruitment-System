@@ -52,6 +52,9 @@ describe('allowedReturn', () => {
     expect(allowedReturn('/my-work?day=tomorrow&tab=joining', recruiter)).toBe('/my-work?day=tomorrow&tab=joining');
     expect(allowedReturn('/vacancies/j1?stage=Offer', recruiter)).toBe('/vacancies/j1?stage=Offer');
     expect(allowedReturn('/search?q=Ahmed', recruiter)).toBe('/search?q=Ahmed');
+    expect(allowedReturn('/cv-bank?search=Alex&page=2&junk=discard', recruiter)).toBe('/cv-bank?search=Alex&page=2');
+    expect(allowedReturn('/cv-bank?search=Alex', noCandidates)).toBeNull();
+    expect(allowedReturn('/cv-bank?search=Alex', interviewer)).toBeNull();
     expect(allowedReturn('/search?q=Ahmed', routeActor('manager', { roles: [{ code: 'HIRING_MANAGER' }], permissions: ['APPLICATION_VIEW'] }))).toBe('/search?q=Ahmed');
     expect(
       allowedReturn(
@@ -106,6 +109,7 @@ describe('withReturnTo', () => {
     expect(withReturnTo('/offers/o1', back)).toBe(`/offers/o1?returnTo=${encoded}`);
     expect(withReturnTo('/hires/h1', back)).toBe(`/hires/h1?returnTo=${encoded}`);
     expect(withReturnTo('/candidates/c1', back)).toBe(`/candidates/c1?returnTo=${encoded}`);
+    expect(withReturnTo('/candidates/c1/documents', back)).toBe(`/candidates/c1/documents?returnTo=${encoded}`);
     expect(withReturnTo('/applications/a1', '/search?q=Ahmed')).toBe(`/applications/a1?returnTo=${encodeURIComponent('/search?q=Ahmed')}`);
     expect(withReturnTo('/applications/a1', '/candidates/compare?job=v1&ids=c1,c2')).toBe(
       `/applications/a1?returnTo=${encodeURIComponent('/candidates/compare?job=v1&ids=c1,c2')}`,
