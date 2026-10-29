@@ -314,4 +314,36 @@ describe('CandidateDetailPage returnTo contract', () => {
     await u.click(await screen.findByRole('button', { name: 'Add document record' }));
     expect(screen.getByRole('dialog', { name: 'Add Document Record' })).toBeInTheDocument();
   });
+  it('does not offer profile edits or job assignment to a candidate viewer', async () => {
+    auth.user.permissions = ['CANDIDATE_VIEW'];
+    mockCandidateDetail();
+    api.getApi.mockClear();
+    render(<MemoryRouter initialEntries={['/candidates/c1']}><Routes>
+      <Route path="/candidates/:id" element={<CandidateDetailPage />} />
+    </Routes></MemoryRouter>);
+    await screen.findByRole('heading', { name: 'Ahmed Embaby' });
+    expect(screen.queryByRole('button', { name: 'Assign to job' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add tag' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Documents' })).toBeInTheDocument();
+    expect(await screen.findByText('Application history could not be checked.')).toBeInTheDocument();
+    expect(api.getApi.mock.calls.map(([url]) => url).some((url) => /^\/(applications|interviews|offers|vacancies)(\?|$)/.test(url))).toBe(false);
+    const u = userEvent.setup();
+    await u.click(screen.getByRole('tab', { name: 'Applications' }));
+    expect(screen.getByText('Application history is not available for your role.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+  });
+  it.each([
+    { permissions: ['CANDIDATE_VIEW', 'APPLICATION_CREATE', 'VACANCY_VIEW'], assign: true, tag: false },
+    { permissions: ['CANDIDATE_VIEW', 'APPLICATION_CREATE'], assign: false, tag: false },
+    { permissions: ['CANDIDATE_VIEW', 'CANDIDATE_EDIT'], assign: false, tag: true },
+  ])('shows profile actions only for their separate permissions', async ({ permissions, assign, tag }) => {
+    auth.user.permissions = permissions;
+    mockCandidateDetail();
+    render(<MemoryRouter initialEntries={['/candidates/c1']}><Routes>
+      <Route path="/candidates/:id" element={<CandidateDetailPage />} />
+    </Routes></MemoryRouter>);
+    await screen.findByRole('heading', { name: 'Ahmed Embaby' });
+    expect(Boolean(screen.queryByRole('button', { name: 'Assign to job' }))).toBe(assign);
+    expect(Boolean(screen.queryByRole('button', { name: 'Add tag' }))).toBe(tag);
+  });
 });
