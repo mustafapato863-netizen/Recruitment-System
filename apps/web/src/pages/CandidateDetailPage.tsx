@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo, type FormEvent } from 'react';
 import { fetchVacancyList } from '../utils/vacancyAccess';
 import type { RedactedVacancy } from '../types/redactedVacancy';
 import { RedactedJobOptions } from '../components/access/RedactedJobOptions';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   PageFrame,
   PageState,
@@ -13,7 +13,6 @@ import {
   DetailSummary,
   TableSkeleton,
   ListSkeleton,
-  DetailSkeleton,
   Tabs,
   TabPanel,
   Modal,
@@ -27,7 +26,6 @@ import {
 } from '../components/ui';
 import { Icon } from '../components/Icon';
 import { ConfirmDialog } from '../components/ConfirmDialog';
-import { CandidateWorkspace } from '../components/candidate/CandidateWorkspace';
 import { CandidateActivityPanel } from '../components/candidate/CandidateActivityPanel';
 import {
   ScorecardSummary,
@@ -42,9 +40,15 @@ import type {
   Offer,
   Vacancy,
   PaginatedResult,
+  CandidateDocument,
 } from '@recruitflow/contracts';
 import { useSetBreadcrumbTitle } from '../context/BreadcrumbContext';
 import { useAuth } from '../auth/AuthContext';
+import { useV2Shell } from '../components/v2/shell/AppShellV2';
+import { routeActor } from '../v2/destinations';
+import { allowedReturn, withReturnTo } from '../v2/returnTarget';
+import { resolveSeat } from '../v2/seat';
+import { stripPay } from '../v2/api/paySafety';
 import './PageEnhancementsV2.css';
 
 type TabKey = 'overview' | 'applications' | 'interviews' | 'offers';
@@ -52,9 +56,19 @@ type TabKey = 'overview' | 'applications' | 'interviews' | 'offers';
 export function CandidateDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
+  const shellSeat = useV2Shell()?.seat;
+  const seat = shellSeat ?? resolveSeat(user);
+  const back = allowedReturn(searchParams.get('returnTo'), routeActor(seat, user));
+  const backHref = back ?? '/candidates';
   // B2 (v2 §3): no delete for anyone. The action archives the candidate.
-  const canDeleteCandidate = Boolean(user?.permissions.includes('CANDIDATE_EDIT'));
+  const isAdministrator = Boolean(user?.roles.some((role) => role.code === 'ADMINISTRATOR'));
+  const canEditCandidate = isAdministrator || Boolean(user?.permissions.includes('CANDIDATE_EDIT'));
+  const canViewApplications = isAdministrator || Boolean(user?.permissions.includes('APPLICATION_VIEW'));
+  const canViewInterviews = isAdministrator || Boolean(user?.permissions.includes('VACANCY_VIEW'));
+  const canAssign = isAdministrator || (canViewInterviews && Boolean(user?.permissions.includes('APPLICATION_CREATE')));
+  const canDeleteCandidate = canEditCandidate;
 
   // Core candidate identity state
   const [candidate, setCandidate] = useState<Candidate | null>(null);
@@ -79,6 +93,10 @@ export function CandidateDetailPage() {
   const [offers, setOffers] = useState<Offer[]>([]);
   const [offersLoading, setOffersLoading] = useState(true);
   const [offersError, setOffersError] = useState<string | null>(null);
+
+  const [documents, setDocuments] = useState<CandidateDocument[]>([]);
+  const [documentsLoading, setDocumentsLoading] = useState(true);
+  const [documentsError, setDocumentsError] = useState<string | null>(null);
 
   const interviewStats = useMemo(() => computeInterviewsStats(interviews), [interviews]);
 
@@ -110,13 +128,19 @@ export function CandidateDetailPage() {
     setApplicationsLoading(true);
     setInterviewsLoading(true);
     setOffersLoading(true);
+    setDocumentsLoading(true);
     setCandidateError(null);
     setApplicationsError(null);
     setInterviewsError(null);
     setOffersError(null);
+    setDocumentsError(null);
+    setApplications([]);
+    setInterviews([]);
+    setOffers([]);
+    setDocuments([]);
 
     try {
-      const candidateObj = await getApi<Candidate>(`/candidates/${id}`);
+      const candidateObj = stripPay(await getApi<Candidate>(`/candidates/${id}`));
       setCandidate(candidateObj);
     } catch (err: unknown) {
       setCandidateError((err as Error).message || 'Failed to load candidate details.');
@@ -124,6 +148,7 @@ export function CandidateDetailPage() {
       setApplicationsLoading(false);
       setInterviewsLoading(false);
       setOffersLoading(false);
+      setDocumentsLoading(false);
       return;
     } finally {
       setCandidateLoading(false);
@@ -132,21 +157,24 @@ export function CandidateDetailPage() {
     // Fetch candidate-specific linked records server-side so private or later-page
     // records are not exposed through whole-collection client filtering.
     const validCandidateId = id && id !== 'undefined' && id !== 'null' ? id : null;
-    const [appsRes, interviewsRes, offersRes, vacsRes] = await Promise.allSettled([
-      validCandidateId
+    const [appsRes, interviewsRes, offersRes, vacsRes, documentsRes] = await Promise.allSettled([
+      validCandidateId && canViewApplications
         ? getApi<PaginatedResult<Application>>(`/applications?candidateId=${encodeURIComponent(validCandidateId)}&page=1&pageSize=100`)
-        : Promise.resolve({ data: [], total: 0, page: 1, pageSize: 100, totalPages: 0 } as PaginatedResult<Application>),
-      validCandidateId
+        : Promise.reject(new Error('Application history is not available for your role.')),
+      validCandidateId && canViewInterviews
         ? getApi<Interview[]>(`/interviews?candidateId=${encodeURIComponent(validCandidateId)}`)
-        : Promise.resolve([]),
-      validCandidateId
+        : Promise.reject(new Error('Interviews are not available for your role.')),
+      validCandidateId && canViewApplications
         ? getApi<Offer[]>(`/offers?candidateId=${encodeURIComponent(validCandidateId)}`)
-        : Promise.resolve([]),
-      fetchVacancyList(),
+        : Promise.reject(new Error('Offers are not available for your role.')),
+      canAssign && canViewInterviews ? fetchVacancyList() : Promise.reject(new Error('Job choices are not available for your role.')),
+      validCandidateId
+        ? getApi<CandidateDocument[]>(`/documents/candidate/${encodeURIComponent(validCandidateId)}`)
+        : Promise.reject(new Error('Documents are not available.')),
     ]);
 
     if (appsRes.status === 'fulfilled') {
-      setApplications(appsRes.value.data ?? []);
+      setApplications(stripPay(appsRes.value.data ?? []));
       setApplicationsLoading(false);
     } else {
       setApplications([]);
@@ -164,12 +192,21 @@ export function CandidateDetailPage() {
     }
 
     if (offersRes.status === 'fulfilled') {
-      setOffers(Array.isArray(offersRes.value) ? offersRes.value : []);
+      setOffers(stripPay(Array.isArray(offersRes.value) ? offersRes.value : []));
       setOffersLoading(false);
     } else {
       setOffers([]);
       setOffersError((offersRes.reason as Error)?.message || 'Failed to load offers.');
       setOffersLoading(false);
+    }
+
+    if (documentsRes.status === 'fulfilled') {
+      setDocuments(Array.isArray(documentsRes.value) ? documentsRes.value : []);
+      setDocumentsLoading(false);
+    } else {
+      setDocuments([]);
+      setDocumentsError((documentsRes.reason as Error)?.message || 'Failed to load documents.');
+      setDocumentsLoading(false);
     }
 
     if (vacsRes.status === 'fulfilled') {
@@ -184,17 +221,17 @@ export function CandidateDetailPage() {
 
   useEffect(() => {
     void loadAllData();
-  }, [id]);
+  }, [id, canViewApplications, canViewInterviews, canAssign]);
 
   // ─── Individual Tab Retry Handlers ────────────────────────────
 
   const retryApplications = async () => {
-    if (!id) return;
+    if (!id || !canViewApplications) return;
     setApplicationsLoading(true);
     setApplicationsError(null);
     try {
-      const res = await getApi<PaginatedResult<Application>>(`/applications?candidateId=${id}&page=1&pageSize=100`);
-      const apps = res.data ?? [];
+      const res = await getApi<PaginatedResult<Application>>(`/applications?candidateId=${encodeURIComponent(id)}&page=1&pageSize=100`);
+      const apps = stripPay(res.data ?? []);
       setApplications(apps);
       void retryInterviews();
       void retryOffers();
@@ -206,6 +243,7 @@ export function CandidateDetailPage() {
   };
 
   const retryInterviewsWithAppIds = async () => {
+    if (!canViewInterviews) return;
     setInterviewsLoading(true);
     setInterviewsError(null);
     try {
@@ -223,6 +261,7 @@ export function CandidateDetailPage() {
   };
 
   const retryOffersWithAppIds = async () => {
+    if (!canViewApplications) return;
     if (!id || id === 'undefined' || id === 'null') {
       setOffers([]);
       setOffersLoading(false);
@@ -232,7 +271,7 @@ export function CandidateDetailPage() {
     setOffersError(null);
     try {
       const allOffers = await getApi<Offer[]>(`/offers?candidateId=${encodeURIComponent(id)}`);
-      setOffers(Array.isArray(allOffers) ? allOffers : []);
+      setOffers(stripPay(Array.isArray(allOffers) ? allOffers : []));
     } catch (err: unknown) {
       setOffersError((err as Error).message || 'Failed to load offers.');
     } finally {
@@ -244,11 +283,30 @@ export function CandidateDetailPage() {
     await retryOffersWithAppIds();
   };
 
+  const retryDocuments = async () => {
+    if (!id || id === 'undefined' || id === 'null') {
+      setDocuments([]);
+      setDocumentsLoading(false);
+      return;
+    }
+    setDocumentsLoading(true);
+    setDocumentsError(null);
+    try {
+      const rows = await getApi<CandidateDocument[]>(`/documents/candidate/${encodeURIComponent(id)}`);
+      setDocuments(Array.isArray(rows) ? rows : []);
+    } catch (err: unknown) {
+      setDocuments([]);
+      setDocumentsError((err as Error).message || 'Failed to load documents.');
+    } finally {
+      setDocumentsLoading(false);
+    }
+  };
+
   // ─── Actions: Apply & Tags ────────────────────────────────────
 
   const handleApply = async (e: FormEvent) => {
     e.preventDefault();
-    if (!id || !selectedVacancyId) return;
+    if (!canAssign || !id || !selectedVacancyId) return;
 
     setApplySubmitting(true);
     setApplyError(null);
@@ -268,7 +326,7 @@ export function CandidateDetailPage() {
 
   const handleAddTag = async (e: FormEvent) => {
     e.preventDefault();
-    if (!id || !candidate || !newTag.trim()) return;
+    if (!canEditCandidate || !id || !candidate || !newTag.trim()) return;
 
     setTagSubmitting(true);
     setTagError(null);
@@ -279,9 +337,9 @@ export function CandidateDetailPage() {
       : [...currentSkills, trimmed];
 
     try {
-      const updated = await patchApi<Candidate>(`/candidates/${id}`, {
+      const updated = stripPay(await patchApi<Candidate>(`/candidates/${id}`, {
         skills: updatedSkills,
-      });
+      }));
       setCandidate(updated);
       setNewTag('');
       setIsTagModalOpen(false);
@@ -299,7 +357,7 @@ export function CandidateDetailPage() {
     setDeleteError(null);
     try {
       await deleteApi(`/candidates/${id}`);
-      navigate('/candidates', { replace: true });
+      navigate(backHref, { replace: true });
       return true;
     } catch (err: unknown) {
       setDeleteError((err as Error).message || 'Failed to archive candidate.');
@@ -334,7 +392,7 @@ export function CandidateDetailPage() {
             title="Access Restricted"
             description="You do not have the required permissions to view this candidate profile."
             actionLabel="Back to Candidates"
-            onAction={() => navigate('/candidates')}
+            onAction={() => navigate(backHref)}
           />
         ) : (
           <PageState
@@ -342,7 +400,7 @@ export function CandidateDetailPage() {
             title="Candidate Not Found"
             description="The requested candidate profile does not exist or has been removed."
             actionLabel="Back to Candidates"
-            onAction={() => navigate('/candidates')}
+            onAction={() => navigate(backHref)}
           />
         )}
       </PageFrame>
@@ -354,18 +412,13 @@ export function CandidateDetailPage() {
   const fullName =
     [candidate.firstName, candidate.lastName].filter(Boolean).join(' ').trim() || 'Candidate';
 
-  const activeApplication =
-    applications.find((app) => app.stage !== 'Rejected' && app.stage !== 'Withdrawn') ??
-    applications[0] ??
-    null;
-
   // ─── Tab Item Definitions ─────────────────────────────────────
 
   const tabItems: TabItem[] = [
     { key: 'overview', label: 'Overview', controls: 'tabpanel-overview' },
-    { key: 'applications', label: 'Applications', count: applications.length, controls: 'tabpanel-applications' },
-    { key: 'interviews', label: 'Interviews', count: interviews.length, controls: 'tabpanel-interviews' },
-    { key: 'offers', label: 'Offers', count: offers.length, controls: 'tabpanel-offers' },
+    { key: 'applications', label: 'Applications', count: !canViewApplications || applicationsLoading || applicationsError ? undefined : applications.length, controls: 'tabpanel-applications' },
+    { key: 'interviews', label: 'Interviews', count: !canViewInterviews || interviewsLoading || interviewsError ? undefined : interviews.length, controls: 'tabpanel-interviews' },
+    { key: 'offers', label: 'Offers', count: !canViewApplications || offersLoading || offersError ? undefined : offers.length, controls: 'tabpanel-offers' },
   ];
 
   // ─── Overview Details (P0.2: Null fields hidden, not fallback strings) ───
@@ -429,6 +482,19 @@ export function CandidateDetailPage() {
       render: (app) => <StatusBadge status={app.stage} />,
     },
     {
+      key: 'owner',
+      header: 'Owner',
+      priority: 'secondary',
+      render: (app) => app.primaryRecruiterName || 'Unassigned',
+    },
+    {
+      key: 'history',
+      header: 'Latest activity',
+      mobileLabel: 'History',
+      priority: 'secondary',
+      render: (app) => app.lastActivityLabel || 'Application submitted',
+    },
+    {
       key: 'status',
       header: 'Status',
       priority: 'secondary',
@@ -441,53 +507,90 @@ export function CandidateDetailPage() {
       ),
     },
     {
-      key: 'date',
-      header: 'Applied Date',
-      priority: 'secondary',
-      render: (app) => (
-        <span className="text-rf-ink-muted font-medium">
-          {new Date(app.appliedAt || app.createdAt).toLocaleDateString()}
-        </span>
-      ),
-    },
-    {
       key: 'action',
       header: 'Action',
       priority: 'secondary',
       render: (app) => (
         <Button variant="secondary" size="sm" asChild>
-          <Link to={`/applications/${app.id}`}>View application</Link>
+          <Link to={withReturnTo(`/applications/${app.id}`, back)}>View application</Link>
         </Button>
       ),
     },
   ];
 
+  const renderApplications = () => {
+    if (!canViewApplications) {
+      return <PageState kind="forbidden" title="Applications unavailable" description="Application history is not available for your role." />;
+    }
+    if (applicationsLoading) {
+      return <TableSkeleton rows={4} columns={6} />;
+    }
+    if (applicationsError) {
+      return (
+        <Alert
+          tone="danger"
+          title="Failed to load applications"
+          action={
+            <Button variant="secondary" size="sm" onClick={() => void retryApplications()}>
+              Retry
+            </Button>
+          }
+        >
+          {applicationsError}
+        </Alert>
+      );
+    }
+    if (applications.length === 0) {
+      return (
+        <PageState
+          kind="empty"
+          title="No applications"
+          description="This person is not on a job yet."
+          actionLabel={canAssign ? 'Assign to job' : undefined}
+          onAction={canAssign ? () => setIsApplyModalOpen(true) : undefined}
+        />
+      );
+    }
+    return (
+      <div className="rf-table-shell overflow-hidden rounded-2xl border border-rf-border-subtle bg-white shadow-xs">
+        <div className="px-4 py-3 border-b border-rf-border-subtle bg-rf-surface-subtle flex items-center justify-between">
+          <h3 className="text-xs font-bold text-rf-ink m-0">Applications ({applications.length})</h3>
+        </div>
+        <ResponsiveDataView
+          rows={applications}
+          columns={applicationColumns}
+          rowKey={(app) => app.id}
+          label="Candidate applications table"
+        />
+      </div>
+    );
+  };
+
   // ─── Render ───────────────────────────────────────────────────
+
+  const avatarInitials = [candidate.firstName?.[0], candidate.lastName?.[0]].filter(Boolean).join('').toUpperCase() || 'C';
 
   return (
     <PageFrame
+      showBack
+      backTo={backHref}
+      leadingVisual={<span className="rf-cand-profile-avatar" aria-hidden="true">{avatarInitials}</span>}
       title={fullName}
+      titleBadge={<StatusBadge status={candidate.status} />}
       description={
-        [candidate.candidateCode, candidate.currentTitle, candidate.currentCompany]
+        [candidate.candidateCode, candidate.currentTitle, candidate.currentCompany, candidate.location]
           .filter(Boolean)
           .join(' · ') || undefined
       }
       actions={
         <>
-          <StatusBadge status={candidate.status} />
-          <Button variant="primary" size="sm" onClick={() => setIsApplyModalOpen(true)}>
+          {canAssign ? <Button variant="primary" size="sm" onClick={() => setIsApplyModalOpen(true)}>
             <Icon name="plus" size={13} />
             Assign to job
-          </Button>
-          <Button variant="secondary" size="sm" asChild>
-            <Link to={`/candidates/${candidate.id}/documents`}>
-              <Icon name="file-text" size={13} />
-              Documents
-            </Link>
-          </Button>
+          </Button> : null}
           {canDeleteCandidate && (
             <Button
-              variant="danger"
+              variant="secondary"
               size="sm"
               onClick={() => {
                 setDeleteError(null);
@@ -507,126 +610,117 @@ export function CandidateDetailPage() {
         </Alert>
       )}
 
-      {/* Candidate 360 Workspace Header */}
-      <CandidateWorkspace
-        candidateName={fullName}
-        positionTitle={activeApplication?.positionTitle ?? candidate.currentTitle ?? null}
-        applicationId={activeApplication?.id ?? null}
-        stage={activeApplication?.stage ?? null}
-        stages={['Applied', 'Screening', 'Interview', 'Offer', 'Pre-Hire', 'Joined']}
-        slaDeadline={null}
-        tags={candidate.skills ?? []}
-        email={candidate.email || null}
-        phone={candidate.phone || null}
-        location={candidate.location || null}
-        onAddTag={() => setIsTagModalOpen(true)}
-      />
+      {applicationsError ? (
+        <p className="text-xs text-slate-600 dark:text-slate-300">Application history could not be checked.</p>
+      ) : null}
 
-      {activeApplication ? (
-        <p className="text-xs text-slate-600 dark:text-slate-300">
-          Next:{' '}
-          <Link className="font-semibold text-blue-700 hover:underline dark:text-blue-300" to={`/applications/${activeApplication.id}`}>
-            Review application
-          </Link>
-          {activeApplication.stage ? ` · ${activeApplication.stage}` : ''}
-        </p>
-      ) : (
-        <p className="text-xs text-slate-600 dark:text-slate-300">Next: assign this person to a job.</p>
-      )}
+      {/* 2-Column Executive Workspace: Main Sections on Left, Activity & Follow-up Sticky Sidebar on Right */}
+      <div className="rf-cand-detail-grid">
+        <div className="rf-cand-detail-main">
+          <Tabs
+            ariaLabel="Candidate sections"
+            items={tabItems}
+            activeKey={activeTab}
+            onChange={(key) => setActiveTab(key as TabKey)}
+          />
 
-      {/* Tabs Navigation */}
-      <CandidateActivityPanel key={candidate.id} candidateId={candidate.id} />
-
-      <Tabs
-        ariaLabel="Candidate sections"
-        items={tabItems}
-        activeKey={activeTab}
-        onChange={(key) => setActiveTab(key as TabKey)}
-      />
-
-      {/* Tab Panels */}
-      <div className="mt-2">
+          {/* Tab Panels */}
+          <div className="mt-3">
         {/* Overview Tab */}
         <TabPanel id="overview" activeKey={activeTab}>
-          {candidateLoading ? (
-            <DetailSkeleton />
-          ) : candidateError ? (
-            <Alert
-              tone="danger"
-              title="Failed to load overview"
-              action={
-                <Button variant="secondary" size="sm" onClick={() => void loadAllData()}>
-                  Retry
-                </Button>
-              }
-            >
-              {candidateError}
-            </Alert>
-          ) : contactItems.length === 0 ? (
-            <PageState
-              kind="empty"
-              title="No details recorded"
-              description="No contact or profile details have been recorded for this candidate."
-            />
-          ) : (
-            <div className="flex flex-col gap-6">
-              <DetailSummary
-                title="Contact"
-                description="Source and consent are included when they are on file."
-                items={contactItems}
-              />
+          <div className="flex flex-col gap-4">
+            <div className="rf-cand-overview-bento">
+              <div className="min-w-0">
+                {contactItems.length === 0 ? (
+                  <PageState
+                    kind="empty"
+                    title="No details recorded"
+                    description="No contact or profile details have been recorded for this candidate."
+                  />
+                ) : (
+                  <DetailSummary
+                    title="Personal details"
+                    description="Source and consent are included when they are on file."
+                    items={contactItems}
+                  />
+                )}
+              </div>
+              <div className="flex flex-col gap-4 min-w-0">
+                <section className="rounded-2xl border border-rf-border-subtle bg-white p-4 shadow-xs flex flex-col gap-2.5" aria-label="Skills">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="text-xs font-bold text-rf-ink m-0">Skills</h3>
+                    {canEditCandidate && (
+                      <Button type="button" variant="secondary" size="sm" onClick={() => setIsTagModalOpen(true)} className="h-6 min-h-6 px-2.5 text-[11px] font-semibold" aria-label="Add tag">
+                        + Add
+                      </Button>
+                    )}
+                  </div>
+                  {(candidate.skills ?? []).length === 0 ? (
+                    <p className="text-xs text-rf-ink-muted m-0">No skills recorded yet.</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {(candidate.skills ?? []).map((skill) => (
+                        <Badge key={skill} variant="neutral" className="text-xs font-medium px-2.5 py-0.5">{skill}</Badge>
+                      ))}
+                    </div>
+                  )}
+                </section>
+                <section className="rf-cand-cv-card flex flex-col gap-3 rounded-2xl border border-rf-border-subtle bg-white p-4 shadow-xs flex-1" aria-label="Documents">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="text-xs font-bold text-rf-ink m-0">CV &amp; Documents</h3>
+                    <Link className="text-xs font-semibold text-rf-action hover:underline" to={withReturnTo(`/candidates/${encodeURIComponent(candidate.id)}/documents`, back)}>
+                      Manage documents
+                    </Link>
+                  </div>
+                {documentsLoading ? (
+                  <PageState kind="loading" title="Loading documents" description="Fetching document records for this person." />
+                ) : documentsError ? (
+                  <Alert
+                    tone="danger"
+                    title="Documents could not be loaded"
+                    action={
+                      <Button variant="secondary" size="sm" onClick={() => void retryDocuments()}>
+                        Retry
+                      </Button>
+                    }
+                  >
+                    {documentsError}
+                  </Alert>
+                ) : documents.length === 0 ? (
+                  <PageState kind="empty" title="No documents" description="No documents have been recorded for this person." />
+                ) : (
+                  <ul className="m-0 flex list-none flex-col gap-2 p-0">
+                    {documents.map((doc) => (
+                      <li key={doc.id} className="rf-cand-doc-item flex items-center gap-3 rounded-xl border border-rf-border-subtle bg-rf-surface-subtle/60 px-3 py-2.5 text-xs text-rf-ink">
+                        <span className="rf-cand-doc-badge" aria-hidden="true">PDF</span>
+                        <div className="min-w-0 flex-1">
+                          <span className="font-semibold block truncate">{doc.fileName}</span>
+                          {doc.documentType ? <span className="text-rf-ink-muted text-[11px]">{doc.documentType}</span> : null}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                </section>
+              </div>
             </div>
-          )}
+            <section className="flex flex-col gap-2.5" aria-label="Applications">
+              <h3 className="text-xs font-semibold text-rf-ink m-0 sr-only">Applications</h3>
+              {renderApplications()}
+            </section>
+          </div>
         </TabPanel>
 
         {/* Applications Tab */}
         <TabPanel id="applications" activeKey={activeTab}>
-          {applicationsLoading ? (
-            <TableSkeleton rows={4} columns={5} />
-          ) : applicationsError ? (
-            <Alert
-              tone="danger"
-              title="Failed to load applications"
-              action={
-                <Button variant="secondary" size="sm" onClick={() => void retryApplications()}>
-                  Retry
-                </Button>
-              }
-            >
-              {applicationsError}
-            </Alert>
-          ) : applications.length === 0 ? (
-            <PageState
-              kind="empty"
-              title="No applications"
-              description="This person is not on a job yet."
-              actionLabel="Assign to job"
-              onAction={() => setIsApplyModalOpen(true)}
-            />
-          ) : (
-            <div className="rf-table-shell overflow-hidden rounded-2xl border border-rf-border-subtle bg-white shadow-xs">
-              <div className="p-4 border-b border-rf-border-subtle bg-rf-surface-subtle flex items-center justify-between">
-                <div>
-                  <h3 className="text-xs font-semibold text-rf-ink m-0">Applications ({applications.length})</h3>
-                </div>
-                <Button variant="primary" size="sm" onClick={() => setIsApplyModalOpen(true)}>
-                  <Icon name="plus" size={13} />
-                  Assign to job
-                </Button>
-              </div>
-              <ResponsiveDataView
-                rows={applications}
-                columns={applicationColumns}
-                rowKey={(app) => app.id}
-                label="Candidate applications table"
-              />
-            </div>
-          )}
+          {renderApplications()}
         </TabPanel>
 
         {/* Interviews Tab */}
         <TabPanel id="interviews" activeKey={activeTab}>
-          {interviewsLoading ? (
+          {!canViewInterviews ? (
+            <PageState kind="forbidden" title="Interviews unavailable" description="Interviews are not available for your role." />
+          ) : interviewsLoading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <TableSkeleton rows={2} columns={3} />
               <TableSkeleton rows={2} columns={3} />
@@ -635,11 +729,11 @@ export function CandidateDetailPage() {
             <Alert
               tone="danger"
               title="Failed to load interviews"
-              action={
+              action={canViewInterviews ?
                 <Button variant="secondary" size="sm" onClick={() => void retryInterviews()}>
                   Retry
                 </Button>
-              }
+              : undefined}
             >
               {interviewsError}
             </Alert>
@@ -723,17 +817,19 @@ export function CandidateDetailPage() {
 
         {/* Offers Tab */}
         <TabPanel id="offers" activeKey={activeTab}>
-          {offersLoading ? (
+          {!canViewApplications ? (
+            <PageState kind="forbidden" title="Offers unavailable" description="Offers are not available for your role." />
+          ) : offersLoading ? (
             <ListSkeleton count={3} />
           ) : offersError ? (
             <Alert
               tone="danger"
               title="Failed to load offers"
-              action={
+              action={canViewApplications ?
                 <Button variant="secondary" size="sm" onClick={() => void retryOffers()}>
                   Retry
                 </Button>
-              }
+              : undefined}
             >
               {offersError}
             </Alert>
@@ -768,7 +864,7 @@ export function CandidateDetailPage() {
                   </div>
                   <div className="flex items-center gap-2 self-end sm:self-center">
                     <Button variant="secondary" size="sm" asChild>
-                      <Link to={`/offers/${offer.id}`}>View offer</Link>
+                      <Link to={withReturnTo(`/offers/${offer.id}`, back)}>View offer</Link>
                     </Button>
                   </div>
                 </div>
@@ -778,6 +874,11 @@ export function CandidateDetailPage() {
         </TabPanel>
 
         {/* Timeline Tab */}
+          </div>
+        </div>
+        <aside className="rf-cand-detail-aside" aria-label="Candidate follow-up sidebar">
+          <CandidateActivityPanel key={candidate.id} candidateId={candidate.id} />
+        </aside>
       </div>
 
       <Modal isOpen={isApplyModalOpen} onClose={() => setIsApplyModalOpen(false)} title="Assign to job">

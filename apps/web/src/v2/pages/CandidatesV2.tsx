@@ -1,17 +1,19 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { History, Info, RotateCw, Scale, Search, Users } from 'lucide-react';
+import { History, Info, RotateCw, Scale, Search } from 'lucide-react';
 import { ApiError, postApi } from '../../api/client';
-import { ButtonV2, EmptyStateV2, ForbiddenStateV2, InputV2, SelectV2, SkeletonV2, StatusChip } from '../../components/v2';
+import { ButtonV2, EmptyStateV2, ForbiddenStateV2, InputV2, SelectV2, SkeletonV2, StatusChip, type StatusTone } from '../../components/v2';
 import { findExistingFile, isApplicationExists } from '../api/applicationExists';
 import { existingPerson } from '../api/cvImport';
 import { ACCEPTING_JOB_STATUSES, fetchOpenJobs } from '../api/jobs';
 import { addToJob, fetchActiveApplications, fetchBank, OPEN_APPLICATION_STAGES, type ActiveRow, type BankRow } from '../api/matching';
+import { buildCandidatesHref, buildCompareHref, parseCompareIds, withReturnTo } from '../returnTarget';
 import { formatDay } from './OpenJobsV2';
 import './jobs.css';
 import './candidates.css';
 
 const STAGE_LABEL: Record<string, string> = { Applied: 'Applied', Screening: 'Screening', Interview: 'Interview', Offer: 'Offer', 'Pre-Hire': 'Pre-hire' };
+const STAGE_TONE: Record<string, StatusTone> = { Applied: 'neutral', Screening: 'info', Interview: 'info', Offer: 'warning', 'Pre-Hire': 'success' };
 const QUERY_KEYS = ['tab', 'search', 'job', 'source', 'stage'] as const;
 type QueryKey = (typeof QUERY_KEYS)[number];
 const initials = (n: string) => n.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join('');
@@ -32,15 +34,8 @@ function orderedQuery(current: URLSearchParams, patch: Partial<Record<QueryKey, 
   return ordered;
 }
 
-function candidatesPath(params: URLSearchParams) {
-  const query = params.toString();
-  return query ? `/candidates?${query}` : '/candidates';
-}
-
 function applicationHref(applicationId: string, returnTo: string) {
-  const query = new URLSearchParams();
-  query.set('returnTo', returnTo);
-  return `/applications/${encodeURIComponent(applicationId)}?${query.toString()}`;
+  return withReturnTo(`/applications/${encodeURIComponent(applicationId)}`, returnTo);
 }
 
 function listCount(count: number, selected: number, truncated: boolean) {
@@ -60,7 +55,9 @@ export function CandidatesV2() {
   const job = params.get('job') ?? '';
   const source = params.get('source') ?? '';
   const stage = knownStage(params.get('stage') ?? '');
-  const returnTo = candidatesPath(params);
+  const rawIds = params.get('ids') ?? '';
+  const urlIds = useMemo(() => parseCompareIds(rawIds), [rawIds]);
+  const seededIdsRef = useRef<string | null>(null);
   const [picked, setPicked] = useState<string[]>([]);
   const [attempt, setAttempt] = useState(0);
   const [active, setActive] = useState<ActiveState>({ kind: 'loading' });
@@ -100,40 +97,86 @@ export function CandidatesV2() {
       return `${row.name} ${row.title ?? ''} ${row.job}`.toLowerCase().includes(needle);
     });
   }, [active, q, job, source, stage]);
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (tab !== 'active' || active.kind !== 'ready') return;
     const visible = new Set(activeRows.map((row) => row.applicationId));
+    if (seededIdsRef.current !== rawIds) {
+      seededIdsRef.current = rawIds;
+      if (urlIds.length > 0) {
+        const idSet = new Set(urlIds);
+        const restored = activeRows
+          .filter((row) => idSet.has(row.candidateId) || idSet.has(row.applicationId))
+          .slice(0, 4)
+          .map((row) => row.applicationId);
+        setPicked(restored);
+        return;
+      }
+    }
     setPicked((prev) => {
       const next = prev.filter((id) => visible.has(id));
       return next.length === prev.length ? prev : next;
     });
-  }, [tab, active, activeRows]);
+  }, [tab, active, activeRows, rawIds, urlIds]);
 
   const jobs = active.kind === 'ready' ? [...new Map(active.rows.map((row) => [row.vacancyId, row.job])).entries()] : [];
   const sources = active.kind === 'ready' ? [...new Set(active.rows.map((row) => row.source).filter((value): value is string => Boolean(value)))] : [];
   const pickedRows = activeRows.filter((row) => picked.includes(row.applicationId));
+  const returnTo = buildCandidatesHref({
+    tab,
+    search: q,
+    job,
+    source,
+    stage,
+    ids: tab === 'active' && pickedRows.length > 0 ? pickedRows.map((row) => row.candidateId) : null,
+  });
   const sameJob = pickedRows.length > 0 && pickedRows.every((row) => row.vacancyId === pickedRows[0].vacancyId);
   const canCompare = pickedRows.length >= 2 && pickedRows.length <= 4 && sameJob;
+  const compareHref = canCompare
+    ? buildCompareHref({
+      job: pickedRows[0].vacancyId,
+      ids: pickedRows.map((row) => row.candidateId),
+      search: q,
+      source,
+      stage,
+    })
+    : null;
   const why = pickedRows.length < 2 ? 'Select 2 to 4 people on the same job.' : !sameJob ? 'Compare works within one job; select people on the same job.' : pickedRows.length > 4 ? 'Compare up to 4.' : '';
   const toggle = (id: string) => setPicked((prev) => (prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]));
   const cur = tab === 'active' ? active : bank;
   const truncated = active.kind === 'ready' && active.truncated;
   const shown = tab === 'active' ? activeRows.length : bank.kind === 'ready' ? bank.rows.length : 0;
 
+  const offerOrPrehireCount = activeRows.filter((row) => row.stage === 'Offer' || row.stage === 'Pre-Hire').length;
+
   return (
     <div className="rf2-jobs rf2-cand">
-      <div className="rf2-row-between">
-        <div>
-          <h1 className="rf2-jobs__title">Candidates</h1>
+      <h1 className="rf2-jobs__title">Candidates</h1>
+      {tab === 'active' ? (
+        <div className="rf2-row-between rf2-cand__header">
+          <div className="rf2-open__kpis rf2-cand__kpis" aria-label="Candidates summary">
+            <div className="rf2-open__kpi" data-tone="action">
+              <span className="rf2-open__kpi-label">Active files</span>
+              <span className="rf2-open__kpi-value">{shown}</span>
+            </div>
+            <div className="rf2-open__kpi" data-tone="warning">
+              <span className="rf2-open__kpi-label">Offer &amp; pre-hire</span>
+              <span className="rf2-open__kpi-value">{offerOrPrehireCount}</span>
+            </div>
+            <div className="rf2-open__kpi" data-tone="success">
+              <span className="rf2-open__kpi-label">Open jobs in view</span>
+              <span className="rf2-open__kpi-value">{jobs.length}</span>
+            </div>
+          </div>
+          <div className="rf2-cand__head-tools">
+            <nav className="rf2-cand__actions" aria-label="Candidate records">
+              <Link className="rf2-btn rf2-btn--secondary rf2-btn--md" to={withReturnTo('/import#import-history', returnTo)}><History aria-hidden="true" /> Import history</Link>
+            </nav>
+            {compareHref
+              ? <Link className="rf2-btn rf2-btn--primary rf2-btn--md" to={compareHref}><Scale aria-hidden="true" /> Compare {pickedRows.length} on skills</Link>
+              : <><ButtonV2 icon={<Scale />} disabled aria-describedby="cmp-why">Compare on skills</ButtonV2><span id="cmp-why" className="rf2-sr-only">{why}</span></>}
+          </div>
         </div>
-        {tab === 'active' ? (canCompare
-          ? <Link className="rf2-btn rf2-btn--primary rf2-btn--md" to={`/candidates/compare?job=${encodeURIComponent(pickedRows[0].vacancyId)}&ids=${pickedRows.map((row) => encodeURIComponent(row.candidateId)).join(',')}`}><Scale aria-hidden="true" /> Compare {pickedRows.length} on skills</Link>
-          : <><ButtonV2 icon={<Scale />} disabled aria-describedby="cmp-why">Compare on skills</ButtonV2><span id="cmp-why" className="rf2-sr-only">{why}</span></>) : null}
-      </div>
-      <nav className="rf2-cand__actions" aria-label="Candidate records">
-        <ButtonV2 kind="secondary" icon={<Users />} onClick={() => setTab('bank')}>Candidate bank</ButtonV2>
-        <Link className="rf2-btn rf2-btn--secondary rf2-btn--md" to="/import#import-history"><History aria-hidden="true" /> Import history</Link>
-      </nav>
+      ) : null}
       <div className="rf2-jobs__filters">
         <div className="rf2-seg" role="tablist" aria-label="Candidates view">
           <button type="button" role="tab" aria-selected={tab === 'active'} className="rf2-seg__opt" onClick={() => setTab('active')}>Active applications</button>
@@ -148,6 +191,11 @@ export function CandidatesV2() {
           </>
         ) : null}
         <p className="rf2-jobs__count" aria-live="polite">{cur.kind === 'ready' ? listCount(shown, tab === 'active' ? pickedRows.length : 0, tab === 'active' && truncated) : ''}</p>
+        {tab === 'bank' ? (
+          <nav className="rf2-cand__actions" aria-label="Candidate records">
+            <Link className="rf2-btn rf2-btn--secondary rf2-btn--sm" to={withReturnTo('/import#import-history', returnTo)}><History aria-hidden="true" /> Import history</Link>
+          </nav>
+        ) : null}
       </div>
       {cur.kind === 'loading' ? <SkeletonV2 lines={6} label="Loading people…" /> : null}
       {cur.kind === 'forbidden' ? <ForbiddenStateV2 body="Your role does not include candidates." /> : null}
@@ -164,8 +212,8 @@ export function CandidatesV2() {
                   return (
                     <tr key={row.applicationId} data-selected={picked.includes(row.applicationId) || undefined}>
                       <td><input type="checkbox" aria-label={`Select ${row.name} (${row.job})`} checked={picked.includes(row.applicationId)} onChange={() => toggle(row.applicationId)} /></td>
-                      <td className="rf2-cand__who"><div className="rf2-kcard__top"><span className="rf2-kcard__avatar" aria-hidden="true">{initials(row.name)}</span><div><Link className="rf2-kcard__name" to={href}>{row.name}</Link>{years ? <p className="rf2-jtable__sub">{years}</p> : null}<p className="rf2-jtable__sub">{row.job}</p></div></div></td>
-                      <td><StatusChip tone="info" label={STAGE_LABEL[row.stage] ?? row.stage} /></td>
+                      <td className="rf2-cand__who"><div className="rf2-cand__who-split"><div className="rf2-kcard__top"><span className="rf2-kcard__avatar" aria-hidden="true">{initials(row.name)}</span><div><Link className="rf2-kcard__name" to={href}>{row.name}</Link>{years ? <p className="rf2-jtable__sub">{years}</p> : null}</div></div><span className="rf2-cand__job-pill">{row.job}</span></div></td>
+                      <td><StatusChip tone={STAGE_TONE[row.stage] ?? 'info'} label={STAGE_LABEL[row.stage] ?? row.stage} /></td>
                       <td className="rf2-cand__quiet"><span className="rf2-cand__label">Source</span>{row.source ?? '—'}</td>
                       <td className="rf2-cand__quiet"><span className="rf2-cand__label">Owner</span>{row.owner ?? '—'}</td>
                       <td className="rf2-cand__next">{row.nextAt ? <StatusChip tone={row.nextAt < new Date().toISOString() ? 'warning' : 'neutral'} label={`Follow-up due ${formatDay(row.nextAt)}`} /> : row.next ?? '—'}</td>
@@ -177,7 +225,7 @@ export function CandidatesV2() {
           )}
         </section>
       ) : null}
-      {tab === 'bank' && bank.kind === 'ready' ? <BankPanel rows={bank.rows} returnTo={returnTo} onAdded={() => setAttempt((n) => n + 1)} /> : null}
+      {tab === 'bank' && bank.kind === 'ready' ? <BankPanel rows={bank.rows} returnTo={returnTo} initialJobId={job} onJobChange={(nextJobId) => updateQuery({ job: nextJobId || null })} onAdded={() => setAttempt((n) => n + 1)} /> : null}
       <p className="rf2-inline-note"><Info aria-hidden="true" /> Rejecting someone closes one application only. The person stays in the bank and can be suggested for other jobs.</p>
     </div>
   );
@@ -186,14 +234,16 @@ export function CandidatesV2() {
 type JobChoice = { id: string; label: string };
 
 /** One person in the bank, then one application on an open job. A repeat keeps the same person and the same file. */
-function BankPanel({ rows, returnTo, onAdded }: { rows: BankRow[]; returnTo: string; onAdded: () => void }) {
+function BankPanel({ rows, returnTo, onAdded, initialJobId, onJobChange }: { rows: BankRow[]; returnTo: string; onAdded: () => void; initialJobId?: string; onJobChange?: (nextJobId: string) => void }) {
   const [first, setFirst] = useState('');
   const [last, setLast] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [notice, setNotice] = useState<string | null>(null);
+  const [personHref, setPersonHref] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [chosen, setChosen] = useState('');
-  const [jobId, setJobId] = useState('');
+  const [jobId, setJobId] = useState(initialJobId ?? '');
   const [jobs, setJobs] = useState<JobChoice[] | null>(null);
   const [jobNote, setJobNote] = useState<{ text: string; href?: string } | null>(null);
   const [linking, setLinking] = useState(false);
@@ -209,22 +259,41 @@ function BankPanel({ rows, returnTo, onAdded }: { rows: BankRow[]; returnTo: str
     return () => { live = false; };
   }, []);
 
+  useEffect(() => {
+    if (!jobs) return;
+    if (initialJobId && jobs.some((item) => item.id === initialJobId)) {
+      setJobId(initialJobId);
+      return;
+    }
+    if (initialJobId) setJobId((current) => (current === initialJobId ? '' : current));
+  }, [jobs, initialJobId]);
+
   const addPerson = async () => {
     const firstName = first.trim();
     const lastName = last.trim();
     const mail = email.trim();
+    const phoneNumber = phone.trim();
     if (!firstName || !lastName || !mail) {
+      setPersonHref(null);
       setNotice('First name, last name, and email are required. Phone is left blank.');
       return;
     }
     setAdding(true);
+    setPersonHref(null);
     try {
-      const created = await postApi<{ id: string; candidateCode?: string }>('/candidates', { firstName, lastName, email: mail, source: 'Bank' });
+      const created = await postApi<{ id: string; candidateCode?: string }>('/candidates', {
+        firstName, lastName, email: mail, source: 'Bank',
+        ...(phoneNumber ? { phone: phoneNumber } : {}),
+      });
+      setChosen(created.id);
+      setPersonHref(withReturnTo(`/candidates/${encodeURIComponent(created.id)}`, returnTo));
       setNotice(`Added one person${created.candidateCode ? ` (${created.candidateCode})` : ''}. The same email stays this one person.`);
       onAdded();
     } catch (e) {
-      const hit = await existingPerson(e, { email: mail });
+      const hit = await existingPerson(e, { email: mail, ...(phoneNumber ? { phone: phoneNumber } : {}) });
       if (hit) {
+        setChosen(hit.candidateId);
+        setPersonHref(withReturnTo(`/candidates/${encodeURIComponent(hit.candidateId)}`, returnTo));
         setNotice(`Already one person in the bank${hit.candidateCode ? ` (${hit.candidateCode})` : ''}. No second person was created.`);
         onAdded();
         return;
@@ -259,34 +328,37 @@ function BankPanel({ rows, returnTo, onAdded }: { rows: BankRow[]; returnTo: str
   return (
     <section className="rf2-panel" aria-label="Bank">
       <nav className="rf2-bank-links" aria-label="Bank tools">
-        <Link to="/import">Review a workbook</Link>
+        <Link to={withReturnTo('/import', returnTo)}>Review a workbook</Link>
         <Link to="/cv-bank">CV bank</Link>
         <Link to="/sourcing-match">Search and match</Link>
         <Link to="/talent-pools">Talent pools</Link>
       </nav>
       <p className="rf2-inline-note"><Info aria-hidden="true" /> PDF and Word CVs are added from a job. Workbooks are reviewed on the import page, and each duplicate needs a decision. A ZIP of CVs is not an intake format.</p>
-      <form className="rf2-bank-add" onSubmit={(e) => { e.preventDefault(); void addPerson(); }}>
-        <InputV2 label="First name" value={first} onChange={(e) => setFirst(e.target.value)} autoComplete="off" />
-        <InputV2 label="Last name" value={last} onChange={(e) => setLast(e.target.value)} autoComplete="off" />
-        <InputV2 label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="off" hint="Same email keeps one person." />
-        <ButtonV2 kind="secondary" type="submit" loading={adding}>Add to the bank</ButtonV2>
-      </form>
-      {notice ? <p role="status">{notice}</p> : null}
-      <form className="rf2-bank-add" onSubmit={(e) => { e.preventDefault(); void addJob(); }}>
-        <SelectV2 label="Open job" value={jobId} onChange={(e) => setJobId(e.target.value)} disabled={!jobs || jobs.length === 0}>
-          <option value="">{jobs && jobs.length === 0 ? 'No open job loaded' : 'Choose an open job'}</option>
-          {(jobs ?? []).map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
-        </SelectV2>
-        <ButtonV2 kind="secondary" type="submit" loading={linking} disabled={!chosen || !jobId}>Add the chosen person to this job</ButtonV2>
-      </form>
-      {jobNote ? <p role="status">{jobNote.text}{jobNote.href ? <> <Link to={jobNote.href}>Open the application</Link></> : null}</p> : null}
+      <div className="rf2-bank__forms">
+        <form className="rf2-bank-add rf2-bank-add--person" onSubmit={(e) => { e.preventDefault(); void addPerson(); }}>
+          <InputV2 label="First name" value={first} onChange={(e) => setFirst(e.target.value)} autoComplete="off" />
+          <InputV2 label="Last name" value={last} onChange={(e) => setLast(e.target.value)} autoComplete="off" />
+          <InputV2 label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="off" hint="Same email keeps one person." />
+          <InputV2 label="Phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} autoComplete="off" />
+          <ButtonV2 kind="secondary" type="submit" loading={adding}>Add to the bank</ButtonV2>
+          {notice ? <p className="rf2-bank__status" role="status">{notice}{personHref ? <> <Link to={personHref}>Open person</Link></> : null}</p> : null}
+        </form>
+        <form className="rf2-bank-add rf2-bank-add--job" onSubmit={(e) => { e.preventDefault(); void addJob(); }}>
+          <SelectV2 label="Open job" value={jobId} onChange={(e) => { setJobId(e.target.value); onJobChange?.(e.target.value); }} disabled={!jobs || jobs.length === 0}>
+            <option value="">{jobs && jobs.length === 0 ? 'No open job loaded' : 'Choose an open job'}</option>
+            {(jobs ?? []).map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+          </SelectV2>
+          <ButtonV2 kind="secondary" type="submit" loading={linking} disabled={!chosen || !jobId}>Add the chosen person to this job</ButtonV2>
+          {jobNote ? <p className="rf2-bank__status" role="status">{jobNote.text}{jobNote.href ? <> <Link to={jobNote.href}>Open the application</Link></> : null}</p> : null}
+        </form>
+      </div>
       {rows.length === 0 ? <EmptyStateV2 headingLevel={3} title="No one found" body="Try another name or title." /> : (
         <table className="rf2-jtable">
           <thead><tr><th scope="col"><span className="rf2-sr-only">Choose</span></th><th scope="col">Name</th><th scope="col">Current title</th><th scope="col">Location</th><th scope="col">Experience</th></tr></thead>
           <tbody>{rows.map((row) => (
             <tr key={row.candidateId}>
               <td><input type="radio" name="bank-person" value={row.candidateId} aria-label={`Choose ${row.name} for a job`} checked={chosen === row.candidateId} onChange={() => setChosen(row.candidateId)} /></td>
-              <td><p className="rf2-jtable__name">{row.name}</p><p className="rf2-jtable__sub">{row.code}</p></td>
+              <td><div className="rf2-kcard__top"><span className="rf2-kcard__avatar" aria-hidden="true">{initials(row.name)}</span><div><Link className="rf2-jtable__name" to={withReturnTo(`/candidates/${encodeURIComponent(row.candidateId)}`, returnTo)}>{row.name}</Link><p className="rf2-jtable__sub">{row.code} · <Link className="rf2-cand__doc-link" to={withReturnTo(`/candidates/${encodeURIComponent(row.candidateId)}/documents`, returnTo)} aria-label={`Documents for ${row.name}`}>Documents</Link></p></div></div></td>
               <td><span className="rf2-cand__label">Title</span>{row.title ?? '—'}</td>
               <td><span className="rf2-cand__label">Location</span>{row.location ?? '—'}</td>
               <td className="rf2-num"><span className="rf2-cand__label">Experience</span>{row.experienceYears != null ? `${row.experienceYears} yrs` : '—'}</td>

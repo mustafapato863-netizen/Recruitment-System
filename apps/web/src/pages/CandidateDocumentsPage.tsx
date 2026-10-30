@@ -1,5 +1,10 @@
 import { useState, useEffect, type FormEvent } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useSearchParams } from 'react-router-dom';
+import { useAuth } from '../auth/AuthContext';
+import { useV2Shell } from '../components/v2/shell/AppShellV2';
+import { routeActor } from '../v2/destinations';
+import { allowedReturn, withReturnTo } from '../v2/returnTarget';
+import { resolveSeat } from '../v2/seat';
 import { Modal } from '../components/Modal';
 import { StatusBadge } from '../components/StatusBadge';
 import { PageFrame } from '../components/ui/PageFrame';
@@ -20,6 +25,11 @@ import './PageEnhancementsV2.css';
 
 export function CandidateDocumentsPage() {
   const { id } = useParams<{ id: string }>();
+  const [params] = useSearchParams();
+  const { user } = useAuth();
+  const canEdit = Boolean(user?.permissions.includes('CANDIDATE_EDIT') || user?.roles.some((role) => role.code === 'ADMINISTRATOR'));
+  const seat = useV2Shell()?.seat ?? resolveSeat(user);
+  const back = allowedReturn(params.get('returnTo'), routeActor(seat, user));
   const [candidate, setCandidate] = useState<Candidate | null>(null);
   const [documents, setDocuments] = useState<CandidateDocument[]>([]);
   const [loading, setLoading] = useState(true);
@@ -63,7 +73,7 @@ export function CandidateDocumentsPage() {
 
   const handleUpload = async (e: FormEvent) => {
     e.preventDefault();
-    if (!id || !candidate || (!fileName && !selectedFile)) return;
+    if (!canEdit || !id || !candidate || (!fileName && !selectedFile)) return;
     setSubmitting(true);
     setUploadError(null);
 
@@ -181,7 +191,7 @@ export function CandidateDocumentsPage() {
         <Alert tone="danger" title="Candidate not found">
           {error || 'The requested candidate profile does not exist.'}
           <Button variant="secondary" size="sm" asChild className="mt-2">
-            <Link to="/candidates">
+            <Link to={back ?? '/candidates'}>
               <Icon name="arrow-left" size={13} />
               Back to candidates
             </Link>
@@ -197,21 +207,29 @@ export function CandidateDocumentsPage() {
 
   return (
     <PageFrame
-      eyebrow={`Candidates / ${candidate.firstName} ${candidate.lastName} / Vault`}
-      title={`Document Vault — ${candidate.firstName} ${candidate.lastName}`}
-      actions={
-        <>
-          <Button variant="ghost" size="sm" asChild>
-            <Link to={`/candidates/${candidate.id}`}>
+      topNav={
+        <div className="rf-page-back-nav">
+          {back ? (
+            <Link to={back} className="rf-page-back-link">
               <Icon name="arrow-left" size={13} />
-              Back to profile
+              Back to candidates
             </Link>
-          </Button>
+          ) : null}
+          {back ? <span className="rf-page-back-sep" aria-hidden="true">/</span> : null}
+          <Link to={withReturnTo(`/candidates/${encodeURIComponent(candidate.id)}`, back)} className="rf-page-back-link">
+            <Icon name="arrow-left" size={13} />
+            Back to profile
+          </Link>
+        </div>
+      }
+      title={`Document Vault — ${candidate.firstName} ${candidate.lastName}`}
+      description={[candidate.candidateCode, candidate.currentTitle].filter(Boolean).join(' · ') || undefined}
+      actions={
+        canEdit ? (
           <Button variant="primary" size="sm" onClick={() => setIsUploadModalOpen(true)}>
-            <Icon name="plus" size={14} />
-            Add document record
+            <Icon name="plus" size={14} /> Add document record
           </Button>
-        </>
+        ) : undefined
       }
     >
       {documentsError && (
@@ -230,9 +248,9 @@ export function CandidateDocumentsPage() {
       )}
 
       <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
-        <MetricCard label="Total Documents" value={documents.length} detail={`${cvCount} CVs on record`} tone="action" />
-        <MetricCard label="Verified Files" value={verifiedCount} detail="Passed virus & format scan" tone="success" />
-        <MetricCard label="Pending Review" value={pendingCount} detail="Awaiting verification" tone="warning" />
+        <MetricCard label="Total Documents" value={documentsError ? '—' : documents.length} detail={documentsError ? 'Document records unavailable' : `${cvCount} CVs on record`} tone="action" />
+        <MetricCard label="Verified Files" value={documentsError ? '—' : verifiedCount} detail="Passed virus & format scan" tone="success" />
+        <MetricCard label="Pending Review" value={documentsError ? '—' : pendingCount} detail="Awaiting verification" tone="warning" />
       </div>
 
       <section className="rf-table-shell rf-long-content overflow-hidden rounded-2xl border border-rf-border bg-rf-surface shadow-xs">
@@ -266,7 +284,7 @@ export function CandidateDocumentsPage() {
                   <PageState
                     kind="empty"
                     title="No document records"
-                    description="Add metadata for a CV, educational certificate, or ID document."
+                    description={canEdit ? 'Add metadata for a CV, educational certificate, or ID document.' : 'No documents have been recorded for this person.'}
                   />
                 </td>
               </tr>
