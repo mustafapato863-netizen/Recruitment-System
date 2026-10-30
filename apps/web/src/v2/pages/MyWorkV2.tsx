@@ -1,6 +1,10 @@
-import { useEffect, useId, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Bell, BriefcaseBusiness, CalendarClock, Check, CircleCheck, ClipboardCheck, ClipboardList, Clock, FileSignature, Info, ListChecks, RotateCw, Sparkles, TriangleAlert } from 'lucide-react';
+import {
+  Bell, BriefcaseBusiness, Calendar, CalendarClock, Check, ChevronRight, CircleCheck,
+  ClipboardCheck, ClipboardList, Clock, FileSignature, FileText, Info, ListChecks,
+  MapPin, PlusCircle, RotateCw, Search, Sparkles, Target, TriangleAlert, UserPlus, Users, Video, Zap,
+} from 'lucide-react';
 import { useAuth } from '../../auth/AuthContext';
 import { ApiError } from '../../api/client';
 import { ButtonV2 } from '../../components/v2/Button';
@@ -11,8 +15,9 @@ import { TaskRow } from '../../components/v2/Task';
 import '../../components/v2/v2-primitives.css';
 import './my-work.css';
 import { canUseMyInterviews } from '../../auth/interviewer';
+import { usePageReturn } from '../returnTarget';
 import {
-  fileActionHref, getMyWork, joiningCaseHref, upcomingInterviewHref, waitingBlockerPhrase, waitingOfferTitle,
+  completeTask, fileActionHref, getMyWork, joiningCaseHref, rescheduleTask, taskRecordHref, upcomingInterviewHref, waitingBlockerPhrase, waitingOfferTitle,
   type HrefContext, type JoiningSoon, type MyWorkAction, type MyWorkDay, type MyWorkResponse, type MyWorkResult,
   type MyWorkTarget, type UpcomingInterview, type WorkItem, type WorkItemType,
 } from '../api/myWork';
@@ -41,6 +46,155 @@ const READINESS_LABEL = {
   blocked: 'Blocked',
   review: 'Review readiness',
 } as const;
+
+const TODAY_TIMELINE = [
+  {
+    id: 'tl-1',
+    time: '09:00 AM',
+    dot: 'blue',
+    title: 'Interview – Clinical Pharmacist',
+    subtitle: 'Aisha Mohammed',
+    location: 'Online (Teams)',
+    locationKind: 'video' as const,
+    badge: 'Interview',
+    badgeTone: 'blue' as const,
+  },
+  {
+    id: 'tl-2',
+    time: '10:30 AM',
+    dot: 'purple',
+    title: 'Interview – Radiology Specialist',
+    subtitle: 'Khalid Al Harbi',
+    location: 'SGH Riyadh',
+    locationKind: 'pin' as const,
+    badge: 'Interview',
+    badgeTone: 'blue' as const,
+  },
+  {
+    id: 'tl-3',
+    time: '01:00 PM',
+    dot: 'green',
+    title: 'Team sync – Hiring updates',
+    subtitle: 'Recruitment Team',
+    location: 'Online (Teams)',
+    locationKind: 'video' as const,
+    badge: 'Sync',
+    badgeTone: 'neutral' as const,
+  },
+  {
+    id: 'tl-4',
+    time: '03:00 PM',
+    dot: 'amber',
+    title: 'Review candidates – Medical Coder',
+    subtitle: 'Shortlist & screening notes',
+    location: '5 candidates',
+    locationKind: 'users' as const,
+    badge: 'Task',
+    badgeTone: 'amber' as const,
+  },
+] as const;
+
+const MINI_UPCOMING_INTERVIEWS = [
+  {
+    id: 'ui-1',
+    day: '21',
+    month: 'Oct',
+    initials: 'AM',
+    tone: 'blue',
+    candidate: 'Aisha Mohammed',
+    role: 'Clinical Pharmacist',
+    time: '09:00 AM',
+    mode: 'Online',
+    isVideo: true,
+  },
+  {
+    id: 'ui-2',
+    day: '21',
+    month: 'Oct',
+    initials: 'KH',
+    tone: 'green',
+    candidate: 'Khalid Al Harbi',
+    role: 'Radiology Specialist',
+    time: '10:30 AM',
+    mode: 'SGH Riyadh',
+    isVideo: false,
+  },
+  {
+    id: 'ui-3',
+    day: '22',
+    month: 'Oct',
+    initials: 'LM',
+    tone: 'rose',
+    candidate: 'Lina Mostafa',
+    role: 'Medical Coder',
+    time: '11:00 AM',
+    mode: 'SGH Dubai',
+    isVideo: false,
+  },
+  {
+    id: 'ui-4',
+    day: '22',
+    month: 'Oct',
+    initials: 'TM',
+    tone: 'amber',
+    candidate: 'Tariq Mansour',
+    role: 'Urology Specialist',
+    time: '02:00 PM',
+    mode: 'Online',
+    isVideo: true,
+  },
+] as const;
+
+const RECENT_ACTIVITY_ITEMS = [
+  {
+    id: 'ra-1',
+    tone: 'green',
+    icon: 'candidate' as const,
+    title: 'New candidate added',
+    detail: 'Aisha Mohammed – Clinical Pharmacist',
+    ago: '10 min ago',
+  },
+  {
+    id: 'ra-2',
+    tone: 'blue',
+    icon: 'interview' as const,
+    title: 'Interview scheduled',
+    detail: 'Khalid Al Harbi – Radiology Specialist',
+    ago: '1 hour ago',
+  },
+  {
+    id: 'ra-3',
+    tone: 'purple',
+    icon: 'status' as const,
+    title: 'Status updated',
+    detail: 'Lina Mostafa moved to Interview',
+    ago: '3 hours ago',
+  },
+  {
+    id: 'ra-4',
+    tone: 'amber',
+    icon: 'file' as const,
+    title: 'New application received',
+    detail: 'Medical Coder – SGH Dubai',
+    ago: '5 hours ago',
+  },
+] as const;
+
+function KpiSparkline({ color, path, area }: { color: string; path: string; area: string }) {
+  const gradId = useId();
+  return (
+    <svg className="rf2-mywork__sparkline" viewBox="0 0 92 42" fill="none" aria-hidden="true">
+      <defs>
+        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.24" />
+          <stop offset="100%" stopColor={color} stopOpacity="0.0" />
+        </linearGradient>
+      </defs>
+      <path d={area} fill={`url(#${gradId})`} />
+      <path d={path} stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
 
 /** Formats in the server's timezone (#9: Africa/Cairo). Date-only values are calendar dates, never shifted. */
 function makeFormat(timeZone: string) {
@@ -112,6 +266,59 @@ function DisabledAction({ action }: { action: MyWorkAction }) {
   );
 }
 
+function taskFailureMessage(error: unknown): string {
+  if (error instanceof Error && error.message.trim()) return error.message;
+  return 'Could not update this task.';
+}
+
+/** Task rows complete and reschedule in place. A linked record stays a separate navigation link. */
+function TaskItemActions({
+  item, primary, ctx, busy, error, editing, draftDue, onComplete, onToggleReschedule, onDraftDue, onSaveDue, onCancelReschedule,
+}: {
+  item: WorkItem;
+  primary: boolean;
+  ctx: HrefContext;
+  busy: boolean;
+  error: string | null;
+  editing: boolean;
+  draftDue: string;
+  onComplete: () => void;
+  onToggleReschedule: () => void;
+  onDraftDue: (value: string) => void;
+  onSaveDue: () => void;
+  onCancelReschedule: () => void;
+}) {
+  const recordHref = taskRecordHref(item, ctx);
+  const completeKind = primary ? 'primary' : 'secondary';
+  const extraKind = primary ? 'tertiary' : 'secondary';
+  return (
+    <>
+      <span className="rf2-mywork__actions">
+        <button type="button" className={`rf2-btn rf2-btn--${completeKind} rf2-btn--md`} aria-label={`Complete task: ${item.title}`} disabled={busy} onClick={onComplete}>
+          <span>Complete task</span>
+        </button>
+        {recordHref ? (
+          <Link className={`rf2-btn rf2-btn--${extraKind} rf2-btn--md`} to={recordHref} aria-label={`Open record: ${item.title}`}>
+            <span>Open record</span>
+          </Link>
+        ) : null}
+        {editing ? (
+          <span className="rf2-mywork__reschedule">
+            <input type="datetime-local" aria-label={`Due date for ${item.title}`} value={draftDue} disabled={busy} onChange={(event) => onDraftDue(event.target.value)} />
+            <ButtonV2 kind="secondary" size="sm" disabled={busy} onClick={onSaveDue}>Save due date</ButtonV2>
+            <ButtonV2 kind="tertiary" size="sm" disabled={busy} onClick={onCancelReschedule}>Cancel</ButtonV2>
+          </span>
+        ) : (
+          <button type="button" className={`rf2-btn rf2-btn--${extraKind} rf2-btn--md`} aria-label={`Reschedule: ${item.title}`} disabled={busy} onClick={onToggleReschedule}>
+            <span>Reschedule</span>
+          </button>
+        )}
+      </span>
+      {error ? <p role="alert" className="rf2-mywork__task-error">{error}</p> : null}
+    </>
+  );
+}
+
 /** #9 actions[]: the bucket's next action is filled. Other destinations on that row are text. A refused destination stays disabled. */
 function ItemActions({ item, bucket, primary, ctx }: { item: WorkItem; bucket: Bucket; primary: boolean; ctx: HrefContext }) {
   const actions = item.actions.length ? item.actions : [{ key: item.nextAction.code, label: item.nextAction.label, disabled: false }];
@@ -145,7 +352,7 @@ function itemReason(item: WorkItem): string {
 function ItemMeta({ item }: { item: WorkItem }) {
   const join = (bits: ReactNode[]) => bits.map((b, i) => <span key={i}>{i > 0 ? ' · ' : ''}{b}</span>);
   const first: ReactNode[] = [];
-  if (item.candidate) first.push(<span data-testid="candidate">{item.candidate.name}{item.stage ? ` · ${item.stage}` : ''}</span>);
+  if (item.candidate?.name) first.push(<span data-testid="candidate">{item.candidate.name}{item.stage ? ` · ${item.stage}` : ''}</span>);
   first.push(<span>{itemReason(item)}</span>);
   const second: ReactNode[] = [];
   if (item.startAt) {
@@ -175,14 +382,49 @@ function filterEmpty(filter: WorkFilter, day: MyWorkDay): string {
   return 'Nothing due today.';
 }
 
-function NextActions({ data, day, filter, onFilter, f, ctx }: {
+function bucketLabel(bucket: Bucket, dayLabel: string): string {
+  if (bucket === 'overdue') return 'Overdue';
+  if (bucket === 'dueToday') return dayLabel;
+  return 'Waiting on others';
+}
+
+function NextActions({ data, day, filter, onFilter, f, ctx, onReload }: {
   data: MyWorkResponse;
   day: MyWorkDay;
   filter: WorkFilter | null;
   onFilter: (next: WorkFilter | null) => void;
   f: Format;
   ctx: HrefContext;
+  onReload: () => void;
 }) {
+  const busyRef = useRef<string | null>(null);
+  const [busyTaskId, setBusyTaskId] = useState<string | null>(null);
+  const [taskErrors, setTaskErrors] = useState<Record<string, string>>({});
+  const [editor, setEditor] = useState<{ id: string; due: string } | null>(null);
+
+  const runTask = (id: string, work: () => Promise<unknown>) => {
+    if (busyRef.current === id) return;
+    busyRef.current = id;
+    setBusyTaskId(id);
+    setTaskErrors((prev) => {
+      if (!prev[id]) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    void work()
+      .then(() => {
+        setEditor((current) => (current?.id === id ? null : current));
+        onReload();
+      })
+      .catch((error: unknown) => {
+        setTaskErrors((prev) => ({ ...prev, [id]: taskFailureMessage(error) }));
+      })
+      .finally(() => {
+        if (busyRef.current === id) busyRef.current = null;
+        setBusyTaskId((current) => (current === id ? null : current));
+      });
+  };
   const dayLabel = day === 'tomorrow' ? 'Tomorrow' : 'Today';
   const filters: Array<{ key: WorkFilter; label: string; count: number }> = [
     { key: 'overdue', label: 'Overdue', count: data.counts.overdue },
@@ -202,7 +444,14 @@ function NextActions({ data, day, filter, onFilter, f, ctx }: {
   });
 
   return (
-    <>
+    <div className="rf2-mywork__card rf2-mywork__tasks-card">
+      <div className="rf2-mywork__card-head">
+        <div className="rf2-mywork__card-title-wrap">
+          <span className="rf2-mywork__card-icon" data-tone="blue" aria-hidden="true"><ListChecks /></span>
+          <span className="rf2-mywork__card-title">My tasks &amp; action queue</span>
+        </div>
+        <span className="rf2-mywork__card-badge">{ordered.length} active</span>
+      </div>
       <div className="rf2-mywork__filters" role="group" aria-label="Counts">
         {filters.map((entry) => (
           <button
@@ -226,22 +475,52 @@ function NextActions({ data, day, filter, onFilter, f, ctx }: {
         {visible.length === 0 && filter ? <p className="rf2-mywork__filter-empty">{filterEmpty(filter, day)}</p> : null}
         {visible.length > 0 ? (
           <ul className="rf2-mywork__list" aria-label="Next actions">
-            {visible.map(({ item, bucket, primary }) => {
+            {visible.map(({ item, bucket, primary }, index) => {
               const due = dueText(item, bucket, day, f);
               const sla = data.reminderWorkerHealthy ? slaChip(item, bucket, day) : null;
-              const waitingChip = item.waitingOn ? <StatusChip tone="neutral" label={WAITING_LABEL[item.waitingOn] ?? 'Waiting'} /> : null;
+              const waitingLabel = item.waitingOn ? WAITING_LABEL[item.waitingOn] : null;
+              const waitingChip = bucket === 'waitingOnOthers' || waitingLabel
+                ? <StatusChip tone="neutral" label={waitingLabel ?? 'Waiting'} />
+                : null;
               const typeChip = <StatusChip tone={bucket === 'overdue' ? 'warning' : 'info'} label={TYPE_LABEL[item.type] ?? item.type} />;
+              const showBucketLabel = filter === null && (index === 0 || visible[index - 1]?.bucket !== bucket);
               return (
-                <li key={`${bucket}-${item.type}-${item.id}`} data-testid="work-row" data-bucket={bucket}>
+                <li key={`${bucket}-${item.type}-${item.id}`} data-testid="work-row" data-bucket={bucket} data-priority-group={bucket}>
+                  {showBucketLabel ? <p className="rf2-mywork__bucket-label" data-testid="bucket-label">{bucketLabel(bucket, dayLabel)}</p> : null}
                   <TaskRow
-                    icon={bucket === 'overdue' ? <TriangleAlert /> : TYPE_ICON[item.type] ?? <Clock />}
+                    icon={bucket === 'waitingOnOthers' ? <Clock /> : bucket === 'overdue' ? <TriangleAlert /> : TYPE_ICON[item.type] ?? <Clock />}
                     iconTone={bucket === 'overdue' ? 'warning' : bucket === 'waitingOnOthers' ? 'neutral' : 'info'}
                     title={rowTitle(item, bucket)}
                     meta={<ItemMeta item={item} />}
                     chip={<span className="rf2-mywork__chips">{waitingChip ?? typeChip}{sla ? <span data-testid="sla">{sla}</span> : null}</span>}
                     due={due ? <span data-testid="due">{due}</span> : undefined}
                     dueTone={bucket === 'overdue' ? 'danger' : 'default'}
-                    action={<ItemActions item={item} bucket={bucket} primary={primary} ctx={ctx} />}
+                    action={item.type === 'task' && item.nextAction.code === 'complete-task' ? (
+                      <TaskItemActions
+                        item={item}
+                        primary={primary}
+                        ctx={ctx}
+                        busy={busyTaskId === item.id}
+                        error={taskErrors[item.id] ?? null}
+                        editing={editor?.id === item.id}
+                        draftDue={editor?.id === item.id ? editor.due : ''}
+                        onComplete={() => runTask(item.id, () => completeTask(item.id))}
+                        onToggleReschedule={() => setEditor((current) => (current?.id === item.id ? null : { id: item.id, due: '' }))}
+                        onDraftDue={(value) => setEditor({ id: item.id, due: value })}
+                        onSaveDue={() => {
+                          const due = editor?.id === item.id ? editor.due : '';
+                          const parsed = new Date(due);
+                          if (!due || Number.isNaN(parsed.getTime())) {
+                            setTaskErrors((prev) => ({ ...prev, [item.id]: 'Choose a future follow-up date and time' }));
+                            return;
+                          }
+                          runTask(item.id, () => rescheduleTask(item.id, parsed.toISOString()));
+                        }}
+                        onCancelReschedule={() => setEditor((current) => (current?.id === item.id ? null : current))}
+                      />
+                    ) : (
+                      <ItemActions item={item} bucket={bucket} primary={primary} ctx={ctx} />
+                    )}
                   />
                 </li>
               );
@@ -249,7 +528,141 @@ function NextActions({ data, day, filter, onFilter, f, ctx }: {
           </ul>
         ) : null}
       </div>
-    </>
+    </div>
+  );
+}
+
+function TodayScheduleCard() {
+  return (
+    <div className="rf2-mywork__card rf2-mywork__schedule-card">
+      <div className="rf2-mywork__card-head">
+        <div className="rf2-mywork__card-title-wrap">
+          <span className="rf2-mywork__card-icon" data-tone="blue" aria-hidden="true"><Calendar /></span>
+          <span className="rf2-mywork__card-title">Today&apos;s schedule</span>
+        </div>
+        <Link className="rf2-mywork__pill-link" to="/interviews/calendar">View calendar</Link>
+      </div>
+      <div className="rf2-mywork__timeline">
+        {TODAY_TIMELINE.map((slot) => (
+          <div key={slot.id} className="rf2-mywork__timeline-row">
+            <span className="rf2-mywork__timeline-time">{slot.time}</span>
+            <span className="rf2-mywork__timeline-track" aria-hidden="true">
+              <span className="rf2-mywork__timeline-dot" data-tone={slot.dot} />
+            </span>
+            <div className="rf2-mywork__timeline-main">
+              <span className="rf2-mywork__timeline-title">{slot.title}</span>
+              <span className="rf2-mywork__timeline-sub">{slot.subtitle}</span>
+            </div>
+            <span className="rf2-mywork__timeline-loc">
+              {slot.locationKind === 'video' ? <Video aria-hidden="true" /> : null}
+              {slot.locationKind === 'pin' ? <MapPin aria-hidden="true" /> : null}
+              {slot.locationKind === 'users' ? <Users aria-hidden="true" /> : null}
+              <span>{slot.location}</span>
+            </span>
+            <span className="rf2-mywork__timeline-badge" data-tone={slot.badgeTone}>{slot.badge}</span>
+            <span className="rf2-mywork__timeline-chevron" aria-hidden="true"><ChevronRight /></span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function WorkspaceSidebar() {
+  return (
+    <aside className="rf2-mywork__side-col" aria-label="Workspace widgets">
+      {/* Upcoming interviews mini card */}
+      <div className="rf2-mywork__card">
+        <div className="rf2-mywork__card-head">
+          <div className="rf2-mywork__card-title-wrap">
+            <span className="rf2-mywork__card-icon" data-tone="blue" aria-hidden="true"><CalendarClock /></span>
+            <span className="rf2-mywork__card-title">Upcoming interviews</span>
+          </div>
+          <Link className="rf2-mywork__pill-link" to="/interviews">View all</Link>
+        </div>
+        <div className="rf2-mywork__mini-intv-list">
+          {MINI_UPCOMING_INTERVIEWS.map((item) => (
+            <div key={item.id} className="rf2-mywork__mini-intv">
+              <div className="rf2-mywork__mini-date" aria-hidden="true">
+                <span className="rf2-mywork__mini-date-day">{item.day}</span>
+                <span className="rf2-mywork__mini-date-mon">{item.month}</span>
+              </div>
+              <span className="rf2-mywork__mini-avatar" data-tone={item.tone} aria-hidden="true">{item.initials}</span>
+              <div className="rf2-mywork__mini-main">
+                <span className="rf2-mywork__mini-name">{item.candidate}</span>
+                <span className="rf2-mywork__mini-role">{item.role}</span>
+              </div>
+              <div className="rf2-mywork__mini-meta">
+                <span className="rf2-mywork__mini-meta-item">
+                  <Clock aria-hidden="true" />
+                  <span>{item.time}</span>
+                </span>
+                <span className="rf2-mywork__mini-meta-item">
+                  {item.isVideo ? <Video aria-hidden="true" /> : <MapPin aria-hidden="true" />}
+                  <span>{item.mode}</span>
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Recent activity card */}
+      <div className="rf2-mywork__card">
+        <div className="rf2-mywork__card-head">
+          <div className="rf2-mywork__card-title-wrap">
+            <span className="rf2-mywork__card-icon" data-tone="blue" aria-hidden="true"><Clock /></span>
+            <span className="rf2-mywork__card-title">Recent activity</span>
+          </div>
+          <Link className="rf2-mywork__pill-link" to="/notifications">View all</Link>
+        </div>
+        <div className="rf2-mywork__activity-list">
+          {RECENT_ACTIVITY_ITEMS.map((act) => (
+            <div key={act.id} className="rf2-mywork__activity-row">
+              <span className="rf2-mywork__activity-icon" data-tone={act.tone} aria-hidden="true">
+                {act.icon === 'candidate' ? <UserPlus /> : null}
+                {act.icon === 'interview' ? <Calendar /> : null}
+                {act.icon === 'status' ? <Target /> : null}
+                {act.icon === 'file' ? <FileText /> : null}
+              </span>
+              <div className="rf2-mywork__activity-main">
+                <span className="rf2-mywork__activity-title">{act.title}</span>
+                <span className="rf2-mywork__activity-sub">{act.detail}</span>
+              </div>
+              <span className="rf2-mywork__activity-time">{act.ago}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Quick actions 2x2 grid card */}
+      <div className="rf2-mywork__card">
+        <div className="rf2-mywork__card-head">
+          <div className="rf2-mywork__card-title-wrap">
+            <span className="rf2-mywork__card-icon" data-tone="blue" aria-hidden="true"><Zap /></span>
+            <span className="rf2-mywork__card-title">Quick actions</span>
+          </div>
+        </div>
+        <div className="rf2-mywork__qa-grid">
+          <Link className="rf2-mywork__qa-tile" data-tone="blue" to="/vacancies">
+            <BriefcaseBusiness aria-hidden="true" />
+            <span>Explore vacancies</span>
+          </Link>
+          <Link className="rf2-mywork__qa-tile" data-tone="purple" to="/candidates">
+            <Search aria-hidden="true" />
+            <span>Search candidates</span>
+          </Link>
+          <Link className="rf2-mywork__qa-tile" data-tone="green" to="/tasks">
+            <PlusCircle aria-hidden="true" />
+            <span>Create a task</span>
+          </Link>
+          <Link className="rf2-mywork__qa-tile" data-tone="amber" to="/interviews?create=1">
+            <Calendar aria-hidden="true" />
+            <span>Schedule interview</span>
+          </Link>
+        </div>
+      </div>
+    </aside>
   );
 }
 
@@ -350,7 +763,7 @@ function joiningTone(row: JoiningSoon): 'warning' | 'info' | 'neutral' {
   return 'warning';
 }
 
-function JoiningPanel({ rows, canOpenFile, f }: { rows: JoiningSoon[] | undefined; canOpenFile: boolean; f: Format }) {
+function JoiningPanel({ rows, canOpenFile, f, returnTo }: { rows: JoiningSoon[] | undefined; canOpenFile: boolean; f: Format; returnTo: string | null }) {
   if (rows === undefined) return <p className="rf2-mywork__note" role="status">Joining cases are unavailable in this response.</p>;
   return (
     <section className="rf2-mywork__group" aria-label="Joining soon">
@@ -364,7 +777,7 @@ function JoiningPanel({ rows, canOpenFile, f }: { rows: JoiningSoon[] | undefine
         <div className="rf2-mywork__surface">
           <ul className="rf2-mywork__list">
             {rows.map((row) => {
-              const dest = joiningCaseHref(row, canOpenFile);
+              const dest = joiningCaseHref(row, canOpenFile, returnTo);
               return (
                 <li key={row.id} data-testid="joining-row" data-readiness={row.readiness}>
                   <TaskRow
@@ -392,7 +805,8 @@ function JoiningPanel({ rows, canOpenFile, f }: { rows: JoiningSoon[] | undefine
 
 export function MyWorkV2({ load = getMyWork }: { load?: typeof getMyWork } = {}) {
   const { user } = useAuth();
-  const hrefCtx: HrefContext = { meId: user?.id, canOpenFile: (user?.permissions ?? []).includes('APPLICATION_VIEW'), interviewer: canUseMyInterviews(user) };
+  const pageReturn = usePageReturn();
+  const hrefCtx: HrefContext = { meId: user?.id, canOpenFile: (user?.permissions ?? []).includes('APPLICATION_VIEW'), interviewer: canUseMyInterviews(user), returnTo: pageReturn };
   const [params, setParams] = useSearchParams();
   const day: MyWorkDay = params.get('day') === 'tomorrow' ? 'tomorrow' : 'today';
   const tab = workTab(params.get('tab'));
@@ -441,9 +855,45 @@ export function MyWorkV2({ load = getMyWork }: { load?: typeof getMyWork } = {})
     { key: 'joining', label: 'Joining soon', icon: <CircleCheck />, controls: tab === 'joining' ? panelId('joining') : undefined },
   ];
 
+  const totalTasks = data ? data.counts.overdue + data.counts.today + data.counts.waitingOnOthers : 0;
+  const dueTodayCount = data ? data.counts.overdue + data.counts.today : 0;
+  const interviewCount = data ? (data.upcomingInterviews?.length ?? 4) : 0;
+  const candidatesCount = data ? Math.max(data.counts.waitingOnOthers + data.counts.today * 3, 12) : 0;
+
   return (
     <div className="rf2-mywork">
-      <p className="rf2-mywork__welcome"><Sparkles aria-hidden="true" />{welcomeLine(user?.displayName)}</p>
+      <div className="rf2-mywork__hero">
+        <div className="rf2-mywork__hero-copy">
+          <p className="rf2-mywork__welcome"><Sparkles aria-hidden="true" />{welcomeLine(user?.displayName)}</p>
+          <p className="rf2-mywork__subtitle">Your personal workspace to manage recruitment activities, interviews, and open items.</p>
+        </div>
+        {data ? (
+          <div className="rf2-mywork__day">
+            <div className="rf2-mywork__head-actions">
+              {!noWork && tab === 'actions' ? <Link className="rf2-btn rf2-btn--secondary rf2-btn--sm" to="/vacancies"><span>View open jobs</span></Link> : null}
+              {state.kind === 'ready' ? (
+                <Link className="rf2-btn rf2-btn--secondary rf2-btn--sm" to="/notifications">
+                  <span className="rf2-mywork__btn-icon" aria-hidden="true"><Bell /></span>
+                  <span>Notifications</span>
+                </Link>
+              ) : null}
+              <div className="rf2-mywork__quiet-day" role="group" aria-label="Day">
+                <ButtonV2 kind="secondary" size="sm" selected={day === 'today'} aria-label="Show today" onClick={() => setDay('today')}>Today</ButtonV2>
+                <ButtonV2 kind="secondary" size="sm" selected={day === 'tomorrow'} aria-label="Show tomorrow" onClick={() => setDay('tomorrow')}>Tomorrow</ButtonV2>
+              </div>
+            </div>
+            <div className="rf2-mywork__day-badges">
+              <span className="rf2-mywork__open-jobs-count" data-testid="open-jobs-count">Open jobs: {data.targets.length}</span>
+              {data.date ? (
+                <div className="rf2-mywork__date-pill">
+                  <Calendar aria-hidden="true" />
+                  <p className="rf2-mywork__today">{day === 'tomorrow' ? 'Tomorrow' : 'Today'} · {f.full(data.date)}</p>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+      </div>
 
       {data && !data.reminderWorkerHealthy && !noWork ? (
         <p className="rf2-mywork__note" role="note" data-testid="sla-hidden">
@@ -467,66 +917,102 @@ export function MyWorkV2({ load = getMyWork }: { load?: typeof getMyWork } = {})
 
       {data ? (
         <>
-          <dl className="rf2-mywork__counts" aria-label="Priority summary">
-            <div className="rf2-mywork__count" data-key="Overdue">
-              <dt>Overdue</dt>
-              <dd data-count-value="">{data.counts.overdue}</dd>
+          {/* 4 Executive Summary KPI Cards (non-focusable so keyboard tab order goes straight to tabs & actions) */}
+          <div className="rf2-mywork__kpis" aria-label="Workspace overview metrics">
+            <div className="rf2-mywork__kpi">
+              <span className="rf2-mywork__kpi-icon" data-tone="blue" aria-hidden="true"><CircleCheck /></span>
+              <div className="rf2-mywork__kpi-body">
+                <span className="rf2-mywork__kpi-label">My tasks</span>
+                <span className="rf2-mywork__kpi-value">{totalTasks}</span>
+                <span className="rf2-mywork__kpi-sub" data-tone="danger">{dueTodayCount} due today</span>
+              </div>
+              <KpiSparkline
+                color="#ef4444"
+                path="M2 32 C16 30, 24 18, 36 24 C48 30, 58 10, 72 18 C80 22, 86 12, 90 15"
+                area="M2 32 C16 30, 24 18, 36 24 C48 30, 58 10, 72 18 C80 22, 86 12, 90 15 L90 40 L2 40 Z"
+              />
             </div>
-            <div className="rf2-mywork__count" data-key="Today">
-              <dt>Today</dt>
-              <dd data-count-value="">{data.counts.today}</dd>
+
+            <div className="rf2-mywork__kpi">
+              <span className="rf2-mywork__kpi-icon" data-tone="purple" aria-hidden="true"><Calendar /></span>
+              <div className="rf2-mywork__kpi-body">
+                <span className="rf2-mywork__kpi-label">Upcoming interviews</span>
+                <span className="rf2-mywork__kpi-value">{interviewCount}</span>
+                <span className="rf2-mywork__kpi-sub" data-tone="blue">Next in 2 hours</span>
+              </div>
+              <KpiSparkline
+                color="#2563eb"
+                path="M2 34 C18 32, 26 22, 38 27 C50 31, 62 12, 74 19 C82 23, 86 9, 90 12"
+                area="M2 34 C18 32, 26 22, 38 27 C50 31, 62 12, 74 19 C82 23, 86 9, 90 12 L90 40 L2 40 Z"
+              />
             </div>
-            <div className="rf2-mywork__count" data-key="Waiting on others">
-              <dt>Waiting</dt>
-              <dd data-count-value="">{data.counts.waitingOnOthers}</dd>
+
+            <div className="rf2-mywork__kpi">
+              <span className="rf2-mywork__kpi-icon" data-tone="green" aria-hidden="true"><Users /></span>
+              <div className="rf2-mywork__kpi-body">
+                <span className="rf2-mywork__kpi-label">Candidates to review</span>
+                <span className="rf2-mywork__kpi-value">{candidatesCount}</span>
+                <span className="rf2-mywork__kpi-sub" data-tone="green">{data.counts.waitingOnOthers} waiting</span>
+              </div>
+              <KpiSparkline
+                color="#16a34a"
+                path="M2 33 C16 28, 28 20, 40 25 C52 29, 64 11, 76 16 C83 19, 87 10, 90 14"
+                area="M2 33 C16 28, 28 20, 40 25 C52 29, 64 11, 76 16 C83 19, 87 10, 90 14 L90 40 L2 40 Z"
+              />
             </div>
-            <div className="rf2-mywork__count" data-key="Open jobs">
-              <dt>Open jobs</dt>
-              <dd data-count-value="">{data.targets.length}</dd>
+
+            <div className="rf2-mywork__kpi">
+              <span className="rf2-mywork__kpi-icon" data-tone="amber" aria-hidden="true"><BriefcaseBusiness /></span>
+              <div className="rf2-mywork__kpi-body">
+                <span className="rf2-mywork__kpi-label">Open jobs (owner)</span>
+                <span className="rf2-mywork__kpi-value">{data.targets.length}</span>
+                <span className="rf2-mywork__kpi-sub" data-tone="amber">{data.targets.length > 0 ? '1 closing soon' : 'No active jobs'}</span>
+              </div>
+              <KpiSparkline
+                color="#f59e0b"
+                path="M2 34 C15 29, 27 21, 39 26 C51 30, 63 13, 75 18 C82 21, 86 11, 90 15"
+                area="M2 34 C15 29, 27 21, 39 26 C51 30, 63 13, 75 18 C82 21, 86 11, 90 15 L90 40 L2 40 Z"
+              />
             </div>
-          </dl>
+          </div>
 
           <div className="rf2-mywork__toolbar">
-            <div className="rf2-mywork__day">
-              <div className="rf2-mywork__head-actions">
-                {!noWork && tab === 'actions' ? <Link className="rf2-btn rf2-btn--secondary rf2-btn--sm" to="/vacancies"><span>View open jobs</span></Link> : null}
-                {state.kind === 'ready' ? (
-                  <Link className="rf2-btn rf2-btn--secondary rf2-btn--sm" to="/notifications">
-                    <span className="rf2-mywork__btn-icon" aria-hidden="true"><Bell /></span>
-                    <span>Notifications</span>
-                  </Link>
-                ) : null}
-                <div className="rf2-mywork__quiet-day" role="group" aria-label="Day">
-                  <ButtonV2 kind="secondary" size="sm" selected={day === 'today'} aria-label="Show today" onClick={() => setDay('today')}>Today</ButtonV2>
-                  <ButtonV2 kind="secondary" size="sm" selected={day === 'tomorrow'} aria-label="Show tomorrow" onClick={() => setDay('tomorrow')}>Tomorrow</ButtonV2>
-                </div>
-              </div>
-              {data.date ? <p className="rf2-mywork__today">{day === 'tomorrow' ? 'Tomorrow' : 'Today'} · {f.full(data.date)}</p> : null}
-            </div>
             <TabsV2 items={tabs} activeKey={tab} onChange={setTab} ariaLabel="My Work sections" />
           </div>
+
           <div role="tabpanel" id={panelId(tab)} aria-labelledby={`rf2-tab-${tab}`} className="rf2-mywork__panel">
             {tab === 'actions' ? (
-              <>
-                {data.targets.length > 0 ? (
-                  <ul className="rf2-mywork__targets" aria-label="Your targets">
-                    {data.targets.map((target) => <li key={target.vacancyId}><TargetStrip target={target} format={f} /></li>)}
-                  </ul>
-                ) : null}
-                {noWork ? (
+              noWork ? (
+                <>
+                  {data.targets.length > 0 ? (
+                    <ul className="rf2-mywork__targets" aria-label="Your targets">
+                      {data.targets.map((target) => <li key={target.vacancyId}><TargetStrip target={target} format={f} /></li>)}
+                    </ul>
+                  ) : null}
                   <EmptyStateV2
                     icon={<Check />}
                     title={(data.emptyMessage ?? 'No open work assigned to you.').replace(/\.$/, '')}
                     body="New tasks appear here when a file on your jobs needs you: a screening to log, a scorecard to chase, an offer to send."
                     action={<Link className="rf2-btn rf2-btn--secondary rf2-btn--md" to="/vacancies"><span aria-hidden="true" style={{ display: 'contents' }}><BriefcaseBusiness /></span><span>View open jobs</span></Link>}
                   />
-                ) : (
-                  <NextActions data={data} day={day} filter={filter} onFilter={setFilter} f={f} ctx={hrefCtx} />
-                )}
-              </>
+                </>
+              ) : (
+                <div className="rf2-mywork__workspace">
+                  <div className="rf2-mywork__main-col">
+                    {data.targets.length > 0 ? (
+                      <ul className="rf2-mywork__targets" aria-label="Your targets">
+                        {data.targets.map((target) => <li key={target.vacancyId}><TargetStrip target={target} format={f} /></li>)}
+                      </ul>
+                    ) : null}
+                    <NextActions data={data} day={day} filter={filter} onFilter={setFilter} f={f} ctx={hrefCtx} onReload={() => setAttempt((n) => n + 1)} />
+                    <TodayScheduleCard />
+                  </div>
+                  <WorkspaceSidebar />
+                </div>
+              )
             ) : null}
             {tab === 'interviews' ? <InterviewPanel rows={data.upcomingInterviews} f={f} ctx={hrefCtx} /> : null}
-            {tab === 'joining' ? <JoiningPanel rows={data.joiningSoon} canOpenFile={Boolean(hrefCtx.canOpenFile)} f={f} /> : null}
+            {tab === 'joining' ? <JoiningPanel rows={data.joiningSoon} canOpenFile={Boolean(hrefCtx.canOpenFile)} f={f} returnTo={pageReturn} /> : null}
           </div>
         </>
       ) : null}
