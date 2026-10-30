@@ -1,0 +1,788 @@
+/* Match Skills (AI-Powered Skill Matching) — Executive V2 Design */
+.rf2-ms {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  max-width: min(100%, 1440px);
+  min-width: 0;
+  margin-inline: auto;
+  box-sizing: border-box;
+  padding: 20px 24px 32px;
+  font-family: var(--rf2-font);
+  color: var(--rf2-ink);
+}
+
+.rf2-ms__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px 20px;
+}
+
+.rf2-ms__title {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.25;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  color: var(--rf2-ink);
+}
+
+.rf2-ms__subtitle {
+  margin: 4px 0 0;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--rf2-muted);
+}
+
+/* Top Job Context Card */
+.rf2-ms__job-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px 22px;
+  border: 1px solid var(--rf2-divider);
+  border-radius: 14px;
+  background: var(--rf2-card);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03);
+}
+
+.rf2-ms__job-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--rf2-divider);
+}
+
+.rf2-ms__job-select-col {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.rf2-ms__field-label {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--rf2-ink);
+}
+
+.rf2-ms__field-req {
+  color: var(--rf2-danger);
+  margin-left: 2px;
+}
+
+.rf2-ms__select-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 42px;
+  padding: 6px 14px;
+  border: 1px solid var(--rf2-divider);
+  border-radius: 10px;
+  background: var(--rf2-surface);
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.rf2-ms__select-box:focus-within {
+  border-color: var(--rf2-action);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.rf2-ms__select-display {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  pointer-events: none;
+}
+
+.rf2-ms__select-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--rf2-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rf2-ms__select-code {
+  font-weight: 500;
+  color: var(--rf2-muted);
+}
+
+.rf2-ms__open-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(22, 163, 74, 0.12);
+  color: #15803d;
+  font-size: 11.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.rf2-ms__open-badge svg {
+  width: 12px;
+  height: 12px;
+}
+
+.rf2-ms__select-chevron {
+  display: inline-flex;
+  color: var(--rf2-muted);
+  pointer-events: none;
+}
+
+.rf2-ms__select-chevron svg {
+  width: 16px;
+  height: 16px;
+}
+
+.rf2-ms__native-select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.rf2-ms__job-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 18px;
+  font-size: 12.5px;
+  color: var(--rf2-ink-2);
+}
+
+.rf2-ms__job-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rf2-ms__job-meta-item svg {
+  width: 14px;
+  height: 14px;
+  color: var(--rf2-muted);
+}
+
+.rf2-ms__job-desc-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-left: 24px;
+  border-left: 1px solid var(--rf2-divider);
+  min-width: 0;
+}
+
+.rf2-ms__desc-heading {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--rf2-ink);
+}
+
+.rf2-ms__desc-text {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--rf2-ink-2);
+}
+
+.rf2-ms__desc-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--rf2-action);
+  text-decoration: none;
+}
+
+.rf2-ms__desc-link:hover {
+  text-decoration: underline;
+}
+
+/* Required Skills Section */
+.rf2-ms__job-skills {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.rf2-ms__skills-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.rf2-ms__skills-title {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--rf2-ink);
+}
+
+.rf2-ms__edit-skills-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--rf2-action);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.rf2-ms__edit-skills-btn:hover {
+  background: var(--rf2-info-tint);
+}
+
+.rf2-ms__edit-skills-btn svg {
+  width: 13px;
+  height: 13px;
+}
+
+.rf2-ms__req-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.rf2-ms__req-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 12px;
+  border-radius: 8px;
+  background: rgba(37, 99, 235, 0.09);
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+/* Filter & Sort Toolbar */
+.rf2-ms__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--rf2-divider);
+  border-radius: 12px;
+  background: var(--rf2-card);
+}
+
+.rf2-ms__filters-left {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 auto;
+}
+
+.rf2-ms__search-wrap {
+  position: relative;
+  flex: 1 1 260px;
+  max-width: 340px;
+}
+
+.rf2-ms__search-wrap svg {
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 15px;
+  height: 15px;
+  color: var(--rf2-muted);
+  pointer-events: none;
+}
+
+.rf2-ms__search-input {
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 12px 6px 34px;
+  border: 1px solid var(--rf2-divider);
+  border-radius: 8px;
+  background: var(--rf2-surface);
+  color: var(--rf2-ink);
+  font: inherit;
+  font-size: 13px;
+  box-sizing: border-box;
+}
+
+.rf2-ms__filter-select {
+  min-height: 36px;
+  padding: 6px 28px 6px 12px;
+  border: 1px solid var(--rf2-divider);
+  border-radius: 8px;
+  background: var(--rf2-surface);
+  color: var(--rf2-ink);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.rf2-ms__reset-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 6px 12px;
+  border: 1px solid var(--rf2-divider);
+  border-radius: 8px;
+  background: var(--rf2-surface);
+  color: var(--rf2-action);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.rf2-ms__reset-btn:hover {
+  background: var(--rf2-info-tint);
+}
+
+.rf2-ms__reset-btn svg {
+  width: 13px;
+  height: 13px;
+}
+
+.rf2-ms__sort-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rf2-ms__sort-label {
+  font-size: 12.5px;
+  color: var(--rf2-muted);
+  font-weight: 500;
+}
+
+/* Match Tier Tabs */
+.rf2-ms__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  border-bottom: 1px solid var(--rf2-divider);
+}
+
+.rf2-ms__tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--rf2-muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 120ms ease, border-color 120ms ease;
+}
+
+.rf2-ms__tab:hover {
+  color: var(--rf2-ink);
+}
+
+.rf2-ms__tab[aria-selected='true'] {
+  color: var(--rf2-action);
+  border-bottom-color: var(--rf2-action);
+  font-weight: 700;
+}
+
+/* Candidate Match Cards List */
+.rf2-ms__list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rf2-ms__card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 20px;
+  border: 1px solid var(--rf2-divider);
+  border-radius: 14px;
+  background: var(--rf2-card);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.02);
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.rf2-ms__card:hover {
+  border-color: rgba(37, 99, 235, 0.28);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
+}
+
+.rf2-ms__card-row {
+  display: grid;
+  grid-template-columns: minmax(275px, 1.25fr) 110px minmax(280px, 2.15fr) auto;
+  align-items: center;
+  gap: 18px;
+}
+
+.rf2-ms__cand-col {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.rf2-ms__check {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--rf2-action);
+  cursor: pointer;
+  flex: none;
+}
+
+.rf2-ms__avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  font-size: 13.5px;
+  font-weight: 800;
+  flex: none;
+}
+
+.rf2-ms__avatar[data-tone='blue'] {
+  background: rgba(37, 99, 235, 0.12);
+  color: #2563eb;
+}
+
+.rf2-ms__avatar[data-tone='green'] {
+  background: rgba(22, 163, 74, 0.12);
+  color: #16a34a;
+}
+
+.rf2-ms__avatar[data-tone='rose'] {
+  background: rgba(225, 29, 72, 0.12);
+  color: #e11d48;
+}
+
+.rf2-ms__avatar[data-tone='amber'] {
+  background: rgba(217, 119, 6, 0.14);
+  color: #d97706;
+}
+
+.rf2-ms__cand-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.rf2-ms__cand-name {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--rf2-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rf2-ms__cand-role {
+  font-size: 12.5px;
+  color: var(--rf2-muted);
+}
+
+.rf2-ms__cand-meta {
+  display: flex;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  align-items: center;
+  gap: 8px 10px;
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--rf2-ink-2);
+}
+
+.rf2-ms__cand-meta-bit {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.rf2-ms__cand-meta-bit svg {
+  width: 12.5px;
+  height: 12.5px;
+  color: var(--rf2-muted);
+}
+
+.rf2-ms__avail-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.rf2-ms__avail-pill[data-tone='available'] {
+  background: rgba(22, 163, 74, 0.12);
+  color: #15803d;
+}
+
+.rf2-ms__avail-pill[data-tone='notice'] {
+  background: rgba(245, 158, 11, 0.14);
+  color: #b45309;
+}
+
+/* Circular SVG Ring Progress Gauge */
+.rf2-ms__gauge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding-inline: 8px;
+  border-left: 1px solid var(--rf2-divider);
+  border-right: 1px solid var(--rf2-divider);
+}
+
+.rf2-ms__gauge-ring {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+}
+
+.rf2-ms__gauge-svg {
+  width: 56px;
+  height: 56px;
+  transform: rotate(-90deg);
+}
+
+.rf2-ms__gauge-pct {
+  position: absolute;
+  font-size: 13.5px;
+  font-weight: 800;
+  color: var(--rf2-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.rf2-ms__gauge-label {
+  font-size: 11.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.rf2-ms__gauge-label[data-tone='excellent'],
+.rf2-ms__gauge-label[data-tone='strong'] {
+  color: #16a34a;
+}
+
+.rf2-ms__gauge-label[data-tone='good'] {
+  color: #2563eb;
+}
+
+.rf2-ms__gauge-label[data-tone='potential'] {
+  color: #d97706;
+}
+
+.rf2-ms__gauge-label[data-tone='low'] {
+  color: #dc2626;
+}
+
+/* Skills Breakdown Column */
+.rf2-ms__skills-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.rf2-ms__skill-group-label {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--rf2-ink);
+}
+
+.rf2-ms__skill-group-label span {
+  font-weight: 500;
+  color: var(--rf2-muted);
+}
+
+.rf2-ms__skill-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.rf2-ms__skill-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.rf2-ms__skill-chip svg {
+  width: 12px;
+  height: 12px;
+  flex: none;
+}
+
+.rf2-ms__skill-chip[data-kind='matched'] {
+  background: rgba(22, 163, 74, 0.1);
+  color: #15803d;
+}
+
+.rf2-ms__skill-chip[data-kind='missing'] {
+  background: rgba(245, 158, 11, 0.13);
+  color: #b45309;
+}
+
+/* Right Actions Column */
+.rf2-ms__actions-col {
+  display: grid;
+  grid-template-columns: 128px 28px;
+  align-items: center;
+  gap: 8px;
+}
+
+.rf2-ms__actions-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rf2-ms__btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+  padding: 5px 12px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--rf2-action);
+  color: #ffffff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  transition: filter 120ms ease;
+}
+
+.rf2-ms__btn-primary:hover {
+  filter: brightness(0.95);
+}
+
+.rf2-ms__btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-height: 32px;
+  padding: 5px 10px;
+  border: 1px solid var(--rf2-divider);
+  border-radius: 8px;
+  background: var(--rf2-surface);
+  color: var(--rf2-action);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.rf2-ms__btn-secondary:hover {
+  background: var(--rf2-info-tint);
+}
+
+.rf2-ms__btn-secondary svg {
+  width: 13px;
+  height: 13px;
+}
+
+.rf2-ms__more-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--rf2-muted);
+  cursor: pointer;
+}
+
+.rf2-ms__more-btn:hover {
+  background: var(--rf2-neutral-tint);
+  color: var(--rf2-ink);
+}
+
+.rf2-ms__more-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.rf2-ms__expanded {
+  padding-top: 14px;
+  border-top: 1px solid var(--rf2-divider);
+}
+
+@media (max-width: 1100px) {
+  .rf2-ms__job-top {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .rf2-ms__job-desc-col {
+    padding-left: 0;
+    border-left: 0;
+    padding-top: 12px;
+    border-top: 1px solid var(--rf2-divider);
+  }
+  .rf2-ms__card-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .rf2-ms__skills-col {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 767px) {
+  .rf2-ms {
+    padding: 14px;
+  }
+  .rf2-ms__card-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .rf2-ms__gauge {
+    border-left: 0;
+    border-right: 0;
+    align-items: flex-start;
+    padding-inline: 0;
+  }
+  .rf2-ms__actions-col {
+    grid-template-columns: minmax(0, 1fr) 32px;
+  }
+}

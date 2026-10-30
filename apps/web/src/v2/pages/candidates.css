@@ -1,4 +1,372 @@
-/* Candidates list hierarchy. Tokens only; shared job chrome stays in jobs.css. */
+/* Candidates list hierarchy — Executive V2 Redesign */
+[data-ui='v2'] .rf2-cand {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+[data-ui='v2'] .rf2-cand__hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px 20px;
+}
+
+[data-ui='v2'] .rf2-cand__hero-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+[data-ui='v2'] .rf2-cand .rf2-cand__visible-title {
+  position: static;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.25;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  color: var(--rf2-ink);
+}
+
+[data-ui='v2'] .rf2-cand__subtitle {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--rf2-muted);
+}
+
+[data-ui='v2'] .rf2-cand__top-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+[data-ui='v2'] .rf2-cand__head-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-inline-start: auto;
+}
+
+/* CV Intake & What Happens Next Split Banner Card */
+[data-ui='v2'] .rf2-cand__intake-banner {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.25fr);
+  gap: 18px;
+  padding: 18px 20px;
+  border: 1px solid var(--rf2-divider);
+  border-radius: 14px;
+  background: var(--rf2-card);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03);
+}
+
+[data-ui='v2'] .rf2-cand__intake-left {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
+  padding-right: 18px;
+  border-right: 1px solid var(--rf2-divider);
+}
+
+[data-ui='v2'] .rf2-cand__intake-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+[data-ui='v2'] .rf2-cand__intake-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 11px;
+  background: rgba(37, 99, 235, 0.1);
+  color: #2563eb;
+  flex: none;
+}
+
+[data-ui='v2'] .rf2-cand__intake-icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+[data-ui='v2'] .rf2-cand__intake-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--rf2-ink);
+}
+
+[data-ui='v2'] .rf2-cand__intake-desc {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  color: var(--rf2-muted);
+}
+
+[data-ui='v2'] .rf2-cand__intake-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+[data-ui='v2'] .rf2-cand__intake-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 6px 18px;
+  border-radius: 9px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+  transition: filter 120ms ease, background-color 120ms ease;
+}
+
+[data-ui='v2'] .rf2-cand__intake-btn svg {
+  width: 15px;
+  height: 15px;
+}
+
+[data-ui='v2'] .rf2-cand__intake-btn--primary {
+  border: 0;
+  background: var(--rf2-action);
+  color: #ffffff;
+}
+
+[data-ui='v2'] .rf2-cand__intake-btn--primary:hover {
+  filter: brightness(0.95);
+}
+
+[data-ui='v2'] .rf2-cand__intake-btn--secondary {
+  border: 1px solid var(--rf2-divider);
+  background: var(--rf2-surface);
+  color: var(--rf2-ink);
+}
+
+[data-ui='v2'] .rf2-cand__intake-btn--secondary:hover {
+  background: var(--rf2-neutral-tint);
+}
+
+[data-ui='v2'] .rf2-cand__intake-foot {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--rf2-muted);
+}
+
+[data-ui='v2'] .rf2-cand__intake-right {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: rgba(37, 99, 235, 0.05);
+}
+
+[data-ui='v2'] .rf2-cand__next-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+[data-ui='v2'] .rf2-cand__next-icon {
+  display: inline-flex;
+  color: #2563eb;
+}
+
+[data-ui='v2'] .rf2-cand__next-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+[data-ui='v2'] .rf2-cand__steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+[data-ui='v2'] .rf2-cand__steps li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+  color: var(--rf2-ink-2);
+}
+
+[data-ui='v2'] .rf2-cand__step-num {
+  display: inline-grid;
+  place-items: center;
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  background: rgba(37, 99, 235, 0.14);
+  color: #2563eb;
+  font-size: 11px;
+  font-weight: 800;
+  flex: none;
+}
+
+/* Filter Bar */
+[data-ui='v2'] .rf2-cand .rf2-jobs__filters {
+  margin-top: 0;
+  padding: 10px 14px;
+  border: 1px solid var(--rf2-divider);
+  border-radius: 12px;
+  background: var(--rf2-card);
+}
+
+[data-ui='v2'] .rf2-cand .rf2-jobs__search {
+  flex: 0 1 280px;
+  max-width: 300px;
+}
+
+[data-ui='v2'] .rf2-cand__reset-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--rf2-action);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+[data-ui='v2'] .rf2-cand__reset-btn:hover {
+  background: var(--rf2-info-tint);
+}
+
+[data-ui='v2'] .rf2-cand__reset-btn svg {
+  width: 13px;
+  height: 13px;
+}
+
+[data-ui='v2'] .rf2-cand__view-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+  padding: 2px;
+  border: 1px solid var(--rf2-divider);
+  border-radius: 8px;
+  background: var(--rf2-surface);
+}
+
+[data-ui='v2'] .rf2-cand__view-opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--rf2-muted);
+}
+
+[data-ui='v2'] .rf2-cand__view-opt svg {
+  width: 13px;
+  height: 13px;
+}
+
+[data-ui='v2'] .rf2-cand__view-opt--active {
+  background: var(--rf2-info-tint);
+  color: var(--rf2-action);
+}
+
+/* Table Styling */
+[data-ui='v2'] .rf2-cand .rf2-jtable td {
+  padding: 11px 14px;
+}
+
+[data-ui='v2'] .rf2-cand .rf2-kcard__avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--rf2-info-tint);
+  color: var(--rf2-action);
+  font-weight: 700;
+}
+
+[data-ui='v2'] .rf2-cand__who-split {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+[data-ui='v2'] .rf2-cand__job-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: var(--rf2-radius-control);
+  background: var(--rf2-neutral-tint);
+  color: var(--rf2-ink-2);
+  font-size: var(--rf2-text-caption);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+[data-ui='v2'] .rf2-cand tbody tr:nth-child(4n+1) .rf2-kcard__avatar { background: var(--rf2-info-tint); color: var(--rf2-action); }
+[data-ui='v2'] .rf2-cand tbody tr:nth-child(4n+2) .rf2-kcard__avatar { background: var(--rf2-success-tint); color: var(--rf2-success); }
+[data-ui='v2'] .rf2-cand tbody tr:nth-child(4n+3) .rf2-kcard__avatar { background: var(--rf2-warning-tint); color: var(--rf2-warning); }
+[data-ui='v2'] .rf2-cand tbody tr:nth-child(4n+4) .rf2-kcard__avatar { background: var(--rf2-danger-tint); color: var(--rf2-danger); }
+
+[data-ui='v2'] .rf2-bank__forms {
+  display: grid;
+  grid-template-columns: minmax(0, 1.85fr) minmax(320px, 1fr);
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--rf2-divider);
+  background: color-mix(in srgb, var(--rf2-neutral-tint) 45%, var(--rf2-card));
+}
+
+[data-ui='v2'] .rf2-bank__forms > .rf2-bank-add {
+  padding: 10px 12px;
+  border: 1px solid var(--rf2-divider);
+  border-radius: var(--rf2-radius-control);
+  background: var(--rf2-card);
+}
+
+[data-ui='v2'] .rf2-bank-add--person {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
+  align-items: start;
+  gap: 8px;
+}
+
+[data-ui='v2'] .rf2-bank-add--person > .rf2-field { min-width: 0; }
+[data-ui='v2'] .rf2-bank-add--person .rf2-field__hint { font-size: 11px; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+[data-ui='v2'] .rf2-bank-add--person > .rf2-btn { margin-top: 22px; white-space: nowrap; }
+
+[data-ui='v2'] .rf2-bank-add--job {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px;
+}
+
+[data-ui='v2'] .rf2-bank-add--job > .rf2-field { min-width: 0; }
+[data-ui='v2'] .rf2-bank-add--job > .rf2-btn { margin-top: 22px; white-space: nowrap; }
+
+[data-ui='v2'] .rf2-bank__status { flex: 1 1 100%; margin: 4px 0 0; font-size: var(--rf2-text-label); color: var(--rf2-ink-2); }
 [data-ui='v2'] .rf2-cand__actions { display: flex; flex-wrap: wrap; gap: var(--rf2-space-1); }
 [data-ui='v2'] .rf2-cand__actions .rf2-btn { text-decoration: none; }
 [data-ui='v2'] .rf2-cand__who { width: 34%; }
@@ -6,6 +374,19 @@
 [data-ui='v2'] .rf2-cand__quiet { color: var(--rf2-ink-2); font-size: var(--rf2-text-label); }
 [data-ui='v2'] .rf2-cand__label { display: none; }
 [data-ui='v2'] .rf2-cand__bound { margin: 0; padding: var(--rf2-space-1) var(--rf2-space-1-5); background: var(--rf2-warning-tint); color: var(--rf2-warning); font-size: var(--rf2-text-label); }
+[data-ui='v2'] .rf2-cand [aria-label='Bank'] > .rf2-inline-note { margin: 12px 16px 0; }
+
+@media (max-width: 980px) {
+  [data-ui='v2'] .rf2-cand__intake-banner {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  [data-ui='v2'] .rf2-cand__intake-left {
+    padding-right: 0;
+    border-right: 0;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--rf2-divider);
+  }
+}
 
 @media (max-width: 767px) {
   [data-ui='v2'] .rf2-cand { min-width: 0; max-width: 100%; }
@@ -19,6 +400,7 @@
   [data-ui='v2'] .rf2-cand .rf2-seg { flex-wrap: wrap; }
   [data-ui='v2'] .rf2-cand .rf2-jobs__search,
   [data-ui='v2'] .rf2-cand .rf2-jobs__filters > .rf2-field { flex: 1 1 100%; min-width: 0; max-width: 100%; }
+  [data-ui='v2'] .rf2-cand .rf2-bank__forms { grid-template-columns: minmax(0, 1fr); }
   [data-ui='v2'] .rf2-cand .rf2-bank-links,
   [data-ui='v2'] .rf2-cand .rf2-bank-add { max-width: 100%; }
   [data-ui='v2'] .rf2-cand .rf2-bank-links a { min-width: 0; overflow-wrap: break-word; }
@@ -88,3 +470,6 @@
     font-size: var(--rf2-text-caption); font-weight: 600; line-height: var(--rf2-leading-caption);
   }
 }
+
+[data-ui='v2'] .rf2-cand__doc-link { color: var(--rf2-action); font-weight: 600; text-decoration: none; }
+[data-ui='v2'] .rf2-cand__doc-link:hover { text-decoration: underline; }

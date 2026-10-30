@@ -15,7 +15,7 @@ const COMMON = ['/profile', '/notifications', '/search'];
 
 /** Path prefixes per seat ("/x" allows "/x" and "/x/…"). Keep in step with navConfig + the v2 pages. */
 export const SEAT_DESTINATIONS: Record<Seat, string[]> = {
-  employee: ['/offers/:id', '/my-work', '/my-result', '/interviews', '/reports', '/vacancies', '/vacancies/:id', '/candidates', '/candidates/compare', '/applications/:id', '/talent-pools'],
+  employee: ['/offers/:id', '/my-work', '/my-result', '/interviews', '/reports', '/vacancies', '/vacancies/:id', '/candidates', '/candidates/compare', '/applications/:id', '/sourcing-match'],
   // '/interviews/:id' stays for the Manager's own scorecard (Team work → Waiting on you → Submit scorecard).
   // v2 default: '/vacancy-requests' is the list only (the drawers carry ?req= / ?req=new); detail and create URLs redirect.
   manager: ['/offers/:id', '/my-work', '/vacancy-requests', '/reports', '/applications/:id'],
@@ -43,7 +43,7 @@ const PARAM_EQUIVALENT: Array<{ from: RegExp; to: Partial<Record<Seat, string>> 
 export const CLASSIC_PATHS: RegExp[] = [
   /^\/hires(\/approvals\/inbox|\/[^/]+)?\/?$/, /^\/licenses\/?$/, /^\/joinings?\/?$/,
   /^\/interviews(\/calendar)?\/?$/, /^\/offers\/?$/, /^\/vacancies\/[^/]+\/analytics\/?$/,
-  /^\/candidates\/(?!compare\/?$)[^/]+(\/documents)?\/?$/, /^\/cv-bank\/?$/, /^\/sourcing-match\/?$/, /^\/talent-pool\/?$/,
+  /^\/candidates\/(?!compare\/?$)[^/]+(\/documents)?\/?$/, /^\/cv-bank\/?$/, /^\/talent-pools(\/[^/]+)?\/?$/, /^\/talent-pool\/?$/,
   /^\/import(\/[^/]+\/[^/]+)?\/?$/, /^\/classic\/(candidates|vacancies|master-data|pipeline-settings)\/?$/,
   /^\/settings(\/targets)?\/?$/, /^\/access-control\/?$/,
 ];
@@ -262,7 +262,7 @@ function classicStaffLanding(seat: Seat, pathname: string, opts: { interviews?: 
     if (seat === 'admin' || (seat === 'employee' && opts.interviews === false)) return home;
     return '/my-interviews';
   }
-  if (/^\/(sourcing-match|talent-pool)\/?$/.test(pathname)) return seat === 'employee' ? '/talent-pools' : home;
+  if (/^\/(talent-pools(\/[^/]+)?|talent-pool)\/?$/.test(pathname)) return seat === 'employee' ? '/sourcing-match' : home;
   if (/^\/(cv-bank|classic\/candidates)\/?$/.test(pathname) || /^\/import(\/[^/]+\/[^/]+)?\/?$/.test(pathname)) return seat === 'employee' ? '/candidates' : home;
   if (/^\/classic\/vacancies\/?$/.test(pathname)) return seat === 'employee' ? '/vacancies' : home;
   if (/^\/access-control\/?$/.test(pathname)) return seat === 'admin' ? '/roles' : home;

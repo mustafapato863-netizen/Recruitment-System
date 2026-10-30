@@ -34,6 +34,9 @@ export const SEAT_NAV: Record<Seat, { heading: string; searchPlaceholder: string
       { key: 'my-work', label: 'My Work', to: '/my-work', icon: 'my-work' },
       { key: 'open-jobs', label: 'Open jobs', to: '/vacancies', icon: 'jobs', requires: ['VACANCY_VIEW'] },
       { key: 'candidates', label: 'Candidates', to: '/candidates', icon: 'candidates', requires: ['CANDIDATE_VIEW'] },
+      { key: 'match-skills', label: 'Match Skills', to: '/sourcing-match', icon: 'result', requires: ['CANDIDATE_VIEW', 'APPLICATION_VIEW'] },
+      { key: 'interviews', label: 'Interviews', to: '/interviews', icon: 'interviews', requires: ['VACANCY_VIEW', 'APPLICATION_VIEW'] },
+      { key: 'reports', label: 'Reports', to: '/reports', icon: 'reports', requires: ['APPLICATION_VIEW'] },
       { key: 'my-interviews', label: 'My interviews', to: '/my-interviews', icon: 'interviews', requires: ['VACANCY_VIEW'], interviewerOnly: true },
     ],
   },
@@ -90,9 +93,9 @@ export const CLASSIC_NAV: SeatNavItem[] = [
 ];
 
 /** Classic labels are retired from the sidebar. Signed-in visits redirect in v2Redirect. */
-export function permittedClassicItems(_permissions?: readonly string[], _isAdministrator = false, _interviewerOnly = false): SeatNavItem[] {
+export const permittedClassicItems: (permissions?: readonly string[], isAdministrator?: boolean, interviewerOnly?: boolean) => SeatNavItem[] = () => {
   return [];
-}
+};
 
 export function permittedNavItems(seat: Seat, permissions: readonly string[] | undefined, isAdministrator = false, recruiterOnly = false, interviewer = false): SeatNavItem[] {
   const held = new Set(permissions ?? []);

@@ -61,7 +61,7 @@ describe('nav per seat', () => {
   });
 
   it.each([
-    ['employee', ['My Work', 'Open jobs', 'Candidates']],
+    ['employee', ['My Work', 'Open jobs', 'Candidates', 'Match Skills', 'Interviews', 'Reports']],
     ['manager', ['Team work', 'Requisitions', 'Team result']],
     ['admin', ['Users', 'Roles', 'Pipeline template', 'Master data', 'Templates', 'Reports', 'Audit', 'Integrations']],
   ] as const)('%s lists its seat destinations', (seat, labels) => {
@@ -368,35 +368,20 @@ describe('matrix fix: narrow viewports', () => {
   afterEach(() => { window.matchMedia = realMatchMedia; });
   const match = (q: string) => q === TOPNAV_MENU_QUERY || q.includes('1023px');
 
-  it('keeps daily links in the header on a wide screen', () => {
-    renderShell('employee');
-    expect(screen.queryByRole('button', { name: 'Open menu' })).not.toBeInTheDocument();
+  it('keeps daily links in the sidebar on a wide screen', () => {
+    const { container } = renderShell('employee');
+    expect(container.querySelector('.rf2-shell__sidebar')).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Collapse sidebar' })).toBeInTheDocument();
     expect(screen.getByRole('navigation', { name: SEAT_NAV.employee.heading })).toBeInTheDocument();
   });
 
-  it('below 1280px a daily seat opens the same links from a menu', async () => {
-    const u = userEvent.setup();
+  it('keeps the employee sidebar below 1024px as the icon rail', () => {
     window.matchMedia = ((q: string) => ({ matches: match(q), media: q, addEventListener: () => {}, removeEventListener: () => {} })) as unknown as typeof window.matchMedia;
     const { container } = renderShell('employee');
-    expect(container.querySelector('.rf2-shell__sidebar')).toBeNull();
+    expect(container.querySelector('.rf2-shell')).toHaveClass('rf2-shell--collapsed');
     expect(screen.queryByRole('button', { name: /sidebar/i })).toBeNull();
-    expect(screen.queryByRole('link', { name: 'Open jobs' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Open menu' })).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 1 })).toHaveClass('rf2-shell__title');
-    const menu = screen.getByRole('button', { name: 'Open menu' });
-    expect(menu).toHaveAttribute('aria-expanded', 'false');
-    await u.click(menu);
-    expect(menu).toHaveAttribute('aria-expanded', 'true');
-    const nav = screen.getByRole('navigation', { name: SEAT_NAV.employee.heading });
-    const jobs = within(nav).getByRole('link', { name: 'Open jobs' });
-    expect(jobs).toHaveAttribute('href', '/vacancies');
-    menu.focus();
-    await u.keyboard('{Escape}');
-    expect(screen.queryByRole('link', { name: 'Open jobs' })).not.toBeInTheDocument();
-    expect(menu).toHaveFocus();
-    await u.click(menu);
-    await u.click(screen.getByRole('link', { name: 'Open jobs' }));
-    expect(await screen.findByRole('heading', { level: 1, name: 'Open jobs' })).toBeInTheDocument();
-    expect(screen.queryByRole('navigation', { name: SEAT_NAV.employee.heading })).not.toBeInTheDocument();
   });
 
   it('keeps the admin sidebar below 1024px as the icon rail', () => {

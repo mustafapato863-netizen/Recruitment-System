@@ -99,7 +99,7 @@ describe('classic staff URLs land on a v2 surface', () => {
     '/hires/approvals/inbox': '/my-work', '/hires': '/my-work', '/hires/h1': '/my-work', '/licenses': '/my-work',
     '/joinings': '/my-work', '/joining': '/my-work', '/interviews': null, '/interviews/calendar': null, '/offers': '/my-work',
     '/vacancies/v1/analytics': '/vacancies/v1', '/candidates/c1': null, '/candidates/c1/documents': null,
-    '/cv-bank': null, '/sourcing-match': '/talent-pools', '/talent-pool': '/talent-pools',
+    '/cv-bank': null, '/sourcing-match': null, '/talent-pool': '/sourcing-match', '/talent-pools': '/sourcing-match',
     '/classic/candidates': '/candidates', '/classic/vacancies': '/vacancies', '/settings/targets': '/my-work', '/access-control': '/my-work',
     '/classic/master-data': '/my-work', '/settings': '/my-work', '/classic/pipeline-settings': '/my-work',
   };
@@ -215,15 +215,15 @@ describe('classic staff URLs land on a v2 surface', () => {
 describe('talent pools are an employee page', () => {
   it('keeps /talent-pools and /talent-pools/:id for an employee who can view candidates', () => {
     const opts = { requisitions: true, interviews: true, permissions: ['CANDIDATE_VIEW'] };
-    expect(v2Redirect('employee', '/talent-pools', opts)).toBeNull();
-    expect(v2Redirect('employee', '/talent-pools/pool-1', opts)).toBeNull();
+    expect(v2Redirect('employee', '/sourcing-match', opts)).toBeNull();
+    expect(v2Redirect('employee', '/talent-pools/pool-1', opts)).toBe('/sourcing-match');
     expect(v2Redirect('employee', '/talent-pools', { permissions: ['VACANCY_VIEW'] })).toBe('/my-work');
   });
   it('sends other seats home; sourcing-match, CV bank, and import land on a v2 page', () => {
     const opts = { requisitions: true, interviews: true } as const;
     expect(v2Redirect('manager', '/talent-pools', opts)).toBe('/my-work');
     expect(v2Redirect('admin', '/talent-pools/pool-1', opts)).toBe('/users');
-    expect(v2Redirect('employee', '/sourcing-match', { ...opts, permissions: ['CANDIDATE_VIEW'] })).toBe('/talent-pools');
+    expect(v2Redirect('employee', '/sourcing-match', { ...opts, permissions: ['CANDIDATE_VIEW'] })).toBeNull();
     expect(v2Redirect('employee', '/cv-bank', { ...opts, permissions: ['CANDIDATE_VIEW'] })).toBeNull();
     expect(v2Redirect('employee', '/import', { ...opts, permissions: ['CANDIDATE_VIEW'] })).toBe('/candidates');
     expect(v2Redirect('employee', '/import', { ...opts, permissions: ['VACANCY_VIEW'] })).toBe('/my-work');
@@ -276,7 +276,7 @@ describe('PR33-3: seeded licence specialist (Omar) and final approver (Aya)', ()
     const { permittedClassicItems, permittedNavItems } = await import('../../components/v2/shell/navConfig');
     expect(permittedClassicItems(OMAR.permissions)).toEqual([]);
     const recruiter = ['VACANCY_VIEW', 'CANDIDATE_VIEW', 'APPLICATION_VIEW'];
-    expect(permittedNavItems('employee', recruiter, false, true, false).map((item) => item.label)).toEqual(['My Work', 'Open jobs', 'Candidates', 'Interviews', 'Reports']);
+    expect(permittedNavItems('employee', recruiter, false, true, false).map((item) => item.label)).toEqual(['My Work', 'Open jobs', 'Candidates', 'Match Skills', 'Interviews', 'Reports']);
     expect(permittedNavItems('manager', ['VACANCY_REQUEST_VIEW', 'APPLICATION_VIEW'], false, false, false).map((item) => item.label)).toEqual(['Team work', 'Requisitions', 'Team result']);
     expect(permittedNavItems('admin', [], true, false, false).map((item) => item.label)).toEqual(['Users', 'Roles', 'Pipeline template', 'Master data', 'Templates', 'Reports', 'Audit', 'Integrations']);
   });

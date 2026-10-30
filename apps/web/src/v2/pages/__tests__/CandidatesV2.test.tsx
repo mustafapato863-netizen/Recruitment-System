@@ -202,7 +202,8 @@ describe('Candidates page', () => {
     expect(screen.getByRole('tab', { name: 'Bank' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByLabelText('Search people')).toHaveValue('heba');
     await waitFor(() => expect(api.getApi).toHaveBeenCalledWith('/candidates?pageSize=100&page=1&status=Active&search=heba'));
-    expect(screen.getByRole('link', { name: 'Talent pools' })).toHaveAttribute('href', '/talent-pools');
+    expect(screen.getByRole('link', { name: 'Match Skills' })).toHaveAttribute('href', '/sourcing-match');
+    expect(screen.queryByRole('link', { name: 'Talent pools' })).not.toBeInTheDocument();
   });
 
   it('puts the current candidates query on a new file and on the existing file', async () => {

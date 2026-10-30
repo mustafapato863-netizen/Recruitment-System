@@ -1,6 +1,9 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Info, RotateCw, Scale, Search } from 'lucide-react';
+import {
+  CloudUpload, FolderUp, Info, LayoutGrid, List, RotateCcw,
+  RotateCw, Scale, Search, Sparkles,
+} from 'lucide-react';
 import { ApiError, postApi } from '../../api/client';
 import { ButtonV2, EmptyStateV2, ForbiddenStateV2, InputV2, SelectV2, SkeletonV2, StatusChip, type StatusTone } from '../../components/v2';
 import { findExistingFile, isApplicationExists } from '../api/applicationExists';
@@ -145,41 +148,75 @@ export function CandidatesV2() {
   const cur = tab === 'active' ? active : bank;
   const truncated = active.kind === 'ready' && active.truncated;
   const shown = tab === 'active' ? activeRows.length : bank.kind === 'ready' ? bank.rows.length : 0;
-
-  const offerOrPrehireCount = activeRows.filter((row) => row.stage === 'Offer' || row.stage === 'Pre-Hire').length;
+  const hasFilters = Boolean(q || job || source || stage);
 
   return (
     <div className="rf2-jobs rf2-cand">
-      <h1 className="rf2-jobs__title">Candidates</h1>
-      {tab === 'active' ? (
-        <div className="rf2-row-between rf2-cand__header">
-          <div className="rf2-open__kpis rf2-cand__kpis" aria-label="Candidates summary">
-            <div className="rf2-open__kpi" data-tone="action">
-              <span className="rf2-open__kpi-label">Active files</span>
-              <span className="rf2-open__kpi-value">{shown}</span>
-            </div>
-            <div className="rf2-open__kpi" data-tone="warning">
-              <span className="rf2-open__kpi-label">Offer &amp; pre-hire</span>
-              <span className="rf2-open__kpi-value">{offerOrPrehireCount}</span>
-            </div>
-            <div className="rf2-open__kpi" data-tone="success">
-              <span className="rf2-open__kpi-label">Open jobs in view</span>
-              <span className="rf2-open__kpi-value">{jobs.length}</span>
-            </div>
-          </div>
-          <div className="rf2-cand__head-tools">
-            {compareHref
-              ? <Link className="rf2-btn rf2-btn--primary rf2-btn--md" to={compareHref}><Scale aria-hidden="true" /> Compare {pickedRows.length} on skills</Link>
-              : <><ButtonV2 icon={<Scale />} disabled aria-describedby="cmp-why">Compare on skills</ButtonV2><span id="cmp-why" className="rf2-sr-only">{why}</span></>}
-          </div>
+      <div className="rf2-cand__hero">
+        <div className="rf2-cand__hero-copy">
+          <h1 className="rf2-jobs__title rf2-cand__visible-title">Candidates</h1>
+          <p className="rf2-cand__subtitle">
+            View and manage all candidates across your jobs. Import CVs, review applications, and move candidates through the hiring process.
+          </p>
         </div>
-      ) : null}
-      <div className="rf2-jobs__filters">
+      </div>
+
+      {/* Top Segmented Tabs + Count & Compare Bar */}
+      <div className="rf2-cand__top-bar">
         <div className="rf2-seg" role="tablist" aria-label="Candidates view">
           <button type="button" role="tab" aria-selected={tab === 'active'} className="rf2-seg__opt" onClick={() => setTab('active')}>Active applications</button>
           <button type="button" role="tab" aria-selected={tab === 'bank'} className="rf2-seg__opt" onClick={() => setTab('bank')}>Bank</button>
         </div>
-        <InputV2 label="Search people" fieldClassName="rf2-jobs__search rf2-sr-label" placeholder="Search name, title, or job" leadingIcon={<Search />} value={q} onChange={(e) => updateQuery({ search: e.target.value || null })} />
+        <div className="rf2-cand__head-tools">
+          <p className="rf2-jobs__count" aria-live="polite">{cur.kind === 'ready' ? listCount(shown, tab === 'active' ? pickedRows.length : 0, tab === 'active' && truncated) : ''}</p>
+          {tab === 'active' ? (
+            compareHref
+              ? <Link className="rf2-btn rf2-btn--primary rf2-btn--md" to={compareHref}><Scale aria-hidden="true" /> Compare {pickedRows.length} on skills</Link>
+              : <><ButtonV2 icon={<Scale />} disabled aria-describedby="cmp-why">Compare on skills</ButtonV2><span id="cmp-why" className="rf2-sr-only">{why}</span></>
+          ) : null}
+        </div>
+      </div>
+
+      {/* CV Intake & What Happens Next Split Banner Card */}
+      <div className="rf2-cand__intake-banner">
+        <div className="rf2-cand__intake-left">
+          <div className="rf2-cand__intake-head">
+            <span className="rf2-cand__intake-icon" aria-hidden="true"><CloudUpload /></span>
+            <div>
+              <span className="rf2-cand__intake-title">Import CVs</span>
+              <p className="rf2-cand__intake-desc">Add candidates by uploading CV files (PDF, DOC, DOCX).</p>
+            </div>
+          </div>
+          <div className="rf2-cand__intake-actions">
+            <Link className="rf2-cand__intake-btn rf2-cand__intake-btn--primary" to="/cv-bank">
+              <CloudUpload aria-hidden="true" />
+              <span>Upload CVs</span>
+            </Link>
+            <button type="button" className="rf2-cand__intake-btn rf2-cand__intake-btn--secondary" onClick={() => setTab('bank')}>
+              <FolderUp aria-hidden="true" />
+              <span>Add to bank</span>
+            </button>
+          </div>
+          <p className="rf2-cand__intake-foot">Supports PDF, DOC, DOCX (Max 10 MB per file). Add multiple files to import in bulk.</p>
+        </div>
+
+        <div className="rf2-cand__intake-right">
+          <div className="rf2-cand__next-head">
+            <span className="rf2-cand__next-icon" aria-hidden="true"><Sparkles /></span>
+            <span className="rf2-cand__intake-title">What happens next?</span>
+          </div>
+          <ol className="rf2-cand__steps">
+            <li><span className="rf2-cand__step-num">1</span><span>We extract candidate details from the CVs automatically</span></li>
+            <li><span className="rf2-cand__step-num">2</span><span>Duplicates are detected and flagged</span></li>
+            <li><span className="rf2-cand__step-num">3</span><span>You can review and edit the extracted information</span></li>
+            <li><span className="rf2-cand__step-num">4</span><span>Candidates are added to your selected job or to the bank</span></li>
+          </ol>
+        </div>
+      </div>
+
+      {/* Filter & View Bar */}
+      <div className="rf2-jobs__filters rf2-cand__filter-bar">
+        <InputV2 label="Search people" fieldClassName="rf2-jobs__search rf2-sr-label" placeholder="Search name, title, or job..." leadingIcon={<Search />} value={q} onChange={(e) => updateQuery({ search: e.target.value || null })} />
         {tab === 'active' ? (
           <>
             <SelectV2 label="Job" fieldClassName="rf2-sr-label" value={job} onChange={(e) => updateQuery({ job: e.target.value || null })}><option value="">Job: All my jobs</option>{jobs.map(([id, title]) => <option key={id} value={id}>{title}</option>)}</SelectV2>
@@ -187,8 +224,22 @@ export function CandidatesV2() {
             <SelectV2 label="Stage" fieldClassName="rf2-sr-label" value={stage} onChange={(e) => updateQuery({ stage: e.target.value || null })}><option value="">All stages</option>{OPEN_APPLICATION_STAGES.map((item) => <option key={item} value={item}>{STAGE_LABEL[item] ?? item}</option>)}</SelectV2>
           </>
         ) : null}
-        <p className="rf2-jobs__count" aria-live="polite">{cur.kind === 'ready' ? listCount(shown, tab === 'active' ? pickedRows.length : 0, tab === 'active' && truncated) : ''}</p>
+        {hasFilters ? (
+          <button
+            type="button"
+            className="rf2-cand__reset-btn"
+            onClick={() => updateQuery({ search: null, job: null, source: null, stage: null })}
+          >
+            <RotateCcw aria-hidden="true" />
+            <span>Reset filters</span>
+          </button>
+        ) : null}
+        <div className="rf2-cand__view-switch" aria-hidden="true">
+          <span className="rf2-cand__view-opt"><LayoutGrid /><span>Cards</span></span>
+          <span className="rf2-cand__view-opt rf2-cand__view-opt--active"><List /><span>List</span></span>
+        </div>
       </div>
+
       {cur.kind === 'loading' ? <SkeletonV2 lines={6} label="Loading people…" /> : null}
       {cur.kind === 'forbidden' ? <ForbiddenStateV2 body="Your role does not include candidates." /> : null}
       {cur.kind === 'error' ? <div role="alert"><EmptyStateV2 title="Could not load people" body={cur.message} action={<ButtonV2 kind="secondary" icon={<RotateCw />} onClick={() => setAttempt((n) => n + 1)}>Try again</ButtonV2>} /></div> : null}
@@ -196,15 +247,37 @@ export function CandidatesV2() {
         <section className="rf2-panel" aria-label="Active applications">
           {truncated ? <p className="rf2-cand__bound" role="status">{`This list is incomplete. Loaded ${active.loaded} of ${active.total ?? active.loaded} applications; stage, job, source, and search apply only to that window.`}</p> : null}
           {activeRows.length === 0 ? <EmptyStateV2 headingLevel={3} title={active.rows.length === 0 && !truncated ? 'No active applications' : 'No people match these filters'} body={active.rows.length === 0 && !truncated ? 'People you add to your jobs show here.' : 'Try another stage, job, source, or search.'} /> : (
-              <table className="rf2-jtable">
-                <thead><tr><th scope="col" className="rf2-row-check"><span className="rf2-sr-only">Select</span></th><th scope="col">Candidate / job</th><th scope="col">Stage</th><th scope="col">Source</th><th scope="col">Owner</th><th scope="col">Next action</th><th scope="col"><span className="rf2-sr-only">Open</span></th></tr></thead>
-                <tbody>{activeRows.map((row) => {
+            <table className="rf2-jtable">
+              <thead>
+                <tr>
+                  <th scope="col" className="rf2-row-check"><span className="rf2-sr-only">Select</span></th>
+                  <th scope="col">Candidate / job</th>
+                  <th scope="col">Stage</th>
+                  <th scope="col">Source</th>
+                  <th scope="col">Owner</th>
+                  <th scope="col">Next action</th>
+                  <th scope="col"><span className="rf2-sr-only">Open</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                {activeRows.map((row) => {
                   const href = applicationHref(row.applicationId, returnTo);
                   const years = [row.experienceYears != null ? `${row.experienceYears} yrs` : null, row.title].filter(Boolean).join(' · ');
                   return (
                     <tr key={row.applicationId} data-selected={picked.includes(row.applicationId) || undefined}>
                       <td><input type="checkbox" aria-label={`Select ${row.name} (${row.job})`} checked={picked.includes(row.applicationId)} onChange={() => toggle(row.applicationId)} /></td>
-                      <td className="rf2-cand__who"><div className="rf2-cand__who-split"><div className="rf2-kcard__top"><span className="rf2-kcard__avatar" aria-hidden="true">{initials(row.name)}</span><div><Link className="rf2-kcard__name" to={href}>{row.name}</Link>{years ? <p className="rf2-jtable__sub">{years}</p> : null}</div></div><span className="rf2-cand__job-pill">{row.job}</span></div></td>
+                      <td className="rf2-cand__who">
+                        <div className="rf2-cand__who-split">
+                          <div className="rf2-kcard__top">
+                            <span className="rf2-kcard__avatar" aria-hidden="true">{initials(row.name)}</span>
+                            <div>
+                              <Link className="rf2-kcard__name" to={href}>{row.name}</Link>
+                              {years ? <p className="rf2-jtable__sub">{years}</p> : null}
+                            </div>
+                          </div>
+                          <span className="rf2-cand__job-pill">{row.job}</span>
+                        </div>
+                      </td>
                       <td><StatusChip tone={STAGE_TONE[row.stage] ?? 'info'} label={STAGE_LABEL[row.stage] ?? row.stage} /></td>
                       <td className="rf2-cand__quiet"><span className="rf2-cand__label">Source</span>{row.source ?? '—'}</td>
                       <td className="rf2-cand__quiet"><span className="rf2-cand__label">Owner</span>{row.owner ?? '—'}</td>
@@ -212,8 +285,9 @@ export function CandidatesV2() {
                       <td className="rf2-jtable__act"><Link className="rf2-btn rf2-btn--secondary rf2-btn--sm" to={href} aria-label={`Open ${row.name}`}>Open</Link></td>
                     </tr>
                   );
-                })}</tbody>
-              </table>
+                })}
+              </tbody>
+            </table>
           )}
         </section>
       ) : null}
@@ -321,8 +395,7 @@ function BankPanel({ rows, returnTo, onAdded, initialJobId, onJobChange }: { row
     <section className="rf2-panel" aria-label="Bank">
       <nav className="rf2-bank-links" aria-label="Bank tools">
         <Link to="/cv-bank">CV bank</Link>
-        <Link to="/sourcing-match">Search and match</Link>
-        <Link to="/talent-pools">Talent pools</Link>
+        <Link to="/sourcing-match">Match Skills</Link>
       </nav>
       <p className="rf2-inline-note"><Info aria-hidden="true" /> PDF and Word CVs are added from a job. Each duplicate person stays one record in the bank. A ZIP of CVs is not an intake format.</p>
       <div className="rf2-bank__forms">
