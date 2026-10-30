@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { History, Info, RotateCw, Scale, Search } from 'lucide-react';
+import { Info, RotateCw, Scale, Search } from 'lucide-react';
 import { ApiError, postApi } from '../../api/client';
 import { ButtonV2, EmptyStateV2, ForbiddenStateV2, InputV2, SelectV2, SkeletonV2, StatusChip, type StatusTone } from '../../components/v2';
 import { findExistingFile, isApplicationExists } from '../api/applicationExists';
@@ -168,9 +168,6 @@ export function CandidatesV2() {
             </div>
           </div>
           <div className="rf2-cand__head-tools">
-            <nav className="rf2-cand__actions" aria-label="Candidate records">
-              <Link className="rf2-btn rf2-btn--secondary rf2-btn--md" to={withReturnTo('/import#import-history', returnTo)}><History aria-hidden="true" /> Import history</Link>
-            </nav>
             {compareHref
               ? <Link className="rf2-btn rf2-btn--primary rf2-btn--md" to={compareHref}><Scale aria-hidden="true" /> Compare {pickedRows.length} on skills</Link>
               : <><ButtonV2 icon={<Scale />} disabled aria-describedby="cmp-why">Compare on skills</ButtonV2><span id="cmp-why" className="rf2-sr-only">{why}</span></>}
@@ -191,11 +188,6 @@ export function CandidatesV2() {
           </>
         ) : null}
         <p className="rf2-jobs__count" aria-live="polite">{cur.kind === 'ready' ? listCount(shown, tab === 'active' ? pickedRows.length : 0, tab === 'active' && truncated) : ''}</p>
-        {tab === 'bank' ? (
-          <nav className="rf2-cand__actions" aria-label="Candidate records">
-            <Link className="rf2-btn rf2-btn--secondary rf2-btn--sm" to={withReturnTo('/import#import-history', returnTo)}><History aria-hidden="true" /> Import history</Link>
-          </nav>
-        ) : null}
       </div>
       {cur.kind === 'loading' ? <SkeletonV2 lines={6} label="Loading people…" /> : null}
       {cur.kind === 'forbidden' ? <ForbiddenStateV2 body="Your role does not include candidates." /> : null}
@@ -328,12 +320,11 @@ function BankPanel({ rows, returnTo, onAdded, initialJobId, onJobChange }: { row
   return (
     <section className="rf2-panel" aria-label="Bank">
       <nav className="rf2-bank-links" aria-label="Bank tools">
-        <Link to={withReturnTo('/import', returnTo)}>Review a workbook</Link>
         <Link to="/cv-bank">CV bank</Link>
         <Link to="/sourcing-match">Search and match</Link>
         <Link to="/talent-pools">Talent pools</Link>
       </nav>
-      <p className="rf2-inline-note"><Info aria-hidden="true" /> PDF and Word CVs are added from a job. Workbooks are reviewed on the import page, and each duplicate needs a decision. A ZIP of CVs is not an intake format.</p>
+      <p className="rf2-inline-note"><Info aria-hidden="true" /> PDF and Word CVs are added from a job. Each duplicate person stays one record in the bank. A ZIP of CVs is not an intake format.</p>
       <div className="rf2-bank__forms">
         <form className="rf2-bank-add rf2-bank-add--person" onSubmit={(e) => { e.preventDefault(); void addPerson(); }}>
           <InputV2 label="First name" value={first} onChange={(e) => setFirst(e.target.value)} autoComplete="off" />

@@ -13,15 +13,7 @@ import { PageLoadingFallback } from './components/Spinner';
 import './App.css';
 import './styles/tokens.css';
 import './styles/density.css';
-import './styles/ui-primitives.css';
-import './styles/design-system.css';
-import './styles/shell.css';
-import './styles/polish.css';
-import './styles/source-integration.css';
-import './styles/v2-parity.css';
 import './styles/tokens-v2.css';
-import './styles/glass-neo.css';
-import './styles/classic-in-shell.css';
 
 // Lazy loaded page components for optimal bundle splitting. v2 is the only signed-in UI (v2 default):
 // v1 URLs are redirected to their v2 equivalents by the shell (v2/destinations.ts), so only v2 routes exist here.
@@ -62,7 +54,6 @@ const CandidateDetailPage = lazy(() => import('./pages/CandidateDetailPage').the
 const CandidateDocumentsPage = lazy(() => import('./pages/CandidateDocumentsPage').then((m) => ({ default: m.CandidateDocumentsPage })));
 const CVBankPage = lazy(() => import('./pages/CVBankPage').then((m) => ({ default: m.CVBankPage })));
 const TalentPoolPage = lazy(() => import('./pages/TalentPoolPage').then((m) => ({ default: m.TalentPoolPage })));
-const BulkImportPage = lazy(() => import('./pages/BulkImportPage').then((m) => ({ default: m.BulkImportPage })));
 const CandidatesPage = lazy(() => import('./pages/CandidatesPage').then((m) => ({ default: m.CandidatesPage })));
 const VacantListPage = lazy(() => import('./pages/VacantListPage').then((m) => ({ default: m.VacantListPage })));
 const PositionLevelTargetSettingsPage = lazy(() => import('./pages/PositionLevelTargetSettingsPage').then((m) => ({ default: m.PositionLevelTargetSettingsPage })));
@@ -152,8 +143,8 @@ function App() {
                   <Route path="/candidates/:id/documents" element={<PermissionGate requiredPermission="CANDIDATE_VIEW"><CandidateDocumentsPage /></PermissionGate>} />
                   <Route path="/cv-bank" element={<PermissionGate requiredPermission="CANDIDATE_VIEW"><CVBankPage /></PermissionGate>} />
                   <Route path="/sourcing-match" element={<PermissionGate requiredPermission="CANDIDATE_VIEW"><TalentPoolPage /></PermissionGate>} />
-                  <Route path="/import" element={<PermissionGate requiredAnyPermission={['CANDIDATE_CREATE', 'VACANCY_REQUEST_CREATE', 'MASTER_DATA_MANAGE']}><BulkImportPage /></PermissionGate>} />
-                  <Route path="/import/:dataset/:jobId" element={<PermissionGate requiredAnyPermission={['CANDIDATE_VIEW', 'VACANCY_REQUEST_VIEW', 'MASTER_DATA_VIEW']}><BulkImportPage /></PermissionGate>} />
+                  <Route path="/import" element={<Navigate to="/candidates" replace />} />
+                  <Route path="/import/:dataset/:jobId" element={<Navigate to="/candidates" replace />} />
                   <Route path="/classic/candidates" element={<PermissionGate requiredPermission="CANDIDATE_VIEW"><CandidatesPage /></PermissionGate>} />
                   <Route path="/classic/vacancies" element={<PermissionGate requiredPermission="VACANCY_VIEW"><VacantListPage /></PermissionGate>} />
                   <Route path="/settings/targets" element={<PermissionGate requiredAnyPermission={['VACANCY_REQUEST_APPROVE', 'USERS_MANAGE', 'VACANCY_MANAGE', 'VACANCY_ASSIGN', 'VACANCY_REASSIGN', 'MASTER_DATA_VIEW']}><PositionLevelTargetSettingsPage /></PermissionGate>} />

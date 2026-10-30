@@ -1,0 +1,1485 @@
+/* ==========================================================================
+   V2 Executive Interviews & Scheduling Workspace (`/interviews`)
+   High-clarity UI/UX with interactive KPI filter cards, status tabs,
+   context-aware row actions, rich 5-day schedule strip, and inspector panel
+   ========================================================================== */
+
+.rf2-intv {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 1560px;
+  margin: 0 auto;
+  width: 100%;
+  padding: 20px 24px 40px;
+  box-sizing: border-box;
+}
+
+/* ── Page Hero Header ── */
+.rf2-intv__hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.rf2-intv__hero-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rf2-intv__hero-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.rf2-intv__hero-title {
+  margin: 0;
+  font-size: clamp(1.35rem, 1.75vw, 1.55rem);
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  color: var(--rf2-ink);
+  line-height: 1.2;
+}
+
+.rf2-intv__hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 600;
+  background: rgba(37, 99, 235, 0.09);
+  color: var(--rf2-action);
+  border: 1px solid rgba(37, 99, 235, 0.18);
+}
+
+.rf2-intv__hero-badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--rf2-action);
+}
+
+.rf2-intv__hero-sub {
+  margin: 0;
+  font-size: 13px;
+  color: var(--rf2-ink-muted);
+}
+
+.rf2-intv__hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* View Switcher (List & Details vs Full Calendar) */
+.rf2-intv__view-switch {
+  display: inline-flex;
+  align-items: center;
+  background: var(--rf2-surface-muted);
+  border: 1px solid var(--rf2-line, #e2e8f0);
+  border-radius: 10px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.rf2-intv__view-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--rf2-ink-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 140ms ease;
+}
+
+.rf2-intv__view-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+.rf2-intv__view-btn:hover {
+  color: var(--rf2-ink);
+}
+
+.rf2-intv__view-btn[data-active="true"] {
+  background: var(--rf2-surface);
+  color: var(--rf2-action);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
+.rf2-intv__cal-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 13px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--rf2-ink);
+  background: var(--rf2-surface);
+  border: 1px solid var(--rf2-line, #e2e8f0);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+  cursor: pointer;
+  text-decoration: none;
+  transition: background-color 140ms ease, border-color 140ms ease;
+}
+
+.rf2-intv__cal-btn:hover {
+  background: var(--rf2-surface-muted);
+  border-color: var(--rf2-line-strong, #cbd5e1);
+}
+
+.rf2-intv__cal-btn svg {
+  width: 14px;
+  height: 14px;
+  color: var(--rf2-action);
+}
+
+.rf2-intv__sched-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 16px;
+  border-radius: 10px;
+  font-size: 12.5px;
+  font-weight: 600;
+  background: var(--rf2-action);
+  color: #ffffff;
+  border: 1px solid transparent;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.25);
+  cursor: pointer;
+  transition: background-color 140ms ease, transform 140ms ease;
+}
+
+.rf2-intv__sched-btn:hover {
+  background: var(--rf2-action-hover);
+}
+
+.rf2-intv__sched-btn svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* ── 4 Executive KPI Cards with Vertical Mini Sparkbars ── */
+.rf2-intv__kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.rf2-intv__kpi {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 16px 18px;
+  border-radius: 14px;
+  background: var(--rf2-surface);
+  border: 1px solid var(--rf2-line, #e2e8f0);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.035);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+}
+
+.rf2-intv__kpi:hover {
+  border-color: var(--rf2-line-strong, #cbd5e1);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
+}
+
+.rf2-intv__kpi[data-active="true"] {
+  border-color: var(--rf2-action);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1), 0 4px 12px rgba(15, 23, 42, 0.05);
+}
+
+.rf2-intv__kpi-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.rf2-intv__kpi-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.rf2-intv__kpi-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.rf2-intv__kpi-icon[data-tone="blue"] {
+  background: rgba(37, 99, 235, 0.1);
+  color: #2563eb;
+}
+
+.rf2-intv__kpi-icon[data-tone="green"] {
+  background: rgba(22, 163, 74, 0.1);
+  color: #16a34a;
+}
+
+.rf2-intv__kpi-icon[data-tone="amber"] {
+  background: rgba(217, 119, 6, 0.12);
+  color: #d97706;
+}
+
+.rf2-intv__kpi-icon[data-tone="purple"] {
+  background: rgba(124, 58, 237, 0.1);
+  color: #7c3aed;
+}
+
+/* Mini Vertical Bar Sparkline */
+.rf2-intv__sparkbars {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 28px;
+}
+
+.rf2-intv__sparkbar {
+  width: 4.5px;
+  border-radius: 999px;
+  transition: height 200ms ease;
+}
+
+.rf2-intv__sparkbars[data-tone="blue"] .rf2-intv__sparkbar {
+  background: rgba(37, 99, 235, 0.22);
+}
+.rf2-intv__sparkbars[data-tone="blue"] .rf2-intv__sparkbar[data-strong="true"] {
+  background: #3b82f6;
+}
+
+.rf2-intv__sparkbars[data-tone="green"] .rf2-intv__sparkbar {
+  background: rgba(22, 163, 74, 0.22);
+}
+.rf2-intv__sparkbars[data-tone="green"] .rf2-intv__sparkbar[data-strong="true"] {
+  background: #22c55e;
+}
+
+.rf2-intv__sparkbars[data-tone="amber"] .rf2-intv__sparkbar {
+  background: rgba(245, 158, 11, 0.24);
+}
+.rf2-intv__sparkbars[data-tone="amber"] .rf2-intv__sparkbar[data-strong="true"] {
+  background: #f59e0b;
+}
+
+.rf2-intv__sparkbars[data-tone="purple"] .rf2-intv__sparkbar {
+  background: rgba(139, 92, 246, 0.22);
+}
+.rf2-intv__sparkbars[data-tone="purple"] .rf2-intv__sparkbar[data-strong="true"] {
+  background: #8b5cf6;
+}
+
+.rf2-intv__kpi-mid {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.rf2-intv__kpi-val {
+  font-size: 1.7rem;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  line-height: 1.05;
+  color: var(--rf2-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.rf2-intv__kpi-subpill {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--rf2-surface-muted);
+  color: var(--rf2-ink-muted);
+}
+
+.rf2-intv__kpi-subpill[data-tone="amber"] {
+  background: rgba(245, 158, 11, 0.13);
+  color: #b45309;
+}
+
+.rf2-intv__kpi-subpill[data-tone="green"] {
+  background: rgba(22, 163, 74, 0.11);
+  color: #15803d;
+}
+
+.rf2-intv__kpi-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.rf2-intv__kpi-label {
+  font-size: 12.5px;
+  color: var(--rf2-ink-muted);
+  font-weight: 500;
+}
+
+.rf2-intv__kpi-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--rf2-action);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.rf2-intv__kpi-link:hover {
+  text-decoration: underline;
+}
+
+/* ── Filter & Segmented Tabs Toolbar ── */
+.rf2-intv__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: var(--rf2-surface);
+  border: 1px solid var(--rf2-line, #e2e8f0);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.035);
+}
+
+.rf2-intv__tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--rf2-surface-muted);
+  padding: 3px;
+  border-radius: 10px;
+  border: 1px solid var(--rf2-line, #e2e8f0);
+}
+
+.rf2-intv__tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--rf2-ink-muted);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 130ms ease;
+}
+
+.rf2-intv__tab:hover {
+  color: var(--rf2-ink);
+}
+
+.rf2-intv__tab[data-active="true"] {
+  background: var(--rf2-surface);
+  color: var(--rf2-ink);
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
+.rf2-intv__tab-count {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.18);
+  color: var(--rf2-ink-muted);
+}
+
+.rf2-intv__tab[data-active="true"] .rf2-intv__tab-count {
+  background: rgba(37, 99, 235, 0.12);
+  color: var(--rf2-action);
+}
+
+.rf2-intv__filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  flex: 1 1 auto;
+  justify-content: flex-end;
+}
+
+.rf2-intv__search-wrap {
+  position: relative;
+  flex: 1 1 210px;
+  max-width: 270px;
+}
+
+.rf2-intv__search-wrap svg {
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 14px;
+  height: 14px;
+  color: var(--rf2-ink-subtle);
+  pointer-events: none;
+}
+
+.rf2-intv__search-input {
+  width: 100%;
+  height: 35px;
+  padding: 0 12px 0 33px;
+  border-radius: 9px;
+  border: 1px solid var(--rf2-line, #e2e8f0);
+  background: var(--rf2-surface-muted);
+  font-size: 12px;
+  color: var(--rf2-ink);
+  outline: none;
+  transition: border-color 140ms ease, background-color 140ms ease;
+}
+
+.rf2-intv__search-input:focus {
+  background: var(--rf2-surface);
+  border-color: var(--rf2-action);
+}
+
+.rf2-intv__select-pill {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.rf2-intv__select-pill > svg:first-child {
+  position: absolute;
+  left: 10px;
+  width: 13.5px;
+  height: 13.5px;
+  color: var(--rf2-ink-muted);
+  pointer-events: none;
+}
+
+.rf2-intv__select {
+  height: 35px;
+  padding: 0 26px 0 30px;
+  border-radius: 9px;
+  border: 1px solid var(--rf2-line, #e2e8f0);
+  background: var(--rf2-surface);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--rf2-ink);
+  cursor: pointer;
+  outline: none;
+}
+
+.rf2-intv__select:focus {
+  border-color: var(--rf2-action);
+}
+
+.rf2-intv__reset-btn {
+  height: 35px;
+  padding: 0 10px;
+  border-radius: 9px;
+  border: 1px dashed var(--rf2-line-strong, #cbd5e1);
+  background: transparent;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--rf2-ink-muted);
+  cursor: pointer;
+}
+
+.rf2-intv__reset-btn:hover {
+  color: var(--rf2-ink);
+  background: var(--rf2-surface-muted);
+}
+
+/* ── Main 2-Column Layout ── */
+.rf2-intv__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2.55fr) minmax(305px, 0.88fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.rf2-intv__main-col {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.rf2-intv__side-col {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+/* ── Upcoming Interviews Table Card ── */
+.rf2-intv__card {
+  background: var(--rf2-surface);
+  border: 1px solid var(--rf2-line, #e2e8f0);
+  border-radius: 14px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.035);
+  overflow: hidden;
+}
+
+.rf2-intv__card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--rf2-line, #e2e8f0);
+}
+
+.rf2-intv__card-head-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rf2-intv__card-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--rf2-ink);
+  letter-spacing: -0.01em;
+}
+
+.rf2-intv__card-title span {
+  font-weight: 600;
+  color: var(--rf2-ink-muted);
+}
+
+.rf2-intv__card-hint {
+  font-size: 11.5px;
+  color: var(--rf2-ink-muted);
+}
+
+.rf2-intv__table-scroll {
+  overflow-x: auto;
+}
+
+.rf2-intv__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.rf2-intv__table th {
+  text-align: left;
+  padding: 9px 7px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--rf2-ink-muted);
+  background: var(--rf2-surface-muted);
+  border-bottom: 1px solid var(--rf2-line, #e2e8f0);
+  white-space: nowrap;
+}
+
+.rf2-intv__table th:first-child,
+.rf2-intv__table td:first-child {
+  padding-left: 12px;
+}
+
+.rf2-intv__table th:last-child,
+.rf2-intv__table td:last-child {
+  padding-right: 12px;
+}
+
+.rf2-intv__table td {
+  padding: 10px 7px;
+  border-bottom: 1px solid var(--rf2-line, #e2e8f0);
+  vertical-align: middle;
+  color: var(--rf2-ink);
+  white-space: nowrap;
+}
+
+.rf2-intv__table tbody tr {
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.rf2-intv__table tbody tr:hover {
+  background: var(--rf2-surface-muted);
+}
+
+.rf2-intv__table tbody tr[data-selected="true"] {
+  background: rgba(37, 99, 235, 0.06);
+  box-shadow: inset 3px 0 0 var(--rf2-action);
+}
+
+.rf2-intv__table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.rf2-intv__time-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  white-space: nowrap;
+}
+
+.rf2-intv__time-main {
+  font-weight: 700;
+  color: var(--rf2-ink);
+  font-variant-numeric: tabular-nums;
+  font-size: 12.5px;
+}
+
+.rf2-intv__time-sub-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.rf2-intv__time-day {
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--rf2-surface-muted);
+  color: var(--rf2-ink-muted);
+}
+
+.rf2-intv__time-day[data-today="true"] {
+  background: rgba(37, 99, 235, 0.1);
+  color: #2563eb;
+}
+
+.rf2-intv__time-dur {
+  font-size: 10.5px;
+  color: var(--rf2-ink-subtle);
+}
+
+.rf2-intv__cand-cell {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rf2-intv__avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11.5px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.rf2-intv__avatar[data-tone="blue"] {
+  background: rgba(37, 99, 235, 0.12);
+  color: #2563eb;
+}
+.rf2-intv__avatar[data-tone="sky"] {
+  background: rgba(14, 165, 233, 0.14);
+  color: #0284c7;
+}
+.rf2-intv__avatar[data-tone="indigo"] {
+  background: rgba(99, 102, 241, 0.14);
+  color: #4f46e5;
+}
+.rf2-intv__avatar[data-tone="green"] {
+  background: rgba(22, 163, 74, 0.14);
+  color: #16a34a;
+}
+.rf2-intv__avatar[data-tone="rose"] {
+  background: rgba(225, 29, 72, 0.12);
+  color: #e11d48;
+}
+.rf2-intv__avatar[data-tone="cyan"] {
+  background: rgba(6, 182, 212, 0.14);
+  color: #0891b2;
+}
+
+.rf2-intv__primary-text {
+  display: block;
+  font-weight: 700;
+  color: var(--rf2-ink);
+  line-height: 1.25;
+}
+
+.rf2-intv__secondary-text {
+  display: block;
+  font-size: 11px;
+  color: var(--rf2-ink-muted);
+  margin-top: 1px;
+}
+
+.rf2-intv__format-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 7px;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.rf2-intv__format-badge svg {
+  width: 13px;
+  height: 13px;
+}
+
+.rf2-intv__format-badge[data-format="video"] {
+  background: rgba(37, 99, 235, 0.07);
+  color: #1d4ed8;
+  border: 1px solid rgba(37, 99, 235, 0.15);
+}
+
+.rf2-intv__format-badge[data-format="onsite"] {
+  background: rgba(15, 118, 110, 0.07);
+  color: #0f766e;
+  border: 1px solid rgba(15, 118, 110, 0.16);
+}
+
+/* Stacked interviewer avatars */
+.rf2-intv__panel-stack {
+  display: inline-flex;
+  align-items: center;
+}
+
+.rf2-intv__panel-av {
+  width: 25px;
+  height: 25px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9.5px;
+  font-weight: 700;
+  border: 2px solid var(--rf2-surface);
+  margin-left: -6px;
+}
+
+.rf2-intv__panel-av:first-child {
+  margin-left: 0;
+}
+
+.rf2-intv__panel-av[data-tone="green"] {
+  background: #dcfce7;
+  color: #15803d;
+}
+.rf2-intv__panel-av[data-tone="indigo"] {
+  background: #e0e7ff;
+  color: #4338ca;
+}
+.rf2-intv__panel-av[data-tone="purple"] {
+  background: #f3e8ff;
+  color: #7e22ce;
+}
+.rf2-intv__panel-av[data-tone="blue"] {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+.rf2-intv__panel-av[data-tone="more"] {
+  background: var(--rf2-surface-muted);
+  color: var(--rf2-ink-muted);
+}
+
+/* Status pills */
+.rf2-intv__status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3.5px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.rf2-intv__status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.rf2-intv__status-pill[data-tone="today"] {
+  background: rgba(37, 99, 235, 0.11);
+  color: #2563eb;
+}
+
+.rf2-intv__status-pill[data-tone="awaiting"] {
+  background: rgba(245, 158, 11, 0.15);
+  color: #b45309;
+}
+
+.rf2-intv__status-pill[data-tone="scheduled"] {
+  background: rgba(59, 130, 246, 0.09);
+  color: #1d4ed8;
+}
+
+.rf2-intv__status-pill[data-tone="completed"] {
+  background: rgba(22, 163, 74, 0.12);
+  color: #15803d;
+}
+
+.rf2-intv__row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.rf2-intv__row-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--rf2-line, #e2e8f0);
+  background: var(--rf2-surface);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--rf2-ink);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 120ms ease;
+}
+
+.rf2-intv__row-btn svg {
+  width: 12.5px;
+  height: 12.5px;
+}
+
+.rf2-intv__row-btn:hover {
+  background: var(--rf2-surface-muted);
+  border-color: var(--rf2-line-strong, #cbd5e1);
+}
+
+.rf2-intv__row-btn[data-variant="primary"] {
+  background: rgba(37, 99, 235, 0.09);
+  border-color: rgba(37, 99, 235, 0.25);
+  color: #2563eb;
+}
+
+.rf2-intv__row-btn[data-variant="primary"]:hover {
+  background: #2563eb;
+  color: #ffffff;
+}
+
+.rf2-intv__row-btn[data-variant="amber"] {
+  background: rgba(245, 158, 11, 0.12);
+  border-color: rgba(245, 158, 11, 0.3);
+  color: #b45309;
+}
+
+.rf2-intv__row-btn[data-variant="amber"]:hover {
+  background: #d97706;
+  color: #ffffff;
+}
+
+.rf2-intv__dots-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--rf2-ink-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.rf2-intv__dots-btn:hover {
+  background: var(--rf2-surface-muted);
+  color: var(--rf2-ink);
+}
+
+.rf2-intv__dots-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* ── This Week's Schedule Card (Bottom Left) ── */
+.rf2-intv__week-card {
+  padding: 16px 18px;
+}
+
+.rf2-intv__week-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.rf2-intv__week-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.rf2-intv__week-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--rf2-surface-muted);
+  border: 1px solid var(--rf2-line, #e2e8f0);
+  border-radius: 8px;
+  padding: 2px;
+}
+
+.rf2-intv__week-step-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--rf2-ink-muted);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.rf2-intv__week-step-btn:hover {
+  background: var(--rf2-surface);
+  color: var(--rf2-ink);
+}
+
+.rf2-intv__week-step-btn svg {
+  width: 13px;
+  height: 13px;
+}
+
+.rf2-intv__week-range {
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--rf2-ink);
+  padding: 0 8px;
+}
+
+.rf2-intv__week-days {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.rf2-intv__day-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 13px;
+  border-radius: 12px;
+  background: var(--rf2-surface-muted);
+  border: 1px solid var(--rf2-line, #e2e8f0);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 140ms ease, background-color 140ms ease, box-shadow 140ms ease;
+}
+
+.rf2-intv__day-tile:hover {
+  border-color: var(--rf2-line-strong, #cbd5e1);
+  background: var(--rf2-surface);
+}
+
+.rf2-intv__day-tile[data-active="true"] {
+  background: rgba(37, 99, 235, 0.065);
+  border-color: rgba(37, 99, 235, 0.4);
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.08);
+}
+
+.rf2-intv__day-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.rf2-intv__day-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--rf2-action);
+  margin-top: 3px;
+}
+
+.rf2-intv__day-name {
+  display: block;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--rf2-ink);
+}
+
+.rf2-intv__day-date {
+  display: block;
+  font-size: 11px;
+  color: var(--rf2-ink-muted);
+  margin-top: 1px;
+}
+
+.rf2-intv__day-slots {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rf2-intv__day-chip {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: var(--rf2-surface);
+  border: 1px solid var(--rf2-line, #e2e8f0);
+  font-size: 10.5px;
+  color: var(--rf2-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rf2-intv__day-chip-time {
+  font-weight: 700;
+  color: var(--rf2-action);
+  font-variant-numeric: tabular-nums;
+}
+
+.rf2-intv__day-foot {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  padding-top: 4px;
+  border-top: 1px dashed var(--rf2-line, #e2e8f0);
+}
+
+.rf2-intv__day-count {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--rf2-ink);
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.rf2-intv__day-unit {
+  font-size: 11px;
+  color: var(--rf2-ink-muted);
+  font-weight: 500;
+}
+
+/* ── Inline Full Week Calendar View (when Calendar view is toggled on `/interviews`) ── */
+.rf2-intv__cal-card {
+  padding: 16px 18px;
+}
+
+.rf2-intv__cal-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.rf2-intv__cal-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--rf2-surface-muted);
+  border: 1px solid var(--rf2-line, #e2e8f0);
+  border-radius: 12px;
+  padding: 10px;
+  min-height: 320px;
+}
+
+.rf2-intv__cal-col[data-today="true"] {
+  background: rgba(37, 99, 235, 0.04);
+  border-color: rgba(37, 99, 235, 0.32);
+}
+
+.rf2-intv__cal-col-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--rf2-line, #e2e8f0);
+}
+
+.rf2-intv__cal-event {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 9px 10px;
+  border-radius: 9px;
+  background: var(--rf2-surface);
+  border: 1px solid var(--rf2-line, #e2e8f0);
+  border-left: 3px solid var(--rf2-action);
+  text-align: left;
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+.rf2-intv__cal-event:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.07);
+}
+
+.rf2-intv__cal-event[data-tone="awaiting"] {
+  border-left-color: #f59e0b;
+}
+
+.rf2-intv__cal-event[data-tone="completed"] {
+  border-left-color: #16a34a;
+}
+
+/* ── Right Column Cards: Interview Details, Prep Checklist, Recent Feedback ── */
+.rf2-intv__side-card {
+  background: var(--rf2-surface);
+  border: 1px solid var(--rf2-line, #e2e8f0);
+  border-radius: 14px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.035);
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+}
+
+.rf2-intv__side-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.rf2-intv__side-title {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 700;
+  color: var(--rf2-ink);
+}
+
+.rf2-intv__side-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rf2-intv__edit-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--rf2-line, #e2e8f0);
+  background: var(--rf2-surface);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--rf2-ink);
+  cursor: pointer;
+}
+
+.rf2-intv__edit-btn:hover {
+  background: var(--rf2-surface-muted);
+}
+
+.rf2-intv__edit-btn svg {
+  width: 12.5px;
+  height: 12.5px;
+  color: var(--rf2-ink-muted);
+}
+
+.rf2-intv__detail-cand {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 11px 12px;
+  border-radius: 11px;
+  background: var(--rf2-surface-muted);
+  border: 1px solid var(--rf2-line, #e2e8f0);
+}
+
+.rf2-intv__detail-cand-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+/* Quick Action Bar inside Interview Details */
+.rf2-intv__detail-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.rf2-intv__detail-cta {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 11px;
+  border-radius: 9px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--rf2-line, #e2e8f0);
+  background: var(--rf2-surface);
+  color: var(--rf2-ink);
+  transition: all 130ms ease;
+}
+
+.rf2-intv__detail-cta svg {
+  width: 14px;
+  height: 14px;
+}
+
+.rf2-intv__detail-cta:hover {
+  background: var(--rf2-surface-muted);
+}
+
+.rf2-intv__detail-cta[data-primary="true"] {
+  background: var(--rf2-action);
+  color: #ffffff;
+  border-color: transparent;
+  box-shadow: 0 1px 4px rgba(37, 99, 235, 0.22);
+}
+
+.rf2-intv__detail-cta[data-primary="true"]:hover {
+  background: var(--rf2-action-hover);
+}
+
+.rf2-intv__meta-list {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rf2-intv__meta-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--rf2-ink);
+  line-height: 1.4;
+}
+
+.rf2-intv__meta-item svg {
+  width: 15px;
+  height: 15px;
+  color: var(--rf2-ink-muted);
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.rf2-intv__meta-label {
+  display: block;
+  font-size: 11px;
+  color: var(--rf2-ink-muted);
+}
+
+.rf2-intv__meta-val {
+  display: block;
+  font-weight: 600;
+  color: var(--rf2-ink);
+}
+
+.rf2-intv__panel-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 4px;
+}
+
+.rf2-intv__panel-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2.5px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  background: var(--rf2-surface-muted);
+  border: 1px solid var(--rf2-line, #e2e8f0);
+  color: var(--rf2-ink);
+}
+
+.rf2-intv__profile-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+  padding: 9px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(37, 99, 235, 0.22);
+  background: rgba(37, 99, 235, 0.055);
+  color: var(--rf2-action);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background-color 140ms ease, border-color 140ms ease;
+}
+
+.rf2-intv__profile-btn:hover {
+  background: rgba(37, 99, 235, 0.11);
+  border-color: rgba(37, 99, 235, 0.35);
+}
+
+.rf2-intv__profile-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Preparation Checklist */
+.rf2-intv__prep-count {
+  font-size: 11.5px;
+  color: var(--rf2-action);
+  font-weight: 600;
+}
+
+.rf2-intv__prep-bar {
+  width: 100%;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--rf2-surface-muted);
+  overflow: hidden;
+}
+
+.rf2-intv__prep-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--rf2-action);
+  transition: width 180ms ease;
+}
+
+.rf2-intv__prep-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.rf2-intv__prep-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 12.5px;
+  color: var(--rf2-ink);
+  cursor: pointer;
+  user-select: none;
+}
+
+.rf2-intv__prep-item input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  accent-color: var(--rf2-action);
+  cursor: pointer;
+}
+
+/* Recent Feedback */
+.rf2-intv__feedback-list {
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+
+.rf2-intv__feedback-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 11px;
+  border-radius: 10px;
+  background: var(--rf2-surface-muted);
+  border: 1px solid var(--rf2-line, #e2e8f0);
+}
+
+.rf2-intv__feedback-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.rf2-intv__feedback-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.rf2-intv__feedback-author {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--rf2-ink);
+}
+
+.rf2-intv__feedback-rating {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1.5px 7px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 700;
+  background: rgba(22, 163, 74, 0.12);
+  color: #15803d;
+}
+
+.rf2-intv__feedback-meta {
+  font-size: 11px;
+  color: var(--rf2-ink-muted);
+  margin-bottom: 4px;
+}
+
+.rf2-intv__feedback-text {
+  margin: 0;
+  font-size: 11.75px;
+  color: var(--rf2-ink);
+  line-height: 1.45;
+}
+
+@media (max-width: 1180px) {
+  .rf2-intv__kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .rf2-intv__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .rf2-intv {
+    padding: 14px 14px 28px;
+  }
+  .rf2-intv__kpis {
+    grid-template-columns: 1fr;
+  }
+  .rf2-intv__week-days,
+  .rf2-intv__cal-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
