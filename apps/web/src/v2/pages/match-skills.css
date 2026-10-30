@@ -86,7 +86,7 @@
   padding: 6px 14px;
   border: 1px solid var(--rf2-divider);
   border-radius: 10px;
-  background: var(--rf2-surface);
+  background: var(--rf2-card);
   transition: border-color 120ms ease, box-shadow 120ms ease;
 }
 
@@ -318,7 +318,7 @@
   padding: 6px 12px 6px 34px;
   border: 1px solid var(--rf2-divider);
   border-radius: 8px;
-  background: var(--rf2-surface);
+  background: var(--rf2-card);
   color: var(--rf2-ink);
   font: inherit;
   font-size: 13px;
@@ -330,7 +330,7 @@
   padding: 6px 28px 6px 12px;
   border: 1px solid var(--rf2-divider);
   border-radius: 8px;
-  background: var(--rf2-surface);
+  background: var(--rf2-card);
   color: var(--rf2-ink);
   font: inherit;
   font-size: 12.5px;
@@ -346,7 +346,7 @@
   padding: 6px 12px;
   border: 1px solid var(--rf2-divider);
   border-radius: 8px;
-  background: var(--rf2-surface);
+  background: var(--rf2-card);
   color: var(--rf2-action);
   font: inherit;
   font-size: 12.5px;
@@ -706,7 +706,7 @@
   padding: 5px 10px;
   border: 1px solid var(--rf2-divider);
   border-radius: 8px;
-  background: var(--rf2-surface);
+  background: var(--rf2-card);
   color: var(--rf2-action);
   font: inherit;
   font-size: 12px;

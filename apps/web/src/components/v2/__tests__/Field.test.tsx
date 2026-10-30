@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import { Search } from 'lucide-react';
 import { InputV2, SelectV2 } from '..';
+import { GlobalSelectEnhancer } from '../../ui/GlobalSelectEnhancer';
 import { axeViolations } from './axe';
 
 describe('InputV2', () => {
@@ -98,5 +99,32 @@ describe('SelectV2', () => {
     expect(seen).toEqual(['inv', 'scr']);
     expect(select).toHaveValue('scr');
     expect(await axeViolations(container)).toEqual([]);
+  });
+});
+
+
+describe('GlobalSelectEnhancer', () => {
+  it('enhances plain native select elements across the app to open the custom rf2-select__menu listbox', async () => {
+    const seen: string[] = [];
+    render(
+      <div>
+        <GlobalSelectEnhancer />
+        <select aria-label="Filter stage" defaultValue="" onChange={(e) => seen.push(e.target.value)}>
+          <option value="">All stages</option>
+          <option value="Screening">Screening</option>
+          <option value="Interview">Interview</option>
+        </select>
+      </div>,
+    );
+    const select = screen.getByLabelText('Filter stage');
+    await userEvent.click(select);
+    expect(screen.getByRole('listbox', { name: 'Filter stage' })).toBeInTheDocument();
+    expect(select).toHaveAttribute('data-rf2-select-open', 'true');
+
+    await userEvent.click(screen.getByRole('option', { name: 'Interview' }));
+    expect(seen).toEqual(['Interview']);
+    expect(select).toHaveValue('Interview');
+    expect(screen.queryByRole('listbox', { name: 'Filter stage' })).not.toBeInTheDocument();
+    expect(select).not.toHaveAttribute('data-rf2-select-open');
   });
 });

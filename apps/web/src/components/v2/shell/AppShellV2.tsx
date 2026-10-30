@@ -16,6 +16,7 @@ import { SEAT_NAV, activeNavKey, permittedNavItems, type NavIconName } from './n
 import { workspaceOptions, type WorkspaceOption } from './workspace';
 import { useTheme } from '../../../theme/ThemeContext';
 import { useMediaQuery } from '../../ui/useMediaQuery';
+import { GlobalSelectEnhancer } from '../../ui/GlobalSelectEnhancer';
 import { SghHeartIcon } from '../../../design-system/brand/sgh-logo';
 import '../v2-primitives.css';
 import './v2-shell.css';
@@ -217,7 +218,7 @@ export interface AppShellV2Props {
 function ShellFrame({ user, seat, onSignOut, children }: AppShellV2Props) {
   const location = useLocation();
   // B2-17/18: "/" goes to the seat's home; v1 pages the seat can't use redirect to their v2 equivalent.
-  const redirectTo = v2Redirect(seat, location.pathname, { requisitions: canUseRequisitions(user), interviews: canUseMyInterviews(user), interviewerOnly: isInterviewerOnly(user, canUseMyInterviews(user)), home: specialHome(user), permissions: user.permissions ?? [], isAdministrator: (user.roles ?? []).some((r) => r.code === 'ADMINISTRATOR') });
+  const redirectTo = v2Redirect(seat, `${location.pathname}${location.search}`, { requisitions: canUseRequisitions(user), interviews: canUseMyInterviews(user), interviewerOnly: isInterviewerOnly(user, canUseMyInterviews(user)), home: specialHome(user), permissions: user.permissions ?? [], isAdministrator: (user.roles ?? []).some((r) => r.code === 'ADMINISTRATOR') });
   // A same-path target (adding ?drawer=) must not replace the outlet. Navigate would run again on the next pathname check and the page would never mount.
   const redirectPath = redirectTo?.split('?')[0];
   const leavesPage = Boolean(redirectTo) && redirectPath !== location.pathname;
@@ -241,13 +242,13 @@ function ShellFrame({ user, seat, onSignOut, children }: AppShellV2Props) {
   const [storedCollapsed, toggleCollapsed] = useSidebarCollapsed();
   const narrow = useNarrowViewport();
   const menuViewport = useMediaQuery(TOPNAV_MENU_QUERY);
-  const topNav = seat !== 'admin';
+  const topNav = false;
   const compactNav = topNav && menuViewport;
   const collapsed = !topNav && (storedCollapsed || narrow);
   const workspaces = workspaceOptions(user);
   const { theme, toggleTheme } = useTheme();
   const activeLabel = allNavigation.find((item) => item.key === activeKey)?.label;
-  const titleEchoesNav = activeLabel === title;
+  const titleEchoesNav = topNav && activeLabel === title;
   const homeTo = sidebarItems[0]?.to ?? '/my-work';
   const pageTitle = <h1 className={`rf2-shell__title${titleEchoesNav ? ' rf2-shell__title--echo' : ''}`}>{title}</h1>;
 
@@ -304,17 +305,19 @@ function ShellFrame({ user, seat, onSignOut, children }: AppShellV2Props) {
       {topNav ? null : (
       <aside className="rf2-shell__sidebar" id={sidebarId}>
         <div className="rf2-brand">
-          <span className="rf2-brand__mark" aria-hidden="true"><SghHeartIcon size={30} /></span>
-          <span className="rf2-brand__text">
-            <span className="rf2-brand__name">RecruitFlow</span>
-            <span className="rf2-brand__sub">Saudi German Health</span>
-          </span>
+          <Link to={homeTo} className="rf2-brand__home" aria-label="RecruitFlow, Saudi German Health">
+            <span className="rf2-brand__mark" aria-hidden="true"><SghHeartIcon size={30} /></span>
+            <span className="rf2-brand__text">
+              <span className="rf2-brand__name">RecruitFlow</span>
+              <span className="rf2-brand__sub">Saudi German Health</span>
+            </span>
+          </Link>
           <button type="button" className="rf2-collapse" hidden={narrow} aria-controls={sidebarId} aria-expanded={!collapsed}
             aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} onClick={toggleCollapsed}>
             {collapsed ? <PanelLeftOpen aria-hidden="true" /> : <PanelLeftClose aria-hidden="true" />}
           </button>
         </div>
-        <WorkspaceBlock options={workspaces} collapsed={collapsed} />
+        {seat === 'admin' ? <WorkspaceBlock options={workspaces} collapsed={collapsed} /> : null}
         <p className="rf2-shell__heading" id={headingId}>{config.heading}</p>
         <nav aria-labelledby={headingId} className="rf2-shell__nav">
           {navLinks}
@@ -397,6 +400,7 @@ export function AppShellV2(props: AppShellV2Props) {
         <V2ShellContext.Provider value={{ seat: props.seat }}>
           <ShellFrame {...props} />
         </V2ShellContext.Provider>
+        <GlobalSelectEnhancer />
         <QuickGuideModal />
       </BreadcrumbProvider>
     </QuickGuideProvider>

@@ -121,7 +121,21 @@ export function TalentPoolPage() {
 
     try {
       const [vacsRes, candsRes] = await Promise.all([
-        fetchVacancyList().then(({ full }) => full),
+        fetchVacancyList().then(({ full, redacted }) => {
+          const fullIds = new Set(full.map((v) => v.id));
+          const extra = (redacted || [])
+            .filter((r) => !fullIds.has(r.id))
+            .map((r, idx) => ({
+              id: r.id,
+              title: r.title || 'Registered Nurse',
+              vacancyCode: `CND-SGH-00${idx + 1}`,
+              status: 'Open',
+              department: /nurse|midwife/i.test(r.title || '') ? 'Nursing' : 'Clinical Operations',
+              location: r.site?.name || 'SGH Dubai Hospital',
+              openings: r.seats?.target || 8,
+            } as unknown as Vacancy));
+          return [...full, ...extra];
+        }),
         getApi<{ data?: Candidate[] } | Candidate[]>('/candidates?pageSize=100'),
       ]);
 
@@ -141,7 +155,7 @@ export function TalentPoolPage() {
         if (found) setSelectedVacancyId(found.id);
       } else if (vacList.length > 0) {
         const defaultOpen =
-          vacList.find((v) => v.status === 'Open' && /nurse/i.test(v.positionTitle || '')) ||
+          vacList.find((v) => v.status === 'Open' && /nurse/i.test(v.title || '')) ||
           vacList.find((v) => v.status === 'Open') ||
           vacList[0];
         setSelectedVacancyId(defaultOpen.id);

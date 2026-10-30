@@ -9,30 +9,31 @@
   --rf2-action-hover: var(--color-action-strong);
   --rf2-action-pressed: var(--color-action-strong);
   --rf2-canvas: var(--color-canvas);
-  --rf2-canvas-glow: linear-gradient(139deg, #dfeaf2 0%, #e8f5f4 71%);
-  --rf2-glow-cyan: radial-gradient(circle, rgba(0, 163, 224, 0.38) 0%, rgba(0, 163, 224, 0) 68%);
-  --rf2-glow-emerald: radial-gradient(circle, rgba(16, 185, 129, 0.3) 0%, rgba(16, 185, 129, 0) 68%);
-  --rf2-glass-nav: rgba(255, 255, 255, 0.56);
-  --rf2-glass-card: rgba(255, 255, 255, 0.86);
-  --rf2-glass-line: rgba(255, 255, 255, 0.88);
-  --rf2-well: rgba(230, 239, 245, 0.8);
-  --rf2-neo-raise: -4px -4px 14px rgba(255, 255, 255, 0.92), 6px 8px 18px rgba(145, 171, 189, 0.32);
-  --rf2-neo-raise-sm: -3px -3px 7px rgba(255, 255, 255, 0.96), 3px 4px 8px rgba(145, 170, 191, 0.38);
-  --rf2-neo-inset: inset -3px -3px 5px rgba(255, 255, 255, 0.94), inset 3px 3px 6px rgba(161, 183, 199, 0.38);
+  /* Compatibility aliases keep existing consumers on the same solid surfaces. */
+  --rf2-canvas-glow: var(--color-canvas);
+  --rf2-glow-cyan: transparent;
+  --rf2-glow-emerald: transparent;
+  --rf2-glass-nav: var(--color-surface);
+  --rf2-glass-card: var(--color-surface);
+  --rf2-glass-line: var(--color-border);
+  --rf2-well: var(--color-field);
+  --rf2-neo-raise: none;
+  --rf2-neo-raise-sm: none;
+  --rf2-neo-inset: none;
   --rf2-card: var(--rf2-glass-card);
-  --rf2-border: var(--color-border-strong);
+  --rf2-border: var(--color-ink-400);
   --rf2-divider: var(--color-border);
   --rf2-nav: var(--rf2-glass-nav);
   --rf2-nav-text: var(--color-ink-700);
   --rf2-on-nav: var(--color-ink-950);
   --rf2-nav-hover: var(--color-action-soft);
-  --rf2-nav-selected: var(--gradient-selection);
-  --rf2-brand-action: linear-gradient(135deg, var(--color-action), var(--color-action-secondary));
+  --rf2-nav-selected: var(--color-action-soft);
+  --rf2-brand-action: var(--color-action);
   /* The fixed SGH emblem keeps its original colours on a white logo plate in either mode. */
   --rf2-brand-plate: #ffffff;
   --rf2-success: var(--color-success);
   --rf2-warning: var(--color-warning);
-  --rf2-danger: var(--color-danger);
+  --rf2-danger: var(--color-danger-strong);
   --rf2-info: var(--color-info);
   --rf2-success-tint: var(--color-success-soft);
   --rf2-warning-tint: var(--color-warning-soft);
@@ -66,33 +67,33 @@
   --rf2-space-6: 48px;
   --rf2-space-8: 64px;
 
-  --rf2-radius-control: 12px;
-  --rf2-radius-card: 20px;
-  --rf2-radius-drawer: 20px;
+  --rf2-radius-control: 8px;
+  --rf2-radius-card: 10px;
+  --rf2-radius-drawer: 10px;
   --rf2-radius-pill: 9999px;
 
-  /* Glass neo: raised panels and inset wells, from the approved desktop frames. */
+  /* Elevation belongs to floating surfaces, not working rows or cards. */
   --rf2-shadow-none: none;
-  --rf2-shadow-menu: var(--rf2-neo-raise);
-  --rf2-shadow-overlay: var(--rf2-neo-raise);
+  --rf2-shadow-menu: var(--shadow-md);
+  --rf2-shadow-overlay: var(--shadow-float);
   --rf2-scrim: var(--color-overlay);
-  /* Drawer only. Glass cards stay translucent; this panel must hide the page. */
+  /* Drawers use an opaque elevated surface. */
   --rf2-text-drawer-title: 16px;
   --rf2-leading-drawer-title: 22px;
   --rf2-weight-drawer-title: 600;
   --rf2-drawer-width: 560px;
-  --rf2-drawer-surface: #ffffff;
-  --rf2-drawer-field: #e6eff5;
+  --rf2-drawer-surface: var(--color-surface-elevated);
+  --rf2-drawer-field: var(--color-field);
   --rf2-drawer-line: var(--rf2-glass-line);
-  --rf2-drawer-shadow: var(--rf2-neo-raise);
-  --rf2-drawer-scrim: rgba(11, 19, 43, 0.4);
+  --rf2-drawer-shadow: var(--rf2-shadow-overlay);
+  --rf2-drawer-scrim: var(--color-overlay);
 
   --rf2-focus-width: 2px;
   --rf2-focus-offset: 2px;
   --rf2-focus-color: var(--color-action-focus);
   --rf2-focus-ring: 0 0 0 var(--rf2-focus-offset) var(--rf2-card), 0 0 0 calc(var(--rf2-focus-offset) + var(--rf2-focus-width)) var(--rf2-focus-color);
 
-  --rf2-motion-fast: 150ms;
+  --rf2-motion-fast: 120ms;
   --rf2-motion-standard: 200ms;
   --rf2-ease: cubic-bezier(0.2, 0, 0, 1);
 
@@ -111,21 +112,7 @@
 
 html[data-ui='v2'][data-theme='dark'],
 html.dark[data-ui='v2'] {
-  --rf2-canvas-glow: linear-gradient(160deg, #0b1020 0%, #0e1c2e 55%, #10241f 100%);
-  --rf2-glow-cyan: radial-gradient(circle, rgba(56, 189, 248, 0.22) 0%, rgba(56, 189, 248, 0) 68%);
-  --rf2-glow-emerald: radial-gradient(circle, rgba(16, 185, 129, 0.18) 0%, rgba(16, 185, 129, 0) 68%);
-  --rf2-glass-nav: rgba(15, 26, 46, 0.72);
-  --rf2-glass-card: rgba(17, 32, 54, 0.88);
-  --rf2-glass-line: rgba(255, 255, 255, 0.14);
-  --rf2-well: rgba(8, 16, 32, 0.55);
-  --rf2-neo-raise: -4px -4px 14px rgba(255, 255, 255, 0.04), 8px 10px 22px rgba(0, 0, 0, 0.45);
-  --rf2-neo-raise-sm: -2px -2px 6px rgba(255, 255, 255, 0.05), 3px 4px 10px rgba(0, 0, 0, 0.4);
-  --rf2-neo-inset: inset -2px -2px 4px rgba(255, 255, 255, 0.06), inset 3px 3px 6px rgba(0, 0, 0, 0.45);
-  --rf2-drawer-surface: #15283f;
-  --rf2-drawer-field: #11263b;
-  --rf2-drawer-line: rgba(155, 205, 230, 0.22);
-  --rf2-drawer-shadow: -4px -4px 14px rgba(100, 131, 163, 0.12), 6px 8px 18px rgba(2, 8, 20, 0.46);
-  --rf2-drawer-scrim: rgba(11, 19, 43, 0.58);
+  --rf2-border: var(--color-border-strong);
 }
 
 @media (prefers-reduced-transparency: reduce) {
@@ -141,6 +128,12 @@ html.dark[data-ui='v2'] {
     --rf2-motion-fast: 0ms;
     --rf2-motion-standard: 0ms;
   }
+}
+
+/* ThemeContext writes this attribute for the in-app reduced-motion toggle. */
+html[data-reduced-motion='true'] {
+  --rf2-motion-fast: 0ms;
+  --rf2-motion-standard: 0ms;
 }
 
 [data-ui='v2'] .rf2-num,
@@ -159,6 +152,113 @@ html.dark[data-ui='v2'] {
 
 /* SGH accents stay vivid while small button labels keep AA contrast in either mode. */
 [data-ui='v2'] .sgh-btn-gradient {
-  background-image: linear-gradient(135deg, var(--color-action), var(--color-action-secondary));
+  background-image: none;
+  background-color: var(--color-action);
   color: var(--rf2-on-action);
+}
+
+
+/* ---------- Universal Enhanced Dropdown List (.rf2-select__menu) ---------- */
+.rf2-select__menu {
+  position: fixed;
+  z-index: 2200;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  overflow: auto;
+  border: 1px solid var(--rf2-divider, var(--color-border));
+  border-radius: 12px;
+  background: var(--rf2-card, var(--color-surface));
+  box-shadow: 0 12px 32px -4px rgba(15, 23, 42, 0.14), 0 4px 12px -2px rgba(15, 23, 42, 0.06);
+  font-family: var(--rf2-font, var(--font-sans));
+  color: var(--rf2-ink, var(--color-ink-950));
+}
+
+.rf2-select__menu:focus,
+.rf2-select__menu:focus-visible,
+[data-ui='v2'] .rf2-select__menu:focus,
+[data-ui='v2'] .rf2-select__menu:focus-visible {
+  outline: none;
+}
+
+.rf2-select__option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--rf2-ink, var(--color-ink-950));
+  font: inherit;
+  font-size: var(--rf2-text-body, 14px);
+  line-height: var(--rf2-leading-body, 21px);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 100ms ease, box-shadow 100ms ease;
+}
+
+.rf2-select__option span {
+  flex: 1;
+  min-width: 0;
+}
+
+.rf2-select__option svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  color: var(--rf2-action, var(--color-action));
+}
+
+.rf2-select__option[data-active='true'] {
+  background: var(--rf2-neutral-tint, var(--color-surface-muted));
+  box-shadow: inset 0 0 0 1.5px var(--rf2-action, var(--color-action));
+}
+
+.rf2-select__option[aria-selected='true'] {
+  background: var(--rf2-info-tint, var(--color-info-soft));
+  color: var(--rf2-action, var(--color-action));
+  font-weight: 600;
+}
+
+.rf2-select__option[aria-disabled='true'] {
+  color: var(--rf2-muted, var(--color-ink-500));
+  cursor: not-allowed;
+}
+
+.rf2-select__empty {
+  margin: 0;
+  padding: 8px 12px;
+  color: var(--rf2-muted, var(--color-ink-500));
+  font-size: var(--rf2-text-label, 13px);
+}
+
+[data-ui='v2'] select:not([multiple]):not([size]):not(.rf2-field__control):not(.rf2-ms__native-select) {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 32px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 14px 14px;
+  cursor: pointer;
+}
+
+[data-ui='v2'] select[data-rf2-select-open='true']:not([multiple]):not([size]):not(.rf2-field__control):not(.rf2-ms__native-select) {
+  border-color: var(--rf2-action) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--rf2-action) 16%, transparent);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%230284c7' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m18 15-6-6-6 6'/%3E%3C/svg%3E");
+}
+
+[data-ui='v2'] .rf2-ms__select-box:has(select[data-rf2-select-open='true']) {
+  border-color: var(--rf2-action) !important;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--rf2-action) 16%, transparent);
+}
+
+[data-ui='v2'] .rf2-ms__select-box:has(select[data-rf2-select-open='true']) .rf2-ms__select-chevron svg {
+  transform: rotate(180deg);
+  color: var(--rf2-action);
 }
