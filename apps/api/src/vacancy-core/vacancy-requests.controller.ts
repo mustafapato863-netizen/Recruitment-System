@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -8,8 +9,11 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import type { AuthUser } from '@recruitflow/contracts';
 // DTO classes must remain runtime imports so Nest can reflect their metadata.
 /* eslint-disable @typescript-eslint/consistent-type-imports */
@@ -22,6 +26,7 @@ import {
   UpdateRequisitionTargetDto,
 } from './vacancy-core.dto';
 import { VacancyCoreService } from './vacancy-core.service';
+import { VacancyDocumentsService } from './vacancy-documents.service';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { TenantScopedGuard } from '../common/guards/tenant-scoped.guard';
@@ -33,7 +38,10 @@ import { AuditAction } from '../common/decorators/audit-action.decorator';
 @UseGuards(JwtAuthGuard)
 @Controller('vacancy-requests')
 export class VacancyRequestsController {
-  constructor(private readonly vacancyCoreService: VacancyCoreService) {}
+  constructor(
+    private readonly vacancyCoreService: VacancyCoreService,
+    private readonly vacancyDocuments: VacancyDocumentsService,
+  ) {}
 
   @Get('context')
   @RequirePermissions('VACANCY_REQUEST_CREATE')
@@ -206,5 +214,17 @@ export class VacancyRequestsController {
   ) {
     // Deprecated alias of /activate (B3).
     return this.vacancyCoreService.convertToVacancy(id, user.organizationId, user.userId);
+  }
+
+  @Post(':id/jd')
+  @RequireAnyPermissions('VACANCY_REQUEST_CREATE', 'VACANCY_MANAGE')
+  @UseInterceptors(FileInterceptor('file'))
+  uploadJd(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @UploadedFile() file?: { originalname: string; mimetype: string; size: number; buffer: Buffer },
+  ) {
+    if (!file) throw new BadRequestException('A PDF, DOCX, or text file is required.');
+    return this.vacancyDocuments.uploadRequisitionJd(user.organizationId, id, file, user);
   }
 }

@@ -26,6 +26,7 @@ import {
 import { useAuth } from '../../auth/AuthContext';
 import { ButtonV2, EmptyStateV2, ForbiddenStateV2, InputV2, SelectV2, SkeletonV2, StatusChip, type StatusTone } from '../../components/v2';
 import { fetchOpenJobs, type JobStatus, type MyJobRow, type OpenJobs, type OtherJobRow } from '../api/jobs';
+import { JdReviewDrawer } from '../drawers/JdReviewDrawer';
 import './jobs.css';
 
 export const STATUS_TONE: Record<JobStatus, StatusTone> = { Open: 'success', 'Partially Filled': 'success', 'On Hold': 'warning', Filled: 'info', Closed: 'neutral' };
@@ -80,6 +81,7 @@ export function OpenJobsV2() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [state, setState] = useState<{ kind: 'loading' } | { kind: 'ready'; data: OpenJobs } | { kind: 'error'; message: string } | { kind: 'forbidden' }>({ kind: 'loading' });
   const [attempt, setAttempt] = useState(0);
+  const [jdJob, setJdJob] = useState<{ id: string; title: string } | null>(null);
   const [dept, setDept] = useState('');
   const q = searchParams.get('q') ?? '';
   const statusParam = searchParams.get('status');
@@ -220,7 +222,7 @@ export function OpenJobsV2() {
                 />
                 <span className="rf2-open__empty-dismiss" aria-hidden="true"><X /></span>
               </div>
-            ) : view === 'cards' ? <JobCards rows={rows} returnTo={activeFilterReturn} /> : <div className="rf2-jscroll"><JobsTable rows={rows} returnTo={activeFilterReturn} /></div>}
+            ) : view === 'cards' ? <JobCards rows={rows} returnTo={activeFilterReturn} onCalibrateJd={setJdJob} /> : <div className="rf2-jscroll"><JobsTable rows={rows} returnTo={activeFilterReturn} onCalibrateJd={setJdJob} /></div>}
           </section>
 
           {state.data.othersError ? (
@@ -258,6 +260,18 @@ export function OpenJobsV2() {
             )
           ) : null}
         </>
+      ) : null}
+      {jdJob ? (
+        <JdReviewDrawer
+          isOpen={true}
+          onClose={() => setJdJob(null)}
+          vacancyId={jdJob.id}
+          title={jdJob.title}
+          onLocked={() => {
+            setJdJob(null);
+            setAttempt((n) => n + 1);
+          }}
+        />
       ) : null}
     </div>
   );
@@ -297,7 +311,7 @@ function jobMark(title: string, department: string | null): LucideIcon {
   return Briefcase;
 }
 
-function JobCards({ rows, returnTo }: { rows: MyJobRow[]; returnTo: string | null }) {
+function JobCards({ rows, returnTo, onCalibrateJd }: { rows: MyJobRow[]; returnTo: string | null; onCalibrateJd?: (job: { id: string; title: string }) => void }) {
   return (
     <ul className="rf2-jcards" aria-labelledby="my-jobs-h">
       {rows.map((j) => {
@@ -336,6 +350,17 @@ function JobCards({ rows, returnTo }: { rows: MyJobRow[]; returnTo: string | nul
                   {filled > 0 ? <span className="rf2-jcard__bar" aria-hidden="true"><span style={{ width: `${filled}%` }} /></span> : null}
                 </p>
                 <div className="rf2-jcard__act">
+                  {onCalibrateJd ? (
+                    <ButtonV2
+                      kind="secondary"
+                      size="md"
+                      icon={<FileText />}
+                      onClick={() => onCalibrateJd({ id: j.id, title: j.title })}
+                      aria-label={`Calibrate JD and ATS criteria: ${j.title}`}
+                    >
+                      JD & ATS
+                    </ButtonV2>
+                  ) : null}
                   <Link className="rf2-btn rf2-btn--primary rf2-btn--md" to={pipelineHref(j.id, returnTo)} aria-label={`Open pipeline: ${j.title}`}>
                     Open pipeline <ArrowRight aria-hidden="true" />
                   </Link>
@@ -549,7 +574,7 @@ function OtherTable({ rows, returnTo }: { rows: OtherJobRow[]; returnTo: string 
   );
 }
 
-function JobsTable({ rows, returnTo }: { rows: MyJobRow[]; returnTo: string | null }) {
+function JobsTable({ rows, returnTo, onCalibrateJd }: { rows: MyJobRow[]; returnTo: string | null; onCalibrateJd?: (job: { id: string; title: string }) => void }) {
   return (
     <table className="rf2-jtable rf2-jtable--mine" aria-labelledby="my-jobs-h">
       <thead><tr><th scope="col">Job</th><th scope="col">Site</th><th scope="col">Seats</th><th scope="col">Due</th><th scope="col">Pipeline</th><th scope="col">Status</th><th scope="col"><span className="rf2-sr-only">Action</span></th></tr></thead>
@@ -575,6 +600,17 @@ function JobsTable({ rows, returnTo }: { rows: MyJobRow[]; returnTo: string | nu
             </td>
             <td data-label="Status"><StatusChip tone={STATUS_TONE[j.status]} label={STATUS_LABEL[j.status]} /></td>
             <td className="rf2-jtable__act">
+              {onCalibrateJd ? (
+                <ButtonV2
+                  kind="secondary"
+                  size="md"
+                  icon={<FileText />}
+                  onClick={() => onCalibrateJd({ id: j.id, title: j.title })}
+                  aria-label={`Calibrate JD and ATS criteria: ${j.title}`}
+                >
+                  JD & ATS
+                </ButtonV2>
+              ) : null}
               <Link className={`rf2-btn rf2-btn--${i === 0 ? 'primary' : 'secondary'} rf2-btn--md`} to={pipelineHref(j.id, returnTo)} aria-label={`Open pipeline: ${j.title}`}>
                 <ArrowRight aria-hidden="true" /> Open pipeline
               </Link>

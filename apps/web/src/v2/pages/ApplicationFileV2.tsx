@@ -2,7 +2,9 @@ import type React from 'react';
 import { isScorecardSubmitted } from '../../utils/scorecardStatus';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, CalendarDays, Check, CircleCheck, Clock, Download, FileText, RotateCw, Send, Star, XCircle } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Briefcase, CalendarDays, Check, CircleCheck, Clock, Download, FileText, RotateCw, Send, Star, XCircle } from 'lucide-react';
+import { AtsMatchCard } from '../components/AtsMatchCard';
+import { SuggestJobsDrawer } from '../drawers/SuggestJobsDrawer';
 import { ApiError } from '../../api/client';
 import { ButtonV2 } from '../../components/v2/Button';
 import { StatusChip } from '../../components/v2/StatusChip';
@@ -511,6 +513,7 @@ export function ApplicationFileV2({ load = loadApplicationFile, mode = 'owner' }
   const [noteSignal, setNoteSignal] = useState(0);
   const [params, setParams] = useSearchParams();
   const [contactOpen, setContactOpen] = useState(() => params.get('contact') === '1');
+  const [suggestJobsOpen, setSuggestJobsOpen] = useState(false);
   const [state, setState] = useState<Load>({ kind: 'loading', id });
   const [attempt, setAttempt] = useState(0);
   const [messages, setMessages] = useState<SectionState<FileMessages>>({ status: 'loading' });
@@ -822,6 +825,7 @@ export function ApplicationFileV2({ load = loadApplicationFile, mode = 'owner' }
                       <p className="rf2-file__muted" id="file-later-hint">Locked actions wait for the current step. They do not move the file.</p>
                       <ButtonV2 kind="secondary" size="md" icon={<FileText />} onClick={focusNote}>Note</ButtonV2>
                       <ButtonV2 kind="secondary" size="md" icon={<FileText />} aria-pressed={showDocuments} onClick={openDocuments}>Documents</ButtonV2>
+                      <ButtonV2 kind="secondary" size="md" icon={<Briefcase />} onClick={() => { setMoreOpen(false); setSuggestJobsOpen(true); }}>Suggest roles</ButtonV2>
                       {!closed ? (
                         <>
                           <ButtonV2 kind="secondary" size="md" icon={<CalendarDays />} disabled={facts.unknown.interviews || ((app.stage === 'Applied' || app.stage === 'Screening') && facts.unknown.screening)} onClick={() => openDrawer('schedule')}>Schedule</ButtonV2>
@@ -873,6 +877,7 @@ export function ApplicationFileV2({ load = loadApplicationFile, mode = 'owner' }
               ) : null}
             </section>
             <EvidenceCard items={evidence} known={evidenceKnown} />
+            <AtsMatchCard applicationId={app.id} onSuggestJobs={app.candidateId ? () => setSuggestJobsOpen(true) : undefined} />
             {manager ? <ScorecardFit file={file} /> : null}
             {showPay && screeningKnown ? (
               <section className="rf2-card" aria-labelledby="salary-h">
@@ -935,6 +940,14 @@ export function ApplicationFileV2({ load = loadApplicationFile, mode = 'owner' }
       {decideId ? (
         <OfferDecisionDrawer offerId={decideId} ownerName={app.primaryRecruiterName ?? null} showPay={showPay} onClose={closeDrawer}
           onDone={(m) => { setToast(m); done(); }} />
+      ) : null}
+      {suggestJobsOpen && app.candidateId ? (
+        <SuggestJobsDrawer
+          isOpen={suggestJobsOpen}
+          onClose={() => setSuggestJobsOpen(false)}
+          candidateId={app.candidateId}
+          candidateName={name}
+        />
       ) : null}
     </div>
   );

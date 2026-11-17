@@ -1,3 +1,5 @@
+import type { InterviewScorecardCriterionRating } from './ats-engine.ts';
+
 export interface HealthResponse {
   status: 'ok';
   service: string;
@@ -1234,6 +1236,7 @@ export interface InterviewScorecardItem {
   /** TODO(E3): deprecated mirror of status === Submitted; removed once Frontend reads status. */
   isLocked: boolean;
   submittedAt: string;
+  ratings?: InterviewScorecardCriterionRating[];
 }
 
 export interface Interview {
@@ -2416,3 +2419,5 @@ export interface ResultsResponse {
     details?: ResultsResponse['details'];
   }>;
 }
+
+export * from './ats-engine.ts';

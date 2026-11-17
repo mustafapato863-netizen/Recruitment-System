@@ -830,6 +830,33 @@ export class InterviewsService {
       ? await this.prisma.interviewScorecard.update({ where: { id: latest.id }, data: fields, include: { interviewer: true } })
       : await this.prisma.interviewScorecard.create({ data: { interviewId, interviewerId, revision: 1, ...fields }, include: { interviewer: true } });
 
+    if (dto.criteriaRatings && dto.criteriaRatings.length > 0 && this.prisma.interviewScorecardRating) {
+      for (const r of dto.criteriaRatings) {
+        await this.prisma.interviewScorecardRating.upsert({
+          where: {
+            scorecardId_criterionKey: {
+              scorecardId: scorecard.id,
+              criterionKey: r.criterionKey,
+            },
+          },
+          update: {
+            criterionName: r.criterionName,
+            category: r.category || 'SKILL',
+            rating: r.rating,
+            comment: r.comment || null,
+          },
+          create: {
+            scorecardId: scorecard.id,
+            criterionKey: r.criterionKey,
+            criterionName: r.criterionName,
+            category: r.category || 'SKILL',
+            rating: r.rating,
+            comment: r.comment || null,
+          },
+        });
+      }
+    }
+
     // B6: scorecard is committed; derive skill evidence in the background (never blocks/throws).
     void this.matching?.deriveEvidenceInBackground(organizationId, { interviewId }, interviewerId, 'scorecard submit');
 
@@ -844,6 +871,19 @@ export class InterviewsService {
       });
     }
 
+    const savedRatings = this.prisma.interviewScorecardRating
+      ? await this.prisma.interviewScorecardRating.findMany({
+          where: { scorecardId: scorecard.id },
+          select: { criterionKey: true, criterionName: true, category: true, rating: true, comment: true },
+        })
+      : (dto.criteriaRatings?.map((r) => ({
+          criterionKey: r.criterionKey,
+          criterionName: r.criterionName,
+          category: r.category || 'SKILL',
+          rating: r.rating,
+          comment: r.comment || null,
+        })) ?? []);
+
     return {
       id: scorecard.id,
       interviewId: scorecard.interviewId,
@@ -854,6 +894,7 @@ export class InterviewsService {
       strengths: scorecard.strengths,
       concerns: scorecard.concerns,
       notes: scorecard.notes,
+      ratings: savedRatings as unknown as any,
       ...scorecardState(scorecard),
     };
   }

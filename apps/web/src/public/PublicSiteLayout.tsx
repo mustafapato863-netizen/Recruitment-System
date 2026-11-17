@@ -12,7 +12,7 @@ export function PublicSiteLayout({
   children: ReactNode;
 }) {
   return (
-    <div className="min-h-screen bg-rf-canvas text-rf-ink">
+    <div className="min-h-screen bg-rf-canvas text-rf-ink" data-ui="v2">
       <header className="border-b border-rf-border-subtle bg-rf-surface/95 backdrop-blur">
         <div className="mx-auto flex w-full max-w-[1120px] items-center justify-between gap-4 px-4 py-4 sm:px-6">
           <Link

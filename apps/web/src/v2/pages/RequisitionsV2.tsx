@@ -12,6 +12,7 @@ import {
   type Grade, type Person, type ReqContext, type ReqStatus, type Requisition,
 } from '../api/requisitions';
 import { RequisitionDrawer, TargetDrawer } from '../drawers/RequisitionDrawers';
+import { JdReviewDrawer } from '../drawers/JdReviewDrawer';
 import { EditRequisitionView, RequisitionDetailView } from './RequisitionViews';
 import './jobs.css';
 import './requisitions.css';
@@ -21,7 +22,7 @@ export { EditRequisitionView, RequisitionDetailView } from './RequisitionViews';
 type Data = { rows: Requisition[]; ctx: ReqContext | null; people: Person[] | null; grades: Grade[] | null };
 type StatusFilter = 'all' | 'Filled' | ReqStatus;
 type SortKey = 'due' | 'due-desc' | 'created' | 'title';
-type DrawerMode = 'target' | 'detail' | 'edit';
+type DrawerMode = 'target' | 'detail' | 'edit' | 'jd';
 
 const STATUS_FILTERS: Array<{ value: StatusFilter; label: string }> = [
   { value: 'all', label: 'All statuses' },
@@ -139,7 +140,10 @@ function overflowActions(r: Requisition, title: string, canActivate: boolean): M
     const label = hasTarget(r) ? 'Update target' : 'Add target';
     items.push({ label, aria: `${label}: ${title}`, mode: 'target' });
   }
-  if (r.status !== 'Cancelled' && r.status !== 'Rejected') items.push({ label: 'Close', aria: `Close requisition: ${title}`, mode: 'drawer' });
+  if (r.status !== 'Cancelled' && r.status !== 'Rejected') {
+    items.push({ label: 'Calibrate JD / ATS', aria: `Calibrate JD and ATS criteria: ${title}`, mode: 'jd' });
+    items.push({ label: 'Close', aria: `Close requisition: ${title}`, mode: 'drawer' });
+  }
   return items;
 }
 
@@ -339,8 +343,9 @@ export function RequisitionsV2() {
   const viewParam = params.get('view');
   const modeParam = params.get('mode');
   const showTarget = Boolean(current && drawer === 'target');
-  const showEdit = Boolean(current && !showTarget && (drawer === 'edit' || (modeParam === 'edit' && drawer !== 'detail')));
-  const showDetail = Boolean(current && !showTarget && !showEdit && (drawer === 'detail' || viewParam === 'detail'));
+  const showJd = Boolean(current && drawer === 'jd');
+  const showEdit = Boolean(current && !showTarget && !showJd && (drawer === 'edit' || (modeParam === 'edit' && drawer !== 'detail')));
+  const showDetail = Boolean(current && !showTarget && !showJd && !showEdit && (drawer === 'detail' || viewParam === 'detail'));
   const filtersActive = Boolean(q || status !== 'all' || siteQ || ownerQ || sort !== 'due' || params.get('due') || params.get('desk'));
   const outsideScope = Boolean(open && open !== 'new' && data && !current);
   const canCreate = can('VACANCY_REQUEST_CREATE') && !!data?.ctx;
@@ -553,7 +558,19 @@ export function RequisitionsV2() {
           {outsideScope ? <p className="rf2-inline-note" role="status">That requisition is not in your team or organization.</p> : null}
           {open === 'new' && canCreate ? <RequisitionDrawer req={null} ctx={data.ctx} people={data.people} grades={data.grades} canActivate={canActivate} canDecide={canDecide} meId={user?.id} onClose={() => go(null)} onDone={done} /> : null}
           {showTarget && current ? <TargetDrawer req={current} people={data.people} canActivate={canActivate} meId={user?.id} onClose={() => go(null)} onDone={done} /> : null}
-          {current && !showTarget && !showDetail && !showEdit ? <RequisitionDrawer key={current.id} req={current} ctx={data.ctx} people={data.people} grades={data.grades} canActivate={canActivate} canDecide={canDecide} meId={user?.id} onClose={() => go(null)} onDone={done} /> : null}
+          {showJd && current ? (
+            <JdReviewDrawer
+              isOpen={true}
+              onClose={() => go(null)}
+              vacancyRequestId={current.id}
+              title={title(current)}
+              onLocked={() => {
+                setToast('JD criteria locked & calibrated for ATS.');
+                go(null);
+              }}
+            />
+          ) : null}
+          {current && !showTarget && !showJd && !showDetail && !showEdit ? <RequisitionDrawer key={current.id} req={current} ctx={data.ctx} people={data.people} grades={data.grades} canActivate={canActivate} canDecide={canDecide} meId={user?.id} onClose={() => go(null)} onDone={done} /> : null}
         </>
       ) : null}
     </div>

@@ -15,6 +15,7 @@ Table organizations {
   candidates candidates [not null]
   applications applications [not null]
   candidateDocuments candidate_documents [not null]
+  vacancyDocuments vacancy_documents [not null]
   screeningLogs screening_logs [not null]
   screeningDrafts screening_drafts [not null]
   applicationNotes application_notes [not null]
@@ -120,6 +121,7 @@ Table users {
   taskApplications applications [not null]
   applicationStageChanges application_status_histories [not null]
   uploadedDocuments candidate_documents [not null]
+  uploadedVacancyDocuments vacancy_documents [not null]
   deletedDocuments candidate_documents [not null]
   screeningLogs screening_logs [not null]
   screeningDrafts screening_drafts [not null]
@@ -280,6 +282,8 @@ Table vacancy_requests {
   cancelReason String
   approvals vacancy_request_approvals [not null]
   vacancy vacancies
+  jdCriteria Json
+  documents vacancy_documents [not null]
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [not null]
 }
@@ -330,6 +334,8 @@ Table vacancies {
   responsibilities String
   qualifications String
   benefits String
+  jdCriteria Json
+  documents vacancy_documents [not null]
   assignments vacancy_assignments [not null]
   applications applications [not null]
   employeeActivityTargets employee_activity_targets [not null]
@@ -464,6 +470,11 @@ Table applications {
   reassignments file_reassignments [not null]
   followUpDate DateTime [note: 'B5 follow-up: owner-editable follow-up date (plain date, no timer).']
   joiningChecks joining_checks [not null]
+  atsScore Decimal [note: 'ATS Matching & Diagnostic fields']
+  atsBreakdown Json
+  atsKnockoutPass Boolean [default: true]
+  atsScoredAt DateTime
+  atsVersion String
 
   indexes {
     (vacancyId, candidateId) [unique]
@@ -544,6 +555,7 @@ Table candidate_documents {
   scannedAt DateTime
   parserStatus String [not null, default: 'NotStarted']
   parserVersion String
+  parsedProfile Json
   retentionExpiresAt DateTime
   consentStatus String [not null, default: 'Unknown']
   deletedAt DateTime
@@ -557,6 +569,29 @@ Table candidate_documents {
   createdAt DateTime [default: `now()`, not null]
   updatedAt DateTime [not null]
   joiningChecks joining_checks [not null]
+}
+
+Table vacancy_documents {
+  id String [pk]
+  organizationId String [not null]
+  organization organizations [not null]
+  vacancyRequestId String
+  vacancyRequest vacancy_requests
+  vacancyId String
+  vacancy vacancies
+  documentType String [not null, default: 'JOB_DESCRIPTION']
+  fileName String [not null]
+  fileSize Int [not null]
+  mimeType String [not null]
+  storageKey String [not null]
+  storageProvider String [not null, default: 'local-private']
+  sha256 String
+  extractionText String
+  parserStatus String [not null, default: 'NotStarted']
+  uploadedById String
+  uploadedBy users
+  createdAt DateTime [default: `now()`, not null]
+  updatedAt DateTime [not null]
 }
 
 Table screening_logs {
@@ -662,10 +697,27 @@ Table interview_scorecards {
   revisedBy users
   revisionReason String
   submittedAt DateTime [default: `now()`]
+  ratings interview_scorecard_ratings [not null]
   createdAt DateTime [default: `now()`, not null]
 
   indexes {
     (interviewId, interviewerId, revision) [unique]
+  }
+}
+
+Table interview_scorecard_ratings {
+  id String [pk]
+  scorecardId String [not null]
+  scorecard interview_scorecards [not null]
+  criterionKey String [not null]
+  criterionName String [not null]
+  category String [not null, default: 'SKILL']
+  rating Int [not null]
+  comment String
+  createdAt DateTime [default: `now()`, not null]
+
+  indexes {
+    (scorecardId, criterionKey) [unique]
   }
 }
 
@@ -1291,6 +1343,14 @@ Ref: candidate_documents.deletedById > users.id [delete: Restrict]
 
 Ref: candidate_documents.uploadedById > users.id [delete: Restrict]
 
+Ref: vacancy_documents.organizationId > organizations.id [delete: Restrict]
+
+Ref: vacancy_documents.vacancyRequestId > vacancy_requests.id [delete: Cascade]
+
+Ref: vacancy_documents.vacancyId > vacancies.id [delete: Cascade]
+
+Ref: vacancy_documents.uploadedById > users.id [delete: Restrict]
+
 Ref: screening_logs.organizationId > organizations.id [delete: Restrict]
 
 Ref: screening_logs.applicationId > applications.id [delete: Restrict]
@@ -1318,6 +1378,8 @@ Ref: interview_scorecards.interviewerId > users.id [delete: Restrict]
 Ref: interview_scorecards.previousRevisionId - interview_scorecards.id [delete: Restrict]
 
 Ref: interview_scorecards.revisedById > users.id [delete: Restrict]
+
+Ref: interview_scorecard_ratings.scorecardId > interview_scorecards.id [delete: Cascade]
 
 Ref: offers.organizationId > organizations.id [delete: Restrict]
 

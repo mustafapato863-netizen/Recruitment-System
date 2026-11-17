@@ -1145,7 +1145,7 @@ function CompareCandidatesStudio() {
                   const r = 21;
                   const circ = 2 * Math.PI * r;
                   const dash = (cand.overallMatch / 100) * circ;
-                  const strokeColor = cand.matchTone === 'green' ? '#10b981' : '#2563eb';
+                  const strokeColor = cand.matchTone === 'green' ? 'var(--rf2-success)' : 'var(--rf2-action)';
                   return (
                     <td key={cand.id}>
                       <div className="rf2-cstudio__match-cell">

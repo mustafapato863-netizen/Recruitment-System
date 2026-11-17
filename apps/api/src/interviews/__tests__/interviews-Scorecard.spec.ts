@@ -8,6 +8,7 @@ describe('InterviewsService scheduling and scorecards', () => {
     interview: { findFirst: vi.fn(), updateMany: vi.fn() },
     interviewAttendee: { findUnique: vi.fn(), count: vi.fn() },
     interviewScorecard: { findFirst: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn() },
+    interviewScorecardRating: { upsert: vi.fn(), findMany: vi.fn() },
   };
   let service: InterviewsService;
 
@@ -157,5 +158,72 @@ describe('InterviewsService scheduling and scorecards', () => {
       where: { id: 'iv-1', organizationId: 'org-1', status: { notIn: ['Cancelled', 'No-show'] } },
       data: { status: 'Completed', completedAt: expect.any(Date) },
     });
+  });
+
+  it('persists structured criteriaRatings linked to the scorecard and returns them', async () => {
+    mockPrisma.interview.findFirst.mockResolvedValue({ id: 'iv-1', status: 'Scheduled' });
+    mockPrisma.interviewAttendee.findUnique.mockResolvedValue({ interviewId: 'iv-1', userId: 'user-1' });
+    mockPrisma.interviewScorecard.findFirst.mockResolvedValue(null);
+    mockPrisma.interviewScorecard.create.mockResolvedValue({
+      id: 'sc-1',
+      interviewId: 'iv-1',
+      interviewerId: 'user-1',
+      interviewer: { displayName: 'Dr. Sarah' },
+      overallRating: 5,
+      recommendation: 'Strong Hire',
+      strengths: 'Excellent clinical knowledge',
+      concerns: null,
+      notes: 'Outstanding candidate',
+      status: 'Submitted',
+      revision: 1,
+      previousRevisionId: null,
+      revisedById: null,
+      revisionReason: null,
+      submittedAt: new Date('2026-11-17T15:00:00.000Z'),
+      createdAt: new Date('2026-11-17T15:00:00.000Z'),
+    });
+    mockPrisma.interviewAttendee.count.mockResolvedValue(1);
+    mockPrisma.interviewScorecard.findMany.mockResolvedValue([{ interviewerId: 'user-1' }]);
+
+    const criteriaRatings = [
+      { criterionKey: 'crit-icu', criterionName: 'ICU Protocols', category: 'SKILL' as const, rating: 5, comment: 'Flawless' },
+      { criterionKey: 'crit-comm', criterionName: 'Communication', category: 'COMPETENCY' as const, rating: 4, comment: 'Clear' },
+    ];
+
+    mockPrisma.interviewScorecardRating.findMany.mockResolvedValue(criteriaRatings);
+
+    const result = await service.submitScorecard('org-1', 'iv-1', 'user-1', {
+      overallRating: 5,
+      recommendation: 'Strong Hire',
+      notes: 'Outstanding candidate',
+      status: 'Submitted',
+      criteriaRatings,
+    });
+
+    expect(mockPrisma.interviewScorecardRating.upsert).toHaveBeenCalledTimes(2);
+    expect(mockPrisma.interviewScorecardRating.upsert).toHaveBeenCalledWith({
+      where: {
+        scorecardId_criterionKey: {
+          scorecardId: 'sc-1',
+          criterionKey: 'crit-icu',
+        },
+      },
+      update: {
+        criterionName: 'ICU Protocols',
+        category: 'SKILL',
+        rating: 5,
+        comment: 'Flawless',
+      },
+      create: {
+        scorecardId: 'sc-1',
+        criterionKey: 'crit-icu',
+        criterionName: 'ICU Protocols',
+        category: 'SKILL',
+        rating: 5,
+        comment: 'Flawless',
+      },
+    });
+
+    expect(result.ratings).toEqual(criteriaRatings);
   });
 });
