@@ -182,7 +182,6 @@ export function PositionLevelTargetSettingsPage() {
     <PageFrame
       eyebrow="Settings & Governance"
       title="Position Level Target Settings"
-      description="Define standard recruitment activity quotas, screening benchmarks, and SLA targets by position grade."
       actions={
         <div className="flex items-center gap-2">
           {canEdit && (

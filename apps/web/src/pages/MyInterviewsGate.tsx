@@ -1,7 +1,7 @@
 import { useAuth } from '../auth/AuthContext';
 import { canUseMyInterviews } from '../auth/interviewer';
 import { PageState } from '../components/ui/PageState';
-import { MyInterviewsPage } from './MyInterviewsPage';
+import { TeamInterviewsV2 } from '../v2/pages/TeamInterviewsV2';
 import { resolveSeat } from '../v2/seat';
 
 /** /my-interviews: interviewers only (INTERVIEWER role today, INTERVIEW_PARTICIPATE after B0b). */
@@ -11,5 +11,5 @@ export function MyInterviewsGate() {
   if (!canUseMyInterviews(user) && resolveSeat(user) !== 'manager') {
     return <PageState kind="forbidden" title="Access Restricted" description="My interviews is for users who interview candidates." />;
   }
-  return <MyInterviewsPage />;
+  return <TeamInterviewsV2 />;
 }

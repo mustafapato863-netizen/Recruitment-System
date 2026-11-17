@@ -125,7 +125,7 @@ export function MetricCard({
       backgroundColor="var(--color-surface)"
       className="h-full shadow-[var(--shadow-2xs)] transition-shadow duration-150 hover:shadow-[var(--shadow-xs)] relative group flex flex-col"
     >
-      <article className={[
+      <article data-metric-tone={tone} className={[
         'flex flex-1 flex-col justify-between relative z-10 w-full',
         density === 'compact' ? 'min-h-[82px] rf-metric-card-pad' : 'min-h-[104px] p-[8px]',
         featured ? 'bg-rf-action-soft/5' : '',

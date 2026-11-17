@@ -360,7 +360,9 @@ export function InterviewCalendarPage() {
     setLoading(true);
     setError(null);
     try {
-      setInterviews(await getApi<Interview[]>('/interviews'));
+      const res = await getApi<Interview[] | { data?: Interview[] }>('/interviews');
+      const list = Array.isArray(res) ? res : (res?.data ?? []);
+      setInterviews(list);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Unable to load the interview calendar.');
     } finally {
@@ -419,7 +421,8 @@ export function InterviewCalendarPage() {
     const map = new Map<string, Interview[]>();
     for (const iv of filteredInterviews) {
       const s = new Date(iv.scheduledStart);
-      const key = `${s.getFullYear()}-${s.getMonth()}-${s.getDate()}:${s.getHours()}`;
+      const hour = Math.min(CALENDAR_END_HOUR, Math.max(CALENDAR_START_HOUR, s.getHours()));
+      const key = `${s.getFullYear()}-${s.getMonth()}-${s.getDate()}:${hour}`;
       const bucket = map.get(key) ?? [];
       bucket.push(iv);
       map.set(key, bucket);
@@ -576,7 +579,7 @@ export function InterviewCalendarPage() {
                 }`}
               >
                 <Icon name="user" size={11} />
-                <span>Mine ({myCount})</span>
+                <span>My Interviews ({myCount})</span>
               </button>
             </div>
           </div>

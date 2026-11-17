@@ -437,9 +437,6 @@ export function SettingsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="rf-page-title">Settings</h1>
-          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            Pipeline stages and who can do what. Other setup lives on its own page.
-          </p>
         </div>
       </div>
 

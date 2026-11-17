@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Bell, Check, Info } from 'lucide-react';
+import { Bell, Check } from 'lucide-react';
 import { SkeletonV2 } from '../../components/v2';
 import { fetchNotifications, markAllRead, markRead, notificationHref, safeText, type NotificationRecord } from '../api/searchNotify';
+import { usePageReturn } from '../returnTarget';
 
 export const NOTIFICATIONS_CHANGED = 'rf2:notifications-changed';
 const ago = (iso: string) => {
@@ -19,6 +20,7 @@ export function NotificationsBell({ unread }: { unread: number }) {
   const btn = useRef<HTMLButtonElement>(null);
   const pop = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const pageReturn = usePageReturn();
   const changed = () => window.dispatchEvent(new Event(NOTIFICATIONS_CHANGED));
   useEffect(() => {
     if (!open) return undefined;
@@ -32,7 +34,7 @@ export function NotificationsBell({ unread }: { unread: number }) {
   }, [open]);
   const openItem = async (n: NotificationRecord) => {
     if (!n.readAt) { try { await markRead(n.id); changed(); } catch { /* still navigate */ } }
-    const href = notificationHref(n);
+    const href = notificationHref(n, pageReturn);
     setOpen(false);
     if (href) navigate(href);
   };
@@ -56,16 +58,18 @@ export function NotificationsBell({ unread }: { unread: number }) {
           {state.kind === 'ready' && state.items.length ? (
             <ul className="rf2-bell__list">
               {state.items.map((n) => {
-                const href = notificationHref(n);
+                const href = notificationHref(n, pageReturn);
                 return (
                   <li key={n.id} data-unread={!n.readAt || undefined}>
                     <button type="button" className="rf2-bell__item" onClick={() => void openItem(n)} aria-describedby={href ? undefined : `nh-${n.id}`}>
+                      <span className="rf2-bell__mark" aria-hidden="true"><Bell /></span>
                       <span className="rf2-bell__txt">
                         <span className="rf2-jtable__name">{safeText(n.title)}</span>
                         {n.message ? <span className="rf2-bell__msg">{safeText(n.message)}</span> : null}
                         <span className="rf2-jtable__sub">{ago(n.createdAt)}</span>
                       </span>
-                      {!n.readAt ? <span className="rf2-bell__new"><Info aria-hidden="true" /> New</span> : null}
+                      {!n.readAt ? <span className="rf2-bell__dot" aria-hidden="true" /> : null}
+                      {!n.readAt ? <span className="rf2-sr-only">New</span> : null}
                     </button>
                     {href ? null : <span id={`nh-${n.id}`} className="rf2-sr-only">Marks as read; there is no page to open.</span>}
                   </li>

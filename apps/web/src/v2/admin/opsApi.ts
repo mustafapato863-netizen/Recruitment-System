@@ -1,9 +1,9 @@
 /**
  * A4 Reports + Audit, A5 Integrations + Admin override (Admin seat).
  * - Open jobs: GET /vacancies/work-queue (org-wide for Admin; redacted rows kept as title/site/seats).
- * - Offers waiting: GET /offers?status=Pending Approval (never pay; stripPay).
- * - Stage counts: B8 GET /reports/overview?from&to → funnel[] (counts only; no time-in-stage median on the API).
- * - Hiring report by team: B8 GET /results/org?month&managerId= per manager (ADMINISTRATOR only), tooFewToJudge from the server.
+ * - Offers waiting: GET /offers?status=Pending Approval (never pay; stripPay). Uses approval submission time (R07).
+ * - Stage counts: B8 GET /reports/overview?from&to → funnel[] using Africa/Cairo [month start, next month start) (R03/R04).
+ * - Hiring report by team: B8 GET /results/org?month&managerId= per manager with bounded concurrency and partial-load tracking (R04/R09).
  * - Audit (CoS): server-side GET /audit?actor&entity&from&to&page&pageSize (C5, admin-only, pageSize ≤ 100) when present;
  *   else GET /audit-logs?page&pageSize=100 with the client-side filters. Read-only.
  * - Every list call stays at pageSize ≤ 100 (B2-22) and pages through fetchAllPages.
@@ -23,7 +23,7 @@ import { stripPay } from '../api/paySafety';
 import { domainError } from '../api/gates';
 import { isRedactedJob, type JobStatus, type JobWorkQueueItem, type RedactedJob } from '../api/jobs';
 import { TILE_KEYS } from '../api/teamResult';
-import type { ResultTile, ResultsResponse, TileKey } from '../api/myResult';
+import { cairoMonthRange, type ResultTile, type ResultsResponse, type TileKey } from '../api/myResult';
 
 const list = <T,>(r: T[] | { data: T[] } | null | undefined): T[] => (Array.isArray(r) ? r : r?.data ?? []);
 const enc = encodeURIComponent;
@@ -39,7 +39,17 @@ export async function fetchOrgJobs(): Promise<OrgJob[]> {
     .filter((j) => j.status !== 'Closed' && j.status !== 'Filled');
 }
 
-export interface WaitingOfferRow { id: string; candidate: string; job: string; version: number; submittedAt: string | null; approver: string | null }
+export interface WaitingOfferRow {
+  id: string;
+  candidate: string;
+  job: string;
+  version: number;
+  /** R07: Current approval-request timestamp (when submitted for approval), never draft creation. */
+  submittedAt: string | null;
+  /** Draft/version creation timestamp, kept separate from approval submission time. */
+  versionCreatedAt?: string | null;
+  approver: string | null;
+}
 type Person = { id?: string | null; name?: string | null; displayName?: string | null } | null | undefined;
 const isRoleCode = (n: string) => /^[A-Z][A-Z0-9_]+$/.test(n.trim());
 /** CoS: name the approver when the API sends one (approver / approvers[] / approvals[].approver); never a role code. */
@@ -49,40 +59,164 @@ export function approverName(o: { approver?: Person; approvers?: Person[]; appro
   return names.length ? names.join(', ') : null;
 }
 export async function fetchOffersWaiting(): Promise<WaitingOfferRow[]> {
-  type V = { id: string; versionNumber: number; createdAt?: string | null };
-  type Raw = { id: string; status?: string; candidateName?: string; positionTitle?: string; currentVersionId?: string | null; currentVersion?: V | null; versions?: V[] } & Parameters<typeof approverName>[0];
+  type ApprovalRaw = { status?: string; createdAt?: string | null; requestedAt?: string | null; submittedAt?: string | null; approver?: Person; approverName?: string | null };
+  type V = { id: string; versionNumber: number; createdAt?: string | null; submittedAt?: string | null; approvals?: ApprovalRaw[] };
+  type Raw = {
+    id: string;
+    status?: string;
+    candidateName?: string;
+    positionTitle?: string;
+    submittedAt?: string | null;
+    currentVersionId?: string | null;
+    currentVersion?: V | null;
+    versions?: V[];
+    approvals?: ApprovalRaw[];
+  } & Parameters<typeof approverName>[0];
   const rows = stripPay(await fetchAllPages<Raw>(`/offers?${new URLSearchParams({ status: 'Pending Approval' })}`));
   return rows.filter((o) => !o.status || o.status === 'Pending Approval').map((o) => {
     const v = o.currentVersion ?? o.versions?.find((x) => x.id === o.currentVersionId) ?? [...(o.versions ?? [])].sort((x, y) => y.versionNumber - x.versionNumber)[0];
-    return { id: o.id, candidate: o.candidateName ?? 'Candidate', job: o.positionTitle ?? 'Job', version: v?.versionNumber ?? 1, submittedAt: v?.createdAt ?? null, approver: approverName(o) };
+    const allApprovals = [...(v?.approvals ?? []), ...(o.approvals ?? [])];
+    const pendingApprovals = allApprovals.filter((a) => !a.status || a.status === 'Pending');
+    const approvalPool = pendingApprovals.length ? pendingApprovals : allApprovals;
+    const latestApprovalAt = [...approvalPool]
+      .map((a) => a.submittedAt ?? a.requestedAt ?? a.createdAt ?? null)
+      .filter((ts): ts is string => typeof ts === 'string' && ts.trim().length > 0)
+      .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())[0] ?? null;
+    const submittedAt = v?.submittedAt ?? o.submittedAt ?? latestApprovalAt ?? null;
+    const versionCreatedAt = v?.createdAt ?? null;
+    return {
+      id: o.id,
+      candidate: o.candidateName ?? 'Candidate',
+      job: o.positionTitle ?? 'Job',
+      version: v?.versionNumber ?? 1,
+      submittedAt,
+      versionCreatedAt,
+      approver: approverName({ ...o, approvals: allApprovals }),
+    };
   });
 }
 
 export interface StageCount { name: string; count: number }
+/**
+ * R03 & R04: Use Africa/Cairo half-open [month start, next month start) instants.
+ * Return null only when the endpoint is not implemented (404/501); rethrow 403/500/malformed errors so the UI can show error + retry.
+ */
 export async function fetchStageCounts(month: string): Promise<StageCount[] | null> {
-  const from = `${month}-01`; const d = new Date(`${month}-01T12:00:00Z`); d.setUTCMonth(d.getUTCMonth() + 1); d.setUTCDate(0);
+  const range = cairoMonthRange(month);
+  if (!range) throw new Error('month must be YYYY-MM.');
   try {
-    const o = await getApi<{ funnel?: Array<{ name: string; count: number }> }>(`/reports/overview?from=${from}&to=${d.toISOString().slice(0, 10)}`);
-    return (o.funnel ?? []).map((f) => ({ name: f.name, count: f.count }));
-  } catch { return null; }
+    const o = await getApi<{ funnel?: unknown }>(`/reports/overview?from=${enc(range.from)}&to=${enc(range.to)}`);
+    if (!o || typeof o !== 'object' || !Array.isArray(o.funnel)) {
+      throw new Error('Stage report returned an invalid response.');
+    }
+    return o.funnel.map((f: { name?: unknown; count?: unknown }) => ({
+      name: typeof f?.name === 'string' ? f.name : 'Unknown',
+      count: typeof f?.count === 'number' ? f.count : 0,
+    }));
+  } catch (e) {
+    const s = (e as { statusCode?: number })?.statusCode;
+    if (s === 404 || s === 501) return null;
+    throw e;
+  }
 }
 
 export interface TeamReportRow { managerId: string; managerName: string; team: string | null; people: number; tiles: Record<TileKey, ResultTile> }
-/** One B8 /results/org call per manager with direct reports. null = results not on this server. */
-export async function fetchTeamReport(month: string, managers: Array<{ id: string; name: string; team: string | null }>): Promise<TeamReportRow[] | null> {
+export type TeamReportList = TeamReportRow[] & {
+  partial: boolean;
+  omittedCount: number;
+  requestedCount: number;
+  forbiddenCount: number;
+  failedCount: number;
+};
+
+const TEAM_REPORT_CONCURRENCY = 3;
+
+/**
+ * R04 & R09: Bounded-concurrency B8 /results/org calls per manager with direct reports.
+ * - Returns null when /results/org is not on this server (404/501).
+ * - Attaches completeness metadata (`partial`, `omittedCount`, `requestedCount`, `forbiddenCount`, `failedCount`)
+ *   when any manager row is restricted or fails, without disclosing restricted manager identities.
+ */
+export async function fetchTeamReport(
+  month: string,
+  managers: Array<{ id: string; name: string; team: string | null }>,
+): Promise<TeamReportList | null> {
+  if (managers.length === 0) {
+    return Object.assign([] as TeamReportRow[], {
+      partial: false,
+      omittedCount: 0,
+      requestedCount: 0,
+      forbiddenCount: 0,
+      failedCount: 0,
+    });
+  }
+  type Outcome =
+    | { kind: 'ok'; row: TeamReportRow }
+    | { kind: 'not-found' }
+    | { kind: 'forbidden' }
+    | { kind: 'invalid' }
+    | { kind: 'error'; error: unknown };
+
+  const outcomes: Outcome[] = new Array(managers.length);
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < managers.length) {
+      const idx = cursor++;
+      const m = managers[idx]!;
+      try {
+        const r = await getApi<ResultsResponse>(`/results/org?month=${month}&managerId=${enc(m.id)}`);
+        if (
+          !r?.tiles ||
+          !TILE_KEYS.every((k) => r.tiles[k] && typeof r.tiles[k].value === 'number' && typeof r.tiles[k].sampleSize === 'number')
+        ) {
+          outcomes[idx] = { kind: 'invalid' };
+          continue;
+        }
+        outcomes[idx] = {
+          kind: 'ok',
+          row: { managerId: m.id, managerName: m.name, team: m.team, people: r.people?.length ?? 0, tiles: r.tiles },
+        };
+      } catch (e) {
+        const s = (e as { statusCode?: number })?.statusCode;
+        if (s === 404 || s === 501) outcomes[idx] = { kind: 'not-found' };
+        else if (s === 403 || s === 400) outcomes[idx] = { kind: 'forbidden' };
+        else outcomes[idx] = { kind: 'error', error: e };
+      }
+    }
+  };
+
+  await Promise.all(Array.from({ length: Math.min(TEAM_REPORT_CONCURRENCY, managers.length) }, () => worker()));
+
   const out: TeamReportRow[] = [];
-  for (const m of managers) {
-    try {
-      const r = await getApi<ResultsResponse>(`/results/org?month=${month}&managerId=${enc(m.id)}`);
-      if (!r?.tiles || !TILE_KEYS.every((k) => r.tiles[k])) continue;
-      out.push({ managerId: m.id, managerName: m.name, team: m.team, people: r.people?.length ?? 0, tiles: r.tiles });
-    } catch (e) {
-      const s = (e as { statusCode?: number })?.statusCode;
-      if (s === 404 && out.length === 0) return null;
-      if (s !== 403 && s !== 400) throw e;
+  let notFoundCount = 0;
+  let forbiddenCount = 0;
+  let failedCount = 0;
+  let firstError: unknown = null;
+
+  for (const o of outcomes) {
+    if (o.kind === 'ok') out.push(o.row);
+    else if (o.kind === 'not-found') notFoundCount++;
+    else if (o.kind === 'forbidden') forbiddenCount++;
+    else if (o.kind === 'invalid') {
+      failedCount++;
+      if (!firstError) firstError = new Error('Team report returned an invalid response.');
+    } else if (o.kind === 'error') {
+      failedCount++;
+      if (!firstError) firstError = o.error;
     }
   }
-  return out;
+
+  if (notFoundCount === managers.length) return null;
+  if (out.length === 0 && firstError) throw firstError;
+
+  const omittedCount = managers.length - out.length;
+  return Object.assign(out, {
+    partial: omittedCount > 0,
+    omittedCount,
+    requestedCount: managers.length,
+    forbiddenCount,
+    failedCount,
+  });
 }
 
 /**

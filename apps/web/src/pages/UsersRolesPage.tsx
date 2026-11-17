@@ -443,7 +443,6 @@ export function UsersRolesPage() {
   return (
     <PageFrame
       title="Users and roles"
-      description="Add people, choose what they can open, and limit which records they see."
       actions={
         <>
           <Button variant="ghost" size="sm" onClick={() => void load()}>

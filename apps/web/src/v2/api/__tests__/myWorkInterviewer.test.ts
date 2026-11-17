@@ -18,5 +18,8 @@ describe('B2F-3: an interviewer’s interview opens /my-interviews, not the file
   it('an interviewer without file access goes there too; the file owner (not attending) still opens the file', () => {
     expect(fileActionHref(item, open, { meId: 'u-x', canOpenFile: false, interviewer: true })).toBe('/my-interviews?interview=iv9');
     expect(fileActionHref(item, open, { meId: 'u-mariam', canOpenFile: true, interviewer: false })).toBe('/applications/app-1');
+    const blocked = fileActionHref(item, open, { meId: 'u-x', canOpenFile: false, interviewer: true, returnTo: '/my-work?tab=interviews' });
+    expect(blocked).toBe('/my-interviews?interview=iv9');
+    expect(blocked).not.toContain('/applications/');
   });
 });

@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { BadRequestException, ConflictException, ForbiddenException } from '@nestjs/common';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PrismaService } from '../../database/prisma.service';
+import { ownedVacancyWhere } from '../job-ownership';
 import { VacancyCoreService } from '../vacancy-core.service';
 import { PrismaVacancyCoreRepository } from '../prisma-vacancy-core.repository';
 import { ApplicationsService } from '../../applications/applications.service';
@@ -261,7 +262,7 @@ describe.skipIf(!url)('B3 requisition and job lifecycle (scratch Postgres)', () 
     await service.assignTeamMember(job.id, ORG, { userId: ids.owner!, roleCode: 'RECRUITER', assignmentKind: 'PRIMARY' } as never);
     const mineQueue = await service.getWorkQueue(ORG, { pageSize: 100, mine: 'true' } as never, as(ids.owner!));
     expect(mineQueue.data.length).toBeGreaterThan(0);
-    const owned = new Set((await prisma.vacancy.findMany({ where: { primaryRecruiterId: ids.owner! } as never, select: { id: true } })).map((a) => a.id));
+    const owned = new Set((await prisma.vacancy.findMany({ where: { organizationId: ORG, ...ownedVacancyWhere(ids.owner!) }, select: { id: true } })).map((a) => a.id));
     expect(mineQueue.data.every((j) => owned.has(j.id))).toBe(true);
     const mineList = await service.listVacancies(ORG, as(ids.owner!), { mine: true });
     expect(mineList.map((v) => v.id)).toContain(job.id);

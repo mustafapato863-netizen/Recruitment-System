@@ -1,3 +1,4 @@
+import { ConflictException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 import type { AuthUser } from '@recruitflow/contracts';
 import type { PrismaService } from '../../database/prisma.service';
@@ -13,7 +14,7 @@ const now = new Date('2026-10-01T10:00:00Z');
 const version = {
   id: 'v1', offerId: 'o1', versionNumber: 1, monthlyPackage: 20000, annualFixed: 240000, contractType: 'Permanent',
   probationPeriod: '3 months', offerExpiry: null, proposedJoiningDate: null, workLocation: 'Cairo', workingSchedule: null,
-  approvalStatus: 'Pending', isLocked: false, createdAt: now,
+  approvalStatus: 'Pending', status: 'Pending Approval', isLocked: false, createdAt: now,
   components: [{ id: 'c1', type: 'Salary', name: 'Basic', amount: 20000, currency: 'EGP', frequency: 'Monthly', isTaxable: true }],
   approvals: [],
 };
@@ -30,10 +31,11 @@ function makeService() {
     offerApproval: {
       findMany: vi.fn().mockResolvedValue([{ id: 'ap1', offerVersionId: 'v1', roleCode: 'HR_MANAGER', status: 'Pending',
         offerVersion: { ...version, offer } }]),
+      findFirst: vi.fn(),
     },
   };
   const accessControl = { getApplicationVisibilityWhere: vi.fn().mockResolvedValue({ organizationId: ORG }), getApplicationReadVisibilityWhere: vi.fn().mockResolvedValue({ organizationId: ORG }) };
-  return new OffersService(prisma as unknown as PrismaService, {} as NotificationsService, accessControl as unknown as AccessControlService);
+  return { service: new OffersService(prisma as unknown as PrismaService, {} as NotificationsService, accessControl as unknown as AccessControlService), prisma };
 }
 
 function collectKeys(value: unknown, keys = new Set<string>()): Set<string> {
@@ -44,7 +46,7 @@ function collectKeys(value: unknown, keys = new Set<string>()): Set<string> {
 
 describe('Offer pay disclosure', () => {
   it('omits pay keys from list, detail and approval inbox for users without OFFER_PAY_VIEW', async () => {
-    const service = makeService();
+    const { service } = makeService();
     const payloads = [
       await service.getOffers(user, {}, { viewOfferPay: false }),
       await service.getOfferById(user, 'o1', { viewOfferPay: false }),
@@ -58,11 +60,34 @@ describe('Offer pay disclosure', () => {
   });
 
   it('keeps pay for users with OFFER_PAY_VIEW', async () => {
-    const service = makeService();
+    const { service } = makeService();
     const detail = await service.getOfferById(user, 'o1', { viewOfferPay: true });
     expect(detail.currentVersion).toMatchObject({ monthlyPackage: 20000, annualFixed: 240000 });
     expect(detail.currentVersion?.components[0]).toMatchObject({ amount: 20000 });
     const [inbox] = await service.getApprovalInbox(user, { viewOfferPay: true });
     expect(inbox).toMatchObject({ monthlyPackage: 20000, packageCurrency: 'EGP' });
+  });
+
+  it('resolves currentVersion via currentVersionId across list and detail, and rejects deciding a superseded version', async () => {
+    const { service, prisma } = makeService();
+    const v2 = { ...version, id: 'v2', versionNumber: 2 };
+    const multiVersionOffer = { ...offer, currentVersionId: 'v1', versions: [v2, version] };
+    prisma.offer.findMany.mockResolvedValueOnce([multiVersionOffer]);
+    prisma.offer.findFirst.mockResolvedValueOnce(multiVersionOffer);
+
+    const [summary] = await service.getOffers(user, {}, { viewOfferPay: false });
+    expect(summary.currentVersion?.id).toBe('v1');
+    const detail = await service.getOfferById(user, 'o1', { viewOfferPay: false });
+    expect(detail.currentVersion?.id).toBe('v1');
+
+    prisma.offerApproval.findFirst.mockResolvedValueOnce({
+      id: 'ap-old',
+      offerVersionId: 'v1',
+      approverUserId: user.userId,
+      roleCode: 'OFFER_APPROVER',
+      status: 'Pending',
+      offerVersion: { ...version, offer: { ...offer, currentVersionId: 'v2' } },
+    });
+    await expect(service.submitDecision(user, 'ap-old', { decision: 'Approve' })).rejects.toBeInstanceOf(ConflictException);
   });
 });

@@ -4,6 +4,7 @@ import { ButtonV2, DrawerV2, EmptyStateV2, SkeletonV2, StatusChip } from '../../
 import { SEAT_LABEL } from '../seat';
 import { CAPABILITIES, POLICY, fetchPermissions, fetchRoles, grant, revoke, roleSeat, type AdminRole, type Permission } from './rolesApi';
 import { fetchUsers } from './usersApi';
+import { AdminWorkspaceHeader } from './AdminWorkspaceHeader';
 import '../pages/jobs.css';
 import './admin.css';
 
@@ -53,10 +54,11 @@ export function RolesV2() {
 
   return (
     <div className="rf2-jobs rf2-admin">
-      <div>
-        <h1 className="rf2-jobs__title">Roles</h1>
-        <p className="rf2-jobs__sub">Three roles and one per-interview capability. A missing permission hides the page — nothing is shown locked.</p>
-      </div>
+      <AdminWorkspaceHeader
+        group="Users & Access"
+        title="Roles"
+        subtitle="Review role capabilities, permission grants and seat mapping."
+      />
       <div className="rf2-panel rf2-admin__card">
         <table className="rf2-jtable rf2-admin__matrix" aria-label="What each role can do">
           <thead><tr><th scope="col">Capability</th><th scope="col">Employee</th><th scope="col">Manager</th><th scope="col">Admin</th><th scope="col" className="rf2-admin__cap">Interviewer (capability)</th></tr></thead>

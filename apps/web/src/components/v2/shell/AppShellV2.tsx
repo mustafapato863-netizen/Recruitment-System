@@ -1,20 +1,22 @@
 import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
-  BarChart3, BriefcaseBusiness, Building2, ChevronsUpDown, CircleHelp, ClipboardList, Columns3, Database, FileText, History,
-  ListChecks, LogOut, Moon, Sun, PanelLeftClose, PanelLeftOpen, Plug, Shield, Target, User, UserRound, Users,
-  CalendarCheck, Archive } from 'lucide-react';
+  BarChart3, BriefcaseBusiness, Building2, CalendarCheck, CalendarClock, CheckCircle2, ChevronsUpDown, ClipboardList, Columns3, Database, FileText, History,
+  ListChecks, LogOut, Menu, Moon, Sun, PanelLeftClose, PanelLeftOpen, Plug, Shield, Target, User, UserRound, Users, X,
+  Archive } from 'lucide-react';
 import type { UserProfile } from '@recruitflow/contracts';
 import { getApi } from '../../../api/client';
 import { BreadcrumbProvider, useBreadcrumb } from '../../../context/BreadcrumbContext';
-import { QuickGuideModal, QuickGuideProvider, useQuickGuide } from '../../../quickguide';
+import { QuickGuideModal, QuickGuideProvider } from '../../../quickguide';
 import { SEAT_LABEL, type Seat } from '../../../v2/seat';
-import { canOpenRoute, canUseRequisitions, isInterviewerOnly, specialHome, isRecruiterOnly, v2Redirect } from '../../../v2/destinations';
+import { canUseRequisitions, isInterviewerOnly, specialHome, isRecruiterOnly, v2Redirect } from '../../../v2/destinations';
 import { NavItem } from '../NavItem';
 import { canUseMyInterviews } from '../../../auth/interviewer';
-import { SEAT_NAV, activeNavKey, permittedClassicItems, permittedNavItems, type NavIconName } from './navConfig';
+import { SEAT_NAV, activeNavKey, permittedNavItems, type NavIconName } from './navConfig';
 import { workspaceOptions, type WorkspaceOption } from './workspace';
 import { useTheme } from '../../../theme/ThemeContext';
+import { useMediaQuery } from '../../ui/useMediaQuery';
+import { GlobalSelectEnhancer } from '../../ui/GlobalSelectEnhancer';
 import { SghHeartIcon } from '../../../design-system/brand/sgh-logo';
 import '../v2-primitives.css';
 import './v2-shell.css';
@@ -23,8 +25,8 @@ import { NotificationsBell, NOTIFICATIONS_CHANGED } from '../../../v2/search/Not
 import '../../../v2/search/search.css';
 
 const ICONS: Record<NavIconName, ReactNode> = {
-  'my-work': <ListChecks />, interviews: <CalendarCheck />, jobs: <BriefcaseBusiness />, candidates: <Users />,
-  team: <Users />, requisitions: <ClipboardList />, result: <Target />,
+  'my-work': <ListChecks />, interviews: <CalendarCheck />, 'my-interviews': <CalendarClock />, jobs: <BriefcaseBusiness />, candidates: <Users />,
+  team: <Users />, requisitions: <ClipboardList />, approvals: <CheckCircle2 />, result: <Target />,
   users: <UserRound />, roles: <Shield />, pipeline: <Columns3 />, 'master-data': <Database />,
   templates: <FileText />, reports: <BarChart3 />, audit: <History />, integrations: <Plug />, classic: <Archive />,
 };
@@ -133,6 +135,8 @@ export function useV2Shell() { return useContext(V2ShellContext); }
 
 /** Below 1024px the sidebar is always the icon rail, so the page keeps its width and the header title stays visible. */
 export const NARROW_QUERY = '(max-width: 1023px)';
+/** Below 1280px a daily seat replaces the header links with a menu. Desktop keeps the bar. */
+export const TOPNAV_MENU_QUERY = '(max-width: 1279px)';
 export function useNarrowViewport(): boolean {
   const query = () => (typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? window.matchMedia(NARROW_QUERY) : null);
   const [narrow, setNarrow] = useState<boolean>(() => query()?.matches ?? false);
@@ -204,15 +208,6 @@ function WorkspaceBlock({ options, collapsed }: { options: WorkspaceOption[]; co
   );
 }
 
-function HelpButton() {
-  const { openGuide } = useQuickGuide();
-  return (
-    <button type="button" className="rf2-icon-button" aria-label="Help: open the quick guide for this page" title="Help" onClick={openGuide}>
-      <CircleHelp aria-hidden="true" />
-    </button>
-  );
-}
-
 export interface AppShellV2Props {
   user: UserProfile;
   seat: Seat;
@@ -223,19 +218,15 @@ export interface AppShellV2Props {
 function ShellFrame({ user, seat, onSignOut, children }: AppShellV2Props) {
   const location = useLocation();
   // B2-17/18: "/" goes to the seat's home; v1 pages the seat can't use redirect to their v2 equivalent.
-  const redirectTo = v2Redirect(seat, location.pathname, { requisitions: canUseRequisitions(user), interviews: canUseMyInterviews(user), interviewerOnly: isInterviewerOnly(user, canUseMyInterviews(user)), home: specialHome(user), permissions: user.permissions ?? [], isAdministrator: (user.roles ?? []).some((r) => r.code === 'ADMINISTRATOR') });
+  const redirectTo = v2Redirect(seat, `${location.pathname}${location.search}`, { requisitions: canUseRequisitions(user), interviews: canUseMyInterviews(user), interviewerOnly: isInterviewerOnly(user, canUseMyInterviews(user)), home: specialHome(user), permissions: user.permissions ?? [], isAdministrator: (user.roles ?? []).some((r) => r.code === 'ADMINISTRATOR') });
+  // A same-path target (adding ?drawer=) must not replace the outlet. Navigate would run again on the next pathname check and the page would never mount.
+  const redirectPath = redirectTo?.split('?')[0];
+  const leavesPage = Boolean(redirectTo) && redirectPath !== location.pathname;
   const { customLabels } = useBreadcrumb();
   const isAdministrator = (user.roles ?? []).some((r) => r.code === 'ADMINISTRATOR');
   const interviewerOnly = isInterviewerOnly(user, canUseMyInterviews(user));
   const allItems = permittedNavItems(seat, user.permissions, isAdministrator, isRecruiterOnly(user.roles), canUseMyInterviews(user));
-  const classic = permittedClassicItems(user.permissions, isAdministrator, interviewerOnly);
-  const home = specialHome(user);
-  const pinned = home ? classic.filter((item) => item.to === home).map((item) => ({ ...item, icon: home === '/licenses' ? 'roles' as const : 'my-work' as const })) : [];
-  const daily = interviewerOnly ? allItems.filter((item) => item.key === 'my-work' || item.key === 'my-interviews') : allItems;
-  const items = home ? pinned : daily;
-  const tools = home ? [] : classic.filter((item) => !items.some((primary) => primary.to === item.to)
-    && canOpenRoute(item.to, user.permissions, isAdministrator));
-  const sidebarItems = [...items, ...tools];
+  const sidebarItems = interviewerOnly ? allItems.filter((item) => item.key === 'my-work' || item.key === 'my-interviews') : allItems;
   const allNavigation = sidebarItems;
   const activeKey = activeNavKey(allNavigation, location.pathname, location.hash);
   const canSeeNotifications = isAdministrator || (user.permissions ?? []).includes('NOTIFICATION_VIEW');
@@ -244,40 +235,92 @@ function ShellFrame({ user, seat, onSignOut, children }: AppShellV2Props) {
   const title = allNavigation.find((i) => i.key === activeKey)?.label ?? customLabels[location.pathname] ?? humanize(location.pathname);
   const headingId = useId();
   const sidebarId = useId();
+  const menuId = useId();
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const menuPanelRef = useRef<HTMLElement>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [storedCollapsed, toggleCollapsed] = useSidebarCollapsed();
   const narrow = useNarrowViewport();
-  const collapsed = storedCollapsed || narrow;
+  const menuViewport = useMediaQuery(TOPNAV_MENU_QUERY);
+  const topNav = false;
+  const compactNav = topNav && menuViewport;
+  const collapsed = !topNav && (storedCollapsed || narrow);
   const workspaces = workspaceOptions(user);
   const { theme, toggleTheme } = useTheme();
+  const activeLabel = allNavigation.find((item) => item.key === activeKey)?.label;
+  const titleEchoesNav = topNav && activeLabel === title;
+  const homeTo = sidebarItems[0]?.to ?? '/my-work';
+  const pageTitle = <h1 className={`rf2-shell__title${titleEchoesNav ? ' rf2-shell__title--echo' : ''}`}>{title}</h1>;
+
+  useEffect(() => { setMenuOpen(false); }, [location.pathname, location.hash]);
+  useEffect(() => { if (!compactNav) setMenuOpen(false); }, [compactNav]);
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    const onPointer = (event: MouseEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (menuButtonRef.current?.contains(target) || menuPanelRef.current?.contains(target)) return;
+      setMenuOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setMenuOpen(false);
+      menuButtonRef.current?.focus();
+    };
+    document.addEventListener('mousedown', onPointer);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onPointer);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [menuOpen]);
+  const headerTools = (
+    <>
+      <HeaderSearch placeholder={config.searchPlaceholder} meId={user.id} />
+      <div className="rf2-shell__actions">
+        <button type="button" className="rf2-icon-button" aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'} title={theme === 'light' ? 'Dark mode' : 'Light mode'} onClick={toggleTheme}>
+          {theme === 'light' ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}
+        </button>
+        {canSeeNotifications ? <NotificationsBell unread={unread} /> : null}
+        <UserMenu user={user} seat={seat} onSignOut={onSignOut} />
+      </div>
+    </>
+  );
+  const navLinks = (
+    <ul className={topNav ? 'rf2-shell__links' : 'rf2-nav-list'}>
+      {sidebarItems.map((item) => (
+        <li key={item.key}>
+          <NavItem asChild label={item.label} icon={ICONS[item.icon]} active={item.key === activeKey} title={collapsed ? item.label : undefined}>
+            {/* Link, not NavLink: aria-current is decided once by activeNavKey (hash-aware). */}
+            <Link to={item.to} />
+          </NavItem>
+        </li>
+      ))}
+    </ul>
+  );
 
   return (
-    <div className={`rf2-shell${collapsed ? ' rf2-shell--collapsed' : ''}`} data-seat={seat}>
+    <div className={`rf2-shell${collapsed ? ' rf2-shell--collapsed' : ''}${topNav ? ' rf2-shell--topnav' : ''}${compactNav ? ' rf2-shell--menu' : ''}`} data-seat={seat}>
       <a className="rf2-skip-link" href="#rf2-main">Skip to main content</a>
+      {topNav ? null : (
       <aside className="rf2-shell__sidebar" id={sidebarId}>
         <div className="rf2-brand">
-          <span className="rf2-brand__mark" aria-hidden="true"><SghHeartIcon size={30} /></span>
-          <span className="rf2-brand__text">
-            <span className="rf2-brand__name">RecruitFlow</span>
-            <span className="rf2-brand__sub">Saudi German Health</span>
-          </span>
+          <Link to={homeTo} className="rf2-brand__home" aria-label="RecruitFlow, Saudi German Health">
+            <span className="rf2-brand__mark" aria-hidden="true"><SghHeartIcon size={30} /></span>
+            <span className="rf2-brand__text">
+              <span className="rf2-brand__name">RecruitFlow</span>
+              <span className="rf2-brand__sub">Saudi German Health</span>
+            </span>
+          </Link>
           <button type="button" className="rf2-collapse" hidden={narrow} aria-controls={sidebarId} aria-expanded={!collapsed}
             aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'} onClick={toggleCollapsed}>
             {collapsed ? <PanelLeftOpen aria-hidden="true" /> : <PanelLeftClose aria-hidden="true" />}
           </button>
         </div>
-        <WorkspaceBlock options={workspaces} collapsed={collapsed} />
+        {seat === 'admin' ? <WorkspaceBlock options={workspaces} collapsed={collapsed} /> : null}
         <p className="rf2-shell__heading" id={headingId}>{config.heading}</p>
         <nav aria-labelledby={headingId} className="rf2-shell__nav">
-          <ul className="rf2-nav-list">
-            {sidebarItems.map((item) => (
-              <li key={item.key}>
-                <NavItem asChild label={item.label} icon={ICONS[item.icon]} active={item.key === activeKey} title={collapsed ? item.label : undefined}>
-                  {/* Link, not NavLink: aria-current is decided once by activeNavKey (hash-aware). */}
-                  <Link to={item.to} />
-                </NavItem>
-              </li>
-            ))}
-          </ul>
+          {navLinks}
         </nav>
         <div className="rf2-shell__account" aria-label="Signed in as">
           <span className="rf2-avatar rf2-avatar--sm" aria-hidden="true">{initials(user.displayName)}</span>
@@ -287,21 +330,62 @@ function ShellFrame({ user, seat, onSignOut, children }: AppShellV2Props) {
           </span>
         </div>
       </aside>
+      )}
       <div className="rf2-shell__main">
         <header className="rf2-shell__header">
-          <h1 className="rf2-shell__title">{title}</h1>
-          <HeaderSearch placeholder={config.searchPlaceholder} meId={user.id} />
-          <button type="button" className="rf2-icon-button" aria-label={theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'} title={theme === 'light' ? 'Dark mode' : 'Light mode'} onClick={toggleTheme}>
-            {theme === 'light' ? <Sun aria-hidden="true" /> : <Moon aria-hidden="true" />}
-          </button>
-          <HelpButton />
-          {canSeeNotifications ? (
-            <NotificationsBell unread={unread} />
-          ) : null}
-          <UserMenu user={user} seat={seat} onSignOut={onSignOut} />
+          {topNav ? (
+            <>
+              <div className="rf2-shell__lead">
+                <Link to={homeTo} className="rf2-brand rf2-brand--bar" aria-label="RecruitFlow, Saudi German Health">
+                  <span className="rf2-brand__mark" aria-hidden="true"><SghHeartIcon size={28} /></span>
+                  <span className="rf2-brand__text">
+                    <span className="rf2-brand__name">RecruitFlow</span>
+                    <span className="rf2-brand__sub">Saudi German Health</span>
+                  </span>
+                </Link>
+                {compactNav ? (
+                  <button
+                    ref={menuButtonRef}
+                    type="button"
+                    className="rf2-icon-button rf2-shell__menu-button"
+                    aria-expanded={menuOpen}
+                    aria-controls={menuOpen ? menuId : undefined}
+                    aria-label={menuOpen ? 'Close menu' : 'Open menu'}
+                    onClick={() => setMenuOpen((open) => !open)}
+                  >
+                    {menuOpen ? <X aria-hidden="true" /> : <Menu aria-hidden="true" />}
+                  </button>
+                ) : null}
+              </div>
+              {compactNav ? (menuOpen ? (
+                <nav
+                  ref={menuPanelRef}
+                  id={menuId}
+                  aria-label={config.heading}
+                  className="rf2-shell__nav rf2-shell__nav--sheet"
+                  onClick={(event) => { if (event.target instanceof Element && event.target.closest('a')) setMenuOpen(false); }}
+                >
+                  {navLinks}
+                </nav>
+              ) : null) : (
+                <nav aria-label={config.heading} className="rf2-shell__nav rf2-shell__nav--bar">
+                  {navLinks}
+                </nav>
+              )}
+              <div className="rf2-shell__end">
+                {pageTitle}
+                {headerTools}
+              </div>
+            </>
+          ) : (
+            <>
+              {pageTitle}
+              {headerTools}
+            </>
+          )}
         </header>
         <main id="rf2-main" className="rf2-shell__content" tabIndex={-1}>
-          {children ?? (redirectTo ? <Navigate to={redirectTo} replace /> : <Outlet />)}
+          {children ?? (leavesPage && redirectTo ? <Navigate to={redirectTo} replace /> : <Outlet />)}
         </main>
       </div>
     </div>
@@ -316,6 +400,7 @@ export function AppShellV2(props: AppShellV2Props) {
         <V2ShellContext.Provider value={{ seat: props.seat }}>
           <ShellFrame {...props} />
         </V2ShellContext.Provider>
+        <GlobalSelectEnhancer />
         <QuickGuideModal />
       </BreadcrumbProvider>
     </QuickGuideProvider>

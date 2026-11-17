@@ -38,7 +38,7 @@ let paths: Record<string, unknown> = {};
 const serve = (extra: Record<string, unknown> = {}) => {
   paths = {
     '/vacancies/work-queue?page=1&pageSize=100': { data: jobs }, '/users?directory=1&page=1&pageSize=100': ufx.users,
-    '/offers?status=Pending+Approval&page=1&pageSize=100': { data: [{ id: 'o1', status: 'Pending Approval', candidateName: 'Lina Hassan', positionTitle: 'HRIS Developer', approvers: [{ id: null, name: 'OFFER_APPROVER' }, { id: 'u-karim', name: 'Karim Hassan' }], versions: [{ id: 'ov1', versionNumber: 1, createdAt: new Date(Date.now() - 86400000).toISOString(), baseSalary: 62000 }] }] },
+    '/offers?status=Pending+Approval&page=1&pageSize=100': { data: [{ id: 'o1', status: 'Pending Approval', candidateName: 'Lina Hassan', positionTitle: 'HRIS Developer', approvers: [{ id: null, name: 'OFFER_APPROVER' }, { id: 'u-karim', name: 'Karim Hassan' }], versions: [{ id: 'ov1', versionNumber: 1, createdAt: new Date(Date.now() - 4 * 86400000).toISOString(), submittedAt: new Date(Date.now() - 86400000).toISOString(), baseSalary: 62000 }] }] },
     [`/results/org?month=${M}&managerId=u-hala`]: res(2, true), [`/results/org?month=${M}&managerId=u-karim`]: res(3, false),
     '/audit-logs?page=1&pageSize=100': { data: audit, total: 3 },
     '/integrations': [{ id: 'i1', name: 'Careers site publishing', provider: 'careers_site', category: 'Publishing', status: 'Connected', lastSyncAt: '2026-10-09T05:45:00.000Z' }, { id: 'i2', name: 'Email Provider', provider: 'smtp', category: 'Communication', status: 'Available', lastSyncAt: null }, { id: 'i3', name: 'Calendar', provider: 'google_calendar', category: 'x', status: 'Connected' }],
@@ -67,11 +67,11 @@ describe('A08 Reports (Admin)', () => {
     expect(within(rows[2]).queryByRole('button', { name: /Override/ })).toBeNull();
     expect(screen.getByRole('list', { name: 'Files by stage' })).toHaveTextContent(/Applied10.*Screening6.*Pre-hire1/);
     expect(screen.getByText(/Time in stage \(median days\) needs a backend field/)).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'Offers waiting' })).toHaveTextContent(/Lina Hassan · HRIS Developer.*Offer v1.*Waiting on Karim Hassan · 1 day/); // approver named, role code skipped
+    expect(screen.getByRole('region', { name: 'Offers waiting' })).toHaveTextContent(/Lina Hassan · HRIS Developer.*Offer v1.*Waiting on Karim Hassan · 1 day/); // approver named, role code skipped; R07 uses submittedAt (1 day), not version createdAt (4 days)
     expect(api.getApi.mock.calls.map((c) => String(c[0])).filter((p) => /pageSize=\d/.test(p)).every((p) => Number(/pageSize=(\d+)/.exec(p)![1]) <= 100)).toBe(true); // B2-22
     const tr = screen.getByRole('table', { name: 'Hiring report by team' });
     expect(within(tr).getAllByRole('row')).toHaveLength(3);
-    expect(within(tr).getByRole('row', { name: /Talent/ })).toHaveTextContent(/Hala Mostafa’s 2 direct reports.*Too few to judge.*4 of 8.*3.*5 of 10.*3 of 5/);
+    expect(within(tr).getByRole('row', { name: /Talent/ })).toHaveTextContent(/Hala Mostafa’s 2 direct reports.*24 follow-ups · 10 screens · 4 offers.*Too few to judge.*4 of 8.*3.*5 of 10.*3 of 5/);
     expect(within(tr).getByRole('row', { name: /^IT/ })).not.toHaveTextContent('Too few');
     expect(container).not.toHaveTextContent(/62,?000|99,?999|salary/i);
     expect(screen.getByText(/No previous period/)).toBeInTheDocument();
@@ -88,6 +88,48 @@ describe('A08 Reports (Admin)', () => {
     serve({ [`/results/org?month=${M}&managerId=u-hala`]: new ApiError(404, 'x'), [`/results/org?month=${M}&managerId=u-karim`]: new ApiError(404, 'x') });
     renderAt('/reports');
     expect(await screen.findByText('Monthly results (/results/org) are not on this server yet.')).toBeInTheDocument();
+  });
+  it('R04: section API errors show section alert + retry instead of false empty states; partial team report alerts without leaking restricted manager identity', async () => {
+    const u = userEvent.setup();
+    serve({
+      '/reports/overview': new ApiError(500, 'Stage report unavailable'),
+      [`/results/org?month=${M}&managerId=u-karim`]: new ApiError(403, 'Forbidden manager'),
+    });
+    renderAt('/reports');
+    await screen.findByRole('table', { name: 'Open jobs' });
+    const stageSection = screen.getByRole('region', { name: 'Files by stage' });
+    expect(within(stageSection).getByRole('alert')).toHaveTextContent('Stage report unavailable');
+    expect(within(stageSection).queryByText('No stage counts for this month.')).toBeNull();
+
+    const teamSection = screen.getByRole('region', { name: 'Hiring report by team' });
+    expect(within(teamSection).getByRole('alert')).toHaveTextContent(/Partial team report: 1 of 2 teams could not be loaded \(1 restricted\)/);
+    expect(within(teamSection).getByRole('alert')).not.toHaveTextContent('Karim');
+
+    // Retry stages after recovery
+    serve();
+    await u.click(within(stageSection).getByRole('button', { name: 'Try again' }));
+    expect(await within(stageSection).findByRole('list', { name: 'Files by stage' })).toHaveTextContent(/Applied10/);
+  });
+  it('R07: when approval submission timestamp is absent, labels version created and omits unverified wait duration', async () => {
+    serve({
+      '/offers?status=Pending+Approval&page=1&pageSize=100': {
+        data: [
+          {
+            id: 'o-draft-only',
+            status: 'Pending Approval',
+            candidateName: 'Nabil Ahmed',
+            positionTitle: 'Medical Coder',
+            approvers: [{ id: 'u-karim', name: 'Karim Hassan' }],
+            versions: [{ id: 'ov-draft', versionNumber: 2, createdAt: '2026-10-20T10:00:00.000Z' }],
+          },
+        ],
+      },
+    });
+    renderAt('/reports');
+    const offersRegion = await screen.findByRole('region', { name: 'Offers waiting' });
+    expect(offersRegion).toHaveTextContent(/Nabil Ahmed · Medical Coder.*Offer v2 · version created 20 Oct 2026.*Waiting on Karim Hassan/);
+    expect(offersRegion).not.toHaveTextContent(/submitted/);
+    expect(offersRegion).not.toHaveTextContent(/Waiting on Karim Hassan · \d+ day/);
   });
 });
 

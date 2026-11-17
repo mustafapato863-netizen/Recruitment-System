@@ -23,6 +23,7 @@ import './PageEnhancementsV2.css';
 type LicenseRow = {
   id: string;
   caseId: string;
+  applicationId: string | null;
   candidate: string;
   type: string;
   number: string;
@@ -99,6 +100,7 @@ export function LicenseManagementPage() {
           rows.push({
             id: requirement.id.slice(0, 8).toUpperCase(),
             caseId: hiringCase.id,
+            applicationId: hiringCase.applicationId || null,
             candidate: hiringCase.candidateName || 'Not reported',
             type: requirement.name,
             number: `REQ-${requirement.id.slice(0, 6).toUpperCase()}`,
@@ -129,7 +131,6 @@ export function LicenseManagementPage() {
     <PageFrame
       eyebrow="Joining & Compliance"
       title="License Management & Verification"
-      description="Track healthcare and professional license requirements, verification authority, validity and expiry risks."
       actions={
         <Button variant="ghost" size="sm" onClick={() => void loadData()}>
           <Icon name="refresh-cw" size={13} className={loading ? 'animate-spin' : ''} />
@@ -192,7 +193,7 @@ export function LicenseManagementPage() {
             className="px-4 pb-4 sm:px-5 sm:pb-5"
             renderActions={(license) => (
               <Button variant="secondary" size="sm" asChild>
-                <Link to={`/hires/${license.caseId}`}>Review case</Link>
+                <Link to={license.applicationId ? `/applications/${license.applicationId}?drawer=prehire` : `/hires/${license.caseId}`}>Review case</Link>
               </Button>
             )}
           />

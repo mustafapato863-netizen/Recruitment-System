@@ -23,7 +23,6 @@ import { useFeedback } from '../hooks/useFeedback';
 import { confirmDiscardChanges, useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import { useMasterDataOptions } from '../hooks/useMasterDataOptions';
 import { CANDIDATE_SOURCE_FALLBACK } from '../data/masterDataDefaults';
-import { QuickGuideTrigger } from '../quickguide';
 import './PageEnhancementsV2.css';
 
 interface EditCandidateForm {
@@ -88,6 +87,7 @@ export function CandidatesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState('');
+  const [loadFailed, setLoadFailed] = useState(false);
   const [selectedCandidateIds, setSelectedCandidateIds] = useState<string[]>([]);
 
   // Active row action menu
@@ -207,6 +207,7 @@ export function CandidatesPage() {
   const load = async (requestedPage = page) => {
     setIsLoading(true);
     setError('');
+    setLoadFailed(false);
     try {
       let queryUrl = `/candidates?page=${requestedPage}&pageSize=${pageSize}`;
       if (statusFilter !== 'All') {
@@ -229,6 +230,8 @@ export function CandidatesPage() {
     } catch (err) {
       const message = getErrorMessage(err, 'Unable to load candidates');
       setError(message);
+      setLoadFailed(true);
+      setCandidates([]);
       toastError(err, 'Unable to load candidates');
     } finally {
       setIsLoading(false);
@@ -614,15 +617,9 @@ export function CandidatesPage() {
       {/* ── Page Header matching Enterprise System ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <h1 className="rf-page-title">
-              Candidates
-            </h1>
-            <QuickGuideTrigger />
-          </div>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            Find a person, then assign them to a job.
-          </p>
+          <h1 className="rf-page-title">
+            Candidates
+          </h1>
         </div>
 
         <div className="flex w-full flex-col sm:w-auto sm:flex-row sm:flex-wrap sm:items-center gap-2 sm:gap-2.5">
@@ -922,6 +919,12 @@ export function CandidatesPage() {
                     <td className="p-3.5"><div className="h-4 w-12 rounded bg-slate-200 dark:bg-slate-700" /></td>
                   </tr>
                 ))
+              ) : loadFailed ? (
+                <tr>
+                  <td colSpan={8} className="p-8 text-center text-sm text-slate-600 dark:text-slate-300">
+                    The candidate list failed to load. Use Retry above. This is not an empty search result.
+                  </td>
+                </tr>
               ) : candidates.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="p-12 text-center text-slate-600 dark:text-slate-300">

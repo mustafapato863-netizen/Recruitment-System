@@ -130,7 +130,6 @@ export function TalentPoolsListV2() {
     <div className="rf2-pools">
       <header>
         <h1 className="rf2-pools__title">Talent pools</h1>
-        <p className="rf2-pools__sub">Groups of people you may hire later. Adding or removing someone does not change an application.</p>
       </header>
       {notice ? <p className="rf2-pools__note" role="status">{notice}</p> : null}
       {state.kind === 'ready' ? (
@@ -283,6 +282,8 @@ export function TalentPoolDetailV2() {
                     <span className="rf2-pools__source">{member.source || ''}</span>
                     <time className="rf2-pools__when" dateTime={member.addedAt}>Added {formatWhen(member.addedAt)}</time>
                     <span className="rf2-pools__action">
+                      <Link className="rf2-btn rf2-btn--secondary rf2-btn--sm" to={`/candidates/${encodeURIComponent(member.candidateId)}`}>Open person</Link>
+                      <Link className="rf2-btn rf2-btn--secondary rf2-btn--sm" to={`/candidates?tab=bank&search=${encodeURIComponent(member.candidateName)}&candidateId=${encodeURIComponent(member.candidateId)}&pool=${encodeURIComponent(detail.pool.id)}`}>Add to job</Link>
                       <ButtonV2 kind="danger-outline" size="sm" aria-label={`Remove ${member.candidateName}`} loading={removingId === member.candidateId} onClick={() => { void onRemove(member.candidateId); }}>Remove</ButtonV2>
                     </span>
                   </li>

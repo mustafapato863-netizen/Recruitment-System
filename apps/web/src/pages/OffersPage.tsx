@@ -7,7 +7,6 @@ import { Icon } from '../components/Icon';
 import { formatOfferAmount, getOfferCurrency } from '../utils/offerCurrency';
 import { Modal } from '../components/Modal';
 import { PageState } from '../components/ui/PageState';
-import { QuickGuideTrigger } from '../quickguide';
 import './PageEnhancementsV2.css';
 
 interface Offer extends BaseOffer {
@@ -344,15 +343,9 @@ export function OffersPage() {
       {/* ── Page Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2.5 flex-wrap">
-            <h1 className="rf-page-title">
-              Offers
-            </h1>
-            <QuickGuideTrigger />
-          </div>
-          <p className="text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400 mt-1">
-            Track approvals, sent offers, and acceptances.
-          </p>
+          <h1 className="rf-page-title">
+            Offers
+          </h1>
         </div>
 
         <div className="flex w-full flex-col sm:w-auto sm:flex-row sm:flex-wrap sm:items-center gap-2 sm:gap-2.5">

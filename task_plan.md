@@ -1,3 +1,15 @@
+# Manager analytics audit (2026-11-02)
+
+Current follow-up: monthly target plans with automatically derived weekly targets — `.scratch/monthly-target-plans/task_plan.md`.
+
+Monthly target plan implementation complete; evidence: `.scratch/monthly-target-plans/verification.md`.
+
+Implementation authorized after the audit: `.scratch/manager-results-improvement/task_plan.md`.
+
+Implementation complete; evidence and limitations: `.scratch/manager-results-improvement/verification.md`.
+
+Current read-only audit and validation: `.scratch/manager-analytics-audit/task_plan.md`. Earlier task records below are preserved.
+
 # Visual correction follow-up (2026-10-12)
 - [x] Identify the remaining sidebar/mode and icon mismatch against the SGH reference.
 - [x] Restore theme surfaces, rounded icon tiles, visible SGH accents and logo backing.
@@ -192,3 +204,71 @@ Branch `codex/local-desktop-upgrade` remains at `16e26b3`. No commit. Phase 9 is
 A normal login at `http://127.0.0.1:5173/` opens the new interface. More (classic) is no longer in the sidebar. Each classic page keeps its route and permission gate, and the signed-in person gets a retained link for every classic page they can open. The 26 acceptance rows still match the phase 4–8 records. The phase-1 dump was restored to disposable database `recruitment_v2_phase9_recover_20261013` and that database was dropped.
 
 Evidence: artifacts/local-desktop-upgrade/phase-9-report.md.
+# 2026-10-28 — v2 design, workflow integration and v1 capability audit
+
+Goal: assess the hiring desk at fc3cce2 and the current local overlay, identify design and journey breaks, map v1 capabilities into a simpler v2, and deliver an evidence-based prioritized recovery plan. Do not redesign or alter business behavior before the audit establishes the scope.
+
+Selected skills: planning-with-files (tracking), ui-ux-pro-max (journey/design audit), ui-design-system (shared UI consistency).
+
+Baseline: current branch phase-2-pipeline-application-file, HEAD fc3cce2, matching local comfort-desk-review and origin/comfort-desk-review refs. Existing tracked/untracked changes must remain intact. main, GitLab, public deployment, existing data and credentials remain untouched.
+
+- [x] Inspect product rules, v1/v2 route and capability map, shared components and current local differences.
+- [x] Inspect available local browser and read-only journeys; distinguish runtime evidence from source findings and historical reports.
+- [x] Record concrete design/integration defects, missing versus hidden capabilities, and a prioritized repair plan with acceptance criteria.
+- [x] Verify report evidence and summarize conclusions and limits to the user.
+
+User clarified the employee journey is the focus. Delivered docs/employee-journey-audit-2026-10-28.md with ten concrete findings, retained/missing capability map, three ordered repair batches and acceptance criteria. Browser walkthrough verified import/CV-bank loops, wrong My Work return destination, misleading next-action labels and 107px document overflow on the application file at 375px. Other four surfaces measured 0px overflow at 375/768/1024/1440. Focused tests: 5 files / 285 tests passed; web typecheck and design-token gate passed. No app-code/data/external changes. Runtime writes, all-role permissions, Dark and comprehensive E2E/accessibility are not certified. Viewport restored.
+
+Follow-up complete: documented semantic color/icon direction, candidate activity and self-scheduling gaps, and employee screen concepts in docs/employee-visual-odoo-benchmark-2026-10-28.md. User supplied the four references Odoo, Linear, Ashby and Notion; compared each against the requested purpose using official documentation, distinguishing verified behavior from design proposals and unverified implementation gaps.
+
+## 2026-10-28 — Consolidated implementation plan (current request)
+
+Requested outcome: turn both audit documents into one professional, phase-based execution plan. Planning and documentation only; implementation is not started by this request.
+
+Selected skills: planning-with-files, senior-fullstack, code-reviewer.
+
+- [x] Read both inputs, tracker conventions, current scripts and affected frontend/API/contract paths.
+- [x] Write the canonical plan with scope, design contract, phase gates, dependencies, acceptance scenarios, verification and rollback.
+- [x] Create the linked execution specification and individual implementation tickets.
+- [x] Validate traceability, local links, ticket dependencies and preservation of existing source changes.
+
+Deliverables: docs/employee-experience-implementation-plan.md and .scratch/employee-experience-recovery/ with spec.md and numbered issues. Both source audits remain intact as evidence.
+
+Complete: nine phases (0–8), 19 implementation/release tickets, 18 acceptance scenarios, requirements traceability, measurable outcomes, role ownership, verification gates and recovery/release rules. Validated 21 new Markdown files: all relative file links resolve, ticket IDs/dependencies/statuses are consistent and all acceptance IDs are present. Resolved a sequencing risk by explicitly allowing functional existing-page bridges in Phase 2 before Phase 4 replacements. No application implementation, migrations, branch operations or deployment in this planning task.
+
+## 2026-10-28 — Notion-inspired system design addendum
+
+Requested outcome: a separate Markdown specification for a simpler Notion-inspired system design, consistent icons, SGH colors, selective smooth motion and performance optimization; incorporate it into the implementation plan.
+
+Selected skills: planning-with-files, ui-ux-pro-max, ui-design-system. Documentation-only request.
+
+- [x] Write docs/notion-inspired-design-spec.md with system visual coverage, component rules, motion and measurable performance targets.
+- [x] Update the main plan, specification and relevant tickets; add system-wide visual rollout/performance work before final acceptance.
+- [x] Validate links, dependency graph and scope consistency; retain historical audits as evidence.
+
+Complete: separate design specification and main plan v1.1, nine phases retained, 21 tickets and 20 acceptance scenarios. Phase 8 executes 20 → 21 → 18 → 19 after Phase 7. Validated 24 Markdown files, relative links, ticket statuses, the acyclic dependency graph, final gate order and acceptance coverage: zero errors. No application redesign, animation implementation, performance benchmark, database change or release was performed by this documentation task.
+
+Acceptance: specific reproducible/source-backed findings; no unsupported claim that a legacy capability is absent; no claim of end-to-end certification; a practical simplification direction with first delivery scope.
+
+---
+
+
+## Employee experience Phase 0 — 28 October 2026
+Status: in progress; gate incomplete. See artifacts/employee-experience-recovery/phase-00/baseline.md for outstanding runtime, isolation, recovery and performance proof.
+
+Phase 0 continuation: disposable schema recovery and current-source login baseline complete; full isolated API, identities and authenticated performance gate remain in progress.
+
+Phase 0 continuation: evidence prepared for independent gate review; stopped before Phase 1. Current web suite has two reproducible failures; release recovery of original data remains unverified.
+
+## Employee experience Phase 1 (in progress)
+Audit contract, shell, tokens and shared consumers; implement visual contract then shared states; verify isolated preview, accessibility, responsive themes and tests; stop for review. Preserve existing overlay.
+
+Phase 1 representative implementation complete for review; independent gate pending. Actual drop/result animation and full offscreen checks remain open. No Phase 2 work.
+
+Phase 1 follow-up: completed synthetic-response drops and offscreen/unmount checks in both motion modes; independent review pending.
+
+## Employee experience Phase 2 — in progress
+1. Trace and repair identity-preserving routes and validated return context (04).
+2. Trace file section reads and introduce explicit failures and recovery (05).
+3. Trace server policies, reconcile counts/actions and test scope (06).
+4. Run isolated browser/static checks and review; stop before Phase 3.

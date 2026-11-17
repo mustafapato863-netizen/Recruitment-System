@@ -14,7 +14,7 @@ export { CardV2 } from './Card';
 export type { CardV2Props } from './Card';
 export { TableV2, TableRowV2, TableCellV2 } from './Table';
 export type { TableV2Props, TableRowV2Props } from './Table';
-export { EmptyStateV2, ForbiddenStateV2, SkeletonV2 } from './PageStates';
+export { EmptyStateV2, ErrorStateV2, ForbiddenStateV2, SkeletonV2 } from './PageStates';
 export { TabsV2, TabPanelV2 } from './Tabs';
 export type { TabV2Item } from './Tabs';
 export { DrawerV2 } from './Drawer';

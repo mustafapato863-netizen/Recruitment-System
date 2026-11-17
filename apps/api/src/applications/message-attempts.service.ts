@@ -90,6 +90,24 @@ export class MessageAttemptsService {
       }),
       this.composition(user.organizationId, applicationId),
     ]);
+    // Optional: unit tests mock prisma without whatsAppTemplate. Never call findMany unless the delegate exists.
+    const waRows = this.prisma.whatsAppTemplate?.findMany
+      ? await this.prisma.whatsAppTemplate.findMany({
+        where: { organizationId: user.organizationId, status: 'Active' },
+        orderBy: [{ isDefault: 'desc' }, { category: 'asc' }, { name: 'asc' }],
+      })
+      : undefined;
+    const whatsappTemplates = Array.isArray(waRows)
+      ? waRows.map((t) => ({
+        id: t.id,
+        name: t.name,
+        category: t.category,
+        interviewType: t.interviewType,
+        bodyTemplate: t.bodyTemplate,
+        body: renderTemplate(t.bodyTemplate, vars),
+        isDefault: t.isDefault,
+      }))
+      : undefined;
     return {
       applicationId,
       followUpDate: app.followUpDate ? app.followUpDate.toISOString().slice(0, 10) : null,
@@ -97,6 +115,7 @@ export class MessageAttemptsService {
       deliveryEnabled: mailDeliveryEnabled(),
       templates: templates.map((template) => this.fill(template, vars)),
       attempts: rows.map((row) => this.toView(row)),
+      ...(whatsappTemplates !== undefined ? { whatsappTemplates } : {}),
     };
   }
 

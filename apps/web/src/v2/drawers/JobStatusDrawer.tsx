@@ -31,9 +31,10 @@ export function JobStatusDrawer({ job, initial, onClose, onDone }: { job: JobDet
   const [holdUntil, setHoldUntil] = useState('');
   const [err, setErr] = useState<Errs>({});
   const [busy, setBusy] = useState(false);
-  const [history, setHistory] = useState<JobStatusHistoryItem[] | null>(null);
+  const [history, setHistory] = useState<JobStatusHistoryItem[] | 'error' | null>(null);
+  const [histAttempt, setHistAttempt] = useState(0);
   const [reload, setReload] = useState(0);
-  useEffect(() => { void jobStatusHistory(job.id).then(setHistory).catch(() => setHistory([])); }, [job.id]);
+  useEffect(() => { setHistory(null); void jobStatusHistory(job.id).then(setHistory).catch(() => setHistory('error')); }, [job.id, histAttempt]);
   useEffect(() => {
     for (const a of ['hold', 'close'] as const) {
       if (allowed.includes(a)) void jobReasons(a).then((r) => setLists((l) => ({ ...l, [a]: r }))).catch(() => setLists((l) => ({ ...l, [a]: 'error' })));
@@ -119,7 +120,9 @@ export function JobStatusDrawer({ job, initial, onClose, onDone }: { job: JobDet
         {err.form ? <p className="rf2-form-error" role="alert">{err.form}</p> : null}
         <section aria-labelledby="job-hist-h" className="rf2-history">
           <h3 id="job-hist-h" className="rf2-field__label">Job history</h3>
-          {history === null ? <SkeletonV2 lines={2} label="Loading history…" /> : history.length === 0 ? <p className="rf2-jtable__sub">No status changes yet.</p> : (
+          {history === null ? <SkeletonV2 lines={2} label="Loading history…" /> : history === 'error' ? (
+            <p className="rf2-form-error" role="alert">Could not load status history. <ButtonV2 kind="secondary" size="sm" type="button" onClick={() => setHistAttempt((n) => n + 1)}>Retry history</ButtonV2></p>
+          ) : history.length === 0 ? <p className="rf2-jtable__sub">No status changes yet.</p> : (
             <ol className="rf2-history__list">
               {[...history].reverse().map((h) => (
                 <li key={h.id}><time dateTime={h.createdAt}>{formatDay(h.createdAt)}</time> <span>{h.fromStatus ? `${h.fromStatus} → ` : ''}{h.toStatus}</span>

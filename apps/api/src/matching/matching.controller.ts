@@ -3,22 +3,38 @@ import type { AuthUser } from '@recruitflow/contracts';
 // Runtime service and DTO imports must remain value imports for Nest DI metadata reflection.
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { MatchingService } from './matching.service';
+import { AtsScoringService } from './ats-scoring.service';
 import { AddSkillEvidenceDto, DuplicateCheckDto } from './matching.dto';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { RequirePermissions } from '../common/decorators/require-permissions.decorator';
 
-/** B6: suggest and compare on a job (with skill evidence), candidate skill evidence, duplicate check. */
+/** B6: suggest and compare on a job (with skill evidence), candidate skill evidence, duplicate check, ATS match scoring. */
 @UseGuards(JwtAuthGuard)
 @Controller()
 export class MatchingController {
-  constructor(private readonly matching: MatchingService) {}
+  constructor(
+    private readonly matching: MatchingService,
+    private readonly atsScoring: AtsScoringService,
+  ) {}
 
   @Get('vacancies/:id/suggestions')
   @RequirePermissions('VACANCY_VIEW')
   suggestions(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.matching.suggestions(user, id);
+  }
+
+  @Get('applications/:id/ats-match')
+  @RequirePermissions('APPLICATION_VIEW')
+  getApplicationAts(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.atsScoring.evaluateApplicationAts(user.organizationId, id, user);
+  }
+
+  @Get('candidates/:id/job-recommendations')
+  @RequirePermissions('CANDIDATE_VIEW')
+  getCandidateJobRecommendations(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.atsScoring.getJobRecommendationsForCandidate(user.organizationId, id);
   }
 
   @Get('vacancies/:id/compare')

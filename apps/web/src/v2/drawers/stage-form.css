@@ -1,0 +1,26 @@
+/* Stage forms use named, flat groups and distinct field wells in both themes. */
+html[data-ui='v2'] .rf2-stage-form { gap: 14px; min-width: 0; }
+html[data-ui='v2'] .rf2-stage-section { --stage-accent: var(--rf2-info); --stage-tint: var(--rf2-info-tint); min-width: 0; padding: 14px; border: 0; outline: none; box-shadow: none; border-radius: var(--rf2-radius-card); background: var(--stage-tint); }
+html[data-ui='v2'] .rf2-stage-section[data-tone='success'] { --stage-accent: var(--rf2-success); --stage-tint: var(--rf2-success-tint); }
+html[data-ui='v2'] .rf2-stage-section[data-tone='warning'] { --stage-accent: var(--rf2-warning); --stage-tint: var(--rf2-warning-tint); }
+html[data-ui='v2'] .rf2-stage-section[data-tone='danger'] { --stage-accent: var(--rf2-danger); --stage-tint: var(--rf2-danger-tint); }
+html[data-ui='v2'] .rf2-stage-section[data-tone='neutral'] { --stage-accent: var(--rf2-ink-2); --stage-tint: var(--rf2-neutral-tint); }
+html[data-ui='v2'] .rf2-stage-section__title { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; color: var(--stage-accent); font-size: 14px; line-height: 20px; font-weight: 700; }
+html[data-ui='v2'] .rf2-stage-section__title > span { display: grid; place-items: center; flex: none; width: 28px; height: 28px; border-radius: 8px; background: var(--rf2-card); }
+html[data-ui='v2'] .rf2-stage-section__title svg { width: 17px; height: 17px; }
+html[data-ui='v2'] .rf2-stage-section__body { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+html[data-ui='v2'] .rf2-stage-section__body > * { min-width: 0; max-width: 100%; }
+html[data-ui='v2'] .rf2-stage-form .rf2-gates { margin: 0; padding: 10px 12px; border-radius: 8px; background: var(--rf2-neutral-tint); }
+html[data-ui='v2'] .rf2-drawer .rf2-stage-form .rf2-stage-section .rf2-field__box { min-height: 44px; background: var(--rf2-card); border: 0; outline: none; box-shadow: none; }
+html[data-ui='v2'] .rf2-drawer .rf2-stage-form .rf2-stage-section :is(input, select, textarea).rf2-field__control { min-width: 0; background: transparent; border: 0; outline: none; box-shadow: none; }
+html[data-ui='v2'] .rf2-drawer .rf2-stage-form .rf2-stage-section .rf2-field:focus-within .rf2-field__box { background: var(--rf2-neutral-tint); }
+html[data-ui='v2'] .rf2-drawer .rf2-stage-form .rf2-stage-section .rf2-field:focus-within > label { color: var(--stage-accent); font-weight: 700; }
+html[data-ui='v2'] .rf2-drawer .rf2-stage-form .rf2-stage-section .rf2-field:is([data-disabled], [data-readonly]) .rf2-field__box { background: var(--rf2-neutral-tint); color: var(--rf2-muted); }
+html[data-ui='v2'] .rf2-drawer .rf2-stage-form .rf2-stage-section .rf2-field[data-state='error'] .rf2-field__box { background: var(--rf2-danger-tint); }
+html[data-ui='v2'] .rf2-drawer .rf2-stage-form .rf2-stage-section .rf2-field[data-state='error'] > label { color: var(--rf2-danger); }
+html[data-ui='v2'] .rf2-stage-form :is(.rf2-checklist__item, .rf2-choice, .rf2-rating) { border: 0; outline: none; box-shadow: none; border-radius: 8px; background: var(--rf2-card); }
+html[data-ui='v2'] .rf2-stage-form .rf2-checklist__item:focus-within { background: var(--rf2-neutral-tint); }
+@media (max-width: 767px) {
+  html[data-ui='v2'] .rf2-stage-section { padding: 12px; }
+  html[data-ui='v2'] .rf2-stage-form .rf2-drawer-form__row { grid-auto-flow: row; grid-template-columns: minmax(0, 1fr); }
+}

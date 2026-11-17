@@ -1,8 +1,18 @@
 import { useState, useEffect, useMemo, useRef, type KeyboardEvent } from 'react';
+import type { UserProfile } from '@recruitflow/contracts';
 import { patchApi } from '../../api/client';
+import { useAuth } from '../../auth/AuthContext';
 import { Icon } from '../Icon';
 import { Modal } from '../Modal';
 import { useMasterDataOptions } from '../../hooks/useMasterDataOptions';
+
+const FULL_SPEC_ROLE_CODES = new Set(['ADMINISTRATOR', 'HIRING_MANAGER', 'HR_ADMIN', 'RECRUITMENT_LEAD']);
+
+function userCanManageFullVacancySpec(user: UserProfile | null | undefined): boolean {
+  if (!user) return false;
+  if (user.permissions?.includes('VACANCY_MANAGE')) return true;
+  return user.roles?.some((role) => FULL_SPEC_ROLE_CODES.has(role.code)) ?? false;
+}
 
 function normalizeLocation(loc?: string | null): string {
   if (!loc) return 'Cairo';
@@ -44,6 +54,8 @@ interface EditPositionRequirementsModalProps {
   initialQualifications?: string | null;
   initialJobSummary?: string | null;
   initialFocusSection?: 'jobSummary' | 'skills' | 'department' | 'location';
+  /** When omitted, full benchmark fields are editable only for VACANCY_MANAGE or a hiring manager/admin role. */
+  canManageFullSpec?: boolean;
   onSaved: (updated: {
     requiredSkills: string[];
     minExperienceYears: number | null;
@@ -67,8 +79,12 @@ export function EditPositionRequirementsModal({
   initialQualifications = '',
   initialJobSummary = '',
   initialFocusSection,
+  canManageFullSpec: canManageFullSpecProp,
   onSaved,
 }: EditPositionRequirementsModalProps) {
+  const { user } = useAuth();
+  const canManageFullSpec = canManageFullSpecProp ?? userCanManageFullVacancySpec(user);
+  const fieldsLocked = !canManageFullSpec;
   const [skills, setSkills] = useState<string[]>(initialSkills);
   const [skillInput, setSkillInput] = useState('');
   const [minExp, setMinExp] = useState<number>(initialMinExp ?? 3);
@@ -98,15 +114,16 @@ export function EditPositionRequirementsModal({
       setSkillInput('');
 
       if (initialFocusSection) {
+        const section = fieldsLocked && initialFocusSection !== 'skills' ? 'skills' : initialFocusSection;
         setTimeout(() => {
-          if (initialFocusSection === 'jobSummary') jobSummaryRef.current?.focus();
-          else if (initialFocusSection === 'skills') skillsRef.current?.focus();
-          else if (initialFocusSection === 'department') departmentRef.current?.focus();
-          else if (initialFocusSection === 'location') locationRef.current?.focus();
+          if (section === 'jobSummary') jobSummaryRef.current?.focus();
+          else if (section === 'skills') skillsRef.current?.focus();
+          else if (section === 'department') departmentRef.current?.focus();
+          else if (section === 'location') locationRef.current?.focus();
         }, 50);
       }
     }
-  }, [isOpen, initialSkills, initialMinExp, initialLocation, initialDepartment, initialQualifications, initialJobSummary, initialFocusSection]);
+  }, [isOpen, initialSkills, initialMinExp, initialLocation, initialDepartment, initialQualifications, initialJobSummary, initialFocusSection, fieldsLocked]);
 
   const availableLocationOptions = useMemo(() => {
     const list: { value: string; label: string }[] = [...CANONICAL_LOCATIONS];
@@ -163,11 +180,15 @@ export function EditPositionRequirementsModal({
     try {
       await patchApi(`/vacancies/${vacancyId}`, {
         requiredSkills: skills,
-        minExperienceYears: minExp,
-        location,
-        department,
-        qualifications,
-        jobSummary,
+        ...(canManageFullSpec
+          ? {
+              minExperienceYears: minExp,
+              location,
+              department,
+              qualifications,
+              jobSummary,
+            }
+          : {}),
       });
 
       onSaved({
@@ -220,27 +241,57 @@ export function EditPositionRequirementsModal({
           </div>
         )}
 
-        {/* Job Summary & Purpose */}
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
-            <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
-              Job Summary &bull; Core Purpose
-            </label>
-            {!jobSummary?.trim() && (
-              <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">
-                Required for Activation
-              </span>
-            )}
+        {fieldsLocked ? (
+          <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900/40">
+            <dl className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <dt className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Job summary</dt>
+                <dd className="mt-1 text-slate-800 dark:text-slate-100">{jobSummary.trim() || 'No job description provided.'}</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Min experience</dt>
+                <dd className="mt-1 text-slate-800 dark:text-slate-100">{minExp} years</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Location</dt>
+                <dd className="mt-1 text-slate-800 dark:text-slate-100">{location || 'Not specified'}</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Department</dt>
+                <dd className="mt-1 text-slate-800 dark:text-slate-100">{department || 'Not specified'}</dd>
+              </div>
+              <div>
+                <dt className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Qualifications</dt>
+                <dd className="mt-1 text-slate-800 dark:text-slate-100">{qualifications.trim() || 'Not specified'}</dd>
+              </div>
+            </dl>
+            <p className="text-xs font-medium text-slate-600 dark:text-slate-300">
+              Managed by Hiring Manager / Admin — you can edit Required Skills below
+            </p>
           </div>
-          <textarea
-            ref={jobSummaryRef}
-            rows={3}
-            value={jobSummary}
-            onChange={(e) => setJobSummary(e.target.value)}
-            placeholder="Describe the primary mission, key clinical/operational responsibilities, and team context for this requisition..."
-            className="w-full px-3.5 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
-          />
-        </div>
+        ) : (
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label htmlFor="position-job-summary" className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                Job Summary &bull; Core Purpose
+              </label>
+              {!jobSummary?.trim() && (
+                <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400">
+                  Required for Activation
+                </span>
+              )}
+            </div>
+            <textarea
+              id="position-job-summary"
+              ref={jobSummaryRef}
+              rows={3}
+              value={jobSummary}
+              onChange={(e) => setJobSummary(e.target.value)}
+              placeholder="Describe the primary mission, key clinical/operational responsibilities, and team context for this requisition..."
+              className="w-full px-3.5 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 resize-none"
+            />
+          </div>
+        )}
 
         {/* Skills Tag Management */}
         <div className="space-y-2">
@@ -315,6 +366,7 @@ export function EditPositionRequirementsModal({
         </div>
 
         {/* Experience & Location Grid */}
+        {fieldsLocked ? null : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-1.5">
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
@@ -353,9 +405,11 @@ export function EditPositionRequirementsModal({
             </select>
           </div>
         </div>
+        )}
 
 
         {/* Department & Qualifications */}
+        {fieldsLocked ? null : (
         <div className="space-y-3">
           <div className="space-y-1.5">
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
@@ -384,6 +438,7 @@ export function EditPositionRequirementsModal({
             />
           </div>
         </div>
+        )}
 
         {/* Footer Actions */}
         <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-200 dark:border-slate-800">

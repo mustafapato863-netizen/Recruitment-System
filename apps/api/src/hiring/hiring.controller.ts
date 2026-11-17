@@ -48,7 +48,7 @@ export class HiringController {
   }
 
   @Get('final-approvals')
-  @RequirePermissions('FINAL_HIRING_APPROVAL')
+  @RequireAnyPermissions('FINAL_HIRING_APPROVAL', 'VACANCY_APPROVE', 'OFFER_APPROVE')
   getFinalApprovalInbox(@CurrentUser() user: AuthUser) {
     return this.hiringService.getFinalApprovalInbox(user.organizationId, user);
   }
@@ -112,7 +112,7 @@ export class HiringController {
   }
 
   @Post(':id/final-approval')
-  @RequirePermissions('FINAL_HIRING_APPROVAL')
+  @RequireAnyPermissions('FINAL_HIRING_APPROVAL', 'VACANCY_APPROVE', 'OFFER_APPROVE')
   @AuditAction('HIRING_FINAL_APPROVAL_DECIDE')
   @UseGuards(TenantScopedGuard)
   @TenantResource({ resource: 'hiringCase', param: 'id' })

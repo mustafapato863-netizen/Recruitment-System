@@ -1,6 +1,6 @@
 import { describe, expect, expectTypeOf, it, vi } from 'vitest';
 import { ApiError } from '../../../api/client';
-import { actionHref, entityHref, getMyWork, isEndpointMissing, joiningCaseHref, normalizeMyWork, resolveSourceMode, upcomingInterviewHref, waitingOfferTitle, type MyWorkResponse, type WorkItem } from '../myWork';
+import { actionHref, entityHref, fileActionHref, getMyWork, isEndpointMissing, joiningCaseHref, normalizeMyWork, resolveSourceMode, taskRecordHref, upcomingInterviewHref, waitingOfferTitle, type MyWorkResponse, type WorkItem } from '../myWork';
 import { myWorkFixture } from '../myWork.fixtures';
 
 const apiErr = (status: number) => new ApiError(status, `status ${status}`);
@@ -116,12 +116,54 @@ describe('E2: My Work actions open the v2 file', () => {
     const sc = fx.overdue[0];
     expect(fileActionHref(sc, sc.actions[0])).toBe('/applications/a1?drawer=scorecard&interview=i1');
     const offer = fx.waitingOnOthers[0];
+    expect(fileActionHref(offer, { key: 'screen', label: 'Log screen', disabled: false })).toBe('/applications/a3?drawer=screen');
+    expect(fileActionHref(offer, { key: 'schedule', label: 'Schedule interview', disabled: false })).toBe('/applications/a3?drawer=schedule');
+    expect(fileActionHref(offer, { key: 'scorecard', label: 'Open scorecard', disabled: false })).toBe('/applications/a3?drawer=scorecard');
     expect(fileActionHref(offer, { key: 'send-offer', label: 'Send offer', disabled: false })).toBe('/applications/a3?drawer=send');
     expect(fileActionHref(offer, { key: 'record-response', label: 'Record response', disabled: false })).toBe('/applications/a3?drawer=answer');
-    expect(fileActionHref(offer, offer.actions[0])).toBe('/applications/a3');
+    expect(fileActionHref(offer, { key: 'pre-hire', label: 'Pre-hire checklist', disabled: false })).toBe('/applications/a3?drawer=prehire');
+    expect(fileActionHref(offer, offer.actions[0])).toBe('/applications/a3?drawer=offer');
     expect(fileActionHref(fx.waitingOnOthers[1], { key: 'move-to-offer', label: 'Move to Offer', disabled: false })).toBe('/applications/a4?drawer=offer');
     const job = fx.dueToday[0];
     expect(fileActionHref(job, job.actions[0])).toBe('/vacancies/j1');
+    const back = '/my-work?day=tomorrow&tab=joining';
+    expect(fileActionHref(sc, sc.actions[0], { returnTo: back })).toBe(`/applications/a1?drawer=scorecard&interview=i1&returnTo=${encodeURIComponent(back)}`);
+    expect(fileActionHref(offer, offer.actions[0], { returnTo: 'https://evil.example/my-work' })).toBe('/applications/a3?drawer=offer');
+    expect(fileActionHref(job, job.actions[0], { returnTo: back })).toBe('/vacancies/j1');
+  });
+
+  it('keeps task completion and reschedule off the router and carries returnTo on the linked record', () => {
+    const task = (over: Partial<WorkItem>): WorkItem => ({
+      id: 't1', type: 'task', title: 'Follow up', dueAt: null, reason: 'Task',
+      nextAction: { code: 'complete-task', label: 'Complete task' },
+      entity: { type: 'task', id: 't1' }, actions: [],
+      ...over,
+    });
+    const ctx = { returnTo: '/my-work' };
+    const open = { key: 'open-record', label: 'Open record', disabled: false };
+    const complete = { key: 'complete-task', label: 'Complete task', disabled: false };
+    const reschedule = { key: 'reschedule-task', label: 'Reschedule', disabled: false };
+    expect(taskRecordHref(task({}), ctx)).toBeNull();
+    expect(fileActionHref(task({}), complete, ctx)).toBeNull();
+    expect(fileActionHref(task({}), reschedule, ctx)).toBeNull();
+    const application = task({ id: 't2', entity: { type: 'application', id: 'a1' } });
+    expect(fileActionHref(application, open, ctx)).toBe('/applications/a1?returnTo=%2Fmy-work');
+    expect(fileActionHref(application, complete, ctx)).toBeNull();
+    expect(taskRecordHref(task({ applicationId: 'a9', candidate: { id: 'c1', name: 'Nour Ali' } }), ctx)).toBe('/applications/a9?returnTo=%2Fmy-work');
+    expect(taskRecordHref(task({ candidate: { id: 'c1', name: 'Nour Ali' } }), ctx)).toBe('/candidates/c1?returnTo=%2Fmy-work');
+    expect(taskRecordHref(task({ entity: { type: 'job', id: 'j1' } }), ctx)).toBe('/vacancies/j1');
+  });
+
+  it('patches task completion and reschedule', async () => {
+    vi.resetModules();
+    const patchApi = vi.fn().mockResolvedValue({});
+    vi.doMock('../../../api/client', async () => ({ ...(await vi.importActual<object>('../../../api/client')), patchApi }));
+    const mod = await import('../myWork');
+    await mod.completeTask('t 1');
+    await mod.rescheduleTask('t 1', '2099-01-01T00:00:00.000Z');
+    expect(patchApi).toHaveBeenNthCalledWith(1, '/tasks/t%201/status', { status: 'Completed' });
+    expect(patchApi).toHaveBeenNthCalledWith(2, '/tasks/t%201/reschedule', { dueAt: '2099-01-01T00:00:00.000Z' });
+    vi.doUnmock('../../../api/client');
   });
 
   it('labels the waitingOn blocker and does not treat a sent offer as approval', () => {
@@ -151,10 +193,29 @@ describe('E2: My Work actions open the v2 file', () => {
     expect(assignedScore).not.toContain('/applications/');
     const [approval, licence] = fx.joiningSoon!;
     expect(joiningCaseHref(approval!, true)).toEqual({ href: '/applications/a3?drawer=prehire', label: 'Open checklist' });
-    expect(joiningCaseHref(licence!, true)).toEqual({ href: '/hires/hc2', label: 'View readiness' });
-    expect(joiningCaseHref({ ...licence!, readiness: 'blocked', detail: 'Approved capacity is already filled.' }, true)).toEqual({ href: '/hires/hc2', label: 'View readiness' });
-    expect(joiningCaseHref({ ...licence!, readiness: 'review', detail: 'Review readiness' }, true)).toEqual({ href: '/hires/hc2', label: 'View readiness' });
+    expect(joiningCaseHref(licence!, true)).toEqual({ href: '/applications/a8?drawer=prehire', label: 'View readiness' });
+    expect(joiningCaseHref(licence!, false)).toEqual({ href: '/applications/a8?drawer=prehire', label: 'View readiness' });
+    expect(joiningCaseHref({ ...licence!, readiness: 'ready', detail: 'Ready to join' }, false)).toEqual({ href: '/applications/a8?drawer=prehire', label: 'View readiness' });
+    expect(joiningCaseHref({ ...licence!, readiness: 'blocked', detail: 'Approved capacity is already filled.' }, false)).toEqual({ href: '/applications/a8?drawer=prehire', label: 'View readiness' });
+    expect(joiningCaseHref({ ...licence!, readiness: 'review', detail: 'Review readiness' }, false)).toEqual({ href: '/applications/a8?drawer=prehire', label: 'View readiness' });
     expect(joiningCaseHref(approval!, false).href).toBe('/hires/hc1');
+    const back = '/my-work?filter=waiting';
+    expect(upcomingInterviewHref(fileRow!, { ...file, returnTo: back })).toBe(`/applications/a2?drawer=schedule&interview=iv2&returnTo=${encodeURIComponent(back)}`);
+    expect(upcomingInterviewHref(assigned!, { canOpenFile: false, returnTo: back })).toBe('/my-interviews?interview=iv-assigned');
+    expect(upcomingInterviewHref(assigned!, { canOpenFile: false, returnTo: back })).not.toContain('/applications/');
+    expect(joiningCaseHref(approval!, false, back).href).toBe(`/hires/hc1?returnTo=${encodeURIComponent(back)}`);
+    expect(joiningCaseHref(licence!, false, '/search?q=Ahmed').href).toBe(`/applications/a8?drawer=prehire&returnTo=${encodeURIComponent('/search?q=Ahmed')}`);
     expect(fx.joiningSoon!.every((row) => row.joined === false)).toBe(true);
   });
+
+  it.each(['licence_pending', 'ready', 'blocked', 'review'] as const)(
+    'joining readiness %s uses the pre-hire drawer /applications/:id?drawer=prehire',
+    (readiness) => {
+      const licence = myWorkFixture().joiningSoon!.find((row) => row.readiness === 'licence_pending')!;
+      expect(joiningCaseHref({ ...licence, readiness }, false)).toEqual({
+        href: '/applications/a8?drawer=prehire',
+        label: 'View readiness',
+      });
+    },
+  );
 });

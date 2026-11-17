@@ -7,10 +7,13 @@ import { axeViolations } from '../../../components/v2/__tests__/axe';
 import * as fx from '../../api/__fixtures__/teamWork';
 
 const api = vi.hoisted(() => ({ getApi: vi.fn(), postApi: vi.fn(), patchApi: vi.fn() }));
+const authState = vi.hoisted(() => ({
+  user: { id: 'u-karim', displayName: 'Karim Hassan', permissions: ['APPLICATION_VIEW'] as string[], roles: [{ code: 'HIRING_MANAGER' }] },
+}));
 vi.mock('../../../api/client', async () => ({ ...(await vi.importActual<object>('../../../api/client')), ...api }));
-vi.mock('../../../auth/AuthContext', () => ({ useAuth: () => ({ user: { id: 'u-karim', displayName: 'Karim Hassan', permissions: ['APPLICATION_VIEW'], roles: [{ code: 'HIRING_MANAGER' }] } }) }));
+vi.mock('../../../auth/AuthContext', () => ({ useAuth: () => ({ user: authState.user }) }));
 import { TeamWorkV2 } from '../TeamWorkV2';
-import { reassignError, taskFor, type TeamFile } from '../../api/teamWork';
+import { interviewsThisWeekCount, reassignError, taskFor, type TeamFile } from '../../api/teamWork';
 
 let responses: Record<string, unknown> = {};
 const serve = (extra: Record<string, unknown> = {}) => {
@@ -25,38 +28,132 @@ const renderAt = (path = '/my-work') => {
   document.documentElement.setAttribute('data-ui', 'v2');
   return render(<MemoryRouter initialEntries={[path]}><Routes><Route path="/my-work" element={<><TeamWorkV2 /><Loc /></>} /></Routes></MemoryRouter>);
 };
-beforeEach(() => { vi.clearAllMocks(); serve(); });
+beforeEach(() => {
+  vi.clearAllMocks();
+  authState.user = { id: 'u-karim', displayName: 'Karim Hassan', permissions: ['APPLICATION_VIEW'], roles: [{ code: 'HIRING_MANAGER' }] };
+  serve();
+});
+const PEOPLE = ['Mariam Farag', 'Noura Al-Dosari', 'Youssef Ibrahim'] as const;
 const card = (name: string) => screen.getByRole('heading', { name }).closest('section') as HTMLElement;
+const memberOf = (name: string) => screen.getByRole('heading', { level: 2, name }).closest('article') as HTMLElement;
+const rosterNames = () => screen.getAllByRole('heading', { level: 2 }).map((heading) => heading.textContent).filter((name) => (PEOPLE as readonly string[]).includes(name ?? ''));
+const summaryItem = (label: string) => within(screen.getByLabelText('Team summary')).getByText(label).closest('li') as HTMLElement;
+const weekInterviews = () => interviewsThisWeekCount(Object.values(fx.apps).flat() as Array<{ interview?: { startAt: string } | null }>);
+function mariamWithExtra() {
+  const rows = structuredClone(fx.apps['u-mariam']) as Array<Record<string, unknown>>;
+  const base = rows.find((row) => row.id === 'a2') as Record<string, unknown>;
+  const candidate = { ...(base.candidate as Record<string, unknown>), id: 'c-a8', firstName: 'Extra', lastName: 'Person' };
+  rows.push({ ...base, id: 'a8', applicationCode: 'APP-A8', candidateId: 'c-a8', stage: 'Applied', followUpDate: fx.day(5), gates: [], interview: null, candidate });
+  return { data: rows, total: rows.length };
+}
+
+describe('Team work desk', () => {
+  it('keeps one Team work heading and opens waiting items from the tab', async () => {
+    const u = userEvent.setup();
+    renderAt();
+    expect(await screen.findByRole('heading', { name: 'Mariam Farag' })).toBeInTheDocument();
+    expect(screen.queryByText(/Open work of your/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Welcome back/)).not.toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { name: 'Team work' })).toHaveLength(1);
+    expect(screen.getByText("Oversee your team's workload, open items, and approvals.")).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Redistribute work' })).toBeNull();
+    expect(screen.getByRole('note')).toHaveTextContent(/Your reporting line appears here, including people who report through someone else/);
+    expect(screen.getByRole('heading', { name: 'Noura Al-Dosari' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Youssef Ibrahim' })).toBeInTheDocument();
+    await u.click(screen.getByRole('tab', { name: /Waiting on you/ }));
+    expect(screen.getByTestId('loc')).toHaveTextContent('tab=waiting');
+    expect(screen.getByRole('heading', { name: 'Waiting on you' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Review offer: Lina Hassan' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Team work' })).toBeInTheDocument();
+  });
+
+  it('keeps the waiting note as one line inside Waiting on you', async () => {
+    serve({
+      '/offers?status=Pending+Approval&pageSize=100': [],
+      '/me/work?day=today': {
+        date: fx.myWork.date,
+        counts: { overdue: 0, today: 0, waitingOnOthers: 0 },
+        overdue: [],
+        dueToday: [],
+        waitingOnOthers: [],
+        targets: [],
+        empty: true,
+        emptyMessage: null,
+        reminderWorkerHealthy: true,
+      },
+    });
+    const u = userEvent.setup();
+    renderAt('/my-work?tab=waiting');
+    const waiting = (await screen.findByRole('heading', { name: 'Waiting on you' })).closest('section')!;
+    const note = within(waiting).getByText('Nothing is waiting on your decision.');
+    expect(note).toHaveTextContent(/^Nothing is waiting on your decision\.$/);
+    expect(within(waiting).queryByRole('heading', { name: 'Nothing is waiting on your decision.' })).not.toBeInTheDocument();
+    expect(within(waiting).getAllByRole('heading')).toHaveLength(1);
+    await u.selectOptions(screen.getByLabelText('Decision type'), 'offers');
+    expect(within(waiting).getByText('No decisions match this filter.')).toBeInTheDocument();
+    expect(within(waiting).queryByText('Nothing is waiting on your decision.')).not.toBeInTheDocument();
+  });
+});
 
 describe('M2 Team work', () => {
   it('waiting on you (my team only), one card per report A–Z, counts equal rows, closed files hidden, no pay; axe', async () => {
+    const u = userEvent.setup();
     const { container } = renderAt();
-    expect(await screen.findByText('Open work of your 3 direct reports. Counts equal the rows shown.')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Mariam Farag' })).toBeInTheDocument();
+    expect(screen.queryByText(/Open work of your/)).not.toBeInTheDocument();
+    expect(rosterNames()).toEqual(['Mariam Farag', 'Noura Al-Dosari', 'Youssef Ibrahim']);
+    expect(summaryItem('Team members')).toHaveTextContent('3');
+    expect(summaryItem('Open items')).toHaveTextContent('8');
+    expect(summaryItem('Overdue')).toHaveTextContent('3');
+    expect(summaryItem('Overdue').querySelector('[data-tone="danger"]')).toBeTruthy();
+    expect(summaryItem('Interviews this week')).toHaveTextContent(String(weekInterviews()));
+    expect(summaryItem('Interviews this week')).not.toHaveTextContent('—');
+    const m = memberOf('Mariam Farag');
+    expect(m).toHaveTextContent('Recruiter-offshore');
+    expect(m).toHaveTextContent('3 Open');
+    expect(m).toHaveTextContent('1 Overdue');
+    expect(m).toHaveTextContent('1 Interview');
+    expect(screen.queryByRole('columnheader', { name: 'Availability' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('table', { name: 'Team workload' })).not.toBeInTheDocument();
+    expect(m).not.toHaveTextContent('Old Joiner');
+    const lina = within(m).getByRole('link', { name: 'Follow-up overdue — Lina Hassan' });
+    expect(lina).toHaveAttribute('href', '/applications/a3?returnTo=%2Fmy-work');
+    expect(lina.closest('li')).toHaveTextContent('Overdue');
+    expect(lina.closest('li')).toHaveTextContent('HRIS Developer · Offshore Cairo');
+    expect(within(m).getByRole('link', { name: 'Follow up — Nourhan Sami' })).toHaveAttribute('href', '/applications/a2?returnTo=%2Fmy-work');
+    expect(within(m).getByRole('link', { name: 'Follow up — Nourhan Sami' }).closest('li')).toHaveTextContent('Today');
+    expect(memberOf('Noura Al-Dosari')).toHaveTextContent('3 Open');
+    expect(memberOf('Noura Al-Dosari')).toHaveTextContent('2 Overdue');
+    expect(memberOf('Youssef Ibrahim')).toHaveTextContent('2 Open');
+    expect(memberOf('Youssef Ibrahim')).toHaveTextContent('0 Overdue');
+    for (const title of [
+      'Scorecard missing — Ahmed Embaby',
+      'Follow-up overdue — Fahad Al-Qahtani',
+      'Follow-up overdue — Sara Al-Otaibi',
+      'Offer in progress — Hossam Nabil',
+      'Interview — Rana Adel',
+    ]) expect(screen.getByRole('link', { name: title })).toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Team members pages' })).not.toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/62,?000|71,?500|858|EGP|40000/);
+    expect(await axeViolations(container)).toEqual([]);
+    await u.click(screen.getByRole('tab', { name: /Waiting on you/ }));
     const wait = screen.getByRole('heading', { name: 'Waiting on you' }).closest('section')!;
-    expect(within(wait).getAllByRole('listitem')).toHaveLength(2);
+    expect(within(wait).getAllByRole('row')).toHaveLength(3);
+    expect(within(wait).queryByRole('columnheader', { name: 'Site' })).toBeNull();
     expect(wait).toHaveTextContent(/Your scorecard — Ahmed Embaby, HRIS Developer.*Late/);
-    expect(within(wait).getByRole('link', { name: 'Submit scorecard: Ahmed Embaby' })).toHaveAttribute('href', '/applications/a1?drawer=scorecard&interview=i1');
+    expect(within(wait).getByRole('link', { name: 'Submit scorecard: Ahmed Embaby' })).toHaveAttribute('href', '/applications/a1?drawer=scorecard&interview=i1&returnTo=%2Fmy-work%3Ftab%3Dwaiting');
     expect(wait).toHaveTextContent(/Offer approval — Lina Hassan, HRIS Developer.*Offer v1 submitted by Mariam Farag/);
     expect(within(wait).getByRole('button', { name: 'Review offer: Lina Hassan' })).toBeInTheDocument();
-    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent).slice(1)).toEqual(['Mariam Farag', 'Noura Al-Dosari', 'Youssef Ibrahim']);
-    const m = card('Mariam Farag');
-    expect(m).toHaveTextContent('3 open · 1 overdue');
-    expect(within(m).getAllByRole('listitem')).toHaveLength(3);
-    expect(within(m).getAllByRole('listitem')[0]).toHaveTextContent(/Scorecard missing — Ahmed Embaby|Follow-up overdue — Lina Hassan/);
-    expect(m).not.toHaveTextContent('Old Joiner');
-    expect(card('Noura Al-Dosari')).toHaveTextContent('3 open · 2 overdue');
-    expect(within(card('Noura Al-Dosari')).getAllByText('Overdue')).toHaveLength(2);
-    expect(card('Youssef Ibrahim')).toHaveTextContent(/Interview — Rana Adel.*BI Data Analyst · SGH Riyadh.*This week/);
-    expect(within(m).getByRole('link', { name: 'Follow up — Nourhan Sami' })).toHaveAttribute('href', '/applications/a2');
-    expect(container.textContent).not.toMatch(/62,?000|71,?500|858|EGP|40000/);
     expect(await axeViolations(container)).toEqual([]);
   });
   it('keeps the direct-report subtitle when every shown person reports to the signed-in user', async () => {
     serve({ '/users/assignable': fx.assignable.map((person) => ({ ...person, managerId: 'u-karim' })) });
     renderAt();
-    expect(await screen.findByText('Open work of your 3 direct reports. Counts equal the rows shown.')).toBeInTheDocument();
-    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent).slice(1)).toEqual(['Mariam Farag', 'Noura Al-Dosari', 'Youssef Ibrahim']);
-    expect(screen.getByText(/Only your direct reports appear here/)).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Mariam Farag' })).toBeInTheDocument();
+    expect(screen.queryByText(/Open work of your/)).not.toBeInTheDocument();
+    expect(rosterNames()).toEqual(['Mariam Farag', 'Noura Al-Dosari', 'Youssef Ibrahim']);
+    expect(screen.getByRole('note')).toHaveTextContent(/Your reporting line appears here, including people who report through someone else/);
+    expect(screen.queryByText(/Your direct reports\./)).toBeNull();
   });
   it('a reporting line that is not all direct reports stays complete and is not labelled as direct reports', async () => {
     serve({
@@ -67,11 +164,141 @@ describe('M2 Team work', () => {
       ],
     });
     renderAt();
-    expect(await screen.findByText('Open work of your 3 people on the reporting line. Counts equal the rows shown.')).toBeInTheDocument();
-    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent).slice(1)).toEqual(['Mariam Farag', 'Noura Al-Dosari', 'Youssef Ibrahim']);
-    expect(screen.getByText(/Your reporting line appears here, including people who report through someone else/)).toBeInTheDocument();
-    expect(screen.queryByText(/Only your direct reports appear here/)).toBeNull();
-    expect(screen.queryByText(/Open work of your 3 direct reports/)).toBeNull();
+    expect(await screen.findByRole('heading', { name: 'Noura Al-Dosari' })).toBeInTheDocument();
+    expect(screen.queryByText(/Open work of your/)).not.toBeInTheDocument();
+    expect(rosterNames()).toEqual(['Mariam Farag', 'Noura Al-Dosari', 'Youssef Ibrahim']);
+    expect(screen.getByRole('note')).toHaveTextContent(/people who report through someone else/);
+    expect(screen.queryByText(/Your direct reports\./)).toBeNull();
+    expect(screen.queryByText(/Your team, including indirect reports/)).toBeNull();
+  });
+  it('reporting-line totals stay put while job filters and View all change the lists', async () => {
+    const u = userEvent.setup();
+    renderAt();
+    const summary = await screen.findByLabelText('Team summary');
+    expect(within(summary).getByText('Overdue').closest('li')).toHaveTextContent('3');
+    expect(screen.getByRole('tab', { name: 'Waiting on you 2' })).toBeInTheDocument();
+    await u.selectOptions(screen.getByLabelText('Job'), 'HRIS Developer');
+    expect(screen.getByTestId('loc').textContent).toMatch(/job=HRIS(?:\+|%20)Developer/);
+    expect(screen.getByRole('heading', { name: 'Mariam Farag' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Youssef Ibrahim' })).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'Noura Al-Dosari' })).toBeNull();
+    expect(within(summary).getByText('Team members').closest('li')).toHaveTextContent('3');
+    expect(within(summary).getByText('Open items').closest('li')).toHaveTextContent('8');
+    expect(within(summary).getByText('Overdue').closest('li')).toHaveTextContent('3');
+    expect(screen.getByRole('tab', { name: 'Waiting on you 2' })).toBeInTheDocument();
+    expect(memberOf('Mariam Farag')).toHaveTextContent('3 Open');
+    await u.selectOptions(screen.getByLabelText('Job'), '');
+    await u.selectOptions(screen.getByLabelText('Item status'), 'overdue');
+    expect(screen.queryByRole('heading', { name: 'Youssef Ibrahim' })).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Noura Al-Dosari' })).toBeInTheDocument();
+    expect(within(summary).getByText('Overdue').closest('li')).toHaveTextContent('3');
+    await u.selectOptions(screen.getByLabelText('Item status'), '');
+    await u.click(screen.getByRole('tab', { name: /Waiting on you/ }));
+    expect(screen.getByTestId('loc')).toHaveTextContent('tab=waiting');
+    expect(screen.getByRole('heading', { name: 'Waiting on you' })).toBeInTheDocument();
+    await u.selectOptions(screen.getByLabelText('Decision type'), 'offers');
+    expect(screen.getByRole('table')).toHaveTextContent('Lina Hassan');
+    expect(screen.getByRole('table')).not.toHaveTextContent('Ahmed Embaby');
+  });
+  it('an empty reporting line says no team members are assigned', async () => {
+    serve({ '/users/assignable': [] });
+    renderAt();
+    expect(await screen.findByText('No team members assigned')).toBeInTheDocument();
+    expect(screen.getByText('People in your reporting line appear here with their open files.')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Mariam Farag' })).toBeNull();
+    expect(screen.queryByRole('rowheader', { name: 'Mariam Farag' })).toBeNull();
+    expect(screen.queryByRole('navigation', { name: 'Team members pages' })).not.toBeInTheDocument();
+  });
+  it('shows an empty member card when a person has no open items', async () => {
+    serve({
+      '/users/assignable': [...fx.assignable, { id: 'u-hana', displayName: 'Hana Adel', status: 'Active', roles: [] }],
+      '/applications?primaryRecruiterId=u-hana&pageSize=100': { data: [], total: 0 },
+    });
+    renderAt();
+    const empty = (await screen.findByRole('heading', { name: 'Hana Adel' })).closest('article')!;
+    expect(empty).toHaveTextContent('No open items');
+    expect(within(empty).queryByRole('link')).not.toBeInTheDocument();
+    expect(within(empty).queryByRole('button', { name: /View all/ })).not.toBeInTheDocument();
+  });
+  it('uses letter initials and a danger pill when a gate blocks the file', async () => {
+    const youssef = structuredClone(fx.apps['u-youssef']) as Array<Record<string, unknown>>;
+    const offer = youssef.find((row) => row.id === 'y2')!;
+    offer.gates = [{ gate: 'offer-accepted', code: 'GATE_OFFER_NOT_ACCEPTED', met: false, missing: ['x'] }];
+    serve({
+      '/users/assignable': [
+        ...fx.assignable,
+        { id: 'u-zenah', displayName: 'Zenah (Recruiter)', status: 'Active', roles: [{ code: 'R', name: 'Recruiter' }] },
+        { id: 'u-lady', displayName: 'Lady (Nursing Recruiter)', status: 'Active', roles: [{ code: 'R', name: 'Recruiter' }] },
+      ],
+      '/applications?primaryRecruiterId=u-zenah&pageSize=100': { data: [], total: 0 },
+      '/applications?primaryRecruiterId=u-lady&pageSize=100': { data: [], total: 0 },
+      '/applications?primaryRecruiterId=u-youssef&pageSize=100': { data: youssef, total: youssef.length },
+    });
+    renderAt();
+    const zenah = (await screen.findByRole('heading', { name: 'Zenah (Recruiter)' })).closest('article')!;
+    const lady = screen.getByRole('heading', { name: 'Lady (Nursing Recruiter)' }).closest('article')!;
+    expect(zenah.querySelector('.rf2-team__avatar')).toHaveTextContent('ZR');
+    expect(lady.querySelector('.rf2-team__avatar')).toHaveTextContent('LN');
+    expect(zenah.querySelector('.rf2-team__avatar')?.textContent).not.toMatch(/[^A-Z?]/);
+    const blocked = screen.getByRole('link', { name: 'Offer not accepted yet — Hossam Nabil' }).closest('li')!;
+    expect(blocked).toHaveTextContent('Needs review');
+    expect(blocked.querySelector('.rf2-chip')).toHaveAttribute('data-tone', 'danger');
+    expect(blocked.querySelector('.rf2-team__ticon')).toHaveAttribute('data-tone', 'danger');
+    expect(blocked.querySelector('.rf2-chip svg')).toHaveClass('lucide-circle-alert');
+    const scorecard = screen.getByRole('link', { name: 'Scorecard missing — Ahmed Embaby' }).closest('li')!;
+    expect(scorecard.querySelector('.rf2-chip')).toHaveAttribute('data-tone', 'danger');
+    expect(scorecard.querySelector('.rf2-chip svg')).toHaveClass('lucide-circle-alert');
+  });
+  it('paginates team members only when more than six are shown', async () => {
+    const people = Array.from({ length: 7 }, (_, index) => ({
+      id: `u-p${index}`,
+      displayName: `Recruiter ${index + 1}`,
+      status: 'Active',
+      roles: [{ code: 'R', name: 'Recruiter' }],
+    }));
+    serve({
+      '/users/assignable': people,
+      ...Object.fromEntries(people.map((person) => [`/applications?primaryRecruiterId=${person.id}&pageSize=100`, { data: [], total: 0 }])),
+    });
+    const u = userEvent.setup();
+    renderAt();
+    expect(await screen.findByRole('heading', { name: 'Recruiter 1' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Recruiter 6' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Recruiter 7' })).not.toBeInTheDocument();
+    const pager = screen.getByRole('navigation', { name: 'Team members pages' });
+    expect(pager).toHaveTextContent('Showing 1–6 of 7 team members');
+    await u.click(within(pager).getByRole('button', { name: 'Page 2' }));
+    expect(screen.getByTestId('loc')).toHaveTextContent('page=2');
+    expect(screen.getByRole('heading', { name: 'Recruiter 7' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Recruiter 1' })).not.toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: 'Team members pages' })).toHaveTextContent('Showing 7–7 of 7 team members');
+  });
+  it('opens the reassign drawer for that person from the card', async () => {
+    const u = userEvent.setup();
+    renderAt();
+    await u.click(await screen.findByRole('button', { name: 'Reassign: Mariam Farag' }));
+    expect(screen.getByTestId('loc')).toHaveTextContent('reassign=u-mariam');
+    const dialog = await screen.findByRole('dialog', { name: 'Reassign files on HRIS Developer' });
+    expect(within(dialog).getByText('Current owner').parentElement).toHaveTextContent('Mariam Farag');
+  });
+  it('shows an em dash for interviews this week when schedules were not returned', async () => {
+    const strip = (rows: unknown[]) => rows.map((row) => {
+      const copy = { ...(row as Record<string, unknown>) };
+      delete copy.interview;
+      return copy;
+    });
+    serve({
+      '/applications?primaryRecruiterId=u-mariam&pageSize=100': { data: strip(fx.apps['u-mariam']), total: fx.apps['u-mariam'].length },
+      '/applications?primaryRecruiterId=u-youssef&pageSize=100': { data: strip(fx.apps['u-youssef']), total: fx.apps['u-youssef'].length },
+      '/applications?primaryRecruiterId=u-noura&pageSize=100': { data: strip(fx.apps['u-noura']), total: fx.apps['u-noura'].length },
+    });
+    renderAt();
+    const interviews = (await screen.findByLabelText('Team summary')).querySelector('li:last-child')!;
+    expect(interviews).toHaveTextContent('Interviews this week');
+    expect(interviews).toHaveTextContent('—');
+    expect(interviews).toHaveTextContent('Interview schedule is not available yet.');
+    expect(within(interviews as HTMLElement).getByText('—')).toBeInTheDocument();
+    expect(within(interviews as HTMLElement).queryByText('0')).not.toBeInTheDocument();
   });
   it('reports list unavailable → honest empty state; offers list failing is not fatal', async () => {
     serve({ '/users/assignable': new ApiError(403, 'no') });
@@ -97,12 +324,75 @@ describe('M2 Team work', () => {
   });
 });
 
+describe('Compact workload review', () => {
+  it('opens workload in a drawer without repeating the roster and returns keyboard focus on close', async () => {
+    serve({ '/applications?primaryRecruiterId=u-mariam&pageSize=100': mariamWithExtra() });
+    const u = userEvent.setup();
+    const { baseElement } = renderAt();
+    const trigger = await screen.findByRole('button', { name: 'View all 4' });
+    await u.click(trigger);
+    const dialog = screen.getByRole('dialog', { name: 'Mariam Farag' });
+    expect(screen.getByRole('heading', { name: 'Noura Al-Dosari' })).toBeInTheDocument();
+    expect(screen.queryByRole('table', { name: 'Team workload' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument();
+    expect(within(dialog).getByRole('heading', { name: 'Applications by job' })).toBeInTheDocument();
+    expect(within(dialog).getByText(/4 active applications/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/Owned jobs unavailable/)).toBeInTheDocument();
+    expect(within(dialog).queryByText('Old Joiner')).not.toBeInTheDocument();
+    expect(await axeViolations(baseElement)).toEqual([]);
+    await u.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
+  it('preselects the reviewed job and keeps the review open when reassignment conflicts', async () => {
+    const u = userEvent.setup();
+    api.postApi.mockRejectedValue(new ApiError(409, 'Conflict', { code: 'REASSIGN_CONFLICT', message: 'Conflict' }, { code: 'REASSIGN_CONFLICT' }));
+    renderAt('/my-work?workload=u-mariam');
+    const workload = await screen.findByRole('dialog', { name: 'Mariam Farag' });
+    await u.click(within(workload).getByRole('button', { name: 'Move applications: HRIS Developer' }));
+    const dialog = screen.getByRole('dialog', { name: 'Redistribute applications' });
+    expect(within(dialog).getByLabelText(/^Job/)).toHaveValue('v-hris-developer');
+    await u.selectOptions(within(dialog).getByLabelText(/^New primary recruiter/), 'u-noura');
+    await u.type(within(dialog).getByLabelText(/^Reason/), 'Share workload');
+    await u.click(within(dialog).getByRole('button', { name: 'Review redistribution' }));
+    expect(api.postApi).not.toHaveBeenCalled();
+    await u.click(within(dialog).getByRole('button', { name: 'Confirm redistribution' }));
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('A file changed while reassigning; nothing was moved.');
+    expect(screen.getByRole('dialog', { name: 'Redistribute applications' })).toBeInTheDocument();
+    expect(memberOf('Mariam Farag')).toHaveTextContent('3 Open');
+    expect(memberOf('Mariam Farag')).toHaveTextContent('1 Overdue');
+    expect(screen.queryByText(/files moved from/)).not.toBeInTheDocument();
+  });
+
+  it('does not report a successful handoff when the server omits its result', async () => {
+    const u = userEvent.setup();
+    api.postApi.mockResolvedValue({});
+    renderAt('/my-work?reassign=u-noura&handoff=job');
+    const dialog = await screen.findByRole('dialog', { name: 'Redistribute applications' });
+    await u.selectOptions(within(dialog).getByLabelText(/^New primary recruiter/), 'u-mariam');
+    await u.type(within(dialog).getByLabelText(/^Reason/), 'Share workload');
+    await u.click(within(dialog).getByRole('button', { name: 'Review redistribution' }));
+    await u.click(within(dialog).getByRole('button', { name: 'Confirm redistribution' }));
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('Could not confirm this reassignment.');
+    expect(screen.queryByText(/files moved from/)).not.toBeInTheDocument();
+  });
+
+  it('blocks a workload deep link outside the loaded team without showing another person’s files', async () => {
+    renderAt('/my-work?workload=outside-team');
+    const dialog = await screen.findByRole('dialog', { name: 'Recruiter workload' });
+    expect(within(dialog).queryByRole('button', { name: /Move applications/ })).not.toBeInTheDocument();
+    expect(within(dialog).getByText(/permission|access/i)).toBeInTheDocument();
+  });
+});
+
 describe('M06 Reassign (B7 POST /files/reassign)', () => {
   it('one file → applicationIds, new owner from my reports only, reason required; toast + reload; axe', async () => {
     const u = userEvent.setup();
     api.postApi.mockResolvedValue({ batchId: 'b1', toUserId: 'u-youssef', moved: [{ applicationId: 'a1', fromUserId: 'u-mariam' }], unchanged: [] });
     const { baseElement } = renderAt();
-    await u.click(await screen.findByRole('button', { name: 'Reassign Mariam Farag’s files' }));
+    await u.click(await screen.findByRole('button', { name: /^Mariam Farag$/ }));
+    await u.click(screen.getByRole('button', { name: /^Reassign$/ }));
     const d = await screen.findByRole('dialog');
     expect(within(d).getByText('Current owner').parentElement).toHaveTextContent('Mariam Farag');
     const to = within(d).getByLabelText(/^New primary recruiter/);
@@ -120,6 +410,32 @@ describe('M06 Reassign (B7 POST /files/reassign)', () => {
     expect(await screen.findByRole('status')).toHaveTextContent('1 file moved from Mariam Farag to Youssef Ibrahim.');
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   }, 10000);
+  it('redistributes one job’s applications only after choosing a source and reviewing the handoff', async () => {
+    const u = userEvent.setup();
+    api.postApi.mockResolvedValue({ batchId: 'b', toUserId: 'u-mariam', moved: [{ applicationId: 'n1' }, { applicationId: 'n2' }, { applicationId: 'n3' }], unchanged: [] });
+    renderAt('/my-work?handoff=pick');
+    const picker = await screen.findByRole('dialog', { name: 'Redistribute work' });
+    expect(screen.getByRole('heading', { name: 'Mariam Farag' })).toBeInTheDocument();
+    expect(screen.queryByRole('table', { name: 'Team workload' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument();
+    expect(within(picker).getByRole('button', { name: 'Continue' })).toBeDisabled();
+    await u.selectOptions(within(picker).getByLabelText('Current recruiter'), 'u-noura');
+    await u.click(within(picker).getByRole('button', { name: 'Continue' }));
+    const dialog = screen.getByRole('dialog', { name: 'Redistribute applications' });
+    expect(within(dialog).queryByRole('button', { name: 'One file' })).toBeNull();
+    expect(within(dialog).queryByRole('button', { name: 'All their files' })).toBeNull();
+    expect(within(dialog).queryByRole('button', { name: 'Confirm redistribution' })).toBeNull();
+    await u.selectOptions(within(dialog).getByLabelText(/^New primary recruiter/), 'u-mariam');
+    expect(within(dialog).getByText(/Mariam Farag: 3 active applications · 1 overdue/)).toBeInTheDocument();
+    await u.type(within(dialog).getByLabelText(/^Reason/), 'Balance workload');
+    await u.click(within(dialog).getByRole('button', { name: 'Review redistribution' }));
+    expect(api.postApi).not.toHaveBeenCalled();
+    expect(within(dialog).getByRole('list', { name: 'Affected files' }).children).toHaveLength(3);
+    expect(within(dialog).getByText(/owner will not change/)).toBeInTheDocument();
+    await u.click(within(dialog).getByRole('button', { name: 'Confirm redistribution' }));
+    await waitFor(() => expect(api.postApi).toHaveBeenCalledExactlyOnceWith('/files/reassign', { applicationIds: ['n1', 'n2', 'n3'], toUserId: 'u-mariam', reason: 'Balance workload' }));
+    expect(await screen.findByRole('status')).toHaveTextContent('3 files moved from Noura Al-Dosari to Mariam Farag.');
+  });
   it('whole job → that report’s open files on the job; all their files → fromUserId', async () => {
     const u = userEvent.setup();
     api.postApi.mockResolvedValue({ batchId: 'b', toUserId: 'u-mariam', moved: [{ applicationId: 'n1' }, { applicationId: 'n2' }, { applicationId: 'n3' }], unchanged: [] });
@@ -132,8 +448,10 @@ describe('M06 Reassign (B7 POST /files/reassign)', () => {
     await u.type(within(d).getByLabelText(/^Reason/), 'Leave');
     await u.click(within(d).getByRole('button', { name: 'Reassign' }));
     await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/files/reassign', { applicationIds: ['n1', 'n2', 'n3'], toUserId: 'u-mariam', reason: 'Leave' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     serve();
-    await u.click(await screen.findByRole('button', { name: 'Reassign Youssef Ibrahim’s files' }));
+    await u.click(await screen.findByRole('button', { name: /^Youssef Ibrahim$/ }));
+    await u.click(screen.getByRole('button', { name: /^Reassign$/ }));
     const d2 = await screen.findByRole('dialog');
     await u.click(within(d2).getByRole('button', { name: 'All their files' }));
     await u.selectOptions(within(d2).getByLabelText(/^New primary recruiter/), 'u-noura');
@@ -171,11 +489,16 @@ describe('M2 CoS follow-ups', () => {
     serve({ '/team/work': fx.teamWorkApi });
     renderAt();
     // #21 B2-16: the roster is /users/assignable, so a report with nothing open on /team/work still has a row.
-    expect(await screen.findByText('Open work of your 3 direct reports. Counts equal the rows shown.')).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Mariam Farag' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Noura Al-Dosari' })).toBeInTheDocument();
+    expect(screen.queryByText(/Open work of your/)).not.toBeInTheDocument();
     const calls = api.getApi.mock.calls.map((c) => String(c[0]));
     expect(calls).toContain('/users/assignable');
     expect(calls.some((c) => c.startsWith('/applications?primaryRecruiterId='))).toBe(false);
-    expect(card('Mariam Farag')).toHaveTextContent('3 open · 1 overdue');
+    expect(memberOf('Mariam Farag')).toHaveTextContent('3 Open');
+    expect(memberOf('Mariam Farag')).toHaveTextContent('1 Overdue');
+    expect(memberOf('Noura Al-Dosari')).toHaveTextContent('No open items');
+    await userEvent.setup().click(screen.getByRole('tab', { name: /Waiting on you/ }));
     const wait = screen.getByRole('heading', { name: 'Waiting on you' }).closest('section')!;
     expect(wait).toHaveTextContent(/Offer v2 submitted by Mariam Farag/);
     expect(wait).toHaveTextContent(/Your scorecard — Rana Adel, BI Data Analyst.*Late/);
@@ -235,12 +558,21 @@ describe('B2F-6 job Hold/Close for the owner’s manager', () => {
     });
     api.postApi.mockResolvedValue({ id: 'v1' });
     renderAt();
-    const m = await waitFor(() => { const c = card('Mariam Farag'); within(c).getByRole('button', { name: 'Hold HRIS Developer' }); return c; });
-    expect(within(m).getByRole('button', { name: 'Close HRIS Developer' })).toBeInTheDocument();
-    expect(within(card('Noura Al-Dosari')).queryByRole('button', { name: 'Hold Payroll Lead' })).toBeNull();
-    expect(within(card('Noura Al-Dosari')).getByRole('button', { name: 'Close Payroll Lead' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Mariam Farag' })).toBeInTheDocument();
     expect(document.body).not.toHaveTextContent('Not my team');
     expect(document.body).not.toHaveTextContent('Redacted');
+    expect(screen.queryByRole('button', { name: 'Hold HRIS Developer' })).toBeNull();
+    await u.click(screen.getByRole('button', { name: /^Noura Al-Dosari$/ }));
+    await u.click(screen.getByRole('tab', { name: /Assignments/ }));
+    const noura = screen.getByRole('heading', { name: 'Noura Al-Dosari' }).closest('section')!;
+    expect(within(noura).queryByRole('button', { name: 'Hold Payroll Lead' })).toBeNull();
+    expect(within(noura).getByRole('button', { name: 'Close Payroll Lead' })).toBeInTheDocument();
+    await u.click(screen.getByRole('button', { name: 'Back to Team work' }));
+    await u.click(screen.getByRole('button', { name: /^Mariam Farag$/ }));
+    await u.click(screen.getByRole('tab', { name: /Assignments/ }));
+    const m = screen.getByRole('heading', { name: 'Mariam Farag' }).closest('section')!;
+    expect(within(m).getByRole('button', { name: 'Hold HRIS Developer' })).toBeInTheDocument();
+    expect(within(m).getByRole('button', { name: 'Close HRIS Developer' })).toBeInTheDocument();
 
     await u.click(within(m).getByRole('button', { name: 'Hold HRIS Developer' }));
     let d = await screen.findByRole('dialog');
@@ -259,5 +591,202 @@ describe('B2F-6 job Hold/Close for the owner’s manager', () => {
     await u.click(within(d).getByRole('button', { name: 'Close job' }));
     await u.click(within(d).getByRole('button', { name: /Confirm close/ }));
     await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/vacancies/v1/close', expect.objectContaining({ reason: 'Other', note: 'Merged with another role' })));
+  });
+});
+
+const pendingReq = {
+  id: 'req-1', requestCode: 'REQ-1', status: 'Pending Approval' as const,
+  branchId: 'b1', positionId: 'p1', requesterId: 'u-karim', requesterName: 'Karim Hassan',
+  positionTitle: 'Ward Nurse', branchName: 'SGH Jeddah', departmentName: 'Nursing',
+  requestedHeadcount: 2, dueDate: '2026-12-01', justification: 'Cover a leaver',
+  primaryRecruiter: { id: 'u-mariam', name: 'Mariam Farag' },
+  createdAt: '2026-10-01T08:00:00.000Z', updatedAt: '2026-10-02T08:00:00.000Z',
+};
+const changesReq = { ...pendingReq, id: 'req-2', requestCode: 'REQ-2', status: 'Changes Requested' as const, positionTitle: 'Lab Tech' };
+
+describe('M01 recruiter details and M03 drilldown', () => {
+  it('opens recruiter details from the card and returns to the team list', async () => {
+    const u = userEvent.setup();
+    renderAt();
+    expect(await screen.findByRole('heading', { name: 'Mariam Farag' })).toBeInTheDocument();
+    await u.click(screen.getByRole('button', { name: /^Mariam Farag$/ }));
+    expect(screen.getByTestId('loc')).toHaveTextContent('recruiter=u-mariam');
+    expect(screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual(['Mariam Farag']);
+    expect(screen.queryByRole('heading', { name: 'Team work' })).not.toBeInTheDocument();
+    const kpis = screen.getByRole('list', { name: 'Recruiter workload KPIs' });
+    const items = within(kpis).getAllByRole('listitem');
+    expect(items.map((item) => item.textContent)).toEqual(['Open files3', 'Overdue1', 'Due today1', 'Waiting on candidate1']);
+    expect(screen.getByText('Recruiter-offshore · Direct report')).toBeInTheDocument();
+    const table = screen.getByRole('table');
+    expect(within(table).getAllByRole('row')).toHaveLength(4);
+    expect(within(table).getAllByRole('row').filter((row) => within(row).queryByText('Ahmed Embaby'))).toHaveLength(1);
+    expect(table).not.toHaveTextContent('Old Joiner');
+    expect(screen.getByRole('link', { name: 'Open Ahmed Embaby' })).toHaveAttribute('href', expect.stringContaining('/applications/a1?returnTo='));
+    expect(screen.queryByRole('button', { name: 'Show all' })).not.toBeInTheDocument();
+    await u.click(screen.getByRole('tab', { name: /Assignments/ }));
+    expect(screen.getByRole('columnheader', { name: 'Site' })).toBeInTheDocument();
+    expect(screen.getByRole('cell', { name: 'File primary recruiter' })).toBeInTheDocument();
+    expect(screen.getByText('Job ownership remains independent of application file reassignment.')).toBeInTheDocument();
+    await u.click(screen.getByRole('tab', { name: /Recent activity/ }));
+    expect(screen.getByText('Chronological authorized activity feed; no activity-based scoring.')).toBeInTheDocument();
+    await u.click(screen.getByRole('button', { name: 'Back to Team work' }));
+    expect(screen.getByTestId('loc').textContent).not.toMatch(/recruiter=/);
+    expect(rosterNames()).toEqual(['Mariam Farag', 'Noura Al-Dosari', 'Youssef Ibrahim']);
+  });
+
+  it('says when the recruiter is outside the reporting line, and names an indirect report', async () => {
+    const first = renderAt('/my-work?recruiter=u-missing');
+    expect(await screen.findByRole('alert')).toHaveTextContent('This recruiter is not in your reporting line.');
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Back to Team work' }));
+    expect(screen.getByTestId('loc').textContent).not.toMatch(/recruiter=/);
+    first.unmount();
+    serve({
+      '/users/assignable': [
+        { id: 'u-mariam', displayName: 'Mariam Farag', status: 'Active', managerId: 'u-karim', roles: [{ code: 'ROLE_001', name: 'Recruiter-offshore' }] },
+        { id: 'u-youssef', displayName: 'Youssef Ibrahim', status: 'Active', managerId: 'u-karim', roles: [{ code: 'ROLE_002', name: 'Recruiter-onshore' }] },
+        { id: 'u-noura', displayName: 'Noura Al-Dosari', status: 'Active', managerId: 'u-mariam', roles: [{ code: 'ROLE_003', name: 'Recruiter-clinical' }] },
+      ],
+    });
+    renderAt('/my-work?recruiter=u-noura');
+    expect(await screen.findByRole('heading', { name: 'Noura Al-Dosari' })).toBeInTheDocument();
+    expect(screen.getByText('Recruiter-clinical · Indirect report (reporting line)')).toBeInTheDocument();
+  });
+});
+
+describe('M04 reassignment review', () => {
+  it('reviews the move, keeps the selection, and confirms through the same reassign call', async () => {
+    const u = userEvent.setup();
+    api.postApi.mockResolvedValue({ batchId: 'b1', toUserId: 'u-youssef', moved: [{ applicationId: 'a1', fromUserId: 'u-mariam' }], unchanged: [] });
+    renderAt('/my-work?reassign=u-mariam&file=a1');
+    const d = await screen.findByRole('dialog', { name: 'Reassign Ahmed Embaby' });
+    await u.click(within(d).getByRole('button', { name: 'Review reassignment' }));
+    expect(within(d).getByText(/A reason is required/)).toBeInTheDocument();
+    expect(within(d).queryByTestId('reassign-review-preview')).toBeNull();
+    await u.selectOptions(within(d).getByLabelText(/^New primary recruiter/), 'u-youssef');
+    await u.type(within(d).getByLabelText(/^Reason/), 'Balance load');
+    await u.click(within(d).getByRole('button', { name: 'Review reassignment' }));
+    const preview = within(d).getByTestId('reassign-review-preview');
+    expect(preview).toHaveTextContent('Ahmed Embaby — HRIS Developer');
+    expect(preview).toHaveTextContent('Mariam Farag → Youssef Ibrahim');
+    expect(preview).toHaveTextContent('Job/requisition owner will not change.');
+    expect(preview).toHaveTextContent('Moving files updates primary recruiter access for the selected applications.');
+    await u.click(within(d).getByRole('button', { name: 'Back from review' }));
+    expect(within(d).queryByTestId('reassign-review-preview')).toBeNull();
+    expect(within(d).getByLabelText(/^Reason/)).toHaveValue('Balance load');
+    await u.click(within(d).getByRole('button', { name: 'Review reassignment' }));
+    await u.click(within(d).getByRole('button', { name: 'Confirm reassignment' }));
+    await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/files/reassign', { applicationIds: ['a1'], toUserId: 'u-youssef', reason: 'Balance load' }));
+  });
+});
+
+describe('M02 waiting queue and M10 approval decision', () => {
+  it('keeps summary chips out of the heading list and previews a disabled decision', async () => {
+    const u = userEvent.setup();
+    renderAt('/my-work?tab=waiting&approval=sample');
+    const waiting = (await screen.findByRole('heading', { name: 'Waiting on you' })).closest('section')!;
+    expect(within(waiting).getAllByRole('heading')).toHaveLength(1);
+    expect(within(waiting).getByText('Pending approvals 0')).toBeInTheDocument();
+    expect(within(waiting).getByText('Changes requested 0')).toBeInTheDocument();
+    expect(within(waiting).queryByRole('columnheader', { name: 'Site' })).toBeNull();
+    expect(within(waiting).getByRole('button', { name: 'Preview approval decision screen' })).toBeInTheDocument();
+    const decision = screen.getByRole('region', { name: 'Approval decision' });
+    expect(decision).toHaveTextContent('SAMPLE / preview mode — Nothing is currently waiting in your live approval queue');
+    expect(decision).toHaveTextContent('Team work / Waiting on you / Approval decision');
+    expect(within(decision).getByRole('button', { name: 'Approve' })).toBeDisabled();
+    expect(within(decision).getByRole('button', { name: 'Return for changes' })).toBeDisabled();
+    expect(within(decision).getByRole('button', { name: 'Decline' })).toBeDisabled();
+    await u.click(within(decision).getByRole('button', { name: 'Approve' }));
+    expect(api.postApi).not.toHaveBeenCalled();
+  });
+
+  it('lists a pending requisition and confirms a return before writing', async () => {
+    authState.user = { ...authState.user, permissions: ['APPLICATION_VIEW', 'VACANCY_REQUEST_VIEW'] };
+    serve({ '/vacancy-requests': [pendingReq, changesReq] });
+    api.postApi.mockResolvedValue({ ...pendingReq, status: 'Changes Requested' });
+    const u = userEvent.setup();
+    renderAt('/my-work?tab=waiting');
+    const waiting = (await screen.findByRole('heading', { name: 'Waiting on you' })).closest('section')!;
+    expect(await within(waiting).findByText('Ward Nurse (REQ-1) · SGH Jeddah')).toBeInTheDocument();
+    expect(within(waiting).queryByText('Lab Tech (REQ-2) · SGH Jeddah')).toBeNull();
+    expect(within(waiting).getByText('Pending approvals 1')).toBeInTheDocument();
+    expect(within(waiting).getByText('Changes requested 1')).toBeInTheDocument();
+    expect(within(waiting).queryByRole('columnheader', { name: 'Site' })).toBeNull();
+    expect(within(waiting).getAllByRole('heading')).toHaveLength(1);
+    await u.click(within(waiting).getByRole('button', { name: 'Review' }));
+    const decision = await screen.findByRole('region', { name: 'Approval decision' });
+    expect(decision).toHaveTextContent('Draft → Submitted → Pending Approval');
+    expect(within(decision).getByText('Cover a leaver')).toBeInTheDocument();
+    expect(within(decision).getByRole('link', { name: 'View related requisition' })).toHaveAttribute('href', '/vacancy-requests?req=req-1');
+    await u.type(within(decision).getByLabelText(/Reason \/ comment/), '   ');
+    await u.click(within(decision).getByRole('button', { name: 'Return for changes' }));
+    expect(await within(decision).findByText('A reason of at least 3 characters is required.')).toBeInTheDocument();
+    expect(api.postApi).not.toHaveBeenCalled();
+    await u.clear(within(decision).getByLabelText(/Reason \/ comment/));
+    await u.type(within(decision).getByLabelText(/Reason \/ comment/), 'Fix the site');
+    await u.click(within(decision).getByRole('button', { name: 'Return for changes' }));
+    expect(within(decision).getByText('Pending Approval → Changes Requested. The requester can edit and resubmit. No job is opened.')).toBeInTheDocument();
+    expect(api.postApi).not.toHaveBeenCalled();
+    await u.click(within(decision).getByRole('button', { name: 'Confirm return' }));
+    await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/vacancy-requests/req-1/request-changes', { comment: 'Fix the site' }));
+  });
+});
+
+describe('M01 to M03 to M04', () => {
+  it('opens recruiter details, walks the workload tabs, and previews a reassignment', async () => {
+    const u = userEvent.setup();
+    renderAt();
+    await u.click(await screen.findByRole('button', { name: /^Mariam Farag$/ }));
+    expect(screen.getByTestId('loc')).toHaveTextContent('recruiter=u-mariam');
+    const kpis = screen.getByRole('list', { name: 'Recruiter workload KPIs' });
+    expect(within(kpis).getByText('Open files')).toBeInTheDocument();
+    expect(within(kpis).getByText('Overdue')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Open files/ })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('columnheader', { name: 'Candidate' })).toBeInTheDocument();
+    await u.click(screen.getByRole('tab', { name: /Overdue/ }));
+    expect(screen.getByRole('tab', { name: /Overdue/ })).toHaveAttribute('aria-selected', 'true');
+    await u.click(screen.getByRole('tab', { name: /Assignments/ }));
+    expect(screen.getByText('Job ownership remains independent of application file reassignment.')).toBeInTheDocument();
+    await u.click(screen.getByRole('tab', { name: /Recent activity/ }));
+    expect(screen.getByText('Chronological authorized activity feed; no activity-based scoring.')).toBeInTheDocument();
+    await u.click(screen.getByRole('button', { name: /^Reassign$/ }));
+    const dialog = await screen.findByRole('dialog');
+    await u.selectOptions(within(dialog).getByLabelText(/^New primary recruiter/), 'u-youssef');
+    await u.type(within(dialog).getByLabelText(/^Reason/), 'Balance load');
+    await u.click(within(dialog).getByRole('button', { name: 'Review reassignment' }));
+    const preview = within(dialog).getByTestId('reassign-review-preview');
+    expect(preview).toHaveTextContent('Ahmed Embaby — HRIS Developer');
+    expect(preview).toHaveTextContent('Mariam Farag → Youssef Ibrahim');
+    expect(preview).toHaveTextContent('Job/requisition owner will not change.');
+  });
+});
+
+describe('M02 to M10', () => {
+  it('opens a live approval from Waiting on you, requires a reason, and links the requisition', async () => {
+    const u = userEvent.setup();
+    const sample = renderAt('/my-work?tab=waiting&approval=sample');
+    const preview = await screen.findByRole('region', { name: 'Approval decision' });
+    expect(preview).toHaveTextContent('SAMPLE / preview mode — Nothing is currently waiting in your live approval queue');
+    expect(within(preview).getByRole('button', { name: 'Return for changes' })).toBeDisabled();
+    expect(within(preview).getByRole('button', { name: 'Decline' })).toBeDisabled();
+    sample.unmount();
+
+    authState.user = { ...authState.user, permissions: ['APPLICATION_VIEW', 'VACANCY_REQUEST_VIEW'] };
+    serve({ '/vacancy-requests': [pendingReq] });
+    renderAt('/my-work?tab=waiting');
+    const waiting = (await screen.findByRole('heading', { name: 'Waiting on you' })).closest('section')!;
+    expect(await within(waiting).findByText('Ward Nurse (REQ-1) · SGH Jeddah')).toBeInTheDocument();
+    await u.click(within(waiting).getByRole('button', { name: 'Review' }));
+    const decision = await screen.findByRole('region', { name: 'Approval decision' });
+    expect(decision).not.toHaveTextContent('SAMPLE / preview mode');
+    expect(within(decision).getByRole('link', { name: 'View related requisition' })).toHaveAttribute('href', '/vacancy-requests?req=req-1');
+    await u.click(within(decision).getByRole('button', { name: 'Return for changes' }));
+    expect(await within(decision).findByText('A reason of at least 3 characters is required.')).toBeInTheDocument();
+    await u.click(within(decision).getByRole('button', { name: 'Decline' }));
+    expect(within(decision).getByText('A reason of at least 3 characters is required.')).toBeInTheDocument();
+    expect(api.postApi).not.toHaveBeenCalled();
+    await u.type(within(decision).getByLabelText(/Reason \/ comment/), 'Not a fit');
+    await u.click(within(decision).getByRole('button', { name: 'Decline' }));
+    expect(within(decision).getByText('Pending Approval → Rejected. The requisition closes. No job is opened.')).toBeInTheDocument();
+    expect(api.postApi).not.toHaveBeenCalled();
   });
 });

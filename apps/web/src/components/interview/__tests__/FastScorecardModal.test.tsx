@@ -2,6 +2,10 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { FastScorecardModal } from '../FastScorecardModal';
+
+vi.mock('../../../auth/AuthContext', () => ({
+  useAuth: () => ({ user: null }),
+}));
 import * as client from '../../../api/client';
 import type { Interview } from '@recruitflow/contracts';
 

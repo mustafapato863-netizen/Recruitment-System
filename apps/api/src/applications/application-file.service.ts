@@ -1,4 +1,5 @@
 import { BadRequestException, ForbiddenException, Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { createHmac, randomBytes } from 'node:crypto';
 import type { Prisma } from '@recruitflow/database';
 import type { AuthUser } from '@recruitflow/contracts';
 import { PrismaService } from '../database/prisma.service';
@@ -7,6 +8,25 @@ import { AuditService } from '../audit/audit.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { JOINING_CHECK_LABELS } from './application-gates';
 import { complianceNameForCheck, invalidateStaleApproval, isJoiningCheckType, resolveSnapshot } from '../hiring/joining-policy';
+import { readPortalGrants, type PortalTokenPayload } from '../public-jobs/candidate-portal.service';
+
+export const APPLICATION_FOLLOW_UP_TASK_TYPE = 'ApplicationFollowUp';
+const PORTAL_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+function portalSecret(): string {
+  const configured = process.env.SELF_SCHEDULE_SECRET;
+  if (configured && configured.length >= 32) return `portal-v1:${configured}`;
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('SELF_SCHEDULE_SECRET must be configured (min 32 chars) in production');
+  }
+  return 'portal-v1:recruitflow-dev-self-schedule-secret-key-2026';
+}
+
+function signPortalToken(payload: PortalTokenPayload): string {
+  const dataPart = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
+  const signature = createHmac('sha256', portalSecret()).update(dataPart).digest('base64url');
+  return `${dataPart}.${signature}`;
+}
 
 /**
  * B5 follow-ups on the application file: follow-up date (owner only), typed joining
@@ -29,8 +49,9 @@ export class ApplicationFileService {
       where: { AND: [visibility, { id, organizationId: user.organizationId }] },
       select: {
         id: true, candidateId: true, vacancyId: true, primaryRecruiterId: true, taskOwnerId: true, followUpDate: true,
+        candidate: { select: { firstName: true, lastName: true } },
         hiringCase: { select: { requirementSnapshot: true } },
-        vacancy: { select: { position: { select: { metadata: true } } } },
+        vacancy: { select: { vacancyCode: true, position: { select: { title: true, metadata: true } } } },
       },
     });
     if (!app) throw new NotFoundException('Application not found.');
@@ -49,7 +70,90 @@ export class ApplicationFileService {
       }
       date = new Date(`${followUpDate}T00:00:00Z`);
     }
-    const updated = await this.prisma.application.update({ where: { id }, data: { followUpDate: date }, select: { id: true, followUpDate: true } });
+    const syncFollowUp = async (tx: PrismaService | Prisma.TransactionClient) => {
+      const updatedApp = await tx.application.update({
+        where: { id },
+        data: { followUpDate: date },
+        select: { id: true, followUpDate: true },
+      });
+      const taskDelegate = (tx as { task?: PrismaService['task'] }).task;
+      if (taskDelegate && typeof taskDelegate.findFirst === 'function') {
+        const now = new Date();
+        if (date === null) {
+          if (typeof taskDelegate.updateMany === 'function') {
+            await taskDelegate.updateMany({
+              where: {
+                organizationId: user.organizationId,
+                entityType: 'Application',
+                entityId: id,
+                type: APPLICATION_FOLLOW_UP_TASK_TYPE,
+                status: { in: ['Open', 'In Progress'] },
+              },
+              data: { status: 'Dismissed', updatedAt: now },
+            });
+          }
+        } else {
+          const candName = app.candidate ? `${app.candidate.firstName ?? ''} ${app.candidate.lastName ?? ''}`.trim() : '';
+          const jobTitle = app.vacancy?.position?.title ?? app.vacancy?.vacancyCode ?? '';
+          const title = candName && jobTitle
+            ? `Follow up: ${candName} · ${jobTitle}`
+            : candName
+              ? `Follow up: ${candName}`
+              : 'Application follow-up';
+          const existing = await taskDelegate.findFirst({
+            where: {
+              organizationId: user.organizationId,
+              entityType: 'Application',
+              entityId: id,
+              type: APPLICATION_FOLLOW_UP_TASK_TYPE,
+              status: { in: ['Open', 'In Progress'] },
+            },
+            orderBy: { createdAt: 'desc' },
+          });
+          if (existing) {
+            await taskDelegate.update({
+              where: { id: existing.id },
+              data: {
+                title,
+                dueAt: date,
+                assigneeUserId: user.userId,
+                description: `Application follow-up scheduled for ${followUpDate}`,
+                updatedAt: now,
+              },
+            });
+          } else {
+            await taskDelegate.create({
+              data: {
+                organizationId: user.organizationId,
+                createdById: user.userId,
+                assigneeUserId: user.userId,
+                type: APPLICATION_FOLLOW_UP_TASK_TYPE,
+                title,
+                description: `Application follow-up scheduled for ${followUpDate}`,
+                priority: 'Normal',
+                status: 'Open',
+                dueAt: date,
+                entityType: 'Application',
+                entityId: id,
+              },
+            });
+          }
+        }
+      }
+      return updatedApp;
+    };
+    const updated = typeof this.prisma.$transaction === 'function'
+      ? await this.prisma.$transaction((tx) => syncFollowUp(tx))
+      : await syncFollowUp(this.prisma);
+    void this.audit?.log({
+      organizationId: user.organizationId,
+      actorUserId: user.userId,
+      action: 'APPLICATION_FOLLOW_UP_SET',
+      entityType: 'Application',
+      entityId: id,
+      result: 'Success',
+      reason: followUpDate ?? 'cleared',
+    });
     return { id: updated.id, followUpDate: updated.followUpDate ? updated.followUpDate.toISOString().slice(0, 10) : null };
   }
 
@@ -94,7 +198,7 @@ export class ApplicationFileService {
       const hiringCase = await tx.hiringCase.findFirst({ where: { applicationId: id }, select: { id: true } });
       if (hiringCase) {
         await tx.complianceRequirement.updateMany({
-          where: { hiringCaseId: hiringCase.id, name: complianceNameForCheck(type) },
+          where: { hiringCaseId: hiringCase.id, name: { in: type === 'CONTRACT' ? ['Employment contract', 'Background Check'] : [complianceNameForCheck(type)] } },
           data: {
             status: verified ? 'Verified' : 'Pending',
             verifiedById: verified ? user.userId : null,
@@ -145,7 +249,13 @@ export class ApplicationFileService {
       versions.set(doc.id, next);
     }
     const ids = docs.map((doc) => doc.id);
-    const [downloads, requests] = await Promise.all([
+    const [checks, downloads, requests, candidateRow] = await Promise.all([
+      typeof (this.prisma as { joiningCheck?: { findMany?: unknown } }).joiningCheck?.findMany === 'function'
+        ? this.prisma.joiningCheck.findMany({
+            where: { applicationId: id },
+            select: { type: true, verified: true, documentId: true },
+          })
+        : Promise.resolve([]),
       ids.length === 0 ? Promise.resolve([]) : this.prisma.auditLog.findMany({
         where: { organizationId: user.organizationId, action: 'DOCUMENT_DOWNLOAD', entityType: 'CandidateDocument', entityId: { in: ids } },
         orderBy: { createdAt: 'asc' },
@@ -156,7 +266,24 @@ export class ApplicationFileService {
         orderBy: { createdAt: 'asc' },
         select: { id: true, reason: true, createdAt: true },
       }),
+      typeof (this.prisma as { candidate?: { findFirst?: unknown } }).candidate?.findFirst === 'function'
+        ? this.prisma.candidate.findFirst({
+            where: { id: app.candidateId, organizationId: user.organizationId },
+            select: { metadata: true },
+          })
+        : Promise.resolve(null),
     ]);
+    const { grants } = readPortalGrants(candidateRow?.metadata);
+    const appGrants = grants.filter((g) => g.applicationId === id);
+    const latestGrant = appGrants[appGrants.length - 1] ?? null;
+    const hasActiveGrant = Boolean(
+      latestGrant && !latestGrant.revokedAt && new Date(latestGrant.expiresAt).getTime() > Date.now(),
+    );
+    const portalLink = {
+      hasActiveGrant,
+      expiresAt: latestGrant?.expiresAt ?? null,
+      revokedAt: latestGrant?.revokedAt ?? null,
+    };
     return {
       documents: [...docs].reverse().map((doc) => ({
         id: doc.id,
@@ -170,7 +297,21 @@ export class ApplicationFileService {
         version: versions.get(doc.id) ?? 1,
         downloads: downloads.filter((row) => row.entityId === doc.id).map((row) => ({ at: row.createdAt.toISOString() })),
       })),
-      requests: requests.map((row) => ({ id: row.id, documentType: row.reason ?? 'Document', at: row.createdAt.toISOString() })),
+      requests: requests.map((row) => {
+        const reqType = row.reason ?? 'Document';
+        const resolved = resolveRequestStatus(reqType, row.createdAt, docs, checks);
+        return {
+          id: row.id,
+          documentType: reqType,
+          at: row.createdAt.toISOString(),
+          status: resolved.status,
+          matchedDocumentId: resolved.matchedDocumentId,
+          matchedDocumentName: resolved.matchedDocumentName,
+          associationKind: resolved.associationKind,
+          deliveryMode: hasActiveGrant ? ('portal_link_active' as const) : ('internal_log' as const),
+        };
+      }),
+      portalLink,
     };
   }
 
@@ -203,8 +344,166 @@ export class ApplicationFileService {
         entityId: id,
       }).catch(() => undefined);
     }
-    return { id: row.id, documentType: type, at: row.createdAt.toISOString() };
+    return {
+      id: row.id,
+      documentType: type,
+      at: row.createdAt.toISOString(),
+      status: 'Requested' as const,
+      matchedDocumentId: null,
+      matchedDocumentName: null,
+      associationKind: null,
+      deliveryMode: 'internal_log' as const,
+    };
   }
+
+  async issueDocumentPortalLink(user: AuthUser, id: string, action: 'issue' | 'revoke' = 'issue') {
+    const app = await this.visibleApplication(user, id);
+    const candidateRow = typeof (this.prisma as { candidate?: { findFirst?: unknown } }).candidate?.findFirst === 'function'
+      ? await this.prisma.candidate.findFirst({
+          where: { id: app.candidateId, organizationId: user.organizationId },
+          select: { id: true, metadata: true },
+        })
+      : null;
+    const { base, grants } = readPortalGrants(candidateRow?.metadata);
+    const nowIso = new Date().toISOString();
+    const revokedExisting = grants.map((g) =>
+      g.applicationId === id && !g.revokedAt ? { ...g, revokedAt: nowIso } : g,
+    );
+    if (action === 'revoke') {
+      if (typeof (this.prisma as { candidate?: { update?: unknown } }).candidate?.update === 'function') {
+        await this.prisma.candidate.update({
+          where: { id: app.candidateId },
+          data: { metadata: { ...base, portal: { grants: revokedExisting } } as unknown as Prisma.InputJsonValue },
+        });
+      }
+      await this.prisma.auditLog.create({
+        data: {
+          organizationId: user.organizationId,
+          actorUserId: user.userId,
+          action: 'PORTAL_LINK_REVOKE',
+          entityType: 'Application',
+          entityId: id,
+          result: 'SUCCESS',
+          reason: 'Candidate portal link revoked by recruiter',
+          afterData: { revokedAt: nowIso } satisfies Prisma.InputJsonObject,
+        },
+      });
+      return {
+        hasActiveGrant: false,
+        token: null,
+        portalPath: null,
+        expiresAt: null,
+        revokedAt: nowIso,
+      };
+    }
+
+    const nonce = randomBytes(16).toString('hex');
+    const expiresAtMs = Date.now() + PORTAL_TTL_MS;
+    const expiresAt = new Date(expiresAtMs).toISOString();
+    const payload: PortalTokenPayload = {
+      kind: 'portal',
+      applicationId: id,
+      candidateId: app.candidateId,
+      organizationId: user.organizationId,
+      expiresAt: expiresAtMs,
+      nonce,
+    };
+    const token = signPortalToken(payload);
+    const nextGrants = [
+      ...revokedExisting,
+      {
+        nonce,
+        applicationId: id,
+        expiresAt,
+        revokedAt: null,
+      },
+    ].slice(-20);
+    if (typeof (this.prisma as { candidate?: { update?: unknown } }).candidate?.update === 'function') {
+      await this.prisma.candidate.update({
+        where: { id: app.candidateId },
+        data: { metadata: { ...base, portal: { grants: nextGrants } } as unknown as Prisma.InputJsonValue },
+      });
+    }
+    await this.prisma.auditLog.create({
+      data: {
+        organizationId: user.organizationId,
+        actorUserId: user.userId,
+        action: 'PORTAL_LINK_ISSUE',
+        entityType: 'Application',
+        entityId: id,
+        result: 'SUCCESS',
+        reason: 'Candidate portal upload link issued by recruiter',
+        afterData: { expiresAt, issuedBy: user.userId } satisfies Prisma.InputJsonObject,
+      },
+    });
+    return {
+      hasActiveGrant: true,
+      token,
+      portalPath: `/portal/applications/${encodeURIComponent(token)}`,
+      expiresAt,
+      revokedAt: null,
+    };
+  }
+}
+
+function resolveRequestStatus(
+  requestType: string,
+  requestAt: Date,
+  docs: Array<{ id: string; documentType: string; fileName: string; createdAt: Date }>,
+  checks: Array<{ type: string; verified: boolean; documentId: string | null }>,
+): {
+  status: 'Requested' | 'Received' | 'Verified';
+  matchedDocumentId: string | null;
+  matchedDocumentName: string | null;
+  associationKind: 'uploaded_after_request' | 'existing_document_match' | 'verified_check_match' | null;
+} {
+  const norm = requestType.trim().toLowerCase();
+  const checkType = norm.includes('contract') || norm.includes('offer')
+    ? 'CONTRACT'
+    : norm === 'id' || norm.includes('passport') || norm.includes('national id')
+      ? 'ID'
+      : norm.includes('scfhs') || norm.includes('licen')
+        ? 'SCFHS_LICENCE'
+        : null;
+  const docTokens = checkType === 'CONTRACT'
+    ? ['contract', 'offer_letter', 'offer']
+    : checkType === 'ID'
+      ? ['id', 'passport']
+      : checkType === 'SCFHS_LICENCE'
+        ? ['license', 'licence', 'scfhs']
+        : [norm];
+  const matchingDocs = docs.filter((doc) => {
+    const dt = doc.documentType.trim().toLowerCase();
+    const fn = doc.fileName.trim().toLowerCase();
+    return docTokens.some((tok) => dt === tok || dt.includes(tok) || fn.includes(tok));
+  });
+  const uploadedAfter = [...matchingDocs].reverse().find((d) => d.createdAt.getTime() >= requestAt.getTime()) ?? null;
+  const recentDoc = uploadedAfter ?? matchingDocs[matchingDocs.length - 1] ?? null;
+  const verifiedCheck = checks.find((c) => c.verified && ((recentDoc && c.documentId === recentDoc.id) || (checkType && c.type === checkType)));
+  const associationKind = uploadedAfter
+    ? 'uploaded_after_request'
+    : recentDoc
+      ? 'existing_document_match'
+      : verifiedCheck
+        ? 'verified_check_match'
+        : null;
+  if (verifiedCheck) {
+    return {
+      status: 'Verified',
+      matchedDocumentId: verifiedCheck.documentId ?? recentDoc?.id ?? null,
+      matchedDocumentName: recentDoc?.fileName ?? null,
+      associationKind,
+    };
+  }
+  if (recentDoc) {
+    return {
+      status: 'Received',
+      matchedDocumentId: recentDoc.id,
+      matchedDocumentName: recentDoc.fileName,
+      associationKind,
+    };
+  }
+  return { status: 'Requested', matchedDocumentId: null, matchedDocumentName: null, associationKind: null };
 }
 
 function storedFile(storageKey: string, storageProvider: string): boolean {

@@ -6,6 +6,7 @@ import type { PrismaService } from '../../database/prisma.service';
 import type { AccessControlService } from '../../access-control/access-control.service';
 import type { UserPermissionsService } from '../../common/user-permissions.service';
 import { CandidateActivityService, summarizeCandidateActivity } from '../candidate-activity.service';
+import { CandidatesService } from '../candidates.service';
 import { CreateCandidateActivityDto } from '../candidate-activity.dto';
 
 const now = new Date('2026-09-07T12:00:00Z');
@@ -104,5 +105,274 @@ describe('Candidate activity measurement', () => {
     await expect(service.complete(user, 'candidate', 'task')).resolves.toEqual({ id: 'task' });
     prisma.task.findFirst.mockResolvedValue(null);
     await expect(service.complete(user, 'candidate', 'foreign')).rejects.toThrow('not found');
+  });
+
+  it('finds a bank person with no applications when the scope is ALL, and keeps them out of an assigned-only scope', async () => {
+    const allowsEmptyBank = (where: { OR?: Array<Record<string, unknown>> }) =>
+      (where.OR ?? []).some((clause) => {
+        const applications = clause.applications as { none?: unknown } | undefined;
+        return Boolean(applications && 'none' in applications);
+      });
+
+    const all = setup('ALL', []);
+    all.prisma.candidate.findFirst.mockImplementation(async (args: { where: { OR?: Array<Record<string, unknown>> } }) => (
+      allowsEmptyBank(args.where) ? { id: 'bank-person', createdById: 'other' } : null
+    ));
+    await expect(all.service.list(user, 'bank-person', {})).resolves.toMatchObject({ completed: 0, totalEntries: 0 });
+    expect(all.prisma.candidate.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        id: 'bank-person',
+        organizationId: 'org',
+        OR: expect.arrayContaining([{ applications: { none: {} } }]),
+      }),
+      select: { id: true, createdById: true },
+    }));
+    expect(all.prisma.application.findMany).toHaveBeenCalledWith({
+      where: { organizationId: 'org', candidateId: 'bank-person' },
+      select: { id: true },
+    });
+
+    const assigned = setup('ASSIGNED_ONLY', []);
+    assigned.prisma.candidate.findFirst.mockImplementation(async (args: { where: { OR?: Array<Record<string, unknown>> } }) => (
+      allowsEmptyBank(args.where) ? { id: 'bank-person', createdById: 'other' } : null
+    ));
+    await expect(assigned.service.list(user, 'bank-person', {})).rejects.toThrow('Candidate not found');
+    expect(assigned.prisma.candidate.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ id: 'bank-person', organizationId: 'org', OR: expect.any(Array) }),
+    }));
+    const assignedWhere = assigned.prisma.candidate.findFirst.mock.calls[0]?.[0] as { where: { OR?: unknown[] } };
+    expect(assignedWhere.where.OR).not.toEqual(expect.arrayContaining([{ applications: { none: {} } }]));
+    expect(assigned.prisma.application.findMany).not.toHaveBeenCalled();
+  });
+
+  it('saves a completed call and the next follow-up together without counting the scheduled follow-up as completed', async () => {
+    const { service, prisma } = setup('ALL', [{ id: 'app-1' }, { id: 'app-2' }]);
+    const tx = { task: { create: vi.fn().mockResolvedValueOnce({ id: 'task-1' }).mockResolvedValueOnce({ id: 'task-2' }) } };
+    (prisma as unknown as { $transaction: (fn: (db: typeof tx) => Promise<unknown>) => Promise<unknown> }).$transaction = vi.fn(async (fn) => fn(tx));
+    const result = await service.create(user, 'candidate', {
+      kind: 'Call', summary: 'Reached candidate', followUpDueAt: '2099-01-01T12:00:00.000Z', followUpSummary: 'Call again about offer',
+    });
+    expect(result).toEqual({ id: 'task-1', followUpId: 'task-2' });
+    expect(prisma.task.create).not.toHaveBeenCalled();
+    expect(tx.task.create).toHaveBeenCalledTimes(2);
+    expect(tx.task.create).toHaveBeenNthCalledWith(1, { data: expect.objectContaining({ entityType: 'Candidate', entityId: 'candidate', type: 'CandidateActivity:Call', title: 'Reached candidate', status: 'Completed', completedById: 'me', completedAt: expect.any(Date) }) });
+    expect(tx.task.create).toHaveBeenNthCalledWith(2, { data: expect.objectContaining({ entityType: 'Candidate', entityId: 'candidate', type: 'CandidateActivity:FollowUp', title: 'FollowUp activity', description: 'Call again about offer', status: 'Open', completedAt: null, completedById: null, dueAt: new Date('2099-01-01T12:00:00.000Z') }) });
+    prisma.task.findMany.mockResolvedValue([
+      { id: 'task-1', type: 'CandidateActivity:Call', title: 'Reached candidate', description: null, assigneeUserId: 'me', assignee: { displayName: 'Recruiter' }, completedById: 'me', completedBy: { displayName: 'Recruiter' }, status: 'Completed', completedAt: now, createdAt: now, dueAt: now, entityType: 'Candidate', entityId: 'candidate' },
+      { id: 'task-2', type: 'CandidateActivity:FollowUp', title: 'FollowUp activity', description: 'Call again about offer', assigneeUserId: 'me', assignee: { displayName: 'Recruiter' }, completedById: null, completedBy: null, status: 'Open', completedAt: null, createdAt: now, dueAt: new Date('2099-01-01T12:00:00.000Z'), entityType: 'Candidate', entityId: 'candidate' },
+      { id: 'auto', type: 'Automation:Email', title: 'Queued reminder', description: null, assigneeUserId: 'me', assignee: { displayName: 'System' }, completedById: null, completedBy: null, status: 'Open', completedAt: null, createdAt: now, dueAt: new Date('2099-03-01T12:00:00.000Z'), entityType: 'Candidate', entityId: 'candidate' },
+    ]);
+    const summary = await service.list(user, 'candidate', {});
+    expect(summary).toMatchObject({ completed: 1, completedByMe: 1, pending: 2, byKind: { Call: 1 } });
+    expect(summary.entries.filter((entry) => entry.kind === 'Call' && entry.status === 'Completed')).toHaveLength(1);
+  });
+
+  it('returns the same activity when a timed follow-up save is retried with the same idempotency key', async () => {
+    const { service, prisma } = setup();
+    const tx = { task: { create: vi.fn().mockResolvedValueOnce({ id: 'task-1' }).mockResolvedValueOnce({ id: 'task-2' }) } };
+    (prisma as unknown as { $transaction: (fn: (db: typeof tx) => Promise<unknown>) => Promise<unknown> }).$transaction = vi.fn(async (fn) => fn(tx));
+    const dto = { kind: 'Call' as const, summary: 'Reached candidate', followUpDueAt: '2099-01-01T12:00:00.000Z', followUpSummary: 'Call again about offer', idempotencyKey: 'retry-1' };
+    await expect(service.create(user, 'candidate', dto)).resolves.toEqual({ id: 'task-1', followUpId: 'task-2' });
+    await expect(service.create(user, 'candidate', dto)).resolves.toEqual({ id: 'task-1', followUpId: 'task-2', deduplicated: true });
+    expect(tx.task.create).toHaveBeenCalledTimes(2);
+  });
+
+  it('rejects a request that both schedules a single follow-up and logs a completed activity with a next one', async () => {
+    const { service, prisma } = setup();
+    await expect(service.create(user, 'candidate', {
+      kind: 'Call', summary: 'Reached candidate', dueAt: '2099-01-01T12:00:00.000Z', followUpDueAt: '2099-01-02T12:00:00.000Z',
+    })).rejects.toThrow('followUpDueAt');
+    expect(prisma.task.create).not.toHaveBeenCalled();
+  });
+
+  it('stores one person activity for a candidate who has two applications', async () => {
+    const { service, prisma } = setup('ALL', [{ id: 'app-1' }, { id: 'app-2' }]);
+    await service.create(user, 'candidate', { kind: 'Call', summary: 'One call for the person' });
+    expect(prisma.application.findMany).toHaveBeenCalled();
+    expect(prisma.task.create).toHaveBeenCalledTimes(1);
+    expect(prisma.task.create).toHaveBeenCalledWith({ data: expect.objectContaining({ entityType: 'Candidate', entityId: 'candidate', type: 'CandidateActivity:Call' }) });
+    const created = prisma.task.create.mock.calls[0]?.[0] as { data: { entityId: string; entityType: string } };
+    expect(created.data.entityType).not.toBe('Application');
+    expect(created.data.entityId).not.toBe('app-1');
+    expect(created.data.entityId).not.toBe('app-2');
+  });
+
+  it('does not count a duplicated activity projection twice', () => {
+    const call = entry('call', 'Completed');
+    const screening = { ...entry('screening', 'Completed', 'other'), kind: 'Screening', at: '2026-09-05T12:00:00.000Z' };
+    const planned = { ...entry('planned', 'Open'), dueAt: '2026-09-08T12:00:00.000Z', at: '2026-09-07T12:00:00.000Z' };
+    const result = summarizeCandidateActivity([
+      call,
+      { ...call, title: 'Ignored duplicate', at: '2026-09-01T00:00:00.000Z' },
+      screening,
+      { ...screening, title: 'Ignored screening duplicate' },
+      planned,
+      { ...planned, title: 'Ignored follow-up duplicate' },
+      { ...entry('a-event', 'Event', null), at: '2026-09-06T12:00:00.000Z' },
+      { ...entry('b-event', 'Event', null), at: '2026-09-06T12:00:00.000Z' },
+    ], 'me', now);
+    expect(result).toMatchObject({ completed: 2, completedByMe: 1, pending: 1, totalEntries: 5, byKind: { Call: 1, Screening: 1 } });
+    expect(result.entries.map((row) => row.id)).toEqual(['planned', 'a-event', 'b-event', 'call', 'screening']);
+    expect(result.entries.find((row) => row.id === 'call')?.title).toBe('Confirmed availability');
+    expect(result.byRecruiter).toEqual(expect.arrayContaining([
+      { userId: 'me', name: 'me', completed: 1 },
+      { userId: 'other', name: 'other', completed: 1 },
+    ]));
+    expect(result.byRecruiter).toHaveLength(2);
+  });
+
+  it('classifies an automated stale alert as a system event and leaves it out of completed work', async () => {
+    const { service, prisma } = setup();
+    prisma.applicationNote.findMany.mockResolvedValue([
+      { id: 'stale', applicationId: 'app', authorId: null, author: null, content: '[Automation] Stale applicant alert: no action for 14 days', createdAt: now },
+      { id: 'blank', applicationId: 'app', authorId: null, author: { displayName: 'Ignored' }, content: 'Generated without an author', createdAt: now },
+      { id: 'tagged', applicationId: 'app', authorId: 'me', author: { displayName: 'Recruiter' }, content: '[System] nightly digest', createdAt: now },
+      { id: 'human', applicationId: 'app', authorId: 'me', author: { displayName: 'Recruiter' }, content: 'Called the candidate', createdAt: now },
+    ]);
+    const result = await service.list(user, 'candidate', {});
+    expect(prisma.applicationNote.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      select: expect.objectContaining({ content: true }),
+    }));
+    expect(result.entries.find((row) => row.id === 'note:stale')).toMatchObject({
+      status: 'Event', actorId: null, actorName: 'System', title: 'System activity: automated stale alert',
+    });
+    expect(result.entries.find((row) => row.id === 'note:blank')).toMatchObject({
+      status: 'Event', actorId: null, actorName: 'System', title: 'System activity recorded',
+    });
+    expect(result.entries.find((row) => row.id === 'note:tagged')).toMatchObject({
+      status: 'Event', actorId: null, actorName: 'System', title: 'Application note recorded',
+    });
+    expect(result.entries.find((row) => row.id === 'note:human')).toMatchObject({
+      status: 'Completed', actorId: 'me', actorName: 'Recruiter', title: 'Application note recorded',
+    });
+    expect(result).toMatchObject({ completed: 1, completedByMe: 1, totalEntries: 4 });
+  });
+
+  it('keeps the previous due time when a follow-up is rescheduled', async () => {
+    const { service, prisma } = setup();
+    prisma.task.findFirst.mockResolvedValue({ id: 'task', dueAt: new Date('2099-01-01T12:00:00.000Z'), description: 'Call again about offer' });
+    await service.reschedule(user, 'candidate', 'task', '2099-02-01T12:00:00.000Z');
+    expect(prisma.task.updateMany).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        dueAt: new Date('2099-02-01T12:00:00.000Z'),
+        description: 'Call again about offer\n[Rescheduled 2099-01-01T12:00:00.000Z -> 2099-02-01T12:00:00.000Z]',
+      }),
+    }));
+  });
+});
+
+function bankPerson(organizationId = 'org') {
+  const stamp = new Date('2026-07-01T00:00:00.000Z');
+  return {
+    id: 'bank-1',
+    organizationId,
+    candidateCode: 'CND-2026-031',
+    firstName: 'Heba',
+    lastName: 'Mansour',
+    email: 'heba@example.com',
+    phone: null,
+    currentTitle: 'Payroll Specialist',
+    currentCompany: null,
+    summary: null,
+    source: 'Bank',
+    status: 'Active',
+    consentStatus: null,
+    consentCapturedAt: null,
+    consentSource: null,
+    skills: ['Payroll'],
+    experienceYears: 7,
+    location: 'Cairo',
+    certifications: [],
+    languages: [],
+    availability: null,
+    metadata: null,
+    createdAt: stamp,
+    updatedAt: stamp,
+    createdById: 'other',
+  };
+}
+
+describe('Bank person with no application', () => {
+  it('lists and opens the person for an ALL scope, and keeps another organization hidden', async () => {
+    const prisma = {
+      candidate: {
+        findFirst: vi.fn().mockResolvedValue(bankPerson()),
+        findMany: vi.fn().mockResolvedValue([bankPerson()]),
+        count: vi.fn().mockResolvedValue(1),
+      },
+    };
+    const access = {
+      getUserEffectiveScope: vi.fn().mockResolvedValue({ dataScope: 'ALL' }),
+      getApplicationVisibilityWhere: vi.fn(),
+    };
+    const service = new CandidatesService(prisma as never, undefined, access as never);
+    await expect(service.getCandidate('org', 'bank-1', { viewPii: true }, user)).resolves.toMatchObject({
+      id: 'bank-1',
+      firstName: 'Heba',
+      organizationId: 'org',
+    });
+    expect(prisma.candidate.findFirst).toHaveBeenCalledWith({
+      where: { AND: [{ organizationId: 'org' }, { id: 'bank-1' }] },
+    });
+    expect(access.getApplicationVisibilityWhere).not.toHaveBeenCalled();
+
+    const listed = await service.listCandidates('org', { page: 1, pageSize: 20 }, { viewPii: true }, user);
+    expect(listed.data.map((row) => row.id)).toEqual(['bank-1']);
+    expect(prisma.candidate.findMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { organizationId: 'org', status: { not: 'Archived' } },
+    }));
+
+    prisma.candidate.findFirst.mockResolvedValue(bankPerson('other-org'));
+    await expect(service.getCandidate('org', 'bank-1', { viewPii: true }, user)).rejects.toThrow('was not found');
+  });
+
+  it('keeps a zero-application bank person visible to the creator under ASSIGNED_ONLY, and hidden from everyone else', async () => {
+    const visibility = { organizationId: 'org', OR: [{ primaryRecruiterId: 'me' }] };
+    const prisma = {
+      candidate: { findFirst: vi.fn().mockResolvedValue(null) },
+    };
+    const access = {
+      getUserEffectiveScope: vi.fn().mockResolvedValue({ dataScope: 'ASSIGNED_ONLY' }),
+      getApplicationVisibilityWhere: vi.fn().mockResolvedValue(visibility),
+    };
+    const service = new CandidatesService(prisma as never, undefined, access as never);
+    await expect(service.getCandidate('org', 'bank-1', { viewPii: true }, user)).rejects.toThrow('was not found');
+    expect(prisma.candidate.findFirst).toHaveBeenCalledWith({
+      where: {
+        AND: [
+          {
+            organizationId: 'org',
+            OR: [
+              { createdById: 'me' },
+              { applications: { some: visibility } },
+            ],
+          },
+          { id: 'bank-1' },
+        ],
+      },
+    });
+
+    prisma.candidate.findFirst.mockResolvedValue({ ...bankPerson(), createdById: 'me' });
+    await expect(service.getCandidate('org', 'bank-1', { viewPii: true }, user)).resolves.toMatchObject({ id: 'bank-1' });
+  });
+
+  it('falls back to application visibility when effective scope is not available', async () => {
+    const prisma = { candidate: { findFirst: vi.fn().mockResolvedValue(null) } };
+    const access = { getApplicationVisibilityWhere: vi.fn().mockResolvedValue({ organizationId: 'org' }) };
+    const service = new CandidatesService(prisma as never, undefined, access as never);
+    await expect(service.getCandidate('org', 'bank-1', { viewPii: true }, user)).rejects.toThrow('was not found');
+    expect(access.getApplicationVisibilityWhere).toHaveBeenCalledWith(user);
+    expect(prisma.candidate.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({
+        AND: expect.arrayContaining([
+          expect.objectContaining({
+            OR: [
+              { createdById: 'me' },
+              { applications: { some: { organizationId: 'org' } } },
+            ],
+          }),
+        ]),
+      }),
+    }));
   });
 });

@@ -11,12 +11,18 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { DatabaseModule } from '../database/database.module';
 import { AccessControlModule } from '../access-control/access-control.module';
 import { MasterDataModule } from '../master-data/master-data.module';
+import { DocumentsModule } from '../documents/documents.module';
+import { ResumeModule } from '../resume/resume.module';
+import { JdParserService } from './jd-parser.service';
+import { VacancyDocumentsService } from './vacancy-documents.service';
 
 @Module({
-  imports: [DatabaseModule, NotificationsModule, AccessControlModule, MasterDataModule],
+  imports: [DatabaseModule, NotificationsModule, AccessControlModule, MasterDataModule, DocumentsModule, ResumeModule],
   controllers: [VacancyRequestsController, VacanciesController],
   providers: [
     VacancyCoreService,
+    VacancyDocumentsService,
+    JdParserService,
     PrismaService,
     InMemoryVacancyCoreRepository,
     PrismaVacancyCoreRepository,
@@ -51,6 +57,6 @@ import { MasterDataModule } from '../master-data/master-data.module';
       },
     },
   ],
-  exports: [VacancyCoreService],
+  exports: [VacancyCoreService, VacancyDocumentsService, JdParserService],
 })
 export class VacancyCoreModule {}

@@ -4,6 +4,7 @@ import { CircleCheck, Info, LogOut, PencilLine, Plus, RotateCw, ShieldCheck } fr
 import { ButtonV2, DrawerV2, EmptyStateV2, InputV2, SelectV2, SkeletonV2 } from '../../components/v2';
 import { useAuth } from '../../auth/AuthContext';
 import { applyWorkflowRule, createPipeline, fetchPipeline, fetchWorkflowRules, isExit, isSingleTemplate, previewWorkflowRule, renameStage, stageInfo, WORKFLOW_RULE_REASON_MAX, type PipelineStage, type PipelineTemplate, type WorkflowImpact, type WorkflowPosition } from './configApi';
+import { AdminWorkspaceHeader } from './AdminWorkspaceHeader';
 import '../pages/jobs.css';
 import './admin.css';
 
@@ -30,10 +31,11 @@ export function PipelineV2() {
   const exits = data?.stages.filter(isExit) ?? [];
   return (
     <div className="rf2-jobs rf2-admin">
-      <div>
-        <h1 className="rf2-jobs__title">Pipeline template</h1>
-        <p className="rf2-jobs__sub">One template for every job. Stages in order, two exits. Gates are checks inside a stage, not extra stages.</p>
-      </div>
+      <AdminWorkspaceHeader
+        group="Recruitment Setup"
+        title="Pipeline template"
+        subtitle="Maintain the canonical hiring stages, exit reasons and position joining checklists."
+      />
       {note ? <p className="rf2-inline-note" data-tone={note.tone} role="status">{note.tone === 'success' ? <CircleCheck aria-hidden="true" /> : <Info aria-hidden="true" />} {note.text}</p> : null}
       {data === undefined && !error ? <SkeletonV2 lines={6} label="Loading pipeline…" /> : null}
       {error ? <div role="alert"><EmptyStateV2 title="Could not load the pipeline" body={error} action={<ButtonV2 kind="secondary" icon={<RotateCw />} onClick={() => setAttempt((n) => n + 1)}>Try again</ButtonV2>} /></div> : null}

@@ -464,7 +464,6 @@ export function MasterDataGridPage() {
     <PageFrame
       eyebrow="Administration"
       title="Master Data"
-      description="Edit controlled recruiting values in a focused grid. Paste rows from Excel, validate them here, then save one bounded batch."
       actions={canManage ? <div className="flex gap-2"><Button variant="secondary" size="sm" onClick={discard} disabled={isSaving}>Discard</Button><Button variant="primary" size="sm" onClick={() => void save()} loading={isSaving} disabled={pendingRows.length === 0}>Save Changes</Button></div> : undefined}
     >
       {error && <Alert tone="danger" title={errorKind === 'load' ? 'Unable to load Master Data' : 'Master Data could not be saved'}>{error}</Alert>}

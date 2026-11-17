@@ -91,7 +91,7 @@ export class OffersController {
   }
 
   @Get('approvals/inbox')
-  @RequirePermissions('APPROVE_OFFERS')
+  @RequireAnyPermissions('APPROVE_OFFERS', 'OFFER_APPROVE')
   async getApprovalInbox(@CurrentUser() user: AuthUser) {
     return this.offersService.getApprovalInbox(user, await this.compensationDisclosure(user));
   }
@@ -157,7 +157,7 @@ export class OffersController {
   }
 
   @Post('approvals/:approvalId/decide')
-  @RequirePermissions('APPROVE_OFFERS')
+  @RequireAnyPermissions('APPROVE_OFFERS', 'OFFER_APPROVE')
   @AuditAction('OFFER_APPROVAL_DECIDE')
   @UseGuards(TenantScopedGuard)
   @TenantResource({ resource: 'offerApproval', param: 'approvalId' })

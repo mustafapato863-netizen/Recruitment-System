@@ -11,9 +11,9 @@
 
 /* Brand action on real buttons. Status chips are spans and stay flat. */
 [data-ui='v2'] .rf2-shell__content :is(button, a).bg-blue-600 {
-  background-image: var(--rf2-brand-action);
-  background-color: transparent;
-  border-color: transparent;
+  background-image: none;
+  background-color: var(--rf2-action);
+  border-color: var(--rf2-divider);
   color: var(--rf2-on-action);
   box-shadow: var(--rf2-neo-raise-sm);
 }
@@ -55,9 +55,9 @@
   input[type='email'],
   input[type='number'],
   select
-):not(.rf2-field__control) {
-  background: var(--rf2-well);
-  border-color: transparent;
+):not(.rf2-field__control):not([class*='rf2-']) {
+  background-color: var(--rf2-well);
+  border-color: var(--rf2-divider);
   box-shadow: var(--rf2-neo-inset);
   color: var(--rf2-ink);
 }

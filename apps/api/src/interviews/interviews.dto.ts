@@ -83,6 +83,16 @@ export class UpdateInterviewDto {
   title?: string;
 
   @IsOptional()
+  @IsString()
+  @MaxLength(60)
+  interviewType?: InterviewType;
+
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  attendeeUserIds?: string[];
+
+  @IsOptional()
   @IsISO8601()
   scheduledStart?: string;
 
@@ -149,6 +159,17 @@ export class SubmitScorecardDto {
   @IsOptional()
   @IsEnum(['Draft', 'Submitted'])
   status?: 'Draft' | 'Submitted';
+
+  /** Criteria ratings tied to locked JD criteria. */
+  @IsOptional()
+  @IsArray()
+  criteriaRatings?: Array<{
+    criterionKey: string;
+    criterionName: string;
+    category?: 'SKILL' | 'COMPETENCY' | 'REQUIREMENT';
+    rating: number;
+    comment?: string;
+  }>;
 }
 
 /** B5: revise a Submitted scorecard (new revision, reason required). */

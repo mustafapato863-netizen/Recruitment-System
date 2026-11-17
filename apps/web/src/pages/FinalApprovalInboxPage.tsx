@@ -19,6 +19,7 @@ import './PageEnhancementsV2.css';
 
 type FinalApprovalRow = {
   id: string;
+  applicationId?: string;
   candidateName: string;
   positionTitle: string;
   branchName: string;
@@ -167,7 +168,6 @@ export function FinalApprovalInboxPage() {
       className="rf-final-approval-page"
       eyebrow="Joining &amp; Compliance"
       title="Final Hiring Approval Inbox"
-      description="Final governance gate before a candidate can transition to Awaiting Joining status."
       actions={
         <Button variant="ghost" size="sm" disabled={isLoading} onClick={() => void loadApprovals()}>
           <Icon name="refresh-cw" size={13} className={isLoading ? 'animate-spin' : ''} />
@@ -217,7 +217,7 @@ export function FinalApprovalInboxPage() {
             renderActions={(row) => (
               <>
                 <Button variant="secondary" size="sm" asChild>
-                  <Link to={`/hires/${row.id}`}>Review case</Link>
+                  <Link to={row.applicationId ? `/applications/${row.applicationId}` : `/hires/${row.id}`}>Review case</Link>
                 </Button>
                 <Button
                   variant="danger"

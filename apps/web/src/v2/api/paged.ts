@@ -10,7 +10,7 @@ type Page<T> = T[] | { data?: T[]; total?: number; meta?: { total?: number; tota
  */
 export async function fetchAllPages<T>(path: string, opts: { pageSize?: number; maxPages?: number } = {}): Promise<T[]> {
   const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, opts.pageSize ?? MAX_PAGE_SIZE));
-  const maxPages = opts.maxPages ?? 20;
+  const maxPages = opts.maxPages ?? 100;
   const [base, qs = ''] = path.split('?');
   const out: T[] = [];
   for (let page = 1; page <= maxPages; page += 1) {

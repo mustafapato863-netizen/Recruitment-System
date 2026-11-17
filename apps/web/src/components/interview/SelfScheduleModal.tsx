@@ -139,6 +139,9 @@ export function SelfScheduleModal({
             <h3 className="font-extrabold text-slate-900 dark:text-white text-sm">
               Self-Schedule Invitation Created
             </h3>
+            <span className="inline-block px-2.5 py-1 rounded-full bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-100 font-bold text-[11px]">
+              {isCopied ? 'Link copied — share with candidate' : 'Link created — not sent automatically'}
+            </span>
             <p className="text-[11px] text-slate-600 dark:text-slate-300">
               This tamper-proof signed link allows the candidate to view live recruiter availability and self-book
               their slot.
@@ -171,6 +174,9 @@ export function SelfScheduleModal({
                 {new Date(generatedLink.expiresAt).toLocaleString()}
               </strong>
             </span>
+            <p className="text-[11px] text-slate-600 dark:text-slate-300">
+              Copying this link does not send an email or message automatically. Share it with the candidate or send an invitation separately.
+            </p>
           </div>
 
           <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex justify-end">
@@ -271,7 +277,7 @@ export function SelfScheduleModal({
               inputMode="url"
               value={meetingLink}
               onChange={(e) => setMeetingLink(e.target.value)}
-              placeholder="https://meet.google.com/..."
+              placeholder="https://teams.microsoft.com/l/meetup-join/..."
               className="w-full p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
             />
             <p className="mt-1 text-[10px] text-slate-500">This link is attached when the candidate books a slot.</p>

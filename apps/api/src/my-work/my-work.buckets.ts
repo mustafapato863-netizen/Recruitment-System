@@ -80,14 +80,14 @@ export interface MyWorkJoiningInput {
 
 export interface MyWorkInput {
   me?: string;
-  jobs: Array<{ id: string; code: string; title: string; status: string; joined: number; target: number; dueDate: string | null; department?: string | null; site?: string | null; owner?: Person | null }>;
+  jobs: Array<{ id: string; code: string; title: string; status: string; joined: number; target: number; dueDate: string | null; department?: string | null; site?: string | null; owner?: Person | null; ownedByMe?: boolean }>;
   /** activateBlocked: why Activate is unavailable for this caller (undefined = activatable). */
   requisitions: Array<{ id: string; code: string; title: string; status: string; dueDate: string | null; activateBlocked?: string | undefined }>;
   tasks: Array<{ id: string; title: string; dueAt: Date | null; entityType: string | null; entityId: string | null }>;
   interviews: Array<{ id: string; title: string; start: Date; end: Date; applicationId: string; status?: string | null; roomUrl?: string | null; roomName?: string | null; interviewers?: Array<{ id: string | null; name: string }>; app?: AppInfo; iAmInterviewer?: boolean; ownsFile?: boolean; jobTitle?: string | null; jobHeld?: boolean }>;
   myMissingScorecards: Array<{ interviewId: string; title: string; end: Date; app?: AppInfo }>;
   othersMissingScorecards: Array<{ interviewId: string; title: string; end: Date; missing: number; app?: AppInfo }>;
-  offers: Array<{ id: string; code: string; status: string; applicationId: string; updatedAt: Date; app?: AppInfo; approvers?: Array<{ id: string | null; name: string }> }>;
+  offers: Array<{ id: string; code: string; status: string; applicationId: string; updatedAt: Date; app?: AppInfo; approvers?: Array<{ id: string | null; name: string }>; sentBack?: boolean }>;
   /** Awaiting joining on a held job. Shown today, linked to the application. */
   joining?: Array<{ id: string; applicationId: string; title: string; app?: AppInfo }>;
   /** Accepted cases the caller owns. Not hires, and not added to target filled counts. */
@@ -276,7 +276,9 @@ export function buildMyWork(input: MyWorkInput, now: Date, day: MyWorkDay = 'tod
   };
 
   for (const job of input.jobs) {
-    if (!['Open', 'Partially Filled'].includes(job.status)) continue;
+    if (!['Open', 'Partially Filled'].includes(job.status) || job.ownedByMe === false) continue;
+    // A missing due date, or a target already met, stays on the Open jobs count and does not raise an alert.
+    if (!job.dueDate || job.joined >= job.target) continue;
     place({
       id: job.id, type: 'job', title: `${job.title} (${job.code})`, dueAt: job.dueDate,
       reason: `${job.joined} of ${job.target} seats filled`, nextAction: { code: 'review-applicants', label: 'Review applicants' },
@@ -316,11 +318,18 @@ export function buildMyWork(input: MyWorkInput, now: Date, day: MyWorkDay = 'tod
 
   for (const task of input.tasks) {
     const type = toEntityType(task.entityType);
+    const isCandidate = Boolean(task.entityId && (task.entityType ?? '').trim().toLowerCase() === 'candidate');
+    const hasLinkedRecord = Boolean(task.entityId && (type !== 'task' || isCandidate));
     place({
       id: task.id, type: 'task', title: task.title, dueAt: iso(task.dueAt), reason: 'Task',
       nextAction: { code: 'complete-task', label: 'Complete task' },
       entity: task.entityId && type !== 'task' ? { type, id: task.entityId } : { type: 'task', id: task.id },
-      actions: [act('complete-task', 'Complete task')],
+      ...(isCandidate && task.entityId ? { candidate: { id: task.entityId, name: '' } } : {}),
+      actions: [
+        act('complete-task', 'Complete task'),
+        ...(hasLinkedRecord ? [act('open-record', 'Open record')] : []),
+        act('reschedule-task', 'Reschedule'),
+      ],
     }, task.dueAt);
   }
 
@@ -365,6 +374,47 @@ export function buildMyWork(input: MyWorkInput, now: Date, day: MyWorkDay = 'tod
   }
 
   for (const offer of input.offers) {
+    if (offer.status === 'Approved') {
+      if (day === 'today') {
+        dueToday.push({
+          id: offer.id, type: 'offer', title: `Offer ${offer.code}`, dueAt: today,
+          reason: 'Offer approved — ready to send',
+          nextAction: { code: 'send-offer', label: 'Send offer' },
+          entity: { type: 'offer', id: offer.id },
+          applicationId: offer.applicationId, ...appFields(offer.app),
+          actions: [act('send-offer', 'Send offer'), act('open-offer', 'Open offer')],
+        });
+      }
+      continue;
+    }
+    if (offer.status === 'Draft' || offer.status === 'Changes Requested') {
+      if (day === 'today') {
+        const sentBack = Boolean(offer.sentBack || offer.status === 'Changes Requested');
+        const label = sentBack ? 'Revise and resubmit' : 'Submit for approval';
+        dueToday.push({
+          id: offer.id, type: 'offer', title: `Offer ${offer.code}`, dueAt: today,
+          reason: sentBack ? 'Offer sent back for changes' : 'Offer draft not submitted',
+          nextAction: { code: 'open-offer', label },
+          entity: { type: 'offer', id: offer.id },
+          applicationId: offer.applicationId, ...appFields(offer.app),
+          actions: [act('open-offer', label)],
+        });
+      }
+      continue;
+    }
+    if (offer.status === 'Expired') {
+      if (day === 'today') {
+        dueToday.push({
+          id: offer.id, type: 'offer', title: `Offer ${offer.code}`, dueAt: today,
+          reason: 'Offer expired',
+          nextAction: { code: 'open-offer', label: 'New offer version' },
+          entity: { type: 'offer', id: offer.id },
+          applicationId: offer.applicationId, ...appFields(offer.app),
+          actions: [act('open-offer', 'New offer version')],
+        });
+      }
+      continue;
+    }
     const waitingOn: WaitingOn | null = offer.status === 'Pending Approval' ? 'approver' : offer.status === 'Sent' ? 'candidate' : null;
     if (!waitingOn) continue;
     const approvers = waitingOn === 'approver' ? offer.approvers ?? [] : [];
@@ -397,7 +447,7 @@ export function buildMyWork(input: MyWorkInput, now: Date, day: MyWorkDay = 'tod
   overdue.sort(byDue); dueToday.sort(byDue); waiting.sort(byDue);
 
   const targets = input.jobs
-    .filter((job) => ['Open', 'Partially Filled'].includes(job.status))
+    .filter((job) => ['Open', 'Partially Filled'].includes(job.status) && job.ownedByMe !== false)
     .map((job) => ({
       ...buildTargetChip({ title: job.title, filled: job.joined, target: job.target, dueDate: job.dueDate }),
       vacancyId: job.id, vacancyCode: job.code,

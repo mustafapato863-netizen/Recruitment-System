@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, Download, RotateCw } from 'lucide-react';
 import { ButtonV2, DrawerV2, EmptyStateV2, SelectV2, SkeletonV2, StatusChip, initials } from '../../components/v2';
 import { auditArea, downloadCsv, fetchAudit, humanize, namedAuditText, toCsv, type AuditEntry, type AuditPage, type AuditQuery } from './opsApi';
 import { fetchUsers } from './usersApi';
+import { AdminWorkspaceHeader } from './AdminWorkspaceHeader';
 import '../pages/jobs.css';
 import '../pages/team.css';
 import './admin.css';
@@ -87,10 +88,12 @@ export function AuditV2({ now = () => Date.now() }: { now?: () => number } = {})
   };
   return (
     <div className="rf2-jobs rf2-admin">
-      <div className="rf2-row-between">
-        <div><h1 className="rf2-jobs__title">Audit</h1><p className="rf2-jobs__sub">Every change on files, jobs, requisitions and settings. Read-only; nothing can be deleted.</p></div>
-        <ButtonV2 kind="secondary" icon={<Download />} onClick={() => void exportCsv()} disabled={!data || data.total === 0 || exporting}>Export</ButtonV2>
-      </div>
+      <AdminWorkspaceHeader
+        group="Settings"
+        title="Audit"
+        subtitle="Inspect immutable configuration, workflow and override activity across the organization."
+        actions={<ButtonV2 kind="secondary" icon={<Download />} onClick={() => void exportCsv()} disabled={!data || data.total === 0 || exporting}>Export</ButtonV2>}
+      />
       {exportError ? <p className="rf2-form-error" role="alert">{exportError}</p> : null}
       <div className="rf2-row-between">
         <div className="rf2-admin__filterset">

@@ -37,7 +37,7 @@ export class ResumeParsingService {
    * Complete resume intake parsing pipeline:
    * 1. Initialize lazy ResumeSource abstraction (Phase 1)
    * 2. If ENABLE_PROVIDER_ARCHITECTURE is true, run Provider flow.
-   * 3. Else, run legacy direct Affinda flow.
+   * 3. Else, preserve direct Affinda mapping, with local extraction on failure.
    * 4. Enrich with SGH healthcare domain rules & clinical summary
    */
   async parseResume(file: UploadedResumeFile): Promise<ExtractedCandidate> {
@@ -68,7 +68,7 @@ export class ResumeParsingService {
       let canonicalResult: CanonicalResumeParseResult;
       let usedSource: 'affinda' | 'legacy' = 'affinda';
       let meta: CanonicalAdaptOptions['meta'] = undefined;
-      let rawText: string | undefined = undefined;
+      let rawText: string | undefined;
 
       if (affindaRes.status === 'SUCCESS') {
         const rawOutput = affindaRes.rawOutput as Record<string, unknown>;
@@ -78,30 +78,10 @@ export class ResumeParsingService {
         rawText = metaObj?.rawText || (typeof rawOutput.rawText === 'string' ? rawOutput.rawText : undefined);
       } else {
         this.logger.warn(`Affinda provider failed: ${affindaRes.error.message}. Falling back to Legacy Regex Provider.`);
-        const legacyRes = await this.legacyProvider.parse(resumeSource);
-        if (legacyRes.status === 'SUCCESS') {
-          canonicalResult = legacyRes.rawOutput as unknown as CanonicalResumeParseResult;
-          usedSource = 'legacy';
-          try {
-            const doc = await resumeSource.getNormalizedDocument();
-            rawText = doc.rawText;
-          } catch {
-            // ignore
-          }
-        } else {
-          if (
-            legacyRes.error?.code === 'CORRUPTED_FILE' ||
-            legacyRes.error?.code === 'UNSUPPORTED_FORMAT'
-          ) {
-            throw fileInvalid(
-              legacyRes.error.message || 'The resume file is corrupted or in an unsupported format.',
-            );
-          }
-          throw integrationUnavailable(
-            `Resume parsing providers failed: Affinda (${affindaRes.error?.message || 'failed'}) and Legacy (${legacyRes.error?.message || 'failed'})`,
-            true,
-          );
-        }
+        const fallback = await this.parseLocally(resumeSource);
+        canonicalResult = fallback.canonical;
+        usedSource = 'legacy';
+        rawText = fallback.rawText;
       }
 
       // Legacy runs only when Affinda fails or a required contact field (email or phone) is missing
@@ -129,8 +109,7 @@ export class ResumeParsingService {
     } else {
       // Legacy Flow
       this.logger.log('Routing through legacy direct Affinda Flow');
-      const rawAffinda = await this.affindaParser.parse(file);
-      mapped = this.candidateMapper.map(rawAffinda);
+      mapped = await this.parseDirectWithFallback(file, resumeSource);
     }
 
     // Step 3: SGH clinical domain & summary enrichment
@@ -141,5 +120,60 @@ export class ResumeParsingService {
     );
 
     return enriched;
+  }
+
+  private async parseDirectWithFallback(
+    file: UploadedResumeFile,
+    source: ResumeSource | null,
+  ): Promise<ExtractedCandidate> {
+    let rawAffinda: Record<string, unknown>;
+    try {
+      rawAffinda = await this.affindaParser.parse(file);
+    } catch {
+      this.logger.warn('External resume processing unavailable; attempting local document extraction.');
+      // Construct lazily so successful flag-off requests keep their existing behavior.
+      if (!source && this.resumeSourceFactory) {
+        try {
+          source = this.resumeSourceFactory.createFromUploadedFile(file);
+        } catch {
+          throw integrationUnavailable('CV processing is temporarily unavailable. Please retry shortly.');
+        }
+      }
+      if (!source) {
+        throw integrationUnavailable('CV processing is temporarily unavailable. Please retry shortly.');
+      }
+      const fallback = await this.parseLocally(source);
+      return this.canonicalToExtractedAdapter.adapt(fallback.canonical, {
+        parserSource: 'legacy',
+        rawText: fallback.rawText,
+      });
+    }
+    // Mapping errors are not provider outages and must not silently trigger fallback.
+    return this.candidateMapper.map(rawAffinda);
+  }
+
+  private async parseLocally(source: ResumeSource): Promise<{
+    canonical: CanonicalResumeParseResult;
+    rawText: string;
+  }> {
+    const result = await this.legacyProvider.parse(source);
+    if (result.status === 'FAILED') {
+      if (result.error.code === 'UNSUPPORTED_FORMAT' && source.fileName.toLowerCase().endsWith('.doc')) {
+        throw integrationUnavailable('This Word (.doc) file needs the CV processing service. Retry later or save it as DOCX or a searchable PDF.');
+      }
+      if (result.error.code === 'CORRUPTED_FILE' || result.error.code === 'UNSUPPORTED_FORMAT') {
+        throw fileInvalid('The CV file could not be read. Upload a valid PDF or Word (.docx) file.');
+      }
+      // Never expose raw provider errors, document contents or internal paths.
+      throw integrationUnavailable('CV processing is temporarily unavailable or exceeded its limits. Retry or try a smaller file.');
+    }
+    const doc = await source.getNormalizedDocument();
+    if (!doc.rawText.trim()) {
+      throw fileInvalid('No readable text was found in this CV. It may be scanned; upload a searchable PDF or a Word (.docx) copy.');
+    }
+    return {
+      canonical: result.rawOutput as unknown as CanonicalResumeParseResult,
+      rawText: doc.rawText,
+    };
   }
 }

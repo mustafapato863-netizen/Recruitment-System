@@ -87,3 +87,36 @@ In case of a critical post-release issue:
 1. Revert to the last known stable Git release tag: `git checkout tags/vX.Y.Z`
 2. Re-run `npx pnpm build`
 3. Restart API & Worker processes.
+
+---
+
+## 6. V2 Release Rollout Governance & 14-Day Production Bake Guard (Choice A)
+
+RecruitFlow V2 enforces the corporate **Choice A (14-Day Safety Guard)** release policy:
+
+### 6.1 Rollout Architecture (100% Organization Cutover)
+- **Default State**: 100% full organization cutover is enabled via `apps/api/src/auth/seat-rollout.ts` (`DEFAULT_V2_SEATS = ['employee', 'manager', 'admin']`) and `apps/web/src/theme/uiVersion.ts` (`applyUiVersion('v2')`).
+- **Multi-tier Rollout Precedence**:
+  1. **Org Config**: `integrations` table row `ROLLOUT_SEATS` with JSON config `{"v2Seats": [...]}`. An empty array `[]` disables V2 for that tenant.
+  2. **Environment Variable**: `RF_V2_SEATS` (e.g., `employee,manager`; `none` disables V2 globally).
+  3. **Default**: `['employee', 'manager', 'admin']` (100% cutover).
+
+### 6.2 Instant Zero-Downtime Rollback Mechanism
+If a critical regression is identified post-deployment:
+- **Global Rollback**: Set `RF_V2_SEATS=none` in the production environment.
+- **Tenant Rollback**: Update tenant's `ROLLOUT_SEATS` integration config to `{"v2Seats": []}`.
+- **Seat-Level Rollback**: Set `RF_V2_SEATS="employee"` to restrict V2 exposure while debugging manager/admin flows.
+
+### 6.3 14-Day Zero-Rollback Production Bake Guard (Choice A)
+Per architectural directive Choice A:
+1. **Preservation of Legacy Wrappers**:
+   - Legacy V1 page components under `apps/web/src/pages/`, classic routing paths in `apps/web/src/App.tsx` (`/hires`, `/hires/:id`, `/offers`, `/classic/candidates`, `/classic/vacancies`, etc.), and `apps/web/src/styles/classic-in-shell.css` MUST remain intact in the codebase throughout the 14-day bake period.
+   - Immediate legacy deletion (Choice B) and premature archival to temporary directories (Choice C) are strictly prohibited.
+2. **Operational Telemetry & Health Monitoring**:
+   - Error rates and request tracing via `x-correlation-id`.
+   - Email/message outbox queue processing.
+   - Background worker and reminder worker health (`GET /api/v1/health` and `reminderWorkerHealthy`).
+   - Core recruiter/manager workflows (interviews, offer approvals, license checks, onboarding).
+3. **Decommissioning Gate (Post-Bake)**:
+   - Full retirement and deletion of legacy V1 pages, classic routes, and `classic-in-shell.css` is permitted ONLY after **14 consecutive calendar days of live production operation with zero rollbacks**.
+

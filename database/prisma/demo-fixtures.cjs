@@ -9,6 +9,10 @@ function dateFromNow(days) {
   return new Date(Date.now() + days * DAY_MS);
 }
 
+function hoursFromNow(hours) {
+  return new Date(Date.now() + hours * 60 * 60 * 1000);
+}
+
 async function upsertPosition(tx, orgId, id, code, title, description) {
   const existingById = await tx.position.findUnique({ where: { id } });
   if (existingById) {
@@ -248,22 +252,40 @@ async function linkDemoSkills(tx, orgId) {
   const key = (v) => String(v ?? '').replace(/[\u00a0\u2007\u202f]/g, ' ').trim().replace(/\s+/g, ' ').toLocaleLowerCase('en-US');
   const library = await tx.masterDataValue.findMany({ where: { organizationId: orgId, category: 'skills', status: 'Active' }, select: { id: true, name: true } });
   const byKey = new Map(library.map((v) => [key(v.name), v.id]));
-  const candidates = await tx.candidate.findMany({ where: { organizationId: orgId, status: 'Active' }, select: { id: true, skills: true }, orderBy: { candidateCode: 'asc' } });
+  const candidates = await tx.candidate.findMany({ where: { organizationId: orgId, status: 'Active' }, select: { id: true, email: true, skills: true }, orderBy: { candidateCode: 'asc' } });
   const links = [];
   for (const c of candidates) for (const s of c.skills) { const id = byKey.get(key(s)); if (id) links.push({ organizationId: orgId, candidateId: c.id, skillId: id }); }
   if (links.length) await tx.candidateSkill.createMany({ data: links, skipDuplicates: true });
-  const clinical = new Set(['icu', 'critical care', 'emergency care', 'pediatrics', 'wound care', 'iv therapy', 'bls', 'acls', 'triage']);
-  const evidenced = candidates.filter((c) => c.skills.some((s) => clinical.has(key(s))));
-  const addEvidence = async (candidateId, skillName, snippet) => {
+  const byEmail = new Map(candidates.map((c) => [c.email, c.id]));
+  // VAC-2026-001 required skills are 5. Evidence is spread so Match Skills shows 5/5, 4/5, 3/5, 2/5, and 0/5.
+  const evidencePlan = [
+    ['nour.ali@sample.com', 'DHA/MOH License', 'CV_TEXT', 'demo-cv', 'DHA/MOH License listed on the uploaded CV.'],
+    ['nour.ali@sample.com', 'Clinical Experience', 'SCREENING_NOTE', 'demo-screen', 'Clinical Experience confirmed during screening.'],
+    ['nour.ali@sample.com', 'ICU', 'SCORECARD', 'demo-interview', 'ICU competency scored at interview.'],
+    ['nour.ali@sample.com', 'BLS/ACLS', 'MANUAL', 'demo-manual', 'BLS/ACLS card checked by the recruiter.'],
+    ['nour.ali@sample.com', 'IV Therapy', 'CV_TEXT', 'demo-cv-iv', 'IV Therapy listed on the CV.'],
+    ['heba.salah@sample.com', 'DHA/MOH License', 'CV_TEXT', 'demo-cv', 'DHA/MOH License listed on the uploaded CV.'],
+    ['heba.salah@sample.com', 'Clinical Experience', 'SCREENING_NOTE', 'demo-screen', 'Clinical Experience confirmed during screening.'],
+    ['heba.salah@sample.com', 'ICU', 'SCORECARD', 'demo-interview', 'ICU competency scored at interview.'],
+    ['heba.salah@sample.com', 'BLS/ACLS', 'MANUAL', 'demo-manual', 'BLS/ACLS card checked by the recruiter.'],
+    ['sara.ahmed.cand@sample.com', 'DHA/MOH License', 'CV_TEXT', 'demo-cv', 'DHA/MOH License listed on the uploaded CV.'],
+    ['sara.ahmed.cand@sample.com', 'Clinical Experience', 'MANUAL', 'demo-manual', 'Clinical Experience noted by the recruiter.'],
+    ['sara.ahmed.cand@sample.com', 'ICU', 'SCREENING_NOTE', 'demo-screen', 'ICU shift history confirmed at screening.'],
+    ['lina.mostafa@sample.com', 'DHA/MOH License', 'CV_TEXT', 'demo-cv', 'DHA/MOH License listed on the uploaded CV.'],
+    ['lina.mostafa@sample.com', 'Clinical Experience', 'MANUAL', 'demo-manual', 'Clinical Experience noted by the recruiter.'],
+    ['ahmed.farag@sample.com', 'MRI', 'CV_TEXT', 'demo-cv', 'MRI experience listed on the CV.'],
+    ['ahmed.farag@sample.com', 'CT Scan', 'SCREENING_NOTE', 'demo-screen', 'CT Scan competency confirmed at screening.'],
+    ['ahmed.farag@sample.com', 'PACS', 'MANUAL', 'demo-manual', 'PACS access confirmed by the recruiter.'],
+    ['ahmed.samir@sample.com', 'Clinical Pharmacy', 'CV_TEXT', 'demo-cv', 'Clinical Pharmacy experience listed on the CV.'],
+    ['ahmed.samir@sample.com', 'Dispensing', 'MANUAL', 'demo-manual', 'Dispensing practice confirmed by the recruiter.'],
+  ];
+  for (const [email, skillName, sourceType, sourceRef, snippet] of evidencePlan) {
+    const candidateId = byEmail.get(email);
     const skillId = byKey.get(key(skillName));
-    if (!skillId) return;
+    if (!candidateId || !skillId) continue;
     const link = await tx.candidateSkill.upsert({ where: { candidateId_skillId: { candidateId, skillId } }, create: { organizationId: orgId, candidateId, skillId }, update: {} });
-    const exists = await tx.candidateSkillEvidence.findFirst({ where: { candidateSkillId: link.id, sourceType: 'MANUAL', sourceRef: 'demo-fixture' } });
-    if (!exists) await tx.candidateSkillEvidence.create({ data: { candidateSkillId: link.id, sourceType: 'MANUAL', sourceRef: 'demo-fixture', snippet } });
-  };
-  for (const [i, c] of evidenced.entries()) {
-    await addEvidence(c.id, 'Clinical Experience', 'Demo fixture: clinical experience confirmed at screening.');
-    if (i < 3) await addEvidence(c.id, 'DHA/MOH License', 'Demo fixture: license number recorded on file.');
+    const exists = await tx.candidateSkillEvidence.findFirst({ where: { candidateSkillId: link.id, sourceType, sourceRef } });
+    if (!exists) await tx.candidateSkillEvidence.create({ data: { candidateSkillId: link.id, sourceType, sourceRef, snippet } });
   }
   return links.length;
 }
@@ -341,6 +363,17 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
     }
   }
 
+  // Hassan (top) -> Mona and Omar. Mona -> Sarah, Sindu, Zenah. Omar -> Lady.
+  const talentManagerMona = usersByEmail['mona.manager@recruitflow.local'] ?? null;
+  if (talentManagerMona && hiringManagerHassan.id !== admin.id) {
+    await tx.user.update({ where: { id: talentManagerMona.id }, data: { managerId: hiringManagerHassan.id } });
+    await tx.user.update({ where: { id: hiringManagerOmarH.id }, data: { managerId: hiringManagerHassan.id } });
+    await tx.user.update({ where: { id: recruiterSarah.id }, data: { managerId: talentManagerMona.id } });
+    await tx.user.update({ where: { id: recruiterSindu.id }, data: { managerId: talentManagerMona.id } });
+    await tx.user.update({ where: { id: recruiterZenah.id }, data: { managerId: talentManagerMona.id } });
+    await tx.user.update({ where: { id: recruiterLady.id }, data: { managerId: hiringManagerOmarH.id } });
+  }
+
   // ── 2. Real Branches from 2026 Manpower List ───────────────
   const orgId = organization.id;
   const branches = {
@@ -379,9 +412,9 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
 
   // ── 4. Real Candidates ─────────────────────────────────────
   const candidateSeeds = [
-    { email: 'nour.ali@sample.com', firstName: 'Nour', lastName: 'Ali', phone: '+966501234567', currentTitle: 'Registered Nurse', currentCompany: 'Care Hospital', source: 'LinkedIn', skills: ['ICU', 'BLS/ACLS', 'IV Therapy'], location: 'Riyadh', experienceYears: 5 },
-    { email: 'heba.salah@sample.com', firstName: 'Heba', lastName: 'Salah', phone: '+966549876543', currentTitle: 'Registered Nurse (ICU)', currentCompany: 'King Faisal Hospital', source: 'Referral', skills: ['ICU', 'Wound Care'], location: 'Riyadh', experienceYears: 4 },
-    { email: 'lina.mostafa@sample.com', firstName: 'Lina', lastName: 'Mostafa', phone: '+966554321098', currentTitle: 'Registered Nurse (Peds)', currentCompany: 'SGH Cairo', source: 'Career Site', skills: ['Pediatrics', 'BLS'], location: 'Jeddah', experienceYears: 3 },
+    { email: 'nour.ali@sample.com', firstName: 'Nour', lastName: 'Ali', phone: '+966501234567', currentTitle: 'Registered Nurse', currentCompany: 'Care Hospital', source: 'LinkedIn', skills: ['DHA/MOH License', 'Clinical Experience', 'ICU', 'BLS/ACLS', 'IV Therapy'], location: 'Riyadh', experienceYears: 5 },
+    { email: 'heba.salah@sample.com', firstName: 'Heba', lastName: 'Salah', phone: '+966549876543', currentTitle: 'Registered Nurse (ICU)', currentCompany: 'King Faisal Hospital', source: 'Referral', skills: ['DHA/MOH License', 'Clinical Experience', 'ICU', 'BLS/ACLS'], location: 'Riyadh', experienceYears: 4 },
+    { email: 'lina.mostafa@sample.com', firstName: 'Lina', lastName: 'Mostafa', phone: '+966554321098', currentTitle: 'Registered Nurse (Peds)', currentCompany: 'SGH Cairo', source: 'Career Site', skills: ['DHA/MOH License', 'Clinical Experience'], location: 'Jeddah', experienceYears: 3 },
     { email: 'dr.osama.ali@sample.com', firstName: 'Osama', lastName: 'Ali', phone: '+971501112233', currentTitle: 'Consultant Psychiatrist', currentCompany: 'Al Amal Psychiatric', source: 'Direct Search', skills: ['Psychiatry', 'Psychopharmacology'], location: 'Dubai', experienceYears: 12 },
     { email: 'christina.beatric@sample.com', firstName: 'Christina', lastName: 'Beatric', phone: '+971523334455', currentTitle: 'Counselor', currentCompany: 'Wellness Clinic Dubai', source: 'Referral', skills: ['CBT', 'Child Counseling'], location: 'Dubai', experienceYears: 8 },
     { email: 'dr.abhimanyu@sample.com', firstName: 'Abhimanyu', lastName: 'Gupta', phone: '+971565556677', currentTitle: 'Specialist Urologist', currentCompany: 'Apollo Hospital', source: 'LinkedIn', skills: ['Endourology', 'Laparoscopy'], location: 'Dubai', experienceYears: 10 },
@@ -397,8 +430,14 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
     { email: 'mai.wahba@sample.com', firstName: 'Mai', lastName: 'Wahba', phone: '+966566667788', currentTitle: 'HR Specialist', currentCompany: 'Alpha Health', source: 'Agency', skills: ['Onboarding', 'HRIS'], location: 'Riyadh', experienceYears: 4 },
     { email: 'hassan.talaat@sample.com', firstName: 'Hassan', lastName: 'Talaat', phone: '+966538889911', currentTitle: 'Clinical Pharmacist', currentCompany: 'Dallah Hospital', source: 'LinkedIn', skills: ['Pharmacotherapy', 'IV Admixtures'], location: 'Riyadh', experienceYears: 5 },
     { email: 'omar.h.cand@sample.com', firstName: 'Omar', lastName: 'Hassan', phone: '+966509991122', currentTitle: 'Senior Radiology Tech', currentCompany: 'Mouwasat Hospital', source: 'Career Site', skills: ['CT', 'Diagnostic Radiography'], location: 'Jeddah', experienceYears: 7 },
-    { email: 'sara.ahmed.cand@sample.com', firstName: 'Sara', lastName: 'Ahmed', phone: '+966541113355', currentTitle: 'Staff Nurse', currentCompany: 'Saudi German Hospital', source: 'Career Site', skills: ['Critical Care', 'BLS/ACLS'], location: 'Riyadh', experienceYears: 4 },
-    { email: 'nabil.ahmed@sample.com', firstName: 'Nabil', lastName: 'Ahmed', phone: '+966553335577', currentTitle: 'Senior Registered Nurse', currentCompany: 'Aster Clinic', source: 'Referral', skills: ['Emergency Care', 'Triage', 'ACLS'], location: 'Dubai', experienceYears: 8 },
+    { email: 'sara.ahmed.cand@sample.com', firstName: 'Sara', lastName: 'Ahmed', phone: '+966541113355', currentTitle: 'Staff Nurse', currentCompany: 'Saudi German Hospital', source: 'Career Site', skills: ['DHA/MOH License', 'Clinical Experience', 'ICU'], location: 'Riyadh', experienceYears: 4 },
+    { email: 'nabil.ahmed@sample.com', firstName: 'Nabil', lastName: 'Ahmed', phone: '+966553335577', currentTitle: 'Senior Registered Nurse', currentCompany: 'Aster Clinic', source: 'Referral', skills: ['ICU', 'Clinical Experience'], location: 'Dubai', experienceYears: 8 },
+    { email: 'rania.kamel@sample.com', firstName: 'Rania', lastName: 'Kamel', phone: '+971501110001', currentTitle: null, currentCompany: null, source: 'Upload', skills: [], location: 'Dubai', experienceYears: null, metadata: { cvExtractionStatus: 'Needs review', rawText: 'Experienced ICU Nurse with DHA/MOH License, BLS, ACLS, and Critical Care background in Dubai.' }, cv: { scanStatus: 'Clean' } },
+    { email: 'tariq.mansour@sample.com', firstName: 'Tariq', lastName: 'Mansour', phone: '+971501110002', currentTitle: null, currentCompany: null, source: 'Upload', skills: [], location: 'Dubai', experienceYears: null, metadata: { cvExtractionStatus: 'Needs review', rawText: 'Experienced ICU Nurse with DHA/MOH License, BLS, ACLS, and Critical Care background in Dubai.' }, cv: { scanStatus: 'Clean' } },
+    { email: 'farida.nabil@sample.com', firstName: 'Farida', lastName: 'Nabil', phone: '+971501110003', currentTitle: 'Staff Nurse', currentCompany: 'City Hospital', source: 'Upload', skills: ['ICU'], location: 'Sharjah', experienceYears: 2, metadata: { cvExtractionStatus: 'Pending' }, cv: { scanStatus: 'Pending' } },
+    { email: 'walid.gamal@sample.com', firstName: 'Walid', lastName: 'Gamal', phone: '+971501110004', currentTitle: 'Registered Nurse', currentCompany: 'Unknown', source: 'Upload', skills: ['ICU'], location: 'Ajman', experienceYears: 6, metadata: { cvExtractionStatus: 'Failed' }, cv: { scanStatus: 'Quarantined' } },
+    { email: 'hala.midwife@sample.com', firstName: 'Hala', lastName: 'Nasser', phone: '+971501110005', currentTitle: 'Midwife', currentCompany: 'Ajman Maternity', source: 'Referral', skills: ['Labor & Delivery', 'Fetal Monitoring', 'DHA/MOH License'], location: 'Ajman', experienceYears: 6 },
+    { email: 'huda.pharm@sample.com', firstName: 'Huda', lastName: 'Saleh', phone: '+971501110006', currentTitle: 'Clinical Pharmacist', currentCompany: 'Ajman Pharmacy', source: 'Career Site', skills: ['Clinical Pharmacy', 'Dispensing', 'DHA/MOH License'], location: 'Ajman', experienceYears: 5 },
   ];
 
   for (let i = 0; i < candidateSeeds.length; i++) {
@@ -406,8 +445,9 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
     await upsertCandidate(tx, orgId, fixtureId(200 + i), {
       candidateCode: `CND-SGH-${String(i + 1).padStart(3, '0')}`,
       firstName: c.firstName, lastName: c.lastName, email: c.email, phone: c.phone,
-      currentTitle: c.currentTitle, currentCompany: c.currentCompany, source: c.source,
-      skills: c.skills, location: c.location, experienceYears: c.experienceYears,
+      currentTitle: c.currentTitle ?? null, currentCompany: c.currentCompany ?? null, source: c.source,
+      skills: c.skills, location: c.location, experienceYears: c.experienceYears ?? null,
+      ...(c.metadata ? { metadata: c.metadata } : {}),
     });
   }
 
@@ -419,39 +459,31 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
     const c = candidateSeeds[i];
     const cand = cByEmail[c.email];
     if (!cand) continue;
+    const scanStatus = c.cv?.scanStatus ?? 'Clean';
+    const extractionText = c.metadata?.rawText
+      ?? (scanStatus === 'Clean' && c.skills?.length
+        ? `${c.firstName} ${c.lastName}, ${c.currentTitle ?? 'candidate'}. Skills: ${c.skills.join(', ')}.`
+        : null);
+    const docData = {
+      fileName: `${c.firstName}_${c.lastName}_Resume_2026.pdf`,
+      fileSize: 1024 * (120 + i * 15),
+      mimeType: 'application/pdf',
+      storageKey: `cvs/${orgId}/${cand.id}/resume.pdf`,
+      storageProvider: 'local-private',
+      scanStatus,
+      extractionText,
+      parserStatus: scanStatus === 'Quarantined' ? 'Failed' : scanStatus === 'Pending' ? 'NotStarted' : 'Parsed',
+      consentStatus: 'Active',
+      retentionExpiresAt: dateFromNow(365),
+    };
     const existingDoc = await tx.candidateDocument.findFirst({
       where: { organizationId: orgId, candidateId: cand.id, documentType: 'CV' },
     });
     if (existingDoc) {
-      await tx.candidateDocument.update({
-        where: { id: existingDoc.id },
-        data: {
-          fileName: `${c.firstName}_${c.lastName}_Resume_2026.pdf`,
-          fileSize: 1024 * (120 + i * 15),
-          mimeType: 'application/pdf',
-          storageKey: `cvs/${orgId}/${cand.id}/resume.pdf`,
-          storageProvider: 'local-private',
-          scanStatus: 'Clean',
-          consentStatus: 'Active',
-          retentionExpiresAt: dateFromNow(365),
-        },
-      });
+      await tx.candidateDocument.update({ where: { id: existingDoc.id }, data: docData });
     } else {
       await tx.candidateDocument.create({
-        data: {
-          id: fixtureId(250 + i),
-          organizationId: orgId,
-          candidateId: cand.id,
-          documentType: 'CV',
-          fileName: `${c.firstName}_${c.lastName}_Resume_2026.pdf`,
-          fileSize: 1024 * (120 + i * 15),
-          mimeType: 'application/pdf',
-          storageKey: `cvs/${orgId}/${cand.id}/resume.pdf`,
-          storageProvider: 'local-private',
-          scanStatus: 'Clean',
-          consentStatus: 'Active',
-          retentionExpiresAt: dateFromNow(365),
-        },
+        data: { id: fixtureId(250 + i), organizationId: orgId, candidateId: cand.id, documentType: 'CV', ...docData },
       });
     }
   }
@@ -468,6 +500,10 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
     { id: fixtureId(308), code: 'VR-2026-008', pos: positions.midwife, br: branches.ajman, req: recruiterLady, status: 'Approved', headcount: 2, empType: 'Full-time', reason: 'LDU Shift Coverage', budget: 'Budgeted', crit: 'Critical', startDays: 14 },
     { id: fixtureId(309), code: 'VR-2026-009', pos: positions.medCoder, br: branches.dubai, req: recruiterSarah, status: 'Approved', headcount: 2, empType: 'Full-time', reason: 'Insurance Revenue Cycle', budget: 'Budgeted', crit: 'Normal', startDays: 60 },
     { id: fixtureId(310), code: 'VR-2026-010', pos: positions.hrSpec, br: branches.group, req: admin, status: 'Draft', headcount: 1, empType: 'Full-time', reason: 'Talent Acquisition Team', budget: 'Budgeted', crit: 'Normal', startDays: 90 },
+    { id: fixtureId(311), code: 'VR-2026-011', pos: positions.cardioSpec, br: branches.dubai, req: talentManagerMona ?? hiringManagerHassan, status: 'Pending Approval', headcount: 2, empType: 'Full-time', reason: 'Cardiology coverage for two suites', budget: 'Budgeted', crit: 'Critical', startDays: 21 },
+    { id: fixtureId(312), code: 'VR-2026-012', pos: positions.dermatologist, br: branches.dubai, req: talentManagerMona ?? hiringManagerHassan, status: 'Changes Requested', headcount: 1, empType: 'Full-time', reason: 'Laser clinic expansion', budget: 'Budgeted', crit: 'High', startDays: 40 },
+    { id: fixtureId(313), code: 'VR-2026-013', pos: positions.cyberSec, br: branches.group, req: talentManagerMona ?? hiringManagerHassan, status: 'Approved', headcount: 1, empType: 'Full-time', reason: 'Security operations hire', budget: 'Budgeted', crit: 'High', startDays: 30 },
+    { id: fixtureId(314), code: 'VR-2026-014', pos: positions.dentAsst, br: branches.sharjah, req: recruiterLady, status: 'Approved', headcount: 1, empType: 'Full-time', reason: 'Dental chair coverage', budget: 'Budgeted', crit: 'Normal', startDays: 25 },
   ];
 
   const reqMap = {};
@@ -478,10 +514,22 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
       requestedHeadcount: r.headcount, employmentType: r.empType, reason: r.reason,
       budgetStatus: r.budget, criticality: r.crit,
       targetStartDate: dateFromNow(r.startDays),
+      targetFillDate: dateFromNow(r.startDays),
       justification: `${r.reason} - SGH 2026 Healthcare Manpower.`,
       submittedAt: r.status === 'Draft' ? null : dateFromNow(-10),
     });
     reqMap[r.code] = createdReq;
+  }
+
+  const grade6 = await tx.masterDataValue.findFirst({
+    where: { organizationId: orgId, category: 'grades', name: 'Grade 6', status: 'Active' },
+    select: { id: true },
+  });
+  if (grade6) {
+    await tx.vacancyRequest.updateMany({
+      where: { id: { in: Object.values(reqMap).map((row) => row.id) } },
+      data: { gradeId: grade6.id },
+    });
   }
 
   // ── 6. Real Vacancies ──────────────────────────────────────
@@ -494,22 +542,128 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
     { id: fixtureId(406), code: 'VAC-2026-006', reqCode: 'VR-2026-006', pos: positions.urologist, br: branches.dubai, target: 1, days: 106 },
     { id: fixtureId(407), code: 'VAC-2026-007', reqCode: 'VR-2026-008', pos: positions.midwife, br: branches.ajman, target: 2, days: 30 },
     { id: fixtureId(408), code: 'VAC-2026-008', reqCode: 'VR-2026-009', pos: positions.medCoder, br: branches.dubai, target: 2, days: 36 },
+    { id: fixtureId(409), code: 'VAC-2026-009', reqCode: 'VR-2026-014', pos: positions.dentAsst, br: branches.sharjah, target: 1, days: 12, status: 'On Hold', holdUntil: dateFromNow(14) },
   ];
+
+  const requiredSkillsByVacancy = {
+    'VAC-2026-001': ['DHA/MOH License', 'Clinical Experience', 'ICU', 'BLS/ACLS', 'IV Therapy'],
+    'VAC-2026-002': ['DHA/MOH License', 'MRI', 'CT Scan', 'PACS'],
+    'VAC-2026-003': ['DHA/MOH License', 'Clinical Pharmacy', 'Dispensing'],
+    'VAC-2026-004': ['DHA/MOH License', 'Psychiatry', 'Clinical Experience'],
+    'VAC-2026-005': ['DHA/MOH License', 'CBT', 'Clinical Experience'],
+    'VAC-2026-006': ['DHA/MOH License', 'Endourology', 'Robotic Tele-Console (Unmapped)'],
+    'VAC-2026-007': ['DHA/MOH License', 'Labor & Delivery', 'Fetal Monitoring'],
+    'VAC-2026-008': ['ICD-10', 'CPT', 'Revenue Cycle'],
+    'VAC-2026-009': ['Clinical Experience'],
+  };
+  const ownerByVacancy = {
+    'VAC-2026-001': recruiterSarah,
+    'VAC-2026-002': recruiterSindu,
+    'VAC-2026-003': recruiterSindu,
+    'VAC-2026-004': recruiterZenah,
+    'VAC-2026-005': recruiterZenah,
+    'VAC-2026-006': recruiterZenah,
+    'VAC-2026-007': recruiterLady,
+    'VAC-2026-008': recruiterSarah,
+    'VAC-2026-009': recruiterSarah,
+  };
 
   const vacMap = {};
   for (const v of vacancySeeds) {
     const vr = reqMap[v.reqCode];
     if (!vr) continue;
+    const owner = ownerByVacancy[v.code] ?? recruiterSarah;
     const createdVac = await upsertVacancy(tx, v.id, {
       organizationId: orgId, branchId: v.br.id, positionId: v.pos.id,
-      vacancyRequestId: vr.id, vacancyCode: v.code, status: 'Open',
+      vacancyRequestId: vr.id, vacancyCode: v.code, status: v.status ?? 'Open',
       approvedHeadcount: v.target, joinedHeadcount: 0,
+      primaryRecruiterId: owner.id,
       location: v.br.city, openedAt: dateFromNow(-v.days), targetStartDate: dateFromNow(30),
-      requiredSkills: ['DHA/MOH License', 'Clinical Experience'],
+      requiredSkills: requiredSkillsByVacancy[v.code] ?? ['DHA/MOH License', 'Clinical Experience'],
+      ...(v.holdUntil ? { holdUntil: v.holdUntil } : { holdUntil: null }),
     });
     vacMap[v.code] = createdVac;
-    // B3: a requisition with a live job has been activated.
     await tx.vacancyRequest.update({ where: { id: vr.id }, data: { status: 'Converted to Vacancy' } });
+  }
+
+  if (vacMap['VAC-2026-009']) {
+    const held = vacMap['VAC-2026-009'];
+    const holdHistory = await tx.vacancyStatusHistory.findFirst({ where: { vacancyId: held.id, toStatus: 'On Hold' } });
+    if (!holdHistory) {
+      await tx.vacancyStatusHistory.create({
+        data: {
+          id: fixtureId(430), vacancyId: held.id, fromStatus: 'Open', toStatus: 'On Hold',
+          reason: 'Budget review', holdUntil: dateFromNow(14), changedById: hiringManagerHassan.id,
+        },
+      });
+    }
+  }
+
+  let assignmentSeq = 451;
+  for (const v of vacancySeeds) {
+    const vac = vacMap[v.code];
+    if (!vac) continue;
+    const owner = ownerByVacancy[v.code] ?? recruiterSarah;
+    const existingAssignment = await tx.vacancyAssignment.findFirst({
+      where: { vacancyId: vac.id, userId: owner.id, roleCode: 'RECRUITER', assignmentKind: 'PRIMARY', isActive: true },
+    });
+    if (existingAssignment) {
+      await tx.vacancyAssignment.update({
+        where: { id: existingAssignment.id },
+        data: { isActive: true, assignmentKind: 'PRIMARY', roleCode: 'RECRUITER' },
+      });
+    } else {
+      await tx.vacancyAssignment.create({
+        data: {
+          id: fixtureId(assignmentSeq), vacancyId: vac.id, userId: owner.id,
+          roleCode: 'RECRUITER', assignmentKind: 'PRIMARY', isActive: true,
+        },
+      });
+    }
+    const stalePrimaries = await tx.vacancyAssignment.findMany({
+      where: { vacancyId: vac.id, assignmentKind: 'PRIMARY', isActive: true, userId: { not: owner.id } },
+    });
+    for (const row of stalePrimaries) {
+      await tx.vacancyAssignment.update({ where: { id: row.id }, data: { isActive: false, assignmentKind: 'FORMER' } });
+    }
+    assignmentSeq += 1;
+  }
+  const radVacForSupport = vacMap['VAC-2026-002'];
+  if (radVacForSupport) {
+    const support = await tx.vacancyAssignment.findFirst({
+      where: { vacancyId: radVacForSupport.id, userId: recruiterSarah.id, roleCode: 'RECRUITER', assignmentKind: 'SUPPORT', isActive: true },
+    });
+    if (!support) {
+      await tx.vacancyAssignment.create({
+        data: {
+          id: fixtureId(assignmentSeq), vacancyId: radVacForSupport.id, userId: recruiterSarah.id,
+          roleCode: 'RECRUITER', assignmentKind: 'SUPPORT', isActive: true,
+        },
+      });
+    }
+  }
+
+  const approverMona = talentManagerMona ?? hiringManagerHassan;
+  const approvalSeeds = [
+    { id: fixtureId(321), code: 'VR-2026-007', status: 'Pending', comment: null, decidedAt: null, assigneeId: approverMona.id },
+    { id: fixtureId(322), code: 'VR-2026-011', status: 'Pending', comment: null, decidedAt: null, assigneeId: hiringManagerHassan.id },
+    { id: fixtureId(323), code: 'VR-2026-012', status: 'Changes Requested', comment: 'Please clarify laser equipment certification requirement and shift coverage before approval.', decidedAt: dateFromNow(-1), assigneeId: hiringManagerHassan.id },
+    { id: fixtureId(324), code: 'VR-2026-013', status: 'Approved', comment: 'Approved. Ready to set the hiring target.', decidedAt: dateFromNow(-2), assigneeId: hiringManagerHassan.id },
+  ];
+  for (const approval of approvalSeeds) {
+    const request = reqMap[approval.code];
+    if (!request) continue;
+    await tx.vacancyRequestApproval.upsert({
+      where: { vacancyRequestId_revision_step: { vacancyRequestId: request.id, revision: 1, step: 1 } },
+      update: {
+        roleCode: 'HIRING_MANAGER', status: approval.status, comment: approval.comment,
+        decidedAt: approval.decidedAt, assigneeUserId: approval.assigneeId,
+      },
+      create: {
+        id: approval.id, vacancyRequestId: request.id, revision: 1, step: 1, roleCode: 'HIRING_MANAGER',
+        status: approval.status, comment: approval.comment, decidedAt: approval.decidedAt, assigneeUserId: approval.assigneeId,
+      },
+    });
   }
 
   // ── 7. Real Applications ───────────────────────────────────
@@ -519,11 +673,12 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
   const psychVacId = vacMap['VAC-2026-004']?.id ?? fixtureId(404);
   const counsVacId = vacMap['VAC-2026-005']?.id ?? fixtureId(405);
   const urolVacId = vacMap['VAC-2026-006']?.id ?? fixtureId(406);
+  const midwifeVacId = vacMap['VAC-2026-007']?.id ?? fixtureId(407);
   const medCoderVacId = vacMap['VAC-2026-008']?.id ?? fixtureId(408);
 
   const appSeeds = [
     // Interview
-    { id: fixtureId(501), code: 'APP-100184', email: 'nour.ali@sample.com', vacId: nurseVacId, stage: 'Interview', src: 'LinkedIn' },
+    { id: fixtureId(501), code: 'APP-100184', email: 'nour.ali@sample.com', vacId: nurseVacId, stage: 'Offer', src: 'LinkedIn' },
     { id: fixtureId(502), code: 'APP-100185', email: 'heba.salah@sample.com', vacId: nurseVacId, stage: 'Interview', src: 'Referral' },
     { id: fixtureId(503), code: 'APP-100186', email: 'ahmed.samir@sample.com', vacId: pharmVacId, stage: 'Interview', src: 'LinkedIn' },
     { id: fixtureId(504), code: 'APP-100187', email: 'sara.ahmed.cand@sample.com', vacId: nurseVacId, stage: 'Interview', src: 'Career Site' },
@@ -546,17 +701,28 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
     // Hired
     { id: fixtureId(517), code: 'APP-100200', email: 'dr.mozna@sample.com', vacId: pharmVacId, stage: 'Pre-Hire', src: 'Walk-in' },
     { id: fixtureId(518), code: 'APP-100201', email: 'tasabeeh.m@sample.com', vacId: nurseVacId, stage: 'Pre-Hire', src: 'Agency' },
+    { id: fixtureId(519), code: 'APP-100202', email: 'dr.sherif@sample.com', vacId: urolVacId, stage: 'Joined', src: 'Headhunt' },
+    { id: fixtureId(520), code: 'APP-100203', email: 'salam.arikat@sample.com', vacId: midwifeVacId, stage: 'Joined', src: 'LinkedIn' },
+    { id: fixtureId(521), code: 'APP-100204', email: 'hala.midwife@sample.com', vacId: midwifeVacId, stage: 'Screening', src: 'Referral' },
+    { id: fixtureId(522), code: 'APP-100205', email: 'huda.pharm@sample.com', vacId: pharmVacId, stage: 'Screening', src: 'Career Site' },
   ];
 
+  const sarahOwned = new Set(['APP-100184', 'APP-100185', 'APP-100187', 'APP-100188', 'APP-100190', 'APP-100191', 'APP-100193', 'APP-100194', 'APP-100195', 'APP-100196', 'APP-100197', 'APP-100201']);
   const appMap = {};
   for (const a of appSeeds) {
     const cand = cByEmail[a.email];
     if (!cand) continue;
+    let owner = recruiterSarah;
+    if (!sarahOwned.has(a.code)) {
+      if (a.vacId === radVacId || a.vacId === pharmVacId) owner = recruiterSindu;
+      else if (a.vacId === psychVacId || a.vacId === counsVacId || a.vacId === urolVacId) owner = recruiterZenah;
+      else if (a.vacId === midwifeVacId) owner = recruiterLady;
+    }
     const createdApp = await upsertApplication(tx, a.id, {
       organizationId: orgId, candidateId: cand.id, vacancyId: a.vacId,
       applicationCode: a.code, stage: a.stage, source: a.src,
-      primaryRecruiterId: recruiterSarah.id, taskOwnerId: recruiterLady.id,
-      appliedAt: dateFromNow(-18),
+      primaryRecruiterId: owner.id, taskOwnerId: owner.id,
+      appliedAt: dateFromNow(-40),
     });
     appMap[a.code] = createdApp;
   }
@@ -587,11 +753,11 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
 
   await tx.interviewScorecard.upsert({
     where: { interviewId_interviewerId_revision: { interviewId: interviewNour.id, interviewerId: hiringManagerOmarH.id, revision: 1 } },
-    update: { overallRating: 5, recommendation: 'Strong Hire' },
+    update: { overallRating: 5, recommendation: 'Strong Hire', status: 'Submitted', submittedAt: dateFromNow(-4) },
     create: {
       id: fixtureId(701),
       interviewId: interviewNour.id, interviewerId: hiringManagerOmarH.id,
-      overallRating: 5, recommendation: 'Strong Hire', status: 'Submitted',
+      overallRating: 5, recommendation: 'Strong Hire', status: 'Submitted', submittedAt: dateFromNow(-4),
       strengths: 'Excellent clinical judgment in emergency scenarios, compassionate patient communication, familiarity with Epic and Cerner EMR systems.',
       concerns: 'Needs orientation on automated medication dispensing units used in SGH Dubai ICU wing.',
       notes: 'Demonstrates strong clinical knowledge and confidence in patient assessment. Communication: 4/5, Clinical Knowledge: 5/5, Problem Solving: 4/5, Teamwork: 5/5, Professionalism: 5/5, Cultural Fit: 4/5. Average: 4.5/5.0',
@@ -601,7 +767,7 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
   // ── 9. Real Offer + Approval Chain ─────────────────────────
   const offerNour = await upsertOffer(tx, fixtureId(801), {
     organizationId: orgId, applicationId: nourAppId,
-    offerCode: 'OFF-2024-0142', status: 'Sent',
+    offerCode: 'OFF-2026-0142', status: 'Sent',
   });
 
   const offerV1 = await upsertOfferVersion(tx, fixtureId(821), {
@@ -611,8 +777,10 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
     offerExpiry: dateFromNow(7), proposedJoiningDate: dateFromNow(20),
     workLocation: 'SGH Dubai Hospital - ICU Wing',
     workingSchedule: '48 hrs/week (Rotational Shifts)',
-    approvalStatus: 'Approved', status: 'Approved',
+    approvalStatus: 'Approved', status: 'Sent',
+    sentAt: new Date(), sentChannel: 'email', sentById: recruiterSarah.id,
   });
+  await tx.offer.update({ where: { id: offerNour.id }, data: { currentVersionId: offerV1.id } });
 
   // Offer Components
   const compDefs = [
@@ -634,14 +802,273 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
     { id: fixtureId(851), user: admin, role: 'HR_MANAGER', status: 'Approved', days: -3, comment: 'Aligned with Nursing Grade 4 band.' },
     { id: fixtureId(852), user: hiringManagerOmarH, role: 'HIRING_MANAGER', status: 'Approved', days: -3, comment: 'Strong clinical fit for ICU Wing 3.' },
     { id: fixtureId(853), user: financeYousef, role: 'FINANCE', status: 'Approved', days: -2, comment: 'Budget cleared FY2026.' },
-    { id: fixtureId(854), user: legalHeba, role: 'LEGAL', status: 'Pending', days: null, comment: 'Awaiting license verification.' },
+    { id: fixtureId(854), user: legalHeba, role: 'LEGAL', status: 'Approved', days: -1, comment: 'License verification complete.' },
   ];
   for (const a of apprvDefs) {
     await tx.offerApproval.upsert({
       where: { id: a.id },
-      update: { status: a.status, comment: a.comment },
-      create: { id: a.id, offerVersionId: offerV1.id, approverUserId: a.user.id, roleCode: a.role, status: a.status, decidedAt: a.days ? dateFromNow(a.days) : null, comment: a.comment },
+      update: { status: a.status, comment: a.comment, decidedAt: a.days != null ? dateFromNow(a.days) : null },
+      create: { id: a.id, offerVersionId: offerV1.id, approverUserId: a.user.id, roleCode: a.role, status: a.status, decidedAt: a.days != null ? dateFromNow(a.days) : null, comment: a.comment },
     });
+  }
+
+  const appId = (code) => {
+    const row = appMap[code];
+    if (!row) throw new Error(`Demo application ${code} was not seeded`);
+    return row.id;
+  };
+  const monaId = approverMona.id;
+
+  async function ensureAttendee(id, interviewId, userId, role) {
+    await tx.interviewAttendee.upsert({
+      where: { interviewId_userId: { interviewId, userId } },
+      update: { role },
+      create: { id, interviewId, userId, role },
+    });
+  }
+
+  async function ensureScorecard(id, interviewId, interviewerId, rating, recommendation, notes) {
+    await tx.interviewScorecard.upsert({
+      where: { interviewId_interviewerId_revision: { interviewId, interviewerId, revision: 1 } },
+      update: { overallRating: rating, recommendation, status: 'Submitted', submittedAt: dateFromNow(-1), notes },
+      create: {
+        id, interviewId, interviewerId, overallRating: rating, recommendation,
+        status: 'Submitted', submittedAt: dateFromNow(-1), notes,
+        strengths: notes,
+      },
+    });
+  }
+
+  const hebaStart = hoursFromNow(2);
+  const interviewHeba = await upsertInterview(tx, fixtureId(602), {
+    organizationId: orgId, applicationId: appId('APP-100185'),
+    interviewCode: 'INT-300790', title: 'Clinical Interview - Heba Salah',
+    interviewType: 'Video', scheduledStart: hebaStart, scheduledEnd: new Date(hebaStart.getTime() + 60 * 60 * 1000),
+    timezone: 'Asia/Dubai', locationUrl: 'https://meet.sgh.ae/icu-heba-2026', roomName: null, status: 'Scheduled',
+  });
+  await ensureAttendee(fixtureId(653), interviewHeba.id, recruiterSarah.id, 'Lead Recruiter');
+  await ensureAttendee(fixtureId(654), interviewHeba.id, monaId, 'Hiring Manager');
+
+  const saraStart = dateFromNow(-2);
+  const interviewSara = await upsertInterview(tx, fixtureId(603), {
+    organizationId: orgId, applicationId: appId('APP-100187'),
+    interviewCode: 'INT-300791', title: 'Clinical Interview - Sara Ahmed',
+    interviewType: 'In-person', scheduledStart: saraStart, scheduledEnd: new Date(saraStart.getTime() + 60 * 60 * 1000),
+    timezone: 'Asia/Dubai', locationUrl: null, roomName: 'SGH Dubai Hospital - Nursing Wing Room 2A', status: 'Completed',
+  });
+  await ensureAttendee(fixtureId(655), interviewSara.id, recruiterSarah.id, 'Lead Recruiter');
+  await ensureAttendee(fixtureId(656), interviewSara.id, hiringManagerHassan.id, 'Hiring Manager');
+  await ensureScorecard(fixtureId(702), interviewSara.id, hiringManagerHassan.id, 4, 'Hire', 'Solid ICU judgment. Hire.');
+
+  const yousefStart = dateFromNow(-3);
+  const interviewYousef = await upsertInterview(tx, fixtureId(604), {
+    organizationId: orgId, applicationId: appId('APP-100188'),
+    interviewCode: 'INT-300792', title: 'Clinical Interview - Yousef Magdy',
+    interviewType: 'In-person', scheduledStart: yousefStart, scheduledEnd: new Date(yousefStart.getTime() + 60 * 60 * 1000),
+    timezone: 'Asia/Dubai', locationUrl: null, roomName: 'SGH Dubai Hospital - Radiology Suite 1', status: 'Completed',
+  });
+  await ensureAttendee(fixtureId(657), interviewYousef.id, recruiterSarah.id, 'Lead Recruiter');
+  await ensureAttendee(fixtureId(658), interviewYousef.id, hiringManagerHassan.id, 'Hiring Manager');
+  await ensureScorecard(fixtureId(703), interviewYousef.id, recruiterSarah.id, 5, 'Strong Hire', 'Strong imaging judgment. Strong Hire.');
+  await ensureScorecard(fixtureId(704), interviewYousef.id, hiringManagerHassan.id, 5, 'Strong Hire', 'Ready to move to offer. Strong Hire.');
+
+  const samirStart = dateFromNow(6);
+  const interviewSamir = await upsertInterview(tx, fixtureId(605), {
+    organizationId: orgId, applicationId: appId('APP-100186'),
+    interviewCode: 'INT-300793', title: 'Pharmacy Interview - Ahmed Samir',
+    interviewType: 'Video', scheduledStart: samirStart, scheduledEnd: new Date(samirStart.getTime() + 60 * 60 * 1000),
+    timezone: 'Asia/Dubai', locationUrl: 'https://meet.sgh.ae/pharm-samir-2026', roomName: null, status: 'Scheduled',
+  });
+  await ensureAttendee(fixtureId(659), interviewSamir.id, recruiterSarah.id, 'Lead Recruiter');
+  await ensureAttendee(fixtureId(660), interviewSamir.id, recruiterSindu.id, 'Recruiter');
+
+  async function ensureSimpleOffer(id, versionId, componentId, spec) {
+    const offer = await upsertOffer(tx, id, {
+      organizationId: orgId, applicationId: spec.applicationId, offerCode: spec.offerCode, status: spec.status,
+    });
+    const version = await upsertOfferVersion(tx, versionId, {
+      offerId: offer.id, versionNumber: 1,
+      monthlyPackage: spec.monthly, annualFixed: spec.monthly * 12,
+      contractType: 'Full-time', probationPeriod: '90 days',
+      offerExpiry: dateFromNow(14), proposedJoiningDate: dateFromNow(30),
+      workLocation: spec.workLocation, workingSchedule: '48 hrs/week',
+      approvalStatus: spec.approvalStatus, status: spec.versionStatus,
+      ...(spec.sentAt ? { sentAt: spec.sentAt, sentChannel: 'email', sentById: recruiterSarah.id } : { sentAt: null, sentChannel: null, sentById: null }),
+    });
+    await tx.offer.update({ where: { id: offer.id }, data: { currentVersionId: version.id, status: spec.status } });
+    await tx.offerComponent.upsert({
+      where: { id: componentId },
+      update: { offerVersionId: version.id, type: 'Salary', name: 'Base Salary', amount: spec.monthly, currency: 'AED', frequency: 'Monthly', isTaxable: true },
+      create: { id: componentId, offerVersionId: version.id, type: 'Salary', name: 'Base Salary', amount: spec.monthly, currency: 'AED', frequency: 'Monthly', isTaxable: true },
+    });
+    return { offer, version };
+  }
+
+  const sentNow = new Date();
+  await ensureSimpleOffer(fixtureId(802), fixtureId(822), fixtureId(835), {
+    applicationId: appId('APP-100194'), offerCode: 'OFF-2026-0141', status: 'Draft',
+    approvalStatus: 'Draft', versionStatus: 'Draft', monthly: 11500, workLocation: 'SGH Dubai Hospital - ICU Wing',
+  });
+  const faragOffer = await ensureSimpleOffer(fixtureId(803), fixtureId(823), fixtureId(836), {
+    applicationId: appId('APP-100195'), offerCode: 'OFF-2026-0143', status: 'Pending Approval',
+    approvalStatus: 'Pending', versionStatus: 'Pending Approval', monthly: 14500, workLocation: 'SGH Dubai Hospital - Radiology',
+  });
+  const maiOffer = await ensureSimpleOffer(fixtureId(804), fixtureId(824), fixtureId(837), {
+    applicationId: appId('APP-100196'), offerCode: 'OFF-2026-0144', status: 'Changes Requested',
+    approvalStatus: 'Changes Requested', versionStatus: 'Changes Requested', monthly: 13000, workLocation: 'SGH Dubai Hospital - ICU Wing',
+  });
+  await ensureSimpleOffer(fixtureId(805), fixtureId(825), fixtureId(838), {
+    applicationId: appId('APP-100197'), offerCode: 'OFF-2026-0145', status: 'Accepted',
+    approvalStatus: 'Approved', versionStatus: 'Accepted', monthly: 16000, sentAt: sentNow, workLocation: 'SGH Mental Health - Psychiatry',
+  });
+  const moznaOffer = await ensureSimpleOffer(fixtureId(806), fixtureId(826), fixtureId(839), {
+    applicationId: appId('APP-100200'), offerCode: 'OFF-2026-0146', status: 'Accepted',
+    approvalStatus: 'Approved', versionStatus: 'Accepted', monthly: 14000, sentAt: sentNow, workLocation: 'SGH Ajman - Pharmacy',
+  });
+  const tasabeehOffer = await ensureSimpleOffer(fixtureId(807), fixtureId(827), fixtureId(840), {
+    applicationId: appId('APP-100201'), offerCode: 'OFF-2026-0147', status: 'Accepted',
+    approvalStatus: 'Approved', versionStatus: 'Accepted', monthly: 15000, sentAt: sentNow, workLocation: 'SGH Dubai Hospital - ICU Wing',
+  });
+  const sherifOffer = await ensureSimpleOffer(fixtureId(808), fixtureId(828), fixtureId(841), {
+    applicationId: appId('APP-100202'), offerCode: 'OFF-2026-0148', status: 'Accepted',
+    approvalStatus: 'Approved', versionStatus: 'Accepted', monthly: 22000, sentAt: sentNow, workLocation: 'SGH Dubai Hospital - Urology',
+  });
+  const salamOffer = await ensureSimpleOffer(fixtureId(809), fixtureId(829), fixtureId(842), {
+    applicationId: appId('APP-100203'), offerCode: 'OFF-2026-0149', status: 'Accepted',
+    approvalStatus: 'Approved', versionStatus: 'Accepted', monthly: 13000, sentAt: sentNow, workLocation: 'SGH Ajman - Labor & Delivery',
+  });
+
+  await tx.offerApproval.upsert({
+    where: { id: fixtureId(855) },
+    update: { offerVersionId: faragOffer.version.id, approverUserId: monaId, roleCode: 'OFFER_APPROVER', status: 'Pending', comment: null, decidedAt: null },
+    create: { id: fixtureId(855), offerVersionId: faragOffer.version.id, approverUserId: monaId, roleCode: 'OFFER_APPROVER', status: 'Pending' },
+  });
+  await tx.offerApproval.upsert({
+    where: { id: fixtureId(856) },
+    update: {
+      offerVersionId: maiOffer.version.id, approverUserId: monaId, roleCode: 'OFFER_APPROVER', status: 'Changes Requested',
+      comment: 'Adjust housing allowance to match Grade 6 Dubai nursing band.', decidedAt: dateFromNow(-1),
+    },
+    create: {
+      id: fixtureId(856), offerVersionId: maiOffer.version.id, approverUserId: monaId, roleCode: 'OFFER_APPROVER', status: 'Changes Requested',
+      comment: 'Adjust housing allowance to match Grade 6 Dubai nursing band.', decidedAt: dateFromNow(-1),
+    },
+  });
+
+  function joinDate(daysAgo) {
+    const proposed = dateFromNow(-daysAgo);
+    const cairoMonth = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo', year: 'numeric', month: '2-digit' }).format(new Date());
+    const proposedMonth = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo', year: 'numeric', month: '2-digit' }).format(proposed);
+    return proposedMonth === cairoMonth ? proposed : new Date();
+  }
+
+  async function ensureHiringCase(id, data) {
+    const existing = await tx.hiringCase.findUnique({ where: { applicationId: data.applicationId } });
+    if (existing) return tx.hiringCase.update({ where: { id: existing.id }, data });
+    const byId = await tx.hiringCase.findUnique({ where: { id } });
+    if (byId) return tx.hiringCase.update({ where: { id }, data });
+    return tx.hiringCase.create({ data: { id, ...data } });
+  }
+
+  async function ensureCompliance(id, hiringCaseId, row) {
+    const existing = await tx.complianceRequirement.findFirst({ where: { hiringCaseId, name: row.name } });
+    const data = { ...row, ...(row.status === 'Verified' ? { verifiedAt: new Date(), verifiedById: recruiterSarah.id } : { verifiedAt: null, verifiedById: null }) };
+    if (existing) return tx.complianceRequirement.update({ where: { id: existing.id }, data });
+    return tx.complianceRequirement.create({ data: { id, hiringCaseId, ...data } });
+  }
+
+  const clinicalSnapshot = { profile: 'clinical', checks: ['ID', 'CONTRACT', 'SCFHS_LICENCE'] };
+  const moznaCase = await ensureHiringCase(fixtureId(860), {
+    organizationId: orgId, applicationId: appId('APP-100200'), offerId: moznaOffer.offer.id,
+    status: 'In Progress', ownerUserId: recruiterSindu.id, plannedJoiningDate: dateFromNow(21), requirementSnapshot: clinicalSnapshot,
+  });
+  await ensureCompliance(fixtureId(870), moznaCase.id, { type: 'License', name: 'DHA/MOH Medical License', status: 'Verified', isRequired: true });
+  await ensureCompliance(fixtureId(871), moznaCase.id, { type: 'Check', name: 'Medical Fitness Check', status: 'Pending', isRequired: true });
+  await ensureCompliance(fixtureId(872), moznaCase.id, { type: 'Check', name: 'Credential Primary Source Verification', status: 'Pending', isRequired: true });
+
+  const tasabeehCase = await ensureHiringCase(fixtureId(861), {
+    organizationId: orgId, applicationId: appId('APP-100201'), offerId: tasabeehOffer.offer.id,
+    status: 'Pending Final Approval', ownerUserId: recruiterSarah.id, plannedJoiningDate: dateFromNow(14), requirementSnapshot: clinicalSnapshot,
+  });
+  await ensureCompliance(fixtureId(873), tasabeehCase.id, { type: 'License', name: 'DHA/MOH Medical License', status: 'Verified', isRequired: true });
+  await ensureCompliance(fixtureId(874), tasabeehCase.id, { type: 'Check', name: 'Medical Fitness Check', status: 'Verified', isRequired: true });
+  await ensureCompliance(fixtureId(875), tasabeehCase.id, { type: 'Check', name: 'Credential Primary Source Verification', status: 'Verified', isRequired: true });
+  const tasabeehApproval = await tx.hiringCaseApproval.findFirst({ where: { hiringCaseId: tasabeehCase.id, roleCode: 'FINAL_HIRING_APPROVER' } });
+  if (tasabeehApproval) {
+    await tx.hiringCaseApproval.update({
+      where: { id: tasabeehApproval.id },
+      data: { status: 'Pending', approverUserId: monaId, comment: null, decidedAt: null, decisionFingerprint: null, invalidatedAt: null },
+    });
+  } else {
+    await tx.hiringCaseApproval.create({
+      data: { id: fixtureId(890), hiringCaseId: tasabeehCase.id, roleCode: 'FINAL_HIRING_APPROVER', approverUserId: monaId, status: 'Pending' },
+    });
+  }
+
+  const sherifJoined = joinDate(3);
+  const salamJoined = joinDate(6);
+  const sherifCase = await ensureHiringCase(fixtureId(862), {
+    organizationId: orgId, applicationId: appId('APP-100202'), offerId: sherifOffer.offer.id,
+    status: 'Joined', ownerUserId: recruiterZenah.id, actualJoiningDate: sherifJoined, requirementSnapshot: clinicalSnapshot,
+  });
+  const salamCase = await ensureHiringCase(fixtureId(863), {
+    organizationId: orgId, applicationId: appId('APP-100203'), offerId: salamOffer.offer.id,
+    status: 'Joined', ownerUserId: recruiterLady.id, actualJoiningDate: salamJoined, requirementSnapshot: clinicalSnapshot,
+  });
+  await ensureCompliance(fixtureId(876), sherifCase.id, { type: 'License', name: 'DHA/MOH Medical License', status: 'Verified', isRequired: true });
+  await ensureCompliance(fixtureId(877), salamCase.id, { type: 'License', name: 'DHA/MOH Medical License', status: 'Verified', isRequired: true });
+
+  async function ensureStage(applicationId, fromStage, toStage, createdAt, changedById) {
+    const existing = await tx.applicationStatusHistory.findFirst({ where: { applicationId, fromStage, toStage } });
+    if (existing) return;
+    await tx.applicationStatusHistory.create({
+      data: { applicationId, fromStage, toStage, createdAt, changedById, reason: `Moved to ${toStage}` },
+    });
+  }
+  for (const joined of [
+    { code: 'APP-100202', at: sherifJoined, ownerId: recruiterZenah.id },
+    { code: 'APP-100203', at: salamJoined, ownerId: recruiterLady.id },
+  ]) {
+    const id = appId(joined.code);
+    await ensureStage(id, null, 'Applied', dateFromNow(-40), joined.ownerId);
+    await ensureStage(id, 'Applied', 'Screening', dateFromNow(-30), joined.ownerId);
+    await ensureStage(id, 'Screening', 'Interview', dateFromNow(-20), joined.ownerId);
+    await ensureStage(id, 'Interview', 'Offer', dateFromNow(-12), joined.ownerId);
+    await ensureStage(id, 'Offer', 'Pre-Hire', dateFromNow(-8), joined.ownerId);
+    await ensureStage(id, 'Pre-Hire', 'Joined', joined.at, joined.ownerId);
+  }
+
+  await tx.vacancy.update({ where: { id: urolVacId }, data: { joinedHeadcount: 1, status: 'Filled' } });
+  await tx.vacancy.update({ where: { id: midwifeVacId }, data: { joinedHeadcount: 1, status: 'Partially Filled' } });
+  if (!(await tx.vacancyStatusHistory.findFirst({ where: { vacancyId: urolVacId, toStatus: 'Filled' } }))) {
+    await tx.vacancyStatusHistory.create({
+      data: { id: fixtureId(431), vacancyId: urolVacId, fromStatus: 'Open', toStatus: 'Filled', reason: 'Sherif Hidar joined', changedById: hiringManagerHassan.id },
+    });
+  }
+  if (!(await tx.vacancyStatusHistory.findFirst({ where: { vacancyId: midwifeVacId, toStatus: 'Partially Filled' } }))) {
+    await tx.vacancyStatusHistory.create({
+      data: { id: fixtureId(432), vacancyId: midwifeVacId, fromStatus: 'Open', toStatus: 'Partially Filled', reason: 'Salam Arikat joined', changedById: hiringManagerHassan.id },
+    });
+  }
+
+  async function ensureScreen(applicationId, screenerId, notes, noticePeriodDays) {
+    const existing = await tx.screeningLog.findFirst({ where: { applicationId, screenerId, notes } });
+    const data = { outcome: 'Passed', notes, noticePeriodDays, method: 'Phone', screenedAt: new Date() };
+    if (existing) {
+      await tx.screeningLog.update({ where: { id: existing.id }, data });
+      return;
+    }
+    await tx.screeningLog.create({ data: { organizationId: orgId, applicationId, screenerId, ...data } });
+  }
+  const icuNote = 'Strong ICU shift readiness; verified DHA eligibility.';
+  for (const code of ['APP-100184', 'APP-100185', 'APP-100187', 'APP-100190', 'APP-100194', 'APP-100196', 'APP-100201']) {
+    await ensureScreen(appId(code), recruiterSarah.id, icuNote, 30);
+  }
+  for (const code of ['APP-100186', 'APP-100189', 'APP-100192', 'APP-100200', 'APP-100205']) {
+    await ensureScreen(appId(code), recruiterSindu.id, 'Pharmacy screen complete; DHA license confirmed.', 30);
+  }
+  for (const code of ['APP-100203', 'APP-100204']) {
+    await ensureScreen(appId(code), recruiterLady.id, 'Midwifery screen complete; labor and delivery experience confirmed.', 45);
   }
 
   // ── 10. Real Notifications ─────────────────────────────────
@@ -698,8 +1125,9 @@ async function seedDemoFixtures(tx, { organization, branch, position, users: see
     vacancyRequests: requestSeeds.length,
     vacancies: vacancySeeds.length,
     applications: appSeeds.length,
-    interviews: 1,
-    offers: 1,
+    interviews: 5,
+    offers: 9,
+    hiringCases: 4,
     notifications: notifs.length,
     talentPools: 3,
   };

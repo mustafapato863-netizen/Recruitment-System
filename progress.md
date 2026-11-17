@@ -1,5 +1,18 @@
 # Progress
 
+## Monthly target plans follow-up
+Current implementation and checks: `.scratch/monthly-target-plans/progress.md`.
+
+Completed and activated on5174; final gates and limitations are recorded in `.scratch/monthly-target-plans/verification.md`.
+
+## 2026-11-02 — Manager results implementation
+Implementing the approved overview, real period analytics, and target-management composition. Evidence: `.scratch/manager-results-improvement/progress.md`.
+
+Completed and activated on localhost5174. Exact verification and untested boundaries: `.scratch/manager-results-improvement/verification.md`.
+
+## 2026-11-02 — Manager analytics visibility audit
+Started read-only route, source, history, and fixture verification. Detailed progress: `.scratch/manager-analytics-audit/progress.md`.
+
 ## 2026-10-12 — correct remaining mode and icon mismatch
 - Selected ui-ux-pro-max for visual review and ui-design-system for reusable brand/theme/icon consistency. Preserved prior local documentation and user ZIP.
 - Found the prior fix deliberately kept a navy sidebar in both modes and retained 16px unboxed icons. Restored theme surfaces, 32px rounded icon tiles, 20px glyphs, cyan selection markers and cyan/emerald primary actions. Added a white plate behind the fixed-colour SGH emblem in both modes.
@@ -186,3 +199,40 @@ Continued the local replacement on branch `codex/local-desktop-upgrade` at `16e2
 Reused Vite on `127.0.0.1:5173` and the isolated API already on port 3000. Mail stayed off. The worker stayed stopped. No new migration. More (classic) was removed from the sidebar after each classic capability still had a gated home. Sarah’s login opens My Work and stays there on refresh. `/settings/targets` still opens Targets. Ahmed opened the advanced pipeline page and did not apply a rule. Anonymous document reads return 401. Desktop widths 1280, 1440, and 1920 were checked in light and dark, including Chrome and Edge for the classic URL. The phase-1 dump restored onto `recruitment_v2_phase9_recover_20261013` (15 users, 28 candidates, 8 vacancies, 18 applications) and that database was dropped. Protected walkthrough rows were unchanged afterward.
 
 Package typechecks, project eslint (13 warnings), the design-token check, and the navigation unit tests passed. `pnpm test:db` and `pnpm test:browser` were skipped. Evidence is in artifacts/local-desktop-upgrade/phase-9-report.md.
+# 2026-10-28 — v2 recovery audit
+
+Started product/design/capability review. Read repository instructions, RTK rules and the three selected skills. Confirmed baseline and existing local modifications; requested optional examples from the user while continuing discovery. No app-code, database, deployment, branch or remote mutation.
+
+Completed employee-focused audit and saved docs/employee-journey-audit-2026-10-28.md. Reviewed v1 retained capability plan, v2 route/shell components, employee pages, file loader, task projection and candidate activity component. Browser walkthrough used existing session and only read/open/cancel actions. Recorded twenty width measurements (five surfaces x four widths). Verified candidate filter return succeeds, import/CV-bank destinations loop, and My Work return reaches a job ownership restriction. Cancelled screening and offer dialogs without saving; restored viewport. Baseline checks: five targeted web test files / 285 tests passed (53.32s), web typecheck exit 0, design-token check exit 0 with recorded legacy exceptions. No runtime data modification or deployment. Audit report separates runtime evidence, source-derived gaps and unresolved API/data discrepancies.
+
+Follow-up: user asked for colors, clarity, guiding icons, and feature/presentation gaps against previously compared systems. Identified Odoo as the only explicitly named benchmark in local files and requested optional names of others. Inspected reference contact sheet, My Work and application reference images, local source and indexed official Odoo 19 documentation. Wrote docs/employee-visual-odoo-benchmark-2026-10-28.md with prioritized feature mapping, semantic icon and color direction, screen concepts and verification criteria. No app changes, no new runtime/color-contrast tests, no direct Odoo account. Official page fetch timed out; indexed primary-source excerpts were available. HTML extraction using BeautifulSoup failed because the module was unavailable; Python standard library extraction succeeded.
+
+User supplied Linear, Ashby and Notion and clarified each reference's purpose and priority. Consulted indexed official documentation and extended the benchmark with a mapping for all four references, workflow/visual gaps and source links. Vendor products were not directly operated; the report distinguishes documented behavior from proposed RecruitFlow design and unverified current behavior.
+
+Planning request completed: authored the canonical employee-experience implementation plan, an execution spec and 19 individual tickets. Preserved both audit inputs and existing app changes. Plan covers nine phases, dependencies, visual/icon/contrast contract, state/API/data integration, milestones, risks, 18 acceptance cases, exact repository gates and controlled recovery/release. Checked 21 Markdown files for relative-file links, complete ticket sequence, backward-only dependencies, initial progress/status and acceptance coverage; zero errors. Planning-document diff whitespace check passed. No new app test run was required or claimed for documentation-only changes; prior 285 tests remain historical audit evidence.
+
+Notion design follow-up completed: created docs/notion-inspired-design-spec.md covering system-wide appearance, SGH brand/token use, consistent outline icons, flat surfaces, selective motion timings, reduced motion and performance measurement/budgets. Updated main plan to v1.1, tracker and tickets 01/02/03/18/19; added 20 system visual coverage and 21 motion/performance. Scope now explicitly includes visual consistency for remaining role/admin/report/auth/public routes while preserving functional boundaries. Final Phase 8 sequence is 20 → 21 → 18 → 19. Validated 24 Markdown files, all relative file links, ticket IDs/statuses, dependency DAG and 20 acceptance cases: zero errors. Whitespace check passed. No application code/test/build/performance run, database mutation or deployment in this task. Official Notion and web.dev docs informed the specification; no exact shared Notion icon asset library was asserted. The skill's generic landing-page/font suggestions were not adopted over SGH/product requirements.
+
+---
+
+
+## Employee experience Phase 0 — 28 October 2026
+Recorded source snapshot, static inventory, focused mocked test, typecheck and existing bundle measurements. Gate remains incomplete; no database restore or write tests attempted. See phase-00 baseline evidence for outcomes and inspection errors.
+
+Phase 0 continuation: migrated, backed up and restored synthetic PostgreSQL data; built current web source in a temporary directory and measured login. Gate remains incomplete; details and command failures recorded in phase-00 evidence.
+
+Phase 0 continuation: seeded isolated environment, verified database and delivery boundary, measured employee routes, and reproduced two current web test failures. See phase-00 evidence; owner gate review remains pending.
+
+Phase 0 subsequently completed for isolated local development: reviewed source archive hash, loopback listeners and independent API-to-disposable-DB/outbox verification; synthetic database/attachment restore and current-source signed-in baselines are documented. Two current web failures remain unresolved; full API/worker/DB testing and real-data/attachment recovery are not claimed and remain later gates. Tracker updated; production release is not authorized.
+
+## Phase 1
+Read tickets 02/03, design spec and project directions; auditing affected components before edits.
+
+Phase 1: 196 focused tests passed; later drag/Display tests 38 passed and motion test 1 passed; web typecheck and token check passed. Browser evidence and limits recorded in artifacts/employee-experience-recovery/phase-01/verification.md.
+
+Phase 1 follow-up: final focused suite passed 33 tests; typecheck and token checks passed. See phase-01 verification evidence. Baseline failures remain open.
+
+## Phase 2
+Started Phase 2 audit; prior jobs adapter and TeamResult failures remain unwaived pending their assigned tickets.
+
+Phase 2 orchestration: AGY corrected the two 04A permission-flow defects, then recreated 04A on clean branch `codex/ticket-04-import-access` from `fc3cce2` for a separate PR. The reported 154 focused tests and static checks passed. Source review found inaccurate per-action permission copy for candidate users with only `CANDIDATE_CREATE` or `CANDIDATE_EDIT`; AGY is correcting this on that clean branch, so 04A is still pending. In parallel, Grok ticket 05 runs in `codex/ticket-05-partial-failure` from `fc3cce2`; do not start 04B until it stops because both may edit the application-file surface. The orchestration review will inspect each branch separately, will not write product code or repeat delegate tests, and will create separate GitHub PRs only after review. `main`, GitLab, merges, and deployment remain unchanged.

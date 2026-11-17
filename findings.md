@@ -1,5 +1,18 @@
 # Findings
 
+## Monthly target plans follow-up
+Current findings: `.scratch/monthly-target-plans/findings.md`.
+
+Completed monthly-only plan entry, exact automatic weekly projection, atomic multi-metric save, preserved legacy rows/history, and responsive editor. Verified37 Web +24 API tests and27 browser checks; see scoped verification.md.
+
+## 2026-11-02 — Manager results implementation
+Current implementation evidence: `.scratch/manager-results-improvement/findings.md`.
+
+Delivered four summary results and analytics before inline targets, real weekly period calculations, target-independent actual work, and mobile matrix correction. Validation: 34 focused tests and 31 browser assertions passed; see scoped verification.md.
+
+## 2026-11-02 — Manager analytics visibility audit
+Current scoped evidence is recorded in `.scratch/manager-analytics-audit/findings.md`; no product edits are authorized by this review request.
+
 ## 2026-10-12 — mode and icon correction
 - Palette restoration alone left a visible mismatch: v2 navigation stayed dark navy even in light mode, and navigation icons were small and unboxed.
 - The earlier SGH sidebar reference uses a light surface, rounded icon tiles, and a cyan active marker. Shared v2 navigation now follows that structure and adapts surfaces/text and cyan/emerald accents to both modes.
@@ -214,3 +227,65 @@ Removing More (classic) does not redirect classic URLs. Those URLs stay behind t
 The live counts are higher than the phase-1 dump because phases 4–8 added sample rows. That dump is the rollback copy, not a reset of the walkthrough. Hire counts, consent, the awaiting-verification file, L4-TECH at 17, the grade band, and the phase 7 invitation were unchanged after the desktop walk. No Arabic language switch exists, so RTL was not added.
 
 Not run: `pnpm test:db`, `pnpm test:browser`, root typecheck, root build. No new migration. Live Figma was not verified. The worker was not started. `Recruitment_DB` was not written. The application file at 390px is still 2px over. Staff My Work at 390 measured 297px over; that page was not changed.
+# 2026-10-28 — v2 recovery audit
+
+- User identifies GitHub branch comfort-desk-review / fc3cce2 as v2 desk baseline; local HEAD is exactly fc3cce2 on phase-2-pipeline-application-file.
+- Local overlay changes 27 tracked files plus untracked artifacts/styles, including Jobs API, My Work, Application File, Pipeline and shell. Browser evidence describes this overlay, not the committed build alone.
+- docs/version-one-simplification-plan.md documents retained v1 workflows and explicitly delayed integrations. Historical readiness statements are not current runtime proof.
+- Existing plans/history must be preserved. Audit is read-only for application, services, data and external systems.
+- Browser available: existing Chrome localhost:5173/vacancies session, employee workspace. Cards currently selected (possibly persisted user preference; do not call this a wrong default). Own job shows active applicants, missing owner, headcount; seven read-only other-job cards. Large unused desktop area in cards view. Need inspect list and task flows before deciding changes.
+- Source destinations.ts redirects candidate detail/document URLs to the bank without preserving candidate identity, and classic settings/targets to master data for admin or seat home for others. These are source-backed reachability risks, to verify against current App routing and actual v2 feature replacements.
+- User clarification: focus is the employee journey across its screens, connected and faster; the user is unsure which capabilities are actually missing. Audit scope narrowed accordingly; admin deep-dive is not needed for this pass.
+- Current local Jobs list shows one own job and seven redacted team rows. Department and owner are blank on this job; distinguish missing data from missing rendered UI. fc3cce2 source initializes list view; initial browser card mode is not proof of a default bug.
+- UI-UX recommendation script first failed due Windows cp1252 output; reran with Python -X utf8 successfully. Its enterprise marketing-page pattern is irrelevant to this operational desk; use only interaction/accessibility guidance and preserve SGH tokens/typography.
+- Independent browser tab opened on localhost:5173/my-work to avoid interacting with the user's active tab. My Work shows Open jobs=0 while Open Jobs lists one assigned job for the same session; inspect count definition before concluding backend inconsistency. My Work repeats Overdue/Today/Waiting in summary and filter row.
+- Confirmed in source: Candidate Bank's Review a workbook, CV bank and Import history links target classic URLs that shell redirects to /candidates. Strong candidate for an actual loop, pending runtime verification.
+- Application file loader catches all auxiliary read failures and substitutes empty arrays/nulls. This conflates unavailable screening/interview/offer/document data with absent data and can produce an incorrect next action; source-backed, no fault injection performed.
+- Runtime verified: Candidates > Import history navigates via /import#import-history and settles back at /candidates with no import/history screen. Bank exposes workbook-review/CV-bank links into the same classic redirect family.
+- Employee Candidates shows 18 active applications with Next action="Note added" throughout this local sample. This is last activity, not an actionable next step; need inspect adapter derivation. Candidate bank rows have selection but no candidate-detail action.
+- v1 CandidateActivityPanel supports completed calls/notes and planned follow-up with time, complete and reschedule. v2 file provides followUpDate (date-only) plus notes; do not treat that as full replacement for candidate activity lifecycle.
+- Runtime verified CV bank link in Bank returns to /candidates with Active applications selected, losing Bank tab. It does not open a distinct CV bank.
+- Pipeline has working direct screen actions and explicit gate text; preserve them. File header currently shows eight enabled action buttons (Log screen, Note, Documents, Schedule, Scorecard, Offer, Pre-hire, Reject) even on Applied and six clickable stage buttons. Report as decision/visibility overload, not proof that server gates can be bypassed.
+- Local Applied file's Evidence and fit displays repeated automated stale-alert notes; Latest activity shows a migration stage change while Chatter includes a more recent note. These are distinct derivations presented as though they describe recruitment evidence and latest activity; inspect source to establish exact behavior.
+- Responsive file measurements (light theme, local overlay, height 900): 375px viewport / 365px client / 472px document = 107px document overflow; 768/1024/1440 had 0px document overflow. Mobile screenshot shows stage buttons spilling outside the header card. Do not infer other pages pass.
+- Source confirms Next action uses lastActivityLabel, My Work Open jobs uses data.targets.length, and Latest activity uses recordedRows excluding notes/messages while Chatter includes both.
+- Screen drawer opened successfully on mobile; observed method/evidence/next step/note, save-draft and save-and-move. No save executed. Locator-based Escape could not focus the dialog; this is an automation failure and not yet proof of a keyboard defect. Close through observed Cancel next.
+- Screen drawer closed through Cancel without saving. Candidates and My Work document overflow measured 0 at 375,768,1024,1440 in light theme. This measures width only, not full responsive/accessibility certification.
+- Positive runtime: Candidates stage=Applied > application > Back to Candidates preserves /candidates?stage=Applied. The current local returnTo improvement works on this entry.
+- Negative runtime: My Work > Open offer opens /applications/<id>?drawer=offer with no returnTo, and the file's back link goes to the job pipeline rather than My Work. That job is a read-only Other job in this session, so follow the back link to establish actual destination behavior.
+- Source task completion gap: backend emits complete-task on standalone tasks, but frontend entityHref(task) returns null and ItemActions drops null hrefs; linked tasks navigate to a record, with no completion handler. No new test task was created.
+- Runtime confirmed My Work > offer > Cancel > file Back link reaches a redacted/forbidden job page (owned by another recruiter). This is a reproducible broken return journey despite permission protection working.
+- Runtime observation requiring data/API diagnosis: the My Work row says offer waiting on candidate, while its Open offer destination displays Draft v1 and a scorecard gate. No writes or hiring decisions performed; do not assume which layer is at fault.
+- Light-theme overflow matrix completed for five surfaces at 375/768/1024/1440, height 900: My Work, Candidates, Jobs list and Pipeline all 0px; Application 107px at 375 only. Pipeline's own horizontal region is intentional; measurements do not certify keyboard/contrast/dark mode.
+- Focused web tests: 5 files / 285 tests passed in 53.32s (destinations, MyWorkV2, CandidatesV2, ApplicationFileV2, JobsV2). Passing component tests do not cover the cross-screen defects just observed.
+- Web typecheck passed (exit 0), design-token check passed with recorded exceptions in three legacy strict files. No production build or broad DB/browser runner was executed for this documentation-only audit.
+- Report delivered: docs/employee-journey-audit-2026-10-28.md. Current recommendation is three batches: fix navigation/truthfulness, complete activity/person workflows, then simplify and standardize UI. Keep existing services, data and permission rules; avoid adding navigation destinations just to restore scattered features.
+- Follow-up benchmark: named local reference is Odoo 19, while SGH reference images are conceptual product mocks, not evidence of Odoo functionality or working features. Odoo docs describe typed activities, a job-first kanban, applicant quick add and interview scheduling. Source has older self-schedule creation and public booking, but access from v2 and delivery were not tested; v1 plan explicitly defers external delivery. Avoid claiming missing means unimplemented across the whole app.
+- Candidate file uses FileText for Note and Documents, which weakens immediate differentiation. Existing status tokens and icons can support a consistent icon-plus-label vocabulary. No measured color ratios or dark-mode certification; recommendations are pending actual contrast/keyboard tests.
+- User identified four ordered references: Odoo for workflow/actions/stages, Linear for My Work/density/speed, Ashby for pipeline/candidate cards, Notion for cards/empty states. Reviewed indexed official docs for My Issues/display options, Ashby Candidate Pipeline/candidate profiles, and Notion views/gallery; updated benchmark with source links, concrete differences, and unverified areas. Notion empty-state behavior is a design recommendation, not a documented claim.
+- Implementation planning: task completion and candidate activity have distinct endpoints/permissions; generic rescheduling and atomic call-plus-follow-up cannot be assumed supported. The plan makes these conditional service/contract tasks, preserves date-only versus timed semantics and requires proof before schema changes.
+- Consolidated plan created in docs/employee-experience-implementation-plan.md with spec and 19 individual tickets under .scratch/employee-experience-recovery/. Phase 2 can use functional permission-gated legacy bridges so later person/intake implementation is not a circular prerequisite. Optional bulk decisions/provider integrations remain deferred.
+- Later direction: Notion is now the primary visual reference system-wide; SGH colors/IBM Plex Sans remain. New docs/notion-inspired-design-spec.md defines solid neutral surfaces, consistent SVG icons, restrained motion/reduced-motion and measured performance. It supersedes old glass/neumorphic styling while preserving workflow and permission rules.
+- Icon interpretation is explicit: same semantic symbol throughout RecruitFlow, with a curated Notion-like outline vocabulary using current SVG infrastructure. Notion's docs support multiple icon sources; exact parity or a common package is not established and is not claimed.
+- Existing bundle script gates are 500 KiB main JS raw, 150 KiB main JS gzip and 60 KiB main CSS gzip; 225 KiB raw CSS is advisory. These do not cover all route chunks. The specification requires actual entry discovery and before/after route/effect/render measurements before claiming optimization.
+- Main plan v1.1 adds system coverage/performance tickets 20–21 and AC19–AC20. Phase 8 order is 20 → 21 → 18 → 19 after 17; dependency graph must be validated for cycles rather than assuming every ID only depends on smaller IDs.
+
+---
+
+
+## Employee experience Phase 0 — 28 October 2026
+Private source snapshot and extraction comparison succeeded. Effective runtime targets and safe data boundary remain unproven; existing build cannot be attributed to current overlay. See phase-00 baseline evidence.
+
+Phase 0 continuation: two fresh local databases restored matching synthetic candidate/document metadata and attachment digest. Live API effective targets remain unknown. See phase-00 baseline.
+
+Phase 0 continuation: loopback API sessions confirmed disposable database; synthetic restore matched, original local counts unchanged between read-only snapshots, signed-in baselines collected. Current web suite 991 passed, 2 failed.
+
+## Phase 1 audit
+Existing v2 tokens still define glass, gradients and neumorphic shadows; scoped desk overrides exist. Phase 0 isolated ports remain active. The design generator suggested neumorphism, which conflicts with the governing Notion specification and is not adopted.
+
+Phase 1: flat SGH v2 tokens and shared surfaces implemented, note/document icons differentiated, reduced-motion drag overlay added. 375px file overflow and light contrast gaps corrected. Known baseline jobs and TeamResult failures remain.
+
+Phase 1 follow-up: pointer drops produced synthetic success without API writes; the mounted board preference observer/listener were removed on navigation and the offscreen board showed no animation activity in two-second samples.
+
+## Phase 2 starting point
+Phase 1 is accepted. Preserve uncommitted overlay, use isolated API 43993 and disposable data only. Tickets 04→05→06 depend on route, partial-read and action policy trace.

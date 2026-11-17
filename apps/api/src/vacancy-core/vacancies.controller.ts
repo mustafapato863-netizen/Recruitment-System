@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -11,11 +12,15 @@ import {
   Post,
   Query,
   StreamableFile,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
-import type { AuthUser } from '@recruitflow/contracts';
+import { FileInterceptor } from '@nestjs/platform-express';
+import type { AuthUser, JdCriteriaDefinition } from '@recruitflow/contracts';
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { VacancyCoreService } from './vacancy-core.service';
+import { VacancyDocumentsService } from './vacancy-documents.service';
 import { UpdateVacancyStatusDto, UpdateVacancyDto, AssignTeamMemberDto, VacancyWorkQueueQueryDto, JobStatusReasonDto, DeleteVacancyDto } from './vacancy-core.dto';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
@@ -28,7 +33,10 @@ import { AuditAction } from '../common/decorators/audit-action.decorator';
 @UseGuards(JwtAuthGuard)
 @Controller('vacancies')
 export class VacanciesController {
-  constructor(private readonly vacancyCoreService: VacancyCoreService) {}
+  constructor(
+    private readonly vacancyCoreService: VacancyCoreService,
+    private readonly vacancyDocuments: VacancyDocumentsService,
+  ) {}
 
   @Get()
   @RequirePermissions('VACANCY_VIEW')
@@ -159,5 +167,33 @@ export class VacanciesController {
     @Body() body: AssignTeamMemberDto,
   ) {
     return this.vacancyCoreService.assignTeamMember(id, user.organizationId, body, user);
+  }
+
+  @Post(':id/jd')
+  @RequireAnyPermissions('VACANCY_MANAGE', 'VACANCY_VIEW')
+  @UseInterceptors(FileInterceptor('file'))
+  uploadJd(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @UploadedFile() file?: { originalname: string; mimetype: string; size: number; buffer: Buffer },
+  ) {
+    if (!file) throw new BadRequestException('A PDF, DOCX, or text file is required.');
+    return this.vacancyDocuments.uploadVacancyJd(user.organizationId, id, file, user);
+  }
+
+  @Get(':id/jd')
+  @RequirePermissions('VACANCY_VIEW')
+  getJd(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.vacancyDocuments.getVacancyJd(user.organizationId, id);
+  }
+
+  @Patch(':id/criteria')
+  @RequireAnyPermissions('VACANCY_MANAGE', 'VACANCY_VIEW')
+  updateCriteria(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() criteria: Partial<JdCriteriaDefinition>,
+  ) {
+    return this.vacancyDocuments.updateVacancyCriteria(user.organizationId, id, criteria, user);
   }
 }

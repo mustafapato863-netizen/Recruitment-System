@@ -5,6 +5,8 @@ export interface TabV2Item {
   label: string;
   /** Decorative. The accessible name stays the label. */
   icon?: ReactNode;
+  /** Separate count chip. Hidden when zero. Included in the accessible name. */
+  count?: number;
   disabled?: boolean;
   controls?: string;
 }
@@ -44,6 +46,7 @@ export function TabsV2({ items, activeKey, onChange, ariaLabel }: TabsV2Props) {
     <div className="rf2-tabs" role="tablist" aria-label={ariaLabel}>
       {items.map((item, index) => {
         const selected = item.key === activeKey;
+        const countLabel = item.count ? new Intl.NumberFormat('en').format(item.count) : '';
         return (
           <button
             key={item.key}
@@ -52,6 +55,7 @@ export function TabsV2({ items, activeKey, onChange, ariaLabel }: TabsV2Props) {
             role="tab"
             id={`rf2-tab-${item.key}`}
             className="rf2-tab"
+            aria-label={countLabel ? `${item.label} ${countLabel}` : undefined}
             aria-selected={selected}
             aria-controls={item.controls}
             aria-disabled={item.disabled || undefined}
@@ -61,7 +65,8 @@ export function TabsV2({ items, activeKey, onChange, ariaLabel }: TabsV2Props) {
             onKeyDown={(event) => onKeyDown(event, index)}
           >
             {item.icon ? <span className="rf2-tab__icon" aria-hidden="true">{item.icon}</span> : null}
-            {item.label}
+            <span>{item.label}</span>
+            {countLabel ? <span className="rf2-tab__count">{countLabel}</span> : null}
           </button>
         );
       })}

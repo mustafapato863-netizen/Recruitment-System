@@ -105,8 +105,14 @@ async function seedDecisionDemo(tx, organizationId, users) {
   const hassan = users['hassan.ali@recruitflow.local'];
   if (!mona || !hassan) return;
   await tx.user.update({ where: { id: mona.id }, data: { managerId: hassan.id } });
+  // Hassan manages Mona and Omar. Omar manages Lady, so she must not be pulled onto Mona's team.
+  const omar = await tx.user.findFirst({ where: { organizationId, email: 'omar.hassan@recruitflow.local' }, select: { id: true } });
+  const lady = await tx.user.findFirst({ where: { organizationId, email: 'lady@recruitflow.local' }, select: { id: true } });
+  if (omar) await tx.user.update({ where: { id: omar.id }, data: { managerId: hassan.id } });
+  if (lady && omar) await tx.user.update({ where: { id: lady.id }, data: { managerId: omar.id } });
+  const held = [mona.id, hassan.id, ...(omar ? [omar.id] : []), ...(lady ? [lady.id] : [])];
   const recruiters = await tx.user.findMany({
-    where: { organizationId, managerId: null, id: { notIn: [mona.id, hassan.id] }, userRoles: { some: { role: { code: 'RECRUITER' } } } },
+    where: { organizationId, managerId: null, id: { notIn: held }, userRoles: { some: { role: { code: 'RECRUITER' } } } },
     select: { id: true },
   });
   for (const r of recruiters) await tx.user.update({ where: { id: r.id }, data: { managerId: mona.id } });
@@ -134,15 +140,316 @@ async function seedSkillLibrary(tx, organizationId) {
   const skills = [
     ['ICU', 'Clinical'], ['Critical Care', 'Clinical'], ['Emergency Care', 'Clinical'], ['Triage', 'Clinical'],
     ['Pediatrics', 'Clinical'], ['Wound Care', 'Clinical'], ['IV Therapy', 'Clinical'],
-    ['BLS', 'Certification'], ['ACLS', 'Certification'],
-    ['Clinical Pharmacy', 'Pharmacy'], ['ICD-10', 'Medical Coding'], ['CPT', 'Medical Coding'],
-    ['MRI', 'Imaging'], ['HRIS', 'HR'], ['Active Directory', 'IT'],
+    ['BLS', 'Certification'], ['ACLS', 'Certification'], ['BLS/ACLS', 'Certification'],
+    ['Clinical Pharmacy', 'Pharmacy'], ['Dispensing', 'Pharmacy'],
+    ['ICD-10', 'Medical Coding'], ['CPT', 'Medical Coding'], ['Revenue Cycle', 'Medical Coding'],
+    ['MRI', 'Imaging'], ['CT Scan', 'Imaging'], ['PACS', 'Imaging'],
+    ['HRIS', 'HR'], ['Active Directory', 'IT'], ['Networking', 'IT'],
     ['Clinical Experience', 'Clinical'], ['DHA/MOH License', 'Licensing'],
+    ['Psychiatry', 'Clinical'], ['CBT', 'Clinical'], ['Endourology', 'Clinical'],
+    ['Labor & Delivery', 'Clinical'], ['Fetal Monitoring', 'Clinical'],
   ];
   await tx.masterDataValue.createMany({
     data: skills.map(([name, category]) => ({ organizationId, category: 'skills', name, status: 'Active', metadata: { category } })),
     skipDuplicates: true,
   });
+}
+
+/** Canonical SGH WhatsApp defaults (same copy as WhatsAppTemplatesService). Idempotent by organization + name. */
+const WHATSAPP_DEFAULTS = [
+  {
+    name: 'Application received — WhatsApp ack',
+    category: 'ack',
+    interviewType: 'Any',
+    bodyTemplate: `Hi {{candidateName}},
+
+Thank you for applying for {{positionTitle}} at {{organizationName}}. We have received your application and our team will review it shortly.
+
+Best regards,
+{{recruiterName}}
+{{organizationName}} Recruitment`,
+  },
+  {
+    name: 'Screening interview invite',
+    category: 'interview_invite',
+    interviewType: 'Screening',
+    bodyTemplate: `Hi {{candidateName}},
+
+We would like to invite you to a {{interviewType}} interview for {{positionTitle}} at {{organizationName}}.
+
+Proposed time: {{interviewDate}}
+
+Please reply on WhatsApp to confirm or suggest another slot.
+
+Thank you,
+{{recruiterName}}`,
+  },
+  {
+    name: 'Technical interview invite',
+    category: 'interview_invite',
+    interviewType: 'Technical',
+    bodyTemplate: `Hi {{candidateName}},
+
+Please join us for a {{interviewType}} interview for {{positionTitle}} at {{organizationName}}.
+
+Scheduled: {{interviewDate}}
+
+Reply here to confirm. Looking forward to speaking with you.
+
+{{recruiterName}}
+{{organizationName}}`,
+  },
+  {
+    name: 'Behavioral / panel interview invite',
+    category: 'interview_invite',
+    interviewType: 'Behavioral',
+    bodyTemplate: `Hello {{candidateName}},
+
+You are invited to a {{interviewType}} interview for {{positionTitle}} ({{organizationName}}).
+
+Date/time: {{interviewDate}}
+
+Please confirm availability on this chat.
+
+Regards,
+{{recruiterName}}`,
+  },
+  {
+    name: 'Managerial interview invite',
+    category: 'interview_invite',
+    interviewType: 'Managerial',
+    bodyTemplate: `Hi {{candidateName}},
+
+Our hiring manager would like to meet you for a {{interviewType}} interview regarding {{positionTitle}} at {{organizationName}}.
+
+Proposed: {{interviewDate}}
+
+Kindly confirm via WhatsApp.
+
+{{recruiterName}}`,
+  },
+  {
+    name: 'Executive interview invite',
+    category: 'interview_invite',
+    interviewType: 'Executive',
+    bodyTemplate: `Dear {{candidateName}},
+
+We would like to invite you to an {{interviewType}} interview for {{positionTitle}} at {{organizationName}}.
+
+Proposed time: {{interviewDate}}
+
+Please confirm on WhatsApp at your earliest convenience.
+
+Warm regards,
+{{recruiterName}}
+{{organizationName}}`,
+  },
+  {
+    name: 'Offer / next-step WhatsApp',
+    category: 'offer_next_step',
+    interviewType: 'Any',
+    bodyTemplate: `Hi {{candidateName}},
+
+Great news regarding {{positionTitle}} at {{organizationName}}. We would like to discuss next steps / offer details with you.
+
+I will share more shortly — please reply when you are available.
+
+{{recruiterName}}
+{{organizationName}} Recruitment`,
+  },
+  {
+    name: 'Application not progressing',
+    category: 'rejection',
+    interviewType: 'Any',
+    bodyTemplate: `Hi {{candidateName}},
+
+Thank you for your interest in {{positionTitle}} at {{organizationName}}. After careful review, we will not be progressing your application at this time.
+
+We appreciate your time and wish you every success.
+
+{{recruiterName}}
+{{organizationName}} Recruitment`,
+  },
+];
+
+async function seedWhatsAppTemplates(tx, organizationId) {
+  for (const row of WHATSAPP_DEFAULTS) {
+    const existing = await tx.whatsAppTemplate.findFirst({
+      where: { organizationId, name: row.name },
+    });
+    if (existing) {
+      await tx.whatsAppTemplate.update({
+        where: { id: existing.id },
+        data: { ...row, status: 'Active', isDefault: true },
+      });
+    } else {
+      await tx.whatsAppTemplate.create({
+        data: { organizationId, ...row, status: 'Active', isDefault: true },
+      });
+    }
+  }
+}
+
+function cairoParts(now) {
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'Africa/Cairo', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now);
+  const n = (type) => Number(parts.find((part) => part.type === type).value);
+  return { y: n('year'), m: n('month'), d: n('day') };
+}
+
+function isoWeekKey(now) {
+  const { y, m, d } = cairoParts(now);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  const dayNum = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+  const isoYear = date.getUTCFullYear();
+  const yearStart = new Date(Date.UTC(isoYear, 0, 1));
+  const week = Math.ceil((((date.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+  return `${isoYear}-W${String(week).padStart(2, '0')}`;
+}
+
+/**
+ * Current Cairo month and week targets for Sarah, Sindu, and Mona, set by Dr. Hassan Ali,
+ * plus qualifying screenings, completed interviews, and submitted scorecards in that month.
+ */
+async function seedEmployeeActivityTargets(tx, organizationId) {
+  const emails = [
+    'sarah.ahmed@recruitflow.local',
+    'sindu@recruitflow.local',
+    'mona.manager@recruitflow.local',
+    'hassan.ali@recruitflow.local',
+  ];
+  const people = await tx.user.findMany({ where: { organizationId, email: { in: emails } }, select: { id: true, email: true } });
+  const byEmail = Object.fromEntries(people.map((person) => [person.email, person]));
+  const sarah = byEmail['sarah.ahmed@recruitflow.local'];
+  const sindu = byEmail['sindu@recruitflow.local'];
+  const mona = byEmail['mona.manager@recruitflow.local'];
+  const hassan = byEmail['hassan.ali@recruitflow.local'];
+  if (!sarah || !sindu || !hassan) return;
+
+  const now = new Date();
+  const monthKey = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Cairo', year: 'numeric', month: '2-digit' }).format(now);
+  const weekKey = isoWeekKey(now);
+  const plans = [
+    [sarah.id, 'screenings_completed', 'monthly', monthKey, 20],
+    [sarah.id, 'interviews_conducted', 'monthly', monthKey, 8],
+    [sarah.id, 'feedback_submitted', 'monthly', monthKey, 6],
+    [sarah.id, 'seats_joined', 'monthly', monthKey, 2],
+    [sarah.id, 'screenings_completed', 'weekly', weekKey, 5],
+    [sarah.id, 'interviews_conducted', 'weekly', weekKey, 2],
+    [sindu.id, 'screenings_completed', 'monthly', monthKey, 15],
+    [sindu.id, 'interviews_conducted', 'monthly', monthKey, 6],
+    [sindu.id, 'feedback_submitted', 'monthly', monthKey, 4],
+    [sindu.id, 'seats_joined', 'monthly', monthKey, 1],
+    [sindu.id, 'screenings_completed', 'weekly', weekKey, 4],
+  ];
+  if (mona) plans.push([mona.id, 'screenings_completed', 'monthly', monthKey, 4]);
+
+  for (const [employeeId, metric, periodType, periodKey, targetQuantity] of plans) {
+    const where = {
+      organizationId_employeeId_metric_periodType_periodKey_scopeKey: {
+        organizationId, employeeId, metric, periodType, periodKey, scopeKey: 'ALL',
+      },
+    };
+    const existing = await tx.employeeActivityTarget.findUnique({ where });
+    if (existing) continue;
+    const created = await tx.employeeActivityTarget.create({
+      data: {
+        organizationId,
+        employeeId,
+        setById: hassan.id,
+        metric,
+        periodType,
+        periodKey,
+        vacancyId: null,
+        scopeKey: 'ALL',
+        targetQuantity,
+        version: 1,
+        isActive: true,
+      },
+    });
+    await tx.employeeActivityTargetRevision.create({
+      data: {
+        targetId: created.id,
+        organizationId,
+        actorId: hassan.id,
+        priorQuantity: null,
+        newQuantity: targetQuantity,
+        reason: 'Initial target assigned',
+      },
+    });
+  }
+
+  await tx.screeningLog.updateMany({
+    where: { organizationId, screenerId: { in: [sarah.id, sindu.id] }, outcome: { not: '__discarded__' } },
+    data: { screenedAt: now },
+  });
+
+  const ownedApps = await tx.application.findMany({
+    where: { organizationId, primaryRecruiterId: { in: [sarah.id, sindu.id] } },
+    select: { id: true, primaryRecruiterId: true },
+    orderBy: { applicationCode: 'asc' },
+  });
+  const sarahApp = ownedApps.find((row) => row.primaryRecruiterId === sarah.id);
+  const sinduApp = ownedApps.find((row) => row.primaryRecruiterId === sindu.id);
+  const started = new Date(now.getTime() - 2 * 60 * 60 * 1000);
+  const ended = new Date(now.getTime() - 60 * 60 * 1000);
+
+  async function ensureConducted(code, applicationId, interviewerId, title) {
+    if (!applicationId) return;
+    const existing = await tx.interview.findUnique({ where: { interviewCode: code }, select: { id: true } });
+    const interview = existing
+      ? await tx.interview.update({
+        where: { id: existing.id },
+        data: { status: 'Completed', completedAt: now, scheduledStart: started, scheduledEnd: ended },
+      })
+      : await tx.interview.create({
+        data: {
+          organizationId,
+          applicationId,
+          interviewCode: code,
+          title,
+          interviewType: 'Video',
+          scheduledStart: started,
+          scheduledEnd: ended,
+          timezone: 'Africa/Cairo',
+          status: 'Completed',
+          completedAt: now,
+        },
+      });
+    const attendee = await tx.interviewAttendee.findUnique({ where: { interviewId_userId: { interviewId: interview.id, userId: interviewerId } } });
+    if (!attendee) {
+      await tx.interviewAttendee.create({ data: { interviewId: interview.id, userId: interviewerId, role: 'Interviewer', response: 'Accepted' } });
+    } else if (attendee.response === 'Declined') {
+      await tx.interviewAttendee.update({ where: { id: attendee.id }, data: { response: 'Accepted' } });
+    }
+    const card = await tx.interviewScorecard.findUnique({ where: { interviewId_interviewerId_revision: { interviewId: interview.id, interviewerId, revision: 1 } } });
+    const cardData = { status: 'Submitted', submittedAt: now, overallRating: 4, recommendation: 'Hire', notes: 'Panel agreed to move forward.', strengths: 'Clear examples.' };
+    if (card) await tx.interviewScorecard.update({ where: { id: card.id }, data: cardData });
+    else await tx.interviewScorecard.create({ data: { interviewId: interview.id, interviewerId, revision: 1, ...cardData } });
+  }
+
+  await ensureConducted('INT-EAT-SARAH-01', sarahApp?.id, sarah.id, 'Panel interview');
+  await ensureConducted('INT-EAT-SINDU-01', sinduApp?.id, sindu.id, 'Panel interview');
+
+  const conducted = await tx.interview.findMany({
+    where: {
+      organizationId,
+      status: 'Completed',
+      attendees: { some: { userId: { in: [sarah.id, sindu.id] }, response: { not: 'Declined' } } },
+    },
+    select: { id: true },
+  });
+  if (conducted.length) {
+    await tx.interview.updateMany({ where: { id: { in: conducted.map((row) => row.id) } }, data: { completedAt: now } });
+    await tx.interviewScorecard.updateMany({
+      where: {
+        interviewerId: { in: [sarah.id, sindu.id] },
+        status: 'Submitted',
+        interviewId: { in: conducted.map((row) => row.id) },
+      },
+      data: { submittedAt: now },
+    });
+  }
 }
 
 async function main() {
@@ -161,6 +468,7 @@ async function main() {
     await seedRejectionReasons(tx, organization.id);
     await seedSkillLibrary(tx, organization.id);
     await seedDefaultPipeline(tx, organization.id);
+    await seedWhatsAppTemplates(tx, organization.id);
 
     // ── Branch ────────────────────────────────────────────────
     const branch = await tx.branch.upsert({
@@ -448,14 +756,14 @@ async function main() {
         'AUDIT_VIEW',
         'CANDIDATE_VIEW', 'CANDIDATE_CREATE', 'CANDIDATE_EDIT',
         'APPLICATION_VIEW', 'APPLICATION_CREATE', 'APPLICATION_MOVE_STAGE',
-        'VIEW_CANDIDATE_PII', 'VIEW_CURRENT_SALARY', 'APPROVE_OFFERS', 'OFFER_PAY_VIEW',
+        'VIEW_CANDIDATE_PII', 'VIEW_CURRENT_SALARY', 'APPROVE_OFFERS', 'FINAL_HIRING_APPROVAL', 'OFFER_PAY_VIEW',
         'NOTIFICATION_VIEW', 'TASK_VIEW', 'TASK_UPDATE_STATUS',
       ],
       HIRING_MANAGER: [
         'VACANCY_REQUEST_VIEW', 'VACANCY_REQUEST_CREATE', 'VACANCY_REQUEST_APPROVE',
         'VACANCY_VIEW',
         'MASTER_DATA_VIEW',
-        'CANDIDATE_VIEW', 'APPLICATION_VIEW', 'APPLICATION_MOVE_STAGE', 'OFFER_PAY_VIEW',
+        'CANDIDATE_VIEW', 'APPLICATION_VIEW', 'APPLICATION_MOVE_STAGE', 'APPROVE_OFFERS', 'FINAL_HIRING_APPROVAL', 'OFFER_PAY_VIEW',
         'NOTIFICATION_VIEW', 'TASK_VIEW', 'TASK_UPDATE_STATUS',
       ],
       INTERVIEWER: [
@@ -588,6 +896,7 @@ async function main() {
 
     const demo = await seedDemoFixtures(tx, { organization, branch, position, users });
     await seedDecisionDemo(tx, organization.id, users);
+    await seedEmployeeActivityTargets(tx, organization.id);
 
     // ── Organization B (for Cross-Tenant Isolation Testing) ─────
     const orgB = await tx.organization.upsert({
@@ -600,6 +909,7 @@ async function main() {
       },
     });
     await seedRejectionReasons(tx, orgB.id);
+    await seedWhatsAppTemplates(tx, orgB.id);
 
     const branchB = await tx.branch.upsert({
       where: { organizationId_code: { organizationId: orgB.id, code: 'ACME-ALEX' } },
@@ -668,7 +978,7 @@ async function main() {
     });
 
     return { organization, branch, position, users, roles, demo, orgB, userB, candidateB, branchB };
-  }, { timeout: 30000 });
+  }, { maxWait: 20000, timeout: 180000 });
 
   for (const org of await prisma.organization.findMany({ select: { id: true } })) { await seedReasonLists(org.id); await seedDemoDepartments(org.id); }
   await resyncCodeSequences();

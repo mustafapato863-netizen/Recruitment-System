@@ -255,7 +255,6 @@ export function PipelineSettingsPage() {
     <PageFrame
       eyebrow="Administration"
       title="Workflow & Pipeline Settings"
-      description="Configure customizable stage funnels, SLA targets, scorecard requirements and transition rules."
       actions={(
         <>
           <Button variant="ghost" size="sm" onClick={() => void loadTemplates()}>

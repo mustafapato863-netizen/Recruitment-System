@@ -7,14 +7,13 @@ import { axeViolations as runAxe, axeViolations } from '../../__tests__/axe';
 
 const getApi = vi.fn();
 vi.mock('../../../../api/client', () => ({ getApi: (p: string) => getApi(p) }));
-const openGuide = vi.fn();
 vi.mock('../../../../quickguide', () => ({
   QuickGuideProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   QuickGuideModal: () => null,
-  useQuickGuide: () => ({ openGuide }),
 }));
 
-import { AppShellV2 } from '../AppShellV2';
+import { AppShellV2, TOPNAV_MENU_QUERY } from '../AppShellV2';
+import { useSetBreadcrumbTitle } from '../../../../context/BreadcrumbContext';
 import { ThemeProvider } from '../../../../theme/ThemeContext';
 import { activeNavKey, permittedNavItems, SEAT_NAV, CLASSIC_NAV, permittedClassicItems } from '../navConfig';
 import type { Seat } from '../../../../v2/seat';
@@ -51,7 +50,7 @@ function renderShell(seat: Seat, u = user(), path = '/my-work', onSignOut = vi.f
   );
 }
 
-beforeEach(() => { getApi.mockReset(); getApi.mockResolvedValue({ unreadCount: 0 }); openGuide.mockReset(); window.localStorage.clear(); });
+beforeEach(() => { getApi.mockReset(); getApi.mockResolvedValue({ unreadCount: 0 }); window.localStorage.clear(); });
 afterEach(() => { document.documentElement.removeAttribute('data-ui'); });
 
 describe('nav per seat', () => {
@@ -62,81 +61,109 @@ describe('nav per seat', () => {
   });
 
   it.each([
-    ['employee', ['My Work', 'Open jobs', 'Candidates']],
-    ['manager', ['Team work', 'Requisitions', 'Team result']],
-    ['admin', ['Users', 'Roles', 'Pipeline template', 'Master data', 'Templates', 'Reports', 'Audit', 'Integrations']],
-  ] as const)('%s lists daily destinations and then each permitted classic page', (seat, labels) => {
+    ['employee', ['My Work', 'Open jobs', 'Candidates', 'Match Skills', 'Interviews', 'Reports']],
+    ['manager', ['Team work', 'Requisitions', 'Approvals', 'Interviews', 'Team result']],
+    ['admin', ['Users', 'Roles', 'Pipeline template', 'Master data', 'WhatsApp templates', 'Reports', 'Audit', 'Integrations']],
+  ] as const)('%s lists its seat destinations', (seat, labels) => {
     const profile = user(ALL, [seat === 'manager' ? 'HIRING_MANAGER' : seat === 'admin' ? 'ADMINISTRATOR' : 'RECRUITER']);
     renderShell(seat, profile);
     const nav = screen.getByRole('navigation', { name: SEAT_NAV[seat].heading });
     const names = within(nav).getAllByRole('link').map((a) => a.textContent);
-    expect(names.slice(0, labels.length)).toEqual([...labels]);
+    expect(names).toEqual([...labels]);
     expect(names).toEqual(visibleNavLabels(seat, profile));
+    for (const classic of ['Hiring cases', 'Licences', 'Joinings', 'All interviews', 'Interview calendar', 'All offers', 'Candidate data & exports', 'CV Bank', 'Talent pools', 'Job exports']) {
+      expect(within(nav).queryByRole('link', { name: classic })).toBeNull();
+    }
     expect(screen.queryByRole('button', { name: 'Other work' })).not.toBeInTheDocument();
     expect(screen.queryByRole('navigation', { name: 'Retained work' })).not.toBeInTheDocument();
   });
 
-  it('hides unavailable items and lists permitted classic pages in the same nav', () => {
+  it('hides unavailable items and omits retired classic pages', () => {
     renderShell('employee', user(['VACANCY_VIEW']));
     const nav = screen.getByRole('navigation', { name: SEAT_NAV.employee.heading });
-    expect(within(nav).getAllByRole('link').map((a) => a.textContent)).toEqual(['My Work', 'Open jobs', 'All interviews', 'Interview calendar', 'Job exports']);
-    expect(within(nav).getByRole('link', { name: 'All interviews' })).toHaveAttribute('href', '/interviews');
-    expect(within(nav).getByRole('link', { name: 'Interview calendar' })).toHaveAttribute('href', '/interviews/calendar');
-    expect(within(nav).getByRole('link', { name: 'Job exports' })).toHaveAttribute('href', '/classic/vacancies');
+    expect(within(nav).getAllByRole('link').map((a) => a.textContent)).toEqual(['My Work', 'Open jobs']);
+    expect(within(nav).queryByRole('link', { name: 'All interviews' })).toBeNull();
+    expect(within(nav).queryByRole('link', { name: 'Interview calendar' })).toBeNull();
+    expect(within(nav).queryByRole('link', { name: 'Job exports' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'More (classic)' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Other work' })).not.toBeInTheDocument();
     expect(screen.queryByText(/locked/i)).not.toBeInTheDocument();
   });
 
-  it('a classic nav link opens that page and titles it', async () => {
+  it('a seat nav link opens that page and titles it', async () => {
     const u = userEvent.setup();
-    renderShell('employee', user(['APPLICATION_VIEW']));
+    renderShell('employee', user(['VACANCY_VIEW']));
     expect(screen.queryByRole('button', { name: 'More (classic)' })).not.toBeInTheDocument();
     expect(screen.queryByRole('searchbox', { name: 'Find a tool' })).not.toBeInTheDocument();
     const nav = screen.getByRole('navigation', { name: SEAT_NAV.employee.heading });
-    const hiring = within(nav).getByRole('link', { name: 'Hiring cases' });
-    expect(hiring).toHaveAttribute('href', '/hires');
-    hiring.focus();
+    const jobs = within(nav).getByRole('link', { name: 'Open jobs' });
+    expect(jobs).toHaveAttribute('href', '/vacancies');
+    jobs.focus();
     await u.keyboard('{Enter}');
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Hiring cases');
-    expect(hiring).toHaveAttribute('aria-current', 'page');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Open jobs' })).toBeInTheDocument();
+    expect(jobs).toHaveAttribute('aria-current', 'page');
   });
 
-  it('keeps admin destinations and classic pages in one menu', async () => {
-    renderShell('admin', user([], ['ADMINISTRATOR']), '/hires');
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Hiring cases');
+  it('keeps admin destinations in one menu', async () => {
+    renderShell('admin', user([], ['ADMINISTRATOR']), '/users');
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Users');
     const nav = screen.getByRole('navigation', { name: SEAT_NAV.admin.heading });
     expect(within(nav).getByRole('link', { name: 'Roles' })).toHaveAttribute('href', '/roles');
-    expect(within(nav).getByRole('link', { name: 'Templates' })).toHaveAttribute('href', '/email-templates');
-    expect(within(nav).getByRole('link', { name: 'Hiring cases' })).toHaveAttribute('href', '/hires');
-    expect(within(nav).getByRole('link', { name: 'Joinings' })).toHaveAttribute('href', '/joinings');
-    expect(within(nav).getByRole('link', { name: 'Licences' })).toHaveAttribute('href', '/licenses');
-    expect(within(nav).getByRole('link', { name: 'Talent pools' })).toHaveAttribute('href', '/sourcing-match');
+    expect(within(nav).getByRole('link', { name: 'WhatsApp templates' })).toHaveAttribute('href', '/whatsapp-templates');
+    expect(within(nav).queryByRole('link', { name: 'Hiring cases' })).toBeNull();
+    expect(within(nav).queryByRole('link', { name: 'Joinings' })).toBeNull();
+    expect(within(nav).queryByRole('link', { name: 'Licences' })).toBeNull();
+    expect(within(nav).queryByRole('link', { name: 'Talent pools' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'More (classic)' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Other work' })).not.toBeInTheDocument();
     expect(await runAxe(nav)).toEqual([]);
   });
 
-  it('an old classic URL still titles the authorized page', () => {
+  it('an old classic URL redirects to the admin home', async () => {
     renderShell('admin', user([], ['ADMINISTRATOR']), '/joinings');
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Joinings');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Users' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Joinings' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'More (classic)' })).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Joinings' })).toHaveAttribute('href', '/joinings');
-    expect(screen.getByRole('link', { name: 'Joinings' })).toHaveAttribute('aria-current', 'page');
   });
 
   it.each([
-    ['LICENSE_SPECIALIST', ['LICENSE_CHECK', 'VACANCY_VIEW', 'CANDIDATE_VIEW'], 'Licences', '/licenses'],
-    ['FINAL_HIRING_APPROVER', ['FINAL_HIRING_APPROVAL', 'VACANCY_VIEW', 'CANDIDATE_VIEW'], 'Final approvals', '/hires/approvals/inbox'],
-  ])('pins %s to that home and hides Open jobs and Other work', (role, permissions, label, path) => {
+    ['LICENSE_SPECIALIST', ['LICENSE_CHECK', 'VACANCY_VIEW', 'CANDIDATE_VIEW'], '/licenses'],
+    ['FINAL_HIRING_APPROVER', ['FINAL_HIRING_APPROVAL', 'VACANCY_VIEW', 'CANDIDATE_VIEW'], '/hires/approvals/inbox'],
+  ])('keeps %s on their queue with the seat items they can open', async (role, permissions, path) => {
     renderShell('employee', user(permissions, [role]), path);
+    expect(await screen.findByText('page content')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 1, name: 'My Work' })).toBeNull();
     const nav = screen.getByRole('navigation', { name: SEAT_NAV.employee.heading });
-    expect(within(nav).getAllByRole('link').map((link) => link.textContent)).toEqual([label]);
-    expect(within(nav).getByRole('link', { name: label })).toHaveAttribute('href', path);
-    expect(screen.queryByRole('link', { name: 'Open jobs' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Candidates' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'My Work' })).not.toBeInTheDocument();
+    expect(within(nav).getAllByRole('link').map((link) => link.textContent)).toEqual(['My Work', 'Open jobs', 'Candidates']);
+    expect(within(nav).queryByRole('link', { name: 'Licences' })).toBeNull();
+    expect(within(nav).queryByRole('link', { name: 'Final approvals' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Other work' })).not.toBeInTheDocument();
+  });
+
+  it('names a file with the candidate in the header', async () => {
+    function NamedFile() {
+      useSetBreadcrumbTitle('Ahmed Embaby');
+      return <p>page content</p>;
+    }
+    document.documentElement.setAttribute('data-ui', 'v2');
+    render(
+      <ThemeProvider><MemoryRouter initialEntries={['/applications/a1']}>
+        <Routes>
+          <Route element={<AppShellV2 user={user()} seat="employee" onSignOut={vi.fn()} />}>
+            <Route path="/applications/:id" element={<NamedFile />} />
+          </Route>
+        </Routes>
+      </MemoryRouter></ThemeProvider>,
+    );
+    expect(await screen.findByRole('heading', { level: 1, name: 'Ahmed Embaby' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 1, name: 'Applications' })).not.toBeInTheDocument();
+  });
+
+  it.each(['/applications/a1', '/applications/a1?drawer=prehire'])('a licence specialist mounts the application file at %s', async (path) => {
+    renderShell('employee', user(['LICENSE_CHECK', 'VACANCY_VIEW'], ['LICENSE_SPECIALIST']), path);
+    expect(await screen.findByText('page content')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Applications' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { level: 1, name: 'Licenses' })).toBeNull();
   });
 
   it('interviewer-only users never see jobs or hiring tools that redirect away from their work', () => {
@@ -150,28 +177,20 @@ describe('nav per seat', () => {
     renderShell('admin', user(['APPLICATION_VIEW'], ['CUSTOM_ADMIN']), '/reports');
     const nav = screen.getByRole('navigation', { name: SEAT_NAV.admin.heading });
     expect(screen.queryByRole('button', { name: 'More (classic)' })).not.toBeInTheDocument();
-    expect(within(nav).getByRole('link', { name: 'Templates' })).toHaveAttribute('href', '/email-templates');
+    expect(within(nav).getByRole('link', { name: 'WhatsApp templates' })).toHaveAttribute('href', '/whatsapp-templates');
     expect(within(nav).queryByRole('link', { name: 'Roles' })).not.toBeInTheDocument();
-    expect(within(nav).getByRole('link', { name: 'Hiring cases' })).toHaveAttribute('href', '/hires');
+    expect(within(nav).queryByRole('link', { name: 'Hiring cases' })).not.toBeInTheDocument();
   });
 
-  it('manager has no Approvals item (v2: not a destination)', () => {
-    expect(permittedNavItems('manager', ['VACANCY_REQUEST_VIEW', 'APPLICATION_VIEW', 'APPROVE_OFFERS', 'VACANCY_REQUEST_APPROVE']).map((i) => i.key)).toEqual(['team-work', 'requisitions', 'team-result']);
-    expect(SEAT_NAV.manager.items.some((i) => /approval/i.test(i.label))).toBe(false);
+  it('manager Approvals is a destination, and Interviews needs vacancy view', () => {
+    expect(permittedNavItems('manager', ['VACANCY_REQUEST_VIEW', 'APPLICATION_VIEW', 'APPROVE_OFFERS', 'VACANCY_REQUEST_APPROVE']).map((i) => i.key)).toEqual(['team-work', 'requisitions', 'approvals', 'team-result']);
+    expect(SEAT_NAV.manager.items.some((i) => i.label === 'Approvals')).toBe(true);
+    expect(permittedNavItems('manager', ['VACANCY_VIEW', 'VACANCY_REQUEST_VIEW', 'APPLICATION_VIEW'], false, false, false).map((i) => i.label)).toContain('Interviews');
   });
 
-  it('retained classic items mirror each v1 PermissionGate; admins see all; interviewer-only users none', () => {
-    const keys = (perms: string[], admin = false, io = false) => permittedClassicItems(perms, admin, io).map((i) => i.to);
-    expect(keys(['FINAL_HIRING_APPROVAL'])).toEqual(['/hires/approvals/inbox']);
-    expect(keys(['APPLICATION_VIEW'])).toEqual(['/hires', '/licenses', '/joinings', '/offers']);
-    expect(keys(['CANDIDATE_VIEW'])).toEqual(['/classic/candidates', '/cv-bank', '/sourcing-match']);
-    expect(keys(['MASTER_DATA_MANAGE'])).toEqual(['/import']);
-    expect(keys(['MASTER_DATA_VIEW'])).toEqual(['/settings/targets', '/classic/master-data', '/settings']);
-    expect(keys(['USERS_VIEW'])).toEqual(['/access-control', '/settings']);
-    expect(keys(['OVERRIDE_WORKFLOW'])).toEqual(['/settings', '/classic/pipeline-settings']);
-    expect(keys([])).toEqual([]);
-    expect(keys([], true)).toHaveLength(CLASSIC_NAV.length);
-    expect(keys(['VACANCY_VIEW', 'APPLICATION_VIEW'], false, true)).toEqual([]);
+  it('retired classic pages stay out of the sidebar', () => {
+    expect(permittedClassicItems(['FINAL_HIRING_APPROVAL', 'APPLICATION_VIEW', 'CANDIDATE_VIEW'], true)).toEqual([]);
+    expect(permittedClassicItems(['VACANCY_VIEW', 'APPLICATION_VIEW'], false, true)).toEqual([]);
     expect(CLASSIC_NAV.map((i) => i.to)).not.toContain('/portal');
     expect(CLASSIC_NAV.map((i) => i.to)).not.toContain('/approval-inbox');
   });
@@ -180,18 +199,18 @@ describe('nav per seat', () => {
     expect(permittedNavItems('admin', [], true)).toHaveLength(8);
   });
 
-  it('classic nav links keep native tab order and open the chosen page', async () => {
+  it('seat links keep native tab order and open the chosen page', async () => {
     const u = userEvent.setup();
     renderShell('employee', user(['VACANCY_VIEW']));
     const nav = screen.getByRole('navigation', { name: SEAT_NAV.employee.heading });
     const links = within(nav).getAllByRole('link');
-    expect(links.map((a) => a.getAttribute('href'))).toEqual(['/my-work', '/vacancies', '/interviews', '/interviews/calendar', '/classic/vacancies']);
-    links[2].focus();
+    expect(links.map((a) => a.getAttribute('href'))).toEqual(['/my-work', '/vacancies']);
+    links[0].focus();
     await u.tab();
-    expect(links[3]).toHaveFocus();
-    await u.click(within(nav).getByRole('link', { name: 'All interviews' }));
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('All interviews');
-    expect(within(nav).getByRole('link', { name: 'All interviews' })).toHaveAttribute('aria-current', 'page');
+    expect(links[1]).toHaveFocus();
+    await u.click(within(nav).getByRole('link', { name: 'Open jobs' }));
+    expect(await screen.findByRole('heading', { level: 1, name: 'Open jobs' })).toBeInTheDocument();
+    expect(within(nav).getByRole('link', { name: 'Open jobs' })).toHaveAttribute('aria-current', 'page');
     expect(screen.queryByRole('button', { name: 'Other work' })).not.toBeInTheDocument();
   });
 
@@ -211,6 +230,11 @@ describe('nav per seat', () => {
     const items = SEAT_NAV.admin.items;
     expect(activeNavKey(items, '/users', '')).toBe('users');
     expect(activeNavKey(items, '/roles', '')).toBe('roles');
+  });
+
+  it.each(['employee', 'manager', 'admin'] as const)('gives every item in %s a distinct icon', (seat) => {
+    const icons = SEAT_NAV[seat].items.map((item) => item.icon);
+    expect(new Set(icons).size).toBe(icons.length);
   });
 });
 
@@ -296,42 +320,48 @@ describe('a11y', () => {
 });
 
 describe('F4 follow-ups', () => {
-  it('Help opens the existing quick guide', async () => {
-    const u = userEvent.setup();
+  it('keeps the quick guide out of the header', () => {
     renderShell('employee');
-    await u.click(screen.getByRole('button', { name: /Help/ }));
-    expect(openGuide).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: /Help/ })).not.toBeInTheDocument();
   });
 
   it('sidebar collapses to an icon rail, keeps accessible names, and persists', async () => {
     const u = userEvent.setup();
-    const { unmount } = renderShell('employee');
+    const admin = user(ALL, ['ADMINISTRATOR']);
+    const { unmount } = renderShell('admin', admin, '/users');
     const toggle = screen.getByRole('button', { name: 'Collapse sidebar' });
     expect(toggle).toHaveAttribute('aria-expanded', 'true');
     toggle.focus();
     await u.keyboard('{Enter}');
     expect(screen.getByRole('button', { name: 'Expand sidebar' })).toHaveAttribute('aria-expanded', 'false');
     expect(document.querySelector('.rf2-shell')).toHaveClass('rf2-shell--collapsed');
-    const link = screen.getByRole('link', { name: 'Open jobs' });
-    expect(link).toHaveAttribute('title', 'Open jobs');
+    const link = screen.getByRole('link', { name: 'Users' });
+    expect(link).toHaveAttribute('title', 'Users');
     expect(window.localStorage.getItem('recruitflow.ui.v2.sidebar')).toBe('collapsed');
     unmount();
-    renderShell('employee');
+    renderShell('admin', admin, '/users');
     expect(document.querySelector('.rf2-shell')).toHaveClass('rf2-shell--collapsed');
     expect(await axeViolations(document.body)).toEqual([]);
   });
 
-  it('shows a static workspace label for the real /auth/me shape (one org)', () => {
+  it('keeps the workspace name out of the daily header', () => {
     renderShell('employee', { ...user(), organizationName: 'IT Recruiting' });
+    expect(screen.queryByTestId('workspace-label')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Change workspace/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'RecruitFlow, Saudi German Health' })).toBeInTheDocument();
+  });
+
+  it('shows a static workspace label for the real /auth/me shape (one org)', () => {
+    renderShell('admin', { ...user(ALL, ['ADMINISTRATOR']), organizationName: 'IT Recruiting' }, '/users');
     expect(screen.getByTestId('workspace-label')).toHaveTextContent('IT Recruiting');
     expect(screen.queryByRole('button', { name: /Change workspace/ })).not.toBeInTheDocument();
   });
 
   it('shows the switcher only when /auth/me lists more than one org', async () => {
     const u = userEvent.setup();
-    const me = { ...user(), organizationId: 'o1', organizationName: 'IT Recruiting',
+    const me = { ...user(ALL, ['ADMINISTRATOR']), organizationId: 'o1', organizationName: 'IT Recruiting',
       organizations: [{ id: 'o1', name: 'IT Recruiting' }, { id: 'o2', name: 'Nursing' }] } as never;
-    renderShell('employee', me);
+    renderShell('admin', me, '/users');
     await u.click(screen.getByRole('button', { name: 'Workspace: IT Recruiting. Change workspace' }));
     const list = screen.getByRole('listbox', { name: 'Workspaces' });
     expect(within(list).getByRole('option', { name: 'IT Recruiting' })).toHaveAttribute('aria-selected', 'true');
@@ -342,11 +372,30 @@ describe('F4 follow-ups', () => {
 describe('matrix fix: narrow viewports', () => {
   const realMatchMedia = window.matchMedia;
   afterEach(() => { window.matchMedia = realMatchMedia; });
-  it('below 1024px the sidebar is the icon rail (no toggle) and the header title is rendered as the h1', () => {
-    window.matchMedia = ((q: string) => ({ matches: q.includes('1023px'), media: q, addEventListener: () => {}, removeEventListener: () => {} })) as unknown as typeof window.matchMedia;
+  const match = (q: string) => q === TOPNAV_MENU_QUERY || q.includes('1023px');
+
+  it('keeps daily links in the sidebar on a wide screen', () => {
+    const { container } = renderShell('employee');
+    expect(container.querySelector('.rf2-shell__sidebar')).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Collapse sidebar' })).toBeInTheDocument();
+    expect(screen.getByRole('navigation', { name: SEAT_NAV.employee.heading })).toBeInTheDocument();
+  });
+
+  it('keeps the employee sidebar below 1024px as the icon rail', () => {
+    window.matchMedia = ((q: string) => ({ matches: match(q), media: q, addEventListener: () => {}, removeEventListener: () => {} })) as unknown as typeof window.matchMedia;
     const { container } = renderShell('employee');
     expect(container.querySelector('.rf2-shell')).toHaveClass('rf2-shell--collapsed');
     expect(screen.queryByRole('button', { name: /sidebar/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Open menu' })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1 })).toHaveClass('rf2-shell__title');
+  });
+
+  it('keeps the admin sidebar below 1024px as the icon rail', () => {
+    window.matchMedia = ((q: string) => ({ matches: match(q), media: q, addEventListener: () => {}, removeEventListener: () => {} })) as unknown as typeof window.matchMedia;
+    const { container } = renderShell('admin', user(ALL, ['ADMINISTRATOR']), '/users');
+    expect(container.querySelector('.rf2-shell')).toHaveClass('rf2-shell--collapsed');
+    expect(screen.queryByRole('button', { name: /sidebar/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Open menu' })).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 1 })).toHaveClass('rf2-shell__title');
   });
 });

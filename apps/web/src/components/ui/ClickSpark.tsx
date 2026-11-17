@@ -20,6 +20,12 @@ interface Spark {
   startTime: number;
 }
 
+function resolveSparkColor(sparkColor: string, canvas: HTMLCanvasElement) {
+  if (!sparkColor.startsWith('var(')) return sparkColor;
+  const varName = sparkColor.slice(4, -1).trim();
+  return getComputedStyle(canvas).getPropertyValue(varName).trim() || '#1769e8'; // design-token-exception
+}
+
 export function ClickSpark({
   sparkColor = 'var(--color-action)',
   sparkSize = 10,
@@ -37,6 +43,7 @@ export function ClickSpark({
   const animationFrameRef = useRef<number | null>(null);
   const drawRef = useRef<((timestamp: number) => void) | null>(null);
   const reducedMotionRef = useRef(false);
+  const strokeColorRef = useRef(sparkColor);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -115,13 +122,7 @@ export function ClickSpark({
 
     const draw = (timestamp: number) => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      // Resolve CSS variable if sparkColor is a var()
-      let strokeColor = sparkColor;
-      if (sparkColor.startsWith('var(')) {
-        const varName = sparkColor.slice(4, -1).trim();
-        strokeColor = getComputedStyle(canvas).getPropertyValue(varName).trim() || '#1769e8'; // design-token-exception
-      }
+      const strokeColor = strokeColorRef.current;
 
       sparksRef.current = sparksRef.current.filter((spark) => {
         const elapsed = timestamp - spark.startTime;
@@ -178,6 +179,7 @@ export function ClickSpark({
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
+    strokeColorRef.current = resolveSparkColor(sparkColor, canvas);
     const now = performance.now();
     const newSparks: Spark[] = Array.from({ length: sparkCount }, (_, i) => ({
       x,

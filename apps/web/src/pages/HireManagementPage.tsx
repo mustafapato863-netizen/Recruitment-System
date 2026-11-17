@@ -141,7 +141,6 @@ export function HireManagementPage() {
   return (
     <PageFrame
       title="Hires"
-      description="Checks, approvals, and joining after offer acceptance."
       actions={
         <Button variant="ghost" size="sm" onClick={() => void loadCases()}>
           <Icon name="refresh-cw" size={13} className={loading ? 'animate-spin' : ''} />

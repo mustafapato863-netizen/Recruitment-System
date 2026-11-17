@@ -13,6 +13,7 @@ import {
   type AdminUser, type OwnedWork,
   overrideReassign,
 } from './usersApi';
+import { AdminWorkspaceHeader } from './AdminWorkspaceHeader';
 import '../pages/jobs.css';
 import './admin.css';
 
@@ -48,13 +49,12 @@ export function UsersV2() {
 
   return (
     <div className="rf2-jobs rf2-admin">
-      <div className="rf2-row-between">
-        <div>
-          <h1 className="rf2-jobs__title">Users</h1>
-          <p className="rf2-jobs__sub">Three roles only: Employee, Manager, Admin. Users are deactivated, never deleted.</p>
-        </div>
-        <ButtonV2 icon={<UserPlus />} onClick={() => go({ drawer: 'invite' })}>Invite user</ButtonV2>
-      </div>
+      <AdminWorkspaceHeader
+        group="Users & Access"
+        title="Users"
+        subtitle="Manage directory access, reporting lines and account status."
+        actions={<ButtonV2 icon={<UserPlus />} onClick={() => go({ drawer: 'invite' })}>Invite user</ButtonV2>}
+      />
       {note ? <p className="rf2-inline-note" data-tone="success" role="status"><CircleCheck aria-hidden="true" /> {note}</p> : null}
       <div className="rf2-row-between rf2-admin__filters">
         <div className="rf2-admin__filterset">
@@ -267,7 +267,7 @@ function TreeDrawer({ users, focus, onClose, onDone }: { users: AdminUser[]; foc
           {err ? <p className="rf2-form-error" role="alert">{err}</p> : null}
         </div>
       ) : <p className="rf2-jtable__sub">Pick a person to change who they report to.</p>}
-      <p className="rf2-inline-note"><Info aria-hidden="true" /> Managers see Team work and Team result for their direct reports only. Changing a line moves those views, not the files; file owners stay the same.</p>
+      <p className="rf2-inline-note"><Info aria-hidden="true" /> Managers see Team work for their reporting line and Team result for their direct reports. Changing a line moves those views, not the files; file owners stay the same.</p>
     </DrawerV2>
   );
 }

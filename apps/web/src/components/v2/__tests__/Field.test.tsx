@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it } from 'vitest';
 import { Search } from 'lucide-react';
 import { InputV2, SelectV2 } from '..';
+import { GlobalSelectEnhancer } from '../../ui/GlobalSelectEnhancer';
 import { axeViolations } from './axe';
 
 describe('InputV2', () => {
@@ -65,6 +66,65 @@ describe('SelectV2', () => {
     expect(screen.getByRole('option', { name: 'Choose a site' })).toBeDisabled();
     expect(screen.getByRole('combobox', { name: 'Grade' })).toHaveAttribute('aria-invalid', 'true');
     expect(screen.getByRole('combobox', { name: 'Locked' })).toBeDisabled();
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
     expect(await axeViolations(container)).toEqual([]);
+  });
+
+  it('opens a glass list and chooses with pointer, keyboard, and escape', async () => {
+    const seen: string[] = [];
+    const { container } = render(
+      <SelectV2 label="Template" defaultValue="" onChange={(event) => seen.push(event.target.value)}>
+        <option value="">Choose a template</option>
+        <option value="ack">Application Received — Acknowledgement</option>
+        <option value="inv">Interview Invitation</option>
+        <option value="scr">Screening Invitation</option>
+      </SelectV2>,
+    );
+    const select = screen.getByLabelText('Template');
+    await userEvent.click(select);
+    expect(screen.getByRole('listbox', { name: 'Template' })).toBeInTheDocument();
+    expect(await axeViolations(document.body)).toEqual([]);
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('listbox', { name: 'Template' })).not.toBeInTheDocument();
+    expect(select).toHaveFocus();
+
+    await userEvent.click(select);
+    await userEvent.click(screen.getByRole('option', { name: 'Interview Invitation' }));
+    expect(seen).toEqual(['inv']);
+    expect(select).toHaveValue('inv');
+    expect(screen.queryByRole('listbox', { name: 'Template' })).not.toBeInTheDocument();
+
+    await userEvent.click(select);
+    await userEvent.keyboard('{ArrowDown}{Enter}');
+    expect(seen).toEqual(['inv', 'scr']);
+    expect(select).toHaveValue('scr');
+    expect(await axeViolations(container)).toEqual([]);
+  });
+});
+
+
+describe('GlobalSelectEnhancer', () => {
+  it('enhances plain native select elements across the app to open the custom rf2-select__menu listbox', async () => {
+    const seen: string[] = [];
+    render(
+      <div>
+        <GlobalSelectEnhancer />
+        <select aria-label="Filter stage" defaultValue="" onChange={(e) => seen.push(e.target.value)}>
+          <option value="">All stages</option>
+          <option value="Screening">Screening</option>
+          <option value="Interview">Interview</option>
+        </select>
+      </div>,
+    );
+    const select = screen.getByLabelText('Filter stage');
+    await userEvent.click(select);
+    expect(screen.getByRole('listbox', { name: 'Filter stage' })).toBeInTheDocument();
+    expect(select).toHaveAttribute('data-rf2-select-open', 'true');
+
+    await userEvent.click(screen.getByRole('option', { name: 'Interview' }));
+    expect(seen).toEqual(['Interview']);
+    expect(select).toHaveValue('Interview');
+    expect(screen.queryByRole('listbox', { name: 'Filter stage' })).not.toBeInTheDocument();
+    expect(select).not.toHaveAttribute('data-rf2-select-open');
   });
 });

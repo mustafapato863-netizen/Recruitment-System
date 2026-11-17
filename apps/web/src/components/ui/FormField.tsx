@@ -42,7 +42,7 @@ export function FormField({ id, label, required = false, hint, error, children }
     : children;
 
   return (
-    <div className="grid gap-1.5">
+    <div className="flex flex-col gap-1.5">
       <label className="text-[10.5px] font-semibold text-rf-ink" htmlFor={id}>
         {label}
         {required && <span className="ml-0.5 text-rf-danger" aria-hidden="true">*</span>}

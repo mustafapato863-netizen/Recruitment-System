@@ -10,6 +10,13 @@ import {
 
 type Errs = Partial<Record<'positionId' | 'branchId' | 'seats' | 'dueDate' | 'assignee' | 'grade' | 'reason' | 'notes' | 'departmentId' | 'form', string>>;
 /** reqError → drawer errors: inline field messages (#23) plus whatever the banner keeps. */
+type ReqForm = { positionId: string; branchId: string; seats: string; dueDate: string; departmentId: string; gradeId: string; assignee: string; notes: string };
+const formFromJson = (raw: string): ReqForm => {
+  const value: unknown = JSON.parse(raw);
+  const record = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  const text = (key: keyof ReqForm) => typeof record[key] === 'string' ? record[key] : '';
+  return { positionId: text('positionId'), branchId: text('branchId'), seats: text('seats'), dueDate: text('dueDate'), departmentId: text('departmentId'), gradeId: text('gradeId'), assignee: text('assignee'), notes: text('notes') };
+};
 const toErrs = (r: ReturnType<typeof reqError>, only?: ReadonlyArray<keyof Errs>): Errs => {
   if (r.inline) {
     const kept = only ? Object.fromEntries(Object.entries(r.inline).filter(([k]) => only.includes(k as keyof Errs))) : r.inline;
@@ -198,6 +205,21 @@ export function RequisitionDrawer({ req, ctx, people, grades, canActivate, canDe
       <div className="rf2-drawer-form rf2-req">
         {errs.form ? <p className="rf2-form-error" role="alert">{errs.form}</p> : null}
         <p className="rf2-jtable__sub">One record for the request and its hiring goal. Seats, the due date and the owner save on this requisition.</p>
+        {req ? <p className="rf2-jtable__sub"><Link className="rf2-link" to={`/vacancy-requests?req=${encodeURIComponent(req.id)}&drawer=detail`}>Open full requisition details</Link></p> : null}
+        {!req ? (
+          <section className="rf2-req__progress" aria-label="Requisition progress">
+            <h3 className="rf2-field__label">Requisition progress & policy checklist</h3>
+            <p className="rf2-jtable__sub">Draft → Pending approval → Approved / Changes requested / Declined → Job active (or direct activation when policy allows)</p>
+            <ul>
+              <li data-state={f.positionId ? 'done' : 'needed'}>{f.positionId ? 'Done' : 'Needed'} — Title selected</li>
+              <li data-state={f.branchId ? 'done' : 'needed'}>{f.branchId ? 'Done' : 'Needed'} — Site selected</li>
+              <li data-state={Number.isInteger(seats) && seats >= 1 ? 'done' : 'needed'}>{Number.isInteger(seats) && seats >= 1 ? 'Done' : 'Needed'} — Seats {'>='} 1</li>
+              <li data-state={f.dueDate ? 'done' : 'needed'}>{f.dueDate ? 'Done' : 'Needed'} — Due date set</li>
+              <li data-state={f.assignee ? 'done' : 'needed'}>{f.assignee ? 'Done' : 'Needed'} — Primary recruiter selected</li>
+            </ul>
+            {JSON.stringify(f) !== initial ? <ButtonV2 kind="tertiary" onClick={() => { setF(formFromJson(initial)); setErrs({}); }}>Reset form</ButtonV2> : null}
+          </section>
+        ) : null}
         {req?.targetChip ? (
           <div className="rf2-req__chip">
             <Target aria-hidden="true" />
@@ -295,6 +317,7 @@ export function TargetDrawer({ req, people, canActivate, targetUpdate = TARGET_U
   const liveEdit = live && targetUpdate;
   const editable = isEditable(req.status) || liveEdit;
   const [why, setWhy] = useState('');
+  const [milestoneNote, setMilestoneNote] = useState('');
   const approved = req.status === 'Approved';
   const [seats, setSeats] = useState(String(req.requestedHeadcount));
   const [due, setDue] = useState(dueOf(req) ?? '');
@@ -338,11 +361,17 @@ export function TargetDrawer({ req, people, canActivate, targetUpdate = TARGET_U
       secondaryAction={locked ? null : <ButtonV2 kind="secondary" onClick={onClose}>Cancel</ButtonV2>}>
       <div className="rf2-drawer-form rf2-req">
         {errs.form ? <p className="rf2-form-error" role="alert">{errs.form}</p> : null}
+        <p className="rf2-jtable__sub">{title} · {req.requestCode} · {req.requestedHeadcount} requested seats · {filled} filled</p>
+        <p>Current target: {dueOf(req) ? `${filled} of ${req.requestedHeadcount} by ${formatDue(dueOf(req))}` : 'Not set'}</p>
+        {dueOf(req) ? (
+          <ButtonV2 kind="tertiary" onClick={() => { setSeats(String(req.requestedHeadcount)); setDue(dueOf(req) ?? ''); setAssignee(req.assignedEmployeeId ?? req.primaryRecruiter?.id ?? ''); setErrs({}); }}>Reset</ButtonV2>
+        ) : null}
         <InputV2 label="Seats" required type="number" min={1} value={seats} onChange={(e) => { setSeats(e.target.value); setErrs({}); }} error={errs.seats} disabled={!editable} />
         <InputV2 label="Due date" required type="date" value={due} onChange={(e) => { setDue(e.target.value); setErrs({}); }} error={errs.dueDate} disabled={!editable}
           hint={!due && editable ? 'Required — a target needs a due date. Save target stays disabled while it is empty.' : undefined} />
         <PersonSelect label="Assign to" people={people} value={assignee} onChange={(v) => { setAssignee(v); setErrs({}); }} error={errs.assignee} disabled={locked || liveEdit} />
         {liveEdit ? <TextareaV2 label="Reason for the change" required rows={2} value={why} onChange={(e) => { setWhy(e.target.value); setErrs({}); }} error={errs.reason} hint="Kept on the job’s history." /> : null}
+        <InputV2 label="Milestone note" value={milestoneNote} onChange={(e) => setMilestoneNote(e.target.value)} hint="Optional. Shown in the preview only." />
         {liveEdit && Number.isInteger(n) && n < filled ? <p className="rf2-inline-note" data-tone="warning" role="status">Approved capacity cannot drop below {filled} already joined. Joined hires stay. Open applications stay on the job.</p> : null}
         {locked ? <p className="rf2-inline-note"><Info aria-hidden="true" /> {req.status === 'Converted to Vacancy' ? 'The job is active. Seats and the due date stay as saved in this view.' : req.status === 'Pending Approval' ? 'Waiting on approval: the target is locked until it comes back.' : 'This requisition is closed.'}</p> : null}
         {approved ? <p className="rf2-inline-note"><Info aria-hidden="true" /> Approved: seats and due date are locked. Pick the owner and activate.</p> : null}
@@ -353,7 +382,9 @@ export function TargetDrawer({ req, people, canActivate, targetUpdate = TARGET_U
             <div><p className="rf2-jtable__name">{title}</p><p className="rf2-jtable__sub">{who ? `Owner: ${who}` : 'No owner yet'}</p></div>
             <p className="rf2-req__chip-n" data-tone={due ? 'success' : undefined}>{filled} of {Number.isInteger(n) && n > 0 ? n : '—'}{due ? ` · due ${formatDue(due).replace(/ \d{4}$/, '')}` : ''}</p>
           </div>
+          {milestoneNote.trim() ? <p className="rf2-jtable__sub">Milestone: {milestoneNote.trim()}</p> : null}
         </section>
+        {dueOf(req) ? <p className="rf2-jtable__sub">Target updates are recorded in the requisition audit trail.</p> : null}
         {req.status === 'Converted to Vacancy' ? <p className="rf2-inline-note" data-tone="success"><CircleCheck aria-hidden="true" /> Live chip: {req.targetChip?.label ?? `${filled} of ${req.requestedHeadcount}`}{dueOf(req) ? ` · due ${formatDue(dueOf(req))}` : ''}.</p> : null}
         {req.status === 'Pending Approval' ? <p className="rf2-jtable__sub"><Clock aria-hidden="true" /> Pending approval.</p> : null}
       </div>

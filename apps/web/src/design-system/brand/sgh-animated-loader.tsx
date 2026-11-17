@@ -185,14 +185,16 @@ export function SghAnimatedLoader({
   if (fullScreen) {
     return (
       <AnimatePresence>
+        {/* Inline z-index: this folder is excluded from the Tailwind scan, so z-[100] never ships. */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.4 }}
-          className={`fixed inset-0 z-[100] isolate flex items-center justify-center p-4 transition-colors duration-300 sm:p-6 ${
+          className={`fixed inset-0 isolate flex items-center justify-center p-4 transition-colors duration-300 sm:p-6 ${
             isDark ? "text-white" : "text-slate-900"
           }`}
+          style={{ zIndex: 100 }}
           role="status"
           aria-live="polite"
           aria-label="Signing in"

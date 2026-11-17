@@ -8,13 +8,13 @@
  * - Both: 403 NOT_JOB_OWNER for non-owners.
  * Add to this job: POST /applications {vacancyId, candidateId, source}.
  * Candidates: GET /applications (my files, B1-scoped, paged) and GET /candidates (bank). The active list does
- * not send `search` (that parameter also matches email). Every row is reduced to an allowlist: no email/phone/
- * salary/notice/national id is kept. Error codes are dropped by the API filter
- * (CONFLICT/VALIDATION_ERROR/FORBIDDEN/NOT_FOUND + message), so `matchErrorFromError` maps messages back.
+ * not send `search` on the unfiltered load; when narrowed beyond the 10-page window, it sends privacy-safe filters.
+ * Every row is reduced to an allowlist: no email/phone/salary/notice/national id is kept.
  */
 import { domainError } from './gates';
 import { getApi, postApi } from '../../api/client';
 import { stripPay } from './paySafety';
+import { cardNextAction, type CardInterview, type FileGate } from './jobs';
 
 const enc = encodeURIComponent;
 
@@ -22,8 +22,8 @@ export interface EvidenceItem { id: string; sourceType: string; sourceRef: strin
 export interface SkillRef { id: string | null; name: string }
 export interface MatchedSkill { skill: SkillRef; hasEvidence: boolean; evidence: EvidenceItem[] }
 export interface SuggestionCandidate { id: string; code: string; name: string; currentTitle: string | null; location: string | null }
-/** ca137e3: people already on the job come back too, with their stage and addable:false. */
-export interface Suggestion { candidate: SuggestionCandidate; matchedSkills: MatchedSkill[]; missingSkills: SkillRef[]; alreadyOnJob?: boolean; stage?: string | null; addable?: boolean }
+/** People already on the job come back too, with their application id, stage, and addable:false. */
+export interface Suggestion { candidate: SuggestionCandidate; matchedSkills: MatchedSkill[]; missingSkills: SkillRef[]; applicationId?: string | null; alreadyOnJob?: boolean; stage?: string | null; addable?: boolean }
 export interface SuggestionsResponse { vacancyId: string; requiredSkills: SkillRef[]; unmappedRequiredSkills: string[]; orderedBy: string[]; suggestions: Suggestion[] }
 export type CompareStatus = 'evidence' | 'no-evidence' | 'missing';
 export interface CompareCell { candidateId: string; status: CompareStatus; evidence: EvidenceItem[] }
@@ -58,9 +58,18 @@ export const sourceLabel = (t: string) => SOURCE_LABEL[t] ?? t.toLowerCase().rep
 export interface ActiveRow { applicationId: string; candidateId: string; name: string; title: string | null; experienceYears: number | null; vacancyId: string; job: string; stage: string; source: string | null; owner: string | null; next: string | null; nextAt: string | null }
 /** Caller-scoped pages of GET /applications. `truncated` is set only when 10 full pages are loaded and `total` is still larger. */
 export interface ActiveApplicationsResult { rows: ActiveRow[]; truncated: boolean; loaded: number; total: number | null }
+export interface ActiveApplicationFilters { search?: string; job?: string; source?: string; stage?: string }
 export interface BankRow { candidateId: string; code: string; name: string; title: string | null; location: string | null; experienceYears: number | null; status: string }
+export type BankRowsResult = BankRow[] & { truncated?: boolean; loaded?: number; total?: number | null };
 
-type RawApp = { id: string; candidateId: string; vacancyId: string; stage: string; source?: string | null; positionTitle?: string; primaryRecruiterName?: string | null; lastActivityLabel?: string | null; nextFollowUpAt?: string | null; candidate?: { firstName?: string; lastName?: string; currentTitle?: string | null; experienceYears?: number | null } };
+type RawApp = {
+  id: string; candidateId: string; vacancyId: string; stage: string; source?: string | null; positionTitle?: string;
+  primaryRecruiterName?: string | null; lastActivityLabel?: string | null; nextFollowUpAt?: string | null;
+  gates?: FileGate[] | null; interview?: CardInterview | null; offerStatus?: string | null; offerSentBack?: boolean;
+  candidate?: { firstName?: string; lastName?: string; currentTitle?: string | null; experienceYears?: number | null };
+};
+/** Past events belong on lastActivityLabel. They are never a next action. */
+const PAST_EVENT = /^(note added|application updated|moved\b|status changed|stage changed)/i;
 type RawCand = { id: string; candidateCode: string; firstName: string; lastName: string; currentTitle?: string | null; location?: string | null; experienceYears?: number | null; status: string };
 const list = <T,>(r: T[] | { data: T[] } | null | undefined): T[] => (Array.isArray(r) ? r : r?.data ?? []);
 /** Open files on the candidates list. Same bound as the bank loader: 10 pages of 100. */
@@ -68,27 +77,48 @@ export const OPEN_APPLICATION_STAGES = ['Applied', 'Screening', 'Interview', 'Of
 const ACTIVE_PAGE_SIZE = 100;
 const ACTIVE_MAX_PAGES = 10;
 
+function nextActionLabel(a: RawApp): string | null {
+  const label = a.lastActivityLabel?.trim() ?? '';
+  const workflowKnown = a.gates != null || a.offerStatus !== undefined || a.offerSentBack !== undefined;
+  const past = PAST_EVENT.test(label);
+  if (!workflowKnown && !past && label) return a.lastActivityLabel ?? null;
+  const derived = cardNextAction(a)?.label ?? null;
+  return !derived || derived === '—' ? null : derived;
+}
+
 function toActiveRow(a: RawApp): ActiveRow {
   return {
     applicationId: a.id, candidateId: a.candidateId,
     name: `${a.candidate?.firstName ?? ''} ${a.candidate?.lastName ?? ''}`.trim() || 'Unnamed',
     title: a.candidate?.currentTitle ?? null, experienceYears: a.candidate?.experienceYears ?? null,
     vacancyId: a.vacancyId, job: a.positionTitle ?? '—', stage: a.stage, source: a.source ?? null,
-    owner: a.primaryRecruiterName ?? null, next: a.lastActivityLabel ?? null, nextAt: a.nextFollowUpAt ?? null,
+    owner: a.primaryRecruiterName ?? null, next: nextActionLabel(a), nextAt: a.nextFollowUpAt ?? null,
   };
 }
 
 /**
  * Pages this caller's applications. Stage, job, source, and name/title/job search are applied by Candidates
- * on the loaded window — `search` is not sent, because the server parameter also matches email.
+ * on the loaded window — `search` is not sent on the unfiltered load, and when server-side narrowing is used
+ * for truncated collections, `includeEmail=false` keeps email matching disabled.
  * A thrown request is left thrown so the page can show an error instead of an empty list.
  */
-export async function fetchActiveApplications(): Promise<ActiveApplicationsResult> {
+export async function fetchActiveApplications(filters?: ActiveApplicationFilters): Promise<ActiveApplicationsResult> {
   const raw: RawApp[] = [];
   let total: number | null = null;
   let truncated = false;
+  const search = filters?.search?.trim() ?? '';
+  const job = filters?.job?.trim() ?? '';
+  const source = filters?.source?.trim() ?? '';
+  const stage = filters?.stage?.trim() ?? '';
   for (let page = 1; page <= ACTIVE_MAX_PAGES; page++) {
     const q = new URLSearchParams({ pageSize: String(ACTIVE_PAGE_SIZE), page: String(page), sortBy: 'updatedAt', sortDirection: 'desc' });
+    if (job) q.set('vacancyId', job);
+    if (source) q.set('source', source);
+    if (stage) q.set('stage', stage);
+    if (search) {
+      q.set('search', search);
+      q.set('includeEmail', 'false');
+    }
     const r = await getApi<RawApp[] | { data: RawApp[]; total?: number }>(`/applications?${q}`);
     const rows = list(r);
     raw.push(...rows);
@@ -99,19 +129,37 @@ export async function fetchActiveApplications(): Promise<ActiveApplicationsResul
   const open = new Set<string>(OPEN_APPLICATION_STAGES);
   return { rows: raw.filter((a) => open.has(a.stage)).map(toActiveRow), truncated, loaded: raw.length, total };
 }
+
 /** Bank = everyone Active in the org (CoS: all seats see the whole bank, never contact fields). Pages through up to 1000. */
-export async function fetchBank(search: string): Promise<BankRow[]> {
+export async function fetchBank(search: string): Promise<BankRowsResult> {
   const raw: RawCand[] = [];
+  let total: number | null = null;
+  let truncated = false;
   for (let page = 1; page <= 10; page++) {
     const q = new URLSearchParams({ pageSize: '100', page: String(page), status: 'Active' });
     if (search.trim()) q.set('search', search.trim());
     const r = await getApi<RawCand[] | { data: RawCand[]; total?: number }>(`/candidates?${q}`);
     const rows = list(r);
     raw.push(...rows);
-    const total = !Array.isArray(r) && typeof r?.total === 'number' ? r.total : null;
+    if (!Array.isArray(r) && typeof r?.total === 'number') total = r.total;
     if (rows.length < 100 || (total !== null && raw.length >= total)) break;
+    if (page === 10 && total !== null && raw.length < total) truncated = true;
   }
-  return raw.filter((c) => c.status === 'Active').map((c) => ({ candidateId: c.id, code: c.candidateCode, name: `${c.firstName} ${c.lastName}`.trim(), title: c.currentTitle ?? null, location: c.location ?? null, experienceYears: c.experienceYears ?? null, status: c.status }));
+  const rows = raw
+    .filter((c) => c.status === 'Active')
+    .map((c) => ({
+      candidateId: c.id,
+      code: c.candidateCode,
+      name: `${c.firstName} ${c.lastName}`.trim(),
+      title: c.currentTitle ?? null,
+      location: c.location ?? null,
+      experienceYears: c.experienceYears ?? null,
+      status: c.status,
+    })) as BankRowsResult;
+  rows.truncated = truncated;
+  rows.loaded = raw.length;
+  rows.total = total;
+  return rows;
 }
 
 // ── errors ──────────────────────────────────────────────────────────────────

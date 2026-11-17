@@ -7,6 +7,8 @@ interface ModalProps {
   isOpen: boolean;
   onClose: () => void;
   title: string;
+  subtitle?: string;
+  leadingIcon?: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
   maxWidthClass?: string;
@@ -16,7 +18,17 @@ interface ModalProps {
 
 const FOCUSABLE_SELECTOR = 'button, input, select, textarea, [href], [tabindex]:not([tabindex="-1"])';
 
-export function Modal({ isOpen, onClose, title, children, footer, maxWidthClass = 'max-w-xl', descriptionId }: ModalProps) {
+export function Modal({
+  isOpen,
+  onClose,
+  title,
+  subtitle,
+  leadingIcon,
+  children,
+  footer,
+  maxWidthClass = 'max-w-xl',
+  descriptionId,
+}: ModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const onCloseRef = useRef(onClose);
@@ -91,8 +103,14 @@ export function Modal({ isOpen, onClose, title, children, footer, maxWidthClass 
         ref={dialogRef}
         role="dialog"
       >
-        <div className="sticky top-0 z-[1] flex shrink-0 items-center justify-between border-b border-rf-border-subtle bg-rf-surface-subtle/65 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:static sm:px-5 sm:pt-3">
-          <h2 className="m-0 font-rf-heading text-[12px] font-extrabold tracking-[-0.015em] text-rf-ink" id={titleId}>{title}</h2>
+        <div className="sticky top-0 z-[1] flex shrink-0 items-start justify-between gap-3 border-b border-rf-border-subtle bg-rf-surface px-4 py-3.5 pt-[max(0.875rem,env(safe-area-inset-top))] sm:static sm:px-6 sm:pt-4">
+          <div className="flex min-w-0 items-center gap-3">
+            {leadingIcon ? <div className="rf-modal-lead-icon shrink-0">{leadingIcon}</div> : null}
+            <div className="min-w-0">
+              <h2 className="m-0 font-rf-heading text-[15px] font-bold tracking-[-0.015em] text-rf-ink" id={titleId}>{title}</h2>
+              {subtitle ? <p className="m-0 mt-0.5 text-[11.5px] font-medium text-rf-ink-muted">{subtitle}</p> : null}
+            </div>
+          </div>
           <IconButton label="Close dialog" tone="ghost" size="sm" onClick={onClose}>
             <Icon name="close" size={15} />
           </IconButton>

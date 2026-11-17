@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Suspense } from 'react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../../api/client';
 import { axeViolations } from '../../../components/v2/__tests__/axe';
@@ -22,7 +22,10 @@ const email = [
   { id: 'e2', name: 'Rejection — polite', category: 'notification', subject: 'Your application', bodyTemplate: 'Dear {{candidateName}}', isDefault: false, status: 'Active' },
   { id: 'e3', name: 'Archived one', category: 'misc', subject: 'x', bodyTemplate: 'x', isDefault: false, status: 'Archived' },
 ];
-const wa = [{ id: 'w1', name: 'Interview reminder', category: 'interview_invite', interviewType: 'any', bodyTemplate: 'Hi {{candidateName}}', isDefault: true, status: 'Active' }];
+const wa = [
+  { id: 'w1', name: 'Interview reminder', category: 'interview_invite', interviewType: 'any', bodyTemplate: 'Hi {{candidateName}}', isDefault: true, status: 'Active' },
+  { id: 'w2', name: 'Document chase', category: 'misc', bodyTemplate: 'Please send documents', isDefault: false, status: 'Active' },
+];
 const v = (id: string, name: string, status = 'Active') => ({ id, name, status, version: 1 });
 let paths: Record<string, unknown> = {};
 const serve = (extra: Record<string, unknown> = {}) => {
@@ -43,8 +46,8 @@ const renderAt = (path: string) => {
   document.documentElement.setAttribute('data-ui', 'v2');
   return render(<MemoryRouter initialEntries={[path]}><Suspense fallback="…"><Routes>
     <Route path="/pipeline-settings" element={<PipelineRoute />} />
-    <Route path="/email-templates" element={<TemplatesRoute />} />
-    <Route path="/whatsapp-templates" element={<TemplatesRoute channel="whatsapp" />} />
+    <Route path="/email-templates" element={<Navigate to="/whatsapp-templates" replace />} />
+    <Route path="/whatsapp-templates" element={<TemplatesRoute />} />
     <Route path="/master-data" element={<MasterDataRoute />} />
   </Routes></Suspense></MemoryRouter>);
 };
@@ -86,21 +89,26 @@ describe('A05 Pipeline template (single)', () => {
 });
 
 describe('A07 Templates (admin-only)', () => {
-  it('email list (archived hidden), editor with preview; insert variable; save PATCH; axe', async () => {
+  it('opens WhatsApp templates from the old email address, with no mail editor or SMTP note', async () => {
     const u = userEvent.setup();
-    api.patchApi.mockResolvedValue({ id: 'e1' });
+    api.patchApi.mockResolvedValue({ id: 'w2' });
     const { container } = renderAt('/email-templates');
-    const nav = await screen.findByRole('navigation', { name: 'Email templates' });
-    expect(within(nav).getAllByRole('button').map((b) => b.textContent)).toEqual(['New', 'Interview inviteStage email (sent on a move)', 'Rejection — politeNotification']);
-    expect(screen.getByLabelText('Preview')).toHaveTextContent('Interview for HRIS Developer');
-    expect(screen.getByLabelText('Preview')).toHaveTextContent('Dear Ahmed Embaby, see you.');
+    const nav = await screen.findByRole('navigation', { name: 'WhatsApp templates' });
+    expect(within(nav).getAllByRole('button').map((b) => b.textContent)).toEqual(['New', 'Document chaseOther', 'Interview reminderSchedule interview drawer']);
+    expect(screen.getByLabelText('Preview')).toHaveTextContent('Please send documents');
+    expect(screen.queryByRole('button', { name: 'Email' })).toBeNull();
+    expect(screen.queryByLabelText(/^Subject/)).toBeNull();
+    expect(screen.queryByText(/SMTP/)).toBeNull();
+    expect(screen.queryByText(/Mail Templates/)).toBeNull();
+    expect(screen.queryByText(/Coming soon/i)).toBeNull();
     const body = screen.getByLabelText(/^Body/) as HTMLTextAreaElement;
     body.setSelectionRange(body.value.length, body.value.length);
     await u.click(screen.getByRole('button', { name: '{{organizationName}}' }));
     await u.type(screen.getByLabelText(/^Body/), ' {{{{meet_link}}');
     expect(screen.getByText(/Not filled by the server, sent as typed: \{\{meet_link\}\}/)).toBeInTheDocument();
     await u.click(screen.getByRole('button', { name: 'Save template' }));
-    await waitFor(() => expect(api.patchApi).toHaveBeenCalledWith('/email-templates/e1', { name: 'Interview invite', category: 'stage_auto', bodyTemplate: 'Dear {{candidateName}}, see you.{{organizationName}} {{meet_link}}', subject: 'Interview for {{positionTitle}}' }));
+    await waitFor(() => expect(api.patchApi).toHaveBeenCalledWith('/whatsapp-templates/w2', { name: 'Document chase', category: 'misc', bodyTemplate: 'Please send documents{{organizationName}} {{meet_link}}' }));
+    expect(api.getApi.mock.calls.some((call) => String(call[0]).includes('/email-templates'))).toBe(false);
     expect(screen.queryByRole('button', { name: /delete/i })).toBeNull();
     expect(await axeViolations(container)).toEqual([]);
   });
@@ -120,21 +128,21 @@ describe('A07 Templates (admin-only)', () => {
   });
   it('B2F-8: Archive (two-step) DELETEs = soft-archive; the template leaves the list; New drafts have no Archive', async () => {
     const u = userEvent.setup();
-    api.deleteApi.mockResolvedValue({ id: 'e2', status: 'Archived' });
-    renderAt('/email-templates');
-    const nav = await screen.findByRole('navigation', { name: 'Email templates' });
-    // PR33-4: the default template (opened first) offers no Archive and says why.
+    api.deleteApi.mockResolvedValue({ id: 'w2', status: 'Archived' });
+    renderAt('/whatsapp-templates');
+    const nav = await screen.findByRole('navigation', { name: 'WhatsApp templates' });
+    await u.click(within(nav).getByRole('button', { name: /Interview reminder/ }));
     expect(screen.queryByRole('button', { name: 'Archive' })).toBeNull();
     expect(screen.getByTestId('default-no-archive')).toHaveTextContent('Default templates can’t be archived.');
-    await u.click(within(nav).getByRole('button', { name: /Rejection — polite/ }));
+    await u.click(within(nav).getByRole('button', { name: /Document chase/ }));
     await u.click(await screen.findByRole('button', { name: 'Archive' }));
     expect(api.deleteApi).not.toHaveBeenCalled();
     const before = api.getApi.mock.calls.length;
     await u.click(screen.getByRole('button', { name: 'Confirm archive' }));
-    await waitFor(() => expect(api.deleteApi).toHaveBeenCalledWith('/email-templates/e2'));
-    expect(await screen.findByRole('status')).toHaveTextContent('“Rejection — polite” archived.');
+    await waitFor(() => expect(api.deleteApi).toHaveBeenCalledWith('/whatsapp-templates/w2'));
+    expect(await screen.findByRole('status')).toHaveTextContent('“Document chase” archived.');
     await waitFor(() => expect(api.getApi.mock.calls.length).toBeGreaterThan(before));
-    await u.click(within(screen.getByRole('navigation', { name: 'Email templates' })).getByRole('button', { name: 'New' }));
+    await u.click(within(screen.getByRole('navigation', { name: 'WhatsApp templates' })).getByRole('button', { name: 'New' }));
     expect(screen.queryByRole('button', { name: 'Archive' })).toBeNull();
   });
 });

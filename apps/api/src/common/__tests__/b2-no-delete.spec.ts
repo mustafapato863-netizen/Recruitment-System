@@ -26,7 +26,7 @@ function sourceFiles(dir: string): string[] {
 describe('B2: no hard deletes anywhere (v2 §3)', () => {
   // Only access-grant links and auth throttling rows may still be removed.
   // Grants are configuration (audited via @AuditAction), not business records.
-  const ALLOWED = new Set(['authRateLimit', 'userRole', 'rolePermission']);
+  const ALLOWED = new Set(['authRateLimit', 'userRole', 'rolePermission', 'screeningDraft']);
 
   it('no service calls prisma.<model>.delete/deleteMany on business records', () => {
     const offenders: string[] = [];

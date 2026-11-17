@@ -26,6 +26,9 @@ export class SendMessageDto {
 export class RequestDocumentDto {
   @IsString() @MinLength(2) @MaxLength(60) documentType!: string;
 }
+export class DocumentPortalLinkDto {
+  @IsOptional() @IsString() action?: 'issue' | 'revoke';
+}
 
 @UseGuards(JwtAuthGuard)
 @Controller('applications')
@@ -72,6 +75,13 @@ export class ApplicationFileController {
   @AuditAction('DOCUMENT_REQUEST')
   requestDocument(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto: RequestDocumentDto) {
     return this.file.requestDocument(user, id, dto.documentType);
+  }
+
+  @Post(':id/document-portal-link')
+  @RequirePermissions('APPLICATION_VIEW')
+  @AuditAction('PORTAL_LINK_ISSUE')
+  issuePortalLink(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string, @Body() dto?: DocumentPortalLinkDto) {
+    return this.file.issueDocumentPortalLink(user, id, dto?.action === 'revoke' ? 'revoke' : 'issue');
   }
 
   @Get(':id/messages')

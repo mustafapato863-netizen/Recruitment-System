@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { GlobalSelectEnhancer } from '../components/ui/GlobalSelectEnhancer';
 
 export type Theme = 'light' | 'dark';
 
@@ -197,7 +198,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     hasPersistedMotionPreference: hasStoredMotion,
   }), [hasStoredMotion, hasStoredTheme, reducedMotion, setReducedMotion, setTheme, theme, toggleTheme]);
 
-  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
+  return (
+    <ThemeContext.Provider value={value}>
+      {children}
+      <GlobalSelectEnhancer />
+    </ThemeContext.Provider>
+  );
 }
 
 export function useTheme() {

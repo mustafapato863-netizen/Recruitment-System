@@ -160,8 +160,12 @@ export class CandidatesController {
   @AuditAction('CANDIDATE_FILL_FROM_CV')
   @UseGuards(TenantScopedGuard)
   @TenantResource({ resource: 'candidate', param: 'id' })
-  fillFromCv(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
-    return this.candidateFill.fillFromCv(user, id);
+  fillFromCv(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body?: { documentId?: string; parsed?: Record<string, unknown> },
+  ) {
+    return this.candidateFill.fillFromCv(user, id, body);
   }
 
   @Patch(':id')
