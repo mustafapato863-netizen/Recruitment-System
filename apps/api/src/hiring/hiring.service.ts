@@ -9,6 +9,7 @@ import {
   isResponsibleRecruiter,
   joiningTypeForRequirement,
   parseSnapshot,
+  resolveSnapshot,
   snapshotForNewCase,
 } from './joining-policy';
 import {
@@ -33,7 +34,13 @@ import type {
   UpdateComplianceDto,
 } from './hiring.dto';
 import { AccessControlService } from '../access-control/access-control.service';
-import { loadAccessProfile } from '../common/access/file-access';
+import { loadAccessProfile, reportingLineUserIds } from '../common/access/file-access';
+import { UserPermissionsService, userHoldsAnyPermission } from '../common/user-permissions.service';
+
+/** Canonical final-hiring permission plus the legacy aliases that already decide this gate. */
+export const FINAL_APPROVAL_PERM_CODES = ['FINAL_HIRING_APPROVAL', 'VACANCY_APPROVE', 'OFFER_APPROVE'] as const;
+/** Roles that may act on a pending FINAL_HIRING_APPROVER step. Administrator is checked separately. */
+export const FINAL_APPROVER_ROLES = ['FINAL_HIRING_APPROVER', 'HIRING_MANAGER', 'HR_MANAGER', 'TALENT_MANAGER'] as const;
 
 @Injectable()
 export class HiringService {
@@ -41,6 +48,7 @@ export class HiringService {
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
     @Optional() @Inject(AccessControlService) private readonly accessControl?: AccessControlService,
+    @Optional() @Inject(UserPermissionsService) private readonly userPermissions?: UserPermissionsService,
   ) {}
 
   private async applicationVisibility(user?: AuthUser) {
@@ -72,6 +80,64 @@ export class HiringService {
 
   private async userHas(user: AuthUser, code: string): Promise<boolean> {
     return (await loadAccessProfile(this.prisma, user)).permissions.includes(code);
+  }
+
+  /** Capability check. Uses the permissions service when it is injected, otherwise the access profile. */
+  private async hasCapability(user: AuthUser, organizationId: string, code: string): Promise<boolean> {
+    if (this.userPermissions) return this.userPermissions.hasPermission(user.userId, organizationId, code);
+    if (typeof this.prisma.user?.findFirst !== 'function') return false;
+    return this.userHas({ ...user, organizationId }, code);
+  }
+
+  private async canActAsFinalApprover(orgId: string, user: AuthUser): Promise<boolean> {
+    const roles = user.roleCodes ?? [];
+    if (roles.includes('ADMINISTRATOR')) return true;
+    if (roles.some((role) => (FINAL_APPROVER_ROLES as readonly string[]).includes(role))) return true;
+    if (this.userPermissions) {
+      return userHoldsAnyPermission(this.userPermissions, user.userId, orgId, FINAL_APPROVAL_PERM_CODES);
+    }
+    for (const code of FINAL_APPROVAL_PERM_CODES) {
+      if (await this.hasCapability(user, orgId, code)) return true;
+    }
+    return false;
+  }
+
+  private async primaryRecruiterId(hiringCase: {
+    applicationId: string;
+    application?: { primaryRecruiterId?: string | null } | null;
+  }): Promise<string | null> {
+    if (hiringCase.application && Object.prototype.hasOwnProperty.call(hiringCase.application, 'primaryRecruiterId')) {
+      return hiringCase.application.primaryRecruiterId ?? null;
+    }
+    if (typeof this.prisma.application?.findUnique !== 'function') return null;
+    const application = await this.prisma.application.findUnique({
+      where: { id: hiringCase.applicationId },
+      select: { primaryRecruiterId: true },
+    });
+    return application?.primaryRecruiterId ?? null;
+  }
+
+  /** Active users who hold a final-approver role or one of the final-approval permissions. */
+  private async findFinalApprovers(orgId: string): Promise<Array<{ id: string }>> {
+    if (typeof this.prisma.user?.findMany !== 'function') return [];
+    return this.prisma.user.findMany({
+      where: {
+        organizationId: orgId,
+        status: 'Active',
+        userRoles: {
+          some: {
+            role: {
+              status: 'Active',
+              OR: [
+                { code: { in: [...FINAL_APPROVER_ROLES] } },
+                { permissions: { some: { permission: { code: { in: [...FINAL_APPROVAL_PERM_CODES] }, status: 'Active' } } } },
+              ],
+            },
+          },
+        },
+      },
+      select: { id: true },
+    });
   }
 
   /** Normal visibility OR, for LICENSE_CHECK holders, their data scope. */
@@ -355,27 +421,67 @@ export class HiringService {
     const visibility = await this.applicationVisibility(user);
     const hiringCase = await this.prisma.hiringCase.findFirst({
       where: { id: caseId, organizationId, ...(visibility ? { application: visibility } : {}) },
-      include: { complianceRequirements: true }
+      include: {
+        complianceRequirements: true,
+        application: { include: { joiningChecks: true, vacancy: { include: { position: { select: { metadata: true } } } } } },
+      },
     });
 
     if (!hiringCase) throw new NotFoundException('Hiring case not found');
 
-    if (hiringCase.status !== 'Pending Compliance') {
+    if (hiringCase.status !== 'Pending Compliance' && hiringCase.status !== 'In Progress') {
       throw new BadRequestException('Hiring case is not pending compliance');
     }
 
-    const allVerified = hiringCase.complianceRequirements
-      .filter(req => req.isRequired)
-      .every(req => req.status === 'Verified' || req.status === 'Not Required');
+    // Unit mocks omit the application. A loaded file uses the job snapshot instead of the legacy checklist.
+    const application = hiringCase.application as typeof hiringCase.application | undefined;
+    const joiningChecks = application?.joiningChecks;
+    if (joiningChecks) {
+      const snapshot = resolveSnapshot(hiringCase.requirementSnapshot, application?.vacancy?.position?.metadata);
+      const absent = snapshot.checks.filter((type) => !joiningChecks.some((check) => check.type === type && check.verified === true));
+      if (absent.length) {
+        throw new ConflictException({
+          code: 'GATE_JOINING_CHECKS_INCOMPLETE',
+          message: `Joined needs the job's required checks verified. Missing: ${absent.map((type) => JOINING_CHECK_LABELS[type]).join(', ')}.`,
+          missing: absent,
+          gate: 'joining-checks',
+        });
+      }
+      if (snapshot.profile === 'clinical') {
+        const licence = joiningChecks.find((check) => check.type === 'SCFHS_LICENCE');
+        if (!licence?.expiryDate) {
+          throw new ConflictException({
+            code: 'LICENCE_EXPIRY_REQUIRED',
+            message: 'A clinical hire needs a valid SCFHS licence expiry before joining.',
+            missing: ['SCFHS licence expiry'],
+            gate: 'licence-expiry',
+          });
+        }
+      }
+    } else {
+      const allVerified = hiringCase.complianceRequirements
+        .filter(req => req.isRequired)
+        .every(req => req.status === 'Verified' || req.status === 'Not Required');
 
-    if (!allVerified) {
-      throw new BadRequestException('Not all required compliance checks are verified');
+      if (!allVerified) {
+        throw new BadRequestException('Not all required compliance checks are verified');
+      }
     }
 
     const updated = await this.prisma.hiringCase.update({
       where: { id: caseId },
       data: { status: 'Pending Final Approval' }
     });
+
+    const approvalStore = this.prisma.hiringCaseApproval;
+    if (approvalStore) {
+      const pending = await approvalStore.findFirst({ where: { hiringCaseId: caseId, status: 'Pending' } });
+      if (!pending) {
+        await approvalStore.create({ data: { hiringCaseId: caseId, roleCode: 'FINAL_HIRING_APPROVER', status: 'Pending' } });
+      }
+    }
+
+    await this.findFinalApprovers(organizationId);
 
     await this.auditService.log({
       organizationId,
@@ -394,11 +500,22 @@ export class HiringService {
     const cases = await this.prisma.hiringCase.findMany({
       where: { organizationId, status: 'Pending Final Approval', ...(visibility ? { application: visibility } : {}) },
       include: {
-        application: { include: { candidate: true, vacancy: { include: { position: true, branch: true } } } }
+        application: { include: { candidate: true, vacancy: { include: { position: true, branch: true } } } },
+        approvals: { where: { status: 'Pending' }, select: { approverUserId: true } },
       }
     });
 
-    return cases.map(c => ({
+    const roles = user?.roleCodes ?? [];
+    const teamScoped = Boolean(user) && !roles.includes('ADMINISTRATOR') && !roles.includes('FINAL_HIRING_APPROVER');
+    const teamIds = teamScoped && user
+      ? await reportingLineUserIds(this.prisma, organizationId, user.userId)
+      : null;
+    const visible = teamIds === null ? cases : cases.filter((hiringCase) => {
+      const named = hiringCase.approvals.some((approval) => approval.approverUserId === user?.userId);
+      return named || (hiringCase.application.primaryRecruiterId !== null && teamIds.includes(hiringCase.application.primaryRecruiterId));
+    });
+
+    return visible.map(c => ({
       id: c.id,
       applicationId: c.applicationId,
       candidateName: `${c.application.candidate.firstName} ${c.application.candidate.lastName}`,
@@ -425,12 +542,29 @@ export class HiringService {
     );
     if (!approval) throw new BadRequestException('No pending final approval found');
 
-    const isAuthorized =
+    let isAuthorized =
       approval.approverUserId === user.userId ||
       user.roleCodes.includes(approval.roleCode) ||
       user.roleCodes.includes('ADMINISTRATOR');
+    if (!isAuthorized && approval.roleCode === 'FINAL_HIRING_APPROVER') {
+      isAuthorized = await this.canActAsFinalApprover(organizationId, user);
+    }
     if (!isAuthorized) {
       throw new ForbiddenException('Not authorized to decide this approval');
+    }
+
+    const holdsStepRole = user.roleCodes.includes(approval.roleCode);
+    if (approval.approverUserId !== user.userId && !user.roleCodes.includes('ADMINISTRATOR') && !holdsStepRole) {
+      const teamIds = await reportingLineUserIds(this.prisma, organizationId, user.userId);
+      if (teamIds !== null) {
+        const recruiterId = await this.primaryRecruiterId(hiringCase as {
+          applicationId: string;
+          application?: { primaryRecruiterId?: string | null } | null;
+        });
+        if (!recruiterId || !teamIds.includes(recruiterId)) {
+          throw new ForbiddenException('This approval is outside your reporting line');
+        }
+      }
     }
 
     const status = dto.decision === 'Approve' ? 'Approved' : 'Rejected';
@@ -565,7 +699,6 @@ export function licenseView(c: CaseForLicense) {
   const iso = (d: Date | string | null) => (d instanceof Date ? d.toISOString() : d);
   return {
     id: c.id,
-    applicationId: c.applicationId,
     status: c.status,
     candidateName: `${c.application.candidate.firstName} ${c.application.candidate.lastName}`,
     positionTitle: c.application.vacancy.position.title,

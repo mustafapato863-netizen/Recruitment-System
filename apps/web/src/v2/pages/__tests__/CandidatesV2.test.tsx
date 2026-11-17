@@ -202,33 +202,12 @@ describe('Candidates page', () => {
     expect(screen.getByRole('tab', { name: 'Bank' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByLabelText('Search people')).toHaveValue('heba');
     await waitFor(() => expect(api.getApi).toHaveBeenCalledWith('/candidates?pageSize=100&page=1&status=Active&search=heba'));
+    expect(screen.getByRole('link', { name: 'CV bank' })).toHaveAttribute('href', '/cv-bank');
     expect(screen.getByRole('link', { name: 'Match Skills' })).toHaveAttribute('href', '/sourcing-match');
+    expect(screen.queryByRole('link', { name: 'Review a workbook' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Talent pools' })).not.toBeInTheDocument();
-  });
-
-  it('puts the current candidates query on a new file and on the existing file', async () => {
-    const u = userEvent.setup();
-    const here = '/candidates?tab=bank&search=Heba';
-    api.postApi.mockResolvedValueOnce({ id: 'made-1' });
-    const view = renderAt(here);
-    await screen.findByRole('option', { name: 'VAC-1 · HRIS Developer' });
-    await u.click(screen.getByRole('radio', { name: 'Choose Heba Mansour for a job' }));
-    await u.selectOptions(screen.getByLabelText('Open job'), 'v1');
-    await u.click(screen.getByRole('button', { name: 'Add the chosen person to this job' }));
-    const created = await screen.findByRole('link', { name: 'Open the application' });
-    expect(created.getAttribute('href')).toContain('/applications/made-1');
-    expect(returnToOf(created.getAttribute('href'))).toBe('/candidates?tab=bank&search=Heba&job=v1');
-    view.unmount();
-
-    api.postApi.mockRejectedValueOnce(new ApiError(409, 'exists', { code: 'APPLICATION_EXISTS', message: 'exists' }, { code: 'APPLICATION_EXISTS' }));
-    renderAt(here);
-    await screen.findByRole('option', { name: 'VAC-1 · HRIS Developer' });
-    await u.click(screen.getByRole('radio', { name: 'Choose Heba Mansour for a job' }));
-    await u.selectOptions(screen.getByLabelText('Open job'), 'v1');
-    await u.click(screen.getByRole('button', { name: 'Add the chosen person to this job' }));
-    const existing = await screen.findByRole('link', { name: 'Open the application' });
-    expect(existing.getAttribute('href')).toContain('/applications/app-heba');
-    expect(returnToOf(existing.getAttribute('href'))).toBe('/candidates?tab=bank&search=Heba&job=v1');
+    expect(screen.queryByRole('button', { name: 'Add to the bank' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add the chosen person to this job' })).not.toBeInTheDocument();
   });
 
   it('says the list is incomplete when the page bound is reached', async () => {
@@ -243,6 +222,46 @@ describe('Candidates page', () => {
     expect(screen.queryByText('1000 people')).not.toBeInTheDocument();
     expect(api.getApi).toHaveBeenCalledTimes(10);
   }, 20000);
+
+  it('reaches record 1001 on a truncated active list when narrowed by search and exposes bank truncation metadata', async () => {
+    const u = userEvent.setup();
+    api.getApi.mockImplementation(async (path: string) => {
+      const [p, qs = ''] = String(path).split('?');
+      const query = new URLSearchParams(qs);
+      if (p === '/applications') {
+        if (query.get('search')) {
+          expect(query.get('includeEmail')).toBe('false');
+          return query.get('search') === 'Record1001'
+            ? { data: [{ ...rawApp(1001), candidate: { firstName: 'Record1001', lastName: 'Person', currentTitle: 'Specialist', experienceYears: 8 } }], total: 1 }
+            : { data: [], total: 0 };
+        }
+        const page = Number(query.get('page'));
+        return pageOf(100, (page - 1) * 100, 1234);
+      }
+      if (p === '/candidates') {
+        const page = Number(query.get('page'));
+        return {
+          data: Array.from({ length: 100 }, (_, i) => ({
+            id: `b-${(page - 1) * 100 + i}`,
+            candidateCode: `CND-${(page - 1) * 100 + i}`,
+            firstName: 'Bank',
+            lastName: `Person ${(page - 1) * 100 + i}`,
+            currentTitle: 'Nurse',
+            location: 'Cairo',
+            experienceYears: 4,
+            status: 'Active',
+          })),
+          total: 1200,
+        };
+      }
+      return defaultGet(path);
+    });
+    renderAt('/candidates');
+    expect(await screen.findByText(/Loaded 1000 of 1234 applications/)).toBeInTheDocument();
+    await u.type(screen.getByLabelText('Search people'), 'Record1001');
+    expect(await screen.findByText('Record1001 Person')).toBeInTheDocument();
+    expect(screen.getByText('1 people')).toBeInTheDocument();
+  }, 45000);
 
   it('shows the next workflow step and never a past event in Next action', async () => {
     api.getApi.mockImplementation(async (path: string) => {
@@ -357,7 +376,7 @@ describe('Ticket 09 person identity', () => {
     expect(await screen.findByText('heba-cv.pdf')).toBeInTheDocument();
     expect(screen.queryByRole('region', { name: 'Pipeline progress' })).not.toBeInTheDocument();
     expect(screen.queryByText('50000')).not.toBeInTheDocument();
-    const manage = screen.getByRole('link', { name: 'Manage documents' });
+    const manage = screen.getByRole('link', { name: 'Documents' });
     expect(manage.getAttribute('href')).toContain('/candidates/c-heba/documents');
     expect(returnToOf(manage.getAttribute('href'))).toBe(bankReturn);
     expect(screen.getByRole('link', { name: 'Back' })).toHaveAttribute('href', bankReturn);
@@ -433,47 +452,20 @@ describe('Ticket 09 person identity', () => {
 });
 
 describe('Ticket 10 intake', () => {
-  it('preselects the authorized job, keeps the existing person, and carries that bank into import', async () => {
-    const u = userEvent.setup();
-    const here = '/candidates?tab=bank&job=v1';
-    api.postApi.mockImplementation(async (path: string) => {
-      if (path === '/candidates') {
-        throw new ApiError(409, 'Candidate already exists.', {
-          code: 'CANDIDATE_EXISTS',
-          message: 'Candidate already exists.',
-          details: { candidateId: 'c-heba', candidateCode: 'CAN-2026-0031' },
-        }, { code: 'CANDIDATE_EXISTS' });
-      }
-      if (path === '/applications') return { id: 'app-heba' };
-      throw new ApiError(404, 'not found');
-    });
+  it('forwards job, candidateId, and returnTo on Upload CVs and omits manual bank forms and retired links', async () => {
+    const here = '/candidates?tab=bank&job=v1&candidateId=c-heba';
     renderAt(here);
-    await screen.findByRole('option', { name: 'VAC-1 · HRIS Developer' });
-    expect(screen.getByLabelText('Open job')).toHaveValue('v1');
-    expect(screen.queryByRole('link', { name: /Import history/ })).not.toBeInTheDocument();
+    expect(await screen.findByText('Heba Mansour')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Upload CVs/i })).toHaveAttribute(
+      'href',
+      `/cv-bank?job=v1&candidateId=c-heba&returnTo=${encodeURIComponent('/candidates?tab=bank&job=v1')}`,
+    );
     expect(screen.queryByRole('link', { name: 'Review a workbook' })).not.toBeInTheDocument();
-
-    await u.type(screen.getByLabelText('First name'), 'Heba');
-    await u.type(screen.getByLabelText('Last name'), 'Mansour');
-    await u.type(screen.getByLabelText('Email'), 'heba@x.test');
-    await u.type(screen.getByLabelText('Phone'), '+20 100');
-    await u.click(screen.getByRole('button', { name: 'Add to the bank' }));
-
-    const notice = await screen.findByRole('status');
-    expect(notice).toHaveTextContent('Already one person in the bank (CAN-2026-0031). No second person was created.');
-    const person = screen.getByRole('link', { name: 'Open person' });
-    expect(person.getAttribute('href')).toContain('/candidates/c-heba');
-    expect(returnToOf(person.getAttribute('href'))).toBe(here);
-    expect(screen.getByRole('radio', { name: 'Choose Heba Mansour for a job' })).toBeChecked();
-    expect(screen.getByRole('button', { name: 'Add the chosen person to this job' })).toBeEnabled();
-    expect(api.postApi).toHaveBeenCalledWith('/candidates', {
-      firstName: 'Heba', lastName: 'Mansour', email: 'heba@x.test', phone: '+20 100', source: 'Bank',
-    });
-    expect(api.postApi.mock.calls.filter((call) => call[0] === '/candidates')).toHaveLength(1);
-
-    await u.click(screen.getByRole('button', { name: 'Add the chosen person to this job' }));
-    expect(await screen.findByRole('link', { name: 'Open the application' })).toBeInTheDocument();
-    expect(api.postApi).toHaveBeenCalledWith('/applications', { vacancyId: 'v1', candidateId: 'c-heba', source: 'Suggested from bank' });
-    expect(api.postApi.mock.calls.filter((call) => call[0] === '/candidates')).toHaveLength(1);
+    expect(screen.queryByRole('link', { name: 'Talent pools' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Import history' })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('First name')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Open job')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add to the bank' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add the chosen person to this job' })).not.toBeInTheDocument();
   });
 });

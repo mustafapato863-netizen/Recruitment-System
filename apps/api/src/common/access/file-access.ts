@@ -34,6 +34,24 @@ export function inReportingTreeOf(managerId: string): Prisma.UserWhereInput {
   return { OR: levels };
 }
 
+/**
+ * Active users in `managerId`'s reporting tree (the manager is not included).
+ * Returns null when the caller has no user directory, so partial test doubles
+ * keep the previous visibility-only scope.
+ */
+export async function reportingLineUserIds(
+  prisma: Pick<PrismaService, 'user'>,
+  organizationId: string,
+  managerId: string,
+): Promise<string[] | null> {
+  if (typeof prisma.user?.findMany !== 'function') return null;
+  const reports = await prisma.user.findMany({
+    where: { organizationId, status: 'Active', ...inReportingTreeOf(managerId) },
+    select: { id: true },
+  });
+  return reports.map((row) => row.id);
+}
+
 export interface AccessProfile {
   userId: string;
   organizationId: string;

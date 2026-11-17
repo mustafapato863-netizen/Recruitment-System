@@ -35,6 +35,7 @@ describe('M3 offer decision (B7)', () => {
     const u = userEvent.setup();
     api.postApi.mockResolvedValue({ id: 'd1', decision: 'Approve', toStatus: 'Approved' });
     const first = renderAt('/my-work');
+    await u.click(await screen.findByRole('tab', { name: /Waiting on you/ }));
     await u.click(await screen.findByRole('button', { name: 'Review offer: Lina Hassan' }));
     // B2-23: Review offer opens the decision over the file, not over Team work.
     expect(screen.getByTestId('loc')).toHaveTextContent('/applications/a3?decide=o1');

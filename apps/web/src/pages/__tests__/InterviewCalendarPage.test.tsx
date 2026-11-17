@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { InterviewCalendarPage } from '../InterviewCalendarPage';
+import { InterviewsPage } from '../InterviewsPage';
 import * as client from '../../api/client';
 import * as authContext from '../../auth/AuthContext';
 
@@ -164,6 +165,47 @@ describe('InterviewCalendarPage', () => {
     await waitFor(() => {
       expect(screen.getByText(/Submit Scorecard: Clinical Peer Review/i)).toBeInTheDocument();
       expect(screen.getByText(/Immutable Record:/i)).toBeInTheDocument();
+    });
+  });
+
+  it('exercises recruiter interview management, Week Calendar toggle, and navigation to /interviews/calendar', async () => {
+    vi.spyOn(client, 'getApi').mockImplementation(async (url: string) => {
+      if (url.startsWith('/interviews')) return mockInterviews;
+      return { items: [], total: 0 };
+    });
+
+    render(
+      <MemoryRouter initialEntries={['/interviews']}>
+        <Routes>
+          <Route path="/interviews" element={<InterviewsPage />} />
+          <Route path="/interviews/calendar" element={<InterviewCalendarPage />} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Interviews' })).toBeInTheDocument();
+    });
+
+    // Switch to Week Calendar view
+    await userEvent.click(screen.getByRole('button', { name: /Week Calendar/i }));
+    await waitFor(() => {
+      expect(screen.getByRole('region', { name: /Weekly interview calendar grid/i })).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: /Open full month\/day calendar/i })).toBeInTheDocument();
+    });
+
+    // Exercise recruiter management drawer (Add slot / Schedule interview)
+    await userEvent.click(screen.getByRole('button', { name: /^Schedule interview$/i }));
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+    await userEvent.click(screen.getByRole('button', { name: /Cancel/i }));
+
+    // Navigate to full calendar route (/interviews/calendar)
+    await userEvent.click(screen.getByRole('link', { name: /Open full month\/day calendar/i }));
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /Interview Calendar/i })).toBeInTheDocument();
+      expect(screen.getByText('Dr. Tariq Al-Amri')).toBeInTheDocument();
     });
   });
 });

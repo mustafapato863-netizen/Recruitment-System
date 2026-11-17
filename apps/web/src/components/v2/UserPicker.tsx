@@ -17,10 +17,11 @@ export interface UserPickerAdapter {
   search: (query: string, signal: AbortSignal) => Promise<UserOption[]>;
 }
 
+/** First letter of the first two words, after every non-letter is stripped. "Zenah (Recruiter)" → ZR. */
 export function initials(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return '?';
-  return ((parts[0][0] ?? '') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
+  const words = name.trim().split(/\s+/).map((word) => word.replace(/[^\p{L}]/gu, '')).filter(Boolean);
+  if (words.length === 0) return '?';
+  return words.slice(0, 2).map((word) => word[0]!.toUpperCase()).join('');
 }
 
 /** Maps the API UserRecord to a picker option. Only id, name, role/job title. */

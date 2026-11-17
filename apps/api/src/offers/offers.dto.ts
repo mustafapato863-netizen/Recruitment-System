@@ -117,6 +117,7 @@ export class OfferDecisionDto {
 export class UpdateOfferStatusDto {
   @IsEnum(['Sent', 'Accepted', 'Declined', 'Withdrawn', 'Expired'])
   status!: 'Sent' | 'Accepted' | 'Declined' | 'Withdrawn' | 'Expired';
+  @IsOptional() @IsString() reason?: string;
 }
 
 export class SendOfferDto {
@@ -125,4 +126,8 @@ export class SendOfferDto {
 
   @IsString()
   templateId!: string;
+
+  @IsOptional()
+  @IsBoolean()
+  prepareOnly?: boolean;
 }

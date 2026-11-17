@@ -3,6 +3,7 @@
 
 import * as React from 'react';
 import { cn } from '@/lib/utils';
+import { useMediaQuery } from './useMediaQuery';
 import {
   defaultDropAnimation,
   defaultDropAnimationSideEffects,
@@ -478,6 +479,19 @@ export interface KanbanOverlayProps {
 function KanbanOverlay({ children, className }: KanbanOverlayProps) {
   const { activeId, isColumn } = React.useContext(KanbanContext);
   const [dimensions, setDimensions] = React.useState<{ width: number; height: number } | null>(null);
+  const systemReducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
+  const [userReducedMotion, setUserReducedMotion] = React.useState(
+    () => typeof document !== 'undefined' && document.documentElement.dataset.reducedMotion === 'true',
+  );
+
+  React.useEffect(() => {
+    const root = document.documentElement;
+    const update = () => setUserReducedMotion(root.dataset.reducedMotion === 'true');
+    const observer = new MutationObserver(update);
+    observer.observe(root, { attributes: true, attributeFilter: ['data-reduced-motion'] });
+    update();
+    return () => observer.disconnect();
+  }, []);
 
   React.useEffect(() => {
     if (activeId) {
@@ -511,7 +525,7 @@ function KanbanOverlay({ children, className }: KanbanOverlayProps) {
   }, [activeId, children, isColumn]);
 
   return (
-    <DragOverlay dropAnimation={dropAnimationConfig}>
+    <DragOverlay dropAnimation={systemReducedMotion || userReducedMotion ? null : dropAnimationConfig}>
       <div
         data-slot="kanban-overlay"
         data-dragging={true}

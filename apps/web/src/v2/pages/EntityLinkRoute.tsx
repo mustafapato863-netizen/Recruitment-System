@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Navigate, useParams } from 'react-router-dom';
+import { Navigate, useParams, useSearchParams } from 'react-router-dom';
 import { getApi } from '../../api/client';
+import { useAuth } from '../../auth/AuthContext';
 import { useV2Shell } from '../../components/v2/shell/AppShellV2';
+import { authorizedLanding, routeActor } from '../destinations';
+import { allowedReturn, withReturnTo } from '../returnTarget';
 
 type Kind = 'offer' | 'hire';
 const PATH: Record<Kind, string> = { offer: '/offers', hire: '/hiring' };
@@ -13,19 +16,34 @@ export function entityTarget(kind: Kind, id: string, appId: string, seat: string
 }
 
 /**
- * PR33-1: /offers/:id and /hires/:id (notifications, My Work) resolve to the file instead of a generic My Work.
- * Unknown/forbidden ids fall back to My Work.
+ * /offers/:id resolves to the file. /hires/:id in the live router stays on the hiring case.
+ * Unknown or forbidden ids fall back to the actor's authorized home.
+ * A returnTo query is kept only when the file contract and the route policy both accept it.
  */
 export function EntityLinkRoute({ kind }: { kind: Kind }) {
   const { id = '' } = useParams();
-  const seat = useV2Shell()?.seat;
+  const seat = useV2Shell()?.seat ?? 'employee';
+  const { user } = useAuth();
+  const returnTo = useSearchParams()[0].get('returnTo');
+  const permKey = (user?.permissions ?? []).join('\u0000');
+  const roleKey = (user?.roles ?? []).map((role) => role.code).join('\u0000');
   const [to, setTo] = useState<string | null>(null);
   useEffect(() => {
+    const actor = routeActor(seat, user);
+    const fallback = authorizedLanding(actor);
+    const back = allowedReturn(returnTo, actor);
+    if (actor.interviewerOnly) {
+      setTo(fallback);
+      return undefined;
+    }
     let live = true;
     getApi<{ applicationId?: string; application?: { id?: string } }>(`${PATH[kind]}/${encodeURIComponent(id)}`)
-      .then((r) => { const app = r?.applicationId ?? r?.application?.id; if (live) setTo(app ? entityTarget(kind, id, app, seat) : '/my-work'); })
-      .catch(() => live && setTo('/my-work'));
+      .then((r) => {
+        const app = r?.applicationId ?? r?.application?.id;
+        if (live) setTo(app ? withReturnTo(entityTarget(kind, id, app, seat), back) : fallback);
+      })
+      .catch(() => { if (live) setTo(fallback); });
     return () => { live = false; };
-  }, [kind, id, seat]);
+  }, [kind, id, seat, user, returnTo, permKey, roleKey]);
   return to ? <Navigate to={to} replace /> : <p className="rf2-file__muted" role="status">Opening…</p>;
 }

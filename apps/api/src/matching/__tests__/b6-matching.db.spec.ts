@@ -73,8 +73,15 @@ describe.skipIf(!url)('B6 suggest, compare, evidence, duplicates (scratch Postgr
     await prisma.vacancyAssignment.create({ data: { vacancyId: vac.id, userId: ids.owner!, roleCode: 'RECRUITER', assignmentKind: 'PRIMARY', isActive: true } });
 
     // A: 2 skills with evidence; B: 3 skills, 1 evidenced; C: 2 skills no evidence; D: 1 evidenced (older)
-    ids.A = await cand('A'); ids.B = await cand('B'); ids.C = await cand('C'); ids.D = await cand('D');
-    ids.onJob = await cand('ONJOB'); ids.archived = await cand('ARCH', { status: 'Archived' }); ids.nomatch = await cand('NONE');
+    // Profile text has to name the skill. A bare link, or manual evidence alone, no longer counts as held.
+    const held = (...names: string[]) => names.map((name) => `${name} ${tag}`);
+    ids.A = await cand('A', { skills: held('ICU', 'BLS') });
+    ids.B = await cand('B', { skills: held('ICU', 'BLS', 'Triage') });
+    ids.C = await cand('C', { skills: held('ICU', 'BLS') });
+    ids.D = await cand('D', { skills: held('ICU') });
+    ids.onJob = await cand('ONJOB', { skills: held('ICU', 'BLS', 'Triage') });
+    ids.archived = await cand('ARCH', { status: 'Archived', skills: held('ICU', 'BLS', 'Triage') });
+    ids.nomatch = await cand('NONE');
     const ev = (c: string, s: string, snippet = 'quote') => matching.addEvidence(ORG, c, { skillId: skill[s]!, snippet }, ids.owner!);
     const link = (c: string, s: string) => prisma.candidateSkill.create({ data: { organizationId: ORG, candidateId: c, skillId: skill[s]! } });
     await ev(ids.D, 'ICU', 'D old');

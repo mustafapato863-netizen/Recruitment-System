@@ -7,6 +7,7 @@ import { UserPermissionsService } from '../common/user-permissions.service';
 import { catalogKey } from '../master-data/catalog-normalization';
 import { normalizeEmailKey, normalizePhoneKey } from '../candidates/contact-keys';
 import { EVIDENCE_SOURCE_TYPES, findSkillSnippet, type EvidenceSourceType } from './skill-evidence';
+import { isSkillLinkActive } from './skill-links';
 
 export interface EvidenceItem {
   id: string;
@@ -22,9 +23,12 @@ export interface Suggestion {
   candidate: { id: string; code: string; name: string; currentTitle: string | null; location: string | null };
   matchedSkills: MatchedSkill[];
   missingSkills: SkillRef[];
+  /** File already open on this job, when one exists. */
+  applicationId?: string | null;
   /** Already has a file on this job (any stage): shown with its stage, cannot be added again. */
   alreadyOnJob?: boolean;
   stage?: string | null;
+  /** False when the person is already on the job, or the job is not Open / Partially Filled. */
   addable?: boolean;
 }
 export interface SuggestionsResponse {
@@ -52,6 +56,35 @@ export interface CompareInfoCell {
   at?: string | null;
 }
 
+type SubmittedScorecard = {
+  id: string;
+  notes: string | null;
+  strengths: string | null;
+  interviewId: string;
+  interviewerId: string;
+  revision: number;
+  submittedAt: Date | null;
+};
+
+/** Latest Submitted revision per interviewer on each interview. Higher revision wins; submittedAt breaks ties. */
+function latestSubmittedScorecards<T extends SubmittedScorecard>(cards: readonly T[]): T[] {
+  const sorted = [...cards].sort((a, b) => {
+    if (a.revision !== b.revision) return b.revision - a.revision;
+    const aTime = a.submittedAt ? new Date(a.submittedAt).getTime() : 0;
+    const bTime = b.submittedAt ? new Date(b.submittedAt).getTime() : 0;
+    return bTime - aTime;
+  });
+  const seen = new Set<string>();
+  const latest: T[] = [];
+  for (const card of sorted) {
+    const key = `${card.interviewId}\0${card.interviewerId}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    latest.push(card);
+  }
+  return latest;
+}
+
 /** Documented ordering (no score is computed or returned). */
 export const SUGGESTION_ORDER = [
   'required skills with at least one piece of evidence (more first)',
@@ -66,6 +99,7 @@ const SUGGESTION_LIMIT = 50;
 
 type CandidateWithSkills = {
   id: string; candidateCode: string; firstName: string; lastName: string; currentTitle: string | null; location: string | null; updatedAt: Date;
+  skills?: string[] | null;
   skillLinks: Array<{ skillId: string; evidence: Array<{ id: string; sourceType: string; sourceRef: string | null; snippet: string | null; createdAt: Date; addedBy: { id: string; displayName: string } | null }> }>;
 };
 
@@ -78,18 +112,23 @@ export class MatchingService {
   ) {}
 
   /**
-   * Interim access rule (B1 not on this base): the job's owner (active PRIMARY
-   * assignment), that owner's manager, ADMINISTRATOR, or VACANCY_MANAGE.
-   * TODO(B1): use Vacancy.primaryRecruiterId + file-access.ts once #4 merges.
+   * The job's owner (active PRIMARY assignment), that owner's manager, the
+   * vacancy's primary recruiter, ADMINISTRATOR, or VACANCY_MANAGE.
    */
   async assertJobAccess(user: AuthUser, vacancyId: string) {
     const vacancy = await this.prisma.vacancy.findFirst({
       where: { id: vacancyId, organizationId: user.organizationId },
-      select: { id: true, requiredSkills: true, assignments: { where: { isActive: true, assignmentKind: 'PRIMARY' }, select: { userId: true, user: { select: { managerId: true } } } } },
+      select: {
+        id: true,
+        status: true,
+        primaryRecruiterId: true,
+        requiredSkills: true,
+        assignments: { where: { isActive: true, assignmentKind: 'PRIMARY' }, select: { userId: true, user: { select: { managerId: true } } } },
+      },
     });
     if (!vacancy) throw new NotFoundException('Job not found.');
     if (user.roleCodes.includes('ADMINISTRATOR')) return vacancy;
-    if (vacancy.assignments.some((a) => a.userId === user.userId || a.user.managerId === user.userId)) return vacancy;
+    if (vacancy.primaryRecruiterId === user.userId || vacancy.assignments.some((a) => a.userId === user.userId || a.user.managerId === user.userId)) return vacancy;
     if (await this.permissions.hasPermission(user.userId, user.organizationId, 'VACANCY_MANAGE')) return vacancy;
     throw new ForbiddenException({ code: 'NOT_JOB_OWNER', message: 'Only the job owner, their manager or a full-access user can suggest or compare for this job.' });
   }
@@ -120,7 +159,7 @@ export class MatchingService {
 
   private candidateSelect(skillIds: string[]) {
     return {
-      id: true, candidateCode: true, firstName: true, lastName: true, currentTitle: true, location: true, updatedAt: true,
+      id: true, candidateCode: true, firstName: true, lastName: true, currentTitle: true, location: true, updatedAt: true, skills: true,
       skillLinks: {
         where: { skillId: { in: skillIds } },
         select: {
@@ -141,7 +180,10 @@ export class MatchingService {
     let latest = 0;
     for (const skill of required) {
       const link = links.get(skill.id);
-      if (!link) { missingSkills.push(skill); continue; }
+      if (!link || !isSkillLinkActive(c.skills ?? undefined, skill.name, link.evidence)) {
+        missingSkills.push(skill);
+        continue;
+      }
       const evidence = link.evidence.map((e) => {
         latest = Math.max(latest, e.createdAt.getTime());
         return { id: e.id, sourceType: e.sourceType, sourceRef: e.sourceRef, snippet: e.snippet, addedBy: e.addedBy ? { id: e.addedBy.id, name: e.addedBy.displayName } : null, addedAt: e.createdAt.toISOString() };
@@ -168,16 +210,31 @@ export class MatchingService {
         status: ACTIVE_CANDIDATE,
         skillLinks: { some: { skillId: { in: skillIds } } },
       },
-      select: { ...this.candidateSelect(skillIds), applications: { where: { vacancyId }, select: { stage: true }, take: 1 } },
+      select: { ...this.candidateSelect(skillIds), applications: { where: { vacancyId }, select: { id: true, stage: true }, take: 1 } },
       take: 1000,
     });
+    // Older callers omit status. Treat that as Open so a person not already on the job stays addable.
+    const jobStatus: string | undefined = vacancy.status;
+    const accepting = jobStatus === undefined || jobStatus === 'Open' || jobStatus === 'Partially Filled';
     const shaped = candidates.map((c) => {
       const onJob = c.applications[0];
-      return { ...this.shape(c, required), updatedAt: c.updatedAt.getTime(), alreadyOnJob: Boolean(onJob), stage: onJob?.stage ?? null, addable: !onJob };
-    });
+      return {
+        ...this.shape(c, required),
+        updatedAt: c.updatedAt.getTime(),
+        applicationId: onJob?.id ?? null,
+        alreadyOnJob: Boolean(onJob),
+        stage: onJob?.stage ?? null,
+        addable: !onJob && accepting,
+      };
+    }).filter((s) => s._held > 0);
     shaped.sort((a, b) =>
       b._evidenced - a._evidenced || b._held - a._held || b._latest - a._latest || b.updatedAt - a.updatedAt || a.candidate.code.localeCompare(b.candidate.code));
-    return { ...base, suggestions: shaped.slice(0, SUGGESTION_LIMIT).map(({ candidate, matchedSkills, missingSkills, alreadyOnJob, stage, addable }) => ({ candidate, matchedSkills, missingSkills, alreadyOnJob, stage, addable })) };
+    return {
+      ...base,
+      suggestions: shaped.slice(0, SUGGESTION_LIMIT).map(({ candidate, matchedSkills, missingSkills, applicationId, alreadyOnJob, stage, addable }) => ({
+        candidate, matchedSkills, missingSkills, applicationId, alreadyOnJob, stage, addable,
+      })),
+    };
   }
 
   async compare(user: AuthUser, vacancyId: string, candidateIds: string[]): Promise<CompareResponse> {
@@ -231,19 +288,19 @@ export class MatchingService {
   // ─── Candidate skills and evidence ────────────────────────────
 
   private async candidateOrThrow(organizationId: string, candidateId: string) {
-    const c = await this.prisma.candidate.findFirst({ where: { id: candidateId, organizationId }, select: { id: true, organizationId: true } });
+    const c = await this.prisma.candidate.findFirst({ where: { id: candidateId, organizationId }, select: { id: true, organizationId: true, skills: true } });
     if (!c) throw new NotFoundException('Candidate not found.');
     return c;
   }
 
   async listCandidateSkills(organizationId: string, candidateId: string) {
-    await this.candidateOrThrow(organizationId, candidateId);
+    const candidate = await this.candidateOrThrow(organizationId, candidateId);
     const links = await this.prisma.candidateSkill.findMany({
       where: { candidateId },
       orderBy: { createdAt: 'asc' },
       select: { skill: { select: { id: true, name: true, status: true, metadata: true } }, evidence: { orderBy: { createdAt: 'desc' }, select: { id: true, sourceType: true, sourceRef: true, snippet: true, createdAt: true, addedBy: { select: { id: true, displayName: true } } } } },
     });
-    return links.map((l) => ({
+    return links.filter((l) => isSkillLinkActive(candidate.skills ?? undefined, l.skill.name, l.evidence)).map((l) => ({
       skill: { id: l.skill.id, name: l.skill.name, active: l.skill.status === 'Active', category: (l.skill.metadata as { category?: string } | null)?.category ?? null },
       hasEvidence: l.evidence.length > 0,
       evidence: l.evidence.map((e) => ({ id: e.id, sourceType: e.sourceType, sourceRef: e.sourceRef, snippet: e.snippet, addedBy: e.addedBy ? { id: e.addedBy.id, name: e.addedBy.displayName } : null, addedAt: e.createdAt.toISOString() })),
@@ -287,8 +344,9 @@ export class MatchingService {
   }
 
   /**
-   * Scans the candidate's CV text, screening notes and scorecards for ACTIVE
-   * library skills and records evidence (idempotent). Returns what was found.
+   * Scans active CV text, screening notes, and the latest Submitted scorecard
+   * per interviewer for ACTIVE library skills and records evidence (idempotent).
+   * Draft and superseded scorecards are ignored. Profile skill text is not evidence.
    */
   async deriveEvidence(organizationId: string, candidateId: string, actorUserId: string | null) {
     await this.candidateOrThrow(organizationId, candidateId);
@@ -296,12 +354,16 @@ export class MatchingService {
       this.prisma.masterDataValue.findMany({ where: { organizationId, category: 'skills', status: 'Active' }, select: { id: true, name: true } }),
       this.prisma.candidateDocument.findMany({ where: { organizationId, candidateId, deletedAt: null, extractionText: { not: null } }, select: { id: true, extractionText: true } }),
       this.prisma.screeningLog.findMany({ where: { organizationId, application: { candidateId } }, select: { id: true, notes: true } }),
-      this.prisma.interviewScorecard.findMany({ where: { interview: { organizationId, application: { candidateId } } }, select: { id: true, notes: true, strengths: true } }),
+      this.prisma.interviewScorecard.findMany({
+        where: { status: 'Submitted', interview: { organizationId, application: { candidateId } } },
+        select: { id: true, notes: true, strengths: true, interviewId: true, interviewerId: true, revision: true, submittedAt: true },
+        orderBy: [{ revision: 'desc' }, { submittedAt: 'desc' }],
+      }),
     ]);
     const sources: Array<{ type: EvidenceSourceType; ref: string; text: string | null }> = [
       ...docs.map((d) => ({ type: 'CV_TEXT' as const, ref: d.id, text: d.extractionText })),
       ...screens.map((s) => ({ type: 'SCREENING_NOTE' as const, ref: s.id, text: s.notes })),
-      ...cards.map((c) => ({ type: 'SCORECARD' as const, ref: c.id, text: [c.strengths, c.notes].filter(Boolean).join('\n') })),
+      ...latestSubmittedScorecards(cards).map((c) => ({ type: 'SCORECARD' as const, ref: c.id, text: [c.strengths, c.notes].filter(Boolean).join('\n') })),
     ];
     const found: Array<{ skillId: string; skill: string; sourceType: EvidenceSourceType; sourceRef: string }> = [];
     await this.prisma.$transaction(async (tx) => {

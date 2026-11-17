@@ -87,6 +87,7 @@ export function CandidatesPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState('');
+  const [loadFailed, setLoadFailed] = useState(false);
   const [selectedCandidateIds, setSelectedCandidateIds] = useState<string[]>([]);
 
   // Active row action menu
@@ -206,6 +207,7 @@ export function CandidatesPage() {
   const load = async (requestedPage = page) => {
     setIsLoading(true);
     setError('');
+    setLoadFailed(false);
     try {
       let queryUrl = `/candidates?page=${requestedPage}&pageSize=${pageSize}`;
       if (statusFilter !== 'All') {
@@ -228,6 +230,8 @@ export function CandidatesPage() {
     } catch (err) {
       const message = getErrorMessage(err, 'Unable to load candidates');
       setError(message);
+      setLoadFailed(true);
+      setCandidates([]);
       toastError(err, 'Unable to load candidates');
     } finally {
       setIsLoading(false);
@@ -915,6 +919,12 @@ export function CandidatesPage() {
                     <td className="p-3.5"><div className="h-4 w-12 rounded bg-slate-200 dark:bg-slate-700" /></td>
                   </tr>
                 ))
+              ) : loadFailed ? (
+                <tr>
+                  <td colSpan={8} className="p-8 text-center text-sm text-slate-600 dark:text-slate-300">
+                    The candidate list failed to load. Use Retry above. This is not an empty search result.
+                  </td>
+                </tr>
               ) : candidates.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="p-12 text-center text-slate-600 dark:text-slate-300">

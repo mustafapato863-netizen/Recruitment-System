@@ -1,12 +1,13 @@
 /**
  * QA BUG-4: interviewer view (v1). Endpoints from backend #4 (feat/b1-ownership-scope):
- *   GET  /interviews/:id/cv         (attendee may download the candidate's current CV)
- *   GET  /interviews/:id/scorecard  (attendee sees only their own scorecard)
- *   POST /interviews/:id/scorecard  (SubmitScorecardDto)
- *   POST /interviews/:id/response   (UpdateInterviewResponseDto: RSVP)
+ *   GET  /interviews/:id/cv                  (attendee may download the candidate's current CV)
+ *   GET  /interviews/:id/scorecard           (attendee sees only their own scorecard)
+ *   POST /interviews/:id/scorecard           (SubmitScorecardDto: Draft | Submitted)
+ *   POST /interviews/:id/scorecard/revisions (ReviseScorecardDto: Submitted revision with reason)
+ *   POST /interviews/:id/response            (UpdateInterviewResponseDto: Confirmed | Declined | Reschedule Requested)
+ *   POST /interviews/:id/scorecard-reminder  (Owner-only reminder to pending interviewers)
  *   GET  /interviews/:id/ics
  *
- * The LIST endpoint is not in any backend PR yet. PROVISIONAL contract (for Backend):
  *   GET /me/interviews?scope=upcoming|past  → { data: MyInterview[] }
  * A 404/405/501 renders "not available yet". No fixtures are used outside tests.
  */
@@ -36,7 +37,21 @@ export interface MyInterview {
 
 export type ListResult = { available: true; items: MyInterview[] } | { available: false };
 
-const ALLOWED_KEYS: ReadonlyArray<keyof MyInterview> = ['id', 'title', 'interviewType', 'scheduledStart', 'scheduledEnd', 'timezone', 'candidateName', 'positionTitle', 'locationUrl', 'roomName', 'myResponse', 'scorecardStatus', 'status'];
+const ALLOWED_KEYS: ReadonlyArray<keyof MyInterview> = [
+  'id',
+  'title',
+  'interviewType',
+  'scheduledStart',
+  'scheduledEnd',
+  'timezone',
+  'candidateName',
+  'positionTitle',
+  'locationUrl',
+  'roomName',
+  'myResponse',
+  'scorecardStatus',
+  'status',
+];
 
 /** Keeps ONLY the whitelisted fields, so stray PII/pay/file data can never render. */
 export function pickInterview(raw: Record<string, unknown>): MyInterview {
@@ -55,7 +70,12 @@ export async function listMyInterviews(scope: 'upcoming' | 'past' = 'upcoming'):
   try {
     const res = await getApi<{ data?: unknown[] } | unknown[]>(`/me/interviews?scope=${scope}`);
     const rows = Array.isArray(res) ? res : Array.isArray(res?.data) ? res.data : [];
-    return { available: true, items: rows.filter((r): r is Record<string, unknown> => typeof r === 'object' && r !== null).map(pickInterview) };
+    return {
+      available: true,
+      items: rows
+        .filter((r): r is Record<string, unknown> => typeof r === 'object' && r !== null)
+        .map(pickInterview),
+    };
   } catch (error) {
     if (error instanceof ApiError && [404, 405, 501].includes(error.statusCode)) return { available: false };
     throw error;
@@ -77,8 +97,11 @@ export interface MyScorecard {
   isLocked?: boolean;
   /** B5: Draft | Submitted — preferred when present. */
   status?: 'Draft' | 'Submitted';
+  revision?: number;
+  revisionReason?: string | null;
   submittedAt: string;
 }
+
 /** = SubmitScorecardDto. */
 export interface SubmitScorecardBody {
   overallRating: number;
@@ -86,20 +109,53 @@ export interface SubmitScorecardBody {
   strengths?: string;
   concerns?: string;
   notes: string;
+  status?: 'Draft' | 'Submitted';
 }
-export const RECOMMENDATIONS: MyScorecard['recommendation'][] = ['Strong Hire', 'Hire', 'Neutral', 'No Hire', 'Strong No Hire'];
 
-export const getMyScorecards = (id: string) => getApi<MyScorecard[]>(`/interviews/${encodeURIComponent(id)}/scorecard`);
-export const submitScorecard = (id: string, body: SubmitScorecardBody) => postApi<MyScorecard>(`/interviews/${encodeURIComponent(id)}/scorecard`, body);
+/** = ReviseScorecardDto. */
+export interface ReviseScorecardBody {
+  overallRating: number;
+  recommendation: MyScorecard['recommendation'];
+  strengths?: string;
+  concerns?: string;
+  notes: string;
+  reason: string;
+}
+
+export const RECOMMENDATIONS: MyScorecard['recommendation'][] = [
+  'Strong Hire',
+  'Hire',
+  'Neutral',
+  'No Hire',
+  'Strong No Hire',
+];
+
+export const getMyScorecards = (id: string) =>
+  getApi<MyScorecard[]>(`/interviews/${encodeURIComponent(id)}/scorecard`);
+export const submitScorecard = (id: string, body: SubmitScorecardBody) =>
+  postApi<MyScorecard>(`/interviews/${encodeURIComponent(id)}/scorecard`, body);
+export const reviseScorecard = (id: string, body: ReviseScorecardBody) =>
+  postApi<MyScorecard>(`/interviews/${encodeURIComponent(id)}/scorecard/revisions`, body);
 /** = UpdateInterviewResponseDto. Accept = 'Confirmed'. */
-export const respond = (id: string, response: 'Confirmed' | 'Declined', note?: string) =>
+export const respond = (
+  id: string,
+  response: 'Confirmed' | 'Declined' | 'Reschedule Requested',
+  note?: string,
+) =>
   postApi(`/interviews/${encodeURIComponent(id)}/response`, note ? { response, note } : { response });
+
+export const sendScorecardReminder = (id: string) =>
+  postApi<{ reminded?: number }>(`/interviews/${encodeURIComponent(id)}/scorecard-reminder`, {});
 
 function saveBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url; a.download = filename; a.rel = 'noopener';
-  document.body.appendChild(a); a.click(); a.remove();
+  a.href = url;
+  a.download = filename;
+  a.rel = 'noopener';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
 export async function downloadCv(id: string): Promise<string> {
@@ -116,7 +172,8 @@ export async function downloadIcs(id: string): Promise<string> {
 /** Friendly copy for download failures (403 incl. B1 codes, 404 no CV). */
 export function downloadErrorMessage(error: unknown, what: 'CV' | 'calendar file'): string {
   if (error instanceof ApiError) {
-    if (error.statusCode === 404) return what === 'CV' ? 'This candidate has no CV on file yet.' : 'This interview was not found.';
+    if (error.statusCode === 404)
+      return what === 'CV' ? 'This candidate has no CV on file yet.' : 'This interview was not found.';
     if (error.statusCode === 403) return `You can't download this ${what}. ${error.message}`.trim();
     return error.message;
   }

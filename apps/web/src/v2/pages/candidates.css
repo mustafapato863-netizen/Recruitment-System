@@ -439,18 +439,17 @@
   [data-ui='v2'] .rf2-cand [aria-label='Active applications'] td:nth-child(7) { grid-area: open; justify-self: end; }
 
   [data-ui='v2'] .rf2-cand [aria-label='Bank'] .rf2-jtable tbody tr {
-    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
     grid-template-areas:
-      "choose name"
-      "title title"
-      "place place"
-      "years years";
+      "name"
+      "title"
+      "place"
+      "years";
   }
-  [data-ui='v2'] .rf2-cand [aria-label='Bank'] td:nth-child(1) { grid-area: choose; }
-  [data-ui='v2'] .rf2-cand [aria-label='Bank'] td:nth-child(2) { grid-area: name; }
-  [data-ui='v2'] .rf2-cand [aria-label='Bank'] td:nth-child(3) { grid-area: title; }
-  [data-ui='v2'] .rf2-cand [aria-label='Bank'] td:nth-child(4) { grid-area: place; }
-  [data-ui='v2'] .rf2-cand [aria-label='Bank'] td:nth-child(5) { grid-area: years; }
+  [data-ui='v2'] .rf2-cand [aria-label='Bank'] td:nth-child(1) { grid-area: name; }
+  [data-ui='v2'] .rf2-cand [aria-label='Bank'] td:nth-child(2) { grid-area: title; }
+  [data-ui='v2'] .rf2-cand [aria-label='Bank'] td:nth-child(3) { grid-area: place; }
+  [data-ui='v2'] .rf2-cand [aria-label='Bank'] td:nth-child(4) { grid-area: years; }
 
   [data-ui='v2'] .rf2-cand__who,
   [data-ui='v2'] .rf2-cand__next { width: auto; max-width: 100%; }

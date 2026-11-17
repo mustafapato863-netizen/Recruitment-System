@@ -9,8 +9,62 @@
   margin-inline: auto;
   box-sizing: border-box;
   padding: 20px 24px 32px;
+  overflow-x: clip;
   font-family: var(--rf2-font);
   color: var(--rf2-ink);
+  --rf2-ms-line: rgba(226, 232, 240, 0.55);
+  --rf2-ms-shadow: 0 2px 10px rgba(15, 23, 42, 0.05), 0 1px 2px rgba(15, 23, 42, 0.03);
+}
+
+:where(:root[data-theme='dark'], html.dark, [data-theme='dark']) .rf2-ms {
+  --rf2-ms-line: rgba(226, 232, 240, 0.22);
+  --rf2-ms-shadow: 0 4px 16px rgba(2, 6, 23, 0.32);
+}
+
+.rf2-ms :is(button, select, input, a, [role='tab']):focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.rf2-ms__match-alert {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(220, 38, 38, 0.35);
+  background: rgba(254, 226, 226, 0.9);
+  color: #991b1b;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.rf2-ms__match-alert p {
+  margin: 0;
+  min-width: 0;
+}
+
+.rf2-ms__retry-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid currentColor;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.rf2-ms__retry-btn:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
 }
 
 .rf2-ms__header {
@@ -38,15 +92,28 @@
 }
 
 /* Top Job Context Card */
+.rf2-ms__job-card,
+.rf2-ms__toolbar,
+.rf2-ms__card,
+.rf2-ms__tabs,
+.rf2-ms__empty {
+  border: 1px solid var(--rf2-ms-line, rgba(226, 232, 240, 0.55));
+  background: var(--rf2-card);
+  box-shadow: var(--rf2-ms-shadow, 0 2px 10px rgba(15, 23, 42, 0.05), 0 1px 2px rgba(15, 23, 42, 0.03));
+}
+
+:where(:root[data-theme='dark'], html.dark, [data-theme='dark']) :is(.rf2-ms__job-card, .rf2-ms__toolbar, .rf2-ms__card, .rf2-ms__tabs, .rf2-ms__empty) {
+  background: var(--color-surface-elevated);
+  border-color: rgba(226, 232, 240, 0.22);
+  box-shadow: 0 4px 16px rgba(2, 6, 23, 0.32);
+}
+
 .rf2-ms__job-card {
   display: flex;
   flex-direction: column;
   gap: 16px;
   padding: 18px 22px;
-  border: 1px solid var(--rf2-divider);
   border-radius: 14px;
-  background: var(--rf2-card);
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03);
 }
 
 .rf2-ms__job-top {
@@ -55,7 +122,7 @@
   gap: 24px;
   align-items: start;
   padding-bottom: 16px;
-  border-bottom: 1px solid var(--rf2-divider);
+  border-bottom: 1px solid var(--rf2-ms-line, rgba(226, 232, 240, 0.55));
 }
 
 .rf2-ms__job-select-col {
@@ -82,17 +149,18 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  min-height: 42px;
+  min-height: 44px;
   padding: 6px 14px;
-  border: 1px solid var(--rf2-divider);
+  border: 1px solid var(--rf2-ms-line, rgba(226, 232, 240, 0.55));
   border-radius: 10px;
   background: var(--rf2-card);
   transition: border-color 120ms ease, box-shadow 120ms ease;
 }
 
 .rf2-ms__select-box:focus-within {
-  border-color: var(--rf2-action);
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+  border-color: #2563eb;
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
 }
 
 .rf2-ms__select-display {
@@ -181,7 +249,7 @@
   flex-direction: column;
   gap: 6px;
   padding-left: 24px;
-  border-left: 1px solid var(--rf2-divider);
+  border-left: 1px solid var(--rf2-ms-line, rgba(226, 232, 240, 0.55));
   min-width: 0;
 }
 
@@ -237,7 +305,8 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 10px;
+  min-height: 36px;
+  padding: 6px 10px;
   border: 0;
   border-radius: 6px;
   background: transparent;
@@ -281,10 +350,10 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  min-width: 0;
+  max-width: 100%;
   padding: 12px 14px;
-  border: 1px solid var(--rf2-divider);
   border-radius: 12px;
-  background: var(--rf2-card);
 }
 
 .rf2-ms__filters-left {
@@ -293,12 +362,15 @@
   align-items: center;
   gap: 8px;
   flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .rf2-ms__search-wrap {
   position: relative;
-  flex: 1 1 260px;
-  max-width: 340px;
+  flex: 1 1 220px;
+  min-width: 0;
+  max-width: min(340px, 100%);
 }
 
 .rf2-ms__search-wrap svg {
@@ -314,9 +386,10 @@
 
 .rf2-ms__search-input {
   width: 100%;
-  min-height: 36px;
-  padding: 6px 12px 6px 34px;
-  border: 1px solid var(--rf2-divider);
+  min-width: 0;
+  min-height: 40px;
+  padding: 8px 12px 8px 34px;
+  border: 1px solid var(--rf2-ms-line, rgba(226, 232, 240, 0.55));
   border-radius: 8px;
   background: var(--rf2-card);
   color: var(--rf2-ink);
@@ -326,9 +399,10 @@
 }
 
 .rf2-ms__filter-select {
-  min-height: 36px;
-  padding: 6px 28px 6px 12px;
-  border: 1px solid var(--rf2-divider);
+  min-height: 40px;
+  max-width: 100%;
+  padding: 8px 28px 8px 12px;
+  border: 1px solid var(--rf2-ms-line, rgba(226, 232, 240, 0.55));
   border-radius: 8px;
   background: var(--rf2-card);
   color: var(--rf2-ink);
@@ -342,9 +416,9 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 36px;
-  padding: 6px 12px;
-  border: 1px solid var(--rf2-divider);
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--rf2-ms-line, rgba(226, 232, 240, 0.55));
   border-radius: 8px;
   background: var(--rf2-card);
   color: var(--rf2-action);
@@ -381,7 +455,10 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 6px;
-  border-bottom: 1px solid var(--rf2-divider);
+  min-width: 0;
+  max-width: 100%;
+  padding: 4px 6px 0;
+  border-radius: 12px;
 }
 
 .rf2-ms__tab {
@@ -389,7 +466,8 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 10px 16px;
+  min-height: 40px;
+  padding: 8px 14px;
   border: 0;
   border-bottom: 2px solid transparent;
   background: transparent;
@@ -422,24 +500,33 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
+  min-width: 0;
+  max-width: 100%;
   padding: 16px 20px;
-  border: 1px solid var(--rf2-divider);
   border-radius: 14px;
-  background: var(--rf2-card);
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.02);
   transition: border-color 120ms ease, box-shadow 120ms ease;
 }
 
 .rf2-ms__card:hover {
-  border-color: rgba(37, 99, 235, 0.28);
-  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.07), 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+:where(:root[data-theme='dark'], html.dark, [data-theme='dark']) .rf2-ms__card:hover {
+  box-shadow: 0 8px 22px rgba(2, 6, 23, 0.46);
+}
+
+.rf2-ms__empty {
+  padding: 32px 16px;
+  border-radius: 14px;
+  text-align: center;
 }
 
 .rf2-ms__card-row {
   display: grid;
-  grid-template-columns: minmax(275px, 1.25fr) 110px minmax(280px, 2.15fr) auto;
+  grid-template-columns: minmax(0, 1.25fr) minmax(104px, 132px) minmax(0, 2.15fr) minmax(156px, 196px);
   align-items: center;
   gap: 18px;
+  min-width: 0;
 }
 
 .rf2-ms__cand-col {
@@ -450,8 +537,10 @@
 }
 
 .rf2-ms__check {
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
+  min-width: 20px;
+  min-height: 20px;
   accent-color: var(--rf2-action);
   cursor: pointer;
   flex: none;
@@ -512,8 +601,7 @@
 
 .rf2-ms__cand-meta {
   display: flex;
-  flex-wrap: nowrap;
-  white-space: nowrap;
+  flex-wrap: wrap;
   align-items: center;
   gap: 8px 10px;
   margin-top: 3px;
@@ -560,9 +648,10 @@
   align-items: center;
   justify-content: center;
   gap: 4px;
+  min-width: 0;
   padding-inline: 8px;
-  border-left: 1px solid var(--rf2-divider);
-  border-right: 1px solid var(--rf2-divider);
+  border-left: 1px solid var(--rf2-ms-line, rgba(226, 232, 240, 0.55));
+  border-right: 1px solid var(--rf2-ms-line, rgba(226, 232, 240, 0.55));
 }
 
 .rf2-ms__gauge-ring {
@@ -588,9 +677,12 @@
 }
 
 .rf2-ms__gauge-label {
+  max-width: 100%;
   font-size: 11.5px;
   font-weight: 700;
-  white-space: nowrap;
+  line-height: 1.25;
+  text-align: center;
+  overflow-wrap: anywhere;
 }
 
 .rf2-ms__gauge-label[data-tone='excellent'],
@@ -636,13 +728,42 @@
 }
 
 .rf2-ms__skill-chip {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 3px 9px;
+  max-width: 100%;
+  padding: 6px 9px;
   border-radius: 6px;
   font-size: 11.5px;
   font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.rf2-ms__evidence-tip {
+  position: absolute;
+  z-index: 4;
+  left: 0;
+  top: calc(100% + 6px);
+  width: max-content;
+  max-width: min(280px, 70vw);
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: var(--rf2-ink);
+  color: var(--rf2-card);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.35;
+  white-space: normal;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.16);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.rf2-ms__skill-chip:hover .rf2-ms__evidence-tip,
+.rf2-ms__skill-chip:focus-visible .rf2-ms__evidence-tip,
+.rf2-ms__skill-chip:focus-within .rf2-ms__evidence-tip {
+  opacity: 1;
 }
 
 .rf2-ms__skill-chip svg {
@@ -664,9 +785,10 @@
 /* Right Actions Column */
 .rf2-ms__actions-col {
   display: grid;
-  grid-template-columns: 128px 28px;
+  grid-template-columns: minmax(0, 1fr) 36px;
   align-items: center;
   gap: 8px;
+  min-width: 0;
 }
 
 .rf2-ms__actions-stack {
@@ -679,8 +801,9 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 32px;
-  padding: 5px 12px;
+  min-height: 36px;
+  max-width: 100%;
+  padding: 6px 12px;
   border: 0;
   border-radius: 8px;
   background: var(--rf2-action);
@@ -702,17 +825,20 @@
   align-items: center;
   justify-content: center;
   gap: 5px;
-  min-height: 32px;
-  padding: 5px 10px;
-  border: 1px solid var(--rf2-divider);
+  min-height: 36px;
+  max-width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--rf2-ms-line, rgba(226, 232, 240, 0.55));
   border-radius: 8px;
   background: var(--rf2-card);
   color: var(--rf2-action);
   font: inherit;
   font-size: 12px;
   font-weight: 700;
+  line-height: 1.25;
+  text-align: center;
   cursor: pointer;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .rf2-ms__btn-secondary:hover {
@@ -727,10 +853,10 @@
 .rf2-ms__more-btn {
   display: inline-grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
+  width: 36px;
+  height: 36px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 8px;
   background: transparent;
   color: var(--rf2-muted);
   cursor: pointer;
@@ -748,7 +874,7 @@
 
 .rf2-ms__expanded {
   padding-top: 14px;
-  border-top: 1px solid var(--rf2-divider);
+  border-top: 1px solid var(--rf2-ms-line, rgba(226, 232, 240, 0.55));
 }
 
 @media (max-width: 1100px) {
@@ -759,19 +885,52 @@
     padding-left: 0;
     border-left: 0;
     padding-top: 12px;
-    border-top: 1px solid var(--rf2-divider);
+    border-top: 1px solid var(--rf2-ms-line, rgba(226, 232, 240, 0.55));
   }
   .rf2-ms__card-row {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) minmax(120px, 160px);
   }
-  .rf2-ms__skills-col {
+  .rf2-ms__skills-col,
+  .rf2-ms__actions-col {
     grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 1023px) {
+  .rf2-ms__search-wrap {
+    flex-basis: 100%;
+    max-width: 100%;
+  }
+  .rf2-ms :is(
+    .rf2-ms__search-input,
+    .rf2-ms__filter-select,
+    .rf2-ms__reset-btn,
+    .rf2-ms__btn-primary,
+    .rf2-ms__btn-secondary,
+    .rf2-ms__tab,
+    .rf2-ms__edit-skills-btn,
+    .rf2-ms__more-btn,
+    .rf2-ms__desc-link,
+    .rf2-ms__select-box
+  ) {
+    min-height: 44px;
+  }
+  .rf2-ms__more-btn {
+    width: 44px;
+    height: 44px;
+  }
+  .rf2-ms__actions-col {
+    grid-template-columns: minmax(0, 1fr) 44px;
   }
 }
 
 @media (max-width: 767px) {
   .rf2-ms {
-    padding: 14px;
+    padding: 14px 12px 24px;
+  }
+  .rf2-ms__job-card,
+  .rf2-ms__card {
+    padding: 14px 12px;
   }
   .rf2-ms__card-row {
     grid-template-columns: minmax(0, 1fr);
@@ -782,7 +941,64 @@
     align-items: flex-start;
     padding-inline: 0;
   }
+  .rf2-ms__gauge-label {
+    text-align: start;
+  }
   .rf2-ms__actions-col {
-    grid-template-columns: minmax(0, 1fr) 32px;
+    grid-template-columns: minmax(0, 1fr) 44px;
+  }
+  .rf2-ms__check {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .rf2-ms :is(
+    .rf2-ms__search-input,
+    .rf2-ms__filter-select,
+    .rf2-ms__reset-btn,
+    .rf2-ms__btn-primary,
+    .rf2-ms__btn-secondary,
+    .rf2-ms__tab,
+    .rf2-ms__edit-skills-btn,
+    .rf2-ms__more-btn,
+    .rf2-ms__desc-link,
+    .rf2-ms__select-box
+  ) {
+    min-height: 44px;
+  }
+  .rf2-ms__more-btn {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+@media (pointer: coarse) {
+  .rf2-ms :is(
+    .rf2-ms__search-input,
+    .rf2-ms__filter-select,
+    .rf2-ms__reset-btn,
+    .rf2-ms__btn-primary,
+    .rf2-ms__btn-secondary,
+    .rf2-ms__tab,
+    .rf2-ms__edit-skills-btn,
+    .rf2-ms__more-btn,
+    .rf2-ms__desc-link,
+    .rf2-ms__select-box
+  ) {
+    min-height: 44px;
+  }
+  .rf2-ms__more-btn {
+    width: 44px;
+    height: 44px;
+  }
+  .rf2-ms__actions-col {
+    grid-template-columns: minmax(0, 1fr) 44px;
+  }
+  .rf2-ms__check {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
   }
 }

@@ -1,6 +1,10 @@
-import { IsDateString, IsOptional, IsUUID } from 'class-validator';
+import { IsDateString, IsOptional, IsUUID, Matches } from 'class-validator';
 
 export class ReportOverviewQueryDto {
+  @IsOptional()
+  @Matches(/^\d{4}-(0[1-9]|1[0-2])$/, { message: 'month must be YYYY-MM.' })
+  month?: string;
+
   @IsOptional()
   @IsDateString()
   from?: string;
@@ -30,4 +34,8 @@ export class ReportOverviewQueryDto {
   @IsOptional()
   @IsUUID()
   recruiterId?: string;
+
+  @IsOptional()
+  @IsUUID()
+  vacancyId?: string;
 }

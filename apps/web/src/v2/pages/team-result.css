@@ -1,0 +1,1028 @@
+/* Manager Team results — monthly plans and automatic weekly progress. Flat surfaces; shadows on buttons only. */
+[data-ui='v2'] .rf2-monthly-plan {
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+  border: 0;
+  border-radius: var(--rf2-radius-card);
+  background: var(--rf2-neutral-tint);
+  box-shadow: none;
+  min-width: 0;
+}
+[data-ui='v2'] .rf2-monthly-plan__intro { display: flex; gap: 12px; align-items: flex-start; }
+[data-ui='v2'] .rf2-monthly-plan h3,
+[data-ui='v2'] .rf2-monthly-plan p { margin: 0; }
+[data-ui='v2'] .rf2-monthly-plan h3 { font-size: var(--rf2-text-card); }
+[data-ui='v2'] .rf2-monthly-plan__intro p { color: var(--rf2-ink-2); font-size: var(--rf2-text-label); }
+[data-ui='v2'] .rf2-monthly-plan__context,
+[data-ui='v2'] .rf2-monthly-plan__metrics { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+[data-ui='v2'] .rf2-monthly-plan__metric { display: flex; gap: 10px; align-items: center; min-width: 0; }
+[data-ui='v2'] .rf2-monthly-plan__metric > .rf2-field { flex: 1; min-width: 0; }
+[data-ui='v2'] .rf2-monthly-plan :is(input,select) {
+  min-width: 0;
+  min-height: 44px;
+  width: 100%;
+  max-width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  outline: 0;
+  border-radius: var(--rf2-radius-control);
+  background: var(--rf2-card);
+  color: var(--rf2-ink);
+  box-shadow: none;
+}
+[data-ui='v2'] .rf2-monthly-plan :is(input,select):focus-visible { background: var(--rf2-info-tint); }
+[data-ui='v2'] .rf2-monthly-plan__preview { color: var(--rf2-ink-2); font-size: var(--rf2-text-caption); min-width: 0; }
+[data-ui='v2'] .rf2-monthly-plan__preview summary { min-height: 44px; display: list-item; align-content: center; cursor: pointer; }
+[data-ui='v2'] .rf2-monthly-plan__preview .rf2-jscroll { margin-top: 12px; }
+[data-ui='v2'] .rf2-monthly-plan__row-actions { display: flex; flex-wrap: wrap; gap: 4px; }
+[data-ui='v2'] .rf2-monthly-plan__auto { display: block; margin-top: 4px; color: var(--rf2-ink-2); font-size: var(--rf2-text-caption); }
+[data-ui='v2'] .rf2-tres__cell-progress { height: 6px; margin-top: 6px; border-radius: var(--rf2-radius-pill); background: var(--rf2-neutral-tint); overflow: hidden; }
+[data-ui='v2'] .rf2-tres__cell-progress > span { display: block; height: 100%; background: var(--rf2-info); border-radius: inherit; }
+[data-ui='v2'] .rf2-monthly-plan__records { display: grid; gap: 12px; background: var(--rf2-neutral-tint); padding: 16px; border-radius: var(--rf2-radius-card); min-width: 0; }
+[data-ui='v2'] .rf2-monthly-plan__records :is(h3,p) { margin: 0; }
+[data-ui='v2'] .rf2-tres__status-banner { display: flex; gap: 8px; align-items: center; }
+[data-ui='v2'] .rf2-tres__status-banner > svg { width: 18px; height: 18px; }
+[data-ui='v2'] .rf2-monthly-plan__preview summary:focus-visible,
+[data-ui='v2'] .rf2-monthly-plan__records summary:focus-visible { outline: 0; background: var(--rf2-info-tint); font-weight: var(--rf2-weight-label); }
+@media (min-width:1024px) { [data-ui='v2'] .rf2-monthly-plan__metrics { grid-template-columns: repeat(4,minmax(0,1fr)); } }
+@media (max-width:639px) { [data-ui='v2'] .rf2-monthly-plan__context { grid-template-columns: minmax(0,1fr); } }
+[data-ui='v2'] .rf2-jobs.rf2-tres {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+[data-ui='v2'] .rf2-tres__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+[data-ui='v2'] .rf2-tres__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: min(100%, max-content);
+}
+
+[data-ui='v2'] .rf2-tres__controls .rf2-field {
+  flex: 0 1 auto;
+  min-width: max-content;
+  max-width: 100%;
+}
+
+[data-ui='v2'] .rf2-tres__controls .rf2-field__control {
+  min-width: max-content;
+  max-width: 100%;
+  padding-right: 24px;
+  border: 0;
+  outline: none;
+  box-shadow: none;
+}
+
+[data-ui='v2'] .rf2-tres .rf2-segmented {
+  display: inline-flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 4px;
+  min-width: min(100%, max-content);
+}
+
+[data-ui='v2'] .rf2-tres .rf2-segmented > .rf2-btn {
+  flex: 0 0 auto;
+}
+
+[data-ui='v2'] .rf2-tres .rf2-tres__monthselect {
+  flex: 0 1 auto;
+  min-width: max-content;
+  max-width: 100%;
+}
+
+/* Four compact results, followed by analysis and editable targets. */
+[data-ui='v2'] .rf2-tres__kpis {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-ui='v2'] .rf2-tres__kpi {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 0;
+  outline: none;
+  border-radius: var(--rf2-radius-card);
+  background: var(--rf2-card);
+  box-shadow: none;
+}
+
+[data-ui='v2'] .rf2-tres__kpi-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--rf2-radius-pill);
+  background: var(--rf2-info-tint);
+  color: var(--rf2-info);
+}
+
+[data-ui='v2'] .rf2-tres__kpi-icon svg {
+  width: 15px;
+  height: 15px;
+}
+
+[data-ui='v2'] .rf2-tres__kpi[data-tone='success'] .rf2-tres__kpi-icon {
+  background: var(--rf2-success-tint);
+  color: var(--rf2-success);
+}
+
+[data-ui='v2'] .rf2-tres__kpi[data-tone='success'] .rf2-tres__spark {
+  background: transparent;
+  color: var(--rf2-success);
+}
+
+[data-ui='v2'] .rf2-tres__kpi[data-tone='danger'] .rf2-tres__kpi-icon {
+  background: var(--rf2-danger-tint);
+  color: var(--rf2-danger);
+}
+
+[data-ui='v2'] .rf2-tres__kpi[data-tone='danger'] .rf2-tres__spark {
+  color: var(--rf2-danger);
+}
+
+[data-ui='v2'] .rf2-tres__kpi[data-tone='neutral'] .rf2-tres__kpi-icon {
+  background: var(--rf2-neutral-tint);
+  color: var(--rf2-ink-2);
+}
+
+[data-ui='v2'] .rf2-tres__kpi-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+[data-ui='v2'] .rf2-tres__kpi-value {
+  font-size: var(--rf2-text-page);
+  font-weight: var(--rf2-weight-page);
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  color: var(--rf2-ink);
+}
+
+[data-ui='v2'] .rf2-tres__kpi-label {
+  color: var(--rf2-ink);
+  font-size: var(--rf2-text-label);
+  font-weight: 600;
+}
+
+[data-ui='v2'] .rf2-tres__kpi-sub {
+  color: var(--rf2-ink-2);
+  font-size: var(--rf2-text-caption);
+}
+
+[data-ui='v2'] .rf2-tres__spark {
+  display: block;
+  margin-top: auto;
+  color: var(--rf2-success);
+}
+
+[data-ui='v2'] .rf2-tres__delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 22px;
+  padding: 0 6px;
+  border-radius: var(--rf2-radius-pill);
+  background: var(--rf2-success-tint);
+  color: var(--rf2-success);
+  font-size: var(--rf2-text-caption);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+[data-ui='v2'] .rf2-tres__delta svg {
+  width: 12px;
+  height: 12px;
+}
+
+[data-ui='v2'] .rf2-tres__delta[data-tone='bad'] {
+  background: var(--rf2-danger-tint);
+  color: var(--rf2-danger);
+}
+
+/* Primary & supporting sections */
+[data-ui='v2'] .rf2-tres__analysis {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+[data-ui='v2'] .rf2-tres__section-title {
+  margin: 0;
+  font-size: var(--rf2-text-card);
+  font-weight: var(--rf2-weight-card);
+  color: var(--rf2-ink);
+}
+
+[data-ui='v2'] .rf2-tres__row2 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+[data-ui='v2'] .rf2-tres__card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 14px 16px;
+  border: 0;
+  outline: none;
+  border-radius: var(--rf2-radius-card);
+  background: var(--rf2-card);
+  box-shadow: none;
+}
+
+[data-ui='v2'] .rf2-tres__card-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+[data-ui='v2'] .rf2-tres__targets-head {
+  justify-content: space-between;
+}
+
+[data-ui='v2'] .rf2-tres__card-title {
+  margin: 0;
+  font-size: var(--rf2-text-card);
+  font-weight: var(--rf2-weight-card);
+}
+
+[data-ui='v2'] .rf2-tres__card-head .rf2-tres__chip {
+  margin-inline-start: auto;
+}
+
+[data-ui='v2'] .rf2-tres__chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 10px;
+  border-radius: var(--rf2-radius-pill);
+  background: var(--rf2-success-tint);
+  color: var(--rf2-success);
+  font-size: var(--rf2-text-caption);
+  font-weight: 700;
+}
+
+[data-ui='v2'] .rf2-tres__tip {
+  position: relative;
+  display: inline-flex;
+}
+
+[data-ui='v2'] .rf2-tres__tip-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  margin: -6px;
+  padding: 0;
+  border: 0;
+  outline: none;
+  border-radius: var(--rf2-radius-pill);
+  background: transparent;
+  box-shadow: none;
+  color: var(--rf2-ink-2);
+  cursor: pointer;
+}
+
+[data-ui='v2'] .rf2-tres__tip-btn svg {
+  width: 15px;
+  height: 15px;
+}
+
+[data-ui='v2'] .rf2-tres__tip-btn:hover,
+[data-ui='v2'] .rf2-tres__tip-btn:focus-visible {
+  background: var(--rf2-info-tint);
+  color: var(--rf2-action);
+  outline: none;
+}
+
+[data-ui='v2'] .rf2-tres__tip-pop {
+  position: absolute;
+  z-index: 2;
+  top: calc(100% - 4px);
+  left: 0;
+  width: min(18rem, 70vw);
+  margin: 0;
+  padding: 10px 12px;
+  border: 0;
+  outline: none;
+  border-radius: var(--rf2-radius-card);
+  background: var(--rf2-surface-muted);
+  box-shadow: none;
+  color: var(--rf2-ink);
+  font-size: var(--rf2-text-caption);
+  line-height: 1.45;
+}
+
+[data-ui='v2'] .rf2-tres__empty,
+[data-ui='v2'] .rf2-tres__series,
+[data-ui='v2'] .rf2-tres__note {
+  margin: 0;
+  color: var(--rf2-ink-2);
+  font-size: var(--rf2-text-label);
+  line-height: 1.45;
+}
+
+[data-ui='v2'] .rf2-tres__notes {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-ui='v2'] .rf2-tres__note {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+[data-ui='v2'] .rf2-tres__note svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  color: var(--rf2-info);
+}
+
+/* Matrix table & metric cells */
+[data-ui='v2'] .rf2-tres__col-head {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+[data-ui='v2'] .rf2-tres__metric-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--rf2-radius-pill);
+  background: var(--rf2-info-tint);
+  color: var(--rf2-info);
+  flex-shrink: 0;
+}
+
+[data-ui='v2'] .rf2-tres__metric-icon svg {
+  width: 13px;
+  height: 13px;
+}
+
+[data-ui='v2'] .rf2-tres__metric-icon[data-tone='success'] {
+  background: var(--rf2-success-tint);
+  color: var(--rf2-success);
+}
+
+[data-ui='v2'] .rf2-tres__metric-icon[data-tone='warning'] {
+  background: var(--rf2-warning-tint);
+  color: var(--rf2-warning);
+}
+
+[data-ui='v2'] .rf2-tres__matrix {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 8px;
+}
+
+[data-ui='v2'] .rf2-tres__matrix th,
+[data-ui='v2'] .rf2-tres__matrix td {
+  border: 0;
+  outline: none;
+  vertical-align: top;
+  padding: 12px 14px;
+}
+
+[data-ui='v2'] .rf2-tres__matrix-row {
+  background: transparent;
+  border-radius: var(--rf2-radius-card);
+}
+
+[data-ui='v2'] .rf2-tres__matrix-row:hover > th,
+[data-ui='v2'] .rf2-tres__matrix-row:hover > td,
+[data-ui='v2'] .rf2-tres__matrix-row[data-selected='true'] > th,
+[data-ui='v2'] .rf2-tres__matrix-row[data-selected='true'] > td {
+  background: var(--rf2-surface-muted);
+}
+
+[data-ui='v2'] .rf2-tres__matrix-emp {
+  min-width: 10.5rem;
+}
+
+[data-ui='v2'] .rf2-tres__who {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+[data-ui='v2'] .rf2-tres__who-text {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+}
+
+[data-ui='v2'] .rf2-tres__matrix-cell {
+  min-width: 9.5rem;
+  border-radius: var(--rf2-radius-control);
+}
+
+[data-ui='v2'] .rf2-tres__matrix-cell[data-active='true'] {
+  background: var(--rf2-info-tint);
+}
+
+[data-ui='v2'] .rf2-tres__cell-mobile-label {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  color: var(--rf2-ink-2);
+  font-size: var(--rf2-text-caption);
+  font-weight: 600;
+}
+
+[data-ui='v2'] .rf2-tres__cell-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+[data-ui='v2'] .rf2-tres__cell-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+}
+
+[data-ui='v2'] .rf2-tres__achieved-btn,
+[data-ui='v2'] .rf2-tres__achieved-sub {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 28px;
+  padding: 2px 8px;
+  border: 0;
+  outline: none;
+  border-radius: var(--rf2-radius-control);
+  background: transparent;
+  box-shadow: none;
+  color: var(--rf2-ink);
+  font-size: var(--rf2-text-label);
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+[data-ui='v2'] .rf2-tres__achieved-sub {
+  color: var(--rf2-ink-2);
+  font-size: var(--rf2-text-caption);
+  font-weight: 500;
+}
+
+[data-ui='v2'] .rf2-tres__achieved-btn:hover,
+[data-ui='v2'] .rf2-tres__achieved-btn:focus-visible,
+[data-ui='v2'] .rf2-tres__achieved-btn[aria-expanded='true'],
+[data-ui='v2'] .rf2-tres__achieved-sub:hover,
+[data-ui='v2'] .rf2-tres__achieved-sub:focus-visible,
+[data-ui='v2'] .rf2-tres__achieved-sub[aria-expanded='true'] {
+  background: var(--rf2-info-tint);
+  color: var(--rf2-action);
+  outline: none;
+}
+
+[data-ui='v2'] .rf2-tres__complete-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--rf2-success);
+  flex-shrink: 0;
+}
+
+[data-ui='v2'] .rf2-tres__cell-ratio {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+[data-ui='v2'] .rf2-tres__cell-unset {
+  color: var(--rf2-ink-2);
+  font-size: var(--rf2-text-label);
+}
+
+[data-ui='v2'] .rf2-tres__cell-unavailable {
+  color: var(--rf2-danger);
+  font-size: var(--rf2-text-label);
+  font-weight: 600;
+}
+
+[data-ui='v2'] .rf2-tres__prog-track {
+  display: flex;
+  width: 100%;
+  height: 6px;
+  border-radius: var(--rf2-radius-pill);
+  background: var(--rf2-neutral-tint);
+  overflow: hidden;
+}
+
+[data-ui='v2'] .rf2-tres__prog-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--rf2-action);
+}
+
+[data-ui='v2'] .rf2-tres__prog-fill[data-complete='true'] {
+  background: var(--rf2-success);
+}
+
+[data-ui='v2'] .rf2-tres__cell-meta {
+  color: var(--rf2-ink-2);
+  font-size: var(--rf2-text-caption);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Inline editor, Add target form & supporting records panel */
+[data-ui='v2'] .rf2-tres__matrix-expand > td {
+  padding: 4px 0 10px;
+}
+
+[data-ui='v2'] .rf2-tres__inline-form,
+[data-ui='v2'] .rf2-tres__inline-editor,
+[data-ui='v2'] .rf2-tres__inline-records {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 0;
+  outline: none;
+  border-radius: var(--rf2-radius-card);
+  background: var(--rf2-surface-muted);
+  box-shadow: none;
+}
+
+[data-ui='v2'] .rf2-tres__inline-form .rf2-field__control,
+[data-ui='v2'] .rf2-tres__inline-editor .rf2-field__control {
+  border: 0;
+  outline: none;
+  box-shadow: none;
+}
+
+[data-ui='v2'] .rf2-tres__inline-form-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+[data-ui='v2'] .rf2-tres__editor-scope {
+  margin: 2px 0 0;
+  color: var(--rf2-ink-2);
+  font-size: var(--rf2-text-caption);
+}
+
+[data-ui='v2'] .rf2-tres__inline-form-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  min-width: 0;
+}
+
+[data-ui='v2'] .rf2-tres__status-banner,
+[data-ui='v2'] .rf2-tres__error-banner,
+[data-ui='v2'] .rf2-tres__conflict,
+[data-ui='v2'] .rf2-tres__unsaved {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 0;
+  outline: none;
+  border-radius: var(--rf2-radius-control);
+  box-shadow: none;
+  font-size: var(--rf2-text-label);
+}
+
+[data-ui='v2'] .rf2-tres__status-banner {
+  background: var(--rf2-success-tint);
+  color: var(--rf2-success);
+}
+
+[data-ui='v2'] .rf2-tres__error-banner,
+[data-ui='v2'] .rf2-tres__conflict,
+[data-ui='v2'] .rf2-tres__error-msg {
+  background: var(--rf2-danger-tint);
+  color: var(--rf2-danger);
+}
+
+[data-ui='v2'] .rf2-tres__error-msg {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: var(--rf2-radius-control);
+  font-size: var(--rf2-text-caption);
+}
+
+[data-ui='v2'] .rf2-tres__unsaved {
+  background: var(--rf2-warning-tint);
+  color: var(--rf2-ink);
+}
+
+[data-ui='v2'] .rf2-tres__conflict p,
+[data-ui='v2'] .rf2-tres__unsaved p,
+[data-ui='v2'] .rf2-tres__error-banner p {
+  margin: 0;
+}
+
+[data-ui='v2'] .rf2-tres__history-box {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: var(--rf2-radius-control);
+  background: var(--rf2-card);
+}
+
+/* Supporting charts & bars */
+[data-ui='v2'] .rf2-tres__bars {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+[data-ui='v2'] .rf2-tres__bar {
+  display: grid;
+  grid-template-columns: minmax(5.5rem, 8rem) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+[data-ui='v2'] .rf2-tres__bar-name,
+[data-ui='v2'] .rf2-tres__bar-value {
+  font-variant-numeric: tabular-nums;
+}
+
+[data-ui='v2'] .rf2-tres__bar-name {
+  color: var(--rf2-ink-2);
+  font-size: var(--rf2-text-label);
+  overflow-wrap: anywhere;
+}
+
+[data-ui='v2'] .rf2-tres__bar-track {
+  display: flex;
+  min-width: 0;
+  height: 8px;
+  border-radius: var(--rf2-radius-pill);
+  background: var(--rf2-neutral-tint);
+}
+
+[data-ui='v2'] .rf2-tres__bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--rf2-action);
+}
+
+[data-ui='v2'] .rf2-tres__bar-fill[data-tone='success'] {
+  background: var(--rf2-success);
+}
+
+[data-ui='v2'] .rf2-tres__plot {
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+}
+
+[data-ui='v2'] .rf2-tres__plot svg {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+}
+
+[data-ui='v2'] .rf2-tres__trend-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 8px;
+}
+
+[data-ui='v2'] .rf2-tres__skel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+}
+
+[data-ui='v2'] .rf2-tres__skel-card {
+  height: 6.5rem;
+  border-radius: var(--rf2-radius-card);
+  background: var(--rf2-neutral-tint);
+}
+
+[data-ui='v2'] .rf2-tres__manage {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 12px;
+  min-width: 0;
+}
+
+[data-ui='v2'] .rf2-tres__manage-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+[data-ui='v2'] .rf2-tres .rf2-jscroll {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+[data-ui='v2'] .rf2-drawer .rf2-jscroll {
+  flex-shrink: 0;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+[data-ui='v2'] .rf2-tres__history {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--rf2-text-caption);
+}
+
+[data-ui='v2'] .rf2-tres__history li {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+[data-ui='v2'] .rf2-tres__table th,
+[data-ui='v2'] .rf2-tres__table td,
+[data-ui='v2'] .rf2-tres .rf2-jtable th,
+[data-ui='v2'] .rf2-tres .rf2-jtable td {
+  border: 0;
+}
+
+[data-ui='v2'] .rf2-tres a {
+  text-decoration: none;
+}
+
+@media (min-width: 520px) {
+  [data-ui='v2'] .rf2-tres__manage,
+  [data-ui='v2'] .rf2-tres__inline-form-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  [data-ui='v2'] .rf2-tres__manage-actions,
+  [data-ui='v2'] .rf2-tres__manage > :is([role='alert'], [role='status']) {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (min-width: 768px) {
+  [data-ui='v2'] .rf2-tres__kpis,
+  [data-ui='v2'] .rf2-tres__skel {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  [data-ui='v2'] .rf2-tres__inline-form-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  [data-ui='v2'] .rf2-tres__row2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Mobile (< 768px): compact employee cards with 4 metrics in a 2-column layout */
+[data-ui='v2'] .rf2-tres__comparison,
+[data-ui='v2'] .rf2-tres__legend {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+[data-ui='v2'] .rf2-tres__comparison {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  max-height: 280px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+[data-ui='v2'] .rf2-tres__comparison > li {
+  display: grid;
+  grid-template-columns: minmax(80px, 1fr) minmax(0, 2fr);
+  align-items: center;
+  gap: 12px;
+  font-size: var(--rf2-text-caption);
+}
+[data-ui='v2'] .rf2-tres__comparison:focus-visible {
+  background: var(--rf2-info-tint);
+  border-radius: var(--rf2-radius-control);
+  outline: 0;
+  box-shadow: none;
+}
+[data-ui='v2'] .rf2-tres__comparison strong {
+  overflow-wrap: anywhere;
+  font-weight: var(--rf2-weight-label);
+}
+[data-ui='v2'] .rf2-tres__comparison-series {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(60px, max-content);
+  align-items: center;
+  column-gap: 8px;
+  row-gap: 6px;
+}
+[data-ui='v2'] .rf2-tres__comparison-track {
+  display: block;
+  height: 6px;
+  border-radius: var(--rf2-radius-pill);
+  background: var(--rf2-neutral-tint);
+  overflow: hidden;
+}
+[data-ui='v2'] .rf2-tres__comparison-track > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+}
+[data-ui='v2'] .rf2-tres [data-series='actual'] {
+  --series-color: var(--rf2-info);
+}
+[data-ui='v2'] .rf2-tres [data-series='target'] {
+  --series-color: var(--rf2-success);
+}
+[data-ui='v2'] .rf2-tres__comparison-track > span {
+  background: var(--series-color);
+}
+[data-ui='v2'] .rf2-tres__legend {
+  display: flex;
+  gap: 14px;
+  color: var(--rf2-ink-2);
+  font-size: var(--rf2-text-caption);
+}
+[data-ui='v2'] .rf2-tres__legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+[data-ui='v2'] .rf2-tres__legend > span::before {
+  content: '';
+  width: 12px;
+  height: 6px;
+  border-radius: var(--rf2-radius-pill);
+  background: var(--series-color);
+}
+[data-ui='v2'] .rf2-tres__activity .rf2-field {
+  flex: 0 1 190px;
+  min-width: 0;
+}
+[data-ui='v2'] .rf2-tres__activity .rf2-field__control {
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  box-shadow: none;
+}
+[data-ui='v2'] .rf2-tres__method > summary:focus-visible {
+  background: var(--rf2-info-tint);
+  color: var(--rf2-info);
+  font-weight: var(--rf2-weight-card);
+  outline: 0;
+  box-shadow: none;
+  text-decoration: none;
+}
+@media (max-width: 767px) {
+  [data-ui='v2'] .rf2-tres .rf2-jscroll .rf2-tres__matrix {
+    min-width: 0;
+    width: 100%;
+  }
+  [data-ui='v2'] .rf2-tres__matrix-row .rf2-tres__matrix-emp {
+    padding: 0 0 6px;
+  }
+  [data-ui='v2'] .rf2-tres__kpi .rf2-tres__spark {
+    display: none;
+  }
+  [data-ui='v2'] .rf2-tres__kpi-top {
+    gap: 4px;
+  }
+  [data-ui='v2'] .rf2-tres__head {
+    min-width: 0;
+  }
+  [data-ui='v2'] .rf2-tres__controls {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  [data-ui='v2'] .rf2-tres__controls .rf2-btn,
+  [data-ui='v2'] .rf2-tres__achieved-btn,
+  [data-ui='v2'] .rf2-tres__achieved-sub,
+  [data-ui='v2'] .rf2-tres__matrix-cell .rf2-btn {
+    min-height: 44px;
+  }
+  [data-ui='v2'] .rf2-tres__bar {
+    grid-template-columns: 76px minmax(0, 1fr) max-content;
+    gap: 8px;
+    font-size: var(--rf2-text-caption);
+  }
+  [data-ui='v2'] .rf2-tres__matrix,
+  [data-ui='v2'] .rf2-tres__matrix tbody {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  [data-ui='v2'] .rf2-tres__matrix thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  [data-ui='v2'] .rf2-tres__matrix-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    padding: 12px;
+    border-radius: var(--rf2-radius-card);
+    background: var(--rf2-surface-muted);
+  }
+  [data-ui='v2'] .rf2-tres__matrix-emp {
+    grid-column: 1 / -1;
+    min-width: 0;
+    padding: 0 0 6px;
+  }
+  [data-ui='v2'] .rf2-tres__matrix-cell {
+    min-width: 0;
+    padding: 10px;
+    border-radius: var(--rf2-radius-control);
+    background: var(--rf2-card);
+  }
+  [data-ui='v2'] .rf2-tres__cell-mobile-label {
+    display: flex;
+  }
+  [data-ui='v2'] .rf2-tres__matrix-expand,
+  [data-ui='v2'] .rf2-tres__matrix-expand > td {
+    display: block;
+    width: 100%;
+    padding: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-ui='v2'] .rf2-tres *,
+  [data-ui='v2'] .rf2-tres *::before,
+  [data-ui='v2'] .rf2-tres *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

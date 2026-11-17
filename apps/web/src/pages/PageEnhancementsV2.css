@@ -2989,7 +2989,7 @@ textarea {
 /* Prevent horizontal overflow across the application */
 html, body {
   max-width: 100%;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 /* Responsive Page & Container Padding Scale */
@@ -3099,4 +3099,405 @@ html, body {
   select {
     min-height: 40px;
   }
+}
+
+
+/* ==========================================================================
+   Add Document Record Modal V2 (Executive 2-Column Layout)
+   ========================================================================== */
+.rf-modal-lead-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+  background: var(--rf2-info-tint, #eff6ff);
+  color: var(--rf2-action, #0066cc);
+  border: 1px solid color-mix(in srgb, var(--rf2-action, #0066cc) 16%, transparent);
+}
+
+.rf-doc-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.rf-doc-modal__grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.38fr) minmax(250px, 0.92fr);
+  gap: 18px;
+  align-items: start;
+}
+
+@media (max-width: 767px) {
+  .rf-doc-modal__grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.rf-doc-modal__main {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.rf-doc-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 18px 16px;
+  border: 1.5px dashed color-mix(in srgb, var(--rf2-action, #2563eb) 42%, var(--rf2-border, #cbd5e1));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--rf2-info-tint, #eff6ff) 55%, var(--rf2-card, #ffffff));
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 140ms ease, background-color 140ms ease;
+}
+
+.rf-doc-dropzone:hover {
+  border-color: var(--rf2-action, #0066cc);
+  background: var(--rf2-info-tint, #eff6ff);
+}
+
+.rf-doc-dropzone__icon {
+  color: var(--rf2-action, #0066cc);
+  margin-bottom: 4px;
+}
+
+.rf-doc-dropzone__title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--rf2-ink, #0f172a);
+}
+
+.rf-doc-dropzone__sub {
+  font-size: 12px;
+  color: var(--rf2-muted, #64748b);
+}
+
+.rf-doc-dropzone__browse {
+  color: var(--rf2-action, #0066cc);
+  font-weight: 600;
+}
+
+.rf-doc-dropzone__hint {
+  font-size: 11px;
+  color: var(--rf2-muted, #64748b);
+  margin-top: 2px;
+}
+
+.rf-doc-file-pill {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--rf2-info-tint, #eff6ff);
+  border: 1px solid color-mix(in srgb, var(--rf2-action, #0066cc) 18%, transparent);
+}
+
+.rf-doc-file-pill__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--rf2-danger-tint, #fef2f2);
+  color: var(--rf2-danger, #dc2626);
+  border: 1px solid color-mix(in srgb, var(--rf2-danger, #dc2626) 24%, transparent);
+  flex-shrink: 0;
+}
+
+.rf-doc-file-pill__meta {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.rf-doc-file-pill__name {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--rf2-ink, #0f172a);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rf-doc-file-pill__sub {
+  font-size: 11px;
+  color: var(--rf2-muted, #64748b);
+}
+
+.rf-doc-file-pill__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--rf2-muted, #64748b);
+  cursor: pointer;
+}
+
+.rf-doc-file-pill__remove:hover {
+  background: color-mix(in srgb, var(--rf2-ink, #0f172a) 8%, transparent);
+  color: var(--rf2-ink, #0f172a);
+}
+
+.rf-doc-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+.rf-doc-date-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+}
+
+.rf-doc-date-box__icon {
+  color: var(--rf2-muted, #64748b);
+  flex-shrink: 0;
+}
+
+.rf-doc-date-box__input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--rf2-ink, #0f172a);
+  outline: none;
+}
+
+.rf-doc-date-box__clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--rf2-muted, #64748b);
+  cursor: pointer;
+}
+
+.rf-doc-extract {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.rf-doc-extract__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 10.5px;
+  color: var(--rf2-muted, #64748b);
+}
+
+.rf-doc-extract__hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.rf-doc-extract__count {
+  font-variant-numeric: tabular-nums;
+}
+
+.rf-doc-modal__side {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.rf-doc-side-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--rf2-divider, #e2e8f0);
+  border-radius: 12px;
+  background: var(--rf2-neutral-tint, #f8fafc);
+}
+
+.rf-doc-side-card__head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--rf2-ink, #0f172a);
+}
+
+.rf-doc-side-card__head svg {
+  color: var(--rf2-action, #0066cc);
+}
+
+.rf-doc-candidate-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--rf2-divider, #e2e8f0);
+  border-radius: 10px;
+  background: var(--rf2-card, #ffffff);
+}
+
+.rf-doc-candidate-box__avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: var(--rf2-info-tint, #dbeafe);
+  color: var(--rf2-action, #0066cc);
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.rf-doc-candidate-box__info {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+}
+
+.rf-doc-candidate-box__name {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--rf2-ink, #0f172a);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rf-doc-candidate-box__sub {
+  font-size: 10.5px;
+  color: var(--rf2-muted, #64748b);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.rf-doc-candidate-box__chev {
+  color: var(--rf2-muted, #64748b);
+  flex-shrink: 0;
+}
+
+.rf-doc-vis-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rf-doc-vis-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.rf-doc-vis-item input[type="radio"] {
+  margin-top: 2px;
+  accent-color: var(--rf2-action, #0066cc);
+}
+
+.rf-doc-vis-item div {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.rf-doc-vis-item__title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--rf2-ink, #0f172a);
+}
+
+.rf-doc-vis-item__desc {
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--rf2-muted, #64748b);
+}
+
+.rf-doc-tag-input {
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--rf2-divider, #e2e8f0);
+  border-radius: 8px;
+  background: var(--rf2-card, #ffffff);
+  font-size: 12px;
+  color: var(--rf2-ink, #0f172a);
+  outline: none;
+}
+
+.rf-doc-tag-input:focus {
+  border-color: var(--rf2-action, #0066cc);
+}
+
+.rf-doc-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.rf-doc-tag-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--rf2-info-tint, #eff6ff);
+  color: var(--rf2-action, #0066cc);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.rf-doc-tag-pill button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.75;
+}
+
+.rf-doc-tag-pill button:hover {
+  opacity: 1;
+}
+
+.rf-doc-modal__footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--rf2-divider, #e2e8f0);
 }

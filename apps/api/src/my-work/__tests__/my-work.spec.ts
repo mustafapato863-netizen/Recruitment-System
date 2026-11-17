@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { buildTargetChip } from '@recruitflow/contracts';
 import { caseFingerprint, type JoiningCheckFact, type RequirementSnapshot } from '../../hiring/joining-policy';
+import { ownedVacancyWhere } from '../../vacancy-core/job-ownership';
 import { buildMyWork, cairoDate, type MyWorkInput, type MyWorkJoiningDecisionFacts, type MyWorkJoiningInput } from '../my-work.buckets';
+import { MyWorkService } from '../my-work.service';
 
 // Frozen clock: 19 Oct 2026, 09:00 Cairo (UTC+3) = 06:00Z.
 const NOW = new Date('2026-10-19T06:00:00Z');
@@ -81,6 +83,33 @@ describe('B4 My Work buckets (frozen clock, Africa/Cairo)', () => {
     expect(work.dueToday.map((i) => i.id).sort()).toEqual(['r-draft-nodate', 't-today']);
     expect(work.waitingOnOthers.map((i) => [i.id, i.waitingOn])).toEqual([['r-pending', 'approver']]);
     expect(work.targets.map((t) => t.vacancyId)).toEqual(['j-over']);
+  });
+
+  it('offers complete and reschedule on every task, and open-record when a record is linked', () => {
+    const dueAt = new Date('2026-10-19T10:00:00Z');
+    const work = buildMyWork({
+      ...empty,
+      tasks: [
+        { id: 't-alone', title: 'Call back', dueAt, entityType: null, entityId: null },
+        { id: 't-app', title: 'Review file', dueAt, entityType: 'Application', entityId: 'a1' },
+        { id: 't-job', title: 'Check vacancy', dueAt, entityType: 'Vacancy', entityId: 'j1' },
+        { id: 't-cand', title: 'Follow up', dueAt, entityType: 'Candidate', entityId: 'c1' },
+      ],
+    }, NOW);
+    const byId = (id: string) => work.dueToday.find((item) => item.id === id)!;
+    expect(byId('t-alone').actions).toEqual([
+      { key: 'complete-task', label: 'Complete task', disabled: false },
+      { key: 'reschedule-task', label: 'Reschedule', disabled: false },
+    ]);
+    expect(byId('t-alone').entity).toEqual({ type: 'task', id: 't-alone' });
+    expect(byId('t-alone').candidate).toBeUndefined();
+    expect(byId('t-app').actions.map((action) => action.key)).toEqual(['complete-task', 'open-record', 'reschedule-task']);
+    expect(byId('t-job').actions.map((action) => action.key)).toEqual(['complete-task', 'open-record', 'reschedule-task']);
+    expect(byId('t-cand').actions.map((action) => action.key)).toEqual(['complete-task', 'open-record', 'reschedule-task']);
+    expect(byId('t-app').entity).toEqual({ type: 'application', id: 'a1' });
+    expect(byId('t-job').entity).toEqual({ type: 'job', id: 'j1' });
+    expect(byId('t-cand').entity).toEqual({ type: 'task', id: 't-cand' });
+    expect(byId('t-cand').candidate).toEqual({ id: 'c1', name: '' });
   });
 
   it('interviews today, missing scorecards from others, offers sent', () => {
@@ -267,5 +296,176 @@ describe('B4 My Work buckets (frozen clock, Africa/Cairo)', () => {
     const tomorrow = buildMyWork({ ...empty, interviews: [file('tmr', '2026-10-20T07:00:00Z', '2026-10-20T08:00:00Z')] }, NOW, 'tomorrow');
     expect(tomorrow.dueToday.map((row) => row.id)).toEqual(['tmr']);
     expect(tomorrow.upcomingInterviews?.map((row) => row.id)).toEqual(['tmr']);
+  });
+
+  it('keeps active owned jobs with no due date in Open jobs, and does not alert on them or on met targets', () => {
+    const work = buildMyWork({
+      ...empty,
+      jobs: [
+        { id: 'open-null', code: 'V1', title: 'Medical Coder', status: 'Open', joined: 0, target: 2, dueDate: null, ownedByMe: true },
+        { id: 'met', code: 'V2', title: 'Filled seats', status: 'Open', joined: 2, target: 2, dueDate: '2026-10-10', ownedByMe: true },
+        { id: 'other', code: 'V3', title: 'Someone else', status: 'Open', joined: 0, target: 1, dueDate: '2026-10-10', ownedByMe: false },
+        { id: 'mine-over', code: 'V4', title: 'Mine overdue', status: 'Partially Filled', joined: 0, target: 1, dueDate: '2026-10-10', ownedByMe: true },
+      ],
+    }, NOW);
+    expect(work.targets.map((target) => target.vacancyId)).toEqual(['open-null', 'met', 'mine-over']);
+    expect(work.targets.find((target) => target.vacancyId === 'open-null')).toMatchObject({ dueDate: null, label: '0 of 2' });
+    expect(work.targets.find((target) => target.vacancyId === 'met')).toMatchObject({ label: '2 of 2', dueDate: '2026-10-10' });
+    expect(work.overdue.map((row) => row.id)).toEqual(['mine-over']);
+    expect(work.dueToday.map((row) => row.id)).toEqual([]);
+  });
+});
+
+describe('My Work ownership matches Open jobs Mine', () => {
+  it('loads jobs owned by primaryRecruiterId or an active PRIMARY assignment', async () => {
+    const vacancyWheres: unknown[] = [];
+    const none = async () => [];
+    const prisma = {
+      vacancy: { findMany: async (args: { where: unknown }) => { vacancyWheres.push(args.where); return []; } },
+      vacancyRequest: { findMany: none },
+      task: { findMany: none },
+      interview: { findMany: none },
+      offer: { findMany: none },
+      hiringCase: { findMany: none },
+      serviceHeartbeat: { findUnique: async () => null },
+    };
+    const service = new MyWorkService(prisma as never);
+    await service.getMyWork({ userId: 'me', organizationId: 'org', tokenVersion: 0, roleCodes: [] });
+    expect(ownedVacancyWhere('me')).toEqual({
+      OR: [
+        { primaryRecruiterId: 'me' },
+        { assignments: { some: { userId: 'me', isActive: true, assignmentKind: 'PRIMARY' } } },
+      ],
+    });
+    expect(vacancyWheres[0]).toEqual({
+      organizationId: 'org',
+      status: { in: ['Open', 'Partially Filled'] },
+      ...ownedVacancyWhere('me'),
+    });
+  });
+
+  it('includes Approved, Draft, sent-back Draft, and Expired offer obligations in dueToday and keeps 15+ day overdue scorecards and earliest tasks', async () => {
+    const taskArgs: Array<{ orderBy?: unknown; take?: number }> = [];
+    const interviewArgs: Array<{ where?: unknown; orderBy?: unknown }> = [];
+    const offerArgs: Array<{ where?: unknown }> = [];
+    const fifteenDaysAgoStart = new Date(NOW.getTime() - 15 * 86_400_000 - 3_600_000);
+    const fifteenDaysAgoEnd = new Date(NOW.getTime() - 15 * 86_400_000);
+    const prisma = {
+      vacancy: { findMany: async () => [] },
+      vacancyRequest: { findMany: async () => [] },
+      task: {
+        findMany: async (args: { orderBy?: unknown; take?: number }) => {
+          taskArgs.push(args);
+          return Array.from({ length: 201 }, (_, idx) => ({
+            id: `t-${idx + 1}`,
+            title: `Task ${idx + 1}`,
+            dueAt: new Date(NOW.getTime() - (201 - idx) * 86_400_000),
+            entityType: 'Application',
+            entityId: 'a1',
+          })).slice(0, args.take ?? 201);
+        },
+      },
+      interview: {
+        findMany: async (args: { where?: unknown; orderBy?: unknown }) => {
+          interviewArgs.push(args);
+          return [
+            {
+              id: 'iv-15d',
+              title: '15-day old panel',
+              status: 'Completed',
+              scheduledStart: fifteenDaysAgoStart,
+              scheduledEnd: fifteenDaysAgoEnd,
+              applicationId: 'a1',
+              locationUrl: null,
+              roomName: null,
+              legacyInterviewerName: null,
+              application: {
+                id: 'a1',
+                stage: 'Interview',
+                primaryRecruiterId: 'me',
+                taskOwnerId: 'me',
+                candidate: { id: 'c1', firstName: 'Ahmed', lastName: 'Embaby' },
+                vacancy: { status: 'Open', primaryRecruiterId: 'me', position: { title: 'HRIS Developer' }, assignments: [] },
+              },
+              attendees: [{ userId: 'me', role: 'INTERVIEWER', user: { displayName: 'Mariam Farag' } }],
+              scorecards: [{ interviewerId: 'me', status: 'Draft' }],
+            },
+          ];
+        },
+      },
+      offer: {
+        findMany: async (args: { where?: unknown }) => {
+          offerArgs.push(args);
+          return [
+            {
+              id: 'o-approved',
+              offerCode: 'OFF-APP',
+              status: 'Approved',
+              applicationId: 'a1',
+              updatedAt: NOW,
+              application: { id: 'a1', stage: 'Offer', candidate: { id: 'c1', firstName: 'Ahmed', lastName: 'Embaby' } },
+              versions: [{ status: 'Approved', approvals: [{ status: 'Approved', approverUserId: 'u-mgr', roleCode: 'HIRING_MANAGER', approver: { displayName: 'Karim Hassan' } }] }],
+            },
+            {
+              id: 'o-sentback',
+              offerCode: 'OFF-SB',
+              status: 'Draft',
+              applicationId: 'a2',
+              updatedAt: NOW,
+              application: { id: 'a2', stage: 'Offer', candidate: { id: 'c2', firstName: 'Lina', lastName: 'Hassan' } },
+              versions: [{ status: 'Changes Requested', approvals: [{ status: 'Rejected', approverUserId: 'u-mgr', roleCode: 'HIRING_MANAGER', approver: { displayName: 'Karim Hassan' } }] }],
+            },
+            {
+              id: 'o-draft',
+              offerCode: 'OFF-DR',
+              status: 'Draft',
+              applicationId: 'a3',
+              updatedAt: NOW,
+              application: { id: 'a3', stage: 'Offer', candidate: { id: 'c3', firstName: 'Nour', lastName: 'Ali' } },
+              versions: [{ status: 'Draft', approvals: [] }],
+            },
+            {
+              id: 'o-expired',
+              offerCode: 'OFF-EXP',
+              status: 'Expired',
+              applicationId: 'a4',
+              updatedAt: NOW,
+              application: { id: 'a4', stage: 'Offer', candidate: { id: 'c4', firstName: 'Omar', lastName: 'Said' } },
+              versions: [{ status: 'Expired', approvals: [] }],
+            },
+          ];
+        },
+      },
+      hiringCase: { findMany: async () => [] },
+      serviceHeartbeat: { findUnique: async () => null },
+    };
+    const service = new MyWorkService(prisma as never);
+    const work = await service.getMyWork({ userId: 'me', organizationId: 'org', tokenVersion: 0, roleCodes: [] }, NOW);
+
+    expect(taskArgs[0]?.orderBy).toEqual([{ dueAt: 'asc' }, { id: 'asc' }]);
+    expect(interviewArgs[0]?.orderBy).toEqual({ scheduledStart: 'asc' });
+    expect(JSON.stringify(offerArgs[0]?.where)).toContain('Approved');
+    expect(JSON.stringify(offerArgs[0]?.where)).toContain('Expired');
+    expect(work.overdue.some((item) => item.id === 'iv-15d' && item.nextAction.code === 'submit-scorecard')).toBe(true);
+    expect(work.overdue.some((item) => item.id === 't-1')).toBe(true);
+    expect(work.dueToday.find((item) => item.id === 'o-approved')).toMatchObject({
+      reason: 'Offer approved — ready to send',
+      nextAction: { code: 'send-offer', label: 'Send offer' },
+    });
+    expect(work.dueToday.find((item) => item.id === 'o-sentback')).toMatchObject({
+      reason: 'Offer sent back for changes',
+      nextAction: { code: 'open-offer', label: 'Revise and resubmit' },
+    });
+    expect(work.dueToday.find((item) => item.id === 'o-draft')).toMatchObject({
+      reason: 'Offer draft not submitted',
+      nextAction: { code: 'open-offer', label: 'Submit for approval' },
+    });
+    expect(work.dueToday.find((item) => item.id === 'o-expired')).toMatchObject({
+      reason: 'Offer expired',
+      nextAction: { code: 'open-offer', label: 'New offer version' },
+    });
+    expect( { ...ownedVacancyWhere('me') }).toEqual({
+      ...ownedVacancyWhere('me'),
+    });
   });
 });

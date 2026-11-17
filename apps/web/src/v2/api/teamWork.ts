@@ -53,8 +53,39 @@ export interface TeamWorkApi {
 const toFile = (a: RawTeamApp): TeamFile => ({
   id: a.id, code: a.applicationCode, vacancyId: a.vacancyId, stage: a.stage, followUpDate: a.followUpDate?.slice(0, 10) ?? null,
   candidate: `${a.candidate?.firstName ?? ''} ${a.candidate?.lastName ?? ''}`.trim() || a.applicationCode,
-  job: a.positionTitle ?? 'Job', site: a.vacancyBranchName ?? a.vacancyLocation ?? null, gates: a.gates, interview: a.interview ?? null,
+  job: a.positionTitle ?? 'Job', site: a.vacancyBranchName ?? a.vacancyLocation ?? null, gates: a.gates,
+  // Missing `interview` is unknown. An explicit null means this file has no scheduled interview.
+  interview: a.interview === undefined ? undefined : a.interview,
 });
+
+/** Sunday–Saturday week containing `today` (YYYY-MM-DD), using the calendar date (Cairo dates are already calendar days). */
+export function cairoWeekBounds(today = cairoToday()): { start: string; end: string } {
+  const noon = new Date(`${today}T12:00:00Z`);
+  const start = new Date(noon);
+  start.setUTCDate(start.getUTCDate() - noon.getUTCDay());
+  const end = new Date(start);
+  end.setUTCDate(end.getUTCDate() + 6);
+  return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) };
+}
+
+/**
+ * Interviews on these files whose start falls in the current Cairo week.
+ * Returns null when any file omitted `interview` (unknown — do not show 0).
+ * An explicit null interview is a known “none”.
+ */
+export function interviewsThisWeekCount(
+  files: ReadonlyArray<{ interview?: { startAt: string } | null }>,
+  today = cairoToday(),
+): number | null {
+  if (files.some((file) => file.interview === undefined)) return null;
+  const { start, end } = cairoWeekBounds(today);
+  return files.filter((file) => {
+    const at = file.interview?.startAt;
+    if (!at) return false;
+    const day = cairoToday(new Date(at));
+    return day >= start && day <= end;
+  }).length;
+}
 
 const GATE_TASK: Record<string, string> = { 'screen-note': 'Screen note missing', scorecard: 'Scorecard missing', 'offer-accepted': 'Offer not accepted yet', 'joining-checks': 'Joining checks open' };
 const addDays = (d: string, n: number) => { const x = new Date(`${d}T12:00:00Z`); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
@@ -197,14 +228,25 @@ export const fileHref = (id: string) => `/applications/${enc(id)}`;
  */
 export interface TeamJob { id: string; code: string; title: string; site: string | null; status: JobStatus; ownerId: string; ownerName: string | null; holdUntil: string | null; filled: number; target: number }
 const OPEN_JOB: ReadonlySet<string> = new Set(['Open', 'Partially Filled', 'On Hold']);
-export async function fetchTeamJobs(reportIds: ReadonlySet<string>): Promise<TeamJob[]> {
+function toTeamJob(r: JobWorkQueueItem, ownerId: string): TeamJob {
+  return { id: r.id, code: r.code, title: r.title, site: r.branch?.name ?? null, status: r.status, ownerId, ownerName: r.owner?.displayName ?? null, holdUntil: r.holdUntil ?? null, filled: r.headcount?.joined ?? 0, target: r.headcount?.approved ?? 0 };
+}
+
+/** Jobs owned by the reporting line, including filled and closed. Redacted rows are omitted. */
+export async function fetchManagedJobs(reportIds: ReadonlySet<string>): Promise<TeamJob[]> {
   const rows = stripPay(await fetchAllPages<JobWorkQueueItem | RedactedJob>('/vacancies/work-queue'));
   const out: TeamJob[] = [];
   for (const r of rows) {
-    if (isRedactedJob(r) || !r.owner?.id || !reportIds.has(r.owner.id) || !OPEN_JOB.has(r.status)) continue;
-    out.push({ id: r.id, code: r.code, title: r.title, site: r.branch?.name ?? null, status: r.status, ownerId: r.owner.id, ownerName: r.owner.displayName ?? null, holdUntil: r.holdUntil ?? null, filled: r.headcount?.joined ?? 0, target: r.headcount?.approved ?? 0 });
+    if (isRedactedJob(r)) continue;
+    const ownerId = r.owner?.id;
+    if (!ownerId || !reportIds.has(ownerId)) continue;
+    out.push(toTeamJob(r, ownerId));
   }
   return out.sort((a, b) => a.title.localeCompare(b.title));
+}
+
+export async function fetchTeamJobs(reportIds: ReadonlySet<string>): Promise<TeamJob[]> {
+  return (await fetchManagedJobs(reportIds)).filter((job) => OPEN_JOB.has(job.status));
 }
 /** The JobDetail subset JobStatusDrawer reads. */
 export const teamJobDetail = (j: TeamJob): JobDetail => ({

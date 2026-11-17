@@ -50,6 +50,7 @@ describe.skipIf(!url)('B8 /results (scratch Postgres)', () => {
     await prisma.application.update({ where: { id: apps[2]! }, data: { stage: 'Rejected' } });
     await prisma.applicationStatusHistory.create({ data: { applicationId: apps[2]!, fromStage: 'Screening', toStage: 'Interview', createdAt: SEPT(7) } as never });
     await prisma.applicationStatusHistory.create({ data: { applicationId: apps[3]!, fromStage: 'Pre-Hire', toStage: 'Joined', createdAt: SEPT(25) } as never });
+    await prisma.hiringCase.create({ data: { organizationId: ORG, applicationId: apps[3]!, status: 'Joined', actualJoiningDate: SEPT(25) } as never });
     // offers: 5 versions sent in Sept, 2 accepted; one sent in Aug (excluded).
     const offer = await prisma.offer.create({ data: { organizationId: ORG, applicationId: apps[4]!, offerCode: `OFF-R8-${tag}`, status: 'Draft' } });
     for (let v = 1; v <= 6; v += 1) {
@@ -98,6 +99,19 @@ describe.skipIf(!url)('B8 /results (scratch Postgres)', () => {
     expect(team.rows).toHaveLength(1);
     expect(team.rows![0]!.person).toEqual({ id: u.r1, name: team.people[0]!.name });
     expect(team.rows![0]!.tiles).toEqual(team.tiles);
+    expect(team.filters.branchId).toBeNull();
+    expect(team.funnel?.map((step) => step.label)).toEqual(['Applications', 'Screened', 'Interviewed', 'Offered', 'Joined']);
+    expect(team.funnel?.[0]?.stepPercent).toBeNull();
+    expect(team.joinedBySite?.every((row) => typeof row.site === 'string' && Number.isInteger(row.joined))).toBe(true);
+    expect(team.sites?.every((site) => typeof site.id === 'string' && site.name.trim().length > 0)).toBe(true);
+    expect(JSON.stringify(team)).not.toMatch(/salary|compensation|packageTotal|monthlyPackage/i);
+    const foreignBranch = randomUUID();
+    const narrowedSite = await run(auth(u.mgr, ['RECRUITER']), 'team', { branchId: foreignBranch });
+    expect(narrowedSite.filters.branchId).toBe(foreignBranch);
+    expect(narrowedSite.people.map((p) => p.id)).toEqual([u.r1]);
+    expect(narrowedSite.tiles.seats).toMatchObject({ value: 0, of: 0, sampleSize: 0 });
+    expect(narrowedSite.funnel?.every((step) => step.count === 0)).toBe(true);
+    expect(narrowedSite.joinedBySite).toEqual([]);
     expect((await run(auth(u.r1, ['RECRUITER']), 'me')).rows).toBeUndefined();
     await expect(run(auth(u.r2, ['RECRUITER']), 'team')).rejects.toMatchObject({ status: 403 });
     const narrowed = await run(auth(u.mgr, ['RECRUITER']), 'team', { managerId: u.r2 });
@@ -130,6 +144,7 @@ describe.skipIf(!url)('B8 /results (scratch Postgres)', () => {
     const cand = (await prisma.candidate.create({ data: { organizationId: ORG, candidateCode: `R8-${tag}-hm`, firstName: 'R8', lastName: 'HM' } })).id;
     const app = await prisma.application.create({ data: { organizationId: ORG, applicationCode: `R8-${tag}-hm`, vacancyId: vac, candidateId: cand, stage: 'Joined', primaryRecruiterId: rep } as never });
     await prisma.applicationStatusHistory.create({ data: { applicationId: app.id, fromStage: 'Pre-Hire', toStage: 'Joined', createdAt: SEPT(25) } as never });
+    await prisma.hiringCase.create({ data: { organizationId: ORG, applicationId: app.id, status: 'Joined', actualJoiningDate: SEPT(25) } as never });
     const me = await run(auth(rep, ['RECRUITER']), 'me');
     const team = await run(auth(hm, ['HIRING_MANAGER']), 'team');
     expect(me.tiles.seats).toMatchObject({ value: 1, of: 2 });

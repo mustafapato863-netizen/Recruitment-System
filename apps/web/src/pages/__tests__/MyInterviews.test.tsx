@@ -1,6 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { Link, MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/client';
 import { canUseMyInterviews } from '../../auth/interviewer';
@@ -283,6 +283,228 @@ describe('B2F-3 deep link from My Work', () => {
     const cards = await screen.findAllByTestId('my-interview');
     expect(cards[1]).toHaveAttribute('aria-current', 'true');
     expect(cards[0]).not.toHaveAttribute('aria-current');
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+});
+
+
+describe('Interview screens functional review fixes (P1 & P2)', () => {
+  it('P1: disables RSVP Accept/Decline and hides Request reschedule on Completed interviews', async () => {
+    api.getApi.mockImplementation(async (p: string) =>
+      p === '/me/interviews?scope=past'
+        ? { data: [row({ id: 'past-1', status: 'Completed', scorecardStatus: 'submitted' })] }
+        : { data: [] },
+    );
+    renderPage();
+    const card = await screen.findByTestId('my-interview');
+    expect(within(card).getByRole('button', { name: /^Accept$/ })).toBeDisabled();
+    expect(within(card).getByRole('button', { name: /^Decline$/ })).toBeDisabled();
+    expect(within(card).queryByRole('button', { name: /Request reschedule/i })).toBeNull();
+  });
+
+  it('P1: surfaces partial-load alert and retry button when past interview read fails', async () => {
+    const u = userEvent.setup();
+    let calls = 0;
+    api.getApi.mockImplementation(async (p: string) => {
+      if (p === '/me/interviews?scope=upcoming') return { data: [] };
+      calls += 1;
+      if (calls === 1) throw new ApiError(500, 'Synthetic past read failed');
+      return { data: [row({ id: 'p-due', candidateName: 'Recovered Candidate', scorecardStatus: 'missing' })] };
+    });
+    renderPage();
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Synthetic past read failed');
+    const retryBtn = screen.getByRole('button', { name: /Retry ended interviews/i });
+    await u.click(retryBtn);
+    expect(await screen.findByText(/Recovered Candidate/)).toBeInTheDocument();
+  });
+
+  it('P1 & P2: future interview offers Prepare scorecard with Save draft enabled and Submit scorecard disabled with explanation', async () => {
+    const u = userEvent.setup();
+    api.getApi.mockImplementation(async (p: string) =>
+      p.endsWith('/scorecard')
+        ? []
+        : p === '/me/interviews?scope=upcoming'
+          ? { data: [row({ id: 'fut-1', scheduledStart: '2099-10-31T08:00:00Z', scheduledEnd: '2099-10-31T09:00:00Z' })] }
+          : { data: [] },
+    );
+    api.postApi.mockResolvedValue({
+      id: 'd1',
+      interviewId: 'fut-1',
+      interviewerId: 'me',
+      overallRating: 4,
+      recommendation: 'Hire',
+      notes: 'Prepared clinical questions and initial CV notes',
+      status: 'Draft',
+      submittedAt: '2026-10-31T10:00:00Z',
+    });
+    renderPage();
+    const prepBtn = await screen.findByRole('button', { name: 'Prepare scorecard' });
+    await u.click(prepBtn);
+    const dialog = await screen.findByRole('dialog');
+    const submitBtn = within(dialog).getByRole('button', { name: 'Submit scorecard' });
+    expect(submitBtn).toBeDisabled();
+    expect(within(dialog).getByText(/Final submission unlocks once the interview starts/i)).toBeInTheDocument();
+
+    const saveDraftBtn = within(dialog).getByRole('button', { name: 'Save draft' });
+    expect(saveDraftBtn).toBeEnabled();
+    await u.click(within(dialog).getByRole('radio', { name: '4' }));
+    await u.type(within(dialog).getByRole('textbox', { name: /Written evidence/ }), 'Prepared clinical questions and initial CV notes');
+    await u.click(saveDraftBtn);
+    expect(api.postApi).toHaveBeenCalledWith('/interviews/fut-1/scorecard', {
+      overallRating: 4,
+      recommendation: 'Hire',
+      notes: 'Prepared clinical questions and initial CV notes',
+      status: 'Draft',
+    });
+    expect(await screen.findByText('Draft saved')).toBeInTheDocument();
+  });
+
+  it('P2: supports Request reschedule with required reason', async () => {
+    const u = userEvent.setup();
+    api.getApi.mockImplementation(async (p: string) =>
+      p === '/me/interviews?scope=upcoming' ? { data: [row({ id: 'iv-resched' })] } : { data: [] },
+    );
+    api.postApi.mockResolvedValue({ id: 'iv-resched', response: 'Reschedule Requested' });
+    renderPage();
+    await u.click(await screen.findByRole('button', { name: 'Request reschedule' }));
+    await u.click(screen.getByRole('button', { name: 'Send reschedule request' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Please include a reason when requesting a reschedule.');
+    expect(api.postApi).not.toHaveBeenCalled();
+
+    await u.type(screen.getByLabelText(/Reason for reschedule request/i), 'On-call ICU shift conflict');
+    await u.click(screen.getByRole('button', { name: 'Send reschedule request' }));
+    expect(api.postApi).toHaveBeenCalledWith('/interviews/iv-resched/response', {
+      response: 'Reschedule Requested',
+      note: 'On-call ICU shift conflict',
+    });
+    expect(await screen.findByText('Reschedule requested')).toBeInTheDocument();
+  });
+
+  it('P2: supports Revise scorecard on a submitted scorecard with a required reason', async () => {
+    const u = userEvent.setup();
+    api.getApi.mockImplementation(async (p: string) =>
+      p.endsWith('/scorecard')
+        ? [{ id: 's1', interviewId: 'iv1', interviewerId: 'me', overallRating: 4, recommendation: 'Hire', notes: 'Initial notes', status: 'Submitted', submittedAt: '2026-10-13T09:00:00Z' }]
+        : p === '/me/interviews?scope=upcoming'
+          ? { data: [row({ scorecardStatus: 'submitted' })] }
+          : { data: [] },
+    );
+    api.postApi.mockResolvedValue({
+      id: 's2',
+      interviewId: 'iv1',
+      interviewerId: 'me',
+      overallRating: 5,
+      recommendation: 'Strong Hire',
+      notes: 'Updated notes after panel debrief',
+      status: 'Submitted',
+      submittedAt: '2026-10-13T10:00:00Z',
+    });
+    renderPage();
+    await u.click(await screen.findByRole('button', { name: 'View my scorecard' }));
+    const revBtn = await screen.findByRole('button', { name: 'Revise scorecard' });
+    await u.click(revBtn);
+
+    await u.click(screen.getByRole('button', { name: 'Submit revision' }));
+    expect(await screen.findByText(/Enter a reason for revising this scorecard/i)).toBeInTheDocument();
+
+    await u.click(screen.getByRole('radio', { name: '5' }));
+    await u.type(screen.getByLabelText(/Reason for revision/i), 'Panel debrief clarified practical coding test');
+    await u.click(screen.getByRole('button', { name: 'Submit revision' }));
+    expect(api.postApi).toHaveBeenCalledWith('/interviews/iv1/scorecard/revisions', {
+      overallRating: 5,
+      recommendation: 'Hire',
+      notes: 'Initial notes',
+      reason: 'Panel debrief clarified practical coding test',
+    });
+    expect(await screen.findByTestId('my-scorecard')).toHaveTextContent('5 of 5');
+  });
+
+  it('P2: immediately moves an ended interview from Scorecard due to Submitted scorecards upon submission', async () => {
+    const u = userEvent.setup();
+    api.getApi.mockImplementation(async (p: string) => {
+      if (p === '/me/interviews?scope=upcoming') return { data: [] };
+      if (p === '/me/interviews?scope=past') return { data: [row({ id: 'p-move', candidateName: 'Kareem Fathy', scorecardStatus: 'missing' })] };
+      return [];
+    });
+    api.postApi.mockResolvedValue({
+      id: 's-move',
+      interviewId: 'p-move',
+      interviewerId: 'me',
+      overallRating: 4,
+      recommendation: 'Hire',
+      notes: 'Strong troubleshooting',
+      status: 'Submitted',
+      submittedAt: '2026-10-13T09:00:00Z',
+    });
+    renderPage();
+    const dueList = await screen.findByRole('list', { name: 'Ended interviews needing my scorecard' });
+    expect(within(dueList).getByText(/Kareem Fathy/)).toBeInTheDocument();
+
+    await u.click(within(dueList).getByRole('button', { name: 'Fill scorecard' }));
+    const dialog = await screen.findByRole('dialog');
+    await u.click(within(dialog).getByRole('radio', { name: '4' }));
+    await u.type(within(dialog).getByRole('textbox', { name: /Written evidence/ }), 'Strong troubleshooting');
+    await u.click(within(dialog).getByRole('button', { name: 'Submit scorecard' }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole('list', { name: 'Ended interviews needing my scorecard' })).toBeNull();
+    });
+    const doneList = await screen.findByRole('list', { name: 'Ended interviews with my submitted scorecard' });
+    expect(within(doneList).getByText(/Kareem Fathy/)).toBeInTheDocument();
+  });
+
+  it('P2: handles subsequent deep-link navigation to a different interview on the same mounted page', async () => {
+    const u = userEvent.setup();
+    api.getApi.mockImplementation(async (p: string) =>
+      p.endsWith('/scorecard')
+        ? []
+        : p === '/me/interviews?scope=upcoming'
+          ? {
+              data: [
+                row({ id: 'iv1', candidateName: 'Ahmed Embaby' }),
+                row({ id: 'iv2', candidateName: 'Nourhan Sami' }),
+              ],
+            }
+          : { data: [] },
+    );
+    render(
+      <MemoryRouter initialEntries={['/my-interviews?interview=iv1&scorecard=1']}>
+        <Link to="/my-interviews?interview=iv2&scorecard=1">Open second deep link</Link>
+        <MyInterviewsPage />
+      </MemoryRouter>,
+    );
+    const firstDialog = await screen.findByRole('dialog');
+    expect(within(firstDialog).getByRole('heading', { name: /Scorecard — Ahmed Embaby/ })).toBeInTheDocument();
+
+    await u.click(within(firstDialog).getByRole('button', { name: 'Cancel' }));
+    await u.click(screen.getByRole('link', { name: 'Open second deep link' }));
+
+    const secondDialog = await screen.findByRole('dialog');
+    expect(within(secondDialog).getByRole('heading', { name: /Scorecard — Nourhan Sami/ })).toBeInTheDocument();
+  });
+
+  it('P2: prompts before discarding unsaved scorecard edits', async () => {
+    const u = userEvent.setup();
+    api.getApi.mockImplementation(async (p: string) =>
+      p.endsWith('/scorecard')
+        ? []
+        : p === '/me/interviews?scope=upcoming'
+          ? { data: [row({ id: 'iv-dirty' })] }
+          : { data: [] },
+    );
+    renderPage();
+    await u.click(await screen.findByRole('button', { name: 'Fill scorecard' }));
+    const dialog = await screen.findByRole('dialog');
+    await u.type(within(dialog).getByRole('textbox', { name: /Written evidence/ }), 'Half-written evaluation');
+    await u.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+    expect(await within(dialog).findByText(/You have unsaved scorecard edits/i)).toBeInTheDocument();
+    await u.click(within(dialog).getByRole('button', { name: 'Keep editing' }));
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    await u.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await u.click(within(dialog).getByRole('button', { name: 'Discard changes' }));
     expect(screen.queryByRole('dialog')).toBeNull();
   });
 });

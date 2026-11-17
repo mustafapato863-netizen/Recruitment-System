@@ -22,7 +22,7 @@ describe('E08 adapter (B3 work queue ?mine=true + dueDate/department/holdUntil +
     expect(r.others).toEqual([
       { id: 'r1', title: 'Pharmacist', site: 'SGH Jeddah', seats: { filled: 1, target: 4 } },
       { id: 'r2', title: 'Radiology Technician', site: 'SGH Dammam', seats: { filled: 0, target: 4 } },
-      { id: 'v9', title: 'BI Data Analyst', site: 'SGH Riyadh', seats: { filled: 0, target: 1 }, full: true, ownerName: expect.anything() },
+      { id: 'v9', title: 'BI Data Analyst', site: 'SGH Riyadh', seats: { filled: 0, target: 1 }, full: true, ownerName: expect.anything(), status: 'Open', department: 'IT', active: 1, dueDate: '2026-12-10' },
     ]);
     expect(JSON.stringify(r)).not.toMatch(/budget|salary|42000|99000/i);
   });
@@ -138,21 +138,23 @@ describe('E11 adapter (resume parse + B6 duplicate check)', () => {
     expect(d.filled).toEqual(['currentCompany', 'location', 'skills']);
     expect(d.conflicts).toEqual([{ field: 'currentTitle', existing: 'HR Officer', incoming: 'HR Systems Analyst' }]);
   });
-  it('link: no candidate created; empty fields filled (PATCH only those), conflicts returned; CV uploaded; application added', async () => {
-    api.getApi.mockResolvedValue({ id: 'c-a4', currentTitle: 'Analyst', currentCompany: null, skills: [], expectedSalary: 42000 });
-    api.patchApi.mockResolvedValue({});
+  it('link: no candidate created; empty fields filled via fill-from-cv, conflicts returned; CV uploaded; application added', async () => {
     api.postFormDataApi.mockResolvedValue({ id: 'd1' });
-    api.postApi.mockResolvedValue({ id: 'app-new' });
-    const r = await importRow('v1', file, { firstName: 'Nourhan', rawText: 'x', title: 'HR Analyst', currentCompany: 'SGH' }, { kind: 'link', candidateId: 'c-a4' });
+    api.postApi.mockImplementation(async (path: string) => {
+      if (path === '/applications') return { id: 'app-new' };
+      if (path.includes('/fill-from-cv')) return { filled: ['currentCompany'], conflicts: [{ field: 'currentTitle', existing: 'Analyst', incoming: 'HR Analyst' }], compared: true };
+      return {};
+    });
+    const parsedCv = { firstName: 'Nourhan', rawText: 'x', title: 'HR Analyst', currentCompany: 'SGH' };
+    const r = await importRow('v1', file, parsedCv, { kind: 'link', candidateId: 'c-a4' });
     expect(api.postApi).not.toHaveBeenCalledWith('/candidates', expect.anything());
-    expect(api.getApi).toHaveBeenCalledWith('/candidates/c-a4');
-    expect(api.patchApi).toHaveBeenCalledWith('/candidates/c-a4', { currentCompany: 'SGH' });
+    expect(api.postApi).toHaveBeenCalledWith('/applications', { vacancyId: 'v1', candidateId: 'c-a4', source: 'CV import' });
     const fd = api.postFormDataApi.mock.calls[0][1] as FormData;
     expect(api.postFormDataApi.mock.calls[0][0]).toBe('/documents/upload');
     expect(fd.get('candidateId')).toBe('c-a4');
     expect(fd.get('documentType')).toBe('CV');
-    expect(api.postApi).toHaveBeenCalledWith('/applications', { vacancyId: 'v1', candidateId: 'c-a4', source: 'CV import' });
-    expect(r).toEqual({ candidateId: 'c-a4', applicationId: 'app-new', link: { filled: ['currentCompany'], conflicts: [{ field: 'currentTitle', existing: 'Analyst', incoming: 'HR Analyst' }], compared: true } });
+    expect(api.postApi).toHaveBeenCalledWith('/candidates/c-a4/fill-from-cv', { documentId: 'd1', parsed: parsedCv });
+    expect(r).toEqual({ candidateId: 'c-a4', applicationId: 'app-new', documentId: 'd1', link: { filled: ['currentCompany'], conflicts: [{ field: 'currentTitle', existing: 'Analyst', incoming: 'HR Analyst' }], compared: true } });
   });
   it('create: POST /candidates with the parsed fields, then upload + application', async () => {
     api.postFormDataApi.mockResolvedValue({ id: 'd1' });

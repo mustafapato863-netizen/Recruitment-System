@@ -1,33 +1,36 @@
-/* Glass neo surfaces for pages that still paint a solid card inside the v2 shell.
-   Loaded after v2-parity so the approved desktop treatment wins on those cards. */
-[data-ui='v2'] .rf2-shell__content .bg-white,
-[data-ui='v2'] .rf2-shell__content .bg-rf-surface,
-[data-ui='v2'] .rf2-shell__content .bg-slate-50 {
-  background-color: var(--rf2-glass-card);
-  border-color: var(--rf2-glass-line);
-  box-shadow: var(--rf2-neo-raise);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+/* Solid token surfaces for pages that still paint a card inside the v2 shell.
+   Loaded after v2-parity. Keep a soft elevation so shared cards and controls
+   do not lose their shadow or keyboard focus ring.
+   Match Skills (.rf2-ms) owns its elevation; these resets must not reach it. */
+[data-ui='v2'] .rf2-shell__content :is(.bg-white, .bg-rf-surface, .bg-slate-50):not(:where(.rf2-ms, .rf2-ms *)) {
+  background-color: var(--rf2-card);
+  border: 1px solid var(--rf2-glass-line);
+  box-shadow: var(--rf2-card-shadow, 0 1px 2px rgba(15, 23, 42, 0.04));
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-radius: var(--rf2-radius-card);
 }
 
-[data-ui='v2'] .rf2-shell .rf-page article.rf-vacancy-card,
-[data-ui='v2'] .rf2-shell article.rf-vacancy-card {
+[data-ui='v2'] .rf2-shell .rf-page article.rf-vacancy-card:not(.rf2-ms__card),
+[data-ui='v2'] .rf2-shell article.rf-vacancy-card:not(.rf2-ms__card) {
+  /* v2-parity paints a gradient border with !important; the image must clear or the solid fill never shows. */
+  background-color: var(--rf2-card) !important;
+  background-image: none !important;
   border: 1px solid var(--rf2-glass-line) !important;
-  border-radius: 20px !important;
-  background: var(--rf2-glass-card) !important;
-  box-shadow: var(--rf2-neo-raise) !important;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  box-shadow: var(--rf2-card-shadow, 0 1px 2px rgba(15, 23, 42, 0.04));
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-radius: var(--rf2-radius-card);
 }
 
-[data-ui='v2'] .rf2-shell .rf-page article.rf-vacancy-card:hover,
-[data-ui='v2'] .rf2-shell article.rf-vacancy-card:hover {
-  box-shadow: var(--rf2-neo-raise-sm) !important;
+[data-ui='v2'] .rf2-shell .rf-page article.rf-vacancy-card:not(.rf2-ms__card):hover,
+[data-ui='v2'] .rf2-shell article.rf-vacancy-card:not(.rf2-ms__card):hover {
+  box-shadow: var(--rf2-card-shadow, 0 1px 2px rgba(15, 23, 42, 0.04));
 }
 
 [data-ui='v2'] .rf2-shell__content .rf2-col {
-  background: color-mix(in srgb, var(--rf2-glass-card) 72%, transparent);
-  border-radius: 16px;
+  background: var(--color-surface-subtle);
+  border-radius: var(--rf2-radius-card);
 }
 
 @media (prefers-reduced-transparency: reduce) {

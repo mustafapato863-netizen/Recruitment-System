@@ -48,6 +48,7 @@ export class AffindaResumeParser {
         Authorization: `Bearer ${apiKey}`,
       },
       body: formData,
+      signal: AbortSignal.timeout(30_000),
     });
 
     if (!response.ok) {

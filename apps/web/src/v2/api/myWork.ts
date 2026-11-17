@@ -14,7 +14,8 @@
  *   'auto' falls back to fixtures only when the endpoint is missing (404/405/501 or network
  *   failure); the page then shows a "Sample data" notice.
  */
-import { getApi, ApiError } from '../../api/client';
+import { getApi, patchApi, ApiError } from '../../api/client';
+import { withReturnTo } from '../returnTarget';
 
 /** = TargetChip in packages/contracts (#9). */
 export interface TargetChip {
@@ -36,7 +37,7 @@ export type WaitingOn = 'approver' | 'interviewer' | 'candidate';
 /** nextAction.code / actions[].key values #9 emits today (string on the wire). */
 export type KnownActionKey =
   | 'review-applicants' | 'hold-job' | 'view-requisition' | 'activate-requisition' | 'submit-requisition' | 'set-due-date'
-  | 'cancel-requisition' | 'complete-task' | 'open-interview' | 'submit-scorecard' | 'move-to-offer' | 'open-offer'
+  | 'cancel-requisition' | 'complete-task' | 'open-record' | 'reschedule-task' | 'open-interview' | 'submit-scorecard' | 'move-to-offer' | 'open-offer'
   | 'send-offer' | 'record-response';
 
 /** = MyWorkAction. */
@@ -254,25 +255,33 @@ export async function fetchMyWorkApi(day: MyWorkDay = 'today'): Promise<MyWorkRe
   return normalizeMyWork(await getApi<Partial<MyWorkResponse>>(`/me/work?day=${day}`), day);
 }
 
+export async function completeTask(taskId: string): Promise<unknown> {
+  return patchApi(`/tasks/${encodeURIComponent(taskId)}/status`, { status: 'Completed' });
+}
+
+export async function rescheduleTask(taskId: string, dueAt: string): Promise<unknown> {
+  return patchApi(`/tasks/${encodeURIComponent(taskId)}/reschedule`, { dueAt });
+}
+
 export async function getMyWork(
   day: MyWorkDay = 'today',
   deps: { env?: MyWorkEnv; api?: (day: MyWorkDay) => Promise<MyWorkResponse>; fixture?: (day: MyWorkDay) => Promise<MyWorkResponse> } = {},
 ): Promise<MyWorkResult> {
   const env = deps.env ?? browserEnv();
   const api = deps.api ?? fetchMyWorkApi;
-  // DEV-guarded so production builds drop the fixture chunk entirely.
-  const fixture = deps.fixture ?? (import.meta.env.DEV
-    ? async (d: MyWorkDay) => (await import('./myWork.fixtures')).myWorkFixture({ day: d })
-    : async (): Promise<MyWorkResponse> => { throw new Error('My Work fixtures are development-only'); });
   const mode = resolveSourceMode(env);
-  if (mode === 'fixture') return { data: normalizeMyWork(await fixture(day), day), source: 'fixture' };
-  if (mode === 'api') return { data: await api(day), source: 'api' };
-  try {
-    return { data: await api(day), source: 'api' };
-  } catch (error) {
-    if (!isEndpointMissing(error)) throw error;
-    return { data: normalizeMyWork(await fixture(day), day), source: 'fixture' };
+  if (mode === 'fixture' && deps.fixture) {
+    return { data: normalizeMyWork(await deps.fixture(day), day), source: 'fixture' };
   }
+  if (deps.fixture && mode === 'auto' && !env.prod) {
+    try {
+      return { data: await api(day), source: 'api' };
+    } catch (error) {
+      if (!isEndpointMissing(error)) throw error;
+      return { data: normalizeMyWork(await deps.fixture(day), day), source: 'fixture' };
+    }
+  }
+  return { data: await api(day), source: 'api' };
 }
 
 /** v1 route for a work item's entity; null when there is no page for it (tasks live on My Work). */
@@ -299,8 +308,22 @@ export function actionHref(item: WorkItem, action: MyWorkAction): string | null 
  * E2: in the v2 Employee seat, application-linked actions open the v2 file (E13)
  * or its drawer instead of v1 pages. Others fall back to actionHref().
  */
-export interface HrefContext { meId?: string; canOpenFile?: boolean; interviewer?: boolean }
+export interface HrefContext { meId?: string; canOpenFile?: boolean; interviewer?: boolean; returnTo?: string | null }
+const carried = (href: string | null, returnTo: string | null | undefined) => (href == null ? null : withReturnTo(href, returnTo));
+
+/** Record behind a task. Standalone tasks stay on My Work and return null. */
+export function taskRecordHref(item: WorkItem, ctx: HrefContext = {}): string | null {
+  if (item.applicationId) return carried(`/applications/${encodeURIComponent(item.applicationId)}`, ctx.returnTo);
+  if (item.entity.type !== 'task') return carried(entityHref(item.entity), ctx.returnTo);
+  if (item.candidate?.id) return carried(`/candidates/${encodeURIComponent(item.candidate.id)}`, ctx.returnTo);
+  return null;
+}
+
 export function fileActionHref(item: WorkItem, action: MyWorkAction, ctx: HrefContext = {}): string | null {
+  if (item.type === 'task') {
+    if (action.key === 'open-record') return taskRecordHref(item, ctx);
+    if (action.key === 'complete-task' || action.key === 'reschedule-task') return null;
+  }
   // B2F-3: an interviewer's interview opens their v2 interview view (CV + own scorecard), never the file
   // (which needs APPLICATION_VIEW / ownership and showed v1 "Access Restricted").
   if (item.entity.type === 'interview' && ctx.interviewer && (action.key === 'open-interview' || action.key === 'submit-scorecard')) {
@@ -310,13 +333,13 @@ export function fileActionHref(item: WorkItem, action: MyWorkAction, ctx: HrefCo
     }
   }
   const appId = item.applicationId ?? (item.entity.type === 'application' ? item.entity.id : undefined);
-  if (!appId) return actionHref(item, action);
+  if (!appId) return carried(actionHref(item, action), ctx.returnTo);
   const base = `/applications/${encodeURIComponent(appId)}`;
   const iv = item.entity.type === 'interview' ? `&interview=${encodeURIComponent(item.entity.id)}` : '';
-  if (action.key === 'open-interview') return base;
+  if (action.key === 'open-interview') return carried(base, ctx.returnTo);
   const drawer = FILE_DRAWER[action.key];
-  if (!drawer) return base;
-  return drawer === 'scorecard' ? `${base}?drawer=scorecard${iv}` : `${base}?drawer=${drawer}`;
+  if (!drawer) return carried(base, ctx.returnTo);
+  return carried(drawer === 'scorecard' ? `${base}?drawer=scorecard${iv}` : `${base}?drawer=${drawer}`, ctx.returnTo);
 }
 
 /** Drawer keys the application file already opens. open-interview stays on the file without a drawer. */
@@ -384,19 +407,19 @@ export function upcomingInterviewHref(row: UpcomingInterview, ctx: HrefContext =
   }
   if (row.access !== 'file' || !row.applicationId || ctx.canOpenFile !== true) return null;
   const applicationId = encodeURIComponent(row.applicationId);
-  if (scorecard) return `/applications/${applicationId}?drawer=scorecard&interview=${interviewId}`;
-  if (row.action.label === 'Manage interview') return `/applications/${applicationId}?drawer=schedule&interview=${interviewId}`;
+  if (scorecard) return carried(`/applications/${applicationId}?drawer=scorecard&interview=${interviewId}`, ctx.returnTo);
+  if (row.action.label === 'Manage interview') return carried(`/applications/${applicationId}?drawer=schedule&interview=${interviewId}`, ctx.returnTo);
   return null;
 }
 
 const PREHIRE_READINESS: ReadonlySet<JoiningSoon['readiness']> = new Set(['licence_pending', 'ready', 'blocked', 'review']);
 
 /** Checklist stays on the file. Those four readiness values open the pre-hire drawer; other rows without file access stay on the hiring case. */
-export function joiningCaseHref(row: JoiningSoon, canOpenFile: boolean): { href: string; label: string } {
+export function joiningCaseHref(row: JoiningSoon, canOpenFile: boolean, returnTo?: string | null): { href: string; label: string } {
   const caseHref = `/hires/${encodeURIComponent(row.id)}`;
   if (PREHIRE_READINESS.has(row.readiness)) {
-    return { href: `/applications/${encodeURIComponent(row.applicationId)}?drawer=prehire`, label: 'View readiness' };
+    return { href: withReturnTo(`/applications/${encodeURIComponent(row.applicationId)}?drawer=prehire`, returnTo), label: 'View readiness' };
   }
-  if (canOpenFile) return { href: `/applications/${encodeURIComponent(row.applicationId)}?drawer=prehire`, label: 'Open checklist' };
-  return { href: caseHref, label: 'Open checklist' };
+  if (canOpenFile) return { href: withReturnTo(`/applications/${encodeURIComponent(row.applicationId)}?drawer=prehire`, returnTo), label: 'Open checklist' };
+  return { href: withReturnTo(caseHref, returnTo), label: 'Open checklist' };
 }

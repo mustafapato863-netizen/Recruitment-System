@@ -4,6 +4,7 @@ import type { TeamWorkResponse, AuthUser } from '@recruitflow/contracts';
 import { PrismaService } from '../database/prisma.service';
 import type { MyWorkDay } from '@recruitflow/contracts';
 import { joiningTypeForRequirement, resolveSnapshot } from '../hiring/joining-policy';
+import { ownedVacancyWhere } from '../vacancy-core/job-ownership';
 import { buildMyWork, UPCOMING_WINDOW_DAYS, type MyWorkJoiningDecisionFacts, type MyWorkJoiningInput, type MyWorkResponse } from './my-work.buckets';
 
 /** E1: the reminder worker's heartbeat (service_heartbeats, written after each sweep). */
@@ -124,11 +125,12 @@ const COMMITMENT_JOB = ['Open', 'Partially Filled', 'On Hold'];
 /**
  * B4: GET /me/work for the signed-in user.
  *
- * Ownership (B1 is not on this base): a job is owned via an active PRIMARY
- * VacancyAssignment; a file via Application.primaryRecruiterId / taskOwnerId,
+ * Ownership: a job is owned when the caller is Vacancy.primaryRecruiterId or
+ * holds an active PRIMARY VacancyAssignment (the same predicate as Open jobs
+ * ?mine=true). A file is owned via Application.primaryRecruiterId / taskOwnerId,
  * or by owning its job. A requisition via requesterId.
- * TODO(B1): NOT switched here on purpose (B1/#4 is not on this base). Switch to Vacancy.primaryRecruiterId and file-access.ts
- * applicationOwnershipWhere once #4 merges; add manager "team work" there.
+ * Open jobs already ANDs that predicate with vacancy scope. Owned jobs sit
+ * inside vacancy full access, so My Work does not run a second scope query.
  */
 @Injectable()
 export class MyWorkService {
@@ -164,7 +166,7 @@ export class MyWorkService {
   async getMyWork(user: AuthUser, now: Date = new Date(), day: MyWorkDay = 'today'): Promise<MyWorkResponse> {
     const org = user.organizationId;
     const me = user.userId;
-    const ownedJobWhere = { organizationId: org, assignments: { some: { userId: me, isActive: true, assignmentKind: 'PRIMARY' } } };
+    const ownedJobWhere = { organizationId: org, ...ownedVacancyWhere(me) };
     const fileOn = (statuses: readonly string[]) => ({
       organizationId: org,
       stage: { notIn: CLOSED_STAGES },
@@ -179,11 +181,13 @@ export class MyWorkService {
         where: { ...ownedJobWhere, status: { in: WORKING_JOB } },
         select: {
           id: true, vacancyCode: true, status: true, joinedHeadcount: true, approvedHeadcount: true,
+          primaryRecruiterId: true, targetStartDate: true,
           position: { select: { title: true } },
           department: true,
           vacancyRequest: { select: { requestedHeadcount: true, targetFillDate: true } },
           branch: { select: { name: true } },
-          assignments: { where: { isActive: true, assignmentKind: 'PRIMARY' }, select: { user: { select: { id: true, displayName: true } } }, take: 1 },
+          primaryRecruiter: { select: { id: true, displayName: true } },
+          assignments: { where: { isActive: true, assignmentKind: 'PRIMARY' }, select: { userId: true, user: { select: { id: true, displayName: true } } } },
         },
       }),
       this.prisma.vacancyRequest.findMany({
@@ -205,34 +209,46 @@ export class MyWorkService {
       }),
       this.prisma.task.findMany({
         where: { organizationId: org, assigneeUserId: me, status: { in: ['Open', 'In Progress'] }, dueAt: { not: null } },
+        orderBy: [{ dueAt: 'asc' }, { id: 'asc' }],
         select: { id: true, title: true, dueAt: true, entityType: true, entityId: true },
-        take: 200,
+        // R02: load all open tasks/interviews/offers without a 200-item cap.
       }),
       // Interviews on my files, or where I am an attendee.
       this.prisma.interview.findMany({
+        orderBy: { scheduledStart: 'asc' },
         where: {
           organizationId: org,
           status: { notIn: ['Cancelled'] },
           // 14 days back keeps overdue scorecards. The forward bound is the upcoming panel's 30-day window.
-          scheduledStart: { gte: new Date(now.getTime() - 14 * 86_400_000), lte: new Date(now.getTime() + UPCOMING_WINDOW_DAYS * 86_400_000) },
+          scheduledStart: { lte: new Date(now.getTime() + UPCOMING_WINDOW_DAYS * 86_400_000) },
+          AND: [
+            { OR: [{ application: commitmentFileWhere }, { attendees: { some: { userId: me } } }] },
+            {
+              OR: [
+                { scheduledStart: { gte: new Date(now.getTime() - 14 * 86_400_000) } },
+                { scheduledEnd: { lte: now }, status: { notIn: ['Cancelled', 'No-show'] } },
+              ],
+            },
+          ],
           OR: [{ application: commitmentFileWhere }, { attendees: { some: { userId: me } } }],
         },
         select: {
           id: true, title: true, status: true, scheduledStart: true, scheduledEnd: true, applicationId: true, locationUrl: true, roomName: true, legacyInterviewerName: true,
-          application: { select: { ...appSelect, primaryRecruiterId: true, taskOwnerId: true, vacancy: { select: { status: true, position: { select: { title: true } }, assignments: { where: { userId: me, isActive: true, assignmentKind: 'PRIMARY' }, select: { id: true } } } } } },
+          application: { select: { ...appSelect, primaryRecruiterId: true, taskOwnerId: true, vacancy: { select: { status: true, primaryRecruiterId: true, position: { select: { title: true } }, assignments: { where: { userId: me, isActive: true, assignmentKind: 'PRIMARY' }, select: { id: true } } } } } },
           attendees: { select: { userId: true, role: true, user: { select: { displayName: true } } } },
           scorecards: { select: { interviewerId: true, status: true } },
         },
-        take: 200,
+        // R02: load all open tasks/interviews/offers without a 200-item cap.
       }),
       this.prisma.offer.findMany({
-        where: { organizationId: org, status: { in: ['Pending Approval', 'Sent'] }, application: commitmentFileWhere },
+        where: { organizationId: org, status: { in: ['Draft', 'Changes Requested', 'Pending Approval', 'Approved', 'Sent', 'Expired'] }, application: commitmentFileWhere },
+        orderBy: { updatedAt: 'asc' },
         select: {
           id: true, offerCode: true, status: true, applicationId: true, updatedAt: true, application: { select: appSelect },
           // C6: who the offer is waiting on (pending approvals of the latest version).
-          versions: { orderBy: { versionNumber: 'desc' }, take: 1, select: { approvals: { where: { status: 'Pending' }, orderBy: { createdAt: 'asc' }, select: { approverUserId: true, roleCode: true, approver: { select: { displayName: true } } } } } },
+          versions: { orderBy: { versionNumber: 'desc' }, take: 1, select: { status: true, approvals: { orderBy: { createdAt: 'asc' }, select: { status: true, approverUserId: true, roleCode: true, approver: { select: { displayName: true } } } } } },
         },
-        take: 200,
+        // R02: load all open tasks/interviews/offers without a 200-item cap.
       }),
       this.prisma.hiringCase.findMany({
         where: {
@@ -259,7 +275,7 @@ export class MyWorkService {
           approvals: { select: { status: true, invalidatedAt: true, roleCode: true, decisionFingerprint: true } },
         },
         orderBy: { plannedJoiningDate: 'asc' },
-        take: 100,
+        // R02: load all open joining cases without a 100-item cap.
       }),
       this.prisma.serviceHeartbeat.findUnique({ where: { service: DUE_REMINDER_HEARTBEAT_SERVICE }, select: { observedAt: true, metadata: true } }),
     ]);
@@ -275,7 +291,7 @@ export class MyWorkService {
 
     const ownsFile = (i: (typeof interviews)[number]) =>
       COMMITMENT_JOB.includes(i.application.vacancy.status) &&
-      (i.application.primaryRecruiterId === me || i.application.taskOwnerId === me || i.application.vacancy.assignments.length > 0);
+      (i.application.primaryRecruiterId === me || i.application.taskOwnerId === me || i.application.vacancy.primaryRecruiterId === me || i.application.vacancy.assignments.length > 0);
     const submitted = (i: (typeof interviews)[number], userId: string) => i.scorecards.some((s) => s.interviewerId === userId && s.status === 'Submitted'); // B5: a Draft is still pending
 
     // M1: same rules as POST /vacancy-requests/:id/activate, so the button matches the API.
@@ -290,14 +306,20 @@ export class MyWorkService {
       return undefined;
     };
     return buildMyWork({
-      jobs: jobs.map((j) => ({
-        id: j.id, code: j.vacancyCode, title: j.position?.title ?? j.vacancyCode, status: j.status, joined: j.joinedHeadcount,
-        target: j.vacancyRequest?.requestedHeadcount ?? j.approvedHeadcount,
-        dueDate: j.vacancyRequest?.targetFillDate ? j.vacancyRequest.targetFillDate.toISOString().slice(0, 10) : null,
-        department: j.department ?? null,
-        site: j.branch?.name ?? null,
-        owner: j.assignments[0]?.user ? { id: j.assignments[0].user.id, name: j.assignments[0].user.displayName } : null,
-      })),
+      jobs: jobs.map((j) => {
+        const due = j.vacancyRequest?.targetFillDate ?? j.targetStartDate ?? null;
+        const assignmentOwner = j.assignments.find((a) => a.userId === j.primaryRecruiterId)?.user ?? j.assignments[0]?.user ?? null;
+        const ownerUser = j.primaryRecruiter ?? assignmentOwner;
+        return {
+          id: j.id, code: j.vacancyCode, title: j.position?.title ?? j.vacancyCode, status: j.status, joined: j.joinedHeadcount,
+          target: j.vacancyRequest?.requestedHeadcount ?? j.approvedHeadcount,
+          dueDate: due ? due.toISOString().slice(0, 10) : null,
+          department: j.department ?? null,
+          site: j.branch?.name ?? null,
+          owner: ownerUser ? { id: ownerUser.id, name: ownerUser.displayName } : null,
+          ownedByMe: j.primaryRecruiterId === me || j.assignments.some((a) => a.userId === me),
+        };
+      }),
       requisitions: requisitions.map((r) => ({
         id: r.id, code: r.requestCode, title: r.position?.title ?? r.requestCode, status: r.status,
         dueDate: r.targetFillDate ? r.targetFillDate.toISOString().slice(0, 10) : null,
@@ -323,7 +345,13 @@ export class MyWorkService {
       })),
       offers: offers.map((o) => ({
         id: o.id, code: o.offerCode, status: o.status, applicationId: o.applicationId, updatedAt: o.updatedAt, app: appInfo(o.application),
-        approvers: (o.versions[0]?.approvals ?? []).map((a) => ({ id: a.approverUserId, name: a.approver?.displayName ?? a.roleCode })),
+        approvers: (o.versions[0]?.approvals ?? [])
+          .filter((a) => !a.status || a.status === 'Pending')
+          .map((a) => ({ id: a.approverUserId, name: a.approver?.displayName ?? a.roleCode })),
+        sentBack:
+          o.status === 'Changes Requested' ||
+          o.versions[0]?.status === 'Changes Requested' ||
+          (o.status === 'Draft' && (o.versions[0]?.approvals ?? []).some((a) => a.status === 'Rejected' || a.status === 'Changes Requested')),
       })),
       joining: joiningCases
         .filter((row) => row.status === 'Awaiting Joining' && row.application.vacancy.status === 'On Hold')

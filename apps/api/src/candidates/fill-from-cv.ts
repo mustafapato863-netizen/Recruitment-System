@@ -10,6 +10,28 @@ type Existing = Record<string, unknown> & { skills?: string[] | null };
 const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null);
 const isEmpty = (v: unknown) => v === null || v === undefined || (typeof v === 'string' && !v.trim());
 
+const STRUCTURED_FIELDS = ['workHistory', 'educationHistory', 'projectHistory', 'evidenceChunks', 'responsibilities', 'rawText'] as const;
+
+function metadataObject(value: unknown): Record<string, unknown> | null {
+  if (value == null || typeof value !== 'object' || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function structuredSlotEmpty(value: unknown): boolean {
+  if (value == null) return true;
+  if (typeof value === 'string') return value.trim().length === 0;
+  if (Array.isArray(value)) return value.length === 0;
+  return false;
+}
+
+function incomingStructured(parsed: ExtractedCandidate, field: (typeof STRUCTURED_FIELDS)[number]): unknown {
+  const record = parsed as ExtractedCandidate & Record<string, unknown>;
+  const value = record[field];
+  if (field === 'rawText') return typeof value === 'string' && value.trim() ? value : null;
+  if (!Array.isArray(value) || value.length === 0) return null;
+  return [...value];
+}
+
 /**
  * E3: fill EMPTY candidate fields from a parsed CV. Never overwrites: a different non-empty value is a conflict.
  * Same rules as the import link path (B6): email/phone compared by normalized key, text case-insensitively,
@@ -46,6 +68,21 @@ export function planFillFromCv(existing: Existing, parsed: ExtractedCandidate): 
   const skills = [...(existing.skills ?? [])];
   for (const sk of parsed.skills ?? []) if (typeof sk === 'string' && sk.trim() && !skills.some((x) => catalogKey(x) === catalogKey(sk))) skills.push(sk.trim());
   if (skills.length !== (existing.skills ?? []).length) { data.skills = skills; filled.push('skills'); }
+  const currentMeta = metadataObject(existing.metadata);
+  if (existing.metadata == null || currentMeta) {
+    const base = currentMeta ? { ...currentMeta } : {};
+    let added = false;
+    for (const field of STRUCTURED_FIELDS) {
+      const incoming = incomingStructured(parsed, field);
+      if (incoming == null || !structuredSlotEmpty(base[field])) continue;
+      base[field] = incoming;
+      added = true;
+    }
+    if (added) {
+      data.metadata = base;
+      filled.push('metadata');
+    }
+  }
   if ('email' in data || 'phone' in data) {
     Object.assign(data, contactKeys((data.email ?? existing.email) as string | null, (data.phone ?? existing.phone) as string | null));
   }

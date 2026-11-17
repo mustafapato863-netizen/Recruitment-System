@@ -15,21 +15,28 @@ import {
   Plus,
   Search,
   SlidersHorizontal,
-  Star,
   UserCheck,
   Users,
   Video,
 } from 'lucide-react';
 import type { Application, Interview, PaginatedResult } from '@recruitflow/contracts';
 import { getApi } from '../api/client';
-import { useAuth } from '../auth/AuthContext';
+import { downloadIcs, sendScorecardReminder } from '../api/myInterviews';
 import { FastScorecardModal } from '../components/interview/FastScorecardModal';
+import { SelectV2 } from '../components/v2';
 import {
   InterviewScheduleDrawerV2,
   type InterviewScheduleCandidateOption,
   type InterviewScheduleInitialValues,
 } from '../v2/drawers/InterviewScheduleDrawerV2';
 import '../v2/pages/interviews-v2.css';
+
+interface RawAttendee {
+  userId?: string;
+  userName?: string;
+  displayName?: string;
+  role?: string;
+}
 
 interface PanelMemberBadge {
   initials: string;
@@ -63,240 +70,52 @@ interface DeskInterviewRow {
   statusLabel: 'Interview today' | 'Awaiting feedback' | 'Scheduled' | 'Completed';
   statusTone: 'today' | 'awaiting' | 'scheduled' | 'completed';
   actionLabel: 'Open' | 'View details';
+  rawStartIso: string | null;
+  rawEndIso: string | null;
+  interviewType: string;
+  rawAttendees: RawAttendee[];
 }
 
-const DEFAULT_DESK_INTERVIEWS: DeskInterviewRow[] = [
-  {
-    id: 'int-v2-1',
-    candidateId: 'cnd-me-1',
-    time: '10:00 AM',
-    durationLabel: '45m',
-    dayLabel: 'Today',
-    weekDayId: 'wed',
-    hourSlot: 10,
-    fullDateLabel: 'Today, 29 Oct 2026',
-    timeRangeLabel: '10:00 AM – 10:45 AM (45 mins)',
-    candidateName: 'Mariam Essam',
-    candidateRole: 'Medical Coder',
-    avatarInitials: 'ME',
-    avatarTone: 'blue',
-    jobTitle: 'Medical Coder',
-    site: 'SGH Dubai Hospital',
-    format: 'Video call',
-    formatShort: 'Video · Teams',
-    platformDetail: 'Video call (Microsoft Teams)',
-    meetingUrl: 'https://teams.microsoft.com/l/meetup-join/sgh-interview-1',
-    panelBadges: [
-      { initials: 'SA', name: 'Sarah Ahmed', role: 'Recruiter', tone: 'green' },
-      { initials: 'NA', name: 'Nour Ali', role: 'Hiring Manager', tone: 'indigo' },
-      { initials: '+1', name: 'Dr. Hany Adel', role: 'HIM Lead', tone: 'more' },
-    ],
-    panelSummary: 'Sarah Ahmed (Recruiter), Nour Ali (Hiring Manager), Dr. Hany Adel (HIM Lead)',
-    statusLabel: 'Interview today',
-    statusTone: 'today',
-    actionLabel: 'Open',
-  },
-  {
-    id: 'int-v2-2',
-    candidateId: 'cnd-kf-2',
-    time: '11:30 AM',
-    durationLabel: '45m',
-    dayLabel: 'Today',
-    weekDayId: 'wed',
-    hourSlot: 11,
-    fullDateLabel: 'Today, 29 Oct 2026',
-    timeRangeLabel: '11:30 AM – 12:15 PM (45 mins)',
-    candidateName: 'Kareem Fathy',
-    candidateRole: 'IT Support Specialist',
-    avatarInitials: 'KF',
-    avatarTone: 'sky',
-    jobTitle: 'IT Support Specialist',
-    site: 'SGH Ajman Hospital',
-    format: 'On-site',
-    formatShort: 'On-site · Room 204',
-    platformDetail: 'On-site (SGH Ajman · Building B, Room 204)',
-    panelBadges: [
-      { initials: 'SA', name: 'Sarah Ahmed', role: 'Recruiter', tone: 'green' },
-      { initials: 'MW', name: 'Mai Wahba', role: 'IT Lead', tone: 'purple' },
-    ],
-    panelSummary: 'Sarah Ahmed (Recruiter), Mai Wahba (IT Operations Lead)',
-    statusLabel: 'Interview today',
-    statusTone: 'today',
-    actionLabel: 'Open',
-  },
-  {
-    id: 'int-v2-3',
-    candidateId: 'cnd-oh-3',
-    time: '2:00 PM',
-    durationLabel: '60m',
-    dayLabel: 'Today',
-    weekDayId: 'wed',
-    hourSlot: 14,
-    fullDateLabel: 'Today, 29 Oct 2026',
-    timeRangeLabel: '2:00 PM – 3:00 PM (1 hour)',
-    candidateName: 'Omar Hassan',
-    candidateRole: 'Radiology Technician',
-    avatarInitials: 'OH',
-    avatarTone: 'indigo',
-    jobTitle: 'Radiology Technician',
-    site: 'SGH Dubai Hospital',
-    format: 'Video call',
-    formatShort: 'Video · Teams',
-    platformDetail: 'Video call (Microsoft Teams)',
-    meetingUrl: 'https://teams.microsoft.com/l/meetup-join/sgh-interview-3',
-    panelBadges: [
-      { initials: 'SA', name: 'Sarah Ahmed', role: 'Recruiter', tone: 'green' },
-      { initials: 'NA', name: 'Nour Ali', role: 'Hiring Manager', tone: 'indigo' },
-      { initials: '+1', name: 'Mariam Essam', role: 'Radiology Lead', tone: 'more' },
-    ],
-    panelSummary: 'Sarah Ahmed (Recruiter), Nour Ali (Hiring Manager), Mariam Essam (Radiology Lead)',
-    statusLabel: 'Awaiting feedback',
-    statusTone: 'awaiting',
-    actionLabel: 'View details',
-  },
-  {
-    id: 'int-v2-4',
-    candidateId: 'cnd-sa-4',
-    time: '3:30 PM',
-    durationLabel: '45m',
-    dayLabel: 'Today',
-    weekDayId: 'wed',
-    hourSlot: 15,
-    fullDateLabel: 'Today, 29 Oct 2026',
-    timeRangeLabel: '3:30 PM – 4:15 PM (45 mins)',
-    candidateName: 'Sara Ahmed',
-    candidateRole: 'Registered Nurse',
-    avatarInitials: 'SA',
-    avatarTone: 'green',
-    jobTitle: 'Registered Nurse',
-    site: 'SGH Dubai Hospital',
-    format: 'On-site',
-    formatShort: 'On-site · Wing B',
-    platformDetail: 'On-site (SGH Dubai · Nursing Wing, Room 112)',
-    panelBadges: [
-      { initials: 'NA', name: 'Nour Ali', role: 'Hiring Manager', tone: 'indigo' },
-      { initials: 'ME', name: 'Mariam Essam', role: 'Clinical Educator', tone: 'blue' },
-    ],
-    panelSummary: 'Nour Ali (Hiring Manager), Mariam Essam (Clinical Educator)',
-    statusLabel: 'Scheduled',
-    statusTone: 'scheduled',
-    actionLabel: 'Open',
-  },
-  {
-    id: 'int-v2-5',
-    candidateId: 'cnd-hs-5',
-    time: '10:00 AM',
-    durationLabel: '60m',
-    dayLabel: 'Tomorrow',
-    weekDayId: 'thu',
-    hourSlot: 10,
-    fullDateLabel: 'Tomorrow, 30 Oct 2026',
-    timeRangeLabel: '10:00 AM – 11:00 AM (1 hour)',
-    candidateName: 'Heba Salah',
-    candidateRole: 'Registered Nurse (ICU)',
-    avatarInitials: 'HS',
-    avatarTone: 'rose',
-    jobTitle: 'Registered Nurse (ICU)',
-    site: 'SGH Dubai Hospital',
-    format: 'Video call',
-    formatShort: 'Video · Teams',
-    platformDetail: 'Video call (Microsoft Teams)',
-    meetingUrl: 'https://teams.microsoft.com/l/meetup-join/sgh-interview-5',
-    panelBadges: [
-      { initials: 'SA', name: 'Sarah Ahmed', role: 'Recruiter', tone: 'green' },
-      { initials: 'ME', name: 'Mariam Essam', role: 'ICU Head Nurse', tone: 'blue' },
-    ],
-    panelSummary: 'Sarah Ahmed (Recruiter), Mariam Essam (ICU Head Nurse)',
-    statusLabel: 'Scheduled',
-    statusTone: 'scheduled',
-    actionLabel: 'Open',
-  },
-  {
-    id: 'int-v2-6',
-    candidateId: 'cnd-ym-6',
-    time: '1:00 PM',
-    durationLabel: '45m',
-    dayLabel: 'Tomorrow',
-    weekDayId: 'thu',
-    hourSlot: 13,
-    fullDateLabel: 'Tomorrow, 30 Oct 2026',
-    timeRangeLabel: '1:00 PM – 1:45 PM (45 mins)',
-    candidateName: 'Yousef Magdy',
-    candidateRole: 'Radiology Technician',
-    avatarInitials: 'YM',
-    avatarTone: 'cyan',
-    jobTitle: 'Radiology Technician',
-    site: 'SGH Ajman Hospital',
-    format: 'On-site',
-    formatShort: 'On-site · Diagnostics',
-    platformDetail: 'On-site (SGH Ajman · Diagnostics Center)',
-    panelBadges: [
-      { initials: 'SA', name: 'Sarah Ahmed', role: 'Recruiter', tone: 'green' },
-      { initials: 'NA', name: 'Nour Ali', role: 'Hiring Manager', tone: 'indigo' },
-    ],
-    panelSummary: 'Sarah Ahmed (Recruiter), Nour Ali (Hiring Manager)',
-    statusLabel: 'Completed',
-    statusTone: 'completed',
-    actionLabel: 'View details',
-  },
-];
+const WEEK_DAY_IDS = ['mon', 'tue', 'wed', 'thu', 'fri'] as const;
+const PANEL_TONES: PanelMemberBadge['tone'][] = ['green', 'indigo', 'purple', 'blue'];
+const AVATAR_TONES: DeskInterviewRow['avatarTone'][] = ['blue', 'sky', 'indigo', 'green', 'rose', 'cyan'];
 
-const WEEK_DAYS = [
-  {
-    id: 'mon',
-    day: 'Mon',
-    date: '26 Oct',
-    count: 2,
-    unit: 'interviews',
-    slots: [
-      { time: '10:30', name: 'Laila M.', rowId: 'int-v2-1' },
-      { time: '14:00', name: 'Tarek S.', rowId: 'int-v2-2' },
-    ],
-  },
-  {
-    id: 'tue',
-    day: 'Tue',
-    date: '27 Oct',
-    count: 3,
-    unit: 'interviews',
-    slots: [
-      { time: '09:30', name: 'Nadia K.', rowId: 'int-v2-1' },
-      { time: '11:30', name: 'Rami A.', rowId: 'int-v2-2' },
-      { time: '15:00', name: 'Salma H.', rowId: 'int-v2-4' },
-    ],
-  },
-  {
-    id: 'wed',
-    day: 'Wed',
-    date: '28 Oct',
-    count: 4,
-    unit: 'interviews',
-    slots: [
-      { time: '10:00', name: 'Mariam E.', rowId: 'int-v2-1' },
-      { time: '11:30', name: 'Kareem F.', rowId: 'int-v2-2' },
-      { time: '14:00', name: 'Omar H.', rowId: 'int-v2-3' },
-    ],
-  },
-  {
-    id: 'thu',
-    day: 'Thu',
-    date: '29 Oct',
-    count: 2,
-    unit: 'interviews',
-    slots: [
-      { time: '10:00', name: 'Heba S.', rowId: 'int-v2-5' },
-      { time: '13:00', name: 'Yousef M.', rowId: 'int-v2-6' },
-    ],
-  },
-  {
-    id: 'fri',
-    day: 'Fri',
-    date: '30 Oct',
-    count: 1,
-    unit: 'interview',
-    slots: [{ time: '11:00', name: 'Dina R.', rowId: 'int-v2-4' }],
-  },
-];
+function calendarDayKey(date: Date): string {
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
+
+function weekDayIdFromDate(date: Date): DeskInterviewRow['weekDayId'] {
+  const ids: DeskInterviewRow['weekDayId'][] = ['mon', 'mon', 'tue', 'wed', 'thu', 'fri', 'fri'];
+  return ids[date.getDay()] ?? 'mon';
+}
+
+function startOfMonday(date: Date): Date {
+  const next = new Date(date);
+  next.setHours(0, 0, 0, 0);
+  const day = next.getDay();
+  const delta = day === 0 ? -6 : 1 - day;
+  next.setDate(next.getDate() + delta);
+  return next;
+}
+
+function formatLocalDateInput(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function formatLocalTimeInput(date: Date): string {
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+
+function initialsOf(name: string): string {
+  const letters = name
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part[0] ?? '')
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+  return letters || 'IN';
+}
 
 const CALENDAR_HOURS = [
   { hour: 9, label: '09:00 AM' },
@@ -307,6 +126,12 @@ const CALENDAR_HOURS = [
   { hour: 14, label: '02:00 PM' },
   { hour: 15, label: '03:00 PM' },
 ];
+
+function displayHourSlot(hour: number): number {
+  const start = CALENDAR_HOURS[0]?.hour ?? hour;
+  const end = CALENDAR_HOURS[CALENDAR_HOURS.length - 1]?.hour ?? hour;
+  return Math.min(end, Math.max(start, hour));
+}
 
 function SparkBars({
   tone,
@@ -333,12 +158,13 @@ function SparkBars({
 
 export function InterviewsPage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
   const [searchParams] = useSearchParams();
   const [apiInterviews, setApiInterviews] = useState<Interview[]>([]);
   const [applications, setApplications] = useState<Application[]>([]);
-  const [selectedId, setSelectedId] = useState<string>('int-v2-3');
-  const [activeWeekDay, setActiveWeekDay] = useState<string>('wed');
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string>('');
+  const [activeWeekDay, setActiveWeekDay] = useState<string>(() => weekDayIdFromDate(new Date()));
   const [viewMode, setViewMode] = useState<'desk' | 'calendar'>('desk');
   const [statusTab, setStatusTab] = useState<'ALL' | 'today' | 'awaiting' | 'completed'>('ALL');
   const [checkedRows, setCheckedRows] = useState<Record<string, boolean>>({});
@@ -367,18 +193,21 @@ export function InterviewsPage() {
   };
 
   const loadData = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
     try {
       const [intRes, appRes] = await Promise.all([
-        getApi<Interview[] | { data?: Interview[] }>('/interviews').catch((): Interview[] => []),
-        getApi<PaginatedResult<Application>>('/applications?page=1&pageSize=50').catch(() => ({ data: [] })),
+        getApi<Interview[] | { data?: Interview[] }>('/interviews'),
+        getApi<PaginatedResult<Application>>('/applications?page=1&pageSize=50').catch(() => ({ data: [] as Application[] })),
       ]);
       const intList = Array.isArray(intRes) ? intRes : intRes?.data || [];
       setApiInterviews(intList);
-
-      const appList = appRes?.data || [];
-      setApplications(appList);
-    } catch {
-      // Fallback to default clinical schedule
+      setApplications(appRes?.data || []);
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Unable to load interviews.');
+      setApiInterviews([]);
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -387,59 +216,94 @@ export function InterviewsPage() {
   }, [loadData]);
 
   const allRows: DeskInterviewRow[] = useMemo(() => {
-    const tones: DeskInterviewRow['avatarTone'][] = ['blue', 'sky', 'indigo', 'green', 'rose', 'cyan'];
-    const existingNames = new Set(DEFAULT_DESK_INTERVIEWS.map((d) => d.candidateName.toLowerCase()));
-    const daytimeApi = apiInterviews.filter((iv) => {
-      if (!iv.scheduledStart) return false;
-      const h = new Date(iv.scheduledStart).getHours();
-      return h >= 8 && h <= 17 && !existingNames.has((iv.candidateName || '').toLowerCase());
-    });
-    const apiMapped: DeskInterviewRow[] = daytimeApi.map((iv, idx) => {
+    const today = new Date();
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+    const todayKey = calendarDayKey(today);
+    const tomorrowKey = calendarDayKey(tomorrow);
+
+    return apiInterviews.map((iv, idx) => {
       const name = iv.candidateName || 'Candidate';
-      const initials =
-        name
-          .split(' ')
-          .filter(Boolean)
-          .map((p) => p[0])
-          .join('')
-          .slice(0, 2)
-          .toUpperCase() || 'CN';
-      const dt = iv.scheduledStart ? new Date(iv.scheduledStart) : new Date();
-      const timeStr = dt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
-      const isVideo = Boolean(iv.locationUrl && iv.locationUrl.startsWith('http'));
+      const startDt = iv.scheduledStart ? new Date(iv.scheduledStart) : new Date();
+      const endDt = iv.scheduledEnd ? new Date(iv.scheduledEnd) : new Date(startDt.getTime() + 45 * 60000);
+      const durationMins = Math.max(15, Math.round((endDt.getTime() - startDt.getTime()) / 60000));
+      const startKey = calendarDayKey(startDt);
+      const dayLabel: DeskInterviewRow['dayLabel'] = startKey === todayKey ? 'Today' : startKey === tomorrowKey ? 'Tomorrow' : 'This week';
+      const timeStr = startDt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+      const endStr = endDt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true });
+      const isVideo = Boolean(iv.locationUrl && /^https?:/i.test(iv.locationUrl));
+      const site = (iv as { branchName?: string }).branchName || iv.roomName || 'Main Campus';
+      const rawAttendees: RawAttendee[] = Array.isArray(iv.attendees)
+        ? iv.attendees.map((att) => ({
+            userId: att.userId,
+            userName: att.userName,
+            displayName: (att as { displayName?: string }).displayName,
+            role: att.role,
+          }))
+        : [];
+      const panelPeople = Array.isArray(iv.attendees) && iv.attendees.length > 0
+        ? rawAttendees.map((att) => ({
+            name: att.userName || att.displayName || 'Interviewer',
+            role: att.role || 'Interviewer',
+          }))
+        : [];
+      const scorecardStatus = (iv as { scorecardStatus?: string }).scorecardStatus;
+      let statusTone: DeskInterviewRow['statusTone'] = 'scheduled';
+      let statusLabel: DeskInterviewRow['statusLabel'] = 'Scheduled';
+      if (iv.status === 'Completed') {
+        statusTone = 'completed';
+        statusLabel = 'Completed';
+      } else if (scorecardStatus === 'missing' || endDt.getTime() < Date.now()) {
+        statusTone = 'awaiting';
+        statusLabel = 'Awaiting feedback';
+      } else if (dayLabel === 'Today') {
+        statusTone = 'today';
+        statusLabel = 'Interview today';
+      }
+      const dated = startDt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
       return {
         id: iv.id,
         candidateId: iv.applicationId || `cnd-${idx}`,
         time: timeStr,
-        durationLabel: '45m',
-        dayLabel: 'Today',
-        weekDayId: 'wed',
-        hourSlot: dt.getHours() || 11,
-        fullDateLabel: dt.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }),
-        timeRangeLabel: `${timeStr} (45 mins)`,
+        durationLabel: `${durationMins}m`,
+        dayLabel,
+        weekDayId: weekDayIdFromDate(startDt),
+        hourSlot: startDt.getHours(),
+        fullDateLabel: dayLabel === 'This week'
+          ? startDt.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
+          : `${dayLabel}, ${dated}`,
+        timeRangeLabel: `${timeStr} – ${endStr} (${durationMins} mins)`,
         candidateName: name,
         candidateRole: iv.positionTitle || 'Clinical Specialist',
-        avatarInitials: initials,
-        avatarTone: tones[idx % tones.length],
+        avatarInitials: initialsOf(name),
+        avatarTone: AVATAR_TONES[idx % AVATAR_TONES.length] ?? 'blue',
         jobTitle: iv.positionTitle || 'Clinical Specialist',
-        site: 'SGH Dubai Hospital',
+        site,
         format: isVideo ? 'Video call' : 'On-site',
-        formatShort: isVideo ? 'Video · Teams' : 'On-site',
-        platformDetail: isVideo ? 'Video call (Microsoft Teams)' : iv.roomName || 'On-site (SGH Dubai Hospital)',
+        formatShort: isVideo ? 'Video' : 'On-site',
+        platformDetail: isVideo
+          ? (iv.locationUrl ? `Video call (${iv.locationUrl})` : 'Video call')
+          : (iv.roomName ? `On-site (${iv.roomName})` : `On-site (${site})`),
         meetingUrl: iv.locationUrl || undefined,
-        panelBadges: [
-          { initials: 'SA', name: user?.displayName || 'Sarah Ahmed', role: 'Recruiter', tone: 'green' },
-          { initials: 'NA', name: 'Nour Ali', role: 'Hiring Manager', tone: 'indigo' },
-        ],
-        panelSummary: `${user?.displayName || 'Sarah Ahmed'} (Recruiter), Nour Ali (Hiring Manager)`,
-        statusLabel: iv.status === 'Completed' ? 'Completed' : 'Scheduled',
-        statusTone: iv.status === 'Completed' ? 'completed' : 'scheduled',
-        actionLabel: 'Open',
+        panelBadges: panelPeople.map((person, personIndex) => ({
+          initials: initialsOf(person.name),
+          name: person.name,
+          role: person.role,
+          tone: PANEL_TONES[personIndex % PANEL_TONES.length] ?? 'blue',
+        })),
+        panelSummary: panelPeople.length > 0
+          ? panelPeople.map((person) => `${person.name} (${person.role})`).join(', ')
+          : 'No panel assigned',
+        statusLabel,
+        statusTone,
+        actionLabel: statusTone === 'completed' || statusTone === 'awaiting' ? 'View details' : 'Open',
+        rawStartIso: iv.scheduledStart || null,
+        rawEndIso: iv.scheduledEnd || null,
+        interviewType: iv.interviewType || 'Technical',
+        rawAttendees,
       };
     });
-
-    return [...DEFAULT_DESK_INTERVIEWS, ...apiMapped];
-  }, [apiInterviews, user?.displayName]);
+  }, [apiInterviews]);
 
   const filteredRows = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -459,9 +323,53 @@ export function InterviewsPage() {
     });
   }, [allRows, dateFilter, formatFilter, searchQuery, siteFilter, statusTab]);
 
+  const calendarRows = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return allRows.filter((r) => {
+      if (statusTab === 'today' && r.dayLabel !== 'Today') return false;
+      if (statusTab === 'awaiting' && r.statusTone !== 'awaiting') return false;
+      if (statusTab === 'completed' && r.statusTone !== 'completed') return false;
+      if (formatFilter !== 'ALL' && r.format !== formatFilter) return false;
+      if (
+        siteFilter !== 'ALL' &&
+        !r.site.toLowerCase().includes(siteFilter.toLowerCase()) &&
+        !r.panelSummary.toLowerCase().includes(siteFilter.toLowerCase())
+      ) {
+        return false;
+      }
+      if (q && !`${r.candidateName} ${r.candidateRole} ${r.jobTitle} ${r.site}`.toLowerCase().includes(q)) {
+        return false;
+      }
+      return true;
+    });
+  }, [allRows, formatFilter, searchQuery, siteFilter, statusTab]);
+
   const selectedInterview = useMemo(() => {
-    return allRows.find((r) => r.id === selectedId) ?? filteredRows[0] ?? DEFAULT_DESK_INTERVIEWS[2];
+    return allRows.find((r) => r.id === selectedId) ?? filteredRows[0] ?? allRows[0] ?? null;
   }, [allRows, filteredRows, selectedId]);
+
+  const weekColumns = useMemo(() => {
+    const monday = startOfMonday(new Date());
+    const todayKey = calendarDayKey(new Date());
+    return WEEK_DAY_IDS.map((id, index) => {
+      const date = new Date(monday);
+      date.setDate(monday.getDate() + index);
+      const slots = allRows.filter((row) => row.weekDayId === id);
+      return {
+        id,
+        day: date.toLocaleDateString('en-US', { weekday: 'short' }),
+        dateLabel: date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }),
+        isToday: calendarDayKey(date) === todayKey,
+        count: slots.length,
+        unit: slots.length === 1 ? 'interview' : 'interviews',
+        slots,
+      };
+    });
+  }, [allRows]);
+  const weekRangeLabel = weekColumns.length > 0
+    ? `${weekColumns[0]?.dateLabel ?? ''} – ${weekColumns[weekColumns.length - 1]?.dateLabel ?? ''}`
+    : '';
+  const todayColumnLabel = `Today · ${new Date().toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' })}`;
 
   const completedPrepCount = prepItems.filter((p) => p.done).length;
   const prepPercent = Math.round((completedPrepCount / prepItems.length) * 100);
@@ -483,24 +391,11 @@ export function InterviewsPage() {
 
   const openScorecardForRow = (row: DeskInterviewRow) => {
     const matchingApi = apiInterviews.find((iv) => iv.id === row.id);
-    if (matchingApi) {
-      setScorecardInterview(matchingApi);
+    if (!matchingApi) {
+      showToast('Unable to open scorecard: interview record not found.');
       return;
     }
-    setScorecardInterview({
-      id: row.id,
-      organizationId: 'org-sgh',
-      applicationId: row.candidateId,
-      interviewType: 'Technical',
-      status: 'Scheduled',
-      scheduledStart: new Date().toISOString(),
-      scheduledEnd: new Date(Date.now() + 45 * 60000).toISOString(),
-      timezone: 'Asia/Dubai',
-      candidateName: row.candidateName,
-      positionTitle: row.jobTitle,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    } as Interview);
+    setScorecardInterview(matchingApi);
   };
 
   const openCreateDrawer = () => {
@@ -528,38 +423,42 @@ export function InterviewsPage() {
       applicationId: r.candidateId,
       candidateName: r.candidateName,
       positionTitle: r.jobTitle,
-      screenNoteSaved: r.statusTone !== 'today' || r.candidateName !== 'Kareem Fathy',
+      screenNoteSaved: true,
     }));
   }, [allRows, applications]);
 
   const drawerInitialValues: InterviewScheduleInitialValues = useMemo(() => {
-    if (drawerMode === 'edit') {
+    if (drawerMode === 'edit' && selectedInterview) {
+      const start = selectedInterview.rawStartIso ? new Date(selectedInterview.rawStartIso) : null;
+      const validStart = start && !Number.isNaN(start.getTime()) ? start : null;
+      const end = selectedInterview.rawEndIso ? new Date(selectedInterview.rawEndIso) : null;
+      const durationMins = validStart && end && !Number.isNaN(end.getTime())
+        ? Math.max(15, Math.round((end.getTime() - validStart.getTime()) / 60000))
+        : Number.parseInt(selectedInterview.durationLabel, 10) || 45;
       return {
         interviewId: selectedInterview.id,
         applicationId: selectedInterview.candidateId,
         candidateName: selectedInterview.candidateName,
         positionTitle: selectedInterview.jobTitle,
-        interviewType: 'Technical',
-        date: '2026-10-29',
-        time: `${String(selectedInterview.hourSlot).padStart(2, '0')}:00`,
-        duration: selectedInterview.durationLabel.replace('m', '') || '60',
-        roomUrl:
-          selectedInterview.meetingUrl ||
-          'https://teams.microsoft.com/l/meetup-join/sgh-interview',
-        interviewers: selectedInterview.panelBadges
-          .filter((b) => b.tone !== 'more')
-          .map((b, i) => ({
-            id: `u-panel-${i}`,
-            name: b.name,
-            detail: b.role,
-          })),
+        interviewType: selectedInterview.interviewType,
+        date: validStart ? formatLocalDateInput(validStart) : '',
+        time: validStart ? formatLocalTimeInput(validStart) : '',
+        duration: String(durationMins),
+        roomUrl: selectedInterview.meetingUrl || '',
+        interviewers: selectedInterview.rawAttendees
+          .map((attendee) => ({
+            id: attendee.userId ?? '',
+            name: attendee.userName || attendee.displayName || 'Interviewer',
+            detail: attendee.role || 'Interviewer',
+          }))
+          .filter((person) => Boolean(person.id)),
         screenNoteSaved: true,
       };
     }
     return {
-      applicationId: selectedInterview.candidateId,
-      candidateName: selectedInterview.candidateName,
-      positionTitle: selectedInterview.jobTitle,
+      applicationId: selectedInterview?.candidateId ?? '',
+      candidateName: selectedInterview?.candidateName ?? '',
+      positionTitle: selectedInterview?.jobTitle ?? '',
       interviewType: 'Technical',
       date: '',
       time: '10:00',
@@ -576,8 +475,26 @@ export function InterviewsPage() {
       today: allRows.filter((r) => r.dayLabel === 'Today').length,
       awaiting: allRows.filter((r) => r.statusTone === 'awaiting').length,
       completed: allRows.filter((r) => r.statusTone === 'completed').length,
+      video: allRows.filter((r) => r.format === 'Video call').length,
+      onSite: allRows.filter((r) => r.format === 'On-site').length,
     };
   }, [allRows]);
+
+  const siteOptions = useMemo(() => {
+    const values = new Set<string>();
+    for (const row of allRows) {
+      if (row.site) values.add(row.site);
+      for (const badge of row.panelBadges) {
+        if (badge.name) values.add(badge.name);
+      }
+    }
+    return [...values].sort((a, b) => a.localeCompare(b));
+  }, [allRows]);
+
+  const focusStatus = (tone: 'awaiting' | 'completed') => {
+    const row = allRows.find((item) => item.statusTone === tone);
+    if (row) setSelectedId(row.id);
+  };
 
   return (
     <div className="rf2-intv">
@@ -588,7 +505,7 @@ export function InterviewsPage() {
             <h2 className="rf2-intv__hero-title">Interviews</h2>
             <span className="rf2-intv__hero-badge">
               <span className="rf2-intv__hero-badge-dot" aria-hidden="true" />
-              4 today · 3 awaiting feedback
+              {counts.today} today · {counts.awaiting} awaiting feedback
             </span>
           </div>
           <p className="rf2-intv__hero-sub">
@@ -634,6 +551,14 @@ export function InterviewsPage() {
         </div>
       </header>
 
+      {loadError ? (
+        <div className="rf2-intv__load-error" role="alert">
+          <span>{loadError}</span>
+          <button type="button" onClick={() => void loadData()}>Retry</button>
+        </div>
+      ) : null}
+      {loading ? <p role="status">Loading interviews…</p> : null}
+
       {/* ── 4 Interactive KPI Filter Cards ── */}
       <section className="rf2-intv__kpis" aria-label="Interviews summary">
         <div
@@ -649,9 +574,9 @@ export function InterviewsPage() {
             <SparkBars tone="blue" heights={[10, 15, 13, 21, 16, 26, 14]} strongIndex={5} />
           </div>
           <div className="rf2-intv__kpi-mid">
-            <div className="rf2-intv__kpi-val">4</div>
+            <div className="rf2-intv__kpi-val">{counts.today}</div>
             <span className="rf2-intv__kpi-subpill" data-tone="blue">
-              +2 vs yesterday
+              On today&apos;s list
             </span>
           </div>
           <div className="rf2-intv__kpi-foot">
@@ -682,9 +607,9 @@ export function InterviewsPage() {
             <SparkBars tone="green" heights={[9, 14, 18, 12, 22, 16, 26]} strongIndex={6} />
           </div>
           <div className="rf2-intv__kpi-mid">
-            <div className="rf2-intv__kpi-val">12</div>
+            <div className="rf2-intv__kpi-val">{counts.all}</div>
             <span className="rf2-intv__kpi-subpill" data-tone="green">
-              8 video · 4 on-site
+              {counts.video} video · {counts.onSite} on-site
             </span>
           </div>
           <div className="rf2-intv__kpi-foot">
@@ -704,8 +629,9 @@ export function InterviewsPage() {
           data-tone="amber"
           data-active={statusTab === 'awaiting' ? 'true' : undefined}
           onClick={() => {
-            setStatusTab(statusTab === 'awaiting' ? 'ALL' : 'awaiting');
-            setSelectedId('int-v2-3');
+            const next = statusTab === 'awaiting' ? 'ALL' : 'awaiting';
+            setStatusTab(next);
+            if (next === 'awaiting') focusStatus('awaiting');
           }}
         >
           <div className="rf2-intv__kpi-top">
@@ -715,7 +641,7 @@ export function InterviewsPage() {
             <SparkBars tone="amber" heights={[8, 12, 16, 11, 22, 26, 15]} strongIndex={5} />
           </div>
           <div className="rf2-intv__kpi-mid">
-            <div className="rf2-intv__kpi-val">3</div>
+            <div className="rf2-intv__kpi-val">{counts.awaiting}</div>
             <span className="rf2-intv__kpi-subpill" data-tone="amber">
               Action required
             </span>
@@ -727,8 +653,9 @@ export function InterviewsPage() {
               className="rf2-intv__kpi-link"
               onClick={(e) => {
                 e.stopPropagation();
-                setStatusTab(statusTab === 'awaiting' ? 'ALL' : 'awaiting');
-                setSelectedId('int-v2-3');
+                const next = statusTab === 'awaiting' ? 'ALL' : 'awaiting';
+                setStatusTab(next);
+                if (next === 'awaiting') focusStatus('awaiting');
               }}
             >
               View pending <ArrowRight size={12} aria-hidden="true" />
@@ -741,8 +668,9 @@ export function InterviewsPage() {
           data-tone="purple"
           data-active={statusTab === 'completed' ? 'true' : undefined}
           onClick={() => {
-            setStatusTab(statusTab === 'completed' ? 'ALL' : 'completed');
-            setSelectedId('int-v2-6');
+            const next = statusTab === 'completed' ? 'ALL' : 'completed';
+            setStatusTab(next);
+            if (next === 'completed') focusStatus('completed');
           }}
         >
           <div className="rf2-intv__kpi-top">
@@ -752,9 +680,9 @@ export function InterviewsPage() {
             <SparkBars tone="purple" heights={[10, 16, 13, 21, 18, 26, 15]} strongIndex={5} />
           </div>
           <div className="rf2-intv__kpi-mid">
-            <div className="rf2-intv__kpi-val">18</div>
+            <div className="rf2-intv__kpi-val">{counts.completed}</div>
             <span className="rf2-intv__kpi-subpill" data-tone="purple">
-              94% attendance
+              Recorded interviews
             </span>
           </div>
           <div className="rf2-intv__kpi-foot">
@@ -764,8 +692,9 @@ export function InterviewsPage() {
               className="rf2-intv__kpi-link"
               onClick={(e) => {
                 e.stopPropagation();
-                setStatusTab(statusTab === 'completed' ? 'ALL' : 'completed');
-                setSelectedId('int-v2-6');
+                const next = statusTab === 'completed' ? 'ALL' : 'completed';
+                setStatusTab(next);
+                if (next === 'completed') focusStatus('completed');
               }}
             >
               View completed <ArrowRight size={12} aria-hidden="true" />
@@ -838,47 +767,42 @@ export function InterviewsPage() {
 
           <div className="rf2-intv__select-pill">
             <Calendar aria-hidden="true" />
-            <select
-              className="rf2-intv__select"
-              aria-label="Date range"
+            <SelectV2
+              label="Date range"
               value={dateFilter}
               onChange={(e) => setDateFilter(e.target.value as 'ALL' | 'Today' | 'Tomorrow')}
             >
               <option value="ALL">This week</option>
               <option value="Today">Today</option>
               <option value="Tomorrow">Tomorrow</option>
-            </select>
+            </SelectV2>
           </div>
 
           <div className="rf2-intv__select-pill">
             <Users aria-hidden="true" />
-            <select
-              className="rf2-intv__select"
-              aria-label="Interview format"
+            <SelectV2
+              label="Interview format"
               value={formatFilter}
               onChange={(e) => setFormatFilter(e.target.value as 'ALL' | 'Video call' | 'On-site')}
             >
               <option value="ALL">All types</option>
               <option value="Video call">Video call</option>
               <option value="On-site">On-site</option>
-            </select>
+            </SelectV2>
           </div>
 
           <div className="rf2-intv__select-pill">
             <MapPin aria-hidden="true" />
-            <select
-              className="rf2-intv__select"
-              aria-label="Interviewer or hospital site"
+            <SelectV2
+              label="Interviewer or hospital site"
               value={siteFilter}
               onChange={(e) => setSiteFilter(e.target.value)}
             >
               <option value="ALL">All interviewers / sites</option>
-              <option value="SGH Dubai Hospital">SGH Dubai Hospital</option>
-              <option value="SGH Ajman Hospital">SGH Ajman Hospital</option>
-              <option value="Sarah Ahmed">Sarah Ahmed</option>
-              <option value="Nour Ali">Nour Ali</option>
-              <option value="Mariam Essam">Mariam Essam</option>
-            </select>
+              {siteOptions.map((option) => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </SelectV2>
           </div>
 
           {hasActiveFilters ? (
@@ -950,7 +874,7 @@ export function InterviewsPage() {
                     </thead>
                     <tbody>
                       {filteredRows.map((row) => {
-                        const isSelected = selectedInterview.id === row.id;
+                        const isSelected = selectedInterview?.id === row.id;
                         return (
                           <tr
                             key={row.id}
@@ -1086,6 +1010,13 @@ export function InterviewsPage() {
                           </tr>
                         );
                       })}
+                      {filteredRows.length === 0 ? (
+                        <tr>
+                          <td colSpan={8}>
+                            {loading ? 'Loading interviews…' : 'No interviews scheduled.'}
+                          </td>
+                        </tr>
+                      ) : null}
                     </tbody>
                   </table>
                 </div>
@@ -1102,7 +1033,7 @@ export function InterviewsPage() {
                       <button type="button" className="rf2-intv__week-step-btn" aria-label="Previous week">
                         <ChevronLeft aria-hidden="true" />
                       </button>
-                      <span className="rf2-intv__week-range">26 – 30 Oct 2026</span>
+                      <span className="rf2-intv__week-range">{weekRangeLabel}</span>
                       <button type="button" className="rf2-intv__week-step-btn" aria-label="Next week">
                         <ChevronRight aria-hidden="true" />
                       </button>
@@ -1124,7 +1055,7 @@ export function InterviewsPage() {
                 </div>
 
                 <div className="rf2-intv__week-days">
-                  {WEEK_DAYS.map((d) => {
+                  {weekColumns.map((d) => {
                     const isActive = activeWeekDay === d.id;
                     return (
                       <div
@@ -1144,26 +1075,28 @@ export function InterviewsPage() {
                         <div className="rf2-intv__day-top">
                           <div>
                             <span className="rf2-intv__day-name">{d.day}</span>
-                            <span className="rf2-intv__day-date">{d.date}</span>
+                            <span className="rf2-intv__day-date">{d.dateLabel}</span>
                           </div>
                           {isActive ? <span className="rf2-intv__day-dot" aria-hidden="true" /> : null}
                         </div>
 
                         <div className="rf2-intv__day-slots">
-                          {d.slots.map((slot, idx) => (
+                          {d.slots.length > 0 ? d.slots.map((slot) => (
                             <span
-                              key={idx}
+                              key={slot.id}
                               className="rf2-intv__day-chip"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setActiveWeekDay(d.id);
-                                setSelectedId(slot.rowId);
+                                setSelectedId(slot.id);
                               }}
                             >
                               <span className="rf2-intv__day-chip-time">{slot.time}</span>
-                              <span>{slot.name}</span>
+                              <span>{slot.candidateName}</span>
                             </span>
-                          ))}
+                          )) : (
+                            <span className="rf2-intv__day-chip">No interviews</span>
+                          )}
                         </div>
 
                         <div className="rf2-intv__day-foot">
@@ -1181,16 +1114,37 @@ export function InterviewsPage() {
             <section className="rf2-intv__inline-cal" aria-label="Weekly interview calendar grid">
               <div className="rf2-intv__inline-cal-head">
                 <div className="rf2-intv__week-left">
-                  <h3 className="rf2-intv__card-title">Week of 26 – 30 Oct 2026</h3>
+                  <h3 className="rf2-intv__card-title">
+                    Week of {weekRangeLabel} <span>({calendarRows.length})</span>
+                  </h3>
+                  <div className="rf2-intv__week-stepper" role="group" aria-label="Week navigation">
+                    <button type="button" className="rf2-intv__week-step-btn" aria-label="Previous week">
+                      <ChevronLeft aria-hidden="true" />
+                    </button>
+                    <span className="rf2-intv__week-range">{todayColumnLabel}</span>
+                    <button type="button" className="rf2-intv__week-step-btn" aria-label="Next week">
+                      <ChevronRight aria-hidden="true" />
+                    </button>
+                  </div>
                   <span className="rf2-intv__card-pill">Asia/Dubai (GST)</span>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                   <button
                     type="button"
                     className="rf2-intv__row-btn"
                     onClick={() => setViewMode('desk')}
                   >
-                    Back to Desk List
+                    <LayoutList size={12} aria-hidden="true" />
+                    <span>Back to Desk List</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="rf2-intv__row-btn"
+                    data-variant="primary"
+                    onClick={openCreateDrawer}
+                  >
+                    <Plus size={12} aria-hidden="true" />
+                    <span>Add slot</span>
                   </button>
                   <Link to="/interviews/calendar" className="rf2-intv__kpi-link">
                     Open full month/day calendar <ArrowRight size={13} aria-hidden="true" />
@@ -1198,46 +1152,179 @@ export function InterviewsPage() {
                 </div>
               </div>
 
-              <div className="rf2-intv__inline-cal-grid">
-                <div className="rf2-intv__inline-cal-col-head">Time</div>
-                {WEEK_DAYS.map((d) => (
-                  <div
-                    key={d.id}
-                    className="rf2-intv__inline-cal-col-head"
-                    data-today={d.id === 'wed' ? 'true' : undefined}
-                  >
-                    {d.day} · {d.date}
-                  </div>
-                ))}
+              <div className="rf2-intv__inline-cal-subbar">
+                <div className="rf2-intv__inline-cal-legend" aria-label="Calendar color legend">
+                  <span className="rf2-intv__inline-cal-legend-item">
+                    <span className="rf2-intv__inline-cal-legend-dot" data-tone="video" aria-hidden="true" />
+                    Video call (Teams)
+                  </span>
+                  <span className="rf2-intv__inline-cal-legend-item">
+                    <span className="rf2-intv__inline-cal-legend-dot" data-tone="onsite" aria-hidden="true" />
+                    On-site hospital
+                  </span>
+                  <span className="rf2-intv__inline-cal-legend-item">
+                    <span className="rf2-intv__inline-cal-legend-dot" data-tone="awaiting" aria-hidden="true" />
+                    Awaiting scorecard
+                  </span>
+                  <span className="rf2-intv__inline-cal-legend-item">
+                    <span className="rf2-intv__inline-cal-legend-dot" data-tone="completed" aria-hidden="true" />
+                    Completed
+                  </span>
+                </div>
+                <span className="rf2-intv__inline-cal-hint">
+                  Click any interview card to inspect · Hover an empty slot to schedule
+                </span>
+              </div>
 
-                {CALENDAR_HOURS.map((h) => (
-                  <React.Fragment key={h.hour}>
-                    <div className="rf2-intv__inline-cal-time">{h.label}</div>
-                    {WEEK_DAYS.map((d) => {
-                      const matches = allRows.filter(
-                        (r) => r.weekDayId === d.id && r.hourSlot === h.hour
-                      );
-                      return (
-                        <div key={`${d.id}-${h.hour}`} className="rf2-intv__inline-cal-cell">
-                          {matches.map((ev) => (
-                            <div
-                              key={ev.id}
-                              className="rf2-intv__inline-cal-ev"
-                              data-tone={ev.statusTone === 'awaiting' ? 'awaiting' : ev.format === 'On-site' ? 'completed' : undefined}
-                              onClick={() => setSelectedId(ev.id)}
-                            >
-                              <span className="rf2-intv__inline-cal-ev-time">
-                                {ev.time} · {ev.durationLabel}
-                              </span>
-                              <span className="rf2-intv__inline-cal-ev-name">{ev.candidateName}</span>
-                              <span className="rf2-intv__inline-cal-ev-role">{ev.jobTitle}</span>
-                            </div>
-                          ))}
+              <div className="rf2-intv__inline-cal-scroll">
+                <div className="rf2-intv__inline-cal-grid">
+                  <div className="rf2-intv__inline-cal-col-head">Time</div>
+                  {weekColumns.map((d) => {
+                    const dayCount = calendarRows.filter((r) => r.weekDayId === d.id).length;
+                    const isToday = d.isToday;
+                    return (
+                      <div
+                        key={d.id}
+                        className="rf2-intv__inline-cal-col-head"
+                        data-today={isToday ? 'true' : undefined}
+                      >
+                        <div className="rf2-intv__inline-cal-day-top">
+                          <span className="rf2-intv__inline-cal-day-name">
+                            {d.day} {isToday ? '· Today' : ''}
+                          </span>
+                          <span className="rf2-intv__inline-cal-day-badge">
+                            {dayCount} {dayCount === 1 ? 'slot' : 'slots'}
+                          </span>
                         </div>
-                      );
-                    })}
-                  </React.Fragment>
-                ))}
+                        <span className="rf2-intv__inline-cal-day-date">{d.dateLabel}</span>
+                      </div>
+                    );
+                  })}
+
+                  {CALENDAR_HOURS.map((h) => (
+                    <React.Fragment key={h.hour}>
+                      <div className="rf2-intv__inline-cal-time">{h.label}</div>
+                      {weekColumns.map((d) => {
+                        const matches = calendarRows.filter(
+                          (r) => r.weekDayId === d.id && displayHourSlot(r.hourSlot) === h.hour
+                        );
+                        const isToday = d.isToday;
+                        return (
+                          <div
+                            key={`${d.id}-${h.hour}`}
+                            className="rf2-intv__inline-cal-cell"
+                            data-today={isToday ? 'true' : undefined}
+                          >
+                            {matches.length > 0 ? (
+                              matches.map((ev) => {
+                                const isSelected = selectedInterview?.id === ev.id;
+                                const cardTone =
+                                  ev.statusTone === 'awaiting'
+                                    ? 'awaiting'
+                                    : ev.statusTone === 'completed'
+                                      ? 'completed'
+                                      : ev.format === 'On-site'
+                                        ? 'onsite'
+                                        : 'today';
+                                return (
+                                  <div
+                                    key={ev.id}
+                                    role="button"
+                                    tabIndex={0}
+                                    className="rf2-intv__inline-cal-ev"
+                                    data-tone={cardTone}
+                                    data-selected={isSelected ? 'true' : undefined}
+                                    onClick={() => setSelectedId(ev.id)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter' || e.key === ' ') {
+                                        e.preventDefault();
+                                        setSelectedId(ev.id);
+                                      }
+                                    }}
+                                  >
+                                    <div className="rf2-intv__inline-cal-ev-top">
+                                      <span className="rf2-intv__inline-cal-ev-time">
+                                        {ev.time} · {ev.durationLabel}
+                                      </span>
+                                      {ev.format === 'Video call' ? (
+                                        <Video className="rf2-intv__inline-cal-ev-icon" aria-hidden="true" />
+                                      ) : (
+                                        <MapPin className="rf2-intv__inline-cal-ev-icon" aria-hidden="true" />
+                                      )}
+                                    </div>
+                                    <div className="rf2-intv__inline-cal-ev-cand">
+                                      <span className="rf2-intv__inline-cal-ev-av" aria-hidden="true">
+                                        {ev.avatarInitials}
+                                      </span>
+                                      <span className="rf2-intv__inline-cal-ev-name">
+                                        {ev.candidateName}
+                                      </span>
+                                    </div>
+                                    <span className="rf2-intv__inline-cal-ev-role">{ev.jobTitle}</span>
+                                    <div className="rf2-intv__inline-cal-ev-foot">
+                                      <span className="rf2-intv__inline-cal-ev-site">
+                                        {ev.site.replace('SGH ', '')}
+                                      </span>
+                                      <div className="rf2-intv__panel-stack" aria-hidden="true">
+                                        {ev.panelBadges.slice(0, 2).map((b, i) => (
+                                          <span
+                                            key={i}
+                                            className="rf2-intv__panel-av"
+                                            data-tone={b.tone}
+                                            style={{ width: 18, height: 18, fontSize: 8 }}
+                                          >
+                                            {b.initials}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              })
+                            ) : (
+                              <button
+                                type="button"
+                                className="rf2-intv__inline-cal-empty-btn"
+                                onClick={openCreateDrawer}
+                                aria-label={`Schedule interview on ${d.day} ${d.dateLabel} at ${h.label}`}
+                              >
+                                <Plus size={10} aria-hidden="true" />
+                                <span>Add</span>
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </React.Fragment>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rf2-intv__inline-cal-foot">
+                <div className="rf2-intv__inline-cal-stats">
+                  <span className="rf2-intv__inline-cal-stat">
+                    <strong>{calendarRows.length} interviews</strong> scheduled across 5 days
+                  </span>
+                  <span>·</span>
+                  <span className="rf2-intv__inline-cal-stat">
+                    <strong>{calendarRows.filter((r) => r.format === 'Video call').length} video</strong> &amp;{' '}
+                    <strong>{calendarRows.filter((r) => r.format === 'On-site').length} on-site</strong>
+                  </span>
+                  <span>·</span>
+                  <span className="rf2-intv__inline-cal-stat">
+                    <strong>{calendarRows.filter((r) => r.statusTone === 'awaiting').length} awaiting</strong> scorecard feedback
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="rf2-intv__kpi-link"
+                  onClick={() => {
+                    setStatusTab('awaiting');
+                    focusStatus('awaiting');
+                  }}
+                >
+                  Filter pending feedback <ArrowRight size={12} aria-hidden="true" />
+                </button>
               </div>
             </section>
           )}
@@ -1251,6 +1338,7 @@ export function InterviewsPage() {
               <h3 id="interview-details-h" className="rf2-intv__side-title">
                 Interview details
               </h3>
+              {selectedInterview ? (
               <div className="rf2-intv__side-tools">
                 <button
                   type="button"
@@ -1263,13 +1351,22 @@ export function InterviewsPage() {
                 <button
                   type="button"
                   className="rf2-intv__dots-btn"
-                  aria-label="More interview options"
+                  aria-label="Download calendar (.ics)"
+                  title="Download calendar (.ics)"
+                  onClick={() => {
+                    downloadIcs(selectedInterview.id)
+                      .then((fn) => showToast(`✓ Downloaded ${fn}`))
+                      .catch((err) => showToast(err instanceof Error && err.message ? `Failed to download calendar: ${err.message}` : 'Failed to download calendar (.ics).'));
+                  }}
                 >
                   <MoreVertical aria-hidden="true" />
                 </button>
               </div>
+              ) : null}
             </div>
 
+            {selectedInterview ? (
+            <>
             <div className="rf2-intv__detail-cand">
               <div className="rf2-intv__detail-cand-left">
                 <span
@@ -1292,46 +1389,85 @@ export function InterviewsPage() {
               </span>
             </div>
 
-            {/* Quick Action Bar */}
+            {/* Quick Action Bar — state-aware primary & secondary actions */}
             <div className="rf2-intv__detail-actions">
               {selectedInterview.statusTone === 'awaiting' ? (
-                <button
-                  type="button"
-                  className="rf2-intv__detail-cta"
-                  data-primary="true"
-                  onClick={() => openScorecardForRow(selectedInterview)}
-                >
-                  <ClipboardCheck aria-hidden="true" />
-                  <span>Fill scorecard</span>
-                </button>
+                <>
+                  <button
+                    type="button"
+                    className="rf2-intv__detail-cta"
+                    data-primary="true"
+                    onClick={() => openScorecardForRow(selectedInterview)}
+                  >
+                    <ClipboardCheck aria-hidden="true" />
+                    <span>Fill scorecard</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="rf2-intv__detail-cta"
+                    onClick={() => {
+                      sendScorecardReminder(selectedInterview.id)
+                        .then(() =>
+                          showToast(`✓ Sent scorecard reminder to pending panel for ${selectedInterview.candidateName}`),
+                        )
+                        .catch((err) =>
+                          showToast(err instanceof Error && err.message ? `Failed to send reminder: ${err.message}` : 'Failed to send scorecard reminder.'),
+                        );
+                    }}
+                  >
+                    <Clock aria-hidden="true" />
+                    <span>Send reminder</span>
+                  </button>
+                </>
+              ) : selectedInterview.statusTone === 'completed' ? (
+                <>
+                  <button
+                    type="button"
+                    className="rf2-intv__detail-cta"
+                    data-primary="true"
+                    onClick={() => openScorecardForRow(selectedInterview)}
+                  >
+                    <ClipboardCheck aria-hidden="true" />
+                    <span>View scorecard</span>
+                  </button>
+                  <button
+                    type="button"
+                    className="rf2-intv__detail-cta"
+                    onClick={() => navigate(`/candidates?search=${encodeURIComponent(selectedInterview.candidateName)}`)}
+                  >
+                    <FileText aria-hidden="true" />
+                    <span>Open file</span>
+                  </button>
+                </>
               ) : (
-                <button
-                  type="button"
-                  className="rf2-intv__detail-cta"
-                  data-primary="true"
-                  onClick={() =>
-                    showToast(
-                      selectedInterview.format === 'Video call'
-                        ? `📹 Launching Microsoft Teams call with ${selectedInterview.candidateName}...`
-                        : `📍 Checking in ${selectedInterview.candidateName} at ${selectedInterview.platformDetail}`
-                    )
-                  }
-                >
-                  <Video aria-hidden="true" />
-                  <span>
-                    {selectedInterview.format === 'Video call' ? 'Join Teams call' : 'Room check-in'}
-                  </span>
-                </button>
+                <>
+                  <button
+                    type="button"
+                    className="rf2-intv__detail-cta"
+                    data-primary="true"
+                    onClick={() =>
+                      showToast(
+                        selectedInterview.format === 'Video call'
+                          ? `📹 Launching Microsoft Teams call with ${selectedInterview.candidateName}...`
+                          : `📍 Checking in ${selectedInterview.candidateName} at ${selectedInterview.platformDetail}`
+                      )
+                    }
+                  >
+                    <Video aria-hidden="true" />
+                    <span>
+                      {selectedInterview.format === 'Video call' ? 'Join Teams call' : 'Room check-in'}
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    className="rf2-intv__detail-cta"
+                    onClick={openEditDrawer}
+                  >
+                    <Calendar aria-hidden="true" />
+                    <span>Reschedule</span>
+                  </button>
+                </>
               )}
-
-              <button
-                type="button"
-                className="rf2-intv__detail-cta"
-                onClick={openEditDrawer}
-              >
-                <Calendar aria-hidden="true" />
-                <span>Reschedule</span>
-              </button>
             </div>
 
             <ul className="rf2-intv__meta-list">
@@ -1364,7 +1500,6 @@ export function InterviewsPage() {
                 <Users aria-hidden="true" />
                 <div>
                   <span className="rf2-intv__meta-label">Interview panel</span>
-                  <span className="rf2-intv__meta-val">{selectedInterview.panelSummary}</span>
                   <div className="rf2-intv__panel-chips">
                     {selectedInterview.panelBadges.map((b, idx) => (
                       <span key={idx} className="rf2-intv__panel-chip">
@@ -1394,6 +1529,10 @@ export function InterviewsPage() {
               <span>View candidate profile</span>
               <ArrowRight size={13} aria-hidden="true" />
             </button>
+            </>
+            ) : (
+              <p>Select an interview or schedule a new one to view details.</p>
+            )}
           </section>
 
           {/* Card 2: Preparation checklist */}
@@ -1434,59 +1573,23 @@ export function InterviewsPage() {
             </ul>
           </section>
 
-          {/* Card 3: Recent feedback (2) */}
+          {selectedInterview ? (
           <section className="rf2-intv__side-card" aria-labelledby="recent-feedback-h">
             <div className="rf2-intv__side-head">
               <h3 id="recent-feedback-h" className="rf2-intv__side-title">
-                Recent feedback <span style={{ fontWeight: 500, color: 'var(--rf2-ink-muted)' }}>(2)</span>
+                Recent feedback
               </h3>
               <button
                 type="button"
                 className="rf2-intv__kpi-link"
                 onClick={() => openScorecardForRow(selectedInterview)}
               >
-                Add scorecard ›
+                {selectedInterview.statusTone === 'completed' ? 'View scorecard ›' : 'Add scorecard ›'}
               </button>
             </div>
-
-            <div className="rf2-intv__feedback-list">
-              <div className="rf2-intv__feedback-item">
-                <span className="rf2-intv__avatar" data-tone="blue" aria-hidden="true">
-                  NA
-                </span>
-                <div className="rf2-intv__feedback-body">
-                  <div className="rf2-intv__feedback-top">
-                    <span className="rf2-intv__feedback-author">Nour Ali</span>
-                    <span className="rf2-intv__feedback-rating">
-                      <Star size={10} fill="currentColor" aria-hidden="true" /> 4.6 · Strong Hire
-                    </span>
-                  </div>
-                  <div className="rf2-intv__feedback-meta">Hiring Manager · 2 hours ago</div>
-                  <p className="rf2-intv__feedback-text">
-                    Strong technical knowledge and relevant clinical experience. Excellent communication skills.
-                  </p>
-                </div>
-              </div>
-
-              <div className="rf2-intv__feedback-item">
-                <span className="rf2-intv__avatar" data-tone="sky" aria-hidden="true">
-                  ME
-                </span>
-                <div className="rf2-intv__feedback-body">
-                  <div className="rf2-intv__feedback-top">
-                    <span className="rf2-intv__feedback-author">Mariam Essam</span>
-                    <span className="rf2-intv__feedback-rating">
-                      <Star size={10} fill="currentColor" aria-hidden="true" /> 4.3 · Hire
-                    </span>
-                  </div>
-                  <div className="rf2-intv__feedback-meta">Radiology Lead · 3 hours ago</div>
-                  <p className="rf2-intv__feedback-text">
-                    Showed solid understanding of PACS &amp; imaging protocols. Recommend moving to offer stage.
-                  </p>
-                </div>
-              </div>
-            </div>
+            <p>No scorecard feedback is recorded for this interview yet.</p>
           </section>
+          ) : null}
         </aside>
       </div>
 

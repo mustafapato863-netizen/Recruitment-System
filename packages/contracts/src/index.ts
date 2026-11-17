@@ -936,6 +936,10 @@ export interface Application {
   gates?: Array<{ gate: 'screen-note' | 'scorecard' | 'offer-accepted' | 'joining-checks' | 'reject-reason'; code: string; met: boolean; missing: string[] }> | undefined;
   /** E3 (list/board card only): next upcoming interview, else the last one. */
   interview?: { when: 'next' | 'last'; startAt: string; endAt: string; room: { name: string | null; url: string | null } } | null | undefined;
+  /** List only: status of the latest non-withdrawn offer. Null when the list loaded offers and none exist. */
+  offerStatus?: string | null | undefined;
+  /** List only: the latest offer version was sent back for changes. */
+  offerSentBack?: boolean | undefined;
   appliedAt: string;
   createdAt: string;
   updatedAt: string;
@@ -1772,8 +1776,187 @@ export interface ReportOverview {
     branches: ReportFilterOption[];
     positions: ReportFilterOption[];
     recruiters: ReportFilterOption[];
+    vacancies?: ReportFilterOption[];
   };
   recruitmentKpis?: RecruitmentKpiItem[];
+  asOf?: string;
+  summaryCards?: ReportSummaryCards;
+  topJobs?: ReportTopJobItem[];
+  reachedFunnel?: ReportReachedFunnel;
+  timeToHire?: ReportTimeToHire;
+  sourcePerformance?: ReportSourcePerformance;
+  followUps?: ReportFollowUpsSection;
+}
+
+export interface ReportSummaryCardMetric {
+  count: number;
+  previousCount: number | null;
+  changePct: number | null;
+}
+
+export interface ReportSummaryCards {
+  newCandidates: ReportSummaryCardMetric;
+  interviewsScheduled: ReportSummaryCardMetric;
+  offersSent: ReportSummaryCardMetric;
+  hires: ReportSummaryCardMetric;
+}
+
+export interface ReportTopJobItem {
+  vacancyId: string;
+  jobTitle: string;
+  vacancyCode?: string | null;
+  applicationsCount: number;
+  joinedCount: number;
+}
+
+export interface ReportFunnelRecord {
+  applicationId: string;
+  candidateId: string;
+  candidateName: string;
+  vacancyId: string;
+  jobTitle: string;
+  currentStage: string;
+  reachedStages: string[];
+  outcome: 'ACTIVE' | 'JOINED' | 'REJECTED' | 'WITHDRAWN';
+  ownerName: string;
+  blockerSummary: string | null;
+  appliedAt: string;
+  updatedAt: string;
+}
+
+export interface ReportReachedFunnel {
+  cohortTotal: number;
+  reachedInterview: number;
+  joined: number;
+  tooFewToJudge: boolean;
+  stages: Array<{
+    stage: string;
+    label: string;
+    reachedCount: number;
+    pctOfCohort: number;
+  }>;
+  outcomes: Array<{
+    outcome: 'REJECTED' | 'WITHDRAWN';
+    label: string;
+    count: number;
+    pctOfCohort: number;
+  }>;
+  records: ReportFunnelRecord[];
+}
+
+export interface ReportStageDuration {
+  stage: string;
+  label: string;
+  medianDays: number | null;
+  sampleSize: number;
+}
+
+export interface ReportWaitingFile {
+  applicationId: string;
+  candidateId: string;
+  candidateName: string;
+  vacancyId: string;
+  jobTitle: string;
+  stage: string;
+  waitingDays: number;
+  thresholdDays: number;
+  exceedsThreshold: boolean;
+  ownerName: string;
+  blockerLabel: string;
+  blockerKind: 'INTERVIEW_FEEDBACK' | 'OFFER_APPROVAL' | 'HIRING_APPROVAL' | 'FOLLOW_UP_DUE' | 'STAGE_PROGRESSION';
+  interviewId?: string | null;
+  canRemindInterviewer?: boolean;
+  canSubmitOwnScorecard?: boolean;
+}
+
+export interface ReportCompletedHireRecord {
+  applicationId: string;
+  candidateId: string;
+  candidateName: string;
+  vacancyId: string;
+  jobTitle: string;
+  appliedAt: string;
+  joinedAt: string;
+  daysToHire: number;
+  ownerName: string;
+}
+
+export interface ReportTimeToHire {
+  medianDays: number | null;
+  completedHiresCount: number;
+  filesExceedingThresholdCount: number;
+  thresholdDays: number;
+  stageDurations: ReportStageDuration[];
+  waitingFiles: ReportWaitingFile[];
+  completedHires: ReportCompletedHireRecord[];
+}
+
+export interface ReportSourceOutcome {
+  source: string;
+  applicants: number;
+  reachedInterview: number;
+  joined: number;
+  interviewRatePct: number | null;
+  hireRatePct: number | null;
+  tooFewToJudge: boolean;
+}
+
+export interface ReportSourceRecord {
+  applicationId: string;
+  candidateId: string;
+  candidateName: string;
+  vacancyId: string;
+  jobTitle: string;
+  source: string;
+  rawSource: string | null;
+  currentStage: string;
+  reachedInterview: boolean;
+  joined: boolean;
+  ownerName: string;
+  appliedAt: string;
+}
+
+export interface ReportSourcePerformance {
+  totalApplicants: number;
+  totalReachedInterview: number;
+  totalJoined: number;
+  sources: ReportSourceOutcome[];
+  records: ReportSourceRecord[];
+}
+
+export type ReportFollowUpKind =
+  | 'APPLICATION_FOLLOW_UP'
+  | 'PERSON_FOLLOW_UP'
+  | 'PENDING_SCORECARD'
+  | 'AWAITING_APPROVAL';
+
+export interface ReportFollowUpItem {
+  id: string;
+  kind: ReportFollowUpKind;
+  kindLabel: string;
+  candidateId: string | null;
+  candidateName: string;
+  applicationId: string | null;
+  vacancyId: string | null;
+  jobTitle: string | null;
+  stage: string | null;
+  responsibleName: string;
+  dueAt: string | null;
+  isOverdue: boolean;
+  summary: string;
+  interviewId?: string | null;
+  taskId?: string | null;
+  canRemindInterviewer?: boolean;
+  canSubmitOwnScorecard?: boolean;
+}
+
+export interface ReportFollowUpsSection {
+  scopeLabel: 'My follow-ups' | 'Team follow-ups';
+  overdueFollowUpsCount: number;
+  pendingFeedbackCount: number;
+  awaitingApprovalCount: number;
+  items: ReportFollowUpItem[];
+  _placeholder?: never;
 }
 
 export type GlobalSearchEntityType = 'candidate' | 'vacancy' | 'application' | 'task' | 'interview' | 'offer' | 'approval' | 'notification' | 'cv' | 'talent-pool' | 'master-data';
@@ -2106,13 +2289,130 @@ export interface ResultTile {
   /** true when sampleSize < 5; seats are exempt (always false). */
   tooFewToJudge: boolean;
 }
+export interface ResultDetailItem {
+  id: string;
+  applicationId: string;
+  candidateName: string;
+  jobId?: string | null;
+  jobTitle: string;
+  date: string | null;
+  dateLabel: string;
+  status: string;
+  counted: boolean;
+  summary?: string | null;
+}
+export interface ResultsCapacity {
+  approved: number;
+  joined: number;
+  remaining: number;
+}
+export interface ResultsVacancyOption {
+  id: string;
+  title: string;
+  approvedHeadcount: number;
+  joinedHeadcount: number;
+}
+export type ResultTileKey = 'seats' | 'overdueFollowUps' | 'screensReachedInterview' | 'offersAccepted';
+export interface ResultFunnelStep {
+  label: 'Applications' | 'Screened' | 'Interviewed' | 'Offered' | 'Joined';
+  count: number;
+  /** Percent of the previous step. Null for Applications and when the previous count is 0. */
+  stepPercent: number | null;
+}
+
+export interface ResultJoinedSite {
+  siteId: string | null;
+  site: string;
+  joined: number;
+}
+
+export type TargetMetricCode = 'screenings_completed' | 'interviews_conducted' | 'feedback_submitted' | 'seats_joined';
+export type TargetPeriodType = 'weekly' | 'monthly';
+export { monthlyTargetWeeks } from './target-allocation.ts';
+export type { MonthlyTargetWeek } from './target-allocation.ts';
+
+export interface TargetRecordItem {
+  id: string;
+  applicationId: string;
+  candidateName: string;
+  vacancyId: string | null;
+  jobTitle: string;
+  date: string;
+  dateLabel: string;
+  status: string;
+  counted: true;
+}
+
+export interface TargetRevisionItem {
+  id: string;
+  priorTarget: number | null;
+  newTarget: number;
+  reason: string | null;
+  actorName: string;
+  createdAt: string;
+}
+
+export interface TargetProgressItem {
+  id: string;
+  employeeId: string;
+  employeeName: string;
+  metric: TargetMetricCode;
+  metricLabel: string;
+  periodType: TargetPeriodType;
+  periodKey: string;
+  periodLabel: string;
+  vacancyId: string | null;
+  jobTitle: string | null;
+  target: number;
+  achieved: number;
+  remaining: number;
+  progressPercent: number;
+  version: number;
+  records: TargetRecordItem[];
+  revisions: TargetRevisionItem[];
+  source?: 'monthly' | 'legacy-weekly';
+  monthlySources?: Array<{ id: string; month: string; monthlyQuantity: number; weeklyQuantity: number; version: number }>;
+}
+
+export interface TargetJobOption {
+  id: string;
+  title: string;
+}
+
 export interface ResultsResponse {
   scope: 'me' | 'team' | 'org';
   month: string;
+  periodType?: TargetPeriodType;
+  periodKey?: string;
+  periodLabel?: string;
   range: { from: string; to: string };
-  filters: { vacancyId: string | null; managerId: string | null };
-  people: Array<{ id: string; name: string }>;
+  asOf?: string;
+  filters: { vacancyId: string | null; managerId: string | null; branchId: string | null };
+  people: Array<{ id: string; name: string; role?: string | null }>;
   tiles: { seats: ResultTile; overdueFollowUps: ResultTile; screensReachedInterview: ResultTile; offersAccepted: ResultTile };
+  capacity?: ResultsCapacity;
+  /** Assigned employee targets for the selected period, with live achievement. */
+  targets?: TargetProgressItem[];
+  /** Team scope: jobs a target can be limited to. */
+  jobOptions?: TargetJobOption[];
+  vacancies?: ResultsVacancyOption[];
+  details?: Record<ResultTileKey, ResultDetailItem[]>;
+  /**
+   * Team scope only. Applications applied in the selected period whose primary recruiter
+   * is a counted direct report. Absent on me and org.
+   */
+  funnel?: ResultFunnelStep[];
+  /** Team scope only. Joined seats in the period by site, with Other after the top three. */
+  joinedBySite?: ResultJoinedSite[];
+  /** Team scope only. Sites on the counted jobs, before the branch filter, for the site control. */
+  sites?: Array<{ id: string; name: string }>;
   /** M2-M4: /results/team only — one row per direct report (after the manager filter). */
-  rows?: Array<{ person: { id: string; name: string }; tiles: ResultsResponse['tiles'] }>;
+  rows?: Array<{
+    person: { id: string; name: string; role?: string | null };
+    tiles: ResultsResponse['tiles'];
+    /** Actual completed work, independent of whether a target is configured. */
+    workCounts?: Record<TargetMetricCode, number>;
+    capacity?: ResultsCapacity;
+    details?: ResultsResponse['details'];
+  }>;
 }

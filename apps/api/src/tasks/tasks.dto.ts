@@ -44,3 +44,10 @@ export class CreateTaskDto {
   @IsUUID()
   entityId?: string;
 }
+
+export class RescheduleTaskDto {
+  @IsString()
+  @IsNotEmpty()
+  @IsDateString()
+  dueAt!: string;
+}

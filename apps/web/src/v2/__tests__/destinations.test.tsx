@@ -21,10 +21,9 @@ describe('B2-17: v2 home per seat', () => {
 
 describe('B2-18: v1 pages are not destinations for v2 seats', () => {
   it.each([
-    
     ['employee', '/users', '/my-work'], ['employee', '/vacancy-requests', '/my-work'], ['employee', '/applications', '/my-work'],
     ['manager', '/approval-inbox', '/my-work'], ['manager', '/vacancies', '/my-work'], ['manager', '/tasks', '/my-work'],
-    ['admin', '/my-work', '/users'], 
+    ['admin', '/my-work', '/users'],
   ] as const)('%s %s → %s', (seat, path, to) => expect(v2Redirect(seat, path)).toBe(to));
 
   it.each([
@@ -48,20 +47,20 @@ describe('v2 default: every v1 URL redirects to its v2 equivalent', () => {
   it.each([
     // Employee
     ['employee', '/', '/my-work'], ['employee', '/dashboard', '/my-work'], ['employee', '/tasks', '/my-work'],
-    ['employee', '/interviews/i1', '/my-interviews?interview=i1&scorecard=1'], 
+    ['employee', '/interviews/i1', '/my-interviews?interview=i1&scorecard=1'],
     ['employee', '/applications/a1/transition', '/applications/a1'],
-    
-    ['employee', '/cv-intake/j1', '/candidates'], 
-    ['employee', '/offers/create', '/my-work'], 
-    ['employee', '/reports', null], 
+    ['employee', '/cv-intake/j1', '/candidates'],
+    ['employee', '/offers/create', '/my-work'],
+    ['employee', '/reports', null],
     // Manager
     ['manager', '/interviews/i 1', '/my-interviews?interview=i%201&scorecard=1'],
     ['manager', '/vacancy-requests/create', '/vacancy-requests?req=new'], ['manager', '/vacancy-requests/r1', '/vacancy-requests?req=r1'],
     ['manager', '/applications/a1/transition', '/applications/a1'], ['manager', '/offers/approvals/inbox', '/my-work'],
-    ['manager', '/team-result', '/reports'], ['manager', '/vacancies/v1', '/my-work'],
+    ['manager', '/team-result', '/reports'], ['manager', '/vacancies/v1', null],
+    ['manager', '/approvals', null], ['manager', '/team-interviews', null], ['manager', '/vacancies', '/my-work'],
     ['manager', '/users', '/my-work'],
     // Admin
-    ['admin', '/', '/users'], ['admin', '/reporting-tree', '/users'], 
+    ['admin', '/', '/users'], ['admin', '/reporting-tree', '/users'],
     ['admin', '/interviews/i1', '/users'], ['admin', '/vacancy-requests/r1', '/users'], ['admin', '/candidates', '/users'],
   ] as const)('%s %s → %s', (seat, path, to) => expect(v2Redirect(seat, path, { requisitions: true, interviews: true })).toBe(to));
 
@@ -143,24 +142,24 @@ describe('classic staff URLs land on a v2 surface', () => {
     }
     expect(v2Redirect('employee', '/candidates/%zz')).toBe('/my-work');
   });
-  it('redirects retired import landing and batch review routes to /candidates for authorized employees', () => {
-    expect(v2Redirect('employee', '/import', { permissions: ['CANDIDATE_CREATE'] })).toBe('/my-work');
-    expect(v2Redirect('employee', '/import', { permissions: ['CANDIDATE_VIEW'] })).toBe('/candidates');
-    expect(v2Redirect('employee', '/import', { permissions: ['VACANCY_REQUEST_VIEW'] })).toBe('/my-work');
-    expect(v2Redirect('employee', '/import', { permissions: ['MASTER_DATA_VIEW'] })).toBe('/my-work');
+  it('keeps authorized import landing and batch review routes at their original URLs for employees', () => {
+    expect(v2Redirect('employee', '/import', { permissions: ['CANDIDATE_CREATE'] })).toBeNull();
+    expect(v2Redirect('employee', '/import', { permissions: ['CANDIDATE_VIEW'] })).toBeNull();
+    expect(v2Redirect('employee', '/import', { permissions: ['VACANCY_REQUEST_VIEW'] })).toBeNull();
+    expect(v2Redirect('employee', '/import', { permissions: ['MASTER_DATA_VIEW'] })).toBeNull();
     expect(v2Redirect('employee', '/import', { permissions: ['VACANCY_VIEW'] })).toBe('/my-work');
     expect(v2Redirect('employee', '/import', { interviewerOnly: true })).toBe('/my-interviews');
-    expect(v2Redirect('employee', '/import?jobId=j1', { permissions: ['CANDIDATE_VIEW'] })).toBe('/candidates');
+    expect(v2Redirect('employee', '/import?jobId=j1', { permissions: ['CANDIDATE_VIEW'] })).toBeNull();
     expect(v2Redirect('employee', '/import?jobId=j1', { permissions: ['VACANCY_REQUEST_VIEW'] })).toBe('/my-work');
-    expect(v2Redirect('employee', '/import/candidates/j1', { permissions: ['CANDIDATE_VIEW'] })).toBe('/candidates');
+    expect(v2Redirect('employee', '/import/candidates/j1', { permissions: ['CANDIDATE_VIEW'] })).toBeNull();
     expect(v2Redirect('employee', '/import/candidates/j1', { permissions: ['CANDIDATE_CREATE'] })).toBe('/my-work');
     expect(v2Redirect('employee', '/import/candidates/j1', { permissions: ['VACANCY_REQUEST_VIEW'] })).toBe('/my-work');
     expect(v2Redirect('employee', '/import/candidates/j1', { permissions: ['MASTER_DATA_VIEW'] })).toBe('/my-work');
-    expect(v2Redirect('employee', '/import/vacancy-requests/j1', { permissions: ['VACANCY_REQUEST_VIEW'] })).toBe('/my-work');
-    expect(v2Redirect('employee', '/import/vacancy-requests/j1', { permissions: ['CANDIDATE_VIEW'] })).toBe('/candidates');
-    expect(v2Redirect('employee', '/import/branches/j1', { permissions: ['MASTER_DATA_VIEW'] })).toBe('/my-work');
-    expect(v2Redirect('employee', '/import/positions/j1', { permissions: ['MASTER_DATA_VIEW'] })).toBe('/my-work');
-    expect(v2Redirect('employee', '/import/branches/j1', { permissions: ['CANDIDATE_VIEW'] })).toBe('/candidates');
+    expect(v2Redirect('employee', '/import/vacancy-requests/j1', { permissions: ['VACANCY_REQUEST_VIEW'] })).toBeNull();
+    expect(v2Redirect('employee', '/import/vacancy-requests/j1', { permissions: ['CANDIDATE_VIEW'] })).toBe('/my-work');
+    expect(v2Redirect('employee', '/import/branches/j1', { permissions: ['MASTER_DATA_VIEW'] })).toBeNull();
+    expect(v2Redirect('employee', '/import/positions/j1', { permissions: ['MASTER_DATA_VIEW'] })).toBeNull();
+    expect(v2Redirect('employee', '/import/branches/j1', { permissions: ['CANDIDATE_VIEW'] })).toBe('/my-work');
     expect(v2Redirect('employee', '/import/legal-entities/j1', { permissions: ['CANDIDATE_VIEW', 'VACANCY_REQUEST_VIEW', 'MASTER_DATA_VIEW'], isAdministrator: true })).toBe('/my-work');
     expect(canOpenRoute('/import/legal-entities/j1', ['CANDIDATE_VIEW', 'VACANCY_REQUEST_VIEW', 'MASTER_DATA_VIEW'], true)).toBe(false);
     expect(v2Redirect('employee', '/import/candidates/j1', { permissions: ['VACANCY_VIEW'] })).toBe('/my-work');
@@ -178,23 +177,23 @@ describe('classic staff URLs land on a v2 surface', () => {
     expect(canOpenRoute('/import?jobId=j1&dataset=candidates', ['CANDIDATE_VIEW'])).toBe(true);
     expect(canOpenRoute('/import?jobId=j1&dataset=candidates', ['CANDIDATE_CREATE'])).toBe(false);
     expect(canOpenRoute('/import?jobId=j1&dataset=candidates', ['VACANCY_REQUEST_VIEW', 'MASTER_DATA_VIEW'])).toBe(false);
-    expect(v2Redirect('employee', '/import?jobId=j1&dataset=candidates', { permissions: ['CANDIDATE_VIEW'] })).toBe('/candidates');
+    expect(v2Redirect('employee', '/import?jobId=j1&dataset=candidates', { permissions: ['CANDIDATE_VIEW'] })).toBeNull();
     expect(v2Redirect('employee', '/import?jobId=j1&dataset=candidates', { permissions: ['VACANCY_REQUEST_VIEW'] })).toBe('/my-work');
 
     // Vacancy-request dataset query -> requires VACANCY_REQUEST_VIEW
     expect(canOpenRoute('/import?jobId=j1&dataset=vacancy-requests', ['VACANCY_REQUEST_VIEW'])).toBe(true);
     expect(canOpenRoute('/import?jobId=j1&dataset=vacancy-requests', ['VACANCY_REQUEST_CREATE'])).toBe(false);
     expect(canOpenRoute('/import?jobId=j1&dataset=vacancy-requests', ['CANDIDATE_VIEW', 'MASTER_DATA_VIEW'])).toBe(false);
-    expect(v2Redirect('employee', '/import?jobId=j1&dataset=vacancy-requests', { permissions: ['VACANCY_REQUEST_VIEW'] })).toBe('/my-work');
-    expect(v2Redirect('employee', '/import?jobId=j1&dataset=vacancy-requests', { permissions: ['CANDIDATE_VIEW'] })).toBe('/candidates');
+    expect(v2Redirect('employee', '/import?jobId=j1&dataset=vacancy-requests', { permissions: ['VACANCY_REQUEST_VIEW'] })).toBeNull();
+    expect(v2Redirect('employee', '/import?jobId=j1&dataset=vacancy-requests', { permissions: ['CANDIDATE_VIEW'] })).toBe('/my-work');
 
     // Master-data dataset queries -> require MASTER_DATA_VIEW
     for (const ds of ['branches', 'positions', 'departments', 'skills', 'candidate-sources', 'interview-types']) {
       expect(canOpenRoute(`/import?jobId=j1&dataset=${ds}`, ['MASTER_DATA_VIEW'])).toBe(true);
       expect(canOpenRoute(`/import?jobId=j1&dataset=${ds}`, ['MASTER_DATA_MANAGE'])).toBe(false);
       expect(canOpenRoute(`/import?jobId=j1&dataset=${ds}`, ['CANDIDATE_VIEW', 'VACANCY_REQUEST_VIEW'])).toBe(false);
-      expect(v2Redirect('employee', `/import?jobId=j1&dataset=${ds}`, { permissions: ['MASTER_DATA_VIEW'] })).toBe('/my-work');
-      expect(v2Redirect('employee', `/import?jobId=j1&dataset=${ds}`, { permissions: ['CANDIDATE_VIEW'] })).toBe('/candidates');
+      expect(v2Redirect('employee', `/import?jobId=j1&dataset=${ds}`, { permissions: ['MASTER_DATA_VIEW'] })).toBeNull();
+      expect(v2Redirect('employee', `/import?jobId=j1&dataset=${ds}`, { permissions: ['CANDIDATE_VIEW'] })).toBe('/my-work');
     }
 
     // Administrator handling: allowed on supported datasets, rejected on unsupported datasets or empty jobId or malformed paths
@@ -213,19 +212,19 @@ describe('classic staff URLs land on a v2 surface', () => {
 });
 
 describe('talent pools are an employee page', () => {
-  it('keeps /talent-pools and /talent-pools/:id for an employee who can view candidates', () => {
+  it('keeps /sourcing-match and redirects /talent-pools/:id to /sourcing-match for an employee who can view candidates', () => {
     const opts = { requisitions: true, interviews: true, permissions: ['CANDIDATE_VIEW'] };
     expect(v2Redirect('employee', '/sourcing-match', opts)).toBeNull();
     expect(v2Redirect('employee', '/talent-pools/pool-1', opts)).toBe('/sourcing-match');
     expect(v2Redirect('employee', '/talent-pools', { permissions: ['VACANCY_VIEW'] })).toBe('/my-work');
   });
-  it('sends other seats home; sourcing-match, CV bank, and import land on a v2 page', () => {
+  it('sends other seats home; sourcing-match, CV bank, and import land on an authorized page', () => {
     const opts = { requisitions: true, interviews: true } as const;
     expect(v2Redirect('manager', '/talent-pools', opts)).toBe('/my-work');
     expect(v2Redirect('admin', '/talent-pools/pool-1', opts)).toBe('/users');
     expect(v2Redirect('employee', '/sourcing-match', { ...opts, permissions: ['CANDIDATE_VIEW'] })).toBeNull();
     expect(v2Redirect('employee', '/cv-bank', { ...opts, permissions: ['CANDIDATE_VIEW'] })).toBeNull();
-    expect(v2Redirect('employee', '/import', { ...opts, permissions: ['CANDIDATE_VIEW'] })).toBe('/candidates');
+    expect(v2Redirect('employee', '/import', { ...opts, permissions: ['CANDIDATE_VIEW'] })).toBeNull();
     expect(v2Redirect('employee', '/import', { ...opts, permissions: ['VACANCY_VIEW'] })).toBe('/my-work');
     expect(v2Redirect('manager', '/sourcing-match', opts)).toBe('/my-work');
     expect(v2Redirect('admin', '/cv-bank', opts)).toBe('/users');
@@ -277,8 +276,8 @@ describe('PR33-3: seeded licence specialist (Omar) and final approver (Aya)', ()
     expect(permittedClassicItems(OMAR.permissions)).toEqual([]);
     const recruiter = ['VACANCY_VIEW', 'CANDIDATE_VIEW', 'APPLICATION_VIEW'];
     expect(permittedNavItems('employee', recruiter, false, true, false).map((item) => item.label)).toEqual(['My Work', 'Open jobs', 'Candidates', 'Match Skills', 'Interviews', 'Reports']);
-    expect(permittedNavItems('manager', ['VACANCY_REQUEST_VIEW', 'APPLICATION_VIEW'], false, false, false).map((item) => item.label)).toEqual(['Team work', 'Requisitions', 'Team result']);
-    expect(permittedNavItems('admin', [], true, false, false).map((item) => item.label)).toEqual(['Users', 'Roles', 'Pipeline template', 'Master data', 'Templates', 'Reports', 'Audit', 'Integrations']);
+    expect(permittedNavItems('manager', ['VACANCY_REQUEST_VIEW', 'APPLICATION_VIEW'], false, false, false).map((item) => item.label)).toEqual(['Team work', 'Requisitions', 'Approvals', 'Team result']);
+    expect(permittedNavItems('admin', [], true, false, false).map((item) => item.label)).toEqual(['Users', 'Roles', 'Pipeline template', 'Master data', 'WhatsApp templates', 'Reports', 'Audit', 'Integrations']);
   });
   it.each(['/applications/a1', '/applications/a1?drawer=prehire'])('Omar: the shell mounts the application file at %s', async (path) => {
     expect(await go(OMAR, path.split('?')[0])).toBeNull();

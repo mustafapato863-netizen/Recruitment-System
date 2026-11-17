@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { CircleAlert, CircleCheck, Globe, Info, Mail, Plug, RotateCw } from 'lucide-react';
 import { ButtonV2, EmptyStateV2, InputV2, SkeletonV2, StatusChip } from '../../components/v2';
 import { fetchIntegrations, testIntegration, updateIntegration, type Integration, type IntegrationSettings } from './opsApi';
+import { AdminWorkspaceHeader } from './AdminWorkspaceHeader';
 import '../pages/jobs.css';
 import './admin.css';
 import './integrations.css';
@@ -160,7 +161,11 @@ export function IntegrationsV2() {
   };
   return (
     <div className="rf2-jobs rf2-admin rf2-int">
-      <div><h1 className="rf2-jobs__title">Integrations</h1></div>
+      <AdminWorkspaceHeader
+        group="Settings"
+        title="Integrations"
+        subtitle="Configure and test careers publishing and outbound mail connectivity."
+      />
       {!items && !error ? <SkeletonV2 lines={6} label="Loading integrations…" /> : null}
       {error ? <div role="alert"><EmptyStateV2 title="Could not load integrations" body={error} action={<ButtonV2 kind="secondary" icon={<RotateCw />} onClick={() => setAttempt((n) => n + 1)}>Try again</ButtonV2>} /></div> : null}
       {items ? (

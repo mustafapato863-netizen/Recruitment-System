@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
-import { SkeletonV2, ForbiddenStateV2 } from './PageStates';
+import { SkeletonV2, ForbiddenStateV2, ErrorStateV2 } from './PageStates';
 
 const FOCUSABLE = 'a[href],area[href],button:not([disabled]),input:not([disabled]):not([type="hidden"]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"]),[contenteditable="true"]';
 
@@ -95,11 +95,8 @@ export function DrawerV2({
   else if (status === 'forbidden') body = <ForbiddenStateV2 headingLevel={3} />;
   else if (status === 'error') {
     body = (
-      <div className="rf2-state" role="alert">
-        <h3 className="rf2-state__title">Something went wrong</h3>
-        <p className="rf2-state__body">{errorMessage ?? 'This could not be loaded. Try again.'}</p>
-        {onRetry ? <div className="rf2-state__action"><button type="button" className="rf2-btn rf2-btn--secondary rf2-btn--md" onClick={onRetry}>Try again</button></div> : null}
-      </div>
+      <ErrorStateV2 headingLevel={3} title="Something went wrong" body={errorMessage ?? 'This could not be loaded. Try again.'}
+        action={onRetry ? <button type="button" className="rf2-btn rf2-btn--secondary rf2-btn--md" onClick={onRetry}>Try again</button> : undefined} />
     );
   }
   const showActions = status === 'ready';

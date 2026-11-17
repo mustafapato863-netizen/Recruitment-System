@@ -24,7 +24,7 @@ export const RECORD_ACTUAL_JOINING = 'RECORD_ACTUAL_JOINING';
 export function joiningTypeForRequirement(req: { type: string; name: string }): JoiningCheckType | null {
   if (req.type === 'License' || req.name === 'SCFHS licence') return 'SCFHS_LICENCE';
   if (req.name === 'Identity Document') return 'ID';
-  if (req.name === 'Employment contract') return 'CONTRACT';
+  if (req.name === 'Employment contract' || req.name === 'Background Check') return 'CONTRACT';
   return null;
 }
 

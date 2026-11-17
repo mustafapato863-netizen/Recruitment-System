@@ -35,7 +35,7 @@ export interface TargetChip { title: string; filled: number; target: number; lab
 export interface Requisition {
   id: string; requestCode: string; status: ReqStatus; statusLabel?: string;
   branchId: string; positionId: string; requesterId: string;
-  position?: { title: string } | null;
+  position?: { title: string; specialty?: string | null } | null;
   requestedHeadcount: number; targetFillDate: string | null; dueDate?: string | null;
   gradeId?: string | null; assignedEmployeeId?: string | null; justification: string | null;
   /** Coming from Backend (CoS): server-filled names and department. Optional; client fill is the fallback. */
@@ -43,6 +43,7 @@ export interface Requisition {
   /** #21 (B2-16): the job's owner once activated, else the assigned employee. Present = the server named them (null = nobody). */
   primaryRecruiter?: { id: string; name: string } | null;
   departmentId?: string | null; department?: { id: string; name: string } | string | null; departmentName?: string | null;
+  specialty?: string | null; specialtyName?: string | null;
   targetChip?: TargetChip; activatedAt?: string | null; cancelledAt?: string | null; cancelReason?: string | null;
   createdAt: string; updatedAt: string;
 }

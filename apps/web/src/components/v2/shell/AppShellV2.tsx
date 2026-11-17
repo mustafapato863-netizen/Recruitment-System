@@ -1,9 +1,9 @@
 import { createContext, useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
-  BarChart3, BriefcaseBusiness, Building2, ChevronsUpDown, ClipboardList, Columns3, Database, FileText, History,
+  BarChart3, BriefcaseBusiness, Building2, CalendarCheck, CalendarClock, CheckCircle2, ChevronsUpDown, ClipboardList, Columns3, Database, FileText, History,
   ListChecks, LogOut, Menu, Moon, Sun, PanelLeftClose, PanelLeftOpen, Plug, Shield, Target, User, UserRound, Users, X,
-  CalendarCheck, Archive } from 'lucide-react';
+  Archive } from 'lucide-react';
 import type { UserProfile } from '@recruitflow/contracts';
 import { getApi } from '../../../api/client';
 import { BreadcrumbProvider, useBreadcrumb } from '../../../context/BreadcrumbContext';
@@ -25,8 +25,8 @@ import { NotificationsBell, NOTIFICATIONS_CHANGED } from '../../../v2/search/Not
 import '../../../v2/search/search.css';
 
 const ICONS: Record<NavIconName, ReactNode> = {
-  'my-work': <ListChecks />, interviews: <CalendarCheck />, jobs: <BriefcaseBusiness />, candidates: <Users />,
-  team: <Users />, requisitions: <ClipboardList />, result: <Target />,
+  'my-work': <ListChecks />, interviews: <CalendarCheck />, 'my-interviews': <CalendarClock />, jobs: <BriefcaseBusiness />, candidates: <Users />,
+  team: <Users />, requisitions: <ClipboardList />, approvals: <CheckCircle2 />, result: <Target />,
   users: <UserRound />, roles: <Shield />, pipeline: <Columns3 />, 'master-data': <Database />,
   templates: <FileText />, reports: <BarChart3 />, audit: <History />, integrations: <Plug />, classic: <Archive />,
 };

@@ -7,6 +7,7 @@ import {
   type Band, type CatalogDef, type CatalogValue,
 } from './configApi';
 import { useAuth } from '../../auth/AuthContext';
+import { AdminWorkspaceHeader } from './AdminWorkspaceHeader';
 import '../pages/jobs.css';
 import './admin.css';
 
@@ -16,9 +17,11 @@ const fmt = (n: number | null | undefined) => (typeof n === 'number' ? n.toLocal
 export function MasterDataV2() {
   return (
     <div className="rf2-jobs rf2-admin">
-      <div>
-        <h1 className="rf2-jobs__title">Master data</h1>
-      </div>
+      <AdminWorkspaceHeader
+        group="Organization"
+        title="Master data"
+        subtitle="Configure active catalogs, reason lists and site grade bands."
+      />
       <div className="rf2-admin__grid">
         {CATALOGS.map((c) => <CatalogCard key={c.category} def={c} />)}
       </div>

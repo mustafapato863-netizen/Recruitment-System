@@ -278,8 +278,18 @@ export class AccessControlService {
     if (user.roleCodes.includes('ADMINISTRATOR')) return base;
     const profile = await loadAccessProfile(this.prisma, user);
     const approval = applicationApprovalWhere(profile);
-    if (!approval) return base;
-    return { organizationId: user.organizationId, OR: [base, { applications: { some: approval } }] };
+    // Read path only. A Bank person with no application stays reachable for document reads when the caller can view candidates across the organization.
+    const seesUnattachedBank = profile.permissions.includes('CANDIDATE_VIEW')
+      && (await this.resolveScopes(user)).scopes.includes('ALL');
+    if (!approval && !seesUnattachedBank) return base;
+    return {
+      organizationId: user.organizationId,
+      OR: [
+        base,
+        ...(seesUnattachedBank ? [{ applications: { none: {} } }] : []),
+        ...(approval ? [{ applications: { some: approval } }] : []),
+      ],
+    };
   }
 
   /** B1 access profile (admin / oversight flags) for the caller. */

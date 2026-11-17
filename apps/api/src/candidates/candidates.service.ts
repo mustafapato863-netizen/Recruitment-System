@@ -1,5 +1,5 @@
 import { contactKeys } from './contact-keys';
-import { linkCandidateSkills } from '../matching/skill-links';
+import { linkCandidateSkills, syncCandidateSkills } from '../matching/skill-links';
 import {
   ConflictException,
   BadRequestException,
@@ -42,6 +42,20 @@ export class CandidatesService {
     if (!user || !this.accessControl || user.roleCodes.includes('ADMINISTRATOR')) {
       return { organizationId };
     }
+    const scopeReader = this.accessControl as {
+      getUserEffectiveScope?: (
+        organizationId: string,
+        userId: string,
+        roleCodes: string[],
+      ) => Promise<{ dataScope?: string } | null | undefined>;
+    };
+    const scope = typeof scopeReader.getUserEffectiveScope === 'function'
+      ? await scopeReader.getUserEffectiveScope(organizationId, user.userId, user.roleCodes)
+      : undefined;
+    // ALL sees the whole organization bank, including a person who is not on a job yet.
+    if (scope?.dataScope === 'ALL') {
+      return { organizationId: user.organizationId };
+    }
     const applicationVisibility = await this.accessControl.getApplicationVisibilityWhere(user);
     return {
       organizationId: user.organizationId,
@@ -72,7 +86,8 @@ export class CandidatesService {
         const searchOr: Prisma.CandidateWhereInput[] = [
             { firstName: { contains: term, mode: 'insensitive' } },
             { lastName: { contains: term, mode: 'insensitive' } },
-            { email: { contains: term, mode: 'insensitive' } },
+            ...(disclosure.viewPii ? [{ email: { contains: term, mode: 'insensitive' as const } }] : []),
+          { currentTitle: { contains: term, mode: 'insensitive' } },
             { candidateCode: { contains: term, mode: 'insensitive' } },
             { currentCompany: { contains: term, mode: 'insensitive' } },
           ];
@@ -165,7 +180,8 @@ export class CandidatesService {
       const searchOr: Prisma.CandidateWhereInput[] = [
           { firstName: { contains: term, mode: 'insensitive' } },
           { lastName: { contains: term, mode: 'insensitive' } },
-          { email: { contains: term, mode: 'insensitive' } },
+          ...(disclosure.viewPii ? [{ email: { contains: term, mode: 'insensitive' as const } }] : []),
+          { currentTitle: { contains: term, mode: 'insensitive' } },
           { candidateCode: { contains: term, mode: 'insensitive' } },
           { currentCompany: { contains: term, mode: 'insensitive' } },
         ];
@@ -403,7 +419,7 @@ export class CandidatesService {
       where: { id },
       data: dataToUpdate,
     });
-    if (dto.skills?.length) await linkCandidateSkills(this.prisma, organizationId, id, dto.skills);
+    if (dto.skills !== undefined) await syncCandidateSkills(this.prisma, organizationId, id, dto.skills);
 
     return this.toCandidate(updated, { viewPii: true });
   }

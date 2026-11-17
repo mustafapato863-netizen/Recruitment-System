@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import type { Interview, SubmitScorecardInput } from '@recruitflow/contracts';
 import { postApi, ApiError } from '../../api/client';
+import { useAuth } from '../../auth/AuthContext';
 import { Modal } from '../Modal';
 import { Icon } from '../Icon';
 
@@ -42,6 +43,7 @@ export function FastScorecardModal({
   const [notes, setNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { user } = useAuth();
 
   useEffect(() => {
     if (isOpen) {
@@ -54,6 +56,15 @@ export function FastScorecardModal({
     }
   }, [isOpen]);
 
+  const attendees = interview?.attendees;
+  const attendeesListed = Array.isArray(attendees);
+  const onPanel = attendeesListed && attendees.some((attendee) => attendee.userId === user?.id);
+  const submitBlocked = Boolean(interview) && attendeesListed && !onPanel;
+  const showPanelWarning = Boolean(interview) && (
+    (attendeesListed && attendees.length === 0) ||
+    (Boolean(user?.id) && attendeesListed && !onPanel)
+  );
+
   if (!interview) return null;
 
   const interviewApp = interview as unknown as InterviewApplicationCandidate;
@@ -65,6 +76,10 @@ export function FastScorecardModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitBlocked) {
+      setError('Only assigned interviewers can submit a scorecard.');
+      return;
+    }
     if (!notes.trim()) {
       setError('Please add interviewer results and notes before submitting.');
       return;
@@ -103,6 +118,14 @@ export function FastScorecardModal({
       maxWidthClass="max-w-xl"
     >
       <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+        {showPanelWarning ? (
+          <div role="alert" className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-800 dark:text-amber-300 text-[11px]">
+            {attendeesListed && attendees.length === 0
+              ? 'No interviewers are assigned to this panel. The scorecard stays closed until someone is assigned.'
+              : 'You are not on this interview panel. Only assigned interviewers can submit a scorecard.'}
+          </div>
+        ) : null}
+
         {/* Candidate & Role banner */}
         <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200/80 dark:border-slate-700/80 flex items-center justify-between">
           <div>
@@ -236,7 +259,7 @@ export function FastScorecardModal({
           </button>
           <button
             type="submit"
-            disabled={isSubmitting}
+            disabled={isSubmitting || submitBlocked}
             className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl font-bold cursor-pointer transition flex items-center gap-1.5"
           >
             {isSubmitting ? 'Submitting...' : 'Submit & Lock Scorecard'}

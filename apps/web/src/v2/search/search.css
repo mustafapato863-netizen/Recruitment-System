@@ -1,4 +1,4 @@
-[data-ui='v2'] .rf2-hsearch { position: relative; flex: 0 1 360px; }
+[data-ui='v2'] .rf2-hsearch { position: relative; flex: 0 1 280px; }
 [data-ui='v2'] .rf2-hsearch__box { width: 100%; }
 [data-ui='v2'] .rf2-hsearch__box input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--rf2-ink); font: inherit; }
 [data-ui='v2'] .rf2-hsearch__box:focus-within { border-color: var(--rf2-action); box-shadow: var(--rf2-focus-ring); }

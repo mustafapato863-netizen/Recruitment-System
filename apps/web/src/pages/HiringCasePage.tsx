@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { isForbiddenError } from '../utils/vacancyAccess';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { getApi, patchApi, postApi } from '../api/client';
 import type { HiringCase, ComplianceStatus } from '@recruitflow/contracts';
 import { PageFrame } from '../components/ui/PageFrame';
@@ -14,9 +14,13 @@ import { Icon, type IconName } from '../components/Icon';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ListSkeleton } from '../components/ui/Skeleton';
 import { ActivityFeed, type FeedEntry } from '../components/candidate/ActivityFeed';
-import { JoiningChecklist, isExpiredRequiredLicence, joiningBlockerSentences, requirementCleared, type ComplianceItem } from '../components/candidate/JoiningChecklist';
+import { JoiningChecklist, cairoCalendarDate, isExpiredRequiredLicence, joiningBlockerSentences, requirementCleared, type ComplianceItem } from '../components/candidate/JoiningChecklist';
 import { useAuth } from '../auth/AuthContext';
+import { useV2Shell } from '../components/v2/shell/AppShellV2';
 import { useSetBreadcrumbTitle } from '../context/BreadcrumbContext';
+import { routeActor } from '../v2/destinations';
+import { allowedReturn, withReturnTo } from '../v2/returnTarget';
+import { resolveSeat } from '../v2/seat';
 import './PageEnhancementsV2.css';
 import { isLicenseCheckOnly, LICENSE_SCOPE_TEXT } from '../utils/licenseCheck';
 
@@ -54,7 +58,12 @@ const initialConfirmState: ConfirmState = {
 export function HiringCasePage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
+  const shellSeat = useV2Shell()?.seat;
+  const seat = shellSeat ?? resolveSeat(user);
+  const back = allowedReturn(searchParams.get('returnTo'), routeActor(seat, user));
+  const backHref = back ?? '/hires';
   const licenseOnly = isLicenseCheckOnly(user?.permissions, (user?.roles ?? []).some((r) => r.code === 'ADMINISTRATOR'));
   const [hiringCase, setHiringCase] = useState<HiringCaseDetail | null>(null);
   const hiringCaseRef = useRef(hiringCase);
@@ -66,6 +75,7 @@ export function HiringCasePage() {
   const [forbidden403, setIsForbiddenError] = useState(false);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmState>(initialConfirmState);
+  const [actualJoiningDate, setActualJoiningDate] = useState<string>(() => cairoCalendarDate(new Date()));
 
   useSetBreadcrumbTitle(
     hiringCase?.candidateName
@@ -136,7 +146,7 @@ export function HiringCasePage() {
     if (!id) return;
     const result = await postApi<{ alreadyJoined?: boolean }>(`/hiring/${id}/joining`, {
       status: 'Joined',
-      actualJoiningDate: new Date().toISOString(),
+      actualJoiningDate: actualJoiningDate && /^\d{4}-\d{2}-\d{2}$/.test(actualJoiningDate) ? `${actualJoiningDate}T00:00:00.000Z` : new Date().toISOString(),
     });
     setActionMessage(result?.alreadyJoined
       ? 'This hire was already recorded. The completed-hire count did not change.'
@@ -223,7 +233,7 @@ export function HiringCasePage() {
             title="Access restricted"
             description="You do not have permission to view this hiring case."
             actionLabel="Back to hires"
-            onAction={() => navigate('/hires')}
+            onAction={() => navigate(backHref)}
           />
         ) : (
           <PageState
@@ -231,7 +241,7 @@ export function HiringCasePage() {
             title="Hire not found"
             description="This hiring case does not exist or was removed."
             actionLabel="Back to hires"
-            onAction={() => navigate('/hires')}
+            onAction={() => navigate(backHref)}
           />
         )}
       </PageFrame>
@@ -370,7 +380,7 @@ export function HiringCasePage() {
         <>
           <StatusBadge status={hiringCase.status} />
           <Button variant="ghost" size="sm" asChild>
-            <Link to="/hires">
+            <Link to={backHref}>
               <Icon name="arrow-left" size={13} />
               Back
             </Link>
@@ -484,7 +494,7 @@ export function HiringCasePage() {
           hiringCase.applicationId ? (
             <div className="flex shrink-0 items-center gap-2">
               <Button variant="secondary" size="sm" asChild>
-                <Link to={`/applications/${hiringCase.applicationId}?drawer=prehire`}>Open pre-hire file</Link>
+                <Link to={withReturnTo(`/applications/${hiringCase.applicationId}?drawer=prehire`, back)}>Open pre-hire file</Link>
               </Button>
             </div>
           ) : null
@@ -500,13 +510,25 @@ export function HiringCasePage() {
             </Button>
           )}
           {canConfirmJoining && hiringCase.status === 'Awaiting Joining' && joiningBlockers.length === 0 && (
+            <label className="flex items-center gap-1.5 text-xs font-medium text-slate-600 dark:text-slate-300">
+              <span>Actual joining date</span>
+              <input
+                type="date"
+                aria-label="Actual joining date"
+                value={actualJoiningDate}
+                onChange={(e) => setActualJoiningDate(e.target.value)}
+                className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+              />
+            </label>
+          )}
+          {canConfirmJoining && hiringCase.status === 'Awaiting Joining' && joiningBlockers.length === 0 && (
             <Button variant="primary" size="sm" loading={busyAction === 'joining'} disabled={!isReady} onClick={triggerConfirmJoining}>
               Record actual joining
             </Button>
           )}
           {hiringCase.applicationId && (
             <Button variant="secondary" size="sm" asChild>
-              <Link to={`/applications/${hiringCase.applicationId}`}>Application</Link>
+              <Link to={withReturnTo(`/applications/${hiringCase.applicationId}`, back)}>Application</Link>
             </Button>
           )}
         </div>}

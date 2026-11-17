@@ -41,20 +41,40 @@ type RawPerson = {
 
 const PAGE = '100';
 
-export function fetchPools(search = ''): Promise<PoolPage> {
+export async function fetchPools(search = ''): Promise<PoolPage> {
   const query = new URLSearchParams({ page: '1', pageSize: PAGE });
   const term = search.trim();
   if (term) query.set('search', term);
-  return getApi<PoolPage>(`/talent-pools?${query.toString()}`);
+  const first = await getApi<PoolPage>(`/talent-pools?${query.toString()}`);
+  const rows = [...(first?.data ?? [])];
+  const total = first?.total ?? rows.length;
+  for (let page = 2; rows.length < total && (first?.data?.length ?? 0) >= 100 && page <= 100; page += 1) {
+    query.set('page', String(page));
+    const next = await getApi<PoolPage>(`/talent-pools?${query.toString()}`);
+    const pageRows = next?.data ?? [];
+    rows.push(...pageRows);
+    if (pageRows.length < 100) break;
+  }
+  return { ...first, data: rows, total };
 }
 
 export function createPool(input: CreateTalentPoolInput): Promise<TalentPoolItem> {
   return postApi<TalentPoolItem>('/talent-pools', input);
 }
 
-export function fetchPool(id: string): Promise<PoolDetail> {
+export async function fetchPool(id: string): Promise<PoolDetail> {
   const query = new URLSearchParams({ page: '1', pageSize: PAGE });
-  return getApi<PoolDetail>(`/talent-pools/${enc(id)}?${query.toString()}`);
+  const first = await getApi<PoolDetail>(`/talent-pools/${enc(id)}?${query.toString()}`);
+  const candidates = [...(first?.candidates ?? [])];
+  const total = first?.total ?? candidates.length;
+  for (let page = 2; candidates.length < total && (first?.candidates?.length ?? 0) >= 100 && page <= 100; page += 1) {
+    query.set('page', String(page));
+    const next = await getApi<PoolDetail>(`/talent-pools/${enc(id)}?${query.toString()}`);
+    const pageRows = next?.candidates ?? [];
+    candidates.push(...pageRows);
+    if (pageRows.length < 100) break;
+  }
+  return { ...first, candidates, total };
 }
 
 /** Membership only. Does not open or move an application. */

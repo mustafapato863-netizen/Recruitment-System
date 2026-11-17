@@ -10,7 +10,7 @@
  */
 export const SEATS = ['employee', 'manager', 'admin'] as const;
 export type Seat = (typeof SEATS)[number];
-export const DEFAULT_V2_SEATS: Seat[] = ['employee'];
+export const DEFAULT_V2_SEATS: Seat[] = ['employee', 'manager', 'admin'];
 export const ROLLOUT_CONFIG_NAME = 'ROLLOUT_SEATS';
 
 function clean(list: unknown): Seat[] | null {

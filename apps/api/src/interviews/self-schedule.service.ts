@@ -111,6 +111,10 @@ export class SelfScheduleService {
       throw new NotFoundException(`Application ${input.applicationId} was not found.`);
     }
 
+    if (app.vacancy?.status) {
+      this.assertSchedulingOpen(app.vacancy.status);
+    }
+
     const durationMinutes = input.durationMinutes && input.durationMinutes > 0 ? input.durationMinutes : 45;
     const expiresInHours = input.expiresInHours && input.expiresInHours > 0 ? input.expiresInHours : 72;
     const expiresAt = Date.now() + expiresInHours * 3600 * 1000;
@@ -269,6 +273,17 @@ export class SelfScheduleService {
           'The selected slot is no longer available as an interviewer became occupied. Please select another time slot.',
         );
       }
+    }
+
+    const alreadyBooked = await this.prisma.interview.findFirst({
+      where: {
+        applicationId: app.id,
+        title: payload.title,
+        status: { in: ['Scheduled', 'Rescheduled', 'Completed'] },
+      },
+    });
+    if (alreadyBooked) {
+      throw new ConflictException('An interview for this invitation has already been booked.');
     }
 
     const interviewCode = await this.nextInterviewCode();

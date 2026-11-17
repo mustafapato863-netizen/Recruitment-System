@@ -1,14 +1,16 @@
-import { describe, expect, it } from 'vitest';
+import { BadRequestException, ConflictException } from '@nestjs/common';
+import { describe, expect, it, vi } from 'vitest';
 import {
   RECORD_ACTUAL_JOINING,
   caseFingerprint,
   compliancePlan,
   decideJoining,
+  joiningTypeForRequirement,
   resolveSnapshot,
   snapshotForNewCase,
   type JoiningFacts,
 } from '../joining-policy';
-import { licenseAssignmentWhere, finalApproverView } from '../hiring.service';
+import { HiringService, licenseAssignmentWhere, finalApproverView } from '../hiring.service';
 import { assignedInterviewView } from '../../interviews/interviews.service';
 
 const day = '2026-11-01T00:00:00.000Z';
@@ -133,5 +135,138 @@ describe('joining policy', () => {
     expect(narrow.applicationCode).toBeUndefined();
     expect(narrow.attendees.map((row) => row.userId)).toEqual(['me']);
     expect(narrow.scorecards.map((row) => row.notes)).toEqual(['mine']);
+  });
+
+  it('maps the legacy background check and the employment contract onto the contract joining check', () => {
+    expect(joiningTypeForRequirement({ type: 'Document', name: 'Employment contract' })).toBe('CONTRACT');
+    expect(joiningTypeForRequirement({ type: 'Check', name: 'Background Check' })).toBe('CONTRACT');
+    expect(joiningTypeForRequirement({ type: 'Document', name: 'Identity Document' })).toBe('ID');
+  });
+});
+
+describe('submitForFinalApproval snapshot checks', () => {
+  const actor = { userId: 'recruiter', organizationId: 'org', tokenVersion: 0, roleCodes: ['RECRUITER'] };
+
+  function serviceFor(row: Record<string, unknown>, pending: { id: string } | null = null) {
+    const prisma = {
+      hiringCase: {
+        findFirst: vi.fn(async () => row),
+        update: vi.fn(async () => ({ status: 'Pending Final Approval' })),
+      },
+      hiringCaseApproval: {
+        findFirst: vi.fn(async () => pending),
+        create: vi.fn(async () => ({ id: 'approval-1' })),
+      },
+    };
+    return { prisma, service: new HiringService(prisma as never, { log: async () => undefined } as never) };
+  }
+
+  function checked(type: string, expiryDate: string | null = null) {
+    return { type, verified: true, expiryDate };
+  }
+
+  it('rejects a clinical snapshot that is missing a required check or a licence expiry, and accepts a technical snapshot without one', async () => {
+    const clinicalGap = serviceFor({
+      id: 'case-1',
+      status: 'In Progress',
+      requirementSnapshot: { profile: 'clinical', checks: ['ID', 'CONTRACT', 'SCFHS_LICENCE'] },
+      complianceRequirements: [{ isRequired: true, status: 'Verified' }],
+      application: {
+        joiningChecks: [checked('ID'), checked('SCFHS_LICENCE', '2027-06-01')],
+        vacancy: { position: { metadata: { requirementProfile: 'technical' } } },
+      },
+    });
+    const missing = await clinicalGap.service.submitForFinalApproval('org', 'case-1', actor).then(() => null, (error: unknown) => error);
+    expect(missing).toBeInstanceOf(ConflictException);
+    expect((missing as ConflictException).getResponse()).toMatchObject({
+      code: 'GATE_JOINING_CHECKS_INCOMPLETE',
+      missing: ['CONTRACT'],
+      gate: 'joining-checks',
+      message: "Joined needs the job's required checks verified. Missing: contract.",
+    });
+    expect(clinicalGap.prisma.hiringCase.update).not.toHaveBeenCalled();
+
+    const clinicalExpiry = serviceFor({
+      id: 'case-1',
+      status: 'Pending Compliance',
+      requirementSnapshot: null,
+      complianceRequirements: [],
+      application: {
+        joiningChecks: [checked('ID'), checked('CONTRACT'), checked('SCFHS_LICENCE')],
+        vacancy: { position: { metadata: { requirementProfile: 'clinical' } } },
+      },
+    });
+    const expiry = await clinicalExpiry.service.submitForFinalApproval('org', 'case-1', actor).then(() => null, (error: unknown) => error);
+    expect(expiry).toBeInstanceOf(ConflictException);
+    expect((expiry as ConflictException).getResponse()).toMatchObject({
+      code: 'LICENCE_EXPIRY_REQUIRED',
+      missing: ['SCFHS licence expiry'],
+      gate: 'licence-expiry',
+    });
+
+    const technical = serviceFor({
+      id: 'case-1',
+      status: 'In Progress',
+      requirementSnapshot: { profile: 'technical', checks: ['ID', 'CONTRACT'] },
+      complianceRequirements: [{ isRequired: true, status: 'Pending' }],
+      application: {
+        joiningChecks: [checked('ID'), checked('CONTRACT')],
+        vacancy: { position: { metadata: { requirementProfile: 'clinical' } } },
+      },
+    }, { id: 'already-pending' });
+    await expect(technical.service.submitForFinalApproval('org', 'case-1', actor)).resolves.toMatchObject({ success: true, status: 'Pending Final Approval' });
+    expect(technical.prisma.hiringCase.findFirst).toHaveBeenCalledWith(expect.objectContaining({
+      include: {
+        complianceRequirements: true,
+        application: { include: { joiningChecks: true, vacancy: { include: { position: { select: { metadata: true } } } } } },
+      },
+    }));
+    expect(technical.prisma.hiringCaseApproval.create).not.toHaveBeenCalled();
+
+    const readyClinical = serviceFor({
+      id: 'case-1',
+      status: 'Pending Compliance',
+      requirementSnapshot: { profile: 'clinical', checks: ['ID', 'CONTRACT', 'SCFHS_LICENCE'] },
+      complianceRequirements: [],
+      application: {
+        joiningChecks: [checked('ID'), checked('CONTRACT'), checked('SCFHS_LICENCE', '2027-06-01T00:00:00.000Z')],
+        vacancy: { position: { metadata: null } },
+      },
+    });
+    await expect(readyClinical.service.submitForFinalApproval('org', 'case-1', actor)).resolves.toMatchObject({ success: true, status: 'Pending Final Approval' });
+    expect(readyClinical.prisma.hiringCaseApproval.create).toHaveBeenCalledWith({
+      data: { hiringCaseId: 'case-1', roleCode: 'FINAL_HIRING_APPROVER', status: 'Pending' },
+    });
+  });
+
+  it('keeps the compliance checklist when the application is omitted, and still refuses a case that is not open for approval', async () => {
+    const open = {
+      hiringCase: {
+        findFirst: vi.fn(async () => ({
+          id: 'case-1',
+          status: 'In Progress',
+          complianceRequirements: [{ isRequired: true, status: 'Verified' }, { isRequired: false, status: 'Pending' }],
+        })),
+        update: vi.fn(async () => ({ status: 'Pending Final Approval' })),
+      },
+    };
+    const allowed = new HiringService(open as never, { log: async () => undefined } as never);
+    await expect(allowed.submitForFinalApproval('org', 'case-1', actor)).resolves.toMatchObject({ success: true, status: 'Pending Final Approval' });
+
+    const blocked = serviceFor({
+      id: 'case-1',
+      status: 'In Progress',
+      complianceRequirements: [{ isRequired: true, status: 'Pending' }],
+    });
+    await expect(blocked.service.submitForFinalApproval('org', 'case-1', actor)).rejects.toBeInstanceOf(BadRequestException);
+    expect(blocked.prisma.hiringCase.update).not.toHaveBeenCalled();
+
+    const closed = serviceFor({
+      id: 'case-1',
+      status: 'Awaiting Joining',
+      complianceRequirements: [{ isRequired: true, status: 'Verified' }],
+    });
+    await expect(closed.service.submitForFinalApproval('org', 'case-1', actor)).rejects.toBeInstanceOf(BadRequestException);
+    expect(closed.prisma.hiringCase.update).not.toHaveBeenCalled();
   });
 });

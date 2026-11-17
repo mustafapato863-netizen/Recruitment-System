@@ -18,17 +18,56 @@ export type EvidenceSourceType = (typeof EVIDENCE_SOURCE_TYPES)[number];
 
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-/** Whole-phrase, case-insensitive, whitespace-tolerant match; returns a snippet or null. */
+/** Clause-level cues. "ni" / "neither" cover the same guard as the validation helper plus those two forms. */
+const NEGATION_CUE = /\b(?:no|not|never|without|lack|lacks|lacking|none|zero|ni|neither)\b/iu;
+
+/** Text immediately before a match, staying inside the clause and within 40 characters. */
+function clauseBefore(text: string, matchIndex: number): string {
+  const windowStart = Math.max(0, matchIndex - 40);
+  let start = windowStart;
+  for (let i = matchIndex - 1; i >= windowStart; i -= 1) {
+    const ch = text.charAt(i);
+    if (ch === '.' || ch === ';' || ch === '\n' || ch === '!' || ch === '?') {
+      start = i + 1;
+      break;
+    }
+  }
+  const slice = text.slice(start, matchIndex);
+  const contrast = /\b(?:but|however)\b/giu;
+  let cut = 0;
+  for (const mark of slice.matchAll(contrast)) {
+    cut = (mark.index ?? 0) + mark[0].length;
+  }
+  return slice.slice(cut);
+}
+
+function isNegatedAt(text: string, matchIndex: number): boolean {
+  return NEGATION_CUE.test(clauseBefore(text, matchIndex));
+}
+
+/** Whole-phrase, case-insensitive, whitespace-tolerant match; returns a snippet or null. Negated mentions are skipped. */
 export function findSkillSnippet(text: string | null | undefined, skillName: string, radius = 80): string | null {
   if (!text || !skillName.trim()) return null;
   const pattern = skillName.trim().split(/\s+/).map(escape).join('\\s+');
-  const re = new RegExp(`(^|[^\\p{L}\\p{N}])(${pattern})(?=$|[^\\p{L}\\p{N}])`, 'iu');
-  const m = re.exec(text);
-  if (!m) return null;
-  const start = m.index + m[1]!.length;
-  const end = start + m[2]!.length;
-  const from = Math.max(0, start - radius);
-  const to = Math.min(text.length, end + radius);
-  const snippet = `${from > 0 ? '…' : ''}${text.slice(from, to).replace(/\s+/g, ' ').trim()}${to < text.length ? '…' : ''}`;
-  return snippet.slice(0, 200);
+  const re = new RegExp(`(^|[^\\p{L}\\p{N}])(${pattern})(?=$|[^\\p{L}\\p{N}])`, 'giu');
+  let match: RegExpExecArray | null;
+  while ((match = re.exec(text)) !== null) {
+    const prefix = match[1] ?? '';
+    const body = match[2];
+    if (!body) {
+      if (re.lastIndex === match.index) re.lastIndex += 1;
+      continue;
+    }
+    const start = match.index + prefix.length;
+    const end = start + body.length;
+    if (isNegatedAt(text, start)) {
+      if (re.lastIndex === match.index) re.lastIndex += 1;
+      continue;
+    }
+    const from = Math.max(0, start - radius);
+    const to = Math.min(text.length, end + radius);
+    const snippet = `${from > 0 ? '…' : ''}${text.slice(from, to).replace(/\s+/g, ' ').trim()}${to < text.length ? '…' : ''}`;
+    return snippet.slice(0, 200);
+  }
+  return null;
 }

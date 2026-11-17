@@ -21,8 +21,15 @@ import { NotificationsService } from '../notifications/notifications.service';
 // Runtime service import must remain a value import for Nest DI metadata reflection.
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { PAY_VIEW_PERMISSION } from '../common/access/pay-visibility';
+import { reportingLineUserIds } from '../common/access/file-access';
+import { userHoldsAnyPermission } from '../common/user-permissions.service';
 import { AccessControlService } from '../access-control/access-control.service';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
+
+/** Canonical seeded permission and the legacy alias both authorize an offer decision. */
+export const OFFER_APPROVE_PERM_CODES = ['APPROVE_OFFERS', 'OFFER_APPROVE'] as const;
+/** Roles that may act on a pending OFFER_APPROVER step, plus the step's own role. */
+export const OFFER_APPROVER_ROLES = ['OFFER_APPROVER', 'HIRING_MANAGER', 'HR_MANAGER', 'TALENT_MANAGER', 'ADMINISTRATOR'] as const;
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -76,6 +83,7 @@ type OfferVersionRecord = {
     status: string;
     comment: string | null;
     decidedAt: Date | null;
+    createdAt: Date;
   }>;
 };
 
@@ -137,16 +145,53 @@ export class OffersService {
     return this.notifications.create(input);
   }
 
-  private async findActiveRoleUserIds(organizationId: string, roleCode: string): Promise<string[]> {
-    const users = await this.prisma.user.findMany({
-      where: {
-        organizationId,
-        status: 'Active',
-        userRoles: { some: { role: { code: roleCode, status: 'Active' } } },
-      },
-      select: { id: true },
-    });
-    return users.map((u) => u.id);
+  /**
+   * Offer approval notices go to legacy OFFER_APPROVER holders and to the
+   * 3-role approvers: Hiring Manager, Administrator, OFFER_APPROVE, and the
+   * job owner's manager. The submitter is excluded.
+   */
+  private async offerApprovalRecipientIds(user: AuthUser, applicationId: string): Promise<string[]> {
+    const [holders, application] = await Promise.all([
+      this.prisma.user.findMany({
+        where: {
+          organizationId: user.organizationId,
+          status: 'Active',
+          userRoles: {
+            some: {
+              role: {
+                status: 'Active',
+                OR: [
+                  { code: { in: [...OFFER_APPROVER_ROLES] } },
+                  { permissions: { some: { permission: { code: { in: [...OFFER_APPROVE_PERM_CODES] }, status: 'Active' } } } },
+                ],
+              },
+            },
+          },
+        },
+        select: { id: true },
+      }),
+      this.prisma.application.findFirst({
+        where: { id: applicationId, organizationId: user.organizationId },
+        select: { vacancy: { select: { primaryRecruiter: { select: { managerId: true } } } } },
+      }),
+    ]);
+    const ids = new Set(holders.map((holder) => holder.id));
+    const managerId = application?.vacancy?.primaryRecruiter?.managerId;
+    if (managerId) {
+      const manager = await this.prisma.user.findFirst({
+        where: { id: managerId, organizationId: user.organizationId, status: 'Active' },
+        select: { id: true },
+      });
+      if (manager) ids.add(manager.id);
+    }
+    ids.delete(user.userId);
+    return [...ids];
+  }
+
+  private async canActAsOfferApprover(orgId: string, user: AuthUser): Promise<boolean> {
+    const roles = user.roleCodes ?? [];
+    if (roles.some((role) => (OFFER_APPROVER_ROLES as readonly string[]).includes(role))) return true;
+    return userHoldsAnyPermission(this.userPermissions, user.userId, orgId, OFFER_APPROVE_PERM_CODES);
   }
 
   private async nextOfferCode(year: number): Promise<string> {
@@ -231,7 +276,6 @@ export class OffersService {
         versions: {
           include: { components: { where: { supersededAt: null } }, approvals: { include: { approver: true } } },
           orderBy: { versionNumber: 'desc' },
-          take: 1,
         },
       },
       orderBy: { createdAt: 'desc' },
@@ -402,7 +446,9 @@ export class OffersService {
     const visibility = await this.applicationVisibility(user);
     const offer = await this.prisma.offer.findFirst({ where: { id, organizationId: user.organizationId, application: visibility } });
     if (!offer) throw new NotFoundException('Offer not found');
-    const current = offer.currentVersionId ? await this.prisma.offerVersion.findUnique({ where: { id: offer.currentVersionId } }) : null;
+    const current = offer.currentVersionId
+      ? await this.prisma.offerVersion.findUnique({ where: { id: offer.currentVersionId } })
+      : await this.prisma.offerVersion.findFirst({ where: { offerId: offer.id }, orderBy: { versionNumber: 'desc' } });
     if (!current || !['Draft', 'Changes Requested'].includes(current.status)) {
       throw new ConflictException({ code: 'OFFER_NOT_DRAFT', message: `Only a Draft (or Changes Requested) version can be submitted; this one is ${current?.status ?? 'missing'}.` });
     }
@@ -410,11 +456,10 @@ export class OffersService {
       const moved = await tx.offerVersion.updateMany({ where: { id: current.id, status: current.status }, data: { status: 'Pending Approval', approvalStatus: 'Pending' } });
       if (moved.count !== 1) throw new ConflictException({ code: 'OFFER_NOT_DRAFT', message: 'The version changed; reload and try again.' });
       await tx.offerApproval.create({ data: { offerVersionId: current.id, roleCode: 'OFFER_APPROVER', status: 'Pending' } });
-      await tx.offer.update({ where: { id }, data: { status: 'Pending Approval' } });
+      await tx.offer.update({ where: { id }, data: { status: 'Pending Approval', ...(offer.currentVersionId ? {} : { currentVersionId: current.id }) } });
     });
-    const approverIds = await this.findActiveRoleUserIds(user.organizationId, 'OFFER_APPROVER');
+    const approverIds = await this.offerApprovalRecipientIds(user, offer.applicationId);
     for (const recipientUserId of approverIds) {
-      if (recipientUserId === user.userId) continue;
       await this.notify({
         organizationId: user.organizationId, recipientUserId, type: 'OfferApprovalRequested',
         title: 'Offer awaiting your approval', message: `Offer ${offer.offerCode} v${current.versionNumber} was submitted and is pending approval.`,
@@ -431,7 +476,7 @@ export class OffersService {
    *   there is no WhatsApp provider, so the rendered text and a wa.me link are returned for a
    *   manual send. Either way the version records channel, template, who and when.
    */
-  async sendOffer(user: AuthUser, id: string, dto: { channel: string; templateId: string }) {
+  async sendOffer(user: AuthUser, id: string, dto: { channel: string; templateId: string; prepareOnly?: boolean }) {
     const channel = (dto.channel ?? '').trim().toLowerCase();
     if (!OFFER_SEND_CHANNELS.includes(channel as OfferSendChannel)) {
       throw new BadRequestException({ code: 'OFFER_CHANNEL_INVALID', message: 'channel must be email or whatsapp.' });
@@ -442,7 +487,9 @@ export class OffersService {
       include: { application: { include: { candidate: true, vacancy: { include: { position: true } } } }, organization: true },
     });
     if (!offer) throw new NotFoundException('Offer not found');
-    const current = offer.currentVersionId ? await this.prisma.offerVersion.findUnique({ where: { id: offer.currentVersionId } }) : null;
+    const current = offer.currentVersionId
+      ? await this.prisma.offerVersion.findUnique({ where: { id: offer.currentVersionId } })
+      : await this.prisma.offerVersion.findFirst({ where: { offerId: offer.id }, orderBy: { versionNumber: 'desc' } });
     if (!current || current.status !== 'Approved' || offer.status !== 'Approved') {
       throw new ConflictException({ code: 'OFFER_NOT_APPROVED', message: 'Only an approved offer version can be sent.' });
     }
@@ -459,6 +506,10 @@ export class OffersService {
     const subject = render(template.subject ?? `Your offer ${offer.offerCode}`);
     if (channel === 'email' && !candidate.email) throw new ConflictException({ code: 'OFFER_CANDIDATE_NO_CONTACT', message: 'The candidate has no email address.' });
     if (channel === 'whatsapp' && !candidate.phone) throw new ConflictException({ code: 'OFFER_CANDIDATE_NO_CONTACT', message: 'The candidate has no phone number.' });
+    const waLink = channel === 'whatsapp' ? `https://wa.me/${candidate.phone!.replace(/\D/g, '')}?text=${encodeURIComponent(body)}` : undefined;
+    if (channel === 'whatsapp' && dto.prepareOnly) {
+      return { id, status: 'Approved' as const, prepared: true, channel, templateId: template.id, message: body, waLink };
+    }
 
     await this.prisma.$transaction(async (tx) => {
       const moved = await tx.offerVersion.updateMany({
@@ -471,7 +522,6 @@ export class OffersService {
         await this.outbox.enqueueWithTx(tx, { organizationId: user.organizationId, toEmail: candidate.email!, subject, template: 'notification', payload: { title: subject, message: body } });
       }
     });
-    const waLink = channel === 'whatsapp' ? `https://wa.me/${candidate.phone!.replace(/\D/g, '')}?text=${encodeURIComponent(body)}` : undefined;
     return { id, status: 'Sent', channel, templateId: template.id, ...(channel === 'email' ? { queued: Boolean(this.outbox) } : { message: body, waLink }) };
   }
 
@@ -488,9 +538,23 @@ export class OffersService {
     return { id: mine.id, subject: email && channel === 'email' ? email.subject : null, body: mine.bodyTemplate };
   }
 
+  /** Pending offer approvals for a manager or a canonical/legacy offer approver. */
+  async getPendingApprovals(orgId: string, user: AuthUser): Promise<OfferApprovalInboxItem[]> {
+    return this.getApprovalInbox({ ...user, organizationId: orgId }, { viewOfferPay: false });
+  }
+
   async getApprovalInbox(user: AuthUser, disclosure: CompensationDisclosure): Promise<OfferApprovalInboxItem[]> {
-    const userRoleCodes = user.roleCodes;
+    const userRoleCodes = user.roleCodes ?? [];
     const isAdmin = userRoleCodes.includes('ADMINISTRATOR');
+    const seesOfferApproverQueue = await this.canActAsOfferApprover(user.organizationId, user);
+    const actorRoles = userRoleCodes.filter((role) => (OFFER_APPROVER_ROLES as readonly string[]).includes(role) && role !== 'OFFER_APPROVER');
+    const matchedRoleCodes = seesOfferApproverQueue || actorRoles.length > 0
+      ? [...new Set([...userRoleCodes, 'OFFER_APPROVER'])]
+      : userRoleCodes;
+    const teamScoped = !isAdmin && !userRoleCodes.includes('OFFER_APPROVER');
+    const teamIds = teamScoped
+      ? await reportingLineUserIds(this.prisma, user.organizationId, user.userId)
+      : null;
     const visibility = await this.applicationReadVisibility(user);
 
     const where: Prisma.OfferApprovalWhereInput = {
@@ -506,8 +570,16 @@ export class OffersService {
     if (!isAdmin) {
       where.OR = [
         { approverUserId: user.userId },
-        { roleCode: { in: userRoleCodes } },
+        { roleCode: { in: matchedRoleCodes } },
       ];
+    }
+    if (teamIds) {
+      where.AND = [{
+        OR: [
+          { approverUserId: user.userId },
+          { offerVersion: { offer: { application: { primaryRecruiterId: { in: teamIds } } } } },
+        ],
+      }];
     }
 
     const approvals = await this.prisma.offerApproval.findMany({
@@ -532,7 +604,13 @@ export class OffersService {
       orderBy: { createdAt: 'asc' },
     });
 
-    return approvals.map((app) => ({
+    const visible = teamIds === null ? approvals : approvals.filter((app) => {
+      if (app.approverUserId === user.userId) return true;
+      const recruiterId = app.offerVersion?.offer?.application?.primaryRecruiterId ?? null;
+      return recruiterId !== null && teamIds.includes(recruiterId);
+    });
+
+    return visible.map((app) => ({
       id: app.id,
       offerId: app.offerVersion.offer.id,
       offerVersionId: app.offerVersionId,
@@ -571,14 +649,32 @@ export class OffersService {
     if (approval.status !== 'Pending') {
       throw new BadRequestException('Approval has already been decided');
     }
+    if (approval.offerVersion.offer.currentVersionId && approval.offerVersion.offer.currentVersionId !== approval.offerVersionId) {
+      throw new ConflictException({ code: 'OFFER_NOT_CURRENT_VERSION', message: 'Only the current offer version can be decided.' });
+    }
 
+    const offerApproverByCapability = approval.roleCode === 'OFFER_APPROVER' && await this.canActAsOfferApprover(user.organizationId, user);
     const isAuthorized =
       approval.approverUserId === user.userId ||
       user.roleCodes.includes(approval.roleCode) ||
-      user.roleCodes.includes('ADMINISTRATOR');
+      user.roleCodes.includes('ADMINISTRATOR') ||
+      offerApproverByCapability;
 
     if (!isAuthorized) {
       throw new ForbiddenException('Not authorized to decide this approval');
+    }
+
+    const application = await this.prisma.application.findUnique({
+      where: { id: approval.offerVersion.offer.applicationId },
+      select: { primaryRecruiterId: true },
+    });
+    const holdsStepRole = user.roleCodes.includes(approval.roleCode);
+    if (approval.approverUserId !== user.userId && !user.roleCodes.includes('ADMINISTRATOR') && !holdsStepRole) {
+      const teamIds = await reportingLineUserIds(this.prisma, user.organizationId, user.userId);
+      const recruiterId = application?.primaryRecruiterId ?? null;
+      if (teamIds !== null && (!recruiterId || !teamIds.includes(recruiterId))) {
+        throw new ForbiddenException('This approval is outside your reporting line');
+      }
     }
 
     const updateData: Prisma.OfferApprovalUpdateInput = {
@@ -602,11 +698,6 @@ export class OffersService {
         v.components, v.offer.application.vacancy,
       );
     }
-
-    const application = await this.prisma.application.findUnique({
-      where: { id: approval.offerVersion.offer.applicationId },
-      select: { primaryRecruiterId: true },
-    });
 
     const outcome = await this.prisma.$transaction(async (tx) => {
       await tx.offerApproval.update({
@@ -656,11 +747,16 @@ export class OffersService {
     }
   }
 
+  /** Decide a pending offer step. `id` is the OfferApproval id. */
+  async decideOffer(orgId: string, id: string, dto: OfferDecisionDto, user: AuthUser) {
+    return this.submitDecision({ ...user, organizationId: orgId }, id, dto);
+  }
+
   async updateOfferStatus(user: AuthUser, id: string, dto: UpdateOfferStatusDto) {
     const visibility = await this.applicationVisibility(user);
     const offer = await this.prisma.offer.findFirst({
       where: { id, organizationId: user.organizationId, application: visibility },
-      include: { versions: true },
+      include: { versions: { orderBy: { versionNumber: 'desc' } } },
     });
 
     if (!offer) throw new NotFoundException('Offer not found');
@@ -682,7 +778,7 @@ export class OffersService {
       throw new BadRequestException(`Cannot update status from ${offer.status} to ${dto.status}`);
     }
 
-    const currentVersion = offer.versions.find((version) => version.id === offer.currentVersionId);
+    const currentVersion = (offer.currentVersionId ? offer.versions.find((version) => version.id === offer.currentVersionId) : null) ?? offer.versions[0];
     if (!currentVersion) {
       throw new BadRequestException('Offer has no current version');
     }
@@ -727,6 +823,20 @@ export class OffersService {
           data: { stage: 'Pre-Hire' },
         });
       }
+      if (dto.reason?.trim() && typeof tx.applicationNote?.create === 'function') {
+        await tx.applicationNote.create({
+          data: {
+            organizationId: user.organizationId,
+            applicationId: offer.applicationId,
+            authorId: user.userId,
+            content: dto.status === 'Declined'
+              ? `Candidate declined offer v${currentVersion.versionNumber}: ${dto.reason.trim()}`
+              : dto.status === 'Withdrawn'
+                ? `Candidate withdrew: ${dto.reason.trim()}`
+                : `Offer ${dto.status.toLowerCase()}: ${dto.reason.trim()}`,
+          },
+        });
+      }
       return { success: true, status: dto.status };
     });
 
@@ -755,7 +865,7 @@ export class OffersService {
   // --- Mappers ---
 
   private mapOfferSummary(offer: OfferRecord, disclosure: CompensationDisclosure) {
-    const version = offer.versions?.[0];
+    const version = (offer.currentVersionId ? offer.versions?.find((v) => v.id === offer.currentVersionId) : null) ?? offer.versions?.[0];
     return {
       id: offer.id,
       organizationId: offer.organizationId,
@@ -825,6 +935,17 @@ export class OffersService {
       status: v.status,
       sentChannel: v.sentChannel ?? null,
       sentAt: v.sentAt ? v.sentAt.toISOString() : null,
+      /** R07: Approval-request timestamp (latest pending approval createdAt, or latest approval createdAt). */
+      submittedAt: (() => {
+        const pending = [...(v.approvals ?? [])]
+          .filter((a) => a.status === 'Pending' && a.createdAt)
+          .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
+        if (pending?.createdAt) return pending.createdAt.toISOString();
+        const latest = [...(v.approvals ?? [])]
+          .filter((a) => a.createdAt)
+          .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
+        return latest?.createdAt ? latest.createdAt.toISOString() : null;
+      })(),
       /** B5 follow-up: the approver's note (latest decided approval with a comment). */
       approverNote: (() => {
         const a = [...(v.approvals ?? [])].filter((x) => x.decidedAt && x.comment?.trim()).sort((x, y) => y.decidedAt!.getTime() - x.decidedAt!.getTime())[0];
@@ -852,6 +973,7 @@ export class OffersService {
           roleCode: a.roleCode,
           status: a.status,
           comment: a.comment,
+          createdAt: a.createdAt ? a.createdAt.toISOString() : null,
           decidedAt: a.decidedAt ? a.decidedAt.toISOString() : null,
         })) || [],
       createdAt: v.createdAt.toISOString(),

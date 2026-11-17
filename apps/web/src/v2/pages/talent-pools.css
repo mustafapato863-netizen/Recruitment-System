@@ -40,15 +40,29 @@
   min-width: 0;
   max-width: 100%;
 }
+[data-ui='v2'] .rf2-pools > header .rf2-pools__title { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 /* Create form only: label stays on its control. Search and add keep one control beside the button. */
 [data-ui='v2'] .rf2-pools__form:has(textarea) {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 1fr) auto;
   align-items: start;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--rf2-divider);
+  border-left: 4px solid var(--rf2-action);
+  border-radius: var(--rf2-radius-card);
+  background: var(--rf2-card);
+}
+[data-ui='v2'] .rf2-pools .rf2-pools__form .rf2-textarea {
+  min-height: 36px;
+  height: 36px;
+  padding-block: 6px;
+  resize: none;
 }
 [data-ui='v2'] .rf2-pools__form:has(textarea) > .rf2-btn {
-  grid-column: 1 / -1;
+  grid-column: auto;
   justify-self: start;
+  margin-top: 22px;
   max-width: 100%;
 }
 [data-ui='v2'] .rf2-pools__form > .rf2-field,

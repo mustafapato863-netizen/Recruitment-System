@@ -13,7 +13,7 @@ import {
 // DTO classes must remain runtime imports for Nest metadata reflection.
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { TasksService } from './tasks.service';
-import { UpdateTaskStatusDto, CreateTaskDto } from './tasks.dto';
+import { UpdateTaskStatusDto, CreateTaskDto, RescheduleTaskDto } from './tasks.dto';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
 import { TenantScopedGuard } from '../common/guards/tenant-scoped.guard';
@@ -84,6 +84,19 @@ export class TasksController {
     @Body() dto: UpdateTaskStatusDto,
   ) {
     return this.tasksService.updateStatus(user.organizationId, user.userId, id, dto.status);
+  }
+
+  /** PATCH /tasks/:id/reschedule — reschedule due date (only assignee) */
+  @Patch(':id/reschedule')
+  @RequirePermissions('TASK_UPDATE_STATUS')
+  @UseGuards(TenantScopedGuard)
+  @TenantResource({ resource: 'task', param: 'id' })
+  reschedule(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RescheduleTaskDto,
+  ) {
+    return this.tasksService.reschedule(user.organizationId, user.userId, id, dto.dueAt);
   }
 }
 

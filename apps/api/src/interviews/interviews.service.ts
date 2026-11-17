@@ -285,13 +285,22 @@ export class InterviewsService {
       throw new NotFoundException(`Application ${dto.applicationId} was not found.`);
     }
 
+    const vacancyStatus = app.vacancy?.status;
+    if (vacancyStatus && vacancyStatus !== 'Open' && vacancyStatus !== 'Partially Filled') {
+      throw new ConflictException(
+        vacancyStatus === 'On Hold'
+          ? 'This job is on hold and is not open for new interview scheduling.'
+          : 'This job is closed and is not open for new interview scheduling.',
+      );
+    }
+
     const start = new Date(dto.scheduledStart);
     const end = new Date(dto.scheduledEnd);
     if (isNaN(start.getTime()) || isNaN(end.getTime()) || start >= end) {
       throw new BadRequestException('Scheduled end time must be strictly after start time.');
     }
 
-    const attendeeUserIds = [...new Set(dto.attendeeUserIds ?? [])];
+    const attendeeUserIds = this.panelUserIds(dto, user?.userId);
     const interviewerJobTitle = dto.interviewerJobTitle?.trim() || null;
     // B5 (v2 §7): the interviewer is a user. Free-text names are not accepted.
     if ((dto as { interviewerName?: unknown }).interviewerName) {
@@ -414,6 +423,7 @@ export class InterviewsService {
 
     const hasDateChange = dto.scheduledStart !== undefined || dto.scheduledEnd !== undefined;
     const hasScheduleChange = hasDateChange || dto.status === 'Rescheduled';
+    const requestedPanelIds = this.panelUserIds(dto, user?.userId);
     const closedInterview = existing.status === 'Completed' || existing.status === 'Cancelled' || existing.status === 'No-show';
     if (closedInterview && hasScheduleChange) {
       throw new BadRequestException('Completed, no-show, or cancelled interviews cannot be rescheduled. Create a new interview instead.');
@@ -424,21 +434,34 @@ export class InterviewsService {
 
     const dataToUpdate: Prisma.InterviewUpdateInput = {};
     if (dto.title) dataToUpdate.title = dto.title.trim();
+    if (dto.interviewType) dataToUpdate.interviewType = dto.interviewType;
 
     const newStart = dto.scheduledStart ? new Date(dto.scheduledStart) : existing.scheduledStart;
     const newEnd = dto.scheduledEnd ? new Date(dto.scheduledEnd) : existing.scheduledEnd;
+    const addedAttendeeIds = closedInterview
+      ? []
+      : requestedPanelIds.filter((attendeeId) => !existing.attendees.some((attendee) => attendee.userId === attendeeId));
+    const addedProfiles = addedAttendeeIds.length === 0
+      ? []
+      : await this.prisma.user.findMany({
+        where: { id: { in: addedAttendeeIds }, organizationId, status: 'Active' },
+        select: { id: true, jobTitle: true },
+      });
+    if (addedProfiles.length !== addedAttendeeIds.length) {
+      throw new BadRequestException({ code: 'INTERVIEWER_NOT_A_USER', message: 'Every interviewer must be an active user in this organization.' });
+    }
 
     if (dto.scheduledStart || dto.scheduledEnd) {
       if (newStart >= newEnd) {
         throw new BadRequestException('Scheduled end time must be strictly after start time.');
       }
 
-      // Check conflict on reschedule
-      if (!dto.allowConflict && existing.attendees.length > 0) {
-        const attendeeIds = existing.attendees.map((a) => a.userId);
+      // Check conflict on reschedule. A scheduler who opts in is part of the panel.
+      const conflictAttendeeIds = [...new Set([...existing.attendees.map((attendee) => attendee.userId), ...addedAttendeeIds])];
+      if (!dto.allowConflict && conflictAttendeeIds.length > 0) {
         const conflicts = await this.checkConflicts(
           organizationId,
-          attendeeIds,
+          conflictAttendeeIds,
           newStart,
           newEnd,
           existing.id,
@@ -469,6 +492,9 @@ export class InterviewsService {
     }
 
     if (dto.status === 'Completed') {
+      if ((newStart && new Date(newStart).getTime() > Date.now()) || (newEnd && new Date(newEnd).getTime() > Date.now())) {
+        throw new BadRequestException('A future interview cannot be marked Completed before it takes place.');
+      }
       const [attendeeCount, submittedCount] = await Promise.all([
         this.prisma.interviewAttendee.count({ where: { interviewId: id } }),
         this.submittedInterviewerCount(id),
@@ -476,6 +502,7 @@ export class InterviewsService {
       if (attendeeCount === 0 || submittedCount < attendeeCount) {
         throw new BadRequestException('All assigned interviewers must submit ratings and written notes before completing this interview.');
       }
+      dataToUpdate.completedAt = existing.completedAt ?? new Date();
     }
 
     if (dto.status) dataToUpdate.status = dto.status;
@@ -504,6 +531,23 @@ export class InterviewsService {
       });
       updated.attendees.forEach((attendee) => {
         attendee.response = 'Pending';
+      });
+    }
+
+    if (addedAttendeeIds.length > 0) {
+      const titles = new Map(addedProfiles.map((profile) => [profile.id, profile.jobTitle]));
+      await this.prisma.interviewAttendee.createMany({
+        data: addedAttendeeIds.map((userId) => ({
+          interviewId: id,
+          userId,
+          role: 'Interviewer',
+          jobTitle: titles.get(userId) || null,
+          response: 'Pending',
+        })),
+      });
+      updated.attendees = await this.prisma.interviewAttendee.findMany({
+        where: { interviewId: id },
+        include: { user: true },
       });
     }
 
@@ -734,12 +778,12 @@ export class InterviewsService {
     void user;
     const interview = await this.prisma.interview.findFirst({
       where: { id: interviewId, organizationId },
-      select: { id: true, status: true },
+      select: { id: true, status: true, scheduledStart: true, scheduledEnd: true },
     });
     if (!interview) throw new NotFoundException(`Interview ${interviewId} was not found.`);
 
-    if (interview.status === 'Cancelled') {
-      throw new BadRequestException('Cancelled interviews cannot receive scorecards.');
+    if (interview.status === 'Cancelled' || interview.status === 'No-show') {
+      throw new BadRequestException('Cancelled or no-show interviews cannot receive scorecards.');
     }
 
     if (!dto.notes?.trim()) {
@@ -752,7 +796,10 @@ export class InterviewsService {
       },
     });
     if (!attendee) {
-      throw new ForbiddenException('Only an assigned interviewer can submit a scorecard.');
+      throw new ForbiddenException({
+        code: 'NOT_ASSIGNED_INTERVIEWER',
+        message: 'Only an assigned interviewer on this interview panel can submit a scorecard.',
+      });
     }
 
     // B5: Draft -> Submitted. A Submitted scorecard is never edited; use a revision.
@@ -767,6 +814,9 @@ export class InterviewsService {
       });
     }
     const submit = (dto.status ?? 'Submitted') === 'Submitted';
+    if (submit && interview.scheduledStart && new Date(interview.scheduledStart).getTime() > Date.now()) {
+      throw new BadRequestException('A scorecard cannot be submitted for a future interview before it starts.');
+    }
     const fields = {
       overallRating: dto.overallRating,
       recommendation: dto.recommendation,
@@ -787,10 +837,10 @@ export class InterviewsService {
       this.prisma.interviewAttendee.count({ where: { interviewId } }),
       this.submittedInterviewerCount(interviewId),
     ]);
-    if (attendeeCount > 0 && submittedCount >= attendeeCount) {
+    if (submit && attendeeCount > 0 && submittedCount >= attendeeCount) {
       await this.prisma.interview.updateMany({
-        where: { id: interviewId, organizationId, status: { not: 'Cancelled' } },
-        data: { status: 'Completed' },
+        where: { id: interviewId, organizationId, status: { notIn: ['Cancelled', 'No-show'] } },
+        data: { status: 'Completed', completedAt: new Date() },
       });
     }
 
@@ -973,6 +1023,21 @@ export class InterviewsService {
     } catch {
       // Integration sync error should not abort interview booking transaction
     }
+  }
+
+  /**
+   * Interviewers come from attendeeUserIds and interviewerIds. Opting in
+   * (`participateAsInterviewer`) adds the scheduling user. Ids are deduped.
+   */
+  private panelUserIds(dto: object, actorUserId?: string): string[] {
+    const raw = dto as {
+      attendeeUserIds?: string[] | null;
+      interviewerIds?: string[] | null;
+      participateAsInterviewer?: boolean;
+    };
+    const ids = [...(raw.attendeeUserIds ?? []), ...(raw.interviewerIds ?? [])];
+    if (raw.participateAsInterviewer === true && actorUserId) ids.push(actorUserId);
+    return [...new Set(ids.filter((id): id is string => typeof id === 'string' && id.length > 0))];
   }
 
   private async nextInterviewCode(): Promise<string> {

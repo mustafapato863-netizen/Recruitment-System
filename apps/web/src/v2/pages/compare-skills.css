@@ -1,0 +1,1113 @@
+/* Compare Candidates Studio — Executive Skill & Fit Matrix */
+[data-ui='v2'] .rf2-cstudio {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-bottom: 24px;
+}
+
+/* Top Hero Header */
+[data-ui='v2'] .rf2-cstudio__hero {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px 20px;
+}
+
+[data-ui='v2'] .rf2-cstudio__hero-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+[data-ui='v2'] .rf2-cstudio__back-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+[data-ui='v2'] .rf2-cstudio__title {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.25;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  color: var(--rf2-ink);
+}
+
+[data-ui='v2'] .rf2-cstudio__subtitle {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--rf2-muted);
+}
+
+[data-ui='v2'] .rf2-cstudio__hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 15px;
+  border-radius: 10px;
+  border: 1px solid var(--rf2-border-strong);
+  background: var(--rf2-card);
+  color: var(--rf2-ink);
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+[data-ui='v2'] .rf2-cstudio__hero-badge svg {
+  width: 16px;
+  height: 16px;
+  color: #2563eb;
+}
+
+/* Control Bar Card (Job Selector + Comparison View + Add Candidates) */
+[data-ui='v2'] .rf2-cstudio__controls-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(240px, 0.85fr) auto;
+  align-items: start;
+  gap: 16px;
+  padding: 16px 18px;
+  border: 1px solid var(--rf2-divider);
+  border-radius: 14px;
+  background: var(--rf2-card);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03);
+}
+
+[data-ui='v2'] .rf2-cstudio__job-col {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+[data-ui='v2'] .rf2-cstudio__job-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+[data-ui='v2'] .rf2-cstudio__field-label {
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--rf2-ink);
+  white-space: nowrap;
+}
+
+[data-ui='v2'] .rf2-cstudio__dropdown-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+[data-ui='v2'] .rf2-cstudio__dropdown-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-height: 40px;
+  padding: 6px 12px;
+  border: 1px solid var(--rf2-border-strong);
+  border-radius: 10px;
+  background: var(--rf2-surface-muted);
+  color: var(--rf2-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+
+[data-ui='v2'] .rf2-cstudio__dropdown-trigger:hover,
+[data-ui='v2'] .rf2-cstudio__dropdown-trigger[aria-expanded='true'] {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+[data-ui='v2'] .rf2-cstudio__job-trigger-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+[data-ui='v2'] .rf2-cstudio__job-name {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--rf2-ink);
+}
+
+[data-ui='v2'] .rf2-cstudio__job-code {
+  font-weight: 500;
+  color: var(--rf2-muted);
+}
+
+[data-ui='v2'] .rf2-cstudio__open-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.14);
+  color: #047857;
+  font-size: 11.5px;
+  font-weight: 700;
+}
+
+[data-ui='v2'] .rf2-cstudio__open-pill svg {
+  width: 12px;
+  height: 12px;
+}
+
+[data-ui='v2'] .rf2-cstudio__chevron {
+  width: 16px;
+  height: 16px;
+  color: var(--rf2-muted);
+  flex: none;
+  transition: transform 140ms ease;
+}
+
+[data-ui='v2'] .rf2-cstudio__dropdown-trigger[aria-expanded='true'] .rf2-cstudio__chevron {
+  transform: rotate(180deg);
+  color: #2563eb;
+}
+
+[data-ui='v2'] .rf2-cstudio__dropdown-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 60;
+  min-width: 260px;
+  max-height: 290px;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--rf2-border-strong);
+  border-radius: 12px;
+  background: var(--rf2-card);
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.14);
+}
+
+[data-ui='v2'] .rf2-cstudio__dropdown-menu--right {
+  left: auto;
+  right: 0;
+  min-width: 280px;
+}
+
+[data-ui='v2'] .rf2-cstudio__dropdown-opt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 11px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--rf2-ink);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+[data-ui='v2'] .rf2-cstudio__dropdown-opt:hover {
+  background: var(--rf2-surface-muted);
+}
+
+[data-ui='v2'] .rf2-cstudio__dropdown-opt[aria-selected='true'] {
+  background: rgba(37, 99, 235, 0.09);
+  border-color: rgba(37, 99, 235, 0.28);
+  color: #1d4ed8;
+  font-weight: 700;
+}
+
+[data-ui='v2'] .rf2-cstudio__dropdown-opt svg {
+  width: 15px;
+  height: 15px;
+  color: #2563eb;
+  flex: none;
+}
+
+[data-ui='v2'] .rf2-cstudio__job-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding-left: 82px;
+  font-size: 12px;
+  color: var(--rf2-muted);
+}
+
+[data-ui='v2'] .rf2-cstudio__job-meta-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+[data-ui='v2'] .rf2-cstudio__job-meta-item svg {
+  width: 13.5px;
+  height: 13.5px;
+  color: var(--rf2-subtle);
+}
+
+[data-ui='v2'] .rf2-cstudio__view-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+[data-ui='v2'] .rf2-cstudio__add-col {
+  display: flex;
+  align-items: center;
+  padding-top: 22px;
+  position: relative;
+}
+
+[data-ui='v2'] .rf2-cstudio__add-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 0 15px;
+  border: 1px solid #1d4ed8;
+  border-radius: 10px;
+  background: #2563eb;
+  color: #ffffff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 1px 2px rgba(37, 99, 235, 0.22);
+}
+
+[data-ui='v2'] .rf2-cstudio__add-btn:hover {
+  background: #1d4ed8;
+}
+
+[data-ui='v2'] .rf2-cstudio__add-btn svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* Selected Candidates Chip Strip */
+[data-ui='v2'] .rf2-cstudio__chips-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  padding: 11px 16px;
+  border: 1px solid var(--rf2-divider);
+  border-radius: 12px;
+  background: var(--rf2-card);
+}
+
+[data-ui='v2'] .rf2-cstudio__chips-left {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+[data-ui='v2'] .rf2-cstudio__chips-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--rf2-ink);
+  margin-right: 4px;
+}
+
+[data-ui='v2'] .rf2-cstudio__cand-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 10px 4px 6px;
+  border: 1px solid var(--rf2-border-strong);
+  border-radius: 999px;
+  background: var(--rf2-surface-muted);
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--rf2-ink);
+}
+
+[data-ui='v2'] .rf2-cstudio__chip-avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  font-size: 10.5px;
+  font-weight: 800;
+}
+
+[data-ui='v2'] .rf2-cstudio__avatar--blue {
+  background: rgba(37, 99, 235, 0.14);
+  color: #1d4ed8;
+}
+
+[data-ui='v2'] .rf2-cstudio__avatar--green {
+  background: rgba(16, 185, 129, 0.15);
+  color: #047857;
+}
+
+[data-ui='v2'] .rf2-cstudio__avatar--rose {
+  background: rgba(244, 63, 94, 0.14);
+  color: #be123c;
+}
+
+[data-ui='v2'] .rf2-cstudio__avatar--amber {
+  background: rgba(245, 158, 11, 0.16);
+  color: #b45309;
+}
+
+[data-ui='v2'] .rf2-cstudio__chip-remove {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--rf2-muted);
+  cursor: pointer;
+}
+
+[data-ui='v2'] .rf2-cstudio__chip-remove:hover {
+  background: rgba(15, 23, 42, 0.08);
+  color: var(--rf2-ink);
+}
+
+[data-ui='v2'] .rf2-cstudio__chip-remove svg {
+  width: 13px;
+  height: 13px;
+}
+
+[data-ui='v2'] .rf2-cstudio__chip-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border: 1px dashed rgba(37, 99, 235, 0.45);
+  border-radius: 999px;
+  background: rgba(37, 99, 235, 0.04);
+  color: #2563eb;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+[data-ui='v2'] .rf2-cstudio__chip-add:hover {
+  background: rgba(37, 99, 235, 0.1);
+}
+
+[data-ui='v2'] .rf2-cstudio__chip-add svg {
+  width: 13.5px;
+  height: 13.5px;
+}
+
+[data-ui='v2'] .rf2-cstudio__clear-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--rf2-muted);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+[data-ui='v2'] .rf2-cstudio__clear-btn:hover {
+  background: var(--rf2-surface-muted);
+  color: #dc2626;
+}
+
+[data-ui='v2'] .rf2-cstudio__clear-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Comparison Matrix Table */
+[data-ui='v2'] .rf2-cstudio__matrix-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--rf2-divider);
+  border-radius: 14px;
+  background: var(--rf2-card);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03);
+}
+
+[data-ui='v2'] .rf2-cstudio__matrix {
+  width: 100%;
+  min-width: 900px;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+[data-ui='v2'] .rf2-cstudio__matrix th,
+[data-ui='v2'] .rf2-cstudio__matrix td {
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--rf2-divider);
+  border-right: 1px solid var(--rf2-divider);
+  vertical-align: middle;
+  text-align: left;
+}
+
+[data-ui='v2'] .rf2-cstudio__matrix th:last-child,
+[data-ui='v2'] .rf2-cstudio__matrix td:last-child {
+  border-right: 0;
+}
+
+[data-ui='v2'] .rf2-cstudio__matrix tbody tr:last-child th,
+[data-ui='v2'] .rf2-cstudio__matrix tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+[data-ui='v2'] .rf2-cstudio__row-label-col {
+  width: 195px;
+  background: var(--rf2-surface-muted);
+}
+
+[data-ui='v2'] .rf2-cstudio__row-th {
+  background: var(--rf2-surface-muted);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--rf2-ink);
+}
+
+[data-ui='v2'] .rf2-cstudio__row-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+[data-ui='v2'] .rf2-cstudio__row-label svg {
+  width: 14px;
+  height: 14px;
+  color: var(--rf2-subtle);
+  flex: none;
+}
+
+/* Candidate Header Cards inside Table Head */
+[data-ui='v2'] .rf2-cstudio__cand-th {
+  vertical-align: top;
+  padding: 16px 18px;
+  background: var(--rf2-card);
+}
+
+[data-ui='v2'] .rf2-cstudio__cand-head {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+[data-ui='v2'] .rf2-cstudio__cand-top {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+[data-ui='v2'] .rf2-cstudio__cand-avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 800;
+  flex: none;
+}
+
+[data-ui='v2'] .rf2-cstudio__cand-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1;
+}
+
+[data-ui='v2'] .rf2-cstudio__cand-name-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+}
+
+[data-ui='v2'] .rf2-cstudio__cand-name {
+  font-size: 15.5px;
+  font-weight: 800;
+  color: var(--rf2-ink);
+}
+
+[data-ui='v2'] .rf2-cstudio__best-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.14);
+  color: #047857;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+[data-ui='v2'] .rf2-cstudio__best-badge svg {
+  width: 12px;
+  height: 12px;
+}
+
+[data-ui='v2'] .rf2-cstudio__cand-role {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--rf2-muted);
+}
+
+[data-ui='v2'] .rf2-cstudio__cand-submeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--rf2-muted);
+}
+
+[data-ui='v2'] .rf2-cstudio__cand-subitem {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+[data-ui='v2'] .rf2-cstudio__cand-subitem svg {
+  width: 12.5px;
+  height: 12.5px;
+  color: var(--rf2-subtle);
+}
+
+[data-ui='v2'] .rf2-cstudio__avail-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+[data-ui='v2'] .rf2-cstudio__avail-tag--ok {
+  background: rgba(16, 185, 129, 0.14);
+  color: #047857;
+}
+
+[data-ui='v2'] .rf2-cstudio__avail-tag--warn {
+  background: rgba(245, 158, 11, 0.16);
+  color: #b45309;
+}
+
+[data-ui='v2'] .rf2-cstudio__avail-tag svg {
+  width: 11px;
+  height: 11px;
+}
+
+[data-ui='v2'] .rf2-cstudio__cand-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+[data-ui='v2'] .rf2-cstudio__btn-view {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid #1d4ed8;
+  background: #2563eb;
+  color: #ffffff;
+  font-size: 12.5px;
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+[data-ui='v2'] .rf2-cstudio__btn-view:hover {
+  background: #1d4ed8;
+}
+
+[data-ui='v2'] .rf2-cstudio__btn-pipe {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  flex: 1.15;
+  min-height: 34px;
+  padding: 0 11px;
+  border-radius: 8px;
+  border: 1px solid var(--rf2-border-strong);
+  background: var(--rf2-card);
+  color: var(--rf2-ink);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+[data-ui='v2'] .rf2-cstudio__btn-pipe:hover {
+  border-color: #2563eb;
+  color: #2563eb;
+}
+
+[data-ui='v2'] .rf2-cstudio__btn-pipe--done {
+  border-color: rgba(16, 185, 129, 0.4);
+  background: rgba(16, 185, 129, 0.1);
+  color: #047857;
+}
+
+[data-ui='v2'] .rf2-cstudio__btn-pipe svg {
+  width: 13.5px;
+  height: 13.5px;
+}
+
+[data-ui='v2'] .rf2-cstudio__btn-more {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--rf2-muted);
+  cursor: pointer;
+  flex: none;
+}
+
+[data-ui='v2'] .rf2-cstudio__btn-more:hover {
+  background: var(--rf2-surface-muted);
+  color: var(--rf2-ink);
+}
+
+[data-ui='v2'] .rf2-cstudio__btn-more svg {
+  width: 15px;
+  height: 15px;
+}
+
+/* Row 1: Overall Match Gauge + Bar */
+[data-ui='v2'] .rf2-cstudio__match-cell {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+[data-ui='v2'] .rf2-cstudio__gauge {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  flex: none;
+}
+
+[data-ui='v2'] .rf2-cstudio__gauge svg {
+  width: 52px;
+  height: 52px;
+  transform: rotate(-90deg);
+}
+
+[data-ui='v2'] .rf2-cstudio__gauge-num {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--rf2-ink);
+}
+
+[data-ui='v2'] .rf2-cstudio__match-bar-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+[data-ui='v2'] .rf2-cstudio__match-tier {
+  font-size: 13px;
+  font-weight: 700;
+}
+
+[data-ui='v2'] .rf2-cstudio__match-tier--green {
+  color: #059669;
+}
+
+[data-ui='v2'] .rf2-cstudio__match-tier--blue {
+  color: #2563eb;
+}
+
+[data-ui='v2'] .rf2-cstudio__match-track {
+  width: 100%;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--rf2-surface-muted);
+  overflow: hidden;
+}
+
+[data-ui='v2'] .rf2-cstudio__match-fill {
+  height: 100%;
+  border-radius: 999px;
+}
+
+/* Skill & Certification Pills */
+[data-ui='v2'] .rf2-cstudio__pill-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+[data-ui='v2'] .rf2-cstudio__pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3.5px 9px;
+  border-radius: 7px;
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+[data-ui='v2'] .rf2-cstudio__pill svg {
+  width: 12px;
+  height: 12px;
+  flex: none;
+}
+
+[data-ui='v2'] .rf2-cstudio__pill--ok {
+  background: rgba(16, 185, 129, 0.12);
+  color: #047857;
+}
+
+[data-ui='v2'] .rf2-cstudio__pill--warn {
+  background: rgba(245, 158, 11, 0.14);
+  color: #b45309;
+}
+
+[data-ui='v2'] .rf2-cstudio__pill--info {
+  background: rgba(37, 99, 235, 0.1);
+  color: #1d4ed8;
+}
+
+[data-ui='v2'] .rf2-cstudio__pill--neutral {
+  border: 1px solid var(--rf2-divider);
+  background: var(--rf2-surface-muted);
+  color: var(--rf2-ink);
+}
+
+/* Experience Cell */
+[data-ui='v2'] .rf2-cstudio__exp-cell {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+[data-ui='v2'] .rf2-cstudio__exp-years {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--rf2-ink);
+}
+
+[data-ui='v2'] .rf2-cstudio__exp-domains {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--rf2-muted);
+}
+
+/* Salary & Feedback Cells */
+[data-ui='v2'] .rf2-cstudio__sal-cell {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+[data-ui='v2'] .rf2-cstudio__sal-val {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: var(--rf2-ink);
+}
+
+[data-ui='v2'] .rf2-cstudio__fb-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+[data-ui='v2'] .rf2-cstudio__fb-score {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13.5px;
+  font-weight: 800;
+  color: var(--rf2-ink);
+}
+
+[data-ui='v2'] .rf2-cstudio__fb-score svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+}
+
+[data-ui='v2'] .rf2-cstudio__fb-score--green svg {
+  color: #10b981;
+}
+
+[data-ui='v2'] .rf2-cstudio__fb-score--amber svg {
+  color: #f59e0b;
+}
+
+[data-ui='v2'] .rf2-cstudio__fb-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--rf2-muted);
+}
+
+/* Strengths Bullets */
+[data-ui='v2'] .rf2-cstudio__strength-list {
+  margin: 0;
+  padding-left: 18px;
+  list-style: disc;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12.5px;
+  color: var(--rf2-ink);
+}
+
+[data-ui='v2'] .rf2-cstudio__strength-list li::marker {
+  color: #10b981;
+}
+
+/* Notes Cell */
+[data-ui='v2'] .rf2-cstudio__note-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  padding: 7px 10px;
+  border: 1px solid var(--rf2-divider);
+  border-radius: 8px;
+  background: var(--rf2-surface-muted);
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--rf2-muted);
+}
+
+[data-ui='v2'] .rf2-cstudio__note-box svg {
+  width: 14px;
+  height: 14px;
+  color: var(--rf2-subtle);
+  flex: none;
+  margin-top: 1px;
+}
+
+/* Bottom Recommendation Summary Card */
+[data-ui='v2'] .rf2-cstudio__rec-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 18px;
+  border: 1px solid var(--rf2-divider);
+  border-radius: 14px;
+  background: var(--rf2-card);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03);
+}
+
+[data-ui='v2'] .rf2-cstudio__rec-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+}
+
+[data-ui='v2'] .rf2-cstudio__rec-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--rf2-ink);
+}
+
+[data-ui='v2'] .rf2-cstudio__rec-title svg {
+  width: 18px;
+  height: 18px;
+  color: #2563eb;
+}
+
+[data-ui='v2'] .rf2-cstudio__rec-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+[data-ui='v2'] .rf2-cstudio__shortlist-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--rf2-ink);
+  cursor: pointer;
+}
+
+[data-ui='v2'] .rf2-cstudio__shortlist-check input {
+  width: 16px;
+  height: 16px;
+  accent-color: #2563eb;
+}
+
+[data-ui='v2'] .rf2-cstudio__shortlist-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 15px;
+  border: 1px solid #1d4ed8;
+  border-radius: 9px;
+  background: #2563eb;
+  color: #ffffff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+[data-ui='v2'] .rf2-cstudio__shortlist-btn:hover {
+  background: #1d4ed8;
+}
+
+[data-ui='v2'] .rf2-cstudio__shortlist-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+[data-ui='v2'] .rf2-cstudio__rec-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 12px;
+}
+
+[data-ui='v2'] .rf2-cstudio__rec-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  padding: 12px 14px;
+  border-radius: 11px;
+  border: 1px solid var(--rf2-divider);
+  background: var(--rf2-surface-muted);
+  cursor: pointer;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+
+[data-ui='v2'] .rf2-cstudio__rec-item--green {
+  border-color: rgba(16, 185, 129, 0.35);
+  background: rgba(16, 185, 129, 0.06);
+}
+
+[data-ui='v2'] .rf2-cstudio__rec-item--blue {
+  border-color: rgba(37, 99, 235, 0.28);
+  background: rgba(37, 99, 235, 0.05);
+}
+
+[data-ui='v2'] .rf2-cstudio__rec-item--amber {
+  border-color: rgba(245, 158, 11, 0.32);
+  background: rgba(245, 158, 11, 0.06);
+}
+
+[data-ui='v2'] .rf2-cstudio__rec-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  flex: none;
+}
+
+[data-ui='v2'] .rf2-cstudio__rec-icon svg {
+  width: 17px;
+  height: 17px;
+}
+
+[data-ui='v2'] .rf2-cstudio__rec-item--green .rf2-cstudio__rec-icon {
+  background: rgba(16, 185, 129, 0.16);
+  color: #047857;
+}
+
+[data-ui='v2'] .rf2-cstudio__rec-item--blue .rf2-cstudio__rec-icon {
+  background: rgba(37, 99, 235, 0.14);
+  color: #1d4ed8;
+}
+
+[data-ui='v2'] .rf2-cstudio__rec-item--amber .rf2-cstudio__rec-icon {
+  background: rgba(245, 158, 11, 0.16);
+  color: #b45309;
+}
+
+[data-ui='v2'] .rf2-cstudio__rec-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+[data-ui='v2'] .rf2-cstudio__rec-name-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+[data-ui='v2'] .rf2-cstudio__rec-name {
+  font-size: 13.5px;
+  font-weight: 800;
+  color: var(--rf2-ink);
+}
+
+[data-ui='v2'] .rf2-cstudio__rec-desc {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.42;
+  color: var(--rf2-muted);
+}
+
+@media (max-width: 1024px) {
+  [data-ui='v2'] .rf2-cstudio__controls-card {
+    grid-template-columns: 1fr;
+  }
+
+  [data-ui='v2'] .rf2-cstudio__job-meta {
+    padding-left: 0;
+  }
+
+  [data-ui='v2'] .rf2-cstudio__add-col {
+    padding-top: 0;
+  }
+}

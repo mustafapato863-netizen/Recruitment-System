@@ -1,6 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../../api/client';
 import * as fx from '../../api/__fixtures__/jobs';
@@ -21,7 +21,19 @@ function serve(extra: Record<string, unknown> = {}) {
     throw new ApiError(404, 'not found');
   });
 }
-const renderAt = (path: string) => render(<MemoryRouter initialEntries={[path]}><Routes><Route path="/vacancies/:id" element={<JobPipelineV2 />} /></Routes></MemoryRouter>);
+function Loc() {
+  const l = useLocation();
+  return <output data-testid="loc">{l.pathname + l.search}</output>;
+}
+const renderAt = (path: string) => render(
+  <MemoryRouter initialEntries={[path]}>
+    <Routes>
+      <Route path="/vacancies/:id" element={<JobPipelineV2 />} />
+      <Route path="/applications/:id" element={<output data-testid="app-file">Application file</output>} />
+    </Routes>
+    <Loc />
+  </MemoryRouter>,
+);
 const job = fx.jobDetail() as unknown as Parameters<typeof canChangeJobStatus>[0];
 
 beforeEach(() => { Object.values(api).forEach((f) => f.mockReset()); who.user = { id: 'u-mariam', displayName: 'Mariam Farag', roles: [] }; serve(); });
@@ -93,7 +105,7 @@ describe('#23 CANDIDATE_EXISTS on import', () => {
     await u.click(within(d).getByRole('button', { name: 'Import 1 to Applied' }));
     const note = await within(d).findByTestId('candidate-exists');
     expect(note).toHaveTextContent(/Already in the bank as Nourhan Sami \(CAN-2026-0007\)/);
-    expect(within(note).getByRole('link', { name: 'the existing person' })).toHaveAttribute('href', '/candidates/c-a4');
+    expect(within(note).getByRole('link', { name: 'the existing person' })).toHaveAttribute('href', expect.stringMatching(/^\/candidates\/c-a4(\?|$)/));
     expect(within(d).getByRole('radio', { name: /Link to Nourhan Sami/ })).toBeChecked();
   });
 });
@@ -116,7 +128,7 @@ describe('#23 603d44d CANDIDATE_EXISTS with details', () => {
     await u.click(within(d).getByRole('button', { name: 'Import 1 to Applied' }));
     const note = await within(d).findByTestId('candidate-exists');
     expect(note).toHaveTextContent('CAN-2026-0099');
-    expect(within(note).getByRole('link', { name: 'the existing person' })).toHaveAttribute('href', '/candidates/c-x9');
+    expect(within(note).getByRole('link', { name: 'the existing person' })).toHaveAttribute('href', expect.stringMatching(/^\/candidates\/c-x9(\?|$)/));
     expect(checks).toBe(before);
   });
 });
@@ -138,8 +150,12 @@ describe('B2R: APPLICATION_EXISTS, admin status, open-files 409, job list paging
     await waitFor(() => expect(within(d).getByRole('button', { name: 'Import 1 to Applied' })).toBeEnabled());
     await u.click(within(d).getByRole('button', { name: 'Import 1 to Applied' }));
     const note = await within(d).findByTestId('application-exists');
-    expect(within(note).getByRole('link', { name: 'Open the existing file' })).toHaveAttribute('href', '/applications/app-old');
+    const existingLink = within(note).getByRole('link', { name: 'Open the existing file' });
+    expect(existingLink).toHaveAttribute('href', `/applications/app-old?returnTo=${encodeURIComponent('/vacancies/v1?drawer=import')}`);
     expect(api.getApi).toHaveBeenCalledWith(expect.stringMatching(/^\/applications\?vacancyId=v1&candidateId=c-new/));
+    await u.click(existingLink);
+    expect(await screen.findByTestId('app-file')).toBeInTheDocument();
+    expect(screen.getByTestId('loc')).toHaveTextContent(`/applications/app-old?returnTo=${encodeURIComponent('/vacancies/v1?drawer=import')}`);
   });
   it('error texts for ADMIN_CANNOT_CHANGE_JOB_STATUS and JOB_HAS_OPEN_APPLICATIONS', async () => {
     const { errorMessage, ADMIN_STATUS_TEXT } = await import('../../api/jobs');
@@ -189,7 +205,7 @@ describe('B2F-2 / B2F-13 import order and board refresh', () => {
     const i = (c: string) => calls.indexOf(c);
     expect(i('post /applications')).toBeGreaterThan(-1);
     expect(i('post /applications')).toBeLessThan(i('form /documents/upload'));
-    expect(i('post /applications')).toBeLessThan(calls.findIndex((c) => c.startsWith('get /candidates/c-')));
+    expect(i('post /applications')).toBeLessThan(calls.findIndex((c) => c.startsWith('post /candidates/c-')));
     // the link filled/conflict summary keeps the drawer open; the board still reloads behind it
     await waitFor(() => expect(calls.filter((c) => c === 'get /vacancies/v1').length).toBeGreaterThan(boardLoadsBefore));
   });

@@ -669,7 +669,7 @@ export function CandidateDetailPage() {
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <h3 className="text-xs font-bold text-rf-ink m-0">CV &amp; Documents</h3>
                     <Link className="text-xs font-semibold text-rf-action hover:underline" to={withReturnTo(`/candidates/${encodeURIComponent(candidate.id)}/documents`, back)}>
-                      Manage documents
+                      Documents
                     </Link>
                   </div>
                 {documentsLoading ? (
@@ -705,7 +705,14 @@ export function CandidateDetailPage() {
               </div>
             </div>
             <section className="flex flex-col gap-2.5" aria-label="Applications">
-              <h3 className="text-xs font-semibold text-rf-ink m-0 sr-only">Applications</h3>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="text-xs font-semibold text-rf-ink m-0 sr-only">Applications</h3>
+                {canViewApplications && !applicationsLoading && !applicationsError && applications[0] ? (
+                  <Link className="text-xs font-semibold text-rf-action hover:underline" to={withReturnTo(`/applications/${applications[0].id}`, back)}>
+                    Review application
+                  </Link>
+                ) : null}
+              </div>
               {renderApplications()}
             </section>
           </div>

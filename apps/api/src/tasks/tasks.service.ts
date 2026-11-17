@@ -1,4 +1,4 @@
-import { Inject, Injectable, NotFoundException, Optional, ForbiddenException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, NotFoundException, Optional, ForbiddenException } from '@nestjs/common';
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { PrismaService } from '../database/prisma.service';
 import { CreateTaskDto } from './tasks.dto';
@@ -89,14 +89,105 @@ export class TasksService {
     if (task.assigneeUserId !== assigneeUserId) {
       throw new ForbiddenException('Access denied: task belongs to another user');
     }
+    if (task.status === status) {
+      return this.toRecord(task, new Date());
+    }
+    if (task.status === 'Completed' || task.status === 'Dismissed') {
+      throw new BadRequestException('Cannot update a closed task.');
+    }
 
     const now = new Date();
     const completedAt = status === 'Completed' ? (task.completedAt ?? now) : null;
+    const completedById = status === 'Completed' ? (task.completedById ?? assigneeUserId) : null;
+
+    if (typeof (this.prisma.task as { updateMany?: unknown }).updateMany === 'function') {
+      const guarded = await this.prisma.task.updateMany({
+        where: { id, organizationId, assigneeUserId, status: { in: ['Open', 'In Progress'] } },
+        data: { status, completedAt, completedById, updatedAt: now },
+      });
+      if (!guarded.count) {
+        const latest = await this.prisma.task.findFirst({ where: { id, organizationId } });
+        if (!latest) throw new NotFoundException('Task not found');
+        if (latest.assigneeUserId !== assigneeUserId) {
+          throw new ForbiddenException('Access denied: task belongs to another user');
+        }
+        if (latest.status === status) return this.toRecord(latest, now);
+        throw new BadRequestException('Cannot update a closed task.');
+      }
+      return this.toRecord({ ...task, status, completedAt, completedById, updatedAt: now }, now);
+    }
 
     const updated = await this.prisma.task.update({
       where: { id },
-      data: { status, completedAt, completedById: status === 'Completed' ? assigneeUserId : null, updatedAt: now },
+      data: { status, completedAt, completedById, updatedAt: now },
     });
+    return this.toRecord(updated, now);
+  }
+
+  async reschedule(organizationId: string, assigneeUserId: string, id: string, dueAtInput: string): Promise<TaskRecord> {
+    const task = await this.prisma.task.findFirst({
+      where: { id, organizationId },
+    });
+    if (!task) throw new NotFoundException('Task not found');
+    if (task.assigneeUserId !== assigneeUserId) {
+      throw new ForbiddenException('Access denied: task belongs to another user');
+    }
+    if (task.status === 'Completed' || task.status === 'Dismissed') {
+      throw new BadRequestException('Cannot reschedule a closed task.');
+    }
+    const dueAt = new Date(dueAtInput);
+    const now = new Date();
+    if (Number.isNaN(dueAt.getTime()) || dueAt <= now) {
+      throw new BadRequestException('Choose a future follow-up date and time');
+    }
+    const isCandidateActivity = typeof task.type === 'string' && task.type.startsWith('CandidateActivity:');
+    const isApplicationFollowUp = task.type === 'ApplicationFollowUp' && task.entityType === 'Application' && Boolean(task.entityId);
+    const syncApplicationFollowUpDate = async () => {
+      if (!isApplicationFollowUp || !task.entityId) return;
+      const appDelegate = (this.prisma as { application?: { updateMany?: (args: unknown) => Promise<unknown> } }).application;
+      if (typeof appDelegate?.updateMany !== 'function') return;
+      const cairoDay = new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'Africa/Cairo',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(dueAt);
+      await appDelegate.updateMany({
+        where: { id: task.entityId, organizationId },
+        data: { followUpDate: new Date(`${cairoDay}T00:00:00Z`) },
+      });
+    };
+    const from = task.dueAt ? new Date(task.dueAt).toISOString() : 'unscheduled';
+    const line = `[Rescheduled ${from} -> ${dueAt.toISOString()}]`;
+    const nextDescription = isCandidateActivity
+      ? (task.description ? `${task.description}\n${line}` : line)
+      : undefined;
+    const writeData = {
+      dueAt,
+      ...(nextDescription !== undefined ? { description: nextDescription } : {}),
+      updatedAt: now,
+    };
+    if (typeof (this.prisma.task as { updateMany?: unknown }).updateMany === 'function') {
+      const guarded = await this.prisma.task.updateMany({
+        where: { id, organizationId, assigneeUserId, status: { in: ['Open', 'In Progress'] } },
+        data: writeData,
+      });
+      if (!guarded.count) {
+        const latest = await this.prisma.task.findFirst({ where: { id, organizationId } });
+        if (!latest) throw new NotFoundException('Task not found');
+        if (latest.assigneeUserId !== assigneeUserId) {
+          throw new ForbiddenException('Access denied: task belongs to another user');
+        }
+        throw new BadRequestException('Cannot reschedule a closed task.');
+      }
+      await syncApplicationFollowUpDate();
+      return this.toRecord({ ...task, ...writeData }, now);
+    }
+    const updated = await this.prisma.task.update({
+      where: { id },
+      data: writeData,
+    });
+    await syncApplicationFollowUpDate();
     return this.toRecord(updated, now);
   }
 

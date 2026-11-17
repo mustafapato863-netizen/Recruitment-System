@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import { SelfScheduleService, type SelfScheduleTokenPayload } from '../self-schedule.service';
 import type { PrismaService } from '../../database/prisma.service';
 import type { NotificationsService } from '../../notifications/notifications.service';
@@ -199,5 +199,48 @@ describe('SelfScheduleService', () => {
       if (previous === undefined) delete process.env.MAIL_DELIVERY_ENABLED;
       else process.env.MAIL_DELIVERY_ENABLED = previous;
     }
+  });
+
+  it('does not issue a self-schedule link when the job is on hold', async () => {
+    mockPrisma.application.findUnique.mockResolvedValue({
+      id: 'app-uuid-1',
+      organizationId: 'org-uuid-1',
+      candidate: { firstName: 'Phase', lastName: 'Eight' },
+      vacancy: { status: 'On Hold', position: { title: 'Sample' } },
+    });
+    await expect(service.createInvitationLink('org-uuid-1', {
+      applicationId: 'app-uuid-1',
+      title: 'Technical Assessment',
+      interviewType: 'Technical',
+      attendeeUserIds: [],
+    })).rejects.toThrow(/on hold/i);
+    expect(mockPrisma.applicationNote.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects a second booking for the same invitation', async () => {
+    mockPrisma.application.findUnique.mockResolvedValue({
+      id: 'app-uuid-1',
+      organizationId: 'org-uuid-1',
+      candidate: { firstName: 'Phase', lastName: 'Eight', email: 'person@example.com' },
+      vacancy: { status: 'Open', position: { title: 'Sample' } },
+    });
+    mockPrisma.interview.findMany.mockResolvedValue([]);
+    mockPrisma.interview.findFirst.mockResolvedValue({ id: 'already-booked', status: 'Scheduled' });
+    await expect(service.bookSelfSchedule(futureToken(), {
+      selectedSlot: new Date(Date.now() + 86_400_000).toISOString(),
+      timezone: 'Asia/Riyadh',
+    })).rejects.toBeInstanceOf(ConflictException);
+    await expect(service.bookSelfSchedule(futureToken(), {
+      selectedSlot: new Date(Date.now() + 86_400_000).toISOString(),
+      timezone: 'Asia/Riyadh',
+    })).rejects.toThrow('An interview for this invitation has already been booked.');
+    expect(mockPrisma.interview.findFirst).toHaveBeenCalledWith({
+      where: {
+        applicationId: 'app-uuid-1',
+        title: 'Technical Assessment',
+        status: { in: ['Scheduled', 'Rescheduled', 'Completed'] },
+      },
+    });
+    expect(mockPrisma.interview.create).not.toHaveBeenCalled();
   });
 });

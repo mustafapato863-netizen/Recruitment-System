@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Inbox, ShieldAlert } from 'lucide-react';
+import { CircleAlert, Inbox, ShieldAlert } from 'lucide-react';
 
 interface StateProps {
   title: string;
@@ -15,6 +15,19 @@ export function EmptyStateV2({ title, body, action, icon, headingLevel = 2 }: St
   return (
     <section className="rf2-state rf2-state--empty" aria-label={title}>
       <span className="rf2-state__icon" aria-hidden="true">{icon ?? <Inbox />}</span>
+      <H className="rf2-state__title">{title}</H>
+      {body ? <p className="rf2-state__body">{body}</p> : null}
+      {action ? <div className="rf2-state__action">{action}</div> : null}
+    </section>
+  );
+}
+
+/** A failed read is announced separately from an empty result. */
+export function ErrorStateV2({ title, body, action, headingLevel = 2 }: StateProps) {
+  const H = `h${headingLevel}` as 'h2' | 'h3';
+  return (
+    <section className="rf2-state rf2-state--error" role="alert">
+      <span className="rf2-state__icon" aria-hidden="true"><CircleAlert /></span>
       <H className="rf2-state__title">{title}</H>
       {body ? <p className="rf2-state__body">{body}</p> : null}
       {action ? <div className="rf2-state__action">{action}</div> : null}

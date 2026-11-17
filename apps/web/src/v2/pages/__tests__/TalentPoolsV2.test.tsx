@@ -90,4 +90,48 @@ describe('Talent pools page', () => {
     await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/talent-pools/pool-1/candidates', { candidateId: 'c1' }));
     expect(calledPaths().some((path) => path.includes('/applications') || path.includes('stage'))).toBe(false);
   });
+
+  it('renders Open person and Add to job links for active pool members and paginates members beyond page 1', async () => {
+    api.getApi.mockImplementation(async (path: string) => {
+      if (path.startsWith('/talent-pools/pool-1?page=1')) {
+        return {
+          ...structuredClone(detail),
+          candidates: Array.from({ length: 100 }, (_, i) => ({
+            id: `m-${i + 1}`,
+            candidateId: `c-${i + 1}`,
+            candidateName: `Nurse ${i + 1}`,
+            source: 'Bank',
+            addedAt: '2026-10-01T08:00:00.000Z',
+          })),
+          total: 101,
+          page: 1,
+          pageSize: 100,
+        };
+      }
+      if (path.startsWith('/talent-pools/pool-1?page=2')) {
+        return {
+          ...structuredClone(detail),
+          candidates: [
+            {
+              id: 'm-101',
+              candidateId: 'c-101',
+              candidateName: 'Nurse 101',
+              source: 'Bank',
+              addedAt: '2026-10-02T08:00:00.000Z',
+            },
+          ],
+          total: 101,
+          page: 2,
+          pageSize: 100,
+        };
+      }
+      throw new ApiError(404, 'not found');
+    });
+    renderAt('/talent-pools/pool-1');
+    expect(await screen.findByText('Nurse 101')).toBeInTheDocument();
+    const openLinks = screen.getAllByRole('link', { name: 'Open person' });
+    expect(openLinks[0]).toHaveAttribute('href', '/candidates/c-1');
+    const addJobLinks = screen.getAllByRole('link', { name: 'Add to job' });
+    expect(addJobLinks[0]).toHaveAttribute('href', `/candidates?tab=bank&search=${encodeURIComponent('Nurse 1')}&candidateId=c-1&pool=pool-1`);
+  });
 });

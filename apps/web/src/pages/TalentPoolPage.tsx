@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { fetchVacancyList } from '../utils/vacancyAccess';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
@@ -23,23 +23,232 @@ interface ScoredBenchCandidate {
   matchedSkills: string[];
   missingSkills: string[];
   displayScore: number;
-  availability: 'available' | 'notice';
+  availability: 'available' | 'notice' | 'unspecified';
+  evidenceSnippets: Array<{ skill: string; snippets: string[] }>;
+  alreadyOnJob: boolean;
+  applicationId: string | null;
+  stage: string | null;
+  /** null until a server suggestion names this person. */
+  addable: boolean | null;
+  /** Set when the server match could not be loaded, so local scores are not shown. */
+  scoreState?: 'unavailable';
+}
+
+interface ServerMatchedSkill {
+  name: string;
+  hasEvidence: boolean;
+  snippets: string[];
+}
+
+interface ServerCandidateMatch {
+  matchedSkills: ServerMatchedSkill[];
+  missingSkills: string[];
+  alreadyOnJob: boolean;
+  applicationId: string | null;
+  stage: string | null;
+  addable: boolean | null;
+}
+
+interface ServerJobMatch {
+  vacancyId: string;
+  requiredCount: number;
+  unmappedRequiredSkills: string[];
+  byCandidateId: Record<string, ServerCandidateMatch>;
+}
+
+/** Job row on Match Skills. Redacted jobs stay read-only and are never filled in. */
+interface MatchSkillsVacancy {
+  id: string;
+  title?: string | null;
+  position?: { id?: string; title?: string; code?: string } | null;
+  positionId?: string;
+  vacancyCode?: string;
+  status?: string;
+  department?: string | null;
+  location?: string | null;
+  openings?: number | null;
+  requiredSkills?: string[] | null;
+  minExperienceYears?: number | null;
+  qualifications?: string | null;
+  jobSummary?: string | null;
+  openedAt?: string | null;
+  redacted?: boolean;
+  siteName?: string | null;
+  targetSeats?: number | null;
 }
 
 type MatchTier = 'all' | 'best' | 'good' | 'potential' | 'low';
-
-const DEFAULT_NURSING_SKILLS = [
-  'Patient Care',
-  'Medication Administration',
-  'Vital Signs Monitoring',
-  'Infection Control',
-  'Clinical Documentation',
-  'BLS/ACLS',
-  'Communication',
-  'Teamwork',
-];
+type RingMode = 'score' | 'no-evidence' | 'needs-requirements' | 'no-job' | 'unavailable';
 
 const AVATAR_TONES = ['blue', 'green', 'rose', 'amber'] as const;
+
+function classifyAvailability(candidate: Candidate): 'available' | 'notice' | 'unspecified' {
+  const metadata = candidate.metadata as Record<string, unknown> | undefined;
+  const raw = candidate.availability ?? metadata?.availability;
+  const rawAvail = typeof raw === 'string' ? raw : '';
+  if (/immediate|available/i.test(rawAvail)) return 'available';
+  if (/notice|days|weeks|month/i.test(rawAvail)) return 'notice';
+  return 'unspecified';
+}
+
+const EMPTY_SERVER_FIELDS = {
+  evidenceSnippets: [] as Array<{ skill: string; snippets: string[] }>,
+  alreadyOnJob: false,
+  applicationId: null as string | null,
+  stage: null as string | null,
+  addable: null as boolean | null,
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function readStatusCode(err: unknown): number | null {
+  if (!isRecord(err)) return null;
+  if (typeof err.statusCode === 'number') return err.statusCode;
+  if (typeof err.status === 'number') return err.status;
+  return null;
+}
+
+const ACCEPTING_APPLICATION_STATUSES = new Set(['Open', 'Partially Filled']);
+const MATCH_TIERS: readonly MatchTier[] = ['all', 'best', 'good', 'potential', 'low'];
+
+function parseTier(value: string | null): MatchTier {
+  return MATCH_TIERS.includes(value as MatchTier) ? (value as MatchTier) : 'all';
+}
+
+function parseSort(value: string | null): 'best' | 'exp' | 'name' {
+  return value === 'exp' || value === 'name' ? value : 'best';
+}
+
+function sameQuery(left: URLSearchParams, right: URLSearchParams): boolean {
+  const keys = new Set([...left.keys(), ...right.keys()]);
+  for (const key of keys) {
+    if (left.get(key) !== right.get(key)) return false;
+  }
+  return true;
+}
+
+function isApplicationExists(err: unknown): boolean {
+  if (!isRecord(err)) return false;
+  if (err.code === 'APPLICATION_EXISTS') return true;
+  return isRecord(err.details) && err.details.code === 'APPLICATION_EXISTS';
+}
+
+interface LocalPipelineMembership {
+  applicationId: string | null;
+  stage: string;
+}
+
+function applyLocalPipeline(
+  row: ScoredBenchCandidate,
+  membership: Record<string, LocalPipelineMembership>,
+  vacancyId: string,
+): ScoredBenchCandidate {
+  const local = membership[`${vacancyId}:${row.candidate.id}`];
+  if (!local) return row;
+  return {
+    ...row,
+    alreadyOnJob: true,
+    applicationId: local.applicationId ?? row.applicationId,
+    stage: local.stage,
+    addable: false,
+  };
+}
+
+function skillNames(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    if (!isRecord(item) || typeof item.name !== 'string') return [];
+    const name = item.name.trim();
+    return name ? [name] : [];
+  });
+}
+
+function matchedFromServer(value: unknown): ServerMatchedSkill[] {
+  if (!Array.isArray(value)) return [];
+  const skills: ServerMatchedSkill[] = [];
+  for (const item of value) {
+    if (!isRecord(item) || !isRecord(item.skill) || typeof item.skill.name !== 'string') continue;
+    const name = item.skill.name.trim();
+    if (!name) continue;
+    const snippets = Array.isArray(item.evidence)
+      ? item.evidence.flatMap((entry) => {
+          if (!isRecord(entry) || typeof entry.snippet !== 'string') return [];
+          const snippet = entry.snippet.trim();
+          return snippet ? [snippet] : [];
+        })
+      : [];
+    skills.push({ name, hasEvidence: item.hasEvidence === true, snippets });
+  }
+  return skills;
+}
+
+/** Accept only a suggestions payload for the job that was requested. Candidate lists and other jobs are ignored. */
+function parseSuggestions(raw: unknown, vacancyId: string): ServerJobMatch | null {
+  if (!isRecord(raw) || raw.vacancyId !== vacancyId || !Array.isArray(raw.suggestions) || !Array.isArray(raw.requiredSkills)) return null;
+  const unmappedRequiredSkills = Array.isArray(raw.unmappedRequiredSkills)
+    ? raw.unmappedRequiredSkills.flatMap((item) => (typeof item === 'string' && item.trim() ? [item.trim()] : []))
+    : [];
+  const byCandidateId: Record<string, ServerCandidateMatch> = {};
+  for (const item of raw.suggestions) {
+    if (!isRecord(item) || !isRecord(item.candidate) || typeof item.candidate.id !== 'string') continue;
+    const alreadyOnJob = item.alreadyOnJob === true;
+    byCandidateId[item.candidate.id] = {
+      matchedSkills: matchedFromServer(item.matchedSkills),
+      missingSkills: skillNames(item.missingSkills),
+      alreadyOnJob,
+      applicationId: typeof item.applicationId === 'string' && item.applicationId.trim() ? item.applicationId : null,
+      stage: typeof item.stage === 'string' && item.stage.trim() ? item.stage : null,
+      addable: typeof item.addable === 'boolean' ? item.addable : (alreadyOnJob ? false : null),
+    };
+  }
+  return { vacancyId, requiredCount: raw.requiredSkills.length, unmappedRequiredSkills, byCandidateId };
+}
+
+function applyServerMatch(
+  row: ScoredBenchCandidate,
+  server: ServerJobMatch | null,
+  vacancyId: string,
+  activeRequiredSkills: string[],
+): ScoredBenchCandidate {
+  if (!server || server.vacancyId !== vacancyId) return row;
+  const totalRequiredCount = server.requiredCount + server.unmappedRequiredSkills.length;
+  const match = server.byCandidateId[row.candidate.id];
+  if (!match) {
+    return {
+      ...row,
+      matchedSkills: [],
+      missingSkills: activeRequiredSkills,
+      displayScore: 0,
+      evidenceSnippets: [],
+    };
+  }
+  const evidenced = match.matchedSkills.filter((skill) => skill.hasEvidence);
+  const matchedSkills = evidenced.map((skill) => skill.name);
+  const missingSkills = [
+    ...match.matchedSkills.filter((skill) => !skill.hasEvidence).map((skill) => skill.name),
+    ...match.missingSkills,
+    ...server.unmappedRequiredSkills,
+  ];
+  return {
+    ...row,
+    matchedSkills,
+    missingSkills,
+    displayScore: totalRequiredCount === 0 ? 0 : Math.round((evidenced.length / totalRequiredCount) * 100),
+    evidenceSnippets: evidenced.map((skill) => ({ skill: skill.name, snippets: skill.snippets })),
+    alreadyOnJob: match.alreadyOnJob,
+    applicationId: match.applicationId,
+    stage: match.stage,
+    addable: match.addable,
+  };
+}
+
+function availabilityLabel(availability: 'available' | 'notice' | 'unspecified'): string {
+  if (availability === 'available') return '• Available';
+  if (availability === 'notice') return 'Notice period';
+  return 'Availability not specified';
+}
 
 function getGaugeMeta(score: number): { label: string; tone: 'excellent' | 'strong' | 'good' | 'potential' | 'low'; color: string } {
   if (score >= 90) return { label: 'Excellent match', tone: 'excellent', color: '#16a34a' };
@@ -49,54 +258,75 @@ function getGaugeMeta(score: number): { label: string; tone: 'excellent' | 'stro
   return { label: 'Low match', tone: 'low', color: '#dc2626' };
 }
 
-function MatchRingGauge({ score }: { score: number }) {
-  const { label, tone, color } = getGaugeMeta(score);
+function MatchRingGauge({ score, mode }: { score: number; mode: RingMode }) {
+  const hideScore = mode === 'needs-requirements' || mode === 'no-job' || mode === 'unavailable';
+  const meta = mode === 'unavailable'
+    ? { label: 'Match unavailable', tone: 'low' as const, color: '#94a3b8' }
+    : mode === 'needs-requirements' || mode === 'no-job'
+      ? {
+          label: mode === 'no-job' ? 'No requirements' : 'Requirements needed',
+          tone: 'low' as const,
+          color: '#94a3b8',
+        }
+      : mode === 'no-evidence'
+        ? { label: 'No evidence found', tone: 'low' as const, color: '#dc2626' }
+        : getGaugeMeta(score);
   const radius = 23;
   const circumference = 2 * Math.PI * radius;
-  const clamped = Math.max(0, Math.min(100, score));
+  const clamped = hideScore ? 0 : Math.max(0, Math.min(100, score));
   const dashOffset = circumference - (clamped / 100) * circumference;
+  const valueText = hideScore ? '—' : `${clamped}%`;
 
   return (
-    <div className="rf2-ms__gauge">
+    <div className="rf2-ms__gauge" role="img" aria-label={`${valueText} ${meta.label}`}>
       <div className="rf2-ms__gauge-ring">
         <svg className="rf2-ms__gauge-svg" viewBox="0 0 56 56" aria-hidden="true">
           <circle cx="28" cy="28" r={radius} stroke="rgba(148, 163, 184, 0.22)" strokeWidth="4.5" fill="none" />
-          <circle
-            cx="28"
-            cy="28"
-            r={radius}
-            stroke={color}
-            strokeWidth="4.5"
-            strokeLinecap="round"
-            fill="none"
-            strokeDasharray={circumference}
-            strokeDashoffset={dashOffset}
-          />
+          {hideScore ? null : (
+            <circle
+              cx="28"
+              cy="28"
+              r={radius}
+              stroke={meta.color}
+              strokeWidth="4.5"
+              strokeLinecap="round"
+              fill="none"
+              strokeDasharray={circumference}
+              strokeDashoffset={dashOffset}
+            />
+          )}
         </svg>
-        <span className="rf2-ms__gauge-pct">{clamped}%</span>
+        <span className="rf2-ms__gauge-pct">{valueText}</span>
       </div>
-      <span className="rf2-ms__gauge-label" data-tone={tone}>{label}</span>
+      <span className="rf2-ms__gauge-label" data-tone={meta.tone}>{meta.label}</span>
     </div>
   );
 }
 
 export function TalentPoolPage() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { show } = useToast();
+  const suppressVacancyReload = useRef<string | null>(null);
 
   // Positions & Vacancies from DB
-  const [vacancies, setVacancies] = useState<Vacancy[]>([]);
+  const [vacancies, setVacancies] = useState<MatchSkillsVacancy[]>([]);
   const [selectedVacancyId, setSelectedVacancyId] = useState<string>('');
   const [benchCandidates, setBenchCandidates] = useState<Candidate[]>([]);
+  const [serverJobMatch, setServerJobMatch] = useState<ServerJobMatch | null>(null);
+  const [suggestionsError, setSuggestionsError] = useState<string | null>(null);
+  const [suggestionsRetryTick, setSuggestionsRetryTick] = useState(0);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [pipelineMembership, setPipelineMembership] = useState<Record<string, LocalPipelineMembership>>({});
+  const loadGeneration = useRef(0);
+  const suggestionGeneration = useRef(0);
 
   // Filters for Match Skills
-  const [benchSearch, setBenchSearch] = useState('');
+  const [benchSearch, setBenchSearch] = useState(() => searchParams.get('q') ?? '');
   const [locationFilter, setLocationFilter] = useState('');
   const [expFilter, setExpFilter] = useState('');
   const [availFilter, setAvailFilter] = useState('');
-  const [sortBy, setSortBy] = useState<'best' | 'exp' | 'name'>('best');
-  const [tierFilter, setTierFilter] = useState<MatchTier>('all');
+  const [sortBy, setSortBy] = useState<'best' | 'exp' | 'name'>(() => parseSort(searchParams.get('sort')));
+  const [tierFilter, setTierFilter] = useState<MatchTier>(() => parseTier(searchParams.get('tier')));
   const [expandedCandidateId, setExpandedCandidateId] = useState<string | null>(null);
 
   // Edit Position Requirements Modal
@@ -107,7 +337,6 @@ export function TalentPoolPage() {
     candidate: Candidate;
     fit: CriteriaBreakdown;
   } | null>(null);
-  const [fastTrackStage, setFastTrackStage] = useState<string>('Screening');
   const [fastTrackNote, setFastTrackNote] = useState('');
   const [isFastTracking, setIsFastTracking] = useState(false);
 
@@ -115,7 +344,8 @@ export function TalentPoolPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const loadData = async () => {
+  const loadData = async (vacancyQuery: string, positionQuery: string) => {
+    const generation = ++loadGeneration.current;
     setLoading(true);
     setError(null);
 
@@ -123,21 +353,31 @@ export function TalentPoolPage() {
       const [vacsRes, candsRes] = await Promise.all([
         fetchVacancyList().then(({ full, redacted }) => {
           const fullIds = new Set(full.map((v) => v.id));
-          const extra = (redacted || [])
+          const fullRows: MatchSkillsVacancy[] = full.map((v: Vacancy) => ({
+            ...v,
+            redacted: false,
+          }));
+          const extra: MatchSkillsVacancy[] = (redacted || [])
             .filter((r) => !fullIds.has(r.id))
-            .map((r, idx) => ({
+            .map((r) => ({
               id: r.id,
-              title: r.title || 'Registered Nurse',
-              vacancyCode: `CND-SGH-00${idx + 1}`,
-              status: 'Open',
-              department: /nurse|midwife/i.test(r.title || '') ? 'Nursing' : 'Clinical Operations',
-              location: r.site?.name || 'SGH Dubai Hospital',
-              openings: r.seats?.target || 8,
-            } as unknown as Vacancy));
-          return [...full, ...extra];
+              title: r.title || 'Restricted job',
+              vacancyCode: 'Restricted',
+              status: 'Restricted',
+              department: '',
+              location: r.site?.name || 'Restricted location',
+              openings: r.seats?.target ?? null,
+              requiredSkills: [],
+              redacted: true,
+              siteName: r.site?.name ?? null,
+              targetSeats: r.seats?.target ?? null,
+            }));
+          return [...fullRows, ...extra];
         }),
         getApi<{ data?: Candidate[] } | Candidate[]>('/candidates?pageSize=100'),
       ]);
+
+      if (generation !== loadGeneration.current) return;
 
       const vacList = vacsRes;
       const candList = Array.isArray(candsRes) ? candsRes : candsRes?.data || [];
@@ -145,96 +385,164 @@ export function TalentPoolPage() {
       setVacancies(vacList);
       setBenchCandidates(candList);
 
-      const queryVacId = searchParams.get('vacancyId');
-      const queryPosId = searchParams.get('positionId');
-
-      if (queryVacId && vacList.some((v) => v.id === queryVacId)) {
-        setSelectedVacancyId(queryVacId);
-      } else if (queryPosId && vacList.some((v) => v.positionId === queryPosId)) {
-        const found = vacList.find((v) => v.positionId === queryPosId);
+      if (vacancyQuery && vacList.some((v) => v.id === vacancyQuery)) {
+        setSelectedVacancyId(vacancyQuery);
+      } else if (positionQuery && vacList.some((v) => v.positionId === positionQuery)) {
+        const found = vacList.find((v) => v.positionId === positionQuery);
         if (found) setSelectedVacancyId(found.id);
       } else if (vacList.length > 0) {
         const defaultOpen =
-          vacList.find((v) => v.status === 'Open' && /nurse/i.test(v.title || '')) ||
-          vacList.find((v) => v.status === 'Open') ||
+          vacList.find((v) => !v.redacted && v.status === 'Open') ||
+          vacList.find((v) => !v.redacted) ||
           vacList[0];
         setSelectedVacancyId(defaultOpen.id);
       }
     } catch (err: unknown) {
+      if (generation !== loadGeneration.current) return;
       setError(err instanceof Error ? err.message : 'Failed to load sourcing data.');
     } finally {
-      setLoading(false);
+      if (generation === loadGeneration.current) setLoading(false);
     }
   };
 
+  const vacancyQuery = searchParams.get('vacancyId') ?? '';
+  const positionQuery = searchParams.get('positionId') ?? '';
+
   useEffect(() => {
-    void loadData();
+    if (suppressVacancyReload.current && suppressVacancyReload.current === vacancyQuery) {
+      suppressVacancyReload.current = null;
+      return;
+    }
+    void loadData(vacancyQuery, positionQuery);
+  }, [vacancyQuery, positionQuery]);
+
+  useEffect(() => {
+    setSelectedIds([]);
+  }, [selectedVacancyId]);
+
+  useEffect(() => {
+    const next = new URLSearchParams(searchParams);
+    if (selectedVacancyId) next.set('vacancyId', selectedVacancyId);
+    if (benchSearch) next.set('q', benchSearch);
+    else next.delete('q');
+    if (tierFilter !== 'all') next.set('tier', tierFilter);
+    else next.delete('tier');
+    if (sortBy !== 'best') next.set('sort', sortBy);
+    else next.delete('sort');
+    if (sameQuery(next, searchParams)) return;
+    if (selectedVacancyId && selectedVacancyId !== vacancyQuery) {
+      suppressVacancyReload.current = selectedVacancyId;
+    }
+    setSearchParams(next, { replace: true });
+  }, [selectedVacancyId, benchSearch, tierFilter, sortBy, searchParams, setSearchParams, vacancyQuery]);
+
+  useEffect(() => {
+    if (document.activeElement?.id === 'rf2-ms-candidate-search') return;
+    const nextQuery = searchParams.get('q') ?? '';
+    const nextTier = parseTier(searchParams.get('tier'));
+    const nextSort = parseSort(searchParams.get('sort'));
+    setBenchSearch((current) => (current === nextQuery ? current : nextQuery));
+    setTierFilter((current) => (current === nextTier ? current : nextTier));
+    setSortBy((current) => (current === nextSort ? current : nextSort));
   }, [searchParams]);
+
+  useEffect(() => {
+    const vacancy = vacancies.find((item) => item.id === selectedVacancyId) ?? null;
+    if (!selectedVacancyId || !vacancy || vacancy.redacted) {
+      suggestionGeneration.current += 1;
+      setServerJobMatch(null);
+      setSuggestionsError(null);
+      return;
+    }
+    const generation = ++suggestionGeneration.current;
+    const vacancyId = selectedVacancyId;
+    let active = true;
+    setSuggestionsError(null);
+    setServerJobMatch((current) => (current?.vacancyId === vacancyId ? current : null));
+    void (async () => {
+      try {
+        const raw: unknown = await getApi<unknown>(`/vacancies/${encodeURIComponent(vacancyId)}/suggestions`);
+        if (!active || generation !== suggestionGeneration.current) return;
+        const parsed = parseSuggestions(raw, vacancyId);
+        if (!parsed) return;
+        setServerJobMatch(parsed);
+        setSuggestionsError(null);
+      } catch (err: unknown) {
+        if (!active || generation !== suggestionGeneration.current) return;
+        const status = readStatusCode(err);
+        if (status === 403 || status === 404) {
+          setServerJobMatch(null);
+          setSuggestionsError(null);
+          return;
+        }
+        setServerJobMatch(null);
+        setSuggestionsError(err instanceof Error ? err.message : 'Could not load server skill matches for this job.');
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [selectedVacancyId, vacancies, suggestionsRetryTick]);
 
   const selectedVacancy = useMemo(() => {
     return vacancies.find((v) => v.id === selectedVacancyId) || null;
   }, [vacancies, selectedVacancyId]);
 
   const activeRequiredSkills = useMemo(() => {
-    const raw = selectedVacancy?.requiredSkills || [];
-    const isGenericSeed =
-      raw.length <= 2 &&
-      raw.every((s) => /dha|moh|clinical experience/i.test(s));
-    if (raw.length > 0 && !isGenericSeed) {
-      return raw;
-    }
-    return DEFAULT_NURSING_SKILLS;
+    return (selectedVacancy?.requiredSkills || []).map((skill) => skill.trim()).filter(Boolean);
   }, [selectedVacancy]);
 
-  // Compute Empirical Match Scores across all Bench Candidates
   const scoredCandidates: ScoredBenchCandidate[] = useMemo(() => {
-    if (!selectedVacancy && benchCandidates.length === 0) return [];
+    if (benchCandidates.length === 0) return [];
 
-    const requirementsInput = {
-      requiredSkills: activeRequiredSkills,
-      minExperienceYears: selectedVacancy?.minExperienceYears ?? 3,
-      location: selectedVacancy?.location || undefined,
-      requiredCertifications: selectedVacancy?.qualifications
-        ? [selectedVacancy.qualifications]
-        : undefined,
-    };
+    const skillMatchReady = Boolean(selectedVacancy) && !selectedVacancy?.redacted && activeRequiredSkills.length > 0;
+    const requirementsInput = skillMatchReady
+      ? {
+          requiredSkills: activeRequiredSkills,
+          minExperienceYears: selectedVacancy?.minExperienceYears ?? undefined,
+          location: selectedVacancy?.location || undefined,
+          requiredCertifications: selectedVacancy?.qualifications
+            ? [selectedVacancy.qualifications]
+            : undefined,
+        }
+      : { requiredSkills: [] as string[] };
 
     return benchCandidates
-      .map((c, idx) => {
+      .map((c) => {
+        const metadata = c.metadata as Record<string, unknown> | undefined;
         const candidateInput = {
           skills: c.skills || [],
           experienceYears: c.experienceYears ?? undefined,
           location: c.location || undefined,
           certifications: c.certifications || [],
           currentTitle: c.currentTitle || undefined,
-          summary: c.summary || (c.metadata as Record<string, unknown> | undefined)?.summary as string | undefined,
+          summary: c.summary || metadata?.summary as string | undefined,
           rawText: (c as { rawText?: string }).rawText || c.summary || undefined,
-          workHistory: (c.metadata as Record<string, unknown> | undefined)?.workHistory as Parameters<typeof calculateCandidateFitScore>[0]['workHistory'],
-          educationHistory: (c.metadata as Record<string, unknown> | undefined)?.educationHistory as Parameters<typeof calculateCandidateFitScore>[0]['educationHistory'],
-          projectHistory: (c.metadata as Record<string, unknown> | undefined)?.projectHistory as Parameters<typeof calculateCandidateFitScore>[0]['projectHistory'],
-          evidenceChunks: (c.metadata as Record<string, unknown> | undefined)?.evidenceChunks as Parameters<typeof calculateCandidateFitScore>[0]['evidenceChunks'],
-          responsibilities: (c.metadata as Record<string, unknown> | undefined)?.responsibilities as Parameters<typeof calculateCandidateFitScore>[0]['responsibilities'],
+          workHistory: metadata?.workHistory as Parameters<typeof calculateCandidateFitScore>[0]['workHistory'],
+          educationHistory: metadata?.educationHistory as Parameters<typeof calculateCandidateFitScore>[0]['educationHistory'],
+          projectHistory: metadata?.projectHistory as Parameters<typeof calculateCandidateFitScore>[0]['projectHistory'],
+          evidenceChunks: metadata?.evidenceChunks as Parameters<typeof calculateCandidateFitScore>[0]['evidenceChunks'],
+          responsibilities: metadata?.responsibilities as Parameters<typeof calculateCandidateFitScore>[0]['responsibilities'],
         };
         const fit = calculateCandidateFitScore(candidateInput, requirementsInput);
+        const availability = classifyAvailability(c);
 
-        // Build clean matched vs missing skill lists for visual clarity
-        const rawMatched = fit.breakdown.skills.matched || [];
-        const tierPattern = [8, 6, 6, 5, 5, 6, 7, 5, 4, 6, 5, 3, 7, 4];
-        const targetMatchCount = Math.min(
-          activeRequiredSkills.length,
-          tierPattern[idx % tierPattern.length] ?? 6,
-        );
-        const matchedSkills = rawMatched.length > 0
-          ? rawMatched
-          : activeRequiredSkills.slice(0, targetMatchCount);
+        if (!skillMatchReady) {
+          return {
+            candidate: c,
+            fit,
+            matchedSkills: [],
+            missingSkills: activeRequiredSkills,
+            displayScore: 0,
+            availability,
+            ...EMPTY_SERVER_FIELDS,
+          };
+        }
 
-        const matchedLower = new Set(matchedSkills.map((s) => s.toLowerCase()));
-        const missingSkills = activeRequiredSkills.filter((req) => !matchedLower.has(req.toLowerCase()));
-        const scorePattern = [95, 88, 82, 78, 76, 85, 91, 74, 66, 80, 72, 54, 89, 64];
-        const displayScore = rawMatched.length > 0
-          ? fit.score
-          : (scorePattern[idx % scorePattern.length] ?? Math.round((matchedSkills.length / Math.max(1, activeRequiredSkills.length)) * 100));
-        const availability: 'available' | 'notice' = idx % 3 === 2 ? 'notice' : 'available';
+        const matchedSkills = fit.breakdown.skills.matched || [];
+        const missingSkills = fit.breakdown.skills.missing
+          ?? activeRequiredSkills.filter((req) => !matchedSkills.some((skill) => skill.toLowerCase() === req.toLowerCase()));
+        const displayScore = matchedSkills.length === 0 ? 0 : fit.breakdown.skills.percentage;
 
         return {
           candidate: c,
@@ -243,10 +551,24 @@ export function TalentPoolPage() {
           missingSkills,
           displayScore,
           availability,
+          ...EMPTY_SERVER_FIELDS,
         };
       })
+      .map((row) => (
+        suggestionsError
+          ? {
+              ...row,
+              matchedSkills: [],
+              missingSkills: activeRequiredSkills,
+              displayScore: 0,
+              evidenceSnippets: [],
+              scoreState: 'unavailable' as const,
+            }
+          : applyServerMatch(row, serverJobMatch, selectedVacancyId, activeRequiredSkills)
+      ))
+      .map((row) => applyLocalPipeline(row, pipelineMembership, selectedVacancyId))
       .sort((a, b) => b.displayScore - a.displayScore);
-  }, [benchCandidates, selectedVacancy, activeRequiredSkills]);
+  }, [benchCandidates, selectedVacancy, activeRequiredSkills, serverJobMatch, selectedVacancyId, pipelineMembership, suggestionsError]);
 
   const distinctLocations = useMemo(() => {
     return Array.from(new Set(benchCandidates.map((c) => c.location).filter((loc): loc is string => Boolean(loc))));
@@ -316,26 +638,46 @@ export function TalentPoolPage() {
   };
 
   // Handle Fast-Track to Pipeline
+  const rememberInPipeline = (candidateId: string, vacancyId: string, applicationId: string | null) => {
+    setPipelineMembership((current) => ({
+      ...current,
+      [`${vacancyId}:${candidateId}`]: { applicationId, stage: 'Applied' },
+    }));
+  };
+
   const handleFastTrackSubmit = async () => {
     if (!fastTrackTarget || !selectedVacancy) return;
+    const candidateId = fastTrackTarget.candidate.id;
+    const vacancyId = selectedVacancy.id;
+    const note = fastTrackNote.trim();
+    const personName = `${fastTrackTarget.candidate.firstName} ${fastTrackTarget.candidate.lastName}`.trim();
     setIsFastTracking(true);
     try {
-      await postApi('/applications', {
-        candidateId: fastTrackTarget.candidate.id,
-        vacancyId: selectedVacancy.id,
-        stage: fastTrackStage,
-        notes: fastTrackNote ? `[Added to job]: ${fastTrackNote}` : '[Added to job]',
-      });
-
+      const created = await postApi<{ id?: string }>('/applications', { candidateId, vacancyId });
+      const applicationId = created?.id ?? null;
+      if (note && applicationId) {
+        await postApi(`/applications/${encodeURIComponent(applicationId)}/notes`, { content: note }).catch(() => {});
+      }
+      rememberInPipeline(candidateId, vacancyId, applicationId);
       show({
         tone: 'success',
         title: 'Added to job',
-        message: `${fastTrackTarget.candidate.firstName} ${fastTrackTarget.candidate.lastName} is now on ${selectedVacancy.title || 'this job'} at ${fastTrackStage}.`,
+        message: `${personName} is now on ${selectedVacancy.title || 'this job'} at Applied.`,
       });
-
       setFastTrackTarget(null);
       setFastTrackNote('');
     } catch (err: unknown) {
+      if (isApplicationExists(err)) {
+        rememberInPipeline(candidateId, vacancyId, null);
+        show({
+          tone: 'info',
+          title: 'Already in pipeline',
+          message: `${personName} is already on ${selectedVacancy.title || 'this job'}.`,
+        });
+        setFastTrackTarget(null);
+        setFastTrackNote('');
+        return;
+      }
       show({
         tone: 'error',
         title: 'Could not add candidate',
@@ -376,11 +718,35 @@ export function TalentPoolPage() {
     });
   };
 
-  const jobTitle = selectedVacancy?.title || selectedVacancy?.position?.title || 'Registered Nurse';
-  const jobCode = selectedVacancy?.vacancyCode || 'CND-SGH-001';
-  const jobLocation = selectedVacancy?.location || 'SGH Dubai Hospital';
-  const jobDept = selectedVacancy?.department || 'Nursing';
-  const jobSeats = (selectedVacancy as { openings?: number } | null)?.openings ?? 8;
+  const unmappedRequiredSkills = serverJobMatch?.vacancyId === selectedVacancyId ? serverJobMatch.unmappedRequiredSkills : [];
+  const jobIsRedacted = Boolean(selectedVacancy?.redacted);
+  const skillMatchReady = Boolean(selectedVacancy) && !jobIsRedacted && activeRequiredSkills.length > 0;
+  const jobTitle = selectedVacancy?.title || selectedVacancy?.position?.title || (jobIsRedacted ? 'Restricted job' : 'No job selected');
+  const jobCode = selectedVacancy?.vacancyCode || '—';
+  const jobLocation = jobIsRedacted
+    ? (selectedVacancy?.location || 'Restricted location')
+    : (selectedVacancy?.location || 'Location not specified');
+  const jobDept = jobIsRedacted
+    ? 'Restricted access'
+    : (selectedVacancy?.department || 'Department not specified');
+  const jobSeats = selectedVacancy?.openings ?? null;
+  const jobSummary = jobIsRedacted
+    ? 'Restricted access'
+    : (selectedVacancy?.jobSummary || 'No job description provided.');
+  const openedAt = selectedVacancy?.openedAt ? new Date(selectedVacancy.openedAt) : null;
+  const postedLabel = jobIsRedacted
+    ? 'Restricted access'
+    : openedAt && !Number.isNaN(openedAt.getTime())
+      ? `Posted ${openedAt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`
+      : 'Posted date not specified';
+  const seatsLabel = jobSeats != null ? `${jobSeats} seats` : 'Seats not specified';
+  const pipelineBlocked = !selectedVacancy || jobIsRedacted || activeRequiredSkills.length === 0;
+  const jobNotAccepting = Boolean(selectedVacancy) && !ACCEPTING_APPLICATION_STATUSES.has(selectedVacancy?.status ?? '');
+  const compareCountOk = selectedIds.length >= 2 && selectedIds.length <= 4;
+  const compareReady = compareCountOk && Boolean(selectedVacancy) && !jobIsRedacted;
+  const compareHref = selectedVacancy
+    ? `/candidates/compare?vacancyId=${encodeURIComponent(selectedVacancy.id)}&ids=${selectedIds.map((id) => encodeURIComponent(id)).join(',')}`
+    : '/candidates/compare';
 
   return (
     <div className="rf2-ms">
@@ -394,6 +760,15 @@ export function TalentPoolPage() {
       {error ? (
         <div className="p-4 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-900/60 text-sm" role="alert">
           {error}
+        </div>
+      ) : null}
+
+      {suggestionsError ? (
+        <div className="rf2-ms__match-alert" role="alert">
+          <p>{suggestionsError}</p>
+          <button type="button" className="rf2-ms__retry-btn" onClick={() => setSuggestionsRetryTick((tick) => tick + 1)}>
+            Retry matching
+          </button>
         </div>
       ) : null}
 
@@ -411,7 +786,7 @@ export function TalentPoolPage() {
                 </span>
                 <span className="rf2-ms__open-badge">
                   <Check aria-hidden="true" />
-                  <span>{selectedVacancy?.status || 'Open'}</span>
+                  <span>{selectedVacancy?.status || 'No job selected'}</span>
                 </span>
               </div>
               <span className="rf2-ms__select-chevron" aria-hidden="true"><ChevronDown /></span>
@@ -424,7 +799,7 @@ export function TalentPoolPage() {
               >
                 {vacancies.map((v) => (
                   <option key={v.id} value={v.id}>
-                    {v.title || v.position?.title || 'Untitled job'} ({v.vacancyCode})
+                    {v.title || v.position?.title || (v.redacted ? 'Restricted job' : 'Untitled job')} ({v.vacancyCode || '—'})
                   </option>
                 ))}
               </select>
@@ -432,15 +807,15 @@ export function TalentPoolPage() {
             <div className="rf2-ms__job-meta">
               <span className="rf2-ms__job-meta-item"><MapPin aria-hidden="true" /><span>{jobLocation}</span></span>
               <span className="rf2-ms__job-meta-item"><Building2 aria-hidden="true" /><span>{jobDept}</span></span>
-              <span className="rf2-ms__job-meta-item"><Users aria-hidden="true" /><span>{jobSeats} seats</span></span>
-              <span className="rf2-ms__job-meta-item"><Calendar aria-hidden="true" /><span>Posted 15 Oct 2026</span></span>
+              <span className="rf2-ms__job-meta-item"><Users aria-hidden="true" /><span>{seatsLabel}</span></span>
+              <span className="rf2-ms__job-meta-item"><Calendar aria-hidden="true" /><span>{postedLabel}</span></span>
             </div>
           </div>
 
           <div className="rf2-ms__job-desc-col">
             <span className="rf2-ms__desc-heading">Job description</span>
             <p className="rf2-ms__desc-text">
-              {selectedVacancy?.jobSummary || 'Provide high-quality nursing care, monitor patient condition, administer medications and collaborate with the healthcare team.'}
+              {jobSummary}
             </p>
             {selectedVacancy ? (
               <Link className="rf2-ms__desc-link" to={`/vacancies/${encodeURIComponent(selectedVacancy.id)}`}>
@@ -462,17 +837,29 @@ export function TalentPoolPage() {
                 type="button"
                 className="rf2-ms__edit-skills-btn"
                 onClick={() => setIsEditRequirementsOpen(true)}
+                disabled={jobIsRedacted}
               >
                 <Pencil aria-hidden="true" />
                 <span>Add / Edit skills</span>
               </button>
             ) : null}
           </div>
-          <div className="rf2-ms__req-pills">
-            {activeRequiredSkills.map((skill) => (
-              <span key={skill} className="rf2-ms__req-pill">{skill}</span>
-            ))}
-          </div>
+          {activeRequiredSkills.length === 0 ? (
+            <p>
+              No required skills defined for this job yet. Finish job requirements to calculate skill matches.
+            </p>
+          ) : (
+            <div className="rf2-ms__req-pills">
+              {activeRequiredSkills.map((skill) => (
+                <span key={skill} className="rf2-ms__req-pill">{skill}</span>
+              ))}
+            </div>
+          )}
+          {unmappedRequiredSkills.length > 0 ? (
+            <p>
+              Not in the active skill library: {unmappedRequiredSkills.join(', ')}. These required skills cannot be matched until they are added to the library.
+            </p>
+          ) : null}
         </div>
       </section>
 
@@ -482,6 +869,7 @@ export function TalentPoolPage() {
           <div className="rf2-ms__search-wrap">
             <Search aria-hidden="true" />
             <input
+              id="rf2-ms-candidate-search"
               type="text"
               value={benchSearch}
               onChange={(e) => setBenchSearch(e.target.value)}
@@ -592,11 +980,41 @@ export function TalentPoolPage() {
         </button>
       </div>
 
+      {selectedIds.length > 0 ? (
+        <div className="rf2-ms__toolbar" role="region" aria-label="Selected candidates">
+          <div className="rf2-ms__filters-left">
+            <span className="rf2-ms__sort-label">{selectedIds.length} selected</span>
+            {compareReady ? (
+              <Link className="rf2-ms__btn-primary min-h-11" style={{ minHeight: 44 }} to={compareHref}>
+                Compare selected ({selectedIds.length})
+              </Link>
+            ) : (
+              <button
+                type="button"
+                className="rf2-ms__btn-secondary min-h-11 disabled:cursor-not-allowed disabled:opacity-60"
+                style={{ minHeight: 44 }}
+                disabled
+                aria-describedby={compareCountOk ? undefined : 'compare-selection-hint'}
+                title={compareCountOk ? 'Choose an open job before comparing' : 'Select 2 to 4 candidates to compare'}
+              >
+                Compare selected ({selectedIds.length})
+              </button>
+            )}
+            {compareCountOk ? null : (
+              <span id="compare-selection-hint">Select 2 to 4 candidates to compare</span>
+            )}
+            <button type="button" className="rf2-ms__reset-btn min-h-11" style={{ minHeight: 44 }} onClick={() => setSelectedIds([])}>
+              Clear selection
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       {/* Candidate Match Cards List */}
       {loading ? (
         <PageState kind="loading" title="Loading skill matches" />
       ) : filteredCandidates.length === 0 ? (
-        <div className="text-center py-12 px-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+        <div className="rf2-ms__empty" role="status">
           <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 flex items-center justify-center mx-auto mb-3">
             <Icon name="search" size={20} />
           </div>
@@ -607,12 +1025,16 @@ export function TalentPoolPage() {
         </div>
       ) : (
         <div className="rf2-ms__list">
-          {filteredCandidates.map(({ candidate, fit, matchedSkills, missingSkills, displayScore, availability }, index) => {
+          {filteredCandidates.map(({ candidate, fit, matchedSkills, missingSkills, displayScore, availability, evidenceSnippets, alreadyOnJob, applicationId, stage, addable, scoreState }, index) => {
             const isExpanded = expandedCandidateId === candidate.id;
             const fullName = `${candidate.firstName || ''} ${candidate.lastName || ''}`.trim() || 'Unnamed Candidate';
             const initials = ((candidate.firstName?.[0] || 'C') + (candidate.lastName?.[0] || 'D')).toUpperCase();
             const tone = AVATAR_TONES[index % AVATAR_TONES.length];
             const totalSkillsCount = matchedSkills.length + missingSkills.length;
+            const skillChips = evidenceSnippets.length > 0
+              ? evidenceSnippets
+              : matchedSkills.map((skill) => ({ skill, snippets: [] as string[] }));
+            const addDisabled = pipelineBlocked || addable === false || jobNotAccepting;
 
             return (
               <article key={candidate.id} className="rf2-ms__card">
@@ -629,38 +1051,56 @@ export function TalentPoolPage() {
                     <span className="rf2-ms__avatar" data-tone={tone} aria-hidden="true">{initials}</span>
                     <div className="rf2-ms__cand-info">
                       <h3 className="rf2-ms__cand-name">{fullName}</h3>
-                      <span className="rf2-ms__cand-role">{candidate.currentTitle || jobTitle}</span>
+                      <span className="rf2-ms__cand-role">{candidate.currentTitle || 'Title not specified'}</span>
                       <div className="rf2-ms__cand-meta">
                         <span className="rf2-ms__cand-meta-bit">
                           <MapPin aria-hidden="true" />
-                          <span>{candidate.location || 'Dubai'}</span>
+                          <span>{candidate.location || 'Location not specified'}</span>
                         </span>
                         <span className="rf2-ms__cand-meta-bit">
                           <BriefcaseBusiness aria-hidden="true" />
-                          <span>{candidate.experienceYears ?? 4} years</span>
+                          <span>{candidate.experienceYears != null ? `${candidate.experienceYears} years` : 'Experience not specified'}</span>
                         </span>
                         <span className="rf2-ms__avail-pill" data-tone={availability}>
-                          {availability === 'available' ? '• Available' : 'Notice period'}
+                          {availabilityLabel(availability)}
                         </span>
                       </div>
                     </div>
                   </div>
 
                   {/* Column 2: Circular Ring Gauge */}
-                  <MatchRingGauge score={displayScore} />
+                  <MatchRingGauge
+                    score={displayScore}
+                    mode={scoreState === 'unavailable' ? 'unavailable' : !selectedVacancy ? 'no-job' : !skillMatchReady ? 'needs-requirements' : matchedSkills.length === 0 ? 'no-evidence' : 'score'}
+                  />
 
                   {/* Column 3: Matched & Missing Skills */}
-                  <div className="rf2-ms__skills-col">
+                  <div className="rf2-ms__skills-col" role="group" aria-label="Matched and missing skills">
+                    {scoreState === 'unavailable' ? (
+                      <p>Server skill match is unavailable.</p>
+                    ) : (
+                      <>
                     <span className="rf2-ms__skill-group-label">
-                      Matched skills <span>({matchedSkills.length}/{totalSkillsCount})</span>
+                      Matched skills <span>({matchedSkills.length}{'/'}{totalSkillsCount})</span>
                     </span>
                     <div className="rf2-ms__skill-chips">
-                      {matchedSkills.map((skill) => (
-                        <span key={skill} className="rf2-ms__skill-chip" data-kind="matched">
-                          <Check aria-hidden="true" />
-                          <span>{skill}</span>
-                        </span>
-                      ))}
+                      {skillChips.map((chip) => {
+                        const evidence = chip.snippets[0];
+                        return (
+                          <span
+                            key={chip.skill}
+                            className="rf2-ms__skill-chip"
+                            data-kind="matched"
+                            title={evidence ? `Evidence: ${evidence}` : undefined}
+                          >
+                            <Check aria-hidden="true" />
+                            <span>{chip.skill}</span>
+                            {evidence ? (
+                              <span className="rf2-ms__evidence-tip" role="tooltip">{evidence}</span>
+                            ) : null}
+                          </span>
+                        );
+                      })}
                     </div>
                     {missingSkills.length > 0 ? (
                       <>
@@ -670,29 +1110,42 @@ export function TalentPoolPage() {
                         <div className="rf2-ms__skill-chips">
                           {missingSkills.slice(0, 4).map((skill) => (
                             <span key={skill} className="rf2-ms__skill-chip" data-kind="missing">
-                              <Check aria-hidden="true" />
                               <span>{skill}</span>
                             </span>
                           ))}
                         </div>
                       </>
                     ) : null}
+                      </>
+                    )}
                   </div>
 
                   {/* Column 4: Actions */}
-                  <div className="rf2-ms__actions-col">
+                  <div className="rf2-ms__actions-col" role="group" aria-label="Candidate actions">
                     <div className="rf2-ms__actions-stack">
                       <Link className="rf2-ms__btn-primary" to={`/candidates/${encodeURIComponent(candidate.id)}`}>
                         View profile
                       </Link>
-                      <button
-                        type="button"
-                        className="rf2-ms__btn-secondary"
-                        onClick={() => setFastTrackTarget({ candidate, fit })}
-                      >
-                        <PlusCircle aria-hidden="true" />
-                        <span>Add to pipeline</span>
-                      </button>
+                      {alreadyOnJob && applicationId ? (
+                        <Link className="rf2-ms__btn-secondary no-underline" to={`/applications/${encodeURIComponent(applicationId)}`}>
+                          Open application ({stage || 'Applied'})
+                        </Link>
+                      ) : alreadyOnJob ? (
+                        <button type="button" className="rf2-ms__btn-secondary disabled:cursor-not-allowed disabled:opacity-60" disabled>
+                          Already in pipeline ({stage || 'Applied'})
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="rf2-ms__btn-secondary disabled:cursor-not-allowed disabled:opacity-60"
+                          onClick={() => setFastTrackTarget({ candidate, fit })}
+                          disabled={addDisabled}
+                          title={jobNotAccepting ? 'Job is not accepting new applications' : undefined}
+                        >
+                          <PlusCircle aria-hidden="true" />
+                          <span>Add to pipeline</span>
+                        </button>
+                      )}
                     </div>
                     <button
                       type="button"
@@ -738,26 +1191,16 @@ export function TalentPoolPage() {
               <CandidateFitScorecard variant="badge" breakdown={fastTrackTarget.fit} />
             </div>
 
-            <div className="space-y-1.5">
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">
-                Stage
-              </label>
-              <select
-                value={fastTrackStage}
-                onChange={(e) => setFastTrackStage(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-semibold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-teal-500"
-              >
-                <option value="Screening">Screening</option>
-                <option value="Interview">Interview</option>
-                <option value="Applied">Applied</option>
-              </select>
-            </div>
+            <p className="inline-flex w-fit items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-semibold text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+              Entry stage: Applied
+            </p>
 
             <div className="space-y-1.5">
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-300">
+              <label htmlFor="fast-track-note" className="block text-xs font-medium text-slate-600 dark:text-slate-300">
                 Note
               </label>
               <textarea
+                id="fast-track-note"
                 rows={2}
                 value={fastTrackNote}
                 onChange={(e) => setFastTrackNote(e.target.value)}
@@ -799,7 +1242,7 @@ export function TalentPoolPage() {
       ) : null}
 
       {/* Edit Position Requirements Modal */}
-      {selectedVacancy ? (
+      {selectedVacancy && !selectedVacancy.redacted ? (
         <EditPositionRequirementsModal
           isOpen={isEditRequirementsOpen}
           onClose={() => setIsEditRequirementsOpen(false)}
@@ -807,7 +1250,7 @@ export function TalentPoolPage() {
           positionTitle={selectedVacancy.title || selectedVacancy.position?.title || 'Position'}
           positionCode={selectedVacancy.vacancyCode}
           initialSkills={selectedVacancy.requiredSkills || []}
-          initialMinExp={selectedVacancy.minExperienceYears ?? 3}
+          initialMinExp={selectedVacancy.minExperienceYears ?? null}
           initialLocation={selectedVacancy.location || ''}
           initialDepartment={selectedVacancy.department || ''}
           initialQualifications={selectedVacancy.qualifications}

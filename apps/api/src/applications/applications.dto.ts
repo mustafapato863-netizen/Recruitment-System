@@ -78,7 +78,17 @@ export class ApplicationQueryDto {
 
   @IsOptional()
   @IsString()
+  @IsOptional()
+  @IsString()
   stage?: ApplicationStage;
+
+  @IsOptional()
+  @IsString()
+  source?: string;
+
+  @IsOptional()
+  @IsString()
+  includeEmail?: string;
 
   @IsOptional()
   @IsUUID()

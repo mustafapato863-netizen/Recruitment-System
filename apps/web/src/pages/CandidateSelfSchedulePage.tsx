@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import type {
   SelfScheduleInvitationView,
@@ -22,7 +22,7 @@ export function CandidateSelfSchedulePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [bookingResult, setBookingResult] = useState<BookSelfScheduleResult | null>(null);
 
-  useEffect(() => {
+  const reloadSlots = useCallback(() => {
     if (!token) {
       setError('No scheduling token provided.');
       setLoading(false);
@@ -31,14 +31,16 @@ export function CandidateSelfSchedulePage() {
 
     setLoading(true);
     setError(null);
+    setSelectedSlot(null);
 
     getApi<SelfScheduleInvitationView>(`/public/interviews/schedule/${token}`)
       .then((data) => {
         setInvitation(data);
-        // Pre-select first date with available slots
         if (data.availableSlots && data.availableSlots.length > 0) {
           const firstDateKey = new Date(data.availableSlots[0].start).toDateString();
           setSelectedDateKey(firstDateKey);
+        } else {
+          setSelectedDateKey('');
         }
       })
       .catch((err: unknown) => {
@@ -54,6 +56,10 @@ export function CandidateSelfSchedulePage() {
         setLoading(false);
       });
   }, [token]);
+
+  useEffect(() => {
+    reloadSlots();
+  }, [reloadSlots]);
 
   // Group available slots by date
   const slotsByDate = useMemo(() => {
@@ -184,17 +190,18 @@ export function CandidateSelfSchedulePage() {
             <h2 className="text-base font-bold text-white">Loading Available Time Slots...</h2>
             <p className="text-xs text-slate-400">Verifying recruiter calendar and checking availability.</p>
           </div>
-        ) : error && !bookingResult ? (
+        ) : error && !invitation && !bookingResult ? (
           <div className="bg-slate-900/70 border border-rose-900/50 rounded-3xl p-8 text-center space-y-4 max-w-md mx-auto shadow-2xl backdrop-blur-sm animate-fade-in">
             <div className="w-12 h-12 bg-rose-500/20 text-rose-400 rounded-2xl flex items-center justify-center mx-auto text-xl">
               ⚠️
             </div>
             <h2 className="text-base font-bold text-white">Unable to Schedule</h2>
             <p className="text-xs text-rose-300/90 leading-relaxed">{error}</p>
-            <div className="pt-2">
+            <div className="pt-2 space-y-3">
               <span className="text-[11px] text-slate-400 block">
                 Please contact the Saudi German Health talent team if you require a new appointment link.
               </span>
+              <button type="button" onClick={reloadSlots}>Try again</button>
             </div>
           </div>
         ) : bookingResult ? (
@@ -253,7 +260,7 @@ export function CandidateSelfSchedulePage() {
                 <span>Add to Calendar (.ics)</span>
               </button>
               <p className="text-[11px] text-slate-400">
-                A calendar invitation email has also been dispatched to your registered address.
+                {bookingResult.message || 'Download the calendar file (.ics) above to save this appointment.'}
               </p>
             </div>
           </div>
@@ -394,8 +401,9 @@ export function CandidateSelfSchedulePage() {
 
               {/* Error message */}
               {error && (
-                <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-xs text-rose-300 font-semibold">
-                  {error}
+                <div className="p-3 bg-rose-500/10 border border-rose-500/30 rounded-xl text-xs text-rose-300 font-semibold space-y-2">
+                  <p>{error}</p>
+                  <button type="button" onClick={reloadSlots}>Refresh available slots</button>
                 </div>
               )}
 

@@ -180,6 +180,7 @@ export class ApplicationsService {
     if (query.candidateId) where.candidateId = query.candidateId;
     if (query.stage) where.stage = query.stage;
     if (query.primaryRecruiterId) where.primaryRecruiterId = query.primaryRecruiterId;
+    if (query.source) where.source = query.source;
 
     if (query.search?.trim()) {
       const term = query.search.trim();
@@ -187,7 +188,11 @@ export class ApplicationsService {
         { applicationCode: { contains: term, mode: 'insensitive' } },
         { candidate: { firstName: { contains: term, mode: 'insensitive' } } },
         { candidate: { lastName: { contains: term, mode: 'insensitive' } } },
-        { candidate: { email: { contains: term, mode: 'insensitive' } } },
+        { candidate: { currentTitle: { contains: term, mode: 'insensitive' } } },
+        { vacancy: { position: { title: { contains: term, mode: 'insensitive' } } } },
+        ...(canViewPii && query.includeEmail !== 'false'
+          ? [{ candidate: { email: { contains: term, mode: 'insensitive' as const } } }]
+          : []),
       ];
       where.AND = [
         ...(Array.isArray(where.AND) ? where.AND : where.AND ? [where.AND] : []),
@@ -258,12 +263,27 @@ export class ApplicationsService {
         }
       }
       // E3: gate state per file, and the card's interview (next upcoming, else the last one).
-      const [gates, interviews] = await Promise.all([
+      const [gates, interviews, offers] = await Promise.all([
         gateStates(this.prisma, items.map((a) => ({ id: a.id, stage: a.stage, rejectionReason: a.rejectionReason }))),
         this.prisma.interview.findMany({
           where: { applicationId: { in: applicationIds }, status: { not: 'Cancelled' } },
           select: { applicationId: true, scheduledStart: true, scheduledEnd: true, roomName: true, locationUrl: true },
           orderBy: { scheduledStart: 'asc' },
+        }),
+        this.prisma.offer.findMany({
+          where: { applicationId: { in: applicationIds }, status: { not: 'Withdrawn' } },
+          orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            applicationId: true,
+            status: true,
+            createdAt: true,
+            versions: {
+              orderBy: { versionNumber: 'desc' },
+              take: 1,
+              select: { status: true, approvals: { select: { status: true } } },
+            },
+          },
         }),
       ]);
       const now = Date.now();
@@ -274,6 +294,10 @@ export class ApplicationsService {
         const pick = next ?? mine[mine.length - 1];
         if (pick) cardInterview.set(id, { when: next ? 'next' : 'last', startAt: pick.scheduledStart.toISOString(), endAt: pick.scheduledEnd.toISOString(), room: { name: pick.roomName, url: pick.locationUrl } });
       }
+      const latestOffer = new Map<string, (typeof offers)[number]>();
+      for (const offer of offers) {
+        if (!latestOffer.has(offer.applicationId)) latestOffer.set(offer.applicationId, offer);
+      }
       for (const item of data) {
         item.gates = gates.get(item.id) ?? [];
         item.interview = cardInterview.get(item.id) ?? null;
@@ -281,6 +305,13 @@ export class ApplicationsService {
         item.lastActivityAt = event?.at.toISOString() ?? item.updatedAt;
         item.lastActivityLabel = event?.label ?? 'Application updated';
         item.nextFollowUpAt = nextFollowUpByCandidate.get(item.candidateId)?.toISOString() ?? null;
+        const offer = latestOffer.get(item.id);
+        const version = offer?.versions[0];
+        item.offerStatus = offer?.status ?? null;
+        item.offerSentBack = Boolean(
+          version?.status === 'Changes Requested'
+          || version?.approvals.some((approval) => approval.status === 'Changes Requested'),
+        );
       }
     }
 
@@ -691,6 +722,21 @@ export class ApplicationsService {
 
       if (changed.count !== 1) return null;
 
+      if (CLOSED_STAGES.includes(dto.stage)) {
+        const taskDelegate = (tx as { task?: PrismaService['task'] }).task;
+        if (typeof taskDelegate?.updateMany === 'function') {
+          await taskDelegate.updateMany({
+            where: {
+              organizationId,
+              entityType: 'Application',
+              entityId: id,
+              type: 'ApplicationFollowUp',
+              status: { in: ['Open', 'In Progress'] },
+            },
+            data: { status: 'Dismissed', updatedAt: new Date() },
+          });
+        }
+      }
       if (dto.stage === 'Joined') {
         const profile = user ? await loadAccessProfile(tx, user) : null;
         const joiningDate = dto.actualJoiningDate ? new Date(dto.actualJoiningDate) : null;

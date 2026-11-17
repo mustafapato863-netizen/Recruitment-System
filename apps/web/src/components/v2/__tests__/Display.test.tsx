@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { ListChecks } from 'lucide-react';
-import { CardV2, EmptyStateV2, ForbiddenStateV2, NavItem, NavList, SkeletonV2, StatusChip, TableCellV2, TableRowV2, TableV2 } from '..';
+import { CardV2, EmptyStateV2, ErrorStateV2, ForbiddenStateV2, NavItem, NavList, SkeletonV2, StatusChip, TableCellV2, TableRowV2, TableV2 } from '..';
 import type { StatusTone } from '..';
 import { axeViolations } from './axe';
 
@@ -119,6 +119,14 @@ describe('TableV2 / TableRowV2', () => {
 });
 
 describe('Page states', () => {
+  it('announces a failed read and offers a working retry', async () => {
+    const retry = vi.fn();
+    const { container } = render(<main><ErrorStateV2 title="Could not load work" body="Please try again." action={<button onClick={retry}>Try again</button>} /></main>);
+    expect(screen.getByRole('alert')).toHaveTextContent('Could not load work');
+    await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(retry).toHaveBeenCalledOnce();
+    expect(await axeViolations(container)).toEqual([]);
+  });
   it('Empty, Forbidden and Skeleton are accessible', async () => {
     const { container } = render(
       <main>

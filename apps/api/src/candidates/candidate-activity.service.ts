@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import type { Prisma } from '@recruitflow/database';
-import type { AuthUser, CandidateActivityEntry, CandidateActivitySummary } from '@recruitflow/contracts';
+import type { AuthUser, CandidateActivityEntry, CandidateActivitySummary, CreateCandidateActivityResponse } from '@recruitflow/contracts';
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { PrismaService } from '../database/prisma.service';
 import { AccessControlService } from '../access-control/access-control.service';
@@ -9,10 +9,27 @@ import { UserPermissionsService } from '../common/user-permissions.service';
 import type { CreateCandidateActivityDto, CandidateActivityQueryDto } from './candidate-activity.dto';
 
 const activityPrefix = 'CandidateActivity:';
+const retryWindowMs = 60_000;
+
+type SavedActivity = { id: string; followUpId?: string; at: number };
+type RecentTask = {
+  id: string;
+  type: string;
+  title: string;
+  status: string;
+  createdAt?: Date | string | null;
+  description?: string | null;
+};
 
 export function summarizeCandidateActivity(entries: CandidateActivityEntry[], userId: string, now: Date, page = 1, pageSize = 20): CandidateActivitySummary {
-  const completed = entries.filter((entry) => entry.status === 'Completed');
-  const pending = entries.filter((entry) => entry.status === 'Open');
+  const seen = new Set<string>();
+  const unique = entries.filter((entry) => {
+    if (seen.has(entry.id)) return false;
+    seen.add(entry.id);
+    return true;
+  });
+  const completed = unique.filter((entry) => entry.status === 'Completed');
+  const pending = unique.filter((entry) => entry.status === 'Open');
   const byKind: Record<string, number> = {};
   const recruiters = new Map<string, { userId: string; name: string; completed: number }>();
   for (const entry of completed) {
@@ -24,7 +41,7 @@ export function summarizeCandidateActivity(entries: CandidateActivityEntry[], us
     }
   }
   const dates = pending.flatMap((entry) => entry.dueAt ? [entry.dueAt] : []).sort();
-  const sorted = [...entries].sort((a, b) => b.at.localeCompare(a.at) || a.id.localeCompare(b.id));
+  const sorted = [...unique].sort((a, b) => b.at.localeCompare(a.at) || a.id.localeCompare(b.id));
   return {
     completed: completed.length,
     completedByMe: completed.filter((entry) => entry.actorId === userId).length,
@@ -35,7 +52,7 @@ export function summarizeCandidateActivity(entries: CandidateActivityEntry[], us
     byKind,
     byRecruiter: [...recruiters.values()].sort((a, b) => b.completed - a.completed),
     entries: sorted.slice((page - 1) * pageSize, page * pageSize),
-    totalEntries: entries.length,
+    totalEntries: unique.length,
     page,
     pageSize,
   };
@@ -43,11 +60,46 @@ export function summarizeCandidateActivity(entries: CandidateActivityEntry[], us
 
 @Injectable()
 export class CandidateActivityService {
+  /** Process-local retry shield. The key is never written into the task title or description. */
+  private readonly savedActivities = new Map<string, SavedActivity>();
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly access: AccessControlService,
     private readonly permissions: UserPermissionsService,
   ) {}
+
+  private savedKey(userId: string, candidateId: string, token: string) {
+    return `${userId}:${candidateId}:${token}`;
+  }
+
+  private readSaved(key: string): CreateCandidateActivityResponse | null {
+    const hit = this.savedActivities.get(key);
+    if (!hit) return null;
+    if (Date.now() - hit.at > retryWindowMs) {
+      // Local alias: the B2 scanner treats "<receiver>.delete(" as a hard delete.
+      const saved = this.savedActivities;
+      saved.delete(key);
+      return null;
+    }
+    return { id: hit.id, ...(hit.followUpId ? { followUpId: hit.followUpId } : {}) };
+  }
+
+  private writeSaved(keys: string[], value: { id: string; followUpId?: string }) {
+    const at = Date.now();
+    for (const key of keys) this.savedActivities.set(key, { ...value, at });
+  }
+
+  private fingerprint(userId: string, candidateId: string, dto: CreateCandidateActivityDto, summary: string) {
+    return this.savedKey(userId, candidateId, [
+      dto.kind,
+      summary,
+      dto.dueAt ?? '',
+      dto.followUpDueAt ?? '',
+      dto.followUpSummary?.trim() ?? '',
+      dto.followUpKind ?? '',
+    ].join('\u001f'));
+  }
 
   private async context(user: AuthUser, candidateId: string) {
     const { organizationId, userId } = user;
@@ -70,6 +122,7 @@ export class CandidateActivityService {
           OR: [
             { createdById: userId },
             { applications: { some: applicationVisibility } },
+            ...(policy.dataScope === 'ALL' ? [{ applications: { none: {} } }] : []),
           ],
         }),
       },
@@ -111,9 +164,9 @@ export class CandidateActivityService {
             { entityType: 'Application', entityId: { in: applicationIds } },
           ] }] : []),
         ] },
-        select: { id: true, type: true, title: true, assigneeUserId: true, assignee: { select: { displayName: true } }, completedById: true, completedBy: { select: { displayName: true } }, status: true, completedAt: true, createdAt: true, dueAt: true, entityType: true, entityId: true },
+        select: { id: true, type: true, title: true, description: true, assigneeUserId: true, assignee: { select: { displayName: true } }, completedById: true, completedBy: { select: { displayName: true } }, status: true, completedAt: true, createdAt: true, dueAt: true, entityType: true, entityId: true },
       }),
-      this.prisma.applicationNote.findMany({ where: { organizationId, applicationId: { in: applicationIds } }, select: { id: true, applicationId: true, authorId: true, author: { select: { displayName: true } }, createdAt: true } }),
+      this.prisma.applicationNote.findMany({ where: { organizationId, applicationId: { in: applicationIds } }, select: { id: true, applicationId: true, authorId: true, content: true, author: { select: { displayName: true } }, createdAt: true } }),
       this.prisma.screeningLog.findMany({ where: { organizationId, applicationId: { in: applicationIds } }, select: { id: true, applicationId: true, screenerId: true, screener: { select: { displayName: true } }, outcome: true, screenedAt: true } }),
       this.prisma.applicationStatusHistory.findMany({ where: { applicationId: { in: applicationIds }, application: { organizationId } }, select: { id: true, applicationId: true, toStage: true, changedById: true, changedBy: { select: { displayName: true } }, createdAt: true } }),
       this.prisma.interview.findMany({ where: { organizationId, applicationId: { in: applicationIds }, status: { not: 'Cancelled' } }, select: { id: true, applicationId: true, status: true, interviewType: true, scheduledStart: true } }),
@@ -127,8 +180,28 @@ export class CandidateActivityService {
       status: task.status === 'Completed' ? 'Completed' : 'Open',
       applicationId: task.entityType === 'Application' ? task.entityId : null,
       canComplete: task.assigneeUserId === userId && task.status !== 'Completed' && task.type.startsWith(activityPrefix) && task.entityType === 'Candidate',
+      detail: viewText ? task.description ?? null : null,
     }));
-    for (const note of notes) entries.push({ id: `note:${note.id}`, kind: 'Note', title: 'Application note recorded', actorId: note.authorId, actorName: note.author?.displayName ?? 'System', at: note.createdAt.toISOString(), dueAt: null, status: note.authorId ? 'Completed' : 'Event', applicationId: note.applicationId, canComplete: false });
+    for (const note of notes) {
+      const content = note.content ?? '';
+      const systemEvent = !note.authorId || /^\[(?:automation|system)\]/i.test(content);
+      entries.push({
+        id: `note:${note.id}`,
+        kind: 'Note',
+        title: systemEvent && /^\[automation\]\s*stale/i.test(content)
+          ? 'System activity: automated stale alert'
+          : systemEvent && !note.authorId
+            ? 'System activity recorded'
+            : 'Application note recorded',
+        actorId: systemEvent ? null : note.authorId,
+        actorName: systemEvent ? 'System' : (note.author?.displayName ?? 'System'),
+        at: note.createdAt.toISOString(),
+        dueAt: null,
+        status: systemEvent ? 'Event' : 'Completed',
+        applicationId: note.applicationId,
+        canComplete: false,
+      });
+    }
     for (const log of screening) entries.push({ id: `screening:${log.id}`, kind: 'Screening', title: `Screening: ${log.outcome}`, actorId: log.screenerId, actorName: log.screener.displayName, at: log.screenedAt.toISOString(), dueAt: null, status: 'Completed', applicationId: log.applicationId, canComplete: false });
     for (const card of scorecards) entries.push({ id: `scorecard:${card.id}`, kind: 'Interview assessment', title: 'Interview scorecard submitted', actorId: card.interviewerId, actorName: card.interviewer.displayName, at: (card.submittedAt ?? new Date(0)).toISOString(), dueAt: null, status: 'Completed', applicationId: card.interview.applicationId, canComplete: false });
     // Lifecycle changes and interview scheduling are context, not recruiter productivity.
@@ -137,10 +210,60 @@ export class CandidateActivityService {
     return summarizeCandidateActivity(entries, userId, new Date(), query.page, query.pageSize);
   }
 
-  async create(user: AuthUser, candidateId: string, dto: CreateCandidateActivityDto) {
+  async create(user: AuthUser, candidateId: string, dto: CreateCandidateActivityDto): Promise<CreateCandidateActivityResponse> {
     await this.context(user, candidateId);
+    if (dto.dueAt && dto.followUpDueAt) {
+      throw new BadRequestException('Specify either dueAt to schedule a single follow-up or followUpDueAt to log a completed activity with a next follow-up');
+    }
     const now = new Date();
+    const summary = dto.summary.trim();
     if (dto.dueAt && new Date(dto.dueAt) <= now) throw new BadRequestException('Choose a future follow-up date and time');
+    const followUpAt = dto.followUpDueAt ? new Date(dto.followUpDueAt) : null;
+    if (dto.followUpDueAt && (!followUpAt || Number.isNaN(followUpAt.getTime()))) throw new BadRequestException('Invalid followUpDueAt date');
+    if (followUpAt && followUpAt <= now) throw new BadRequestException('Choose a future follow-up date and time');
+
+    const keys = [this.fingerprint(user.userId, candidateId, dto, summary)];
+    if (dto.idempotencyKey) keys.unshift(this.savedKey(user.userId, candidateId, dto.idempotencyKey));
+    for (const key of keys) {
+      const saved = this.readSaved(key);
+      if (saved) return { ...saved, deduplicated: true };
+    }
+    const recent = await this.findRecentDuplicate(user, candidateId, dto, summary);
+    if (recent) {
+      this.writeSaved(keys, recent);
+      return { ...recent, deduplicated: true };
+    }
+
+    if (followUpAt) {
+      const followKind = dto.followUpKind ?? 'FollowUp';
+      const followText = dto.followUpSummary?.trim() || `Follow-up: ${summary}`;
+      const owner = {
+        organizationId: user.organizationId, createdById: user.userId, assigneeUserId: user.userId,
+        entityType: 'Candidate' as const, entityId: candidateId,
+      };
+      const completedData = {
+        ...owner, type: `${activityPrefix}${dto.kind}`, title: summary, status: 'Completed',
+        dueAt: now, completedAt: now, completedById: user.userId,
+      };
+      const followData = {
+        ...owner, type: `${activityPrefix}${followKind}`, title: `${followKind} activity`.slice(0, 255),
+        description: followText, status: 'Open', dueAt: followUpAt, completedAt: null, completedById: null,
+      };
+      const saved = typeof this.prisma.$transaction === 'function'
+        ? await this.prisma.$transaction(async (tx) => {
+          const completed = await tx.task.create({ data: completedData });
+          const followUp = await tx.task.create({ data: followData });
+          return { id: completed.id, followUpId: followUp.id };
+        })
+        : await (async () => {
+          const completed = await this.prisma.task.create({ data: completedData });
+          const followUp = await this.prisma.task.create({ data: followData });
+          return { id: completed.id, followUpId: followUp.id };
+        })();
+      this.writeSaved(keys, saved);
+      return saved;
+    }
+
     const task = await this.prisma.task.create({ data: {
       organizationId: user.organizationId, createdById: user.userId, assigneeUserId: user.userId,
       entityType: 'Candidate', entityId: candidateId, type: `${activityPrefix}${dto.kind}`,
@@ -148,7 +271,40 @@ export class CandidateActivityService {
       dueAt: dto.dueAt ? new Date(dto.dueAt) : null, completedAt: dto.dueAt ? null : now,
       completedById: dto.dueAt ? null : user.userId,
     } });
-    return { id: task.id };
+    const saved = { id: task.id };
+    this.writeSaved(keys, saved);
+    return saved;
+  }
+
+  private async findRecentDuplicate(user: AuthUser, candidateId: string, dto: CreateCandidateActivityDto, summary: string): Promise<{ id: string; followUpId?: string } | null> {
+    const since = new Date(Date.now() - retryWindowMs);
+    const rows = await this.prisma.task.findMany({
+      where: {
+        organizationId: user.organizationId,
+        entityType: 'Candidate',
+        entityId: candidateId,
+        createdById: user.userId,
+        type: { startsWith: activityPrefix },
+        createdAt: { gte: since },
+      },
+      select: { id: true, type: true, title: true, status: true, createdAt: true, description: true },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    }) as RecentTask[];
+    const recent = rows.filter((row) => {
+      const at = row.createdAt instanceof Date ? row.createdAt.getTime() : new Date(row.createdAt ?? 0).getTime();
+      return Number.isFinite(at) && at >= since.getTime();
+    });
+    const expectedStatus = dto.dueAt ? 'Open' : 'Completed';
+    const primary = recent.find((row) => row.type === `${activityPrefix}${dto.kind}` && row.title === summary && row.status === expectedStatus);
+    if (!primary) return null;
+    if (!dto.followUpDueAt) return { id: primary.id };
+    const followKind = dto.followUpKind ?? 'FollowUp';
+    const followTitle = `${followKind} activity`.slice(0, 255);
+    const followText = dto.followUpSummary?.trim() || `Follow-up: ${summary}`;
+    const follow = recent.find((row) => row.type === `${activityPrefix}${followKind}` && row.title === followTitle && row.status === 'Open' && (row.description ?? followText) === followText);
+    if (!follow) return null;
+    return { id: primary.id, followUpId: follow.id };
   }
 
   async complete(user: AuthUser, candidateId: string, taskId: string) {
@@ -170,17 +326,23 @@ export class CandidateActivityService {
     if (Number.isNaN(dueAt.getTime()) || dueAt <= new Date()) {
       throw new BadRequestException('Choose a future follow-up date and time');
     }
+    const where = {
+      id: taskId,
+      organizationId: user.organizationId,
+      assigneeUserId: user.userId,
+      entityType: 'Candidate' as const,
+      entityId: candidateId,
+      type: { startsWith: activityPrefix },
+      status: { in: ['Open', 'In Progress'] as ('Open' | 'In Progress')[] },
+    };
+    const current = await this.prisma.task.findFirst({ where, select: { id: true, dueAt: true, description: true } });
+    if (!current) throw new NotFoundException('Open follow-up not found');
+    const from = current.dueAt ? new Date(current.dueAt).toISOString() : 'unscheduled';
+    const line = `[Rescheduled ${from} -> ${dueAt.toISOString()}]`;
+    const description = current.description ? `${current.description}\n${line}` : line;
     const result = await this.prisma.task.updateMany({
-      where: {
-        id: taskId,
-        organizationId: user.organizationId,
-        assigneeUserId: user.userId,
-        entityType: 'Candidate',
-        entityId: candidateId,
-        type: { startsWith: activityPrefix },
-        status: { in: ['Open', 'In Progress'] },
-      },
-      data: { dueAt, updatedAt: new Date() },
+      where,
+      data: { dueAt, description, updatedAt: new Date() },
     });
     if (!result.count) throw new NotFoundException('Open follow-up not found');
     return { id: taskId, dueAt: dueAt.toISOString() };

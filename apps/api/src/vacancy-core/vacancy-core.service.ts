@@ -38,6 +38,7 @@ import {
 // Runtime service imports must remain value imports for Nest DI metadata reflection.
 /* eslint-disable @typescript-eslint/consistent-type-imports */
 import { PrismaService } from '../database/prisma.service';
+import { ownedVacancyWhere } from './job-ownership';
 import { NotificationsService } from '../notifications/notifications.service';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import { exportFailed } from '../common/errors/api-error';
@@ -301,8 +302,8 @@ export class VacancyCoreService {
     let vacancies = (await this.repository.listVacancies(organizationId)).filter((vacancy) => !INACTIVE_JOB_STATUSES.includes(vacancy.status));
     if (options.mine) {
       if (!user) return [];
-      // B3 ?mine=true with B1 ownership: Vacancy.primaryRecruiterId.
-      const owned = await this.prisma.vacancy.findMany({ where: { organizationId, primaryRecruiterId: user.userId }, select: { id: true } });
+      // ?mine=true: primary recruiter or an active PRIMARY assignment. Same predicate as My Work.
+      const owned = await this.prisma.vacancy.findMany({ where: { organizationId, ...ownedVacancyWhere(user.userId) }, select: { id: true } });
       const ownedIds = new Set(owned.map((o) => o.id));
       vacancies = vacancies.filter((v) => ownedIds.has(v.id));
     }
@@ -363,7 +364,7 @@ export class VacancyCoreService {
       });
     }
     if (query.mine === 'true' || query.mine === true) {
-      filters.push({ primaryRecruiterId: user?.userId ?? '00000000-0000-0000-0000-000000000000' });
+      filters.push(user?.userId ? ownedVacancyWhere(user.userId) : { primaryRecruiterId: '00000000-0000-0000-0000-000000000000' });
     }
     const where: Prisma.VacancyWhereInput = { AND: filters };
 
@@ -377,6 +378,7 @@ export class VacancyCoreService {
         include: {
           position: { select: { title: true } },
           branch: { select: { id: true, name: true, code: true } },
+          primaryRecruiter: { select: { id: true, displayName: true } },
           assignments: {
             where: { isActive: true },
             orderBy: { assignedAt: 'asc' },
@@ -403,7 +405,8 @@ export class VacancyCoreService {
         const stage = application.stage as ApplicationStage;
         if (stage in pipelineCounts) pipelineCounts[stage] += 1;
       }
-      const owner = vacancy.assignments[0]?.user ?? null;
+      const primaryAssignment = vacancy.assignments.find((assignment) => assignment.assignmentKind === 'PRIMARY');
+      const owner = vacancy.primaryRecruiter ?? primaryAssignment?.user ?? null;
       const remaining = Math.max(0, vacancy.approvedHeadcount - vacancy.joinedHeadcount);
       const newApplicants = pipelineCounts.Applied;
       const isTargetPast = Boolean(
@@ -444,8 +447,8 @@ export class VacancyCoreService {
         health,
         lastActivity: { at: lastActivityAt.toISOString(), label: latestApplication && latestApplication > vacancy.updatedAt ? 'Applicant activity' : 'Job updated' },
         nextAction,
-        // B3/E3: the requisition's due date (plain YYYY-MM-DD) and department.
-        dueDate: vacancy.vacancyRequest?.targetFillDate ? vacancy.vacancyRequest.targetFillDate.toISOString().slice(0, 10) : null,
+        // The requisition fill date, else the job's target start (plain YYYY-MM-DD), and department.
+        dueDate: (vacancy.vacancyRequest?.targetFillDate ?? vacancy.targetStartDate)?.toISOString().slice(0, 10) ?? null,
         department: vacancy.department ?? null,
         holdUntil: vacancy.holdUntil ? vacancy.holdUntil.toISOString().slice(0, 10) : null,
       };

@@ -37,3 +37,11 @@ tests/artifacts/*
 
 # Access exports contain user PII; never commit them
 /exports/
+
+# Local transcripts, artifacts, screenshots, and local scratch notes
+artifacts/
+202610*
+/*.png
+.scratch/
+apps/web/.scratch/
+

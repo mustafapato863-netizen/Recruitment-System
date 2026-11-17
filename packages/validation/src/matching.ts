@@ -529,6 +529,71 @@ function extractEvidenceContext(candidate: CandidateMatchProfile): ExtractedEvid
   };
 }
 
+const NEGATION_CUE = /\b(?:no|not|never|without|lack|lacks|lacking|none|zero)\b/iu;
+
+/** Text immediately before a match, staying inside the clause and within 40 characters. */
+function clauseBefore(text: string, matchIndex: number): string {
+  const windowStart = Math.max(0, matchIndex - 40);
+  let start = windowStart;
+  for (let i = matchIndex - 1; i >= windowStart; i -= 1) {
+    const ch = text.charAt(i);
+    if (ch === '.' || ch === ';' || ch === '\n' || ch === '!' || ch === '?') {
+      start = i + 1;
+      break;
+    }
+  }
+  const slice = text.slice(start, matchIndex);
+  const contrast = /\b(?:but|however)\b/giu;
+  let cut = 0;
+  for (const mark of slice.matchAll(contrast)) {
+    cut = (mark.index ?? 0) + mark[0].length;
+  }
+  return slice.slice(cut);
+}
+
+function keywordBody(keyword: string): string {
+  return keyword
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => escapeRegex(part).replace(/\\-/g, '[-\\s]'))
+    .join('\\s+');
+}
+
+/** True when the keyword occurs and every occurrence in this text is clause-negated. */
+export function isNegatedSkillMention(text: string, keyword: string): boolean {
+  const body = keywordBody(keyword);
+  if (!text || !body) return false;
+  const re = new RegExp(`(?:^|[^\\p{L}\\p{N}])(?:${body})(?=$|[^\\p{L}\\p{N}])`, 'giu');
+  let seen = false;
+  for (const match of text.matchAll(re)) {
+    seen = true;
+    const at = match.index ?? 0;
+    const keywordAt = /[\p{L}\p{N}]/u.test(text.charAt(at)) ? at : at + 1;
+    if (!NEGATION_CUE.test(clauseBefore(text, keywordAt))) return false;
+  }
+  return seen;
+}
+
+function hasPositivePattern(text: string, pattern: RegExp): boolean {
+  const flags = pattern.flags.includes('g') ? pattern.flags : `${pattern.flags}g`;
+  const re = new RegExp(pattern.source, flags.includes('u') ? flags : `${flags}u`);
+  for (const match of text.matchAll(re)) {
+    if (!NEGATION_CUE.test(clauseBefore(text, match.index ?? 0))) return true;
+  }
+  return false;
+}
+
+function mentionsPositiveKeyword(text: string, keyword: string): boolean {
+  const normKw = normalizeText(keyword);
+  if (!text || !normKw) return false;
+  const norm = normalizeText(text);
+  const present = normKw.length <= 3
+    ? new RegExp(`(?:^|\\s)${escapeRegex(normKw)}(?:$|\\s)`).test(norm)
+    : norm.includes(normKw);
+  return present && !isNegatedSkillMention(text, keyword);
+}
+
 /**
  * Extracts relevant clean evidence sentences/snippets from candidate text
  */
@@ -551,14 +616,7 @@ function extractRelevantEvidence(
 
   const matchedSnippets: string[] = [];
   for (const snippet of sources) {
-    const norm = normalizeText(snippet);
-    const hasMatch = keywords.some((kw) => {
-      const normKw = normalizeText(kw);
-      if (normKw.length <= 3) {
-        return new RegExp(`(?:^|\\s)${escapeRegex(normKw)}(?:$|\\s)`).test(norm);
-      }
-      return norm.includes(normKw);
-    });
+    const hasMatch = keywords.some((kw) => mentionsPositiveKeyword(snippet, kw));
 
     if (hasMatch && !matchedSnippets.includes(snippet)) {
       matchedSnippets.push(snippet);
@@ -578,7 +636,7 @@ export function evaluateSkillEvidence(
 ): SkillEvidenceItem {
   const normReq = normalizeText(reqSkill);
   const ctx = extractEvidenceContext(candidate);
-  const { candSkills, rawText, normFullText, workResponsibilities, educationItems } = ctx;
+  const { candSkills, rawText, workResponsibilities, educationItems } = ctx;
 
   const importance: RequirementImportance =
     category === 'hard_gate'
@@ -616,9 +674,9 @@ export function evaluateSkillEvidence(
     // Check skills list
     const foundInSkills = candSkills.find((cs) => conceptRegex.test(cs));
     // Check responsibilities / work history
-    const foundInResponsibilities = workResponsibilities.filter((r) => conceptRegex.test(r));
+    const foundInResponsibilities = workResponsibilities.filter((r) => hasPositivePattern(r, conceptRegex));
     // Check raw text
-    const foundInText = conceptRegex.test(rawText);
+    const foundInText = hasPositivePattern(rawText, conceptRegex);
 
     if (foundInResponsibilities.length > 0) {
       return {
@@ -776,21 +834,13 @@ export function evaluateSkillEvidence(
       automationTools.some((at) => areSkillsEquivalent(cs, at) || normalizeText(cs).includes(at)),
     );
 
-    const autoResponsibilities = workResponsibilities.filter((r) => {
-      const normR = normalizeText(r);
-      return (
-        normR.includes('power automate') ||
-        normR.includes('power apps') ||
-        normR.includes('dataverse') ||
-        normR.includes('power platform') ||
-        normR.includes('zapier') ||
-        normR.includes('uipath')
-      );
-    });
+    const autoResponsibilities = workResponsibilities.filter((r) =>
+      ['power automate', 'power apps', 'dataverse', 'power platform', 'zapier', 'uipath'].some((tool) => mentionsPositiveKeyword(r, tool)),
+    );
 
     const hasPowerBiOnly =
       candSkills.some((cs) => normalizeText(cs) === 'power bi' || normalizeText(cs).includes('power bi')) ||
-      normFullText.includes('power bi');
+      mentionsPositiveKeyword(rawText, 'power bi');
 
     if (autoResponsibilities.length > 0 || foundAutoTools.length > 0) {
       const evidence: string[] = [];
@@ -892,12 +942,7 @@ export function evaluateSkillEvidence(
       const foundInSkills = candSkills.filter((cs) =>
         dim.keywords.some((kw) => areSkillsEquivalent(cs, kw)),
       );
-      const foundInText = dim.keywords.filter((kw) => {
-        const normKw = normalizeText(kw);
-        return normKw.length <= 3
-          ? new RegExp(`(?:^|\\s)${escapeRegex(normKw)}(?:$|\\s)`).test(normFullText)
-          : normFullText.includes(normKw);
-      });
+      const foundInText = dim.keywords.filter((kw) => mentionsPositiveKeyword(rawText, kw));
 
       const uniqueFound = Array.from(new Set([...foundInSkills, ...foundInText]));
       if (uniqueFound.length > 0) {
@@ -917,7 +962,7 @@ export function evaluateSkillEvidence(
       const hasOnlyRelated = effectiveRule.relatedOnlyKeywords.some(
         (kw) =>
           candSkills.some((cs) => areSkillsEquivalent(cs, kw)) ||
-          normFullText.includes(normalizeText(kw)),
+          mentionsPositiveKeyword(rawText, kw),
       );
       if (hasOnlyRelated && matchedDimensions.length === 0 && respEvidence.length === 0) {
         return {
@@ -1037,7 +1082,18 @@ export function evaluateSkillEvidence(
       candidate.summary || undefined,
       reqWords,
       3,
-    );
+    ).filter((row) => {
+      const mentioned = reqWords.filter((word) => {
+        const normWord = normalizeText(word);
+        if (!normWord) return false;
+        const norm = normalizeText(row.snippet);
+        return normWord.length <= 3
+          ? new RegExp(`(?:^|\\s)${escapeRegex(normWord)}(?:$|\\s)`).test(norm)
+          : norm.includes(normWord);
+      });
+      if (mentioned.length === 0) return true;
+      return mentioned.some((word) => !isNegatedSkillMention(row.snippet, word));
+    });
 
     if (ranked.length > 0) {
       const { classification } = computeEvidenceStrength(ranked, reqWords.length);
@@ -1249,6 +1305,23 @@ export function calculateCandidateFitScore(
   let requiredPercentage = 100;
   let preferredPercentage: number | undefined;
 
+  // Resolve non-skill requirements before the empty-skills baseline so a job
+  // with nothing to evaluate cannot inherit a non-zero score.
+  const actualExp = Math.max(0, candidate.experienceYears ?? 0);
+  const requiredExp = Math.max(0, requirements.minExperienceYears ?? 0);
+
+  let reqCerts = (requirements.requiredCertifications || []).filter(Boolean) as string[];
+  if (reqCerts.length === 0 && requirements.qualifications) {
+    reqCerts = extractCertificationsFromText(requirements.qualifications);
+  }
+
+  const candLoc = (candidate.location || '').trim();
+  const reqLoc = (requirements.location || '').trim();
+  const candSkills = (candidate.skills || []).filter(Boolean);
+  const noSkillRequirements = requiredItems.length === 0 && preferredItems.length === 0;
+  const noPositionRequirements =
+    noSkillRequirements && requiredExp === 0 && reqCerts.length === 0 && !reqLoc;
+
   if (requiredItems.length > 0) {
     const requiredScoreSum = requiredItems.reduce((acc, curr) => acc + curr.score, 0);
     requiredPercentage = Math.round((requiredScoreSum / requiredItems.length) * 100);
@@ -1267,22 +1340,24 @@ export function calculateCandidateFitScore(
   } else if (preferredItems.length > 0) {
     const preferredScoreSum = preferredItems.reduce((acc, curr) => acc + curr.score, 0);
     skillsPercentage = Math.round((preferredScoreSum / preferredItems.length) * 100);
+  } else if (candSkills.length === 0 || noPositionRequirements) {
+    skillsPercentage = 0;
+    requiredPercentage = 0;
   } else {
-    // If no skills explicitly required, give 100% if candidate has skills, else 85% baseline
-    const candSkills = (candidate.skills || []).filter(Boolean);
-    skillsPercentage = candSkills.length > 0 ? 100 : 85;
+    // Other requirements exist and the candidate listed skills, but none were required.
+    skillsPercentage = 100;
   }
 
   const weightedScoreSkills = Math.round(skillsPercentage * WEIGHT_SKILLS);
 
   // 2. Experience Matching (25%)
-  const actualExp = Math.max(0, candidate.experienceYears ?? 0);
-  const requiredExp = Math.max(0, requirements.minExperienceYears ?? 0);
-
   let expPercentage = 100;
   let expMet = true;
 
-  if (requiredExp > 0) {
+  if (noPositionRequirements) {
+    expPercentage = 0;
+    expMet = false;
+  } else if (requiredExp > 0) {
     if (actualExp >= requiredExp) {
       expPercentage = 100;
       expMet = true;
@@ -1297,11 +1372,6 @@ export function calculateCandidateFitScore(
   const weightedScoreExp = Math.round(expPercentage * WEIGHT_EXP);
 
   // 3. Certifications / Licenses Matching (25%)
-  let reqCerts = (requirements.requiredCertifications || []).filter(Boolean) as string[];
-  if (reqCerts.length === 0 && requirements.qualifications) {
-    reqCerts = extractCertificationsFromText(requirements.qualifications);
-  }
-
   const candCerts = (candidate.certifications || []).filter(Boolean) as string[];
   let matchedCerts: string[] = [];
   let missingCerts: string[] = [];
@@ -1309,7 +1379,11 @@ export function calculateCandidateFitScore(
   let certMet: boolean;
   let certificationEvidenceStatus: CertificationEvidenceStatus;
 
-  if (reqCerts.length > 0) {
+  if (noPositionRequirements) {
+    certPercentage = 0;
+    certMet = false;
+    certificationEvidenceStatus = 'not_applicable';
+  } else if (reqCerts.length > 0) {
     matchedCerts = reqCerts.filter((rc) =>
       candCerts.some((cc) => areSkillsEquivalent(cc, rc)),
     );
@@ -1325,13 +1399,13 @@ export function calculateCandidateFitScore(
   const weightedScoreCerts = Math.round(certPercentage * WEIGHT_CERTS);
 
   // 4. Location Matching (10%)
-  const candLoc = (candidate.location || '').trim();
-  const reqLoc = (requirements.location || '').trim();
-
   let locPercentage = 100;
   let locMet = true;
 
-  if (reqLoc && !['remote', 'any', 'all branches'].includes(reqLoc.toLowerCase())) {
+  if (noPositionRequirements) {
+    locPercentage = 0;
+    locMet = false;
+  } else if (reqLoc && !['remote', 'any', 'all branches'].includes(reqLoc.toLowerCase())) {
     if (!candLoc) {
       locPercentage = 50; // Unknown candidate location -> neutral relocation assumption
       locMet = false;
@@ -1346,13 +1420,14 @@ export function calculateCandidateFitScore(
   const weightedScoreLoc = Math.round(locPercentage * WEIGHT_LOC);
 
   // Overall Score Calculation (Clamped 0 - 100)
-  const totalScore = Math.min(
+  let totalScore = Math.min(
     100,
     Math.max(
       0,
       weightedScoreSkills + weightedScoreExp + weightedScoreCerts + weightedScoreLoc,
     ),
   );
+  if (noPositionRequirements) totalScore = 0;
 
   let matchLevel: MatchLevel = 'low';
   if (totalScore >= 80) {
@@ -1363,7 +1438,9 @@ export function calculateCandidateFitScore(
 
   // Generate dynamic summary
   let summaryText: string;
-  if (matchLevel === 'high') {
+  if (noPositionRequirements) {
+    summaryText = 'No job requirements configured to evaluate fit.';
+  } else if (matchLevel === 'high') {
     summaryText = `Strong candidate match (${totalScore}%). Exceeds or meets primary skill and qualification benchmarks.`;
   } else if (matchLevel === 'moderate') {
     summaryText = `Good potential match (${totalScore}%). Meets core competencies with minor experience or certification gap.`;

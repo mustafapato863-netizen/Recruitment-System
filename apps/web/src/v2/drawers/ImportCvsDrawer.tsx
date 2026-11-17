@@ -1,11 +1,14 @@
 import { useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { usePageReturn, withReturnTo } from '../returnTarget';
+import { ApiError } from '../../api/client';
 import { CircleCheck, CircleX, FileText, Link2, TriangleAlert, Upload } from 'lucide-react';
 import { ButtonV2, DrawerV2, StatusChip } from '../../components/v2';
-import { FIELD_LABEL, candidateExistsDetails, cvFileProblem, duplicateCheck, existingPerson, importRow, parseCv, splitName, type DuplicateCheckResult, type ExtractedCv, type ExistingPerson, type ImportDecision, type LinkResult } from '../api/cvImport';
+import { FIELD_LABEL, candidateExistsDetails, cvFileProblem, duplicateCheck, existingPerson, importRow, parseCv, readStoredImportProgress, splitName, type DuplicateCheckResult, type ExtractedCv, type ExistingPerson, type ImportDecision, type LinkResult, type PartialImportProgress } from '../api/cvImport';
 import { errorMessage, jobTitle, type JobDetail } from '../api/jobs';
 
 type RowStatus = 'parsing' | 'ready' | 'unreadable' | 'invalid' | 'importing' | 'done' | 'failed';
-interface Row { key: string; file: File; status: RowStatus; cv?: ExtractedCv; dup?: DuplicateCheckResult | null; decision?: ImportDecision; problem?: string; link?: LinkResult; existing?: ExistingPerson; onJob?: { applicationId: string | null } }
+interface Row { key: string; file: File; status: RowStatus; cv?: ExtractedCv; dup?: DuplicateCheckResult | null; decision?: ImportDecision; problem?: string; link?: LinkResult; existing?: ExistingPerson; onJob?: { applicationId: string | null }; partial?: PartialImportProgress }
 
 const MATCH_LABEL = { email: 'same email', phone: 'same phone' } as const;
 
@@ -17,6 +20,23 @@ export function ImportCvsDrawer({ job, onClose, onDone, onImported }: { job: Job
   const input = useRef<HTMLInputElement>(null);
   const patch = (key: string, p: Partial<Row>) => setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...p } : r)));
 
+  const readRow = async (key: string, file: File) => {
+    try {
+      const cv = await parseCv(file);
+      const named = Boolean(cv.firstName || cv.lastName || cv.email || cv.phone);
+      if (!named && !cv.rawText?.trim()) { patch(key, { status: 'unreadable', problem: 'No readable text. Re-scan it or add it as a single CV.' }); return; }
+      let dup: DuplicateCheckResult | null = null;
+      if (cv.email || cv.phone) dup = await duplicateCheck({ ...(cv.email ? { email: cv.email } : {}), ...(cv.phone ? { phone: cv.phone } : {}) });
+      const stored = readStoredImportProgress(job.id, file);
+      const decision: ImportDecision = stored?.candidateId ? { kind: 'link', candidateId: stored.candidateId } : dup?.matches[0] ? { kind: 'link', candidateId: dup.matches[0].candidateId } : { kind: 'create' };
+      patch(key, { status: 'ready', cv, dup, decision, ...(stored ? { partial: stored } : {}), problem: undefined });
+
+    } catch (e) {
+      const unreadable = e instanceof ApiError && e.code === 'FILE_INVALID';
+      patch(key, { status: unreadable ? 'unreadable' : 'failed', problem: errorMessage(e, 'CV processing failed. Please retry.') });
+    }
+  };
+
   const add = (files: FileList | null) => {
     if (!files?.length) return;
     setSummary(null);
@@ -25,20 +45,19 @@ export function ImportCvsDrawer({ job, onClose, onDone, onImported }: { job: Job
     for (const row of fresh) {
       const problem = cvFileProblem(row.file);
       if (problem) { patch(row.key, { status: 'invalid', problem }); continue; }
-      void (async () => {
-        try {
-          const cv = await parseCv(row.file);
-          const named = Boolean(cv.firstName || cv.lastName || cv.email || cv.phone);
-          if (!named && !cv.rawText?.trim()) { patch(row.key, { status: 'unreadable', problem: 'No readable text. Re-scan it or add it as a single CV.' }); return; }
-          let dup: DuplicateCheckResult | null = null;
-          if (cv.email || cv.phone) dup = await duplicateCheck({ ...(cv.email ? { email: cv.email } : {}), ...(cv.phone ? { phone: cv.phone } : {}) });
-          const decision: ImportDecision = dup?.matches[0] ? { kind: 'link', candidateId: dup.matches[0].candidateId } : { kind: 'create' };
-          patch(row.key, { status: 'ready', cv, dup, decision });
-        } catch (e) {
-          patch(row.key, { status: 'unreadable', problem: errorMessage(e, 'The CV could not be read.') });
-        }
-      })();
+      void readRow(row.key, row.file);
     }
+  };
+
+  const retryRow = (key: string) => {
+    const row = rows.find((item) => item.key === key);
+    if (!row) return;
+    if (row.status === 'unreadable' || (row.status === 'failed' && !row.cv)) {
+      patch(key, { status: 'parsing', problem: undefined });
+      void readRow(key, row.file);
+      return;
+    }
+    if (row.status === 'failed' && row.cv) patch(key, { status: 'ready', problem: undefined });
   };
 
   const ready = rows.filter((r) => r.status === 'ready');
@@ -49,12 +68,22 @@ export function ImportCvsDrawer({ job, onClose, onDone, onImported }: { job: Job
     for (const r of ready) {
       patch(r.key, { status: 'importing' });
       try {
-        const res = await importRow(job.id, r.file, r.cv ?? {}, r.decision ?? { kind: 'create' });
-        if (res.alreadyOnJob) { already += 1; patch(r.key, { status: 'done', link: res.link, onJob: { applicationId: res.applicationId } }); continue; }
+        const res = await importRow(job.id, r.file, r.cv ?? {}, r.decision ?? { kind: 'create' }, r.partial);
+        if (res.alreadyOnJob) { already += 1; patch(r.key, { status: 'done', link: res.link, onJob: { applicationId: res.applicationId }, partial: undefined, problem: undefined }); continue; }
         ok += 1; if (r.decision?.kind === 'link') linked += 1;
         if (res.link?.conflicts.length) conflicted += 1;
-        patch(r.key, { status: 'done', link: res.link });
+        patch(r.key, { status: 'done', link: res.link, onJob: undefined, partial: undefined, problem: undefined });
       } catch (e) {
+        const partial = (e as { partialImport?: PartialImportProgress } | null)?.partialImport;
+        if (partial?.candidateId) {
+          failed += 1;
+          patch(r.key, partial.documentId
+            ? { status: 'failed', decision: { kind: 'link', candidateId: partial.candidateId }, partial, ...(partial.applicationId ? { onJob: { applicationId: partial.applicationId } } : {}), problem: `Added to Applied and CV attached, but profile enrichment failed: ${errorMessage(e, 'Profile fill failed.')} Retry to complete enrichment or open the file.` }
+            : partial.applicationId
+            ? { status: 'failed', decision: { kind: 'link', candidateId: partial.candidateId }, partial, onJob: { applicationId: partial.applicationId }, problem: `Added to Applied, but CV upload failed: ${errorMessage(e, 'Upload failed.')} Retry to attach the CV or open the file.` }
+            : { status: 'failed', decision: { kind: 'link', candidateId: partial.candidateId }, partial, problem: errorMessage(e, 'Import failed.') });
+          continue;
+        }
         // #23 CANDIDATE_EXISTS: someone with this email/phone is already in the bank. Offer to link that person (never copy).
         const found = await existingPerson(e, { email: r.cv?.email, phone: r.cv?.phone });
         if (found !== undefined) {
@@ -94,7 +123,7 @@ export function ImportCvsDrawer({ job, onClose, onDone, onImported }: { job: Job
         </div>
         {rows.length ? (
           <ul className="rf2-imports" aria-label="CVs">
-            {rows.map((r) => <ImportRow key={r.key} row={r} onDecide={(d) => patch(r.key, { decision: d })} />)}
+            {rows.map((r) => <ImportRow key={r.key} row={r} onDecide={(d) => patch(r.key, { decision: d })} onRetry={() => retryRow(r.key)} />)}
           </ul>
         ) : null}
         {summary ? <p className="rf2-inline-note" role="status">{summary}</p> : null}
@@ -103,7 +132,8 @@ export function ImportCvsDrawer({ job, onClose, onDone, onImported }: { job: Job
   );
 }
 
-function ImportRow({ row, onDecide }: { row: Row; onDecide: (d: ImportDecision) => void }) {
+function ImportRow({ row, onDecide, onRetry }: { row: Row; onDecide: (d: ImportDecision) => void; onRetry: () => void }) {
+  const pageReturn = usePageReturn();
   const chip = {
     parsing: <StatusChip tone="neutral" label="Reading…" />,
     ready: row.dup?.isDuplicate ? <StatusChip tone="warning" label="Duplicate" /> : <StatusChip tone="success" label="Parsed" />,
@@ -119,6 +149,12 @@ function ImportRow({ row, onDecide }: { row: Row; onDecide: (d: ImportDecision) 
     <li className="rf2-imports__row" aria-busy={row.status === 'parsing' || row.status === 'importing' || undefined}>
       <div className="rf2-row-between"><span className="rf2-imports__file"><FileText aria-hidden="true" /> {row.file.name}</span>{chip}</div>
       {row.problem ? <p className="rf2-imports__problem" role={row.status === 'failed' ? 'alert' : undefined}><CircleX aria-hidden="true" /> {row.problem}</p> : null}
+      {row.status === 'failed' || row.status === 'unreadable' ? (
+        <p className="rf2-imports__actions">
+          <ButtonV2 kind="secondary" size="sm" onClick={onRetry}>Retry</ButtonV2>
+          {row.status === 'failed' && row.partial?.applicationId ? <> <Link className="rf2-link" to={withReturnTo(`/applications/${encodeURIComponent(row.partial.applicationId)}`, pageReturn)}>Open the file</Link></> : null}
+        </p>
+      ) : null}
       {row.status === 'ready' && row.cv ? (
         <dl className="rf2-imports__parsed">
           <div><dt>Name</dt><dd>{name ? `${name.firstName} ${name.lastName}` : '—'}</dd></div>
@@ -132,7 +168,7 @@ function ImportRow({ row, onDecide }: { row: Row; onDecide: (d: ImportDecision) 
         <p className="rf2-inline-note" data-tone="warning"><TriangleAlert aria-hidden="true" /> No email or phone in this CV, so it can’t be checked for duplicates. It will be added as a new person.</p>
       ) : null}
       {row.status === 'ready' && row.existing ? (
-        <p className="rf2-inline-note" data-tone="warning" role="alert" data-testid="candidate-exists"><Link2 aria-hidden="true" /> Already in the bank{row.existing.name ? ` as ${row.existing.name}` : ''}{row.existing.candidateCode ? ` (${row.existing.candidateCode})` : ''}. Import again to link this CV to <a className="rf2-link" href={`/candidates/${encodeURIComponent(row.existing.candidateId)}`} target="_blank" rel="noreferrer">the existing person</a>.</p>
+        <p className="rf2-inline-note" data-tone="warning" role="alert" data-testid="candidate-exists"><Link2 aria-hidden="true" /> Already in the bank{row.existing.name ? ` as ${row.existing.name}` : ''}{row.existing.candidateCode ? ` (${row.existing.candidateCode})` : ''}. Import again to link this CV to <Link className="rf2-link" to={withReturnTo(`/candidates/${encodeURIComponent(row.existing.candidateId)}`, pageReturn)}>the existing person</Link>.</p>
       ) : null}
       {row.status === 'ready' && row.dup?.isDuplicate ? (
         <fieldset className="rf2-dup">
@@ -149,7 +185,7 @@ function ImportRow({ row, onDecide }: { row: Row; onDecide: (d: ImportDecision) 
       ) : null}
       {row.status === 'done' && row.onJob ? (
         <p className="rf2-inline-note" data-tone="warning" role="note" data-testid="application-exists"><Link2 aria-hidden="true" /> Already on this job.{' '}
-          {row.onJob.applicationId ? <a className="rf2-link" href={`/applications/${encodeURIComponent(row.onJob.applicationId)}`}>Open the existing file</a> : 'Find the existing file on the board.'}</p>
+          {row.onJob.applicationId ? <Link className="rf2-link" to={withReturnTo(`/applications/${encodeURIComponent(row.onJob.applicationId)}`, pageReturn)}>Open the existing file</Link> : 'Find the existing file on the board.'}</p>
       ) : null}
       {row.status === 'done' && !row.onJob ? <p className="rf2-jtable__sub"><CircleCheck aria-hidden="true" /> Added to Applied.{row.link?.filled.length ? ` Filled from the CV: ${row.link.filled.map((f) => FIELD_LABEL[f] ?? f).join(', ')}.` : ''}</p> : null}
       {row.status === 'done' && row.link?.conflicts.length ? (

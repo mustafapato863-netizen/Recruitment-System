@@ -1,20 +1,16 @@
-import { useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from './AuthContext';
-import { useTheme } from '../theme/ThemeContext';
 import { getFieldError, getErrorFields } from '../api/errors';
 import { Icon } from '../components/Icon';
 import { Alert } from '../components/ui/Alert';
 import { Button } from '../components/ui/Button';
 import { FormField } from '../components/ui/FormField';
 import { Input } from '../components/ui/Input';
-import { AtmosphericBackground } from '../components/ui/AtmosphericBackground';
 import { BorderGlow } from '../components/ui/BorderGlow';
 import { ThemeToggle } from '../components/ui/ThemeToggle';
 import { SghAnimatedLogo } from '../design-system/brand/sgh-animated-logo';
 import { SghLogo } from '../design-system/brand/sgh-logo';
-import { SghAnimatedLoader } from '../design-system/brand/sgh-animated-loader';
-import { ThinkingDots } from '../design-system/backgrounds/thinking-dots';
 
 type LoginField = 'email' | 'password';
 type LoginFieldErrors = Partial<Record<LoginField, string>>;
@@ -81,15 +77,25 @@ export function LoginPage() {
   const [error, setError] = useState('');
   const [fieldErrors, setFieldErrors] = useState<LoginFieldErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [selectedPersonaEmail, setSelectedPersonaEmail] = useState('');
 
   const { login } = useAuth();
-  const { theme } = useTheme();
-  const isDark = theme === 'dark';
   const navigate = useNavigate();
   const location = useLocation();
   const redirectPath = (location.state as { from?: string } | null)?.from;
+
+  useEffect(() => {
+    const prefetchSignedInShell = () => {
+      void import('../layout/V2Shell');
+      void import('../v2/pages/MyWorkRoute');
+    };
+    if (typeof window.requestIdleCallback === 'function') {
+      const idleId = window.requestIdleCallback(prefetchSignedInShell, { timeout: 1200 });
+      return () => window.cancelIdleCallback(idleId);
+    }
+    const timerId = window.setTimeout(prefetchSignedInShell, 200);
+    return () => window.clearTimeout(timerId);
+  }, []);
 
   const emailInputRef = useRef<HTMLInputElement>(null);
   const passwordInputRef = useRef<HTMLInputElement>(null);
@@ -146,21 +152,15 @@ export function LoginPage() {
     if (!validateForm()) return;
 
     setIsSubmitting(true);
-    setIsAuthenticating(true);
 
     try {
-      await Promise.all([
-        login({
-          email: email.trim(),
-          password,
-        }),
-        new Promise((resolve) => setTimeout(resolve, 2000)),
-      ]);
+      await login({
+        email: email.trim(),
+        password,
+      });
 
       navigate(redirectPath || '/', { replace: true });
     } catch (err) {
-      setIsAuthenticating(false);
-
       const serverFields = getErrorFields(err);
       if (serverFields && Object.keys(serverFields).length > 0) {
         const serverFieldErrors: LoginFieldErrors = {};
@@ -184,21 +184,25 @@ export function LoginPage() {
   };
 
   return (
-    <>
-      {isAuthenticating && (
-        <SghAnimatedLoader
-          fullScreen
-          durationMs={2000}
-          textSequence="Saudi German Health"
-          subtitle="Authenticating & Loading Recruitment Workspace..."
-          isDark={isDark}
-        />
-      )}
-        <main className="relative isolate min-h-screen overflow-hidden bg-rf-canvas">
-        <AtmosphericBackground className="z-0" variant="auth" />
-        <div className="pointer-events-none absolute inset-0 z-0 opacity-40">
-          <ThinkingDots dotSize={1.4} spacing={32} speed={0.0015} isDark={isDark} />
+    <main className="relative isolate min-h-screen overflow-hidden bg-rf-canvas">
+      {isSubmitting && (
+        <div
+          className="fixed inset-0 flex items-center justify-center p-4"
+          style={{ zIndex: 100, background: 'color-mix(in srgb, var(--color-canvas) 92%, transparent)' }}
+          role="status"
+          aria-live="polite"
+          aria-label="Signing in"
+        >
+          <div
+            className="flex w-full max-w-sm flex-col items-center gap-2 rounded-3xl border border-rf-border-subtle px-8 py-8 text-center shadow-[var(--shadow-float)]"
+            style={{ background: 'var(--color-surface)' }}
+          >
+            <SghAnimatedLogo size={72} showText={false} animated={false} />
+            <p className="m-0 font-rf-heading text-xl font-extrabold text-rf-ink">Saudi German Health</p>
+            <p className="m-0 text-sm font-medium text-rf-ink-muted">Signing in</p>
+          </div>
         </div>
+      )}
 
       <ThemeToggle
         className="fixed right-4 top-4 z-30 sm:right-6 sm:top-6"
@@ -206,27 +210,17 @@ export function LoginPage() {
       />
 
       <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-[1180px] items-center px-4 py-5 sm:px-6 lg:px-8">
-        <BorderGlow 
-          animated 
+        <BorderGlow
           borderRadius={16}
-          className="mx-auto w-full max-w-[1180px] rounded-2xl border border-rf-border-subtle shadow-[var(--shadow-float)] backdrop-blur-xl lg:min-h-[640px]"
+          className="mx-auto w-full max-w-[1180px] rounded-2xl border border-rf-border-subtle shadow-[var(--shadow-float)] lg:min-h-[640px]"
           backgroundColor="var(--color-surface)"
         >
           <section className="flex-1 grid h-full w-full overflow-hidden rounded-2xl lg:grid-cols-[1.05fr_0.95fr]">
             {/* Brand / product story */}
             <div className="relative hidden overflow-hidden border-r border-rf-border-subtle bg-rf-action-soft/45 p-8 lg:flex lg:flex-col lg:justify-between xl:p-10 h-full">
-              <div
-                className="pointer-events-none absolute -left-24 -top-24 h-80 w-80 rounded-full bg-rf-info/10 blur-3xl"
-                aria-hidden="true"
-              />
-              <div
-                className="pointer-events-none absolute -bottom-32 -right-24 h-96 w-96 rounded-full bg-rf-action/10 blur-3xl"
-                aria-hidden="true"
-              />
-
               <div className="relative">
                 <div className="flex items-center gap-3.5">
-                  <SghAnimatedLogo size={52} showText={false} />
+                  <SghAnimatedLogo size={52} showText={false} animated={false} />
                   <div className="h-9 w-px bg-rf-border-subtle" aria-hidden="true" />
                   <div>
                     <p className="m-0 font-rf-heading text-[16px] font-extrabold tracking-[-0.02em] text-rf-ink">
@@ -311,7 +305,7 @@ export function LoginPage() {
                 <header className="mb-6">
                   <div className="mb-3.5 inline-flex items-center gap-2 rounded-full border border-rf-action/20 bg-rf-action-soft px-3 py-1 text-[10.5px] font-bold text-rf-action shadow-2xs">
                     <span
-                      className="h-2 w-2 rounded-full bg-rf-success shadow-[0_0_0_3px_rgba(0,168,89,0.2)] animate-pulse"
+                      className="h-2 w-2 rounded-full bg-rf-success"
                       aria-hidden="true"
                     />
                     <span>Saudi German Health • Secure Workspace</span>
@@ -441,7 +435,7 @@ export function LoginPage() {
                   </div>
 
                   <Button
-                    className="sgh-btn-gradient mt-1 h-12 w-full rounded-xl text-[13px] font-bold shadow-[0_4px_16px_rgba(0,163,224,0.28)] transition hover:shadow-[0_8px_24px_rgba(0,163,224,0.38)] hover:-translate-y-px"
+                    className="sgh-btn-gradient mt-1 h-12 w-full rounded-xl text-[13px] font-bold"
                     type="submit"
                     variant="primary"
                     size="lg"
@@ -541,7 +535,6 @@ export function LoginPage() {
           </section>
         </BorderGlow>
       </div>
-      </main>
-    </>
+    </main>
   );
 }

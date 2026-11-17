@@ -62,8 +62,8 @@ describe('nav per seat', () => {
 
   it.each([
     ['employee', ['My Work', 'Open jobs', 'Candidates', 'Match Skills', 'Interviews', 'Reports']],
-    ['manager', ['Team work', 'Requisitions', 'Team result']],
-    ['admin', ['Users', 'Roles', 'Pipeline template', 'Master data', 'Templates', 'Reports', 'Audit', 'Integrations']],
+    ['manager', ['Team work', 'Requisitions', 'Approvals', 'Interviews', 'Team result']],
+    ['admin', ['Users', 'Roles', 'Pipeline template', 'Master data', 'WhatsApp templates', 'Reports', 'Audit', 'Integrations']],
   ] as const)('%s lists its seat destinations', (seat, labels) => {
     const profile = user(ALL, [seat === 'manager' ? 'HIRING_MANAGER' : seat === 'admin' ? 'ADMINISTRATOR' : 'RECRUITER']);
     renderShell(seat, profile);
@@ -109,7 +109,7 @@ describe('nav per seat', () => {
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Users');
     const nav = screen.getByRole('navigation', { name: SEAT_NAV.admin.heading });
     expect(within(nav).getByRole('link', { name: 'Roles' })).toHaveAttribute('href', '/roles');
-    expect(within(nav).getByRole('link', { name: 'Templates' })).toHaveAttribute('href', '/email-templates');
+    expect(within(nav).getByRole('link', { name: 'WhatsApp templates' })).toHaveAttribute('href', '/whatsapp-templates');
     expect(within(nav).queryByRole('link', { name: 'Hiring cases' })).toBeNull();
     expect(within(nav).queryByRole('link', { name: 'Joinings' })).toBeNull();
     expect(within(nav).queryByRole('link', { name: 'Licences' })).toBeNull();
@@ -177,14 +177,15 @@ describe('nav per seat', () => {
     renderShell('admin', user(['APPLICATION_VIEW'], ['CUSTOM_ADMIN']), '/reports');
     const nav = screen.getByRole('navigation', { name: SEAT_NAV.admin.heading });
     expect(screen.queryByRole('button', { name: 'More (classic)' })).not.toBeInTheDocument();
-    expect(within(nav).getByRole('link', { name: 'Templates' })).toHaveAttribute('href', '/email-templates');
+    expect(within(nav).getByRole('link', { name: 'WhatsApp templates' })).toHaveAttribute('href', '/whatsapp-templates');
     expect(within(nav).queryByRole('link', { name: 'Roles' })).not.toBeInTheDocument();
     expect(within(nav).queryByRole('link', { name: 'Hiring cases' })).not.toBeInTheDocument();
   });
 
-  it('manager has no Approvals item (v2: not a destination)', () => {
-    expect(permittedNavItems('manager', ['VACANCY_REQUEST_VIEW', 'APPLICATION_VIEW', 'APPROVE_OFFERS', 'VACANCY_REQUEST_APPROVE']).map((i) => i.key)).toEqual(['team-work', 'requisitions', 'team-result']);
-    expect(SEAT_NAV.manager.items.some((i) => /approval/i.test(i.label))).toBe(false);
+  it('manager Approvals is a destination, and Interviews needs vacancy view', () => {
+    expect(permittedNavItems('manager', ['VACANCY_REQUEST_VIEW', 'APPLICATION_VIEW', 'APPROVE_OFFERS', 'VACANCY_REQUEST_APPROVE']).map((i) => i.key)).toEqual(['team-work', 'requisitions', 'approvals', 'team-result']);
+    expect(SEAT_NAV.manager.items.some((i) => i.label === 'Approvals')).toBe(true);
+    expect(permittedNavItems('manager', ['VACANCY_VIEW', 'VACANCY_REQUEST_VIEW', 'APPLICATION_VIEW'], false, false, false).map((i) => i.label)).toContain('Interviews');
   });
 
   it('retired classic pages stay out of the sidebar', () => {
@@ -229,6 +230,11 @@ describe('nav per seat', () => {
     const items = SEAT_NAV.admin.items;
     expect(activeNavKey(items, '/users', '')).toBe('users');
     expect(activeNavKey(items, '/roles', '')).toBe('roles');
+  });
+
+  it.each(['employee', 'manager', 'admin'] as const)('gives every item in %s a distinct icon', (seat) => {
+    const icons = SEAT_NAV[seat].items.map((item) => item.icon);
+    expect(new Set(icons).size).toBe(icons.length);
   });
 });
 

@@ -18,7 +18,7 @@ export const SEAT_DESTINATIONS: Record<Seat, string[]> = {
   employee: ['/offers/:id', '/my-work', '/my-result', '/interviews', '/reports', '/vacancies', '/vacancies/:id', '/candidates', '/candidates/compare', '/applications/:id', '/sourcing-match'],
   // '/interviews/:id' stays for the Manager's own scorecard (Team work → Waiting on you → Submit scorecard).
   // v2 default: '/vacancy-requests' is the list only (the drawers carry ?req= / ?req=new); detail and create URLs redirect.
-  manager: ['/offers/:id', '/my-work', '/vacancy-requests', '/reports', '/applications/:id'],
+  manager: ['/offers/:id', '/my-work', '/vacancy-requests', '/approvals', '/team-interviews', '/reports', '/applications/:id', '/vacancies/:id'],
   admin: ['/users', '/roles', '/pipeline-settings', '/master-data', '/email-templates', '/whatsapp-templates', '/reports', '/audit-log', '/integrations'],
 };
 
@@ -81,13 +81,15 @@ const ROUTE_GATES: Array<[RegExp, Gate]> = [
   [/^\/import\/vacancy-requests\/[^/]+\/?$/, { all: ['VACANCY_REQUEST_VIEW'] }],
   [/^\/import\/(?:branches|positions|departments|skills|candidate-sources|interview-types)\/[^/]+\/?$/, { all: ['MASTER_DATA_VIEW'] }],
   [/^\/import\/?$/, { any: ['CANDIDATE_VIEW', 'VACANCY_REQUEST_VIEW', 'MASTER_DATA_VIEW', 'CANDIDATE_CREATE', 'VACANCY_REQUEST_CREATE', 'MASTER_DATA_MANAGE'] }],
-  [/^\/(my-interviews|vacancies|interviews|classic\/vacancies)(\/|$)/, { all: ['VACANCY_VIEW'] }],
+  [/^\/(my-interviews|team-interviews|vacancies|interviews|classic\/vacancies)(\/|$)/, { all: ['VACANCY_VIEW'] }],
   [/^\/notifications\/?$/, { all: ['NOTIFICATION_VIEW'] }],
   [/^\/vacancy-requests(\/|$)/, { all: ['VACANCY_REQUEST_VIEW'] }],
-  [/^\/(users|roles|access-control)\/?$/, { all: ['USERS_VIEW'] }],
+  [/^\/(users|access-control)\/?$/, { all: ['USERS_VIEW'] }],
+  [/^\/roles\/?$/, { all: ['ROLES_VIEW'] }],
   [/^\/(master-data|integrations|classic\/master-data)\/?$/, { all: ['MASTER_DATA_VIEW'] }],
   [/^\/audit-log\/?$/, { all: ['AUDIT_VIEW'] }],
-  [/^\/(pipeline-settings|classic\/pipeline-settings)\/?$/, { all: ['OVERRIDE_WORKFLOW'] }],
+  [/^\/pipeline-settings\/?$/, { all: ['MASTER_DATA_VIEW'] }],
+  [/^\/classic\/pipeline-settings\/?$/, { all: ['OVERRIDE_WORKFLOW'] }],
   [/^\/(email|whatsapp)-templates\/?$/, { any: ['MASTER_DATA_MANAGE', 'MASTER_DATA_VIEW'] }],
   [/^\/settings\/targets\/?$/, { any: ['VACANCY_REQUEST_APPROVE', 'USERS_MANAGE', 'VACANCY_MANAGE', 'VACANCY_ASSIGN', 'VACANCY_REASSIGN', 'MASTER_DATA_VIEW'] }],
   [/^\/settings\/?$/, { any: ['USERS_VIEW', 'MASTER_DATA_VIEW', 'OVERRIDE_WORKFLOW', 'AUDIT_VIEW'] }],
@@ -208,17 +210,28 @@ const MY_INTERVIEWS = /^\/my-interviews\/?$/;
  * goes to /my-interviews instead.
  */
 const INTERVIEWER_ONLY_OK = ['/my-work', '/my-interviews', ...COMMON];
+// Temporary, permission-gated bridge for import landing and supported dataset batch review routes.
+const IMPORT_BRIDGE = /^\/import(?:\/(?:candidates|vacancy-requests|branches|positions|departments|skills|candidate-sources|interview-types)\/[^/]+)?\/?$/;
 const PERSON_BRIDGE = /^\/(?:candidates\/(?!compare\/?$)[^/]+(?:\/documents)?|cv-bank)\/?$/;
 const RECORD_TARGET = /^\/(?:applications|offers|hires|candidates)\/(?!compare(?:\/|$))[^/?#]+$/;
 export function isInterviewerOnly(user: { permissions?: readonly string[] } | null | undefined, interviewer: boolean): boolean {
   return interviewer && !(user?.permissions ?? []).includes('APPLICATION_VIEW');
 }
+function resolveSeatHome(seat: Seat, opts: { home?: string | null; permissions?: readonly string[]; isAdministrator?: boolean }): string {
+  const base = opts.home ?? SEAT_HOME[seat];
+  if (seat === 'admin' && opts.permissions && !opts.isAdministrator && !canOpenRoute(base, opts.permissions, false)) {
+    const firstPermitted = SEAT_DESTINATIONS.admin.find((p) => p !== '/email-templates' && canOpenRoute(p, opts.permissions, false));
+    if (firstPermitted) return firstPermitted;
+  }
+  return base;
+}
+
 export function v2Redirect(seat: Seat, pathname: string, opts: { requisitions?: boolean; interviews?: boolean; interviewerOnly?: boolean; home?: string | null; permissions?: readonly string[]; isAdministrator?: boolean } = {}): string | null {
   // Stay on /applications/:id. A redirect that only adds ?drawer= keeps the same pathname, and the
   // shell would render Navigate instead of the file on every pass. The licence file opens that drawer.
   const [beforeHash] = pathname.split('#');
   const [cleanPath, query = ''] = beforeHash.split('?');
-  const home = opts.home ?? SEAT_HOME[seat];
+  const home = resolveSeatHome(seat, opts);
   try {
     if (query) decodeURIComponent(query);
   } catch {
@@ -227,7 +240,12 @@ export function v2Redirect(seat: Seat, pathname: string, opts: { requisitions?: 
   if (isInvalidImportQuery(cleanPath, query)) return home;
   const rawReturn = query ? new URLSearchParams(query).get('returnTo') : null;
   const validatedReturn = rawReturn ? allowedReturn(rawReturn, { seat, ...opts }) : null;
-  let to = v2RedirectByPath(seat, cleanPath, opts);
+  let to = v2RedirectByPath(seat, cleanPath, { ...opts, home });
+  if (seat === 'admin' && /^\/reporting-tree\/?$/.test(cleanPath) && query) {
+    const params = new URLSearchParams(query);
+    const focus = (params.get('focus') ?? '').trim();
+    to = focus && /^[A-Za-z0-9_-]+$/.test(focus) ? `/users?drawer=tree&focus=${encodeURIComponent(focus)}` : '/users?drawer=tree';
+  }
   if (to && validatedReturn) {
     const toPath = to.split('?')[0];
     if (RECORD_TARGET.test(toPath)) {
@@ -239,7 +257,7 @@ export function v2Redirect(seat: Seat, pathname: string, opts: { requisitions?: 
   // A URL, or a redirect target, the route gate refuses goes home instead of the v1 Access Restricted page.
   if (!opts.permissions && !opts.isAdministrator) return samePath(pathname, to) ? null : to;
   const target = to ?? beforeHash;
-  if (target !== home && !canOpenRoute(target, opts.permissions, opts.isAdministrator)) return validatedReturn ?? home;
+  if (!canOpenRoute(target, opts.permissions, opts.isAdministrator)) return validatedReturn ?? home;
   // A same-path result only adds a query. The shell would replace the page with Navigate and the file would never mount.
   return samePath(pathname, to) ? null : to;
 }
@@ -290,6 +308,7 @@ function v2RedirectByPath(seat: Seat, pathname: string, opts: { requisitions?: b
   }
   if (opts.interviewerOnly && seat !== 'admin') return INTERVIEWER_ONLY_OK.some((p) => matches(p, pathname)) ? null : '/my-interviews';
   if (UNSUPPORTED_IMPORT_BATCH_ROUTE.test(pathname)) return opts.home ?? SEAT_HOME[seat];
+  if (seat === 'employee' && IMPORT_BRIDGE.test(pathname)) { try { decodeURIComponent(pathname); return null; } catch { return opts.home ?? SEAT_HOME[seat]; } }
   // B2F-3: an interviewer (any non-admin seat) reads the CV and submits their scorecard on /my-interviews, inside the v2 shell.
   // The Manager seat always may: its own scorecards (Team work → Waiting on you) open there.
   if (MY_INTERVIEWS.test(pathname) && seat !== 'admin') return opts.interviews === false && seat !== 'manager' ? SEAT_HOME[seat] : null;
@@ -345,6 +364,9 @@ export function authorizedLanding(actor: RoutePolicy): string {
   if ((actor.permissions || actor.isAdministrator) && !canOpenRoute(preferred, actor.permissions, actor.isAdministrator)) {
     const seatHome = SEAT_HOME[actor.seat];
     if (seatHome !== preferred && canOpenRoute(seatHome, actor.permissions, actor.isAdministrator)) return seatHome;
+    if (actor.seat === 'admin') {
+      return resolveSeatHome('admin', actor);
+    }
   }
   return preferred;
 }

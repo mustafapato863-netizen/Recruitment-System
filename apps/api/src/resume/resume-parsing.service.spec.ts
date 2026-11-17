@@ -93,7 +93,7 @@ describe('ResumeParsingService', () => {
     expect(result.summary).toContain('Cardiovascular Medicine');
   });
 
-  it('propagates errors when Affinda parsing fails', async () => {
+  it('returns a retryable service error when Affinda fails and no local extractor is available', async () => {
     const mockAffindaParser: Partial<AffindaResumeParser> = {
       parse: vi.fn().mockRejectedValue(new Error('Affinda API authentication failed')),
     };
@@ -114,9 +114,10 @@ describe('ResumeParsingService', () => {
       size: 500,
     };
 
-    await expect(service.parseResume(mockFile)).rejects.toThrow(
-      'Affinda API authentication failed',
-    );
+    await expect(service.parseResume(mockFile)).rejects.toMatchObject({
+      response: expect.objectContaining({ code: 'INTEGRATION_UNAVAILABLE', retryable: true }),
+      status: 503,
+    });
   });
 
   describe('Feature Flag: ENABLE_DOCUMENT_EXTRACTOR', () => {
@@ -228,6 +229,7 @@ describe('ResumeParsingService', () => {
       size: 1024,
     };
     const mockSource = {
+      fileName: 'Tariq_Hassan_CV.pdf',
       binaryChecksum: 'mock-checksum',
       getNormalizedDocument: vi.fn().mockResolvedValue({ rawText: 'Extracted text' }),
     };
