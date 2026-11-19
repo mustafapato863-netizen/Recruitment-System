@@ -72,8 +72,8 @@ export function LicenseManagementV2() {
       .then(([rawUsers, rolloutRes]) => {
         if (!alive) return;
         const userList = Array.isArray(rawUsers) ? rawUsers : [];
-        const mappedUsers: UserSeatRow[] = userList.map((u: any) => {
-          const roles = Array.isArray(u.roles) ? u.roles.map((r: any) => (typeof r === 'string' ? r : r.code || r.name)) : [];
+        const mappedUsers: UserSeatRow[] = userList.map((u: UserSeatRow) => {
+          const roles = Array.isArray(u.roles) ? u.roles.map((role) => String(role)) : [];
           const hasReports = Boolean(u.directReportCount || u.hasDirectReports);
           let seat: Seat = 'employee';
           if (roles.includes('ADMINISTRATOR') || roles.includes('ADMIN')) seat = 'admin';
