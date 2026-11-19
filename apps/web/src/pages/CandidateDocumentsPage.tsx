@@ -191,7 +191,7 @@ export function CandidateDocumentsPage() {
   return (
     <main className="rf2-docs">
       <nav aria-label="Candidate breadcrumbs" className="rf2-docs__crumbs">
-        <Link to={backHref}>Candidates</Link><span aria-hidden="true">/</span>
+        <Link to={backHref}>Back to candidates</Link><span aria-hidden="true">/</span>
         <Link to={profileHref}>Back to profile</Link><span aria-hidden="true">/</span>
         <span>Documents</span>
       </nav>
