@@ -15,7 +15,13 @@ describe('JdParserService', () => {
     expect(parser.parseJdText(text3).minExperienceYears).toBe(4);
 
     const text4 = 'Fresh graduate entry-level position with no experience required.';
-    expect(parser.parseJdText(text4).minExperienceYears).toBe(3); // Default baseline
+    expect(parser.parseJdText(text4).minExperienceYears).toBe(0); // Explicit entry-level role
+  });
+
+  it('leaves unspecified experience unknown instead of inventing a hiring gate', () => {
+    const result = parser.parseJdText('Registered Nurse: BLS and patient care; training available.');
+    expect(result.minExperienceYears).toBeNull();
+    expect(result.knockoutRules.some((rule) => rule.field === 'experienceYears')).toBe(false);
   });
 
   it('extracts must-have vs nice-to-have skills based on section headings', () => {

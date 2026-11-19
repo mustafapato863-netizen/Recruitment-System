@@ -99,6 +99,7 @@ export class JdParserService {
   }
 
   private extractExperienceYears(text: string): number | null {
+    if (/\b(?:no|zero)\s+(?:prior\s+)?(?:work\s+)?experience\s+required\b/i.test(text)) return 0;
     const expRegexes = [
       /(?:minimum|at least|req(?:uired)?)\s*(\d+)\+?\s*(?:to\s*\d+)?\s*years?(?:\s+of)?\s+experience/i,
       /(\d+)\+?\s*(?:to\s*\d+)?\s*years?(?:\s+of)?\s+(?:relevant\s+)?experience/i,
@@ -114,7 +115,8 @@ export class JdParserService {
         }
       }
     }
-    return 3; // Default reasonable baseline if not detected
+    // Missing requirements are unknown, never an invented three-year hiring gate.
+    return null;
   }
 
   private extractSkills(text: string, lines: string[], existingSkills: string[]) {

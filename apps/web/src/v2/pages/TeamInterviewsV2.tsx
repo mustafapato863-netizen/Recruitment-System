@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { CalendarDays, CircleAlert, CircleCheck, Info, RotateCw, Users } from 'lucide-react';
+import { CalendarDays, CircleAlert, CircleCheck, Download, Info, RotateCw, Users } from 'lucide-react';
 import { ButtonV2, EmptyStateV2, ForbiddenStateV2, SkeletonV2, StatusChip } from '../../components/v2';
 import { getApi } from '../../api/client';
-import { listMyInterviews, type MyInterview } from '../../api/myInterviews';
+import { downloadErrorMessage, downloadIcs, listMyInterviews, type MyInterview } from '../../api/myInterviews';
 import './jobs.css';
 import './team.css';
 
@@ -66,10 +66,30 @@ function fromTeam(raw: Record<string, unknown>, mineIds: Set<string>): Row | nul
 }
 
 function InterviewLinks({ row }: { row: Row }) {
+  const [downloading, setDownloading] = useState(false);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+
+  const exportCalendar = async () => {
+    setDownloading(true);
+    setDownloadError(null);
+    try {
+      // Reuse the V1 server-authorized ICS download: no new candidate data or permissions.
+      await downloadIcs(row.id);
+    } catch (error) {
+      setDownloadError(downloadErrorMessage(error, 'calendar file'));
+    } finally {
+      setDownloading(false);
+    }
+  };
+
   return (
     <>
       {row.mine ? <Link className="rf2-btn rf2-btn--secondary rf2-btn--sm" to={`/my-interviews?interview=${encodeURIComponent(row.id)}&scorecard=1`}>Open my scorecard</Link> : null}
       {row.applicationId ? <Link className="rf2-btn rf2-btn--secondary rf2-btn--sm" to={`/applications/${encodeURIComponent(row.applicationId)}`}>Open file</Link> : null}
+      <ButtonV2 kind="secondary" size="sm" icon={<Download aria-hidden="true" />} disabled={downloading} onClick={() => void exportCalendar()}>
+        {downloading ? 'Downloading…' : 'Download calendar'}
+      </ButtonV2>
+      {downloadError ? <span role="alert">{downloadError}</span> : null}
     </>
   );
 }
