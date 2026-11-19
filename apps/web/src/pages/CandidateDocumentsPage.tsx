@@ -206,29 +206,27 @@ export function CandidateDocumentsPage() {
           <header className="rf2-docs__head">
             <div>
               <p className="rf2-docs__eyebrow">Candidate profile / Document vault</p>
-              <h1>Documents · {candidate.data.firstName} {candidate.data.lastName}</h1>
+              <h1>Document Vault — {candidate.data.firstName} {candidate.data.lastName}</h1>
               <p className="rf2-docs__sub">{[candidate.data.candidateCode, candidate.data.currentTitle].filter(Boolean).join(' · ') || 'Uploaded candidate documents and verification status'}</p>
             </div>
             <div className="rf2-docs__tools">
               <ButtonV2 kind="secondary" icon={<RefreshCw />} onClick={refresh}>Refresh</ButtonV2>
-              {canEdit ? <ButtonV2 icon={<FilePlus2 />} onClick={() => setShowUpload(true)}>Add document</ButtonV2> : null}
+              {canEdit ? <ButtonV2 icon={<FilePlus2 />} onClick={() => setShowUpload(true)}>Add document record</ButtonV2> : null}
             </div>
           </header>
           {notice ? <p className="rf2-docs__notice" data-tone={notice.tone} role="status">{notice.message}</p> : null}
           {actionError ? <p className="rf2-docs__notice" data-tone="danger" role="alert">{actionError}</p> : null}
-          {documents.kind === 'ready' ? (
-            <div className="rf2-docs__summary" aria-label="Document counts">
-              <CardV2><span>Total documents</span><strong>{loaded.length}</strong></CardV2>
-              <CardV2><span>Stored and scan-clean</span><strong>{scanned}</strong></CardV2>
-              <CardV2><span>Scan pending</span><strong>{pending}</strong></CardV2>
-            </div>
-          ) : null}
+          <div className="rf2-docs__summary" aria-label="Document counts">
+            <article><CardV2><span>Total Documents</span><strong>{documents.kind === 'ready' ? loaded.length : '—'}</strong></CardV2></article>
+            <article><CardV2><span>Verified Files</span><strong>{documents.kind === 'ready' ? scanned : '—'}</strong></CardV2></article>
+            <article><CardV2><span>Pending Review</span><strong>{documents.kind === 'ready' ? pending : '—'}</strong></CardV2></article>
+          </div>
           <CardV2 title="Candidate documents">
             {documents.kind === 'loading' ? <SkeletonV2 lines={5} label="Loading document records" /> : null}
             {documents.kind === 'error' ? (
               documents.forbidden
                 ? <ForbiddenStateV2 title="Documents access restricted" body={documents.message} />
-                : <ErrorStateV2 title="Documents unavailable" body={documents.message} action={<ButtonV2 kind="secondary" onClick={refresh}>Retry</ButtonV2>} />
+                : <ErrorStateV2 title="Document list unavailable" body={documents.message} action={<ButtonV2 kind="secondary" onClick={refresh}>Retry</ButtonV2>} />
             ) : null}
             {documents.kind === 'ready' && loaded.length === 0 ? (
               <EmptyStateV2 title="No document records" body="Upload a real document file to attach it to this candidate."
@@ -265,13 +263,13 @@ export function CandidateDocumentsPage() {
       ) : null}
 
       <Modal isOpen={showUpload && canEdit && candidate.kind === 'ready'} onClose={closeUpload}
-        title="Upload candidate document" maxWidthClass="max-w-lg">
+        title="Add Document Record" maxWidthClass="max-w-lg">
         <form onSubmit={(e) => void upload(e)} className="rf2-docs__form">
           <p>Upload an actual file. Its size, scan status and filename are determined by the stored document, not manually entered values.</p>
           {uploadError ? <p className="rf2-docs__notice" data-tone="danger" role="alert">{uploadError}</p> : null}
           <label htmlFor="rf2-document-file">Document file <span aria-hidden="true">*</span></label>
           <input id="rf2-document-file" type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            required onChange={(event) => { setSelectedFile(event.target.files?.[0] ?? null); setUploadError(''); }} />
+            aria-required="true" onChange={(event) => { setSelectedFile(event.target.files?.[0] ?? null); setUploadError(''); }} />
           <small>PDF, DOC or DOCX · Maximum 10 MB</small>
           {selectedFile ? <p className="rf2-docs__selected"><UploadCloud aria-hidden="true" /> {selectedFile.name} ({formatSize(selectedFile.size)})</p> : null}
           <label htmlFor="rf2-document-type">Document type</label>
