@@ -1,0 +1,263 @@
+/*
+ * RecruitFlow V2 — unified workspace UX.
+ *
+ * This is intentionally a signed-in-only, theme-token-driven enhancement to
+ * native V2 and retained legacy screens. It does NOT change backend workflows,
+ * authorization, navigation destinations or public candidate pages.
+ */
+[data-ui='v2'] .rf2-shell__content {
+  min-width: 0;
+  background: var(--rf2-canvas);
+  color: var(--rf2-ink);
+  overflow-wrap: anywhere;
+}
+
+[data-ui='v2'] .rf2-shell__content :is(
+  .rf2-jobs, .rf2-team, .rf2-cand, .rf2-ms, .rf-page, .rf2-cvb
+) {
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* A consistent, restrained hierarchy for both full V2 and retained pages. */
+[data-ui='v2'] .rf2-shell__content :is(
+  .rf2-jobs__title, .rf2-team__title, .rf2-cvb__title, .rf-page-title
+) {
+  color: var(--rf2-ink);
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+
+[data-ui='v2'] .rf2-shell__content :is(
+  .rf2-team__intro, .rf2-cand__subtitle, .rf2-jobs__sub, .rf2-cvb__subtitle
+) {
+  max-width: 78ch;
+  color: var(--rf2-muted);
+  line-height: 1.55;
+}
+
+/* Surface rhythm: white/off-white, clear boundaries, no glass or heavy shadow. */
+[data-ui='v2'] .rf2-shell__content :is(
+  .rf2-panel, .rf2-card, .rf2-jobhead, .rf2-team__kpis > li,
+  .rf2-team__summary-cards > li, .rf2-cand__intake-banner
+) {
+  background: var(--rf2-card);
+  border: 1px solid var(--rf2-divider);
+  border-radius: var(--rf2-radius-card);
+  box-shadow: none;
+}
+
+[data-ui='v2'] .rf2-shell__content :is(
+  .rf2-jobs__filters, .rf2-team__toolbar
+) {
+  border-color: var(--rf2-divider);
+  border-radius: var(--rf2-radius-card);
+}
+
+/* Compact data tables with readable row separation and safe horizontal scroll. */
+[data-ui='v2'] .rf2-shell__content :is(
+  .rf2-jscroll, .rf-table-shell, .rf2-cvb__table-wrap
+) {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+[data-ui='v2'] .rf2-shell__content .rf2-jtable {
+  border-collapse: separate;
+  border-spacing: 0;
+  min-width: 600px;
+  width: 100%;
+}
+
+[data-ui='v2'] .rf2-shell__content .rf2-jtable :is(th, td) {
+  border-bottom: 1px solid var(--rf2-divider);
+}
+
+[data-ui='v2'] .rf2-shell__content .rf2-jtable thead th {
+  color: var(--rf2-ink-2);
+  background: var(--rf2-neutral-tint);
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+[data-ui='v2'] .rf2-shell__content .rf2-jtable tbody tr:last-child td {
+  border-bottom: 0;
+}
+[data-ui='v2'] .rf2-shell__content .rf2-jtable tbody tr:focus-within {
+  background: var(--rf2-info-tint);
+}
+[data-ui='v2'] .rf2-shell__content .rf2-jtable :is(th, td):first-child {
+  padding-inline-start: var(--rf2-space-2);
+}
+[data-ui='v2'] .rf2-shell__content .rf2-jtable :is(th, td):last-child {
+  padding-inline-end: var(--rf2-space-2);
+}
+
+/* Current-filter state is equally visible for tabs and pressed button groups. */
+[data-ui='v2'] .rf2-shell__content .rf2-tab:is(
+  [aria-selected='true'], [aria-pressed='true']
+) {
+  color: var(--rf2-action);
+  background: var(--rf2-info-tint);
+  font-weight: 650;
+}
+[data-ui='v2'] .rf2-shell__content .rf2-tab[aria-pressed='true'] .rf2-tab__count {
+  background: var(--rf2-card);
+  color: var(--rf2-action);
+}
+
+/* Compact controls remain fully usable with a mouse, keyboard or touch. */
+[data-ui='v2'] .rf2-shell__content :is(
+  input, select, textarea, button, [role='button'], a
+) {
+  max-width: 100%;
+}
+[data-ui='v2'] .rf2-shell__content :is(input, select, textarea) {
+  color: var(--rf2-ink);
+}
+[data-ui='v2'] .rf2-shell__content :is(input, select, textarea)::placeholder {
+  color: var(--rf2-muted);
+  opacity: 1;
+}
+[data-ui='v2'] .rf2-shell__content :is(button, a)[aria-disabled='true'] {
+  cursor: not-allowed;
+  opacity: .65;
+}
+[data-ui='v2'] .rf2-shell__content :is(button, input, select, textarea):disabled {
+  cursor: not-allowed;
+}
+
+/*
+ * Existing V2 primitive rules suppress outlines on multiple controls.
+ * This last-loaded rule restores a visible focus indicator throughout every
+ * signed-in view without styling plain mouse clicks.
+ */
+[data-ui='v2'] :is(
+  a[href], button:not(:disabled), input:not(:disabled),
+  select:not(:disabled), textarea:not(:disabled), summary,
+  [role='button']:not([aria-disabled='true']),
+  [role='tab']:not([aria-disabled='true']), [tabindex='0']
+):focus-visible {
+  outline: 2px solid var(--rf2-focus-color) !important;
+  outline-offset: 2px;
+}
+[data-ui='v2'] :is(
+  .rf2-field__box, .rf2-select__trigger
+):focus-within {
+  border-color: var(--rf2-action);
+  box-shadow: var(--rf2-focus-ring);
+}
+[data-ui='v2'] .rf2-skip-link:focus-visible {
+  position: fixed;
+  top: var(--rf2-space-1);
+  left: var(--rf2-space-1);
+  z-index: 4000;
+  padding: var(--rf2-space-1) var(--rf2-space-2);
+  border: 1px solid var(--rf2-action);
+  background: var(--rf2-card);
+}
+
+/* Consistent feedback for saved/error/empty states on retained pages too. */
+[data-ui='v2'] .rf2-shell__content [role='alert']:not(.rf2-chip) {
+  max-width: 100%;
+}
+[data-ui='v2'] .rf2-shell__content :is(
+  .rf2-state, .rf2-empty, .rf2-error
+) {
+  min-width: 0;
+  border-radius: var(--rf2-radius-card);
+}
+
+/* CV intake: one clear brand action, subdued explanatory panel. */
+[data-ui='v2'] .rf2-cand__intake-icon,
+[data-ui='v2'] .rf2-cand__step-num {
+  color: var(--rf2-action);
+  background: var(--rf2-info-tint);
+}
+[data-ui='v2'] .rf2-cand__intake-right {
+  background: var(--rf2-neutral-tint);
+  border: 1px solid var(--rf2-divider);
+}
+[data-ui='v2'] .rf2-cand__next-icon {
+  color: var(--rf2-action);
+}
+
+/* Retained candidate, hiring, import, document and admin pages share a width. */
+[data-ui='v2'] .rf2-shell__content > :is(.page, .rf-page, .rf2-cvb) {
+  box-sizing: border-box;
+  width: min(100%, 1480px);
+  margin-inline: auto;
+  padding-inline: clamp(12px, 2.4vw, 32px);
+}
+[data-ui='v2'] .rf2-shell__content :is(
+  .rf-page, .rf2-cvb
+) :is(table, img, video, iframe) {
+  max-width: 100%;
+}
+
+/* Guard against panels, toolbars and chips clipping core actions. */
+[data-ui='v2'] .rf2-shell__content :is(
+  .rf2-team__bar, .rf2-jobhead__top, .rf2-jobhead__actions,
+  .rf2-cand__top-bar, .rf2-cvb__actions, .rf2-row-between
+) {
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+/* Touch layout does not rely on 36px-only buttons or giant desktop tables. */
+@media (pointer: coarse) {
+  [data-ui='v2'] .rf2-shell__content :is(button, .rf2-btn, [role='tab']) {
+    min-height: 44px;
+  }
+}
+@media (max-width: 1023px) {
+  [data-ui='v2'] .rf2-shell__content :is(.rf2-jobs, .rf2-team) {
+    padding: var(--rf2-space-2);
+  }
+  [data-ui='v2'] .rf2-shell__content :is(
+    .rf2-team__kpis, .rf2-team__summary-cards
+  ) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 640px) {
+  [data-ui='v2'] .rf2-shell__content :is(.rf2-jobs, .rf2-team) {
+    padding: var(--rf2-space-1-5);
+  }
+  [data-ui='v2'] .rf2-shell__content :is(
+    .rf2-team__kpis, .rf2-team__summary-cards
+  ) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  [data-ui='v2'] .rf2-shell__content .rf2-cand__intake-banner {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  [data-ui='v2'] .rf2-shell__content .rf2-cand__intake-left {
+    padding-right: 0;
+    border-right: 0;
+    border-bottom: 1px solid var(--rf2-divider);
+    padding-bottom: var(--rf2-space-2);
+  }
+  [data-ui='v2'] .rf2-shell__content .rf2-tabs {
+    max-width: 100%;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-block: 2px;
+  }
+  [data-ui='v2'] .rf2-shell__content .rf2-tab {
+    flex: none;
+    white-space: nowrap;
+  }
+  [data-ui='v2'] .rf2-shell__content .rf2-jscroll {
+    margin-inline: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-ui='v2'] .rf2-shell__content *,
+  [data-ui='v2'] .rf2-shell__content *::before,
+  [data-ui='v2'] .rf2-shell__content *::after {
+    scroll-behavior: auto;
+  }
+}
