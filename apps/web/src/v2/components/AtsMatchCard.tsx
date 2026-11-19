@@ -63,14 +63,16 @@ export function AtsMatchCard({ applicationId, onSuggestJobs }: AtsMatchCardProps
 
   const { atsScore, atsKnockoutPass, breakdown } = data;
   const manualReview = breakdown.manualReviewRequired ?? [];
-  const scoreTone = !atsKnockoutPass ? 'danger' : atsScore >= 70 ? 'success' : atsScore >= 50 ? 'warning' : 'danger';
+  const scoreTone = !atsKnockoutPass ? 'danger' : manualReview.length > 0 ? 'warning' : atsScore >= 70 ? 'success' : atsScore >= 50 ? 'warning' : 'danger';
   const scoreLabel = !atsKnockoutPass
     ? `${atsScore}% (Knockout Flagged)`
-    : atsScore >= 70
-      ? `${atsScore}% — Strong Fit`
-      : atsScore >= 50
-        ? `${atsScore}% — Moderate Fit`
-        : `${atsScore}% — Low Fit`;
+    : manualReview.length > 0
+      ? `${atsScore}% — Provisional (review needed)`
+      : atsScore >= 70
+        ? `${atsScore}% — Strong Fit`
+        : atsScore >= 50
+          ? `${atsScore}% — Moderate Fit`
+          : `${atsScore}% — Low Fit`;
 
   const skillsWithEvidence = breakdown.skillBreakdown.filter((s) => s.matched && s.evidenceSnippet);
 
