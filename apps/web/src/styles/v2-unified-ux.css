@@ -136,7 +136,7 @@
  * This last-loaded rule restores a visible focus indicator throughout every
  * signed-in view without styling plain mouse clicks.
  */
-[data-ui='v2'] :is(
+[data-ui='v2'] .rf2-shell :is(
   a[href], button:not(:disabled), input:not(:disabled),
   select:not(:disabled), textarea:not(:disabled), summary,
   [role='button']:not([aria-disabled='true']),
@@ -145,7 +145,7 @@
   outline: 2px solid var(--rf2-focus-color) !important;
   outline-offset: 2px;
 }
-[data-ui='v2'] :is(
+[data-ui='v2'] .rf2-shell :is(
   .rf2-field__box, .rf2-select__trigger
 ):focus-within {
   border-color: var(--rf2-action);
