@@ -63,7 +63,7 @@ describe('nav per seat', () => {
   it.each([
     ['employee', ['My Work', 'Open jobs', 'Candidates', 'Match Skills', 'Interviews', 'Reports']],
     ['manager', ['Team work', 'Requisitions', 'Approvals', 'Interviews', 'Team result']],
-    ['admin', ['Users', 'Roles', 'Pipeline template', 'Master data', 'WhatsApp templates', 'Reports', 'Audit', 'Integrations']],
+    ['admin', ['Users', 'Roles', 'Licences & seats', 'Pipeline template', 'Master data', 'WhatsApp templates', 'Reports', 'Audit', 'Integrations']],
   ] as const)('%s lists its seat destinations', (seat, labels) => {
     const profile = user(ALL, [seat === 'manager' ? 'HIRING_MANAGER' : seat === 'admin' ? 'ADMINISTRATOR' : 'RECRUITER']);
     renderShell(seat, profile);
@@ -196,7 +196,7 @@ describe('nav per seat', () => {
   });
 
   it('administrators pass every gate like PermissionGate', () => {
-    expect(permittedNavItems('admin', [], true)).toHaveLength(8);
+    expect(permittedNavItems('admin', [], true)).toHaveLength(9);
   });
 
   it('seat links keep native tab order and open the chosen page', async () => {
