@@ -18,6 +18,17 @@ interface UserSeatRow {
   hasDirectReports: boolean;
 }
 
+interface UserSeatWire {
+  id: string;
+  displayName?: string | null;
+  name?: string | null;
+  email?: string | null;
+  roles?: Array<string | { code?: string; name?: string }>;
+  directReportCount?: number;
+  hasDirectReports?: boolean;
+  status?: string;
+}
+
 interface RolloutState {
   v2Seats: Seat[];
   source: 'org' | 'env' | 'default';
@@ -63,7 +74,7 @@ export function LicenseManagementV2() {
     setError(null);
 
     Promise.all([
-      getApi<UserSeatRow[]>('/users').catch(() => []),
+      getApi<UserSeatWire[]>('/users').catch(() => []),
       getApi<{ v2Seats?: Seat[]; source?: 'org' | 'env' | 'default' }>('/auth/rollout').catch(() => ({
         v2Seats: ['employee'],
         source: 'default' as const,
@@ -72,8 +83,10 @@ export function LicenseManagementV2() {
       .then(([rawUsers, rolloutRes]) => {
         if (!alive) return;
         const userList = Array.isArray(rawUsers) ? rawUsers : [];
-        const mappedUsers: UserSeatRow[] = userList.map((u: UserSeatRow) => {
-          const roles = Array.isArray(u.roles) ? u.roles.map((role) => String(role)) : [];
+        const mappedUsers: UserSeatRow[] = userList.map((u: UserSeatWire) => {
+          const roles = Array.isArray(u.roles)
+            ? u.roles.map((role) => typeof role === 'string' ? role : role.code ?? role.name ?? '').filter(Boolean)
+            : [];
           const hasReports = Boolean(u.directReportCount || u.hasDirectReports);
           let seat: Seat = 'employee';
           if (roles.includes('ADMINISTRATOR') || roles.includes('ADMIN')) seat = 'admin';
