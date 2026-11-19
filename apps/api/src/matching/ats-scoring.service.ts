@@ -1,6 +1,4 @@
 import {
-  BadRequestException,
-  ForbiddenException,
   Inject,
   Injectable,
   Logger,
@@ -55,6 +53,8 @@ export class AtsScoringService {
     applicationId: string,
     user?: AuthUser,
   ): Promise<AtsEvaluationResult> {
+    // Authorization must be enforced at the route and scoped query boundary.
+    void user;
     const app = await this.prisma.application.findFirst({
       where: { id: applicationId, organizationId },
       include: {
