@@ -5,7 +5,6 @@ import { useAuth } from '../auth/AuthContext';
 import { isTeamLeaderOrAdmin } from '../auth/workspacePersona';
 import { Icon } from '../components/Icon';
 import { Modal } from '../components/Modal';
-import { Alert } from '../components/ui';
 import { Button } from '../components/ui/Button';
 import { Select } from '../components/ui/Select';
 import { PageState } from '../components/ui/PageState';
