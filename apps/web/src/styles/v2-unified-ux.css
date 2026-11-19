@@ -39,7 +39,9 @@
 /* Surface rhythm: white/off-white, clear boundaries, no glass or heavy shadow. */
 [data-ui='v2'] .rf2-shell__content :is(
   .rf2-panel, .rf2-card, .rf2-jobhead, .rf2-team__kpis > li,
-  .rf2-team__summary-cards > li, .rf2-cand__intake-banner
+  .rf2-team__summary-cards > li, .rf2-cand__intake-banner,
+  .rf2-mywork__card, .rf2-mywork__group, .rf2-team__member,
+  .rf2-admin__card
 ) {
   background: var(--rf2-card);
   border: 1px solid var(--rf2-divider);
