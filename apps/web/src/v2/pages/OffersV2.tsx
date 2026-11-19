@@ -38,7 +38,7 @@ const statuses = [
 
 function belongsToStatus(offer: Offer, status: string): boolean {
   if (status === 'all') return true;
-  if (status === 'pending') return offer.status === 'Pending Approval' || offer.status === 'Approval';
+  if (status === 'pending') return offer.status === 'Pending Approval';
   return offer.status === status;
 }
 
