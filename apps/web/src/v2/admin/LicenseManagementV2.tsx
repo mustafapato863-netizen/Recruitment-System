@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { AlertTriangle } from 'lucide-react';
 import { ButtonV2, EmptyStateV2, SkeletonV2, StatusChip } from '../../components/v2';
 import { InputV2 } from '../../components/v2/Field';
-import { getApi, patchApi, postApi, ApiError } from '../../api/client';
+import { getApi } from '../../api/client';
 import { AdminWorkspaceHeader } from './AdminWorkspaceHeader';
 import { type Seat } from '../seat';
 import './admin.css';
@@ -29,32 +29,12 @@ interface UserSeatWire {
   status?: string;
 }
 
-interface RolloutState {
-  v2Seats: Seat[];
-  source: 'org' | 'env' | 'default';
-  quota: {
-    employee: { total: number; used: number };
-    manager: { total: number; used: number };
-    admin: { total: number; used: number };
-  };
-}
-
 export function LicenseManagementV2() {
   const [params, setParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [users, setUsers] = useState<UserSeatRow[]>([]);
-  const [rollout, setRollout] = useState<RolloutState>({
-    v2Seats: ['employee'],
-    source: 'default',
-    quota: {
-      employee: { total: 50, used: 0 },
-      manager: { total: 15, used: 0 },
-      admin: { total: 5, used: 0 },
-    },
-  });
-  // attempt unused
 
   const search = params.get('q') || '';
   const seatFilter = params.get('seat') || '';
@@ -73,16 +53,10 @@ export function LicenseManagementV2() {
     setLoading(true);
     setError(null);
 
-    Promise.all([
-      getApi<UserSeatWire[]>('/users').catch(() => []),
-      getApi<{ v2Seats?: Seat[]; source?: 'org' | 'env' | 'default' }>('/auth/rollout').catch(() => ({
-        v2Seats: ['employee'],
-        source: 'default' as const,
-      })),
-    ])
-      .then(([rawUsers, rolloutRes]) => {
+    getApi<UserSeatWire[]>('/users')
+      .then((rawUsers) => {
         if (!alive) return;
-        const userList = Array.isArray(rawUsers) ? rawUsers : [];
+        if (!Array.isArray(rawUsers)) throw new Error('The user directory returned an invalid list.');
         const mappedUsers: UserSeatRow[] = userList.map((u: UserSeatWire) => {
           const roles = Array.isArray(u.roles)
             ? u.roles.map((role) => typeof role === 'string' ? role : role.code ?? role.name ?? '').filter(Boolean)
@@ -98,29 +72,16 @@ export function LicenseManagementV2() {
             email: u.email || '',
             seat,
             roles,
-            status: u.status || 'Active',
+            status: u.status || 'Unknown',
             hasDirectReports: hasReports,
           };
         });
 
-        const empUsed = mappedUsers.filter((u) => u.seat === 'employee' && u.status === 'Active').length;
-        const mgrUsed = mappedUsers.filter((u) => u.seat === 'manager' && u.status === 'Active').length;
-        const admUsed = mappedUsers.filter((u) => u.seat === 'admin' && u.status === 'Active').length;
-
         setUsers(mappedUsers);
-        setRollout({
-          v2Seats: (rolloutRes.v2Seats ?? ['employee']) as Seat[],
-          source: rolloutRes.source || 'default',
-          quota: {
-            employee: { total: 50, used: empUsed },
-            manager: { total: 15, used: mgrUsed },
-            admin: { total: 5, used: admUsed },
-          },
-        });
       })
       .catch((e) => {
         if (!alive) return;
-        setError(e instanceof ApiError ? e.message : 'Could not load license and seat configuration.');
+        setError(e instanceof Error ? e.message : 'Could not load user seat assignments.');
       })
       .finally(() => {
         if (alive) setLoading(false);
@@ -129,30 +90,7 @@ export function LicenseManagementV2() {
     return () => {
       alive = false;
     };
-  }, []);
-
-  const toggleSeatV2 = async (seat: Seat) => {
-    const nextSeats = rollout.v2Seats.includes(seat)
-      ? rollout.v2Seats.filter((s) => s !== seat)
-      : [...rollout.v2Seats, seat];
-
-    setSaving(true);
-    setError(null);
-    try {
-      await postApi('/integrations/config', {
-        name: 'ROLLOUT_SEATS',
-        configJson: { v2Seats: nextSeats },
-      }).catch(async () => {
-        // Fallback endpoint if direct org config endpoint is used
-        await patchApi('/auth/rollout', { v2Seats: nextSeats });
-      });
-      setRollout((prev) => ({ ...prev, v2Seats: nextSeats, source: 'org' }));
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'Failed to save rollout configuration.');
-    } finally {
-      setSaving(false);
-    }
-  };
+  }, [attempt]);
 
   const filteredUsers = users.filter((u) => {
     if (seatFilter && u.seat !== seatFilter) return false;
@@ -163,77 +101,48 @@ export function LicenseManagementV2() {
     return true;
   });
 
+  const activeCounts = {
+    employee: users.filter((u) => u.seat === 'employee' && u.status === 'Active').length,
+    manager: users.filter((u) => u.seat === 'manager' && u.status === 'Active').length,
+    admin: users.filter((u) => u.seat === 'admin' && u.status === 'Active').length,
+  };
+
   return (
     <div className="rf2-admin-workspace">
       <AdminWorkspaceHeader
         group="Users & Access"
-        title="License & Seat Administration"
-        subtitle="Manage seat quotas, active software licenses, and V2 phased rollout controls."
+        title="User seats & access"
+        subtitle="Review actual user assignments. Licensed capacity is not reported by the user directory."
       />
 
       {error ? (
         <div className="rf2-admin-error" role="alert">
           <AlertTriangle aria-hidden="true" />
           <span>{error}</span>
+          <ButtonV2 kind="secondary" size="sm" onClick={() => setAttempt((n) => n + 1)}>Retry</ButtonV2>
         </div>
       ) : null}
 
-      <div className="rf2-admin-seat-grid">
-        {(['employee', 'manager', 'admin'] as const).map((seat) => {
-          const quota = rollout.quota[seat];
-          const isV2 = rollout.v2Seats.includes(seat);
-          const percent = Math.min(100, Math.round((quota.used / Math.max(1, quota.total)) * 100));
-
-          return (
-            <div key={seat} className="rf2-admin-card rf2-admin-seat-card">
-              <div className="rf2-row-between">
-                <div>
-                  <h3 className="rf2-admin-seat-card__title">
-                    {seat.charAt(0).toUpperCase() + seat.slice(1)} Workspace
-                  </h3>
-                  <span className="rf2-admin-seat-card__quota">
-                    {quota.used} / {quota.total} Seats Occupied ({percent}%)
-                  </span>
-                </div>
-                <StatusChip
-                  tone={isV2 ? 'success' : 'neutral'}
-                  label={isV2 ? 'V2 Enabled' : 'V1 Classic'}
-                />
+      <p className="rf2-jtable__sub" role="note">
+        V2 is the signed-in interface. This page does not turn V1 back on.
+        Counts reflect active user records, not purchased seats or a verified licensing limit.
+      </p>
+      <div className="rf2-admin-seat-grid" aria-label="Active users by workspace">
+        {(['employee', 'manager', 'admin'] as const).map((seat) => (
+          <div key={seat} className="rf2-admin-card rf2-admin-seat-card">
+            <div className="rf2-row-between">
+              <div>
+                <h3 className="rf2-admin-seat-card__title">
+                  {seat.charAt(0).toUpperCase() + seat.slice(1)} workspace
+                </h3>
+                <span className="rf2-admin-seat-card__quota">
+                  {loading ? 'Loading users…' : error ? 'Unavailable' : `${activeCounts[seat]} active users`}
+                </span>
               </div>
-
-              <div
-                style={{
-                  height: 6,
-                  background: 'var(--rf2-border-subtle, #e2e8f0)',
-                  borderRadius: 3,
-                  margin: '12px 0',
-                  overflow: 'hidden',
-                }}
-              >
-                <div
-                  style={{
-                    height: '100%',
-                    width: `${percent}%`,
-                    background: percent > 90 ? 'var(--rf2-danger, #ef4444)' : 'var(--rf2-action, #2563eb)',
-                    borderRadius: 3,
-                  }}
-                />
-              </div>
-
-              <div className="rf2-row-between" style={{ marginTop: 16 }}>
-                <span className="text-sm font-medium">Default UI Version</span>
-                <ButtonV2
-                  kind={isV2 ? 'primary' : 'secondary'}
-                  size="sm"
-                  disabled={saving}
-                  onClick={() => toggleSeatV2(seat)}
-                >
-                  {isV2 ? 'Switch to V1' : 'Graduate to V2'}
-                </ButtonV2>
-              </div>
+              <StatusChip tone="neutral" label="V2 interface" />
             </div>
-          );
-        })}
+          </div>
+        ))}
       </div>
 
       <div className="rf2-team__toolbar" style={{ marginTop: 24 }}>
@@ -257,7 +166,7 @@ export function LicenseManagementV2() {
               onClick={() => updateParams({ seat: 'employee' })}
             >
               Employees
-              <span className="rf2-tab__count">{rollout.quota.employee.used}</span>
+              <span className="rf2-tab__count">{activeCounts.employee}</span>
             </button>
             <button
               type="button"
@@ -267,7 +176,7 @@ export function LicenseManagementV2() {
               onClick={() => updateParams({ seat: 'manager' })}
             >
               Managers
-              <span className="rf2-tab__count">{rollout.quota.manager.used}</span>
+              <span className="rf2-tab__count">{activeCounts.manager}</span>
             </button>
             <button
               type="button"
@@ -277,7 +186,7 @@ export function LicenseManagementV2() {
               onClick={() => updateParams({ seat: 'admin' })}
             >
               Admins
-              <span className="rf2-tab__count">{rollout.quota.admin.used}</span>
+              <span className="rf2-tab__count">{activeCounts.admin}</span>
             </button>
           </div>
 
@@ -296,14 +205,14 @@ export function LicenseManagementV2() {
       <section className="rf2-panel" style={{ marginTop: 16 }}>
         {loading ? <SkeletonV2 lines={6} label="Loading users and seat assignments…" /> : null}
 
-        {!loading && filteredUsers.length === 0 ? (
+        {!loading && !error && filteredUsers.length === 0 ? (
           <EmptyStateV2
             title="No users found"
             body={users.length === 0 ? 'No active users in organization.' : 'No users match the search criteria.'}
           />
         ) : null}
 
-        {!loading && filteredUsers.length > 0 ? (
+        {!loading && !error && filteredUsers.length > 0 ? (
           <div className="rf2-jscroll">
             <table className="rf2-jtable" aria-label="User seat allocations">
               <thead>
@@ -313,12 +222,10 @@ export function LicenseManagementV2() {
                   <th scope="col">Assigned Seat</th>
                   <th scope="col">Assigned Roles</th>
                   <th scope="col">Status</th>
-                  <th scope="col">Experience Mode</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredUsers.map((u) => {
-                  const onV2 = rollout.v2Seats.includes(u.seat);
                   return (
                     <tr key={u.id}>
                       <td>
@@ -339,12 +246,6 @@ export function LicenseManagementV2() {
                         <StatusChip
                           tone={u.status === 'Active' ? 'success' : 'neutral'}
                           label={u.status}
-                        />
-                      </td>
-                      <td>
-                        <StatusChip
-                          tone={onV2 ? 'success' : 'neutral'}
-                          label={onV2 ? 'V2 Target' : 'V1 Classic'}
                         />
                       </td>
                     </tr>
