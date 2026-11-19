@@ -17,6 +17,7 @@ import '../styles/glass-neo.css';
 import '../styles/classic-in-shell.css';
 import '../pages/CommandCenterPolish.css';
 import '../pages/ApplicantProfilePolish.css';
+import '../styles/v2-unified-ux.css';
 
 /**
  * v2 default: every signed-in seat (Employee, Manager, Admin, interviewer-only) gets the v2 shell. No ?ui=v2,
