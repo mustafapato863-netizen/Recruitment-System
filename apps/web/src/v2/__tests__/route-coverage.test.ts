@@ -1,0 +1,64 @@
+/// <reference types="node" />
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { describe, expect, it } from 'vitest';
+import { SCREEN_ROUTES } from '../screenRegistry';
+import { ADMIN_GROUP_ROUTES, SEAT_NAV } from '../../components/v2/shell/navConfig';
+
+const app = readFileSync(resolve(__dirname, '../../App.tsx'), 'utf8');
+const shell = readFileSync(resolve(__dirname, '../../layout/V2Shell.tsx'), 'utf8');
+const tokens = readFileSync(resolve(__dirname, '../../styles/tokens-v2.css'), 'utf8');
+const ux = readFileSync(resolve(__dirname, '../../styles/v2-unified-ux.css'), 'utf8');
+const declared = Array.from(app.matchAll(/<Route\s+path="([^"]+)"/g), (match) => match[1]);
+
+function registered(path: string): boolean {
+  const raw = path.split(/[?#]/)[0];
+  return SCREEN_ROUTES.some((screen) => screen.path === raw);
+}
+
+describe('all public and signed-in screen paths are inventoried', () => {
+  it('covers the entire App.tsx route tree without duplicate or ghost routes', () => {
+    expect(new Set(declared).size).toBe(declared.length);
+    const catalog = SCREEN_ROUTES.map((screen) => screen.path);
+    expect(new Set(catalog).size).toBe(catalog.length);
+    expect(catalog.toSorted()).toEqual(declared.toSorted());
+  });
+
+  it('classifies every registered route and keeps legacy parity gaps explicit', () => {
+    expect(SCREEN_ROUTES.every((screen) =>
+      ['public', 'v2', 'retained', 'redirect'].includes(screen.surface))).toBe(true);
+    for (const path of ['/hires/:id', '/candidates/:id', '/candidates/:id/documents', '/cv-bank', '/import']) {
+      expect(SCREEN_ROUTES.find((screen) => screen.path === path)?.surface).toBe('retained');
+    }
+    for (const path of ['/offers', '/hires', '/hires/approvals/inbox', '/joinings']) {
+      expect(SCREEN_ROUTES.find((screen) => screen.path === path)?.surface).toBe('v2');
+    }
+  });
+
+  it('has actual App routes for every seat-nav link and supported admin destination', () => {
+    for (const config of Object.values(SEAT_NAV)) {
+      for (const item of config.items) {
+        expect(registered(item.to), `Missing nav screen ${item.label}: ${item.to}`).toBe(true);
+      }
+    }
+    for (const item of ADMIN_GROUP_ROUTES.filter((entry) => entry.status === 'supported')) {
+      expect(registered(item.to), `Missing admin screen ${item.label}: ${item.to}`).toBe(true);
+    }
+  });
+});
+
+describe('signed-in UX baseline shared by every screen', () => {
+  it('loads design refinements only in the authenticated V2 shell', () => {
+    expect(shell).toContain("import '../styles/v2-unified-ux.css'");
+    expect(app).not.toContain("import './styles/v2-unified-ux.css'");
+  });
+
+  it('restores perceptible keyboard focus and visible panel borders', () => {
+    expect(tokens).toMatch(/--rf2-focus-width:\s*2px/);
+    expect(tokens).toMatch(/--rf2-glass-line:\s*var\(--color-border\)/);
+    expect(ux).toMatch(/:focus-visible/);
+    expect(ux).toMatch(/outline:\s*2px solid var\(--rf2-focus-color\)/);
+    expect(ux).toMatch(/\.rf2-jtable/);
+    expect(ux).toMatch(/@media \(max-width:\s*640px\)/);
+  });
+});
