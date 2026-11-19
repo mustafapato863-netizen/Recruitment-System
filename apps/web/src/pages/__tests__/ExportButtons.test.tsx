@@ -6,7 +6,6 @@ import { CandidatesPage } from '../CandidatesPage';
 import { VacantListPage } from '../VacantListPage';
 import { ToastProvider } from '../../components/ui/ToastContext';
 import { downloadApi, fetchApi, getApi } from '../../api/client';
-import { saveBlob } from '../../utils/download';
 
 vi.mock('../../api/client', () => ({
   fetchApi: vi.fn(),
@@ -16,7 +15,6 @@ vi.mock('../../api/client', () => ({
 }));
 
 vi.mock('../../utils/download', () => ({
-  saveBlob: vi.fn(),
 }));
 
 vi.mock('../../auth/AuthContext', () => ({
@@ -36,70 +34,26 @@ vi.mock('../../auth/AuthContext', () => ({
   }),
 }));
 
-describe('Export XLSX Buttons', () => {
+describe('No Excel export actions in the V2 migration', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  describe('CandidatesPage Export', () => {
-    it('triggers /candidates/export.xlsx download when Export XLSX is clicked', async () => {
-      const user = userEvent.setup();
-      vi.mocked(fetchApi).mockResolvedValue({
-        data: [],
-        total: 0,
-        page: 1,
-        pageSize: 20,
-      });
-      vi.mocked(downloadApi).mockResolvedValue(new Blob(['mock-candidates-xlsx']));
-
-      render(
-        <MemoryRouter>
-          <ToastProvider>
-            <CandidatesPage />
-          </ToastProvider>
-        </MemoryRouter>,
-      );
-
-      const exportButton = await screen.findByRole('button', { name: /export candidates to excel/i });
-      expect(exportButton).toBeInTheDocument();
-
-      await user.click(exportButton);
-
-      await waitFor(() => {
-        expect(downloadApi).toHaveBeenCalledWith(expect.stringContaining('/candidates/export.xlsx'));
-        expect(saveBlob).toHaveBeenCalledWith(
-          expect.any(Blob),
-          expect.stringMatching(/candidates-export-.*\.xlsx/),
-        );
-      });
-    });
+  it('does not advertise or invoke Excel export from the retired candidate listing', async () => {
+    vi.mocked(fetchApi).mockResolvedValue({ data: [], total: 0, page: 1, pageSize: 20 });
+    render(<MemoryRouter><ToastProvider><CandidatesPage /></ToastProvider></MemoryRouter>);
+    await waitFor(() => expect(fetchApi).toHaveBeenCalled());
+    expect(screen.queryByRole('button', { name: /export candidates to excel|export xlsx/i })).not.toBeInTheDocument();
+    expect(downloadApi).not.toHaveBeenCalled();
   });
 
-  describe('VacantListPage Export', () => {
-    it('triggers /vacancies/export.xlsx download when Export XLSX is clicked', async () => {
-      const user = userEvent.setup();
-      vi.mocked(getApi).mockResolvedValue([]);
-      vi.mocked(downloadApi).mockResolvedValue(new Blob(['mock-vacancies-xlsx']));
-
-      render(
-        <MemoryRouter>
-          <VacantListPage />
-        </MemoryRouter>,
-      );
-
-      await user.click(screen.getByText('More actions'));
-      const exportButton = await screen.findByRole('button', { name: /export xlsx/i });
-      expect(exportButton).toBeInTheDocument();
-
-      await user.click(exportButton);
-
-      await waitFor(() => {
-        expect(downloadApi).toHaveBeenCalledWith('/vacancies/export.xlsx');
-        expect(saveBlob).toHaveBeenCalledWith(
-          expect.any(Blob),
-          expect.stringMatching(/vacancies-export-.*\.xlsx/),
-        );
-      });
-    });
+  it('keeps other vacancy actions but offers no Export XLSX entry', async () => {
+    const user = userEvent.setup();
+    vi.mocked(getApi).mockResolvedValue([]);
+    render(<MemoryRouter><VacantListPage /></MemoryRouter>);
+    await user.click(screen.getByText('More actions'));
+    expect(screen.getByText('Upload job description')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /export xlsx|export.*excel/i })).not.toBeInTheDocument();
+    expect(downloadApi).not.toHaveBeenCalled();
   });
 });
