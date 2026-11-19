@@ -877,7 +877,9 @@ export function ApplicationFileV2({ load = loadApplicationFile, mode = 'owner' }
               ) : null}
             </section>
             <EvidenceCard items={evidence} known={evidenceKnown} />
-            <AtsMatchCard applicationId={app.id} onSuggestJobs={app.candidateId ? () => setSuggestJobsOpen(true) : undefined} />
+            {!approver && !licence ? (
+              <AtsMatchCard applicationId={app.id} onSuggestJobs={app.candidateId ? () => setSuggestJobsOpen(true) : undefined} />
+            ) : null}
             {manager ? <ScorecardFit file={file} /> : null}
             {showPay && screeningKnown ? (
               <section className="rf2-card" aria-labelledby="salary-h">
@@ -903,6 +905,7 @@ export function ApplicationFileV2({ load = loadApplicationFile, mode = 'owner' }
                 applicationId={app.id}
                 followUpDate={app.followUpDate ?? null}
                 omitAttempts
+                showDeliveryDestination
                 read={messages}
                 onReload={() => setMessageAttempt((n) => n + 1)}
                 whatsappContext={{
