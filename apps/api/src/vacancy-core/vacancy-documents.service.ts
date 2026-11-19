@@ -1,6 +1,4 @@
 import {
-  BadRequestException,
-  ForbiddenException,
   Inject,
   Injectable,
   Logger,
@@ -9,12 +7,15 @@ import {
 } from '@nestjs/common';
 import { createHash } from 'node:crypto';
 import type { AuthUser, JdCriteriaDefinition, VacancyDocumentItem } from '@recruitflow/contracts';
+// Runtime constructor metadata is required by NestJS dependency injection.
+/* eslint-disable @typescript-eslint/consistent-type-imports */
 import { PrismaService } from '../database/prisma.service';
 import { DocumentStorageService } from '../documents/document-storage.service';
 import { CompositeDocumentExtractor } from '../resume/extraction/composite-document-extractor';
 import { ResumeSourceFactory } from '../resume/source/resume-source.factory';
 import { JdParserService } from './jd-parser.service';
 import { AccessControlService } from '../access-control/access-control.service';
+/* eslint-enable @typescript-eslint/consistent-type-imports */
 
 @Injectable()
 export class VacancyDocumentsService {
@@ -48,7 +49,7 @@ export class VacancyDocumentsService {
     const stored = await this.storage.put(organizationId, vacancyId, file.originalname, file.buffer);
 
     // Extract text from PDF, Word, or plain-text
-    let extractionText = '';
+    let extractionText: string;
     let parserStatus = 'Completed';
 
     if (file.mimetype.includes('text') || file.originalname.endsWith('.txt')) {
@@ -66,10 +67,12 @@ export class VacancyDocumentsService {
       } catch (err: unknown) {
         this.logger.warn(`Failed extracting text from JD ${file.originalname}: ${err}`);
         parserStatus = 'Failed';
-        extractionText = file.buffer.toString('utf8').replace(/[\x00-\x1F\x7F-\x9F]/g, ' ').slice(0, 10000);
+        // Never interpret binary PDF/DOCX bytes as real qualifications.
+        extractionText = '';
       }
     } else {
-      extractionText = file.buffer.toString('utf8').slice(0, 10000);
+      parserStatus = 'Unavailable';
+      extractionText = '';
     }
 
     // Parse structured requirements
@@ -146,7 +149,7 @@ export class VacancyDocumentsService {
     const sha256 = createHash('sha256').update(file.buffer).digest('hex');
     const stored = await this.storage.put(organizationId, vacancyRequestId, file.originalname, file.buffer);
 
-    let extractionText = '';
+    let extractionText: string;
     let parserStatus = 'Completed';
 
     if (file.mimetype.includes('text') || file.originalname.endsWith('.txt')) {
@@ -164,10 +167,12 @@ export class VacancyDocumentsService {
       } catch (err: unknown) {
         this.logger.warn(`Failed extracting text from JD ${file.originalname}: ${err}`);
         parserStatus = 'Failed';
-        extractionText = file.buffer.toString('utf8').replace(/[\x00-\x1F\x7F-\x9F]/g, ' ').slice(0, 10000);
+        // Never interpret binary PDF/DOCX bytes as real qualifications.
+        extractionText = '';
       }
     } else {
-      extractionText = file.buffer.toString('utf8').slice(0, 10000);
+      parserStatus = 'Unavailable';
+      extractionText = '';
     }
 
     const parsedCriteria = this.jdParser.parseJdText(extractionText, []);
