@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useId, useRef, useState, type Rea
 import { Link, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   BarChart3, BriefcaseBusiness, Building2, CalendarCheck, CalendarClock, CheckCircle2, ChevronsUpDown, ClipboardList, Columns3, Database, FileText, History,
-  ListChecks, LogOut, Menu, Moon, Sun, PanelLeftClose, PanelLeftOpen, Plug, Shield, Target, User, UserRound, Users, X,
+  KeyRound, ListChecks, LogOut, Menu, Moon, Sun, PanelLeftClose, PanelLeftOpen, Plug, Shield, Target, User, UserRound, Users, X,
   Archive } from 'lucide-react';
 import type { UserProfile } from '@recruitflow/contracts';
 import { getApi } from '../../../api/client';
@@ -27,7 +27,7 @@ import '../../../v2/search/search.css';
 const ICONS: Record<NavIconName, ReactNode> = {
   'my-work': <ListChecks />, interviews: <CalendarCheck />, 'my-interviews': <CalendarClock />, jobs: <BriefcaseBusiness />, candidates: <Users />,
   team: <Users />, requisitions: <ClipboardList />, approvals: <CheckCircle2 />, result: <Target />,
-  users: <UserRound />, roles: <Shield />, pipeline: <Columns3 />, 'master-data': <Database />,
+  users: <UserRound />, roles: <Shield />, licenses: <KeyRound />, pipeline: <Columns3 />, 'master-data': <Database />,
   templates: <FileText />, reports: <BarChart3 />, audit: <History />, integrations: <Plug />, classic: <Archive />,
 };
 
