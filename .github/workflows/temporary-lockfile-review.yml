@@ -1,0 +1,25 @@
+# TEMPORARY: branch-only read-only helper. Remove before merge.
+name: Temporary pnpm lockfile regeneration review
+on:
+  push:
+    branches:
+      - fix/v2-dependency-audit-20261119
+permissions:
+  contents: read
+jobs:
+  regenerate-diff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: pnpm/action-setup@v3
+        with:
+          version: 11
+      - name: Resolve security updates without executing package scripts
+        run: pnpm install --lockfile-only --no-frozen-lockfile --ignore-scripts
+      - name: Emit generated lockfile diff for review
+        run: |
+          git diff --numstat -- pnpm-lock.yaml
+          git diff -- pnpm-lock.yaml
