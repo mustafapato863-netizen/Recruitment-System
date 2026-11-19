@@ -894,7 +894,7 @@ export class InterviewsService {
       strengths: scorecard.strengths,
       concerns: scorecard.concerns,
       notes: scorecard.notes,
-      ratings: savedRatings as InterviewScorecardItem['ratings'],
+      ratings: savedRatings as NonNullable<InterviewScorecardItem['ratings']>,
       ...scorecardState(scorecard),
     };
   }
