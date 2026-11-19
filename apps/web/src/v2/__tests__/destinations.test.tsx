@@ -95,17 +95,18 @@ describe('candidate entry paths stay out of the staff home', () => {
 describe('classic staff URLs land on a v2 surface', () => {
   const opts = { requisitions: true, interviews: true } as const;
   const employee: Record<string, string | null> = {
-    '/hires/approvals/inbox': '/my-work', '/hires': '/my-work', '/hires/h1': '/my-work', '/licenses': '/my-work',
-    '/joinings': '/my-work', '/joining': '/my-work', '/interviews': null, '/interviews/calendar': null, '/offers': '/my-work',
+    '/hires/approvals/inbox': '/my-work', '/hires': null, '/hires/h1': null, '/licenses': '/my-work',
+    '/joinings': null, '/joining': '/my-work', '/interviews': null, '/interviews/calendar': null, '/offers': null,
     '/vacancies/v1/analytics': '/vacancies/v1', '/candidates/c1': null, '/candidates/c1/documents': null,
     '/cv-bank': null, '/sourcing-match': null, '/talent-pool': '/sourcing-match', '/talent-pools': '/sourcing-match',
     '/classic/candidates': '/candidates', '/classic/vacancies': '/vacancies', '/settings/targets': '/my-work', '/access-control': '/my-work',
     '/classic/master-data': '/my-work', '/settings': '/my-work', '/classic/pipeline-settings': '/my-work',
   };
-  const manager: Record<string, string> = {
+  const manager: Record<string, string | null> = {
     ...Object.fromEntries(Object.keys(employee).map((path) => [path, path.startsWith('/interviews') ? '/my-interviews' : '/my-work'])),
     '/import': '/my-work',
     '/import/candidates/j1': '/my-work',
+    '/hires': null, '/hires/h1': null, '/joinings': null, '/offers': null,
   };
   const admin: Record<string, string> = {
     ...Object.fromEntries(Object.keys(employee).map((path) => [path, '/users'])),
@@ -119,6 +120,19 @@ describe('classic staff URLs land on a v2 surface', () => {
   });
   it.each(Object.entries(manager))('manager %s → %s', (path, to) => expect(v2Redirect('manager', path, opts)).toBe(to));
   it.each(Object.entries(admin))('admin %s → %s', (path, to) => expect(v2Redirect('admin', path, opts)).toBe(to));
+  it('native V2 workflow pages stay reachable with valid permissions and remain hidden from unauthorized and restricted users', () => {
+    const allowed = { ...opts, permissions: ['APPLICATION_VIEW', 'VACANCY_VIEW'] };
+    for (const path of ['/offers', '/hires', '/hires/h1', '/joinings']) {
+      expect(v2Redirect('employee', path, allowed), path).toBeNull();
+      expect(v2Redirect('manager', path, allowed), path).toBeNull();
+      expect(v2Redirect('employee', path, { ...opts, permissions: ['CANDIDATE_VIEW'] }), path).toBe('/my-work');
+    }
+    expect(v2Redirect('employee', '/hires/approvals/inbox', { ...opts, permissions: ['APPLICATION_VIEW'] })).toBe('/my-work');
+    expect(v2Redirect('employee', '/hires', {
+      ...opts, home: '/hires/approvals/inbox', permissions: ['FINAL_HIRING_APPROVAL'],
+    })).toBe('/hires/approvals/inbox');
+    expect(v2Redirect('employee', '/hires', { ...opts, interviewerOnly: true })).toBe('/my-interviews');
+  });
   it('a viewer the route gate refuses does not land on the target', () => {
     expect(v2Redirect('employee', '/cv-bank', { ...opts, permissions: ['VACANCY_VIEW'] })).toBe('/my-work');
     expect(v2Redirect('employee', '/classic/vacancies', { ...opts, permissions: ['CANDIDATE_VIEW'] })).toBe('/my-work');
