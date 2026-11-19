@@ -47,11 +47,11 @@ beforeEach(() => {
 describe('native V2 candidate document vault', () => {
   it('shows server-backed files, status, permissions and return navigation', async () => {
     renderPage();
-    expect(await screen.findByRole('heading', { name: 'Documents · Mariam Essam' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Document Vault — Mariam Essam' })).toBeInTheDocument();
     expect(screen.getByText('mariam.pdf')).toBeInTheDocument();
     expect(screen.getByText('Clean')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Back to profile' }).getAttribute('href')).toContain('returnTo=');
-    expect(screen.getByRole('button', { name: 'Add document' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add document record' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Download mariam.pdf' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Archive mariam.pdf' })).toBeInTheDocument();
   });
@@ -60,11 +60,12 @@ describe('native V2 candidate document vault', () => {
     const user = userEvent.setup();
     renderPage();
     await screen.findByText('mariam.pdf');
-    await user.click(screen.getByRole('button', { name: 'Add document' }));
-    const dialog = screen.getByRole('dialog', { name: 'Upload candidate document' });
+    await user.click(screen.getByRole('button', { name: 'Add document record' }));
+    const dialog = screen.getByRole('dialog', { name: 'Add Document Record' });
     expect(within(dialog).getByRole('button', { name: 'Upload document' })).toBeDisabled();
     expect(api.postFormDataApi).not.toHaveBeenCalled();
     await user.upload(within(dialog).getByLabelText('Document file *'), new File(['real data'], 'new-cv.pdf', { type: 'application/pdf' }));
+    expect(within(dialog).getByRole('button', { name: 'Upload document' })).toBeEnabled();
     await user.click(within(dialog).getByRole('button', { name: 'Upload document' }));
     await waitFor(() => expect(api.postFormDataApi).toHaveBeenCalledWith('/documents/upload', expect.any(FormData)));
     const body = api.postFormDataApi.mock.calls[0][1] as FormData;
@@ -80,7 +81,7 @@ describe('native V2 candidate document vault', () => {
     const user = userEvent.setup();
     renderPage();
     await screen.findByText('mariam.pdf');
-    expect(screen.queryByRole('button', { name: 'Add document' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add document record' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Archive mariam.pdf' })).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Download mariam.pdf' }));
     await waitFor(() => expect(api.downloadApi).toHaveBeenCalledWith('/documents/d1/download'));
@@ -108,7 +109,7 @@ describe('native V2 candidate document vault', () => {
     await user.click(screen.getByRole('button', { name: 'Archive mariam.pdf' }));
     const dialog = screen.getByRole('dialog', { name: 'Archive document' });
     expect(within(dialog).getByRole('button', { name: 'Archive document' })).toBeDisabled();
-    await user.type(within(dialog).getByLabelText('Reason for archiving'), 'Newer verified CV received');
+    await user.type(within(dialog).getByRole('textbox', { name: /Reason for archiving/ }), 'Newer verified CV received');
     await user.click(within(dialog).getByRole('button', { name: 'Archive document' }));
     await waitFor(() => expect(api.postApi).toHaveBeenCalledWith('/documents/d1/archive', { reason: 'Newer verified CV received' }));
     expect(screen.getByText(/Document archived/)).toBeInTheDocument();
@@ -125,7 +126,7 @@ describe('native V2 candidate document vault', () => {
     const user = userEvent.setup();
     renderPage();
     expect(await screen.findByText('Documents are unavailable.')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Documents · Mariam Essam' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Document Vault — Mariam Essam' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Retry' }));
     expect(await screen.findByText('mariam.pdf')).toBeInTheDocument();
   });
