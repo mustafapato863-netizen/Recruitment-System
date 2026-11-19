@@ -151,7 +151,7 @@ export class AtsScoringService {
     for (const skill of criteria.mustHaveSkills) {
       const sLower = skill.name.toLowerCase();
       const link = candidateLinkSkills.get(sLower);
-      const isEvidenced = Boolean(link && isSkillLinkActive(candidate.skills ?? undefined, link.skill.name, link.evidence));
+      const isEvidenced = Boolean(link?.evidence.length && isSkillLinkActive(candidate.skills ?? undefined, link.skill.name, link.evidence));
       // V1 parity: a self-reported profile skill is not verified match evidence.
       const snippet = (isEvidenced ? link?.evidence[0]?.snippet : null) || findSkillSnippet(combinedCvText, skill.name);
       const matched = isEvidenced || Boolean(snippet);
@@ -178,7 +178,7 @@ export class AtsScoringService {
     for (const skill of criteria.niceToHaveSkills) {
       const sLower = skill.name.toLowerCase();
       const link = candidateLinkSkills.get(sLower);
-      const isEvidenced = Boolean(link && isSkillLinkActive(candidate.skills ?? undefined, link.skill.name, link.evidence));
+      const isEvidenced = Boolean(link?.evidence.length && isSkillLinkActive(candidate.skills ?? undefined, link.skill.name, link.evidence));
       const snippet = (isEvidenced ? link?.evidence[0]?.snippet : null) || findSkillSnippet(combinedCvText, skill.name);
       const matched = isEvidenced || Boolean(snippet);
 
