@@ -26,7 +26,7 @@ const LINKS: readonly Shortcut[] = [
 export function WorkflowShortcutsV2({ seat }: { seat: 'employee' | 'manager' }) {
   const { user } = useAuth();
   const permissions = new Set(user?.permissions ?? []);
-  const isAdmin = Boolean(user?.roles.some((r) => r.code === 'ADMINISTRATOR'));
+  const isAdmin = Boolean(user?.roles?.some((r) => r.code === 'ADMINISTRATOR'));
   const links = LINKS.filter((item) => (!item.employeeOnly || seat === 'employee') && (isAdmin || permissions.has(item.permission)));
   if (!links.length) return null;
   return (
