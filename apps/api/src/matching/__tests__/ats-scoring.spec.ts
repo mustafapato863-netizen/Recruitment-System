@@ -261,11 +261,29 @@ describe('AtsScoringService', () => {
     });
 
   describe('getJobRecommendationsForCandidate', () => {
+    it('preserves recruiter-verified screening evidence when the CV lacks the skill', async () => {
+      mockPrisma.candidate.findFirst.mockResolvedValue({
+        id: 'cand-evidence', experienceYears: 2, skills: ['ICU'],
+        applications: [],
+        skillLinks: [{ skill: { name: 'ICU' }, evidence: [{ sourceType: 'SCREENING_NOTE' }] }],
+        documents: [{ extractionText: 'Registered nurse with clinical experience.' }],
+      });
+      mockPrisma.vacancy.findMany.mockResolvedValue([{
+        id: 'vac-icu', vacancyCode: 'VAC-ICU', department: 'Nursing',
+        position: { title: 'ICU Nurse' }, branch: { name: 'Giza' },
+        minExperienceYears: 2, requiredSkills: ['ICU'], jdCriteria: null, createdAt: new Date(),
+      }]);
+      const suggestions = await service.getJobRecommendationsForCandidate('org-1', 'cand-evidence');
+      expect(suggestions[0].matchedSkillsCount).toBe(1);
+      expect(suggestions[0].atsScore).toBe(100);
+    });
+
     it('ranks open jobs with highest score first and unapplied above applied', async () => {
       const mockCandidate = {
         id: 'cand-1',
         experienceYears: 5,
         skills: ['React', 'TypeScript', 'Node.js'],
+        skillLinks: [],
         applications: [
           { id: 'app-applied', vacancyId: 'vac-applied', stage: 'Application' },
         ],
