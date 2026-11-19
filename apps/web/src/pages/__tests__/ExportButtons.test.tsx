@@ -14,9 +14,6 @@ vi.mock('../../api/client', () => ({
   downloadApi: vi.fn(),
 }));
 
-vi.mock('../../utils/download', () => ({
-}));
-
 vi.mock('../../auth/AuthContext', () => ({
   useAuth: () => ({
     user: {
