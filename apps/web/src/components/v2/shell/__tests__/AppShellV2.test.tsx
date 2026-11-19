@@ -177,7 +177,7 @@ describe('nav per seat', () => {
     renderShell('admin', user(['APPLICATION_VIEW'], ['CUSTOM_ADMIN']), '/reports');
     const nav = screen.getByRole('navigation', { name: SEAT_NAV.admin.heading });
     expect(screen.queryByRole('button', { name: 'More (classic)' })).not.toBeInTheDocument();
-    expect(within(nav).getByRole('link', { name: 'WhatsApp templates' })).toHaveAttribute('href', '/whatsapp-templates');
+    expect(within(nav).queryByRole('link', { name: 'WhatsApp templates' })).not.toBeInTheDocument();
     expect(within(nav).queryByRole('link', { name: 'Roles' })).not.toBeInTheDocument();
     expect(within(nav).queryByRole('link', { name: 'Hiring cases' })).not.toBeInTheDocument();
   });
