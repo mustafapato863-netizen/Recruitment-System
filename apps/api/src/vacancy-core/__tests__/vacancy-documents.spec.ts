@@ -6,10 +6,15 @@ import { VacancyDocumentsService } from '../vacancy-documents.service';
 
 describe('VacancyDocumentsService', () => {
   let service: VacancyDocumentsService;
-  let mockPrisma: any;
-  let mockStorage: any;
+  type Spy = ReturnType<typeof vi.fn>;
+  let mockPrisma: {
+    vacancy: { findFirst: Spy; update: Spy };
+    vacancyRequest: { findFirst: Spy; update: Spy };
+    vacancyDocument: { create: Spy };
+  };
+  let mockStorage: { put: Spy };
   let jdParser: JdParserService;
-  let mockAccessControl: any;
+  let mockAccessControl: Record<string, never>;
 
   const mockUser: AuthUser = {
     userId: 'user-recruiter-1',
@@ -44,10 +49,10 @@ describe('VacancyDocumentsService', () => {
     mockAccessControl = {};
 
     service = new VacancyDocumentsService(
-      mockPrisma,
-      mockStorage,
+      mockPrisma as never,
+      mockStorage as never,
       jdParser,
-      mockAccessControl,
+      mockAccessControl as never,
     );
   });
 
