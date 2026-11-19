@@ -261,3 +261,71 @@
     scroll-behavior: auto;
   }
 }
+
+/* Discoverable secondary workflows without cluttering the primary sidebar. */
+[data-ui='v2'] .rf2-workflow-shortcuts {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: var(--rf2-space-1-5);
+  min-width: 0;
+  margin-block: var(--rf2-space-1);
+  padding: var(--rf2-space-1-5) var(--rf2-space-2);
+  border: 1px solid var(--rf2-divider);
+  border-radius: var(--rf2-radius-card);
+  background: var(--rf2-card);
+}
+[data-ui='v2'] .rf2-workflow-shortcuts__label {
+  flex: none;
+  padding-block: 8px;
+  font-size: var(--rf2-text-caption);
+  font-weight: 700;
+  color: var(--rf2-muted);
+  white-space: nowrap;
+}
+[data-ui='v2'] .rf2-workflow-shortcuts__links {
+  display: flex;
+  align-items: center;
+  gap: var(--rf2-space-1);
+  flex: 1 1 auto;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+[data-ui='v2'] .rf2-workflow-shortcuts__link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  min-height: 36px;
+  padding: 7px 10px;
+  border: 1px solid var(--rf2-divider);
+  border-radius: var(--rf2-radius-control);
+  background: var(--rf2-card);
+  color: var(--rf2-ink-2);
+  font-size: var(--rf2-text-label);
+  font-weight: 600;
+  text-decoration: none;
+}
+[data-ui='v2'] .rf2-workflow-shortcuts__link:hover {
+  border-color: var(--rf2-action);
+  background: var(--rf2-info-tint);
+  color: var(--rf2-action);
+}
+[data-ui='v2'] .rf2-workflow-shortcuts__link svg {
+  width: 15px;
+  height: 15px;
+  flex: none;
+}
+[data-ui='v2'] .rf2-workflow-shortcuts__external {
+  margin-inline-start: 2px;
+  opacity: .55;
+}
+@media (max-width: 640px) {
+  [data-ui='v2'] .rf2-workflow-shortcuts {
+    padding: var(--rf2-space-1-5);
+  }
+  [data-ui='v2'] .rf2-workflow-shortcuts__label {
+    width: 100%;
+    padding-block: 0;
+  }
+}
