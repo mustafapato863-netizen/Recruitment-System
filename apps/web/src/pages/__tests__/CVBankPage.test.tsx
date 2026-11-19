@@ -129,6 +129,41 @@ describe('CVBankPage uploader and intake recovery', () => {
     expect(screen.queryByRole('button', { name: 'Bulk upload' })).not.toBeInTheDocument();
   });
 
+  it('archives a CV only after an editor supplies an audit reason and confirms', async () => {
+    const user = userEvent.setup();
+    api.postApi.mockImplementation(async (path: string) => {
+      if (path === '/documents/doc-initial/archive') {
+        storedDocs = [];
+        return { status: 'Archived' };
+      }
+      return {};
+    });
+    renderCvBank();
+    const actions = await screen.findByRole('button', { name: 'More actions for Mariam Essam' });
+    await user.click(actions);
+    await user.click(within(screen.getByRole('menu', { name: 'Actions for Mariam Essam' })).getByRole('menuitem', { name: 'Archive CV' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/audited and reversible/i)).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Archive CV' })).toBeDisabled();
+    expect(api.postApi).not.toHaveBeenCalled();
+    await user.type(within(dialog).getByRole('textbox', { name: 'Reason for archiving' }), 'Outdated CV replaced');
+    await user.click(within(dialog).getByRole('button', { name: 'Archive CV' }));
+    await waitFor(() => expect(api.postApi).toHaveBeenCalledWith(
+      '/documents/doc-initial/archive', { reason: 'Outdated CV replaced' },
+    ));
+    expect(toastShow).toHaveBeenCalledWith(expect.objectContaining({ title: 'CV archived', tone: 'success' }));
+  });
+
+  it('does not offer archive or upload to viewers without candidate editing rights', async () => {
+    const user = userEvent.setup();
+    permissionState.permissions = ['CANDIDATE_VIEW'];
+    renderCvBank();
+    const actions = await screen.findByRole('button', { name: 'More actions for Mariam Essam' });
+    await user.click(actions);
+    expect(within(screen.getByRole('menu', { name: 'Actions for Mariam Essam' })).queryByRole('menuitem', { name: 'Archive CV' })).not.toBeInTheDocument();
+    expect(api.postApi).not.toHaveBeenCalled();
+  });
+
   it('parses, creates candidate, attaches to scoped job, uploads CV binary, and reads back into the CV Bank list', async () => {
     const user = userEvent.setup();
 
