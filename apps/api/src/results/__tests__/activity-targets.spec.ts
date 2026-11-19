@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- Dynamic heterogeneous test doubles model Prisma rows and query shapes. */
 import { randomUUID } from 'node:crypto';
 import type { AuthUser } from '@recruitflow/contracts';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -48,7 +49,6 @@ describe('employee activity targets', () => {
   const manager = auth(ids.manager, ['HIRING_MANAGER']);
   const employee = auth(ids.employee, ['RECRUITER']);
   const outsider = auth(ids.outsider, ['HIRING_MANAGER']);
-  const admin = auth(ids.admin, ['ADMINISTRATOR']);
 
   const users = [
     { id: ids.manager, organizationId: ORG, displayName: 'Dr. Hassan Ali', jobTitle: 'Hiring Manager', status: 'Active', managerId: null, userRoles: [{ role: { code: 'HIRING_MANAGER' } }] },
