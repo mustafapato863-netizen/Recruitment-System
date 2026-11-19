@@ -15,6 +15,7 @@ import {
   approveRequisition, declineRequisition, deptOf, dueOf, fetchContext, fetchRequisitions, formatDue, mineOrTeam, ownerOf, reqError, requestRequisitionChanges, siteOf, titleOf,
   type ReqContext, type Requisition,
 } from '../api/requisitions';
+import { WorkflowShortcutsV2 } from './WorkflowShortcutsV2';
 import './jobs.css';
 import './team.css';
 
@@ -235,6 +236,7 @@ export function TeamWorkV2() {
             </div>
 
           </header>
+          <WorkflowShortcutsV2 seat="manager" />
           {reports ? (
             <ul className="rf2-team__summary-cards" aria-label="Team summary">
               <li>
