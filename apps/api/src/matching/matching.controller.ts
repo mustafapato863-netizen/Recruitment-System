@@ -7,6 +7,8 @@ import { AtsScoringService } from './ats-scoring.service';
 import { AddSkillEvidenceDto, DuplicateCheckDto } from './matching.dto';
 /* eslint-enable @typescript-eslint/consistent-type-imports */
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard';
+import { TenantScopedGuard } from '../common/guards/tenant-scoped.guard';
+import { TenantResource } from '../common/decorators/tenant-resource.decorator';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { RequirePermissions } from '../common/decorators/require-permissions.decorator';
 
@@ -27,12 +29,16 @@ export class MatchingController {
 
   @Get('applications/:id/ats-match')
   @RequirePermissions('APPLICATION_VIEW')
+  @UseGuards(TenantScopedGuard)
+  @TenantResource({ resource: 'application', param: 'id' })
   getApplicationAts(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.atsScoring.evaluateApplicationAts(user.organizationId, id, user);
   }
 
   @Get('candidates/:id/job-recommendations')
   @RequirePermissions('CANDIDATE_VIEW')
+  @UseGuards(TenantScopedGuard)
+  @TenantResource({ resource: 'candidate', param: 'id' })
   getCandidateJobRecommendations(@CurrentUser() user: AuthUser, @Param('id', ParseUUIDPipe) id: string) {
     return this.atsScoring.getJobRecommendationsForCandidate(user.organizationId, id);
   }
