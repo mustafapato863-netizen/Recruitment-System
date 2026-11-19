@@ -17,7 +17,7 @@ import { UserPermissionsService } from '../common/user-permissions.service';
 import { findSkillSnippet } from './skill-evidence';
 import { isSkillLinkActive } from './skill-links';
 
-const ATS_VERSION = 'v2-ats-1.0';
+const ATS_VERSION = 'v2-ats-1.1';
 
 @Injectable()
 export class AtsScoringService {
@@ -98,7 +98,7 @@ export class AtsScoringService {
       (vacancy.jdCriteria as unknown as JdCriteriaDefinition) || {
         version: 1,
         isLocked: false,
-        minExperienceYears: vacancy.minExperienceYears ?? 3,
+        minExperienceYears: vacancy.minExperienceYears ?? null,
         educationLevels: [],
         languages: [],
         workMode: 'On-site',
@@ -112,8 +112,7 @@ export class AtsScoringService {
         weights: { skills: 50, experience: 30, education: 10, languages: 10 },
       };
 
-    const candidateExpYears = candidate.experienceYears ?? 0;
-    const candidateSkillsLower = new Set((candidate.skills || []).map((s) => s.toLowerCase()));
+    const candidateExpYears = candidate.experienceYears ?? null;
     const candidateLinkSkills = new Map(
       candidate.skillLinks.map((l) => [l.skill.name.toLowerCase(), l]),
     );
@@ -123,13 +122,23 @@ export class AtsScoringService {
 
     // 1. Evaluate Knockout Rules
     const knockoutFailures: string[] = [];
+    const manualReviewRequired = new Set<string>();
     for (const rule of criteria.knockoutRules || []) {
-      if (rule.field === 'experienceYears') {
+      if (rule.field === 'experienceYears' && rule.operator === 'GTE') {
         const required = Number(rule.value);
-        if (candidateExpYears < required) {
+        if (!Number.isFinite(required) || candidateExpYears === null) {
+          manualReviewRequired.add('Experience requirement is not verified; recruiter review is needed.');
+        } else if (candidateExpYears < required) {
           knockoutFailures.push(rule.failureMessage || `Requires minimum ${required} years experience (Candidate has ${candidateExpYears}).`);
         }
+      } else {
+        manualReviewRequired.add(`${rule.field} knockout must be verified by a reviewer; not evaluated automatically.`);
       }
+    }
+    if (criteria.educationLevels?.length) manualReviewRequired.add('Education credentials require verification.');
+    if (criteria.languages?.length) manualReviewRequired.add('Language proficiency requires verification.');
+    if ((criteria.minExperienceYears ?? vacancy.minExperienceYears ?? 0) > 0 && candidateExpYears === null) {
+      manualReviewRequired.add('Candidate experience is not recorded; human review is required.');
     }
     const knockoutsPassed = knockoutFailures.length === 0;
 
@@ -142,11 +151,10 @@ export class AtsScoringService {
     for (const skill of criteria.mustHaveSkills) {
       const sLower = skill.name.toLowerCase();
       const link = candidateLinkSkills.get(sLower);
-      const isDirectSkill = candidateSkillsLower.has(sLower);
-      const isEvidenced = Boolean(link && isSkillLinkActive(candidate.skills ?? undefined, link.skill.name, link.evidence));
-
-      const snippet = link?.evidence[0]?.snippet || findSkillSnippet(combinedCvText, skill.name);
-      const matched = isDirectSkill || isEvidenced || Boolean(snippet);
+      const isEvidenced = Boolean(link?.evidence.length && isSkillLinkActive(candidate.skills ?? undefined, link.skill.name, link.evidence));
+      // V1 parity: a self-reported profile skill is not verified match evidence.
+      const snippet = (isEvidenced ? link?.evidence[0]?.snippet : null) || findSkillSnippet(combinedCvText, skill.name);
+      const matched = isEvidenced || Boolean(snippet);
 
       if (matched) {
         mustHaveMatchedCount += 1;
@@ -159,7 +167,7 @@ export class AtsScoringService {
         isMustHave: true,
         matched,
         evidenceSnippet: snippet || null,
-        sourceType: link?.evidence[0]?.sourceType || (snippet ? 'CV_TEXT' : null),
+        sourceType: (isEvidenced ? link?.evidence[0]?.sourceType : null) || (snippet ? 'CV_TEXT' : null),
       });
     }
 
@@ -170,9 +178,9 @@ export class AtsScoringService {
     for (const skill of criteria.niceToHaveSkills) {
       const sLower = skill.name.toLowerCase();
       const link = candidateLinkSkills.get(sLower);
-      const isDirectSkill = candidateSkillsLower.has(sLower);
-      const snippet = link?.evidence[0]?.snippet || findSkillSnippet(combinedCvText, skill.name);
-      const matched = isDirectSkill || Boolean(snippet);
+      const isEvidenced = Boolean(link?.evidence.length && isSkillLinkActive(candidate.skills ?? undefined, link.skill.name, link.evidence));
+      const snippet = (isEvidenced ? link?.evidence[0]?.snippet : null) || findSkillSnippet(combinedCvText, skill.name);
+      const matched = isEvidenced || Boolean(snippet);
 
       if (matched) {
         niceToHaveMatchedCount += 1;
@@ -185,29 +193,31 @@ export class AtsScoringService {
         isMustHave: false,
         matched,
         evidenceSnippet: snippet || null,
-        sourceType: link?.evidence[0]?.sourceType || (snippet ? 'CV_TEXT' : null),
+        sourceType: (isEvidenced ? link?.evidence[0]?.sourceType : null) || (snippet ? 'CV_TEXT' : null),
       });
     }
 
     // 4. Calculate Sub-Scores
-    const mustHaveRatio = mustHaveTotalCount > 0 ? mustHaveMatchedCount / mustHaveTotalCount : 1.0;
-    const niceToHaveRatio = niceToHaveTotalCount > 0 ? niceToHaveMatchedCount / niceToHaveTotalCount : 1.0;
-    const skillsScore = mustHaveTotalCount > 0 ? (mustHaveRatio * 0.8 + niceToHaveRatio * 0.2) * 100 : 80;
+    const mustHaveRatio = mustHaveTotalCount > 0 ? mustHaveMatchedCount / mustHaveTotalCount : 0;
+    const niceToHaveRatio = niceToHaveTotalCount > 0 ? niceToHaveMatchedCount / niceToHaveTotalCount : 0;
+    const skillsScore = mustHaveTotalCount > 0 && niceToHaveTotalCount > 0
+      ? (mustHaveRatio * 0.8 + niceToHaveRatio * 0.2) * 100
+      : (mustHaveTotalCount > 0 ? mustHaveRatio : niceToHaveRatio) * 100;
 
-    const reqExp = criteria.minExperienceYears || 1;
-    const expRatio = Math.min(candidateExpYears / reqExp, 1.25);
-    const expScore = Math.min(expRatio * 100, 100);
+    const reqExp = criteria.minExperienceYears ?? vacancy.minExperienceYears ?? 0;
+    const expKnown = candidateExpYears !== null && Number.isFinite(candidateExpYears);
+    const expScore = reqExp > 0 && expKnown ? Math.min((candidateExpYears / reqExp) * 100, 100) : 0;
 
     const weights = criteria.weights || { skills: 50, experience: 30, education: 10, languages: 10 };
-    const totalWeight = weights.skills + weights.experience + weights.education + weights.languages;
+    const skillsWeight = mustHaveTotalCount + niceToHaveTotalCount > 0 ? Math.max(0, weights.skills) : 0;
+    const experienceWeight = reqExp > 0 && expKnown ? Math.max(0, weights.experience) : 0;
+    const totalWeight = skillsWeight + experienceWeight;
 
-    // Weighted Overall Score
-    let computedOverall = (
-      (skillsScore * weights.skills) +
-      (expScore * weights.experience) +
-      (85 * weights.education) + // Baseline default for education
-      (90 * weights.languages)   // Baseline default for languages
-    ) / totalWeight;
+    // Only verifiable evidence contributes to scores. Degree/language data is
+    // currently absent and must not earn invented 85/90 placeholder points.
+    let computedOverall = totalWeight > 0
+      ? ((skillsScore * skillsWeight) + (expScore * experienceWeight)) / totalWeight
+      : 0;
 
     // If knockouts failed, cap score at 49 to highlight blocker, but never auto-reject
     if (!knockoutsPassed) {
@@ -221,6 +231,7 @@ export class AtsScoringService {
       overallScore,
       knockoutsPassed,
       knockoutFailures,
+      manualReviewRequired: [...manualReviewRequired],
       mustHaveSkillsPassed,
       mustHaveMatchedCount,
       mustHaveTotalCount,
@@ -232,17 +243,17 @@ export class AtsScoringService {
       experienceMatch: {
         actualYears: candidateExpYears,
         requiredYears: reqExp,
-        passed: candidateExpYears >= reqExp,
+        passed: reqExp > 0 && expKnown ? candidateExpYears >= reqExp : null,
       },
       educationMatch: {
-        actual: ['Accredited Degree'],
+        actual: [],
         required: criteria.educationLevels || [],
-        passed: true,
+        passed: null,
       },
       languagesMatch: {
-        actual: ['English'],
+        actual: [],
         required: (criteria.languages || []).map((l) => l.language),
-        passed: true,
+        passed: null,
       },
       calculatedAt: new Date().toISOString(),
     };
@@ -280,6 +291,7 @@ export class AtsScoringService {
       where: { id: candidateId, organizationId },
       include: {
         applications: { select: { id: true, vacancyId: true, stage: true } },
+        skillLinks: { include: { skill: { select: { name: true } }, evidence: { select: { sourceType: true } } } },
         documents: {
           where: { deletedAt: null, extractionText: { not: null } },
           select: { extractionText: true },
@@ -307,8 +319,10 @@ export class AtsScoringService {
       orderBy: { createdAt: 'desc' },
     });
 
-    const candidateSkillsLower = new Set((candidate.skills || []).map((s) => s.toLowerCase()));
     const candidateExp = candidate.experienceYears ?? 0;
+    const evidencedSkills = new Set(candidate.skillLinks
+      .filter((link) => link.evidence.length > 0 && isSkillLinkActive(candidate.skills ?? undefined, link.skill.name, link.evidence))
+      .map((link) => link.skill.name.toLowerCase()));
     const combinedCvText = candidate.documents.map((d) => d.extractionText || '').join('\n');
 
     const recommendations: CandidateJobRecommendation[] = [];
@@ -319,8 +333,8 @@ export class AtsScoringService {
 
       let matchedCount = 0;
       for (const reqSkill of mustHaves) {
-        const sLower = reqSkill.toLowerCase();
-        if (candidateSkillsLower.has(sLower) || findSkillSnippet(combinedCvText, reqSkill)) {
+        // Reuse all V1-backed evidence, including screening and scorecard links.
+        if (evidencedSkills.has(reqSkill.toLowerCase()) || findSkillSnippet(combinedCvText, reqSkill)) {
           matchedCount += 1;
         }
       }
