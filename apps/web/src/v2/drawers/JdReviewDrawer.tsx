@@ -67,21 +67,13 @@ export function JdReviewDrawer({
             isLocked: false,
             lockedAt: null,
             lockedById: null,
-            minExperienceYears: 3,
-            educationLevels: ['BACHELORS'],
-            languages: [{ language: 'English', minProficiency: 'Professional' }],
+            minExperienceYears: null,
+            educationLevels: [],
+            languages: [],
             workMode: 'On-site',
             mustHaveSkills: [],
             niceToHaveSkills: [],
-            knockoutRules: [
-              {
-                id: 'ko-exp',
-                field: 'experienceYears',
-                operator: 'GTE',
-                value: 3,
-                failureMessage: 'Requires at least 3 years experience.',
-              },
-            ],
+            knockoutRules: [],
             weights: { skills: 50, experience: 30, education: 10, languages: 10 },
           },
         );
@@ -435,10 +427,10 @@ export function JdReviewDrawer({
                 <InputV2
                   label="Min Experience (Years)"
                   type="number"
-                  value={criteria?.minExperienceYears ?? 3}
+                  value={criteria?.minExperienceYears ?? ''}
                   onChange={(e) =>
                     setCriteria((prev) =>
-                      prev ? { ...prev, minExperienceYears: parseInt(e.target.value, 10) || 0 } : null,
+                      prev ? { ...prev, minExperienceYears: e.target.value === '' ? null : Math.max(0, Number(e.target.value)) } : null,
                     )
                   }
                 />
@@ -463,6 +455,7 @@ export function JdReviewDrawer({
 
             <div className="border-t border-[var(--rf2-divider)] pt-3">
               <span className="block text-xs font-bold text-[var(--rf2-ink)] mb-2">ATS Scoring Weights (%)</span>
+              <p className="text-[11px] text-[var(--rf2-muted)] mb-2">Configured weights; only skills and experience with evaluable evidence count toward the current score. Qualifications still require recruiter verification.</p>
               <div className="grid grid-cols-4 gap-2 text-center text-xs">
                 <div className="rounded-xl bg-[var(--rf2-well)] p-2">
                   <span className="block font-extrabold text-[var(--rf2-action)]">50%</span>
