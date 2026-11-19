@@ -40,7 +40,7 @@ describe('LicenseManagementV2', () => {
     expect(screen.getByText('Employee workspace')).toBeInTheDocument();
     expect(screen.getByText('Manager workspace')).toBeInTheDocument();
     expect(screen.getByText('Admin workspace')).toBeInTheDocument();
-    expect(screen.getAllByText('1 active users')).toHaveLength(3);
+    expect(screen.getAllByText('1 active user')).toHaveLength(3);
     expect(screen.getByText('Sarah Ahmed')).toBeInTheDocument();
     expect(screen.getByText('Dr. Hassan Ali')).toBeInTheDocument();
     expect(screen.getByText('Omar Khalil')).toBeInTheDocument();
