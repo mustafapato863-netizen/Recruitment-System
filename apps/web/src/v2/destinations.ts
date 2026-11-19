@@ -19,7 +19,7 @@ export const SEAT_DESTINATIONS: Record<Seat, string[]> = {
   // '/interviews/:id' stays for the Manager's own scorecard (Team work → Waiting on you → Submit scorecard).
   // v2 default: '/vacancy-requests' is the list only (the drawers carry ?req= / ?req=new); detail and create URLs redirect.
   manager: ['/offers/:id', '/my-work', '/vacancy-requests', '/approvals', '/team-interviews', '/reports', '/applications/:id', '/vacancies/:id'],
-  admin: ['/users', '/roles', '/pipeline-settings', '/master-data', '/email-templates', '/whatsapp-templates', '/reports', '/audit-log', '/integrations'],
+  admin: ['/users', '/roles', '/licenses', '/pipeline-settings', '/master-data', '/email-templates', '/whatsapp-templates', '/reports', '/audit-log', '/integrations'],
 };
 
 /**
