@@ -1,0 +1,198 @@
+/*
+ * V2 visual and accessibility bridge for the remaining functional V1 pages.
+ *
+ * These pages are not labelled native V2 until their full business interactions
+ * have been migrated and accepted. Kept in the authenticated shell only.
+ */
+
+/* Candidate profile, CV documents, old hiring case details and admin settings. */
+[data-ui='v2'] .rf2-shell__content :is(
+  .rf-page-hero, .rf-panel, .rf-elevated-card, .rf-metric-card,
+  .rf-table-shell, .rf-detail-hero
+) {
+  background: var(--rf2-card) !important;
+  background-image: none !important;
+  border: 1px solid var(--rf2-divider) !important;
+  box-shadow: none !important;
+  border-radius: var(--rf2-radius-card);
+}
+
+[data-ui='v2'] .rf2-shell__content .rf-page-hero::after,
+[data-ui='v2'] .rf2-shell__content .rf-panel::before {
+  display: none;
+}
+
+/* Make old table and history surfaces usable at 375px without clipping cells. */
+[data-ui='v2'] .rf2-shell__content .rf-table-shell {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto !important;
+  overscroll-behavior-x: contain;
+  scrollbar-gutter: stable;
+}
+[data-ui='v2'] .rf2-shell__content .rf-table-shell table {
+  max-width: none;
+  font-variant-numeric: tabular-nums;
+}
+[data-ui='v2'] .rf2-shell__content .rf-table-shell th {
+  color: var(--rf2-ink-2);
+  background: var(--rf2-neutral-tint);
+}
+[data-ui='v2'] .rf2-shell__content .rf-table-shell tbody tr:focus-within {
+  background: var(--rf2-info-tint);
+}
+
+/* Candidate details: constrain the profile columns and preserve visible actions. */
+[data-ui='v2'] .rf2-shell__content .rf-cand-detail-grid {
+  min-width: 0;
+  gap: var(--rf2-space-2);
+  grid-template-columns: minmax(0, 1.7fr) minmax(275px, 360px);
+}
+[data-ui='v2'] .rf2-shell__content :is(
+  .rf-cand-detail-main, .rf-cand-detail-aside,
+  .rf-cand-overview-bento, .rf-cand-cv-card
+) {
+  min-width: 0;
+  max-width: 100%;
+}
+[data-ui='v2'] .rf2-shell__content .rf-cand-profile-avatar {
+  color: var(--rf2-action);
+  background: var(--rf2-info-tint);
+}
+[data-ui='v2'] .rf2-shell__content .rf-cand-doc-item {
+  border-color: var(--rf2-divider);
+  background: var(--rf2-neutral-tint);
+}
+[data-ui='v2'] .rf2-shell__content .rf-cand-doc-item :is(a, button) {
+  flex-shrink: 0;
+}
+
+/* Old import/review forms: focusable, legible, calm drag-and-drop surfaces. */
+[data-ui='v2'] .rf2-shell__content :is(.rf-upload-dropzone, .rf-doc-dropzone) {
+  background: var(--rf2-neutral-tint);
+  border: 2px dashed var(--rf2-divider);
+  border-radius: var(--rf2-radius-card);
+  color: var(--rf2-ink);
+  transition: border-color var(--rf2-motion-fast) var(--rf2-ease),
+              background-color var(--rf2-motion-fast) var(--rf2-ease);
+}
+[data-ui='v2'] .rf2-shell__content :is(
+  .rf-upload-dropzone, .rf-doc-dropzone
+):is(:hover, :focus-within) {
+  border-color: var(--rf2-action);
+  background: var(--rf2-info-tint);
+}
+[data-ui='v2'] .rf2-shell__content :is(
+  .rf-upload-dropzone, .rf-doc-dropzone
+):focus-within {
+  outline: 2px solid var(--rf2-focus-color);
+  outline-offset: 2px;
+}
+
+/* CV Bank: remove hard-coded intense blue and use consistent semantic tokens. */
+[data-ui='v2'] .rf2-shell__content .rf2-cvb__btn--primary {
+  background: var(--rf2-action);
+  border-color: var(--rf2-action);
+  color: var(--rf2-on-action);
+  box-shadow: none;
+}
+[data-ui='v2'] .rf2-shell__content .rf2-cvb__btn--primary:hover:not(:disabled) {
+  background: var(--rf2-action-hover);
+  border-color: var(--rf2-action-hover);
+}
+[data-ui='v2'] .rf2-shell__content :is(
+  .rf2-cvb__kpi, .rf2-cvb__card, .rf2-cvb__banner
+) {
+  background: var(--rf2-card);
+  border: 1px solid var(--rf2-divider);
+  box-shadow: none;
+  border-radius: var(--rf2-radius-card);
+}
+[data-ui='v2'] .rf2-shell__content .rf2-cvb__banner {
+  background: var(--rf2-neutral-tint);
+}
+[data-ui='v2'] .rf2-shell__content .rf2-cvb__kpi-icon[data-tone='blue'],
+[data-ui='v2'] .rf2-shell__content .rf2-cvb__banner-icon {
+  background: var(--rf2-info-tint);
+  color: var(--rf2-action);
+}
+[data-ui='v2'] .rf2-shell__content .rf2-cvb__kpi-icon[data-tone='green'] {
+  background: var(--rf2-success-tint);
+  color: var(--rf2-success);
+}
+[data-ui='v2'] .rf2-shell__content .rf2-cvb__kpi-icon[data-tone='amber'] {
+  background: var(--rf2-warning-tint);
+  color: var(--rf2-warning);
+}
+[data-ui='v2'] .rf2-shell__content .rf2-cvb__card-head {
+  border-bottom: 1px solid var(--rf2-divider);
+}
+[data-ui='v2'] .rf2-shell__content .rf2-cvb__actions {
+  min-width: 0;
+  flex-wrap: wrap;
+}
+[data-ui='v2'] .rf2-shell__content .rf2-cvb__kpi-value {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Hiring-case notes and checklists stay readable at smaller sizes. */
+[data-ui='v2'] .rf2-shell__content :is(
+  .rf-detail-hero, .rf-page-hero, .rf-cand-activity-panel
+) {
+  min-width: 0;
+}
+[data-ui='v2'] .rf2-shell__content details > summary {
+  cursor: pointer;
+  border-radius: var(--rf2-radius-control);
+}
+[data-ui='v2'] .rf2-shell__content details > summary:focus-visible {
+  outline: 2px solid var(--rf2-focus-color) !important;
+  outline-offset: 2px;
+}
+
+/* Read-only data remains visible, not washed out or clipped, on mobile. */
+@media (max-width: 1100px) {
+  [data-ui='v2'] .rf2-shell__content .rf-cand-detail-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  [data-ui='v2'] .rf2-shell__content .rf-cand-detail-aside {
+    position: static;
+  }
+}
+@media (max-width: 768px) {
+  [data-ui='v2'] .rf2-shell__content .rf2-cvb__kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  [data-ui='v2'] .rf2-shell__content .rf-page-hero {
+    padding: var(--rf2-space-2);
+  }
+}
+@media (max-width: 520px) {
+  [data-ui='v2'] .rf2-shell__content .rf2-cvb__kpis {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  [data-ui='v2'] .rf2-shell__content .rf2-cvb__kpi {
+    padding: var(--rf2-space-1-5);
+  }
+  [data-ui='v2'] .rf2-shell__content :is(
+    .rf-cand-overview-bento, .rf-cand-detail-grid
+  ) {
+    display: block;
+  }
+  [data-ui='v2'] .rf2-shell__content .rf-cand-detail-aside {
+    margin-top: var(--rf2-space-2);
+  }
+  [data-ui='v2'] .rf2-shell__content .rf2-cvb__header {
+    gap: var(--rf2-space-1-5);
+  }
+  [data-ui='v2'] .rf2-shell__content .rf2-cvb__actions {
+    width: 100%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-ui='v2'] .rf2-shell__content :is(
+    .rf-upload-dropzone, .rf-doc-dropzone
+  ) {
+    transition-duration: 0ms;
+  }
+}
