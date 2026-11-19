@@ -38,7 +38,7 @@ describe.skipIf(!url)('B5 application file: gates, scorecards, offers, interview
     return app;
   }
   const scheduled = (applicationId: string, extra: Record<string, unknown> = {}) => interviews.createInterview(ORG, {
-    applicationId, interviewType: 'Technical', scheduledStart: '2031-01-01T08:00:00Z', scheduledEnd: '2031-01-01T09:00:00Z',
+    applicationId, interviewType: 'Technical', scheduledStart: '2026-01-01T08:00:00Z', scheduledEnd: '2026-01-01T09:00:00Z',
     attendeeUserIds: [ids.iv!], locationUrl: 'https://meet.google.com/abc-defg-hij', allowConflict: true, ...extra,
   } as never);
   const card = { overallRating: 4, recommendation: 'Hire' as const, notes: 'Solid' };
