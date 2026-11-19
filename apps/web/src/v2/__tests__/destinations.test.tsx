@@ -133,6 +133,21 @@ describe('classic staff URLs land on a v2 surface', () => {
     })).toBe('/hires/approvals/inbox');
     expect(v2Redirect('employee', '/hires', { ...opts, interviewerOnly: true })).toBe('/my-interviews');
   });
+  it('makes approval and licence desks reachable only with their exact route permissions', () => {
+    expect(v2Redirect('manager', '/hires/approvals/inbox', {
+      permissions: ['FINAL_HIRING_APPROVAL'],
+    })).toBeNull();
+    expect(v2Redirect('employee', '/licenses', { permissions: ['LICENSE_CHECK'] })).toBeNull();
+    expect(v2Redirect('employee', '/licenses', { permissions: ['APPLICATION_VIEW'] })).toBeNull();
+    expect(v2Redirect('admin', '/licenses', { permissions: ['USERS_VIEW'] })).toBeNull();
+    expect(v2Redirect('employee', '/hires/approvals/inbox', {
+      permissions: ['CANDIDATE_VIEW'],
+    })).toBe('/my-work');
+    expect(v2Redirect('employee', '/licenses', {
+      permissions: ['CANDIDATE_VIEW'],
+    })).toBe('/my-work');
+  });
+
   it('a viewer the route gate refuses does not land on the target', () => {
     expect(v2Redirect('employee', '/cv-bank', { ...opts, permissions: ['VACANCY_VIEW'] })).toBe('/my-work');
     expect(v2Redirect('employee', '/classic/vacancies', { ...opts, permissions: ['CANDIDATE_VIEW'] })).toBe('/my-work');
@@ -302,7 +317,7 @@ describe('PR33-3: seeded licence specialist (Omar) and final approver (Aya)', ()
   it('admins leave classic URLs for the matching v2 page', () => {
     expect(v2Redirect('admin', '/hires', { permissions: [], isAdministrator: true })).toBe('/users');
     expect(v2Redirect('admin', '/hires/h1', { permissions: [], isAdministrator: true })).toBe('/users');
-    expect(v2Redirect('admin', '/licenses', { permissions: [], isAdministrator: true })).toBe('/users');
+    expect(v2Redirect('admin', '/licenses', { permissions: [], isAdministrator: true })).toBeNull();
     expect(v2Redirect('admin', '/cv-bank', { permissions: [], isAdministrator: true })).toBe('/users');
     expect(v2Redirect('admin', '/access-control', { permissions: [], isAdministrator: true })).toBe('/roles');
     expect(v2Redirect('admin', '/settings', { permissions: [], isAdministrator: true })).toBe('/master-data');
