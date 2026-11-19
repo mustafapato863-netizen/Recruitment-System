@@ -291,6 +291,7 @@ export class AtsScoringService {
       where: { id: candidateId, organizationId },
       include: {
         applications: { select: { id: true, vacancyId: true, stage: true } },
+        skillLinks: { include: { skill: { select: { name: true } }, evidence: { select: { sourceType: true } } } },
         documents: {
           where: { deletedAt: null, extractionText: { not: null } },
           select: { extractionText: true },
@@ -319,6 +320,9 @@ export class AtsScoringService {
     });
 
     const candidateExp = candidate.experienceYears ?? 0;
+    const evidencedSkills = new Set(candidate.skillLinks
+      .filter((link) => link.evidence.length > 0 && isSkillLinkActive(candidate.skills ?? undefined, link.skill.name, link.evidence))
+      .map((link) => link.skill.name.toLowerCase()));
     const combinedCvText = candidate.documents.map((d) => d.extractionText || '').join('\n');
 
     const recommendations: CandidateJobRecommendation[] = [];
@@ -329,8 +333,8 @@ export class AtsScoringService {
 
       let matchedCount = 0;
       for (const reqSkill of mustHaves) {
-        // Reuse V1 evidence-only matching for cross-job recommendations.
-        if (findSkillSnippet(combinedCvText, reqSkill)) {
+        // Reuse all V1-backed evidence, including screening and scorecard links.
+        if (evidencedSkills.has(reqSkill.toLowerCase()) || findSkillSnippet(combinedCvText, reqSkill)) {
           matchedCount += 1;
         }
       }
