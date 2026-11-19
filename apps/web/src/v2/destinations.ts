@@ -213,6 +213,8 @@ const INTERVIEWER_ONLY_OK = ['/my-work', '/my-interviews', ...COMMON];
 // Temporary, permission-gated bridge for import landing and supported dataset batch review routes.
 const IMPORT_BRIDGE = /^\/import(?:\/(?:candidates|vacancy-requests|branches|positions|departments|skills|candidate-sources|interview-types)\/[^/]+)?\/?$/;
 const PERSON_BRIDGE = /^\/(?:candidates\/(?!compare\/?$)[^/]+(?:\/documents)?|cv-bank)\/?$/;
+/** Native V2 lists and hiring-case detail must remain reachable from workflow links. */
+const V2_WORKFLOW_BRIDGE = /^\/(?:offers|hires(?:\/[^/]+)?|joinings)\/?$/;
 const RECORD_TARGET = /^\/(?:applications|offers|hires|candidates)\/(?!compare(?:\/|$))[^/?#]+$/;
 export function isInterviewerOnly(user: { permissions?: readonly string[] } | null | undefined, interviewer: boolean): boolean {
   return interviewer && !(user?.permissions ?? []).includes('APPLICATION_VIEW');
@@ -307,6 +309,9 @@ function v2RedirectByPath(seat: Seat, pathname: string, opts: { requisitions?: b
     }
   }
   if (opts.interviewerOnly && seat !== 'admin') return INTERVIEWER_ONLY_OK.some((p) => matches(p, pathname)) ? null : '/my-interviews';
+  // Normal employee/manager workspaces can open actual V2 offer and hire desks.
+  // Dedicated approver/licence homes remain restricted to their own queues and case files.
+  if (seat !== 'admin' && (!opts.home || opts.home === SEAT_HOME[seat]) && V2_WORKFLOW_BRIDGE.test(pathname)) return null;
   if (UNSUPPORTED_IMPORT_BATCH_ROUTE.test(pathname)) return opts.home ?? SEAT_HOME[seat];
   if (seat === 'employee' && IMPORT_BRIDGE.test(pathname)) { try { decodeURIComponent(pathname); return null; } catch { return opts.home ?? SEAT_HOME[seat]; } }
   // B2F-3: an interviewer (any non-admin seat) reads the CV and submits their scorecard on /my-interviews, inside the v2 shell.
