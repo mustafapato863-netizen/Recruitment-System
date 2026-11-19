@@ -136,7 +136,7 @@ export function LicenseManagementV2() {
                   {seat.charAt(0).toUpperCase() + seat.slice(1)} workspace
                 </h3>
                 <span className="rf2-admin-seat-card__quota">
-                  {loading ? 'Loading users…' : error ? 'Unavailable' : `${activeCounts[seat]} active users`}
+                  {loading ? 'Loading users…' : error ? 'Unavailable' : `${activeCounts[seat]} active user${activeCounts[seat] === 1 ? '' : 's'}`}
                 </span>
               </div>
               <StatusChip tone="neutral" label="V2 interface" />
