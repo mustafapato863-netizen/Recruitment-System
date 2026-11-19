@@ -48,7 +48,7 @@ const EntityLinkRoute = lazy(() => import('./v2/pages/EntityLinkRoute').then((m)
 const HireManagementPage = lazy(() => import('./pages/HireManagementPage').then((m) => ({ default: m.HireManagementPage })));
 const HiringCasePage = lazy(() => import('./pages/HiringCasePage').then((m) => ({ default: m.HiringCasePage })));
 const FinalApprovalInboxPage = lazy(() => import('./pages/FinalApprovalInboxPage').then((m) => ({ default: m.FinalApprovalInboxPage })));
-const OffersPage = lazy(() => import('./pages/OffersPage').then((m) => ({ default: m.OffersPage })));
+const OffersPage = lazy(() => import('./v2/pages/OffersV2').then((m) => ({ default: m.OffersV2 })));
 const JobAnalyticsPage = lazy(() => import('./pages/JobAnalyticsPage').then((m) => ({ default: m.JobAnalyticsPage })));
 const CandidateDetailPage = lazy(() => import('./pages/CandidateDetailPage').then((m) => ({ default: m.CandidateDetailPage })));
 const CandidateDocumentsPage = lazy(() => import('./pages/CandidateDocumentsPage').then((m) => ({ default: m.CandidateDocumentsPage })));
