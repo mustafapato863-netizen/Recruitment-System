@@ -10,5 +10,6 @@ interface AtmosphericBackgroundProps {
  * surface and performance specification.
  */
 export function AtmosphericBackground(_props: AtmosphericBackgroundProps) {
+  void _props;
   return null;
 }
