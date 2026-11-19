@@ -72,7 +72,7 @@ const ROUTE_GATES: Array<[RegExp, Gate]> = [
   [/^\/hires\/approvals\/inbox\/?$/, { all: ['FINAL_HIRING_APPROVAL'] }],
   // GET /hiring/:id allows any of these (the final approver opens the case she approves).
   [/^\/hires\/[^/]+\/?$/, { any: ['APPLICATION_VIEW', 'APPROVE_OFFERS', 'FINAL_HIRING_APPROVAL', 'LICENSE_CHECK'] }],
-  [/^\/licenses\/?$/, { any: ['APPLICATION_VIEW', 'LICENSE_CHECK'] }],
+  [/^\/licenses\/?$/, { any: ['APPLICATION_VIEW', 'LICENSE_CHECK', 'USERS_VIEW'] }],
   [/^\/(hires|joinings|offers|reports)\/?$/, { all: ['APPLICATION_VIEW'] }],
   // #34: final-hire approvers read the file. LICENSE_CHECK opens the same file on the pre-hire drawer.
   [/^\/applications\/[^/]+\/?$/, { any: ['APPLICATION_VIEW', 'FINAL_HIRING_APPROVAL', 'LICENSE_CHECK'] }],
@@ -246,11 +246,12 @@ export function v2Redirect(seat: Seat, pathname: string, opts: { requisitions?: 
   // A permissioned reviewer can open the native approval or licence desk even
   // without the dedicated reviewer role/home. The API and App PermissionGate
   // still enforce file ownership and the underlying action permission.
-  if (!opts.interviewerOnly && opts.permissions) {
-    const held = new Set(opts.permissions);
-    if (cleanPath === '/hires/approvals/inbox' && held.has('FINAL_HIRING_APPROVAL')) to = null;
+  if (!opts.interviewerOnly && (opts.permissions || opts.isAdministrator)) {
+    const held = new Set(opts.permissions ?? []);
+    if (cleanPath === '/hires/approvals/inbox' &&
+      (opts.isAdministrator || held.has('FINAL_HIRING_APPROVAL'))) to = null;
     if (cleanPath === '/licenses' &&
-      ['APPLICATION_VIEW', 'LICENSE_CHECK', 'USERS_VIEW'].some((permission) => held.has(permission))) to = null;
+      (opts.isAdministrator || ['APPLICATION_VIEW', 'LICENSE_CHECK', 'USERS_VIEW'].some((permission) => held.has(permission)))) to = null;
   }
   if (seat === 'admin' && /^\/reporting-tree\/?$/.test(cleanPath) && query) {
     const params = new URLSearchParams(query);
