@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReportOverview, UserProfile } from '@recruitflow/contracts';
+import type * as ApiClientModule from '../../../api/client';
 import { ApiError } from '../../../api/client';
 import { axeViolations } from '../../../components/v2/__tests__/axe';
 import { AppShellV2 } from '../../../components/v2/shell/AppShellV2';
@@ -15,7 +16,7 @@ const api = vi.hoisted(() => ({
 }));
 
 vi.mock('../../../api/client', async () => {
-  const actual = await vi.importActual<typeof import('../../../api/client')>('../../../api/client');
+  const actual = await vi.importActual<typeof ApiClientModule>('../../../api/client');
   return {
     ...actual,
     getApi: (path: string, opts?: unknown) => api.getApi(path, opts),
