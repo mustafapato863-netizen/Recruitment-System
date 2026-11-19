@@ -137,7 +137,7 @@ export class AtsScoringService {
     }
     if (criteria.educationLevels?.length) manualReviewRequired.add('Education credentials require verification.');
     if (criteria.languages?.length) manualReviewRequired.add('Language proficiency requires verification.');
-    if ((criteria.minExperienceYears ?? 0) > 0 && candidateExpYears === null) {
+    if ((criteria.minExperienceYears ?? vacancy.minExperienceYears ?? 0) > 0 && candidateExpYears === null) {
       manualReviewRequired.add('Candidate experience is not recorded; human review is required.');
     }
     const knockoutsPassed = knockoutFailures.length === 0;
