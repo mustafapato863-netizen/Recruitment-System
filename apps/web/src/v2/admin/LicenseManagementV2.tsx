@@ -57,7 +57,7 @@ export function LicenseManagementV2() {
       .then((rawUsers) => {
         if (!alive) return;
         if (!Array.isArray(rawUsers)) throw new Error('The user directory returned an invalid list.');
-        const mappedUsers: UserSeatRow[] = userList.map((u: UserSeatWire) => {
+        const mappedUsers: UserSeatRow[] = rawUsers.map((u: UserSeatWire) => {
           const roles = Array.isArray(u.roles)
             ? u.roles.map((role) => typeof role === 'string' ? role : role.code ?? role.name ?? '').filter(Boolean)
             : [];
