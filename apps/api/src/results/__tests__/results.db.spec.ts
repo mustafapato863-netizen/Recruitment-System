@@ -5,6 +5,7 @@ import { PrismaService } from '../../database/prisma.service';
 import { AccessControlService } from '../../access-control/access-control.service';
 import { ResultsService } from '../results.service';
 import { HAS_VACANCY_OWNER } from '../../common/schema-features';
+import { privateVacancy } from '../../common/testing/private-vacancy';
 
 const url = process.env.B8_TEST_DATABASE_URL;
 const ORG = '10000000-0000-4000-8000-000000000001';
@@ -26,9 +27,12 @@ describe.skipIf(!url)('B8 /results (scratch Postgres)', () => {
     const roles = Object.fromEntries((await prisma.role.findMany({ where: { code: { in: ['RECRUITER', 'ADMINISTRATOR'] } } })).map((r) => [r.code, r.id]));
     const mk = (id: string, n: string, role: string, managerId?: string) => prisma.user.create({ data: { id, organizationId: ORG, email: `r8-${n}-${tag}@t.test`, emailNormalized: `r8-${n}-${tag}@t.test`, displayName: `R8 ${n}`, passwordHash: 'x', managerId: managerId ?? null, userRoles: { create: { roleId: roles[role]! } } } });
     await mk(u.mgr, 'mgr', 'RECRUITER'); await mk(u.r1, 'r1', 'RECRUITER', u.mgr); await mk(u.r2, 'r2', 'RECRUITER'); await mk(u.admin, 'admin', 'ADMINISTRATOR');
-    const jobs = await prisma.vacancy.findMany({ where: { organizationId: ORG, status: { not: 'Closed' } }, take: 2, orderBy: { vacancyCode: 'asc' } });
-    job = jobs[0]!.id; otherJob = jobs[1]!.id;
-    await prisma.vacancy.update({ where: { id: job }, data: { approvedHeadcount: 3 } });
+    // Never reassign seeded shared jobs: concurrent suites use those too.
+    job = await privateVacancy(prisma, ORG, 'R8-primary');
+    otherJob = await privateVacancy(prisma, ORG, 'R8-other');
+    // Make the reporting period explicit: openedAt must precede September 2026.
+    await prisma.vacancy.update({ where: { id: job }, data: { approvedHeadcount: 3, openedAt: new Date('2026-08-01T00:00:00Z'), status: 'Open' } });
+    await prisma.vacancy.update({ where: { id: otherJob }, data: { openedAt: new Date('2026-08-01T00:00:00Z'), status: 'Open' } });
     // Same shape the API writes: one active PRIMARY (+ Vacancy.primaryRecruiterId once B1 is under this branch).
     // One transaction: other suites check the single-PRIMARY invariant concurrently.
     await prisma.$transaction([
