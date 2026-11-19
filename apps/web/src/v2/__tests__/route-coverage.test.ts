@@ -83,6 +83,29 @@ describe('business-critical V2 screens remain navigable for the authorized seat'
   });
 });
 
+describe('native V2 routes are actually reachable after seat routing', () => {
+  const fullPermissions = [
+    'APPLICATION_VIEW', 'CANDIDATE_VIEW', 'VACANCY_VIEW',
+    'VACANCY_REQUEST_VIEW', 'FINAL_HIRING_APPROVAL', 'LICENSE_CHECK',
+    'USERS_VIEW', 'ROLES_VIEW', 'MASTER_DATA_VIEW', 'AUDIT_VIEW',
+  ];
+  it('opens every native V2 route for at least one authorized seat instead of redirecting silently', () => {
+    const native = SCREEN_ROUTES.filter((route) => route.surface === 'v2');
+    expect(native.length).toBeGreaterThan(20);
+    for (const route of native) {
+      const actualPath = route.path.replace(':id', 'test-record-id');
+      const reachable = (['employee', 'manager', 'admin'] as const).some((seat) =>
+        v2Redirect(seat, actualPath, {
+          permissions: fullPermissions,
+          requisitions: true,
+          interviews: true,
+          isAdministrator: seat === 'admin',
+        }) === null);
+      expect(reachable, `Native screen ${route.path} is unreachable by all authorized seats`).toBe(true);
+    }
+  });
+});
+
 describe('signed-in UX baseline shared by every screen', () => {
   it('loads design refinements only in the authenticated V2 shell', () => {
     expect(shell).toContain("import '../styles/v2-unified-ux.css'");
