@@ -306,7 +306,7 @@ describe('PR33-3: seeded licence specialist (Omar) and final approver (Aya)', ()
     const recruiter = ['VACANCY_VIEW', 'CANDIDATE_VIEW', 'APPLICATION_VIEW'];
     expect(permittedNavItems('employee', recruiter, false, true, false).map((item) => item.label)).toEqual(['My Work', 'Open jobs', 'Candidates', 'Match Skills', 'Interviews', 'Reports']);
     expect(permittedNavItems('manager', ['VACANCY_REQUEST_VIEW', 'APPLICATION_VIEW'], false, false, false).map((item) => item.label)).toEqual(['Team work', 'Requisitions', 'Approvals', 'Team result']);
-    expect(permittedNavItems('admin', [], true, false, false).map((item) => item.label)).toEqual(['Users', 'Roles', 'Pipeline template', 'Master data', 'WhatsApp templates', 'Reports', 'Audit', 'Integrations']);
+    expect(permittedNavItems('admin', [], true, false, false).map((item) => item.label)).toEqual(['Users', 'Roles', 'Licences & seats', 'Pipeline template', 'Master data', 'WhatsApp templates', 'Reports', 'Audit', 'Integrations']);
   });
   it.each(['/applications/a1', '/applications/a1?drawer=prehire'])('Omar: the shell mounts the application file at %s', async (path) => {
     expect(await go(OMAR, path.split('?')[0])).toBeNull();
