@@ -65,7 +65,7 @@ describe('AtsMatchCard', () => {
     });
 
     expect(screen.getByText(/85% — Strong Fit/i)).toBeInTheDocument();
-    expect(screen.getByText(/Mandatory criteria passed/i)).toBeInTheDocument();
+    expect(screen.getByText(/No evaluated knockout failures/i)).toBeInTheDocument();
     expect(screen.getByText('2 / 2')).toBeInTheDocument();
     expect(screen.getByText('Kubernetes')).toBeInTheDocument();
   });
