@@ -167,7 +167,7 @@ describe('AtsScoringService', () => {
           data: expect.objectContaining({
             atsScore: result.atsScore,
             atsKnockoutPass: true,
-            atsVersion: 'v2-ats-1.0',
+            atsVersion: 'v2-ats-1.1',
           }),
         }),
       );
@@ -229,12 +229,67 @@ describe('AtsScoringService', () => {
     });
   });
 
+    it('does not award unverified qualification points or count a self-reported skill as evidence', async () => {
+      const criteria: JdCriteriaDefinition = {
+        version: 1, isLocked: true, minExperienceYears: 5,
+        educationLevels: ['BACHELORS'], languages: [{ language: 'English' }],
+        mustHaveSkills: [{ id: 's1', name: 'ICU' }], niceToHaveSkills: [],
+        knockoutRules: [{ id: 'd1', field: 'degree', operator: 'IN', value: ['BACHELORS'] }],
+        weights: { skills: 50, experience: 30, education: 10, languages: 10 },
+      };
+      mockPrisma.application.findFirst.mockResolvedValue({
+        id: 'app-review',
+        candidate: {
+          id: 'candidate-review', experienceYears: null, skills: ['ICU'],
+          skillLinks: [{ skill: { id: 'icu-id', name: 'ICU' }, evidence: [] }],
+          documents: [{ extractionText: 'Clinical work history available upon request.' }],
+        },
+        vacancy: {
+          id: 'vac-review', vacancyCode: 'VAC-REV', requiredSkills: ['ICU'],
+          minExperienceYears: 5, jdCriteria: criteria,
+        },
+      });
+      mockPrisma.application.update.mockResolvedValue({});
+      const result = await service.evaluateApplicationAts('org-1', 'app-review');
+
+      expect(result.atsScore).toBe(0);
+      expect(result.breakdown.mustHaveMatchedCount).toBe(0);
+      expect(result.breakdown.manualReviewRequired).toEqual(expect.arrayContaining([
+        expect.stringContaining('Education'),
+        expect.stringContaining('Language'),
+        expect.stringContaining('experience'),
+      ]));
+      expect(result.breakdown.experienceMatch.actualYears).toBeNull();
+      expect(result.breakdown.educationMatch.passed).toBeNull();
+      expect(result.breakdown.languagesMatch.passed).toBeNull();
+      expect(result.atsKnockoutPass).toBe(true); // Unverified is not automatic rejection.
+      expect(mockPrisma.application.update).toHaveBeenCalledTimes(1);
+    });
+
   describe('getJobRecommendationsForCandidate', () => {
+    it('preserves recruiter-verified screening evidence when the CV lacks the skill', async () => {
+      mockPrisma.candidate.findFirst.mockResolvedValue({
+        id: 'cand-evidence', experienceYears: 2, skills: ['ICU'],
+        applications: [],
+        skillLinks: [{ skill: { name: 'ICU' }, evidence: [{ sourceType: 'SCREENING_NOTE' }] }],
+        documents: [{ extractionText: 'Registered nurse with clinical experience.' }],
+      });
+      mockPrisma.vacancy.findMany.mockResolvedValue([{
+        id: 'vac-icu', vacancyCode: 'VAC-ICU', department: 'Nursing',
+        position: { title: 'ICU Nurse' }, branch: { name: 'Giza' },
+        minExperienceYears: 2, requiredSkills: ['ICU'], jdCriteria: null, createdAt: new Date(),
+      }]);
+      const suggestions = await service.getJobRecommendationsForCandidate('org-1', 'cand-evidence');
+      expect(suggestions[0].matchedSkillsCount).toBe(1);
+      expect(suggestions[0].atsScore).toBe(100);
+    });
+
     it('ranks open jobs with highest score first and unapplied above applied', async () => {
       const mockCandidate = {
         id: 'cand-1',
         experienceYears: 5,
         skills: ['React', 'TypeScript', 'Node.js'],
+        skillLinks: [],
         applications: [
           { id: 'app-applied', vacancyId: 'vac-applied', stage: 'Application' },
         ],
