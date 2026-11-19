@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { SCREEN_ROUTES } from '../screenRegistry';
+import { v2Redirect } from '../destinations';
 import { ADMIN_GROUP_ROUTES, SEAT_NAV } from '../../components/v2/shell/navConfig';
 
 const app = readFileSync(resolve(__dirname, '../../App.tsx'), 'utf8');
@@ -43,6 +44,33 @@ describe('all public and signed-in screen paths are inventoried', () => {
     }
     for (const item of ADMIN_GROUP_ROUTES.filter((entry) => entry.status === 'supported')) {
       expect(registered(item.to), `Missing admin screen ${item.label}: ${item.to}`).toBe(true);
+    }
+  });
+});
+
+describe('business-critical V2 screens remain navigable for the authorized seat', () => {
+  const permissions = [
+    'APPLICATION_VIEW', 'CANDIDATE_VIEW', 'VACANCY_VIEW', 'VACANCY_REQUEST_VIEW',
+    'USERS_VIEW', 'ROLES_VIEW', 'MASTER_DATA_VIEW', 'AUDIT_VIEW',
+  ];
+  it.each([
+    ['employee', [
+      '/my-work', '/my-result', '/vacancies', '/vacancies/v1', '/candidates',
+      '/candidates/compare', '/cv-bank', '/sourcing-match', '/interviews',
+      '/interviews/calendar', '/offers', '/offers/o1', '/hires', '/hires/h1',
+      '/joinings', '/applications/a1', '/reports',
+    ]],
+    ['manager', [
+      '/my-work', '/vacancy-requests', '/approvals', '/team-interviews',
+      '/reports', '/offers', '/hires', '/hires/h1', '/joinings',
+    ]],
+    ['admin', [
+      '/users', '/roles', '/master-data', '/audit-log', '/pipeline-settings',
+      '/whatsapp-templates', '/integrations', '/reports',
+    ]],
+  ] as const)('%s can reach real screen routes instead of silently returning home', (seat, paths) => {
+    for (const path of paths) {
+      expect(v2Redirect(seat, path, { permissions, requisitions: true, interviews: true, isAdministrator: seat === 'admin' }), `Blocked real ${seat} screen: ${path}`).toBeNull();
     }
   });
 });
