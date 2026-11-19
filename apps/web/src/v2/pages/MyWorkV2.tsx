@@ -660,8 +660,6 @@ export function MyWorkV2({ load = getMyWork }: { load?: typeof getMyWork } = {})
         ) : null}
       </div>
 
-      <WorkflowShortcutsV2 seat="employee" />
-
       {data && !data.reminderWorkerHealthy && !noWork ? (
         <p className="rf2-mywork__note" role="note" data-testid="sla-hidden">
           <Info aria-hidden="true" /> Reminders are paused right now, so SLA flags are hidden. Due dates below are still correct.
@@ -702,6 +700,7 @@ export function MyWorkV2({ load = getMyWork }: { load?: typeof getMyWork } = {})
             {tab === 'interviews' ? <InterviewPanel rows={data.upcomingInterviews} f={f} ctx={hrefCtx} /> : null}
             {tab === 'joining' ? <JoiningPanel rows={data.joiningSoon} canOpenFile={Boolean(hrefCtx.canOpenFile)} f={f} returnTo={pageReturn} /> : null}
           </div>
+          <WorkflowShortcutsV2 seat="employee" />
         </>
       ) : null}
     </div>
