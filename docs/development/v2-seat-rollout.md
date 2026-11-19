@@ -1,24 +1,33 @@
-# v2 per-seat rollout switch (B10)
+# V2 rollout switch: current implementation and release limitation
 
-v2 §3: one seat at a time — Employee, then Manager, then Admin. Old screens stay until that seat is proven.
+> **Release blocker (19 November 2026): the per-seat V1 fallback is NOT implemented in the signed-in web app.**
+> See [the production release playbook](../operations/release-playbook.md) and
+> [the full replacement programme](../v2-complete-replacement-programme.md).
 
-`GET /api/v1/auth/me` adds:
+`GET /api/v1/auth/me` currently returns:
 
-| field | meaning |
-|---|---|
-| `seat` | caller's seat: `admin` (ADMINISTRATOR role), `manager` (HIRING_MANAGER role or has active direct reports), else `employee` |
-| `v2Seats` | seats that get the v2 UI |
-| `v2Enabled` | `v2Seats.includes(seat)` |
-| `flags.v2Seats` | same list (shape promised in FRONTEND_GAP F4) |
+| field | value |
+| --- | --- |
+| `seat` | `admin` for ADMINISTRATOR, `manager` for HIRING_MANAGER / direct reports, else `employee` |
+| `v2Seats` | configured seat list |
+| `v2Enabled` | whether caller's seat is in `v2Seats` |
+| `flags.v2Seats` | same configured list |
 
-## Where `v2Seats` comes from (first valid wins)
-1. **Org config:** `integrations` row with `name = 'ROLLOUT_SEATS'`, `configJson = {"v2Seats": ["employee","manager"]}`. `[]` = nobody. No migration; same pattern as `RLS_ACCESS_POLICY`.
-2. **Env `RF_V2_SEATS`:** e.g. `employee,manager`; `none` = nobody.
-3. **Default:** `["employee", "manager", "admin"]` (100% full organization cutover).
+The values resolve from organization `integrations` row
+`ROLLOUT_SEATS = { "v2Seats": ["employee","manager"] }`, then
+`RF_V2_SEATS` (including `none`), then all-seat default.
 
-Unknown seat names are ignored. A level whose values are all invalid falls through to the next level. Values come back in rollout order (employee, manager, admin).
+**Actual web behavior:** `apps/web/src/layout/V2Shell.tsx` always invokes
+`applyUiVersion('v2')` and renders `AppShellV2`, irrespective of
+`v2Enabled` or `v2Seats`. The code/tests deliberately ignore
+`?ui=v1`, localStorage toggles and legacy environment switches.
+`RF_V2_SEATS=none` therefore **does not restore the V1 UI**.
 
-## Emergency Rollback & 14-Day Bake Guard (Choice A)
-- **Instant Rollback**: Set `RF_V2_SEATS=none` in the environment, or set `{"v2Seats": []}` in the organization's `ROLLOUT_SEATS` configuration. No database migration or redeployment is required.
-- **14-Day Zero-Rollback Bake Guard (Choice A)**: Legacy V1 wrappers in `apps/web/src/pages/`, classic routing paths in `App.tsx`, and `classic-in-shell.css` remain preserved during a mandatory 14-day production bake under live traffic before legacy code decommissioning.
+Do not instruct operations to use these values as a rollback mechanism until
+a genuine legacy route/shell switch has been implemented and its browser,
+permissions, deep-link and persisted-data tests pass.
 
+**Required before production:** choose either a genuine per-seat web UI switch
+or a rehearsed blue/green deployment rollback of compatible immutable releases.
+Keep V1 code and the 14-day zero-rollback bake guard, and prohibit legacy
+decommissioning until full release acceptance is evidenced.
