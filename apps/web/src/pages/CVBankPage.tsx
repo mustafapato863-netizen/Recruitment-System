@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  ArrowUpDown, CheckCircle2, ChevronLeft, ChevronRight, Clock, Database,
+  Archive, ArrowUpDown, CheckCircle2, ChevronLeft, ChevronRight, Clock, Database,
   Download, Eye, FileText, FolderUp, MoreVertical, RefreshCw, Search,
   ShieldCheck, Upload, X,
 } from 'lucide-react';
@@ -11,6 +11,7 @@ import type { Candidate, CandidateDocument, CvBankBackupStatus, PaginatedResult 
 import { downloadApi, getApi, patchApi, postApi } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { Alert } from '../components/ui/Alert';
+import { ConfirmDialog } from '../components/ConfirmDialog';
 import { Button } from '../components/ui/Button';
 import { Drawer } from '../components/ui/Drawer';
 import { PageState } from '../components/ui/PageState';
@@ -191,6 +192,8 @@ export function CVBankPage() {
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [archiveTarget, setArchiveTarget] = useState<CVRow | null>(null);
+  const [archiving, setArchiving] = useState(false);
   const [viewingKey, setViewingKey] = useState<string | null>(null);
   const [draft, setDraft] = useState<ReviewDraft>(EMPTY_DRAFT);
   const [docUrl, setDocUrl] = useState<string | null>(null);
@@ -423,6 +426,28 @@ export function CVBankPage() {
     setViewingKey(row.key);
     setDraft(draftFromRow(row));
     setOpenMenuId(null);
+  };
+
+  const archiveCv = async (reason?: string) => {
+    if (!archiveTarget?.doc || !canEditDocuments || archiving) return;
+    const note = reason?.trim();
+    if (!note) {
+      setError('An archive reason is required.');
+      return;
+    }
+    setArchiving(true);
+    setError('');
+    try {
+      await postApi(`/documents/${encodeURIComponent(archiveTarget.doc.id)}/archive`, { reason: note });
+      const name = archiveTarget.fileName;
+      setArchiveTarget(null);
+      await loadData({ silent: true });
+      show({ tone: 'success', title: 'CV archived', message: `${name} was removed from the active bank. The document remains recoverable.` });
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Unable to archive the CV document.');
+    } finally {
+      setArchiving(false);
+    }
   };
 
   const handleFileUploadSelected = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -877,6 +902,20 @@ export function CVBankPage() {
                                   <Download aria-hidden="true" />
                                   <span>Download</span>
                                 </button>
+                                {canEditDocuments && row.doc ? (
+                                  <button
+                                    type="button"
+                                    role="menuitem"
+                                    className="rf2-cvb__menu-item rf2-cvb__menu-item--danger"
+                                    onClick={() => {
+                                      setArchiveTarget(row);
+                                      setOpenMenuId(null);
+                                    }}
+                                  >
+                                    <Archive aria-hidden="true" />
+                                    <span>Archive CV</span>
+                                  </button>
+                                ) : null}
                               </div>
                             ) : null}
                           </div>
@@ -1073,6 +1112,20 @@ export function CVBankPage() {
           </div>
         </Drawer>
       ) : null}
+      <ConfirmDialog
+        isOpen={archiveTarget !== null}
+        onClose={() => { if (!archiving) setArchiveTarget(null); }}
+        onConfirm={(reason) => archiveCv(reason)}
+        title="Archive candidate CV"
+        description={archiveTarget ? `Archive ${archiveTarget.fileName} for ${archiveTarget.candidateName}? This is audited and reversible. It will no longer appear in the active CV bank.` : undefined}
+        confirmLabel="Archive CV"
+        tone="warning"
+        withComment
+        commentLabel="Reason for archiving"
+        commentPlaceholder="Why should this CV be removed from the active bank?"
+        commentRequired
+        isLoading={archiving}
+      />
     </div>
   );
 }
