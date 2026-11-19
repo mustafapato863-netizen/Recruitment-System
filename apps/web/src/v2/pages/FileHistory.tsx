@@ -473,7 +473,7 @@ function WhatsAppMessage({ templates, context }: { templates?: FileWhatsAppTempl
 }
 
 /** Templates and queued, sent, and failed attempts. Retry of a failed send adds a row and leaves the failed attempt. */
-export function MessagesCard({ applicationId, followUpDate, omitAttempts = false, read, onReload, whatsappContext }: { applicationId: string; followUpDate: string | null; omitAttempts?: boolean; read?: SectionState<MessagePayload>; onReload?: () => void; whatsappContext?: WhatsAppSendContext }) {
+export function MessagesCard({ applicationId, followUpDate, omitAttempts = false, showDeliveryDestination = false, read, onReload, whatsappContext }: { applicationId: string; followUpDate: string | null; omitAttempts?: boolean; showDeliveryDestination?: boolean; read?: SectionState<MessagePayload>; onReload?: () => void; whatsappContext?: WhatsAppSendContext }) {
   const [localRead, setLocalRead] = useState<SectionState<MessagePayload>>({ status: 'loading' });
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -529,7 +529,7 @@ export function MessagesCard({ applicationId, followUpDate, omitAttempts = false
     <section className="rf2-card" aria-labelledby="msgs-h">
       <h3 id="msgs-h" className="rf2-card__title">Messages</h3>
       <p className="rf2-file__muted">Follow-up on this file: {follow ? day(follow) : 'not set'}. Sending does not change it.</p>
-      {payload?.destination ? <p className="rf2-file__muted">Recipient {payload.destination}. The candidate is not emailed.</p> : null}
+      {showDeliveryDestination && payload?.destination ? <p className="rf2-file__muted">Recipient {payload.destination}. The candidate is not emailed.</p> : null}
       {section.status === 'loading' ? <p className="rf2-file__muted">Loading message history.</p> : null}
       {readProblem && section.status !== 'loading' ? (
         <div className="rf2-file__section" role="alert" data-tone={readProblem.tone === 'unavailable' ? 'unavailable' : readProblem.tone === 'transient' ? 'warning' : 'danger'}>
