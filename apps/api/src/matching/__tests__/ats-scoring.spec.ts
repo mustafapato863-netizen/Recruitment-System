@@ -235,7 +235,8 @@ describe('AtsScoringService', () => {
         id: 'app-review',
         candidate: {
           id: 'candidate-review', experienceYears: null, skills: ['ICU'],
-          skillLinks: [], documents: [{ extractionText: 'Clinical work history available upon request.' }],
+          skillLinks: [{ skill: { id: 'icu-id', name: 'ICU' }, evidence: [] }],
+          documents: [{ extractionText: 'Clinical work history available upon request.' }],
         },
         vacancy: {
           id: 'vac-review', vacancyCode: 'VAC-REV', requiredSkills: ['ICU'],
