@@ -108,10 +108,11 @@ describe('classic staff URLs land on a v2 surface', () => {
     '/import/candidates/j1': '/my-work',
     '/hires': null, '/hires/h1': null, '/joinings': null, '/offers': null,
   };
-  const admin: Record<string, string> = {
+  const admin: Record<string, string | null> = {
     ...Object.fromEntries(Object.keys(employee).map((path) => [path, '/users'])),
     '/import': '/users',
     '/import/candidates/j1': '/users',
+    '/licenses': null,
     '/access-control': '/roles', '/settings': '/master-data', '/settings/targets': '/master-data', '/classic/master-data': '/master-data',
     '/classic/pipeline-settings': '/pipeline-settings',
   };
