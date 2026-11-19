@@ -13,6 +13,7 @@ import { EmptyStateV2, ForbiddenStateV2, SkeletonV2 } from '../../components/v2/
 import { TabsV2, type TabV2Item } from '../../components/v2/Tabs';
 import { TaskRow } from '../../components/v2/Task';
 import '../../components/v2/v2-primitives.css';
+import { WorkflowShortcutsV2 } from './WorkflowShortcutsV2';
 import './my-work.css';
 import { MyWorkTargets } from './MyWorkTargets';
 import { MyWorkActivity } from './MyWorkActivity';
@@ -658,6 +659,8 @@ export function MyWorkV2({ load = getMyWork }: { load?: typeof getMyWork } = {})
           </div>
         ) : null}
       </div>
+
+      <WorkflowShortcutsV2 seat="employee" />
 
       {data && !data.reminderWorkerHealthy && !noWork ? (
         <p className="rf2-mywork__note" role="note" data-testid="sla-hidden">
