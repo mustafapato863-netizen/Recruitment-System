@@ -90,7 +90,8 @@ describe.skipIf(!url)('B1 ownership and scope (scratch Postgres)', () => {
 
     await prisma.candidate.create({ data: { id: ids.candidate, organizationId: ORG, candidateCode: `B1-${tag}`, firstName: 'B1', lastName: 'Candidate', email: `cand-${tag}@b1.test` } });
     await prisma.application.create({ data: { id: ids.application, organizationId: ORG, applicationCode: `B1-${tag}`, vacancyId, candidateId: ids.candidate, stage: 'Interview', primaryRecruiterId: ids.owner } });
-    const start = new Date(Date.now() + 86_400_000);
+    // A completed interview must be in the past before submitting its scorecard.
+    const start = new Date(Date.now() - 86_400_000);
     for (const [id, attendee] of [[ids.interview, ids.interviewer], [ids.otherInterview, ids.other]] as const) {
       await prisma.interview.create({ data: { id, organizationId: ORG, applicationId: ids.application, interviewCode: `B1-${id.slice(0, 8)}`, title: 'B1', interviewType: 'Technical', scheduledStart: start, scheduledEnd: new Date(start.getTime() + 3_600_000), attendees: { create: { userId: attendee } } } });
     }
