@@ -5,8 +5,13 @@ import { AtsScoringService } from '../ats-scoring.service';
 
 describe('AtsScoringService', () => {
   let service: AtsScoringService;
-  let mockPrisma: any;
-  let mockPermissions: any;
+  type Spy = ReturnType<typeof vi.fn>;
+  let mockPrisma: {
+    application: { findFirst: Spy; update: Spy };
+    candidate: { findFirst: Spy };
+    vacancy: { findMany: Spy };
+  };
+  let mockPermissions: { canViewSalary: Spy };
 
   beforeEach(() => {
     mockPrisma = {
@@ -26,7 +31,7 @@ describe('AtsScoringService', () => {
       canViewSalary: vi.fn().mockResolvedValue(false),
     };
 
-    service = new AtsScoringService(mockPrisma, mockPermissions);
+    service = new AtsScoringService(mockPrisma as never, mockPermissions as never);
   });
 
   describe('Anti-Bias & Pay Safety Sanitization', () => {
@@ -46,12 +51,13 @@ describe('AtsScoringService', () => {
 
       const sanitized = service.sanitizeForAtsScoring(sensitiveCandidate);
 
-      expect((sanitized as any).firstName).toBeUndefined();
-      expect((sanitized as any).lastName).toBeUndefined();
-      expect((sanitized as any).email).toBeUndefined();
-      expect((sanitized as any).phone).toBeUndefined();
-      expect((sanitized as any).salary).toBeUndefined();
-      expect((sanitized as any).compensation).toBeUndefined();
+      const safe = sanitized as Record<string, unknown>;
+      expect(safe.firstName).toBeUndefined();
+      expect(safe.lastName).toBeUndefined();
+      expect(safe.email).toBeUndefined();
+      expect(safe.phone).toBeUndefined();
+      expect(safe.salary).toBeUndefined();
+      expect(safe.compensation).toBeUndefined();
 
       // Preserves legitimate qualifications
       expect(sanitized.id).toBe('cand-123');
