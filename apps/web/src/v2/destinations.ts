@@ -243,6 +243,15 @@ export function v2Redirect(seat: Seat, pathname: string, opts: { requisitions?: 
   const rawReturn = query ? new URLSearchParams(query).get('returnTo') : null;
   const validatedReturn = rawReturn ? allowedReturn(rawReturn, { seat, ...opts }) : null;
   let to = v2RedirectByPath(seat, cleanPath, { ...opts, home });
+  // A permissioned reviewer can open the native approval or licence desk even
+  // without the dedicated reviewer role/home. The API and App PermissionGate
+  // still enforce file ownership and the underlying action permission.
+  if (!opts.interviewerOnly && opts.permissions) {
+    const held = new Set(opts.permissions);
+    if (cleanPath === '/hires/approvals/inbox' && held.has('FINAL_HIRING_APPROVAL')) to = null;
+    if (cleanPath === '/licenses' &&
+      ['APPLICATION_VIEW', 'LICENSE_CHECK', 'USERS_VIEW'].some((permission) => held.has(permission))) to = null;
+  }
   if (seat === 'admin' && /^\/reporting-tree\/?$/.test(cleanPath) && query) {
     const params = new URLSearchParams(query);
     const focus = (params.get('focus') ?? '').trim();
