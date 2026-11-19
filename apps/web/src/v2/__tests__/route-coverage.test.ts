@@ -39,6 +39,11 @@ describe('all public and signed-in screen paths are inventoried', () => {
     for (const path of ['/hires/:id', '/candidates/:id', '/cv-bank', '/import']) {
       expect(SCREEN_ROUTES.find((screen) => screen.path === path)?.surface).toBe('retained');
     }
+    for (const path of ['/classic/candidates', '/classic/vacancies']) {
+      expect(SCREEN_ROUTES.find((screen) => screen.path === path)?.surface).toBe('redirect');
+    }
+    expect(app).toContain('<Navigate to="/candidates" replace />');
+    expect(app).toContain('<Navigate to="/vacancies" replace />');
     for (const path of ['/offers', '/hires', '/hires/approvals/inbox', '/joinings', '/candidates/:id/documents']) {
       expect(SCREEN_ROUTES.find((screen) => screen.path === path)?.surface).toBe('v2');
     }

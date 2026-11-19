@@ -16,8 +16,8 @@ or if a supported sidebar/admin destination has no declared route.
 |---|---:|---|
 | Public authentication, self-schedule, candidate portal and careers | 12 | Outside authenticated V2 shell; separate responsive and privacy validation required |
 | Native V2 recruiter, manager, admin and hiring workflows | 28 | Shared V2 polish proposed; functional acceptance varies by screen |
-| Retained V1 components / old staff workflows | 17 | Coherent styling via V2 shell proposed, **not yet native V2 equivalents** |
-| Supported aliases and catch-all | 6 | Redirects with intentional destination; no independent screen |
+| Retained V1 components / old staff workflows | 15 | Coherent styling via V2 shell proposed, **not yet native V2 equivalents** |
+| Supported aliases and catch-all | 8 | Redirects with intentional destination; no independent screen |
 | **Total** | **63** | **100% route-level inventory, not 100% UX/UAT completion** |
 
 ## Changes in this UI/UX enhancement branch
@@ -60,7 +60,7 @@ For **every real rendered screen**, record evidence of the following (mark as un
 - [ ] Data survives refresh; no fabricated counters, duplicate candidates, unverified ATS credits or stale offer versions
 - [ ] Candidate PII and compensation are never accessible by an unauthorized role or tenant
 - [ ] Single-CV and bulk-CV intake remain the candidate creation entry points; **no manual-entry creation form**
-- [ ] No Excel-export action introduced
+- [ ] No Excel-export action (including legacy candidate and vacancy views)
 - [ ] Browser matrix + API integration + accessibility suites pass for the exact candidate commit, not just unit tests
 
 ## Priority completion order — *remaining*, not completed by this PR
@@ -70,3 +70,6 @@ For **every real rendered screen**, record evidence of the following (mark as un
 **P2:** optional density preference, advanced search shortcuts, explanatory microcopy and finer mobile touch interactions after P0/P1.
 
 **No-go:** This audit proves route-level enumeration and a shared implementation change. It does **not** certify that every 63 route has passed UAT or that V1 can be removed. Follow the R0–R9 owner sign-off and documented rollback requirements before production cutover.
+
+
+**Classic route retirement:** `/classic/candidates` and `/classic/vacancies` now permission-gate then redirect to their functional V2 lists. Their Excel export buttons/handlers have been removed from the old source; the candidate V2 intake continues to create candidates only from CV uploads. Import templates and failed-import reports remain downloadable as workflow utilities.

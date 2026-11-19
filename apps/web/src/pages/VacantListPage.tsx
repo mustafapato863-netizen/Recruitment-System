@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { downloadApi, getApi, postApi } from '../api/client';
+import { getApi, postApi } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { isTeamLeaderOrAdmin } from '../auth/workspacePersona';
 import { Icon } from '../components/Icon';
@@ -9,7 +9,6 @@ import { Alert } from '../components/ui';
 import { Button } from '../components/ui/Button';
 import { Select } from '../components/ui/Select';
 import { PageState } from '../components/ui/PageState';
-import { saveBlob } from '../utils/download';
 import { EditPositionRequirementsModal } from '../components/vacancy/EditPositionRequirementsModal';
 import { ImportJobDescriptionModal } from '../components/vacancy/ImportJobDescriptionModal';
 import {
@@ -132,8 +131,6 @@ export function VacantListPage() {
   const [isMoreFiltersOpen, setIsMoreFiltersOpen] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 12;
-  const [isExporting, setIsExporting] = useState(false);
-  const [exportError, setExportError] = useState<string | null>(null);
 
   // Filters for Positions Catalog
   const [catalogSearch, setCatalogSearch] = useState('');
@@ -200,19 +197,6 @@ export function VacantListPage() {
   const showToast = (msg: string) => {
     setToastMessage(msg);
     setTimeout(() => setToastMessage(null), 3500);
-  };
-
-  const handleExportExcel = async () => {
-    setIsExporting(true);
-    setExportError(null);
-    try {
-      const blob = await downloadApi('/vacancies/export.xlsx');
-      saveBlob(blob, `vacancies-export-${new Date().toISOString().slice(0, 10)}.xlsx`);
-    } catch {
-      setExportError('Failed to export vacancies to Excel. Please try again.');
-    } finally {
-      setIsExporting(false);
-    }
   };
 
   useEffect(() => {
@@ -525,11 +509,6 @@ export function VacantListPage() {
         </button>
       </div>
 
-      {exportError && (
-        <Alert tone="danger" title="Export failed">
-          {exportError}
-        </Alert>
-      )}
 
       {/* ── Top-Level View Switcher: Full Positions Directory vs Active Requisitions ── */}
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-slate-200/80 dark:border-slate-800">
@@ -602,17 +581,7 @@ export function VacantListPage() {
             >
               <Icon name="upload" size={16} /> Import applicants
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                pageActionsRef.current?.removeAttribute('open');
-                void handleExportExcel();
-              }}
-              disabled={isExporting}
-              className="flex min-h-10 w-full items-center gap-2 rounded-lg px-3 text-left text-sm font-medium text-rf-ink hover:bg-rf-surface-hover focus-visible:outline-2 focus-visible:outline-rf-action disabled:opacity-50"
-            >
-              <Icon name={isExporting ? 'refresh-cw' : 'download'} size={16} className={isExporting ? 'animate-spin' : ''} /> {isExporting ? 'Exporting...' : 'Export XLSX'}
-            </button>
+
           </div>
         </details>
       </div>

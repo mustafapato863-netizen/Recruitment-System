@@ -85,7 +85,6 @@ export function CandidatesPage() {
   const pageSize = 20;
 
   const [isLoading, setIsLoading] = useState(true);
-  const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState('');
   const [loadFailed, setLoadFailed] = useState(false);
   const [selectedCandidateIds, setSelectedCandidateIds] = useState<string[]>([]);
@@ -178,25 +177,6 @@ export function CandidatesPage() {
 
   const { notify, error: toastError, getErrorMessage } = useFeedback();
   const showToast = (msg: string) => notify(msg);
-
-  const handleExportExcel = async () => {
-    setIsExporting(true);
-    try {
-      const params = new URLSearchParams();
-      if (statusFilter && statusFilter !== 'All') params.set('status', statusFilter);
-      if (sourceFilter && sourceFilter !== 'All') params.set('source', sourceFilter);
-      if (search.trim()) params.set('search', search.trim());
-      const query = params.toString() ? `?${params.toString()}` : '';
-      const blob = await downloadApi(`/candidates/export.xlsx${query}`);
-      saveBlob(blob, `candidates-export-${new Date().toISOString().slice(0, 10)}.xlsx`);
-      showToast('Candidate export downloaded successfully.');
-    } catch {
-      setError('Failed to export candidates to Excel.');
-      toastError(new Error('Failed to export candidates to Excel.'), 'Export failed');
-    } finally {
-      setIsExporting(false);
-    }
-  };
 
   const copyCode = (e: React.MouseEvent, code: string) => {
     e.stopPropagation();
@@ -630,18 +610,6 @@ export function CandidatesPage() {
           >
             <Icon name="refresh-cw" size={13} className={isLoading ? 'animate-spin' : ''} />
             <span>Refresh</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => void handleExportExcel()}
-            disabled={isExporting}
-            className="flex min-h-10 items-center justify-center gap-1.5 px-3.5 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-700 transition shadow-xs cursor-pointer disabled:opacity-50"
-            aria-label="Export candidates to Excel"
-            title="Export filtered candidate records as XLSX workbook"
-          >
-            <Icon name={isExporting ? 'refresh-cw' : 'download'} size={13} className={`text-emerald-700 dark:text-emerald-400 ${isExporting ? 'animate-spin' : ''}`} />
-            <span>{isExporting ? 'Exporting...' : 'Export XLSX'}</span>
           </button>
 
           {canCreateCandidate && (

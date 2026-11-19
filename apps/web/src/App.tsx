@@ -56,8 +56,6 @@ const CandidateDocumentsPage = lazy(() => import('./pages/CandidateDocumentsPage
 const CVBankPage = lazy(() => import('./pages/CVBankPage').then((m) => ({ default: m.CVBankPage })));
 const TalentPoolPage = lazy(() => import('./pages/TalentPoolPage').then((m) => ({ default: m.TalentPoolPage })));
 const BulkImportPage = lazy(() => import('./pages/BulkImportPage').then((m) => ({ default: m.BulkImportPage })));
-const CandidatesPage = lazy(() => import('./pages/CandidatesPage').then((m) => ({ default: m.CandidatesPage })));
-const VacantListPage = lazy(() => import('./pages/VacantListPage').then((m) => ({ default: m.VacantListPage })));
 const PositionLevelTargetSettingsPage = lazy(() => import('./pages/PositionLevelTargetSettingsPage').then((m) => ({ default: m.PositionLevelTargetSettingsPage })));
 const UsersRolesPage = lazy(() => import('./pages/UsersRolesPage').then((m) => ({ default: m.UsersRolesPage })));
 const MasterDataGridPage = lazy(() => import('./pages/MasterDataGridPage').then((m) => ({ default: m.MasterDataGridPage })));
@@ -149,8 +147,8 @@ function App() {
                   <Route path="/sourcing-match" element={<PermissionGate requiredPermission="CANDIDATE_VIEW"><TalentPoolPage /></PermissionGate>} />
                   <Route path="/import" element={<PermissionGate requiredAnyPermission={['CANDIDATE_VIEW', 'VACANCY_REQUEST_VIEW', 'MASTER_DATA_VIEW', 'CANDIDATE_CREATE', 'VACANCY_REQUEST_CREATE', 'MASTER_DATA_MANAGE']}><BulkImportPage /></PermissionGate>} />
                   <Route path="/import/:dataset/:jobId" element={<PermissionGate requiredAnyPermission={['CANDIDATE_VIEW', 'VACANCY_REQUEST_VIEW', 'MASTER_DATA_VIEW']}><BulkImportPage /></PermissionGate>} />
-                  <Route path="/classic/candidates" element={<PermissionGate requiredPermission="CANDIDATE_VIEW"><CandidatesPage /></PermissionGate>} />
-                  <Route path="/classic/vacancies" element={<PermissionGate requiredPermission="VACANCY_VIEW"><VacantListPage /></PermissionGate>} />
+                  <Route path="/classic/candidates" element={<PermissionGate requiredPermission="CANDIDATE_VIEW"><Navigate to="/candidates" replace /></PermissionGate>} />
+                  <Route path="/classic/vacancies" element={<PermissionGate requiredPermission="VACANCY_VIEW"><Navigate to="/vacancies" replace /></PermissionGate>} />
                   <Route path="/settings/targets" element={<PermissionGate requiredAnyPermission={['VACANCY_REQUEST_APPROVE', 'USERS_MANAGE', 'VACANCY_MANAGE', 'VACANCY_ASSIGN', 'VACANCY_REASSIGN', 'MASTER_DATA_VIEW']}><PositionLevelTargetSettingsPage /></PermissionGate>} />
                   <Route path="/access-control" element={<PermissionGate requiredPermission="USERS_VIEW"><UsersRolesPage /></PermissionGate>} />
                   <Route path="/classic/master-data" element={<PermissionGate requiredPermission="MASTER_DATA_VIEW"><MasterDataGridPage /></PermissionGate>} />
