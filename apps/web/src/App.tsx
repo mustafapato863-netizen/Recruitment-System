@@ -51,6 +51,7 @@ const FinalApprovalInboxPage = lazy(() => import('./v2/pages/FinalApprovalInboxV
 const OffersPage = lazy(() => import('./v2/pages/OffersV2').then((m) => ({ default: m.OffersV2 })));
 const JobAnalyticsPage = lazy(() => import('./pages/JobAnalyticsPage').then((m) => ({ default: m.JobAnalyticsPage })));
 const CandidateDetailPage = lazy(() => import('./pages/CandidateDetailPage').then((m) => ({ default: m.CandidateDetailPage })));
+// Native V2 document vault retains the stable candidate URL and audited document APIs.
 const CandidateDocumentsPage = lazy(() => import('./pages/CandidateDocumentsPage').then((m) => ({ default: m.CandidateDocumentsPage })));
 const CVBankPage = lazy(() => import('./pages/CVBankPage').then((m) => ({ default: m.CVBankPage })));
 const TalentPoolPage = lazy(() => import('./pages/TalentPoolPage').then((m) => ({ default: m.TalentPoolPage })));

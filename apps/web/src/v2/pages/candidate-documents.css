@@ -1,0 +1,42 @@
+/* Native V2 candidate document vault. Flat cards, truthful status, responsive table. */
+[data-ui='v2'] .rf2-docs { display: flex; flex-direction: column; gap: 16px; min-width: 0; padding: 20px; max-width: 1460px; width: 100%; margin-inline: auto; color: var(--rf2-ink); }
+[data-ui='v2'] .rf2-docs__crumbs { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; color: var(--rf2-muted); font-size: 12px; }
+[data-ui='v2'] .rf2-docs__crumbs a { color: var(--rf2-action); text-decoration: none; }
+[data-ui='v2'] .rf2-docs__head, [data-ui='v2'] .rf2-docs__tools { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+[data-ui='v2'] .rf2-docs__tools { align-items: center; justify-content: flex-start; }
+[data-ui='v2'] .rf2-docs__eyebrow { margin: 0 0 4px; color: var(--rf2-muted); font-size: 12px; }
+[data-ui='v2'] .rf2-docs h1 { margin: 0; font-size: 23px; line-height: 1.25; font-weight: 750; }
+[data-ui='v2'] .rf2-docs__sub { margin: 6px 0 0; color: var(--rf2-muted); font-size: 13px; }
+[data-ui='v2'] .rf2-docs__summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+[data-ui='v2'] .rf2-docs__summary .rf2-card { display: flex; flex-direction: column; gap: 8px; padding: 16px; }
+[data-ui='v2'] .rf2-docs__summary span { color: var(--rf2-muted); font-size: 12px; }
+[data-ui='v2'] .rf2-docs__summary strong { font-size: 24px; font-variant-numeric: tabular-nums; }
+[data-ui='v2'] .rf2-docs__notice { border: 1px solid var(--rf2-divider); border-radius: 8px; background: var(--rf2-card); padding: 12px; margin: 0; font-size: 13px; }
+[data-ui='v2'] .rf2-docs__notice[data-tone='danger'] { color: var(--rf2-danger); }
+[data-ui='v2'] .rf2-docs__notice[data-tone='warning'] { color: var(--rf2-warning); }
+[data-ui='v2'] .rf2-docs__notice[data-tone='success'] { color: var(--rf2-success); }
+[data-ui='v2'] .rf2-docs__scroll { max-width: 100%; overflow-x: auto; }
+[data-ui='v2'] .rf2-docs__table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; }
+[data-ui='v2'] .rf2-docs__table th, [data-ui='v2'] .rf2-docs__table td { padding: 12px; border-bottom: 1px solid var(--rf2-divider); vertical-align: middle; }
+[data-ui='v2'] .rf2-docs__table th { color: var(--rf2-muted); font-weight: 600; white-space: nowrap; }
+[data-ui='v2'] .rf2-docs__table td { min-width: 85px; }
+[data-ui='v2'] .rf2-docs__table td:first-child { min-width: 200px; }
+[data-ui='v2'] .rf2-docs__table tr:last-child td { border-bottom: 0; }
+[data-ui='v2'] .rf2-docs__filename { display: flex; align-items: center; gap: 8px; font-weight: 600; overflow-wrap: anywhere; }
+[data-ui='v2'] .rf2-docs__filename svg { width: 18px; min-width: 18px; color: var(--rf2-muted); }
+[data-ui='v2'] .rf2-docs__row-actions { display: flex; align-items: center; gap: 8px; }
+[data-ui='v2'] .rf2-docs__row-actions svg { width: 14px; }
+[data-ui='v2'] .rf2-docs__form { display: flex; flex-direction: column; gap: 9px; }
+[data-ui='v2'] .rf2-docs__form > p { margin: 0 0 8px; color: var(--rf2-ink-2); font-size: 13px; }
+[data-ui='v2'] .rf2-docs__form > label { margin-top: 8px; font-size: 13px; font-weight: 600; }
+[data-ui='v2'] .rf2-docs__form > input, [data-ui='v2'] .rf2-docs__form > select, [data-ui='v2'] .rf2-docs__form > textarea { border: 1px solid var(--rf2-divider); border-radius: 8px; color: var(--rf2-ink); background: var(--rf2-card); padding: 10px; width: 100%; }
+[data-ui='v2'] .rf2-docs__form small { color: var(--rf2-muted); }
+[data-ui='v2'] .rf2-docs__form .rf2-docs__selected { display: flex; align-items: center; gap: 8px; overflow-wrap: anywhere; color: var(--rf2-ink); }
+[data-ui='v2'] .rf2-docs__selected svg { width: 16px; }
+[data-ui='v2'] .rf2-docs__form-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+@media (max-width: 700px) {
+  [data-ui='v2'] .rf2-docs { padding: 12px; }
+  [data-ui='v2'] .rf2-docs__summary { grid-template-columns: 1fr; }
+  [data-ui='v2'] .rf2-docs__head { align-items: stretch; }
+  [data-ui='v2'] .rf2-docs__row-actions { flex-wrap: wrap; }
+}

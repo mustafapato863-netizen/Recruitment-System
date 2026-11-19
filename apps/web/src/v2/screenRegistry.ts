@@ -49,6 +49,7 @@ export const SCREEN_ROUTE_GROUPS: readonly ScreenRouteGroup[] = [
     '/vacancies/:id',
     '/candidates',
     '/candidates/compare',
+    '/candidates/:id/documents',
   ] },
   { area: "Manager desk", surface: 'v2', paths: [
     '/vacancy-requests',
@@ -71,7 +72,6 @@ export const SCREEN_ROUTE_GROUPS: readonly ScreenRouteGroup[] = [
     '/hires/:id',
     '/vacancies/:id/analytics',
     '/candidates/:id',
-    '/candidates/:id/documents',
     '/cv-bank',
     '/sourcing-match',
     '/import',

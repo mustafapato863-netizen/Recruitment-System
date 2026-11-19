@@ -15,8 +15,8 @@ or if a supported sidebar/admin destination has no declared route.
 | Scope | Registered paths | State |
 |---|---:|---|
 | Public authentication, self-schedule, candidate portal and careers | 12 | Outside authenticated V2 shell; separate responsive and privacy validation required |
-| Native V2 recruiter, manager, admin and hiring workflows | 27 | Shared V2 polish proposed; functional acceptance varies by screen |
-| Retained V1 components / old staff workflows | 18 | Coherent styling via V2 shell proposed, **not yet native V2 equivalents** |
+| Native V2 recruiter, manager, admin and hiring workflows | 28 | Shared V2 polish proposed; functional acceptance varies by screen |
+| Retained V1 components / old staff workflows | 17 | Coherent styling via V2 shell proposed, **not yet native V2 equivalents** |
 | Supported aliases and catch-all | 6 | Redirects with intentional destination; no independent screen |
 | **Total** | **63** | **100% route-level inventory, not 100% UX/UAT completion** |
 
@@ -31,20 +31,22 @@ or if a supported sidebar/admin destination has no declared route.
 
 No candidate, offer, compliance or payroll records are changed by these UX changes.
 
+**Native candidate document vault:** `/candidates/:id/documents` now uses V2 primitives, requires an actual PDF/DOC/DOCX binary for creation, shows only server-confirmed metadata, provides scan/consent/retention-gated downloads and reason-required audited archival. Phantom size/date, non-persistent privacy switches, and metadata-only document creation have been removed. Functional regression tests added; full business UAT remains pending.
+
 ## Coverage by product area
 
 | Area | V2 / retained implementation | User tasks to verify before V1 retirement |
 |---|---|---|
 | My Work / Team Work / Approvals | Native V2 | Tasks, overdue/next actions, date filters, accessible shortcuts, correct owner scopes, empty/partial/forbidden and stale data |
 | Open jobs / pipeline / requisitions | Native V2 | Jobs table/card/board, drag conflicts, JD review, bulk or single CV upload, job hold/resume/capacity, approval drawers |
-| Candidates / comparison / Match Skills | Native list + comparison, retained detail/Match Skills | Identity, CV extraction, duplicates, multiple documents, download/delete permissions, application links, evidence-only matching, zero invented scores |
+| Candidates / comparison / Match Skills | Native list + comparison, retained candidate detail/Match Skills; native V2 document vault | Identity, CV extraction, duplicates, multiple documents, download/delete permissions, application links, evidence-only matching, zero invented scores |
 | Interviews | Native team/calendar, retained My Interviews scorecard UI | Schedule/reschedule/RSVP/ICS, future-vs-completed scorecard, interviewer-only view, timezone, calendar keyboard access |
 | Offers | Native V2 list + decision drawer; legacy APIs preserved | Version history, approvals, signatures/response, compensation visibility, expiry, recoverable API errors |
 | Hires / joinings / final approvals / licenses | Native lists/inboxes, retained full hiring detail | Clinical vs nonclinical checks, final approval distinct from joining, concurrency/headcount, expiry and verification history |
 | Reports and results | Native V2 for main seats, retained job analytics | Source-data reconciliation, honest zero/unknown, permission-safe KPI totals, CSV export not introduced |
 | Administration | Native V2 users/roles/master data/pipeline/templates/audit/integrations | Create/edit/invite, role gates, two-tenant audits, accessibility, matching real stored data |
 | Candidate portal / public jobs / account flows | Public pages, not V2 shell | Phone/desktop responsiveness, keyboard and screen reader, submit/retry, privacy and token expiry |
-| Retained settings, CV bank, import, candidate file/document UI | Still retained components | Full native UI redesign **pending**; existing APIs, history and rights must remain functional during migration |
+| Retained settings, CV bank, import and candidate profile | Still retained components | Full native UI redesign **pending**; existing APIs, history and rights must remain functional during migration |
 
 ## Exact UX acceptance matrix
 
@@ -63,7 +65,7 @@ For **every real rendered screen**, record evidence of the following (mark as un
 
 ## Priority completion order — *remaining*, not completed by this PR
 
-**P0:** candidate profile and documents; CV bank upload/dedup/retention; import center; clinical/technical hiring-case detail; protected history and signing; rollback/restore and E2E gates.  
+**P0:** candidate profile; CV bank upload/dedup/retention; import center; clinical/technical hiring-case detail; protected history and signing; rollback/restore and E2E gates.  
 **P1:** job analytics, full settings/targets and role-aware admin usability; polished candidate portal, interviewer's scorecard; reporting deep links.  
 **P2:** optional density preference, advanced search shortcuts, explanatory microcopy and finer mobile touch interactions after P0/P1.
 

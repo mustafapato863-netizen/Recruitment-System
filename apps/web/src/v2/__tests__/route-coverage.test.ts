@@ -36,10 +36,10 @@ describe('all public and signed-in screen paths are inventoried', () => {
   it('classifies every registered route and keeps legacy parity gaps explicit', () => {
     expect(SCREEN_ROUTES.every((screen) =>
       ['public', 'v2', 'retained', 'redirect'].includes(screen.surface))).toBe(true);
-    for (const path of ['/hires/:id', '/candidates/:id', '/candidates/:id/documents', '/cv-bank', '/import']) {
+    for (const path of ['/hires/:id', '/candidates/:id', '/cv-bank', '/import']) {
       expect(SCREEN_ROUTES.find((screen) => screen.path === path)?.surface).toBe('retained');
     }
-    for (const path of ['/offers', '/hires', '/hires/approvals/inbox', '/joinings']) {
+    for (const path of ['/offers', '/hires', '/hires/approvals/inbox', '/joinings', '/candidates/:id/documents']) {
       expect(SCREEN_ROUTES.find((screen) => screen.path === path)?.surface).toBe('v2');
     }
   });
