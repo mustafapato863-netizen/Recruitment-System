@@ -50,7 +50,8 @@ describe.skipIf(!url)('B8 /results (scratch Postgres)', () => {
     await prisma.application.update({ where: { id: apps[2]! }, data: { stage: 'Rejected' } });
     await prisma.applicationStatusHistory.create({ data: { applicationId: apps[2]!, fromStage: 'Screening', toStage: 'Interview', createdAt: SEPT(7) } as never });
     await prisma.applicationStatusHistory.create({ data: { applicationId: apps[3]!, fromStage: 'Pre-Hire', toStage: 'Joined', createdAt: SEPT(25) } as never });
-    await prisma.hiringCase.create({ data: { organizationId: ORG, applicationId: apps[3]!, status: 'Joined', actualJoiningDate: SEPT(25) } as never });
+    const joinedOffer = await prisma.offer.create({ data: { organizationId: ORG, applicationId: apps[3]!, offerCode: `OFF-R8-JOIN-${tag}`, status: 'Accepted' } });
+    await prisma.hiringCase.create({ data: { organizationId: ORG, applicationId: apps[3]!, offerId: joinedOffer.id, status: 'Joined', actualJoiningDate: SEPT(25) } });
     // offers: 5 versions sent in Sept, 2 accepted; one sent in Aug (excluded).
     const offer = await prisma.offer.create({ data: { organizationId: ORG, applicationId: apps[4]!, offerCode: `OFF-R8-${tag}`, status: 'Draft' } });
     for (let v = 1; v <= 6; v += 1) {
@@ -144,7 +145,8 @@ describe.skipIf(!url)('B8 /results (scratch Postgres)', () => {
     const cand = (await prisma.candidate.create({ data: { organizationId: ORG, candidateCode: `R8-${tag}-hm`, firstName: 'R8', lastName: 'HM' } })).id;
     const app = await prisma.application.create({ data: { organizationId: ORG, applicationCode: `R8-${tag}-hm`, vacancyId: vac, candidateId: cand, stage: 'Joined', primaryRecruiterId: rep } as never });
     await prisma.applicationStatusHistory.create({ data: { applicationId: app.id, fromStage: 'Pre-Hire', toStage: 'Joined', createdAt: SEPT(25) } as never });
-    await prisma.hiringCase.create({ data: { organizationId: ORG, applicationId: app.id, status: 'Joined', actualJoiningDate: SEPT(25) } as never });
+    const joinedOffer = await prisma.offer.create({ data: { organizationId: ORG, applicationId: app.id, offerCode: `OFF-R8-HM-${tag}`, status: 'Accepted' } });
+    await prisma.hiringCase.create({ data: { organizationId: ORG, applicationId: app.id, offerId: joinedOffer.id, status: 'Joined', actualJoiningDate: SEPT(25) } });
     const me = await run(auth(rep, ['RECRUITER']), 'me');
     const team = await run(auth(hm, ['HIRING_MANAGER']), 'team');
     expect(me.tiles.seats).toMatchObject({ value: 1, of: 2 });
