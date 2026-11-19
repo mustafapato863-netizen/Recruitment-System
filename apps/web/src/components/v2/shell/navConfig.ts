@@ -71,7 +71,7 @@ export const SEAT_NAV: Record<Seat, { heading: string; searchPlaceholder: string
       { key: 'roles', label: 'Roles', to: '/roles', icon: 'roles', group: 'Users & Access', requires: ['ROLES_VIEW'] },
       { key: 'pipeline', label: 'Pipeline template', to: '/pipeline-settings', icon: 'pipeline', group: 'Recruitment Setup', requires: ['MASTER_DATA_VIEW'] },
       { key: 'master-data', label: 'Master data', to: '/master-data', icon: 'master-data', group: 'Organization', requires: ['MASTER_DATA_VIEW'] },
-      { key: 'templates', label: 'WhatsApp templates', to: '/whatsapp-templates', icon: 'templates', group: 'Recruitment Setup', requiresAny: ['MASTER_DATA_MANAGE', 'MASTER_DATA_VIEW', 'APPLICATION_VIEW', 'VACANCY_VIEW'] },
+      { key: 'templates', label: 'WhatsApp templates', to: '/whatsapp-templates', icon: 'templates', group: 'Recruitment Setup', requiresAny: ['MASTER_DATA_MANAGE', 'MASTER_DATA_VIEW'] },
       { key: 'reports', label: 'Reports', to: '/reports', icon: 'reports', group: 'Reports', requires: ['APPLICATION_VIEW'] },
       { key: 'audit', label: 'Audit', to: '/audit-log', icon: 'audit', group: 'Settings', requires: ['AUDIT_VIEW'] },
       { key: 'integrations', label: 'Integrations', to: '/integrations', icon: 'integrations', group: 'Settings', requires: ['MASTER_DATA_VIEW'] },
