@@ -164,7 +164,7 @@ describe('draft scorecard + room name', () => {
     const evidence = screen.getByLabelText(/Written evidence/);
     expect(evidence).toHaveValue('Half done');
     await u.type(evidence, ', finished');
-    await u.click(screen.getByRole('button', { name: 'Submit scorecard' }));
+    await u.click(await screen.findByRole('button', { name: 'Submit scorecard' }));
     expect(api.postApi).toHaveBeenCalledWith('/interviews/iv1/scorecard', { overallRating: 3, recommendation: 'Neutral', notes: 'Half done, finished' });
     await waitFor(() => expect(screen.getByText('Scorecard submitted')).toBeInTheDocument());
   });
@@ -496,6 +496,7 @@ describe('Interview screens functional review fixes (P1 & P2)', () => {
     renderPage();
     await u.click(await screen.findByRole('button', { name: 'Fill scorecard' }));
     const dialog = await screen.findByRole('dialog');
+    await within(dialog).findByRole('button', { name: 'Submit scorecard' });
     await u.type(within(dialog).getByRole('textbox', { name: /Written evidence/ }), 'Half-written evaluation');
     await u.click(within(dialog).getByRole('button', { name: 'Cancel' }));
 
