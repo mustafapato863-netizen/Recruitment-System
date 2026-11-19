@@ -81,31 +81,51 @@ pg_restore -U postgres -h localhost -d Recruitment_DB -v recruitflow_backup_YYYY
 
 ---
 
-## 5. Rollback Procedure
+## 5. Rollback Procedure — release BLOCKER until rehearsed
 
-In case of a critical post-release issue:
-1. Revert to the last known stable Git release tag: `git checkout tags/vX.Y.Z`
-2. Re-run `npx pnpm build`
-3. Restart API & Worker processes.
+Current signed-in web routing always loads `V2Shell`, regardless of the API's
+`v2Seats` and `v2Enabled` values. **Do not rely on `RF_V2_SEATS=none` or
+`ROLLOUT_SEATS: []` to restore V1**. They do not switch the frontend back to V1.
+Changing a configuration row is not a demonstrated safe rollback.
+
+The release owner must select and rehearse one real rollback route **before** deploying
+V2 to production:
+
+1. Reinstate and test real per-seat V1/V2 frontend route trees and a switch, **or**
+2. Preserve a compatible, immutable V1 web/API/worker deployment artifact and rehearse
+   atomic traffic rollback (blue/green). Confirm that the deployed DB schema and
+   document storage can safely serve the previous binary before switching traffic.
+
+A Git checkout or UI setting alone is not a tested rollback. Record the tested deployment
+IDs, migration baseline, document-backup snapshot, rehearsal logs and authorized decision
+owner. Restore only from validated backups following the recovery playbook; never perform
+an ad hoc destructive production DB reset.
 
 ---
 
 ## 6. V2 Release Rollout Governance & 14-Day Production Bake Guard (Choice A)
 
-RecruitFlow V2 enforces the corporate **Choice A (14-Day Safety Guard)** release policy:
+### 6.1 Actual V2 Runtime Behavior (as of 19 November 2026)
 
-### 6.1 Rollout Architecture (100% Organization Cutover)
-- **Default State**: 100% full organization cutover is enabled via `apps/api/src/auth/seat-rollout.ts` (`DEFAULT_V2_SEATS = ['employee', 'manager', 'admin']`) and `apps/web/src/theme/uiVersion.ts` (`applyUiVersion('v2')`).
-- **Multi-tier Rollout Precedence**:
-  1. **Org Config**: `integrations` table row `ROLLOUT_SEATS` with JSON config `{"v2Seats": [...]}`. An empty array `[]` disables V2 for that tenant.
-  2. **Environment Variable**: `RF_V2_SEATS` (e.g., `employee,manager`; `none` disables V2 globally).
-  3. **Default**: `['employee', 'manager', 'admin']` (100% cutover).
+- All authenticated users enter the V2 shell through `App.tsx` and `V2Shell.tsx`.
+- `/auth/me` exposes `seat`, `v2Seats`, `v2Enabled` and `flags.v2Seats`,
+  using organization config, `RF_V2_SEATS`, then full-seat default precedence.
+- **These API values are currently informational only for UI selection.** The frontend
+  deliberately ignores them; the app does **not** implement functional per-seat V1 fallback.
+- V1 components still render on some old URLs under V2's shell. This is partial
+  UI reuse, not proof of a reversible V1 rollout.
+- Until real rollback is implemented and tested, release status is **NO-GO**.
 
-### 6.2 Instant Zero-Downtime Rollback Mechanism
-If a critical regression is identified post-deployment:
-- **Global Rollback**: Set `RF_V2_SEATS=none` in the production environment.
-- **Tenant Rollback**: Update tenant's `ROLLOUT_SEATS` integration config to `{"v2Seats": []}`.
-- **Seat-Level Rollback**: Set `RF_V2_SEATS="employee"` to restrict V2 exposure while debugging manager/admin flows.
+### 6.2 Rollback Acceptance and Monitoring
+
+- Choose one option from §5, implement it and verify it with Employee, Manager,
+  Admin, restricted interviewer and final-hiring approver accounts.
+- Verify persisted candidate/job/application history, document downloads and versioned
+  offers after rollback and re-entry.
+- Monitor auth refresh, cross-tenant access, recruiter workload, interviews, offers,
+  clinical licensing, final approval, joining capacity, queue failures and API health.
+- Retain an approved previous deployment during the 14-day production bake. Do not
+  announce instant/zero-downtime rollback until evidence confirms it.
 
 ### 6.3 14-Day Zero-Rollback Production Bake Guard (Choice A)
 Per architectural directive Choice A:
