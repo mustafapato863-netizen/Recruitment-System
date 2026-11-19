@@ -62,6 +62,7 @@ export function AtsMatchCard({ applicationId, onSuggestJobs }: AtsMatchCardProps
   }
 
   const { atsScore, atsKnockoutPass, breakdown } = data;
+  const manualReview = breakdown.manualReviewRequired ?? [];
   const scoreTone = !atsKnockoutPass ? 'danger' : atsScore >= 70 ? 'success' : atsScore >= 50 ? 'warning' : 'danger';
   const scoreLabel = !atsKnockoutPass
     ? `${atsScore}% (Knockout Flagged)`
@@ -98,15 +99,25 @@ export function AtsMatchCard({ applicationId, onSuggestJobs }: AtsMatchCardProps
             </p>
           </div>
         </div>
+      ) : manualReview.length > 0 ? (
+        <div className="rf2-ats-card__alert rf2-ats-card__alert--warning" role="status">
+          <AlertTriangle className="rf2-ats-card__alert-icon" aria-hidden="true" />
+          <div>
+            <strong>Human verification required</strong>
+            <p className="rf2-ats-card__alert-sub">{manualReview.join(' ')}</p>
+            <p className="rf2-ats-card__notice">No verified knockout failed, but unverified requirements are not marked as passed. This score is advisory only.</p>
+          </div>
+        </div>
       ) : (
         <div className="rf2-ats-card__alert rf2-ats-card__alert--success" role="status">
           <CheckCircle2 className="rf2-ats-card__alert-icon" aria-hidden="true" />
           <div>
-            <strong>Mandatory criteria passed</strong>
-            <p className="rf2-ats-card__alert-sub">All required stage-gate knockout rules satisfied.</p>
+            <strong>No evaluated knockout failures</strong>
+            <p className="rf2-ats-card__alert-sub">This does not replace a recruiter's hiring review.</p>
           </div>
         </div>
       )}
+      <p className="rf2-ats-card__notice">Evidence-based indicator: scores use evaluated skills and experience only. Unverified education and languages do not earn points.</p>
 
       <div className="rf2-ats-card__stats-grid">
         <div className="rf2-ats-card__stat-box">
@@ -130,11 +141,11 @@ export function AtsMatchCard({ applicationId, onSuggestJobs }: AtsMatchCardProps
         <div className="rf2-ats-card__stat-box">
           <span className="rf2-ats-card__stat-label">Experience Weight</span>
           <span className="rf2-ats-card__stat-val">
-            {breakdown.experienceMatch
-              ? `${Math.min(100, Math.round((breakdown.experienceMatch.actualYears / (breakdown.experienceMatch.requiredYears || 1)) * 100))}%`
-              : '100%'}
+            {breakdown.experienceMatch?.actualYears != null && breakdown.experienceMatch.requiredYears > 0
+              ? `${Math.min(100, Math.round((breakdown.experienceMatch.actualYears / breakdown.experienceMatch.requiredYears) * 100))}%`
+              : 'Not evaluated'}
           </span>
-          <span className="rf2-ats-card__stat-hint">Tenure & seniority</span>
+          <span className="rf2-ats-card__stat-hint">Evidence-based tenure</span>
         </div>
       </div>
 
