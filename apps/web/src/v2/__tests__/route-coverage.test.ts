@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { SCREEN_ROUTES } from '../screenRegistry';
 import { v2Redirect } from '../destinations';
-import { ADMIN_GROUP_ROUTES, SEAT_NAV } from '../../components/v2/shell/navConfig';
+import { ADMIN_GROUP_ROUTES, SEAT_NAV, permittedNavItems } from '../../components/v2/shell/navConfig';
 
 const app = readFileSync(resolve(__dirname, '../../App.tsx'), 'utf8');
 const shell = readFileSync(resolve(__dirname, '../../layout/V2Shell.tsx'), 'utf8');
@@ -23,6 +23,14 @@ describe('all public and signed-in screen paths are inventoried', () => {
     const catalog = SCREEN_ROUTES.map((screen) => screen.path);
     expect(new Set(catalog).size).toBe(catalog.length);
     expect(catalog.toSorted()).toEqual(declared.toSorted());
+  });
+
+  it('does not advertise WhatsApp templates to a user rejected by their route gate', () => {
+    const links = permittedNavItems('admin', ['APPLICATION_VIEW'], false);
+    expect(links.some((item) => item.to === '/whatsapp-templates')).toBe(false);
+    expect(permittedNavItems('admin', ['MASTER_DATA_VIEW'], false).some(
+      (item) => item.to === '/whatsapp-templates',
+    )).toBe(true);
   });
 
   it('classifies every registered route and keeps legacy parity gaps explicit', () => {
