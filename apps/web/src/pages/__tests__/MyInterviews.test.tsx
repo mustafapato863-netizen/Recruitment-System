@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Link, MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -161,10 +161,13 @@ describe('draft scorecard + room name', () => {
     expect(await screen.findByText('Draft saved')).toBeInTheDocument();
     await u.click(screen.getByRole('button', { name: 'Continue scorecard' }));
     expect(await screen.findByTestId('draft-note')).toBeInTheDocument();
-    const evidence = screen.getByLabelText(/Written evidence/);
+    const dialog = await screen.findByRole('dialog', { name: /Scorecard/ });
+    const evidence = within(dialog).getByLabelText(/Written evidence/);
     expect(evidence).toHaveValue('Half done');
-    await u.type(evidence, ', finished');
-    await u.click(await screen.findByRole('button', { name: 'Submit scorecard' }));
+    // Exercise the controlled change directly; pointer synthesis against a portal was flaky under full parallel CI.
+    fireEvent.change(evidence, { target: { value: 'Half done, finished' } });
+    expect(evidence).toHaveValue('Half done, finished');
+    await u.click(within(dialog).getByRole('button', { name: 'Submit scorecard' }));
     expect(api.postApi).toHaveBeenCalledWith('/interviews/iv1/scorecard', { overallRating: 3, recommendation: 'Neutral', notes: 'Half done, finished' });
     await waitFor(() => expect(screen.getByText('Scorecard submitted')).toBeInTheDocument());
   });
