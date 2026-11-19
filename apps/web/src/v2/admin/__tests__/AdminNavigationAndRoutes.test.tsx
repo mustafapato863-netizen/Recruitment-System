@@ -64,7 +64,7 @@ describe('ADM-03 & R2: Authoritative server read-prerequisite alignment', () => 
     // User with USERS_VIEW only: can open /users, cannot open /roles
     expect(canOpenRoute('/users', ['USERS_VIEW'], false)).toBe(true);
     expect(canOpenRoute('/roles', ['USERS_VIEW'], false)).toBe(false);
-    expect(permittedNavItems('admin', ['USERS_VIEW'], false).map((i) => i.key)).toEqual(['users']);
+    expect(permittedNavItems('admin', ['USERS_VIEW'], false).map((i) => i.key)).toEqual(['users', 'license-seats']);
     expect(v2Redirect('admin', '/roles', { permissions: ['USERS_VIEW'], isAdministrator: false })).toBe('/users');
 
     // User with ROLES_VIEW only: can open /roles, cannot open /users, lands on /roles instead of looping on /users
