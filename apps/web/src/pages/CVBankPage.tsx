@@ -179,7 +179,7 @@ export function CVBankPage() {
   const navigate = useNavigate();
   const { show } = useToast();
   const [params, setParams] = useSearchParams();
-  const canDownload = Boolean(user?.permissions.includes('DOWNLOAD_DOCUMENTS'));
+  const canDownload = Boolean(user?.permissions?.includes('DOWNLOAD_DOCUMENTS'));
 
   const [documents, setDocuments] = useState<CandidateDocument[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
@@ -204,6 +204,10 @@ export function CVBankPage() {
   const appliedSearch = params.get('search') ?? '';
   const contextJobId = params.get('job') ?? params.get('vacancyId') ?? '';
   const contextCandidateId = params.get('candidateId') ?? '';
+  const isAdministrator = Boolean(user?.roles?.some((role) => role.code === 'ADMINISTRATOR'));
+  const canEditDocuments = isAdministrator || Boolean(user?.permissions?.includes('CANDIDATE_EDIT'));
+  const canCreateCandidates = isAdministrator || Boolean(user?.permissions?.includes('CANDIDATE_CREATE'));
+  const canUploadCv = canEditDocuments && (Boolean(contextCandidateId) || canCreateCandidates);
   const rawPage = params.get('page') ?? '';
   const page = /^[1-9]\d{0,5}$/.test(rawPage) ? Number(rawPage) : 1;
   const returnTo = `/cv-bank${params.toString() ? `?${params.toString()}` : ''}`;
@@ -425,6 +429,10 @@ export function CVBankPage() {
     const selectedFiles = event.target.files ? Array.from(event.target.files) : [];
     event.target.value = '';
     if (selectedFiles.length === 0) return;
+    if (!canUploadCv) {
+      setError('You do not have permission to upload or create candidate CV records.');
+      return;
+    }
 
     setUploading(true);
     setError('');
@@ -546,6 +554,7 @@ export function CVBankPage() {
         ref={fileInputRef}
         type="file"
         aria-label="Upload CV files"
+        disabled={!canUploadCv}
         accept=".pdf,.doc,.docx"
         multiple
         hidden
@@ -563,7 +572,7 @@ export function CVBankPage() {
           </p>
         </div>
         <div className="rf2-cvb__actions">
-          <button
+          {canUploadCv ? <button
             type="button"
             className="rf2-cvb__btn rf2-cvb__btn--primary"
             disabled={uploading}
@@ -571,15 +580,15 @@ export function CVBankPage() {
           >
             <Upload aria-hidden="true" />
             <span>{uploading ? 'Uploading…' : 'Upload CVs'}</span>
-          </button>
-          <button
+          </button> : null}
+          {canCreateCandidates ? <button
             type="button"
             className="rf2-cvb__btn"
             onClick={() => navigate(bulkUploadHref)}
           >
             <FolderUp aria-hidden="true" />
             <span>Bulk upload</span>
-          </button>
+          </button> : null}
           <button
             type="button"
             className="rf2-cvb__btn"
