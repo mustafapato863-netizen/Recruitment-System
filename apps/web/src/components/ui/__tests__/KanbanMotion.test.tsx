@@ -1,9 +1,11 @@
 import { act, render, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 
+import type * as DndKit from '@dnd-kit/core';
+
 const overlay = vi.hoisted(() => vi.fn());
 vi.mock('@dnd-kit/core', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@dnd-kit/core')>();
+  const actual = await importOriginal<typeof DndKit>();
   return { ...actual, DragOverlay: (props: { dropAnimation: unknown }) => { overlay(props.dropAnimation); return null; } };
 });
 
