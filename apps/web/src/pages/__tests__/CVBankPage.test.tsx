@@ -5,6 +5,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { CVBankPage } from '../CVBankPage';
 
 const toastShow = vi.fn();
+const permissionState = vi.hoisted(() => ({
+  permissions: ['CANDIDATE_VIEW', 'CANDIDATE_CREATE', 'CANDIDATE_EDIT', 'DOWNLOAD_DOCUMENTS'],
+}));
 
 vi.mock('../../components/ui/ToastContext', () => ({
   useToast: () => ({ show: toastShow }),
@@ -18,7 +21,7 @@ vi.mock('../../auth/AuthContext', () => ({
       email: 'sarah@sgh.test',
       seat: 'employee',
       roles: [{ code: 'RECRUITER', name: 'Recruiter' }],
-      permissions: ['CANDIDATE_VIEW', 'CANDIDATE_CREATE', 'CANDIDATE_EDIT', 'DOWNLOAD_DOCUMENTS'],
+      permissions: permissionState.permissions,
     },
     isLoading: false,
   }),
@@ -59,6 +62,7 @@ describe('CVBankPage uploader and intake recovery', () => {
   let storedDocs: Array<Record<string, unknown>> = [];
 
   beforeEach(() => {
+    permissionState.permissions = ['CANDIDATE_VIEW', 'CANDIDATE_CREATE', 'CANDIDATE_EDIT', 'DOWNLOAD_DOCUMENTS'];
     toastShow.mockReset();
     api.getApi.mockReset();
     api.postApi.mockReset();
@@ -105,6 +109,24 @@ describe('CVBankPage uploader and intake recovery', () => {
       }
       throw new Error(`Unexpected GET ${path}`);
     });
+  });
+
+  it('shows CV records but hides upload actions from view-only users', async () => {
+    permissionState.permissions = ['CANDIDATE_VIEW'];
+    renderCvBank();
+    expect(await screen.findByRole('heading', { name: 'CV Bank' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Upload CVs' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Bulk upload' })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Upload CV files')).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Refresh/i })).toBeInTheDocument();
+    expect(api.postApi).not.toHaveBeenCalled();
+  });
+
+  it('allows a document editor to attach a CV to an existing candidate without advertising new-candidate import', async () => {
+    permissionState.permissions = ['CANDIDATE_VIEW', 'CANDIDATE_EDIT'];
+    renderCvBank('/cv-bank?candidateId=cand-1');
+    expect(await screen.findByRole('button', { name: 'Upload CVs' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Bulk upload' })).not.toBeInTheDocument();
   });
 
   it('parses, creates candidate, attaches to scoped job, uploads CV binary, and reads back into the CV Bank list', async () => {
