@@ -3,7 +3,7 @@ import type { Seat } from '../../../v2/seat';
 export type NavIconName =
   | 'my-work' | 'jobs' | 'candidates' | 'interviews' | 'my-interviews'
   | 'team' | 'requisitions' | 'approvals' | 'result'
-  | 'users' | 'roles' | 'pipeline' | 'master-data' | 'templates' | 'reports' | 'audit' | 'integrations' | 'classic';
+  | 'users' | 'roles' | 'licenses' | 'pipeline' | 'master-data' | 'templates' | 'reports' | 'audit' | 'integrations' | 'classic';
 
 export type AdminNavGroup =
   | 'Overview'
@@ -69,7 +69,7 @@ export const SEAT_NAV: Record<Seat, { heading: string; searchPlaceholder: string
     items: [
       { key: 'users', label: 'Users', to: '/users', icon: 'users', group: 'Users & Access', requires: ['USERS_VIEW'] },
       { key: 'roles', label: 'Roles', to: '/roles', icon: 'roles', group: 'Users & Access', requires: ['ROLES_VIEW'] },
-      { key: 'license-seats', label: 'Licences & seats', to: '/licenses', icon: 'roles', group: 'Users & Access', requires: ['USERS_VIEW'] },
+      { key: 'license-seats', label: 'Licences & seats', to: '/licenses', icon: 'licenses', group: 'Users & Access', requires: ['USERS_VIEW'] },
       { key: 'pipeline', label: 'Pipeline template', to: '/pipeline-settings', icon: 'pipeline', group: 'Recruitment Setup', requires: ['MASTER_DATA_VIEW'] },
       { key: 'master-data', label: 'Master data', to: '/master-data', icon: 'master-data', group: 'Organization', requires: ['MASTER_DATA_VIEW'] },
       { key: 'templates', label: 'WhatsApp templates', to: '/whatsapp-templates', icon: 'templates', group: 'Recruitment Setup', requiresAny: ['MASTER_DATA_MANAGE', 'MASTER_DATA_VIEW'] },
