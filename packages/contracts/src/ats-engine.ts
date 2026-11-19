@@ -58,6 +58,8 @@ export interface AtsMatchBreakdown {
   overallScore: number; // 0-100
   knockoutsPassed: boolean;
   knockoutFailures: string[];
+  /** Requirements without verified data need human review, not automatic approval or rejection. */
+  manualReviewRequired?: string[];
   mustHaveSkillsPassed: boolean;
   mustHaveMatchedCount: number;
   mustHaveTotalCount: number;
@@ -67,19 +69,19 @@ export interface AtsMatchBreakdown {
   skillBreakdown: AtsSkillMatchItem[];
   missingKeywords: string[];
   experienceMatch: {
-    actualYears: number;
+    actualYears: number | null;
     requiredYears: number;
-    passed: boolean;
+    passed: boolean | null;
   };
   educationMatch: {
     actual: string[];
     required: string[];
-    passed: boolean;
+    passed: boolean | null;
   };
   languagesMatch: {
     actual: string[];
     required: string[];
-    passed: boolean;
+    passed: boolean | null;
   };
   calculatedAt: string;
 }
