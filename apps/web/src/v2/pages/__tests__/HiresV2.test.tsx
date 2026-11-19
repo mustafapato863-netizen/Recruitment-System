@@ -34,6 +34,9 @@ describe('HiresV2', () => {
     await user.click(screen.getByRole('button', { name: /All cases/ }));
     expect(screen.getByText('Nora Ali')).toBeInTheDocument();
     expect(screen.getByText('Adam Selim')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Pending Final Approval/ }));
+    expect(screen.getByText('Nora Ali')).toBeInTheDocument();
+    expect(screen.queryByText('Adam Selim')).not.toBeInTheDocument();
   });
 
   it('keeps API failures explicit and recovers with retry', async () => {
