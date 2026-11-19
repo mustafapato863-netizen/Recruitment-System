@@ -894,7 +894,7 @@ export class InterviewsService {
       strengths: scorecard.strengths,
       concerns: scorecard.concerns,
       notes: scorecard.notes,
-      ratings: savedRatings as unknown as any,
+      ratings: savedRatings as InterviewScorecardItem['ratings'],
       ...scorecardState(scorecard),
     };
   }
