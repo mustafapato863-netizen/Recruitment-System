@@ -45,7 +45,7 @@ const NotificationsPage = lazy(() => import('./pages/NotificationsPage').then((m
 const ProfilePage = lazy(() => import('./pages/ProfilePage').then((m) => ({ default: m.ProfilePage })));
 const EntityLinkRoute = lazy(() => import('./v2/pages/EntityLinkRoute').then((m) => ({ default: m.EntityLinkRoute })));
 // Classic (v1) pages. Same PermissionGate as v1. A signed-out request never reaches these routes.
-const HireManagementPage = lazy(() => import('./pages/HireManagementPage').then((m) => ({ default: m.HireManagementPage })));
+const HireManagementPage = lazy(() => import('./v2/pages/HiresV2').then((m) => ({ default: m.HiresV2 })));
 const HiringCasePage = lazy(() => import('./pages/HiringCasePage').then((m) => ({ default: m.HiringCasePage })));
 const FinalApprovalInboxPage = lazy(() => import('./v2/pages/FinalApprovalInboxV2').then((m) => ({ default: m.FinalApprovalInboxV2 })));
 const OffersPage = lazy(() => import('./v2/pages/OffersV2').then((m) => ({ default: m.OffersV2 })));
