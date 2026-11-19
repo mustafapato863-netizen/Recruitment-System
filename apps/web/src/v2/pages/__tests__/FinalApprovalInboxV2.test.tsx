@@ -31,7 +31,7 @@ describe('FinalApprovalInboxV2', () => {
     expect(saveApproval).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: 'Authorize hire' }));
     const modal = screen.getByRole('dialog');
-    expect(within(modal).getByText(/does not/i)).not.toBeInTheDocument();
+    expect(within(modal).getByText(/Check the candidate file/)).toBeInTheDocument();
     expect(saveApproval).not.toHaveBeenCalled();
     await user.click(within(modal).getByRole('button', { name: 'Confirm authorization' }));
     await waitFor(() => expect(saveApproval).toHaveBeenCalledWith('/hiring/case-1/final-approval', {
