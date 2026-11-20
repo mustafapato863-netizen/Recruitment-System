@@ -15,10 +15,10 @@ or if a supported sidebar/admin destination has no declared route.
 | Scope | Registered paths | State |
 |---|---:|---|
 | Public authentication, self-schedule, candidate portal and careers | 12 | Outside authenticated V2 shell; separate responsive and privacy validation required |
-| Native V2 recruiter, manager, admin and hiring workflows | 30 | Native V2 primitives (`apps/web/src/v2/` & `components/v2/`) |
-| Retained V1 components / old staff workflows | 9 | Routed via `apps/web/src/v2/pages/*V2.tsx` adapters inside V2 shell; full native UI rewrite pending |
+| Native V2 recruiter, manager, admin and hiring workflows | 39 | Canonical implementations in `apps/web/src/v2/` & `components/v2/` |
+| Retained V1 components / old staff workflows | 0 | **100% migrated into `apps/web/src/v2/` or retired to redirects** |
 | Supported aliases and catch-all | 13 | Redirects with intentional destination; no independent screen |
-| **Total** | **64** | **100% route-level inventory, 13 classic routes retired to redirects** |
+| **Total** | **64** | **100% route-level V2 adoption, 13 classic routes retired to redirects** |
 
 ## Changes in this UI/UX enhancement branch
 
